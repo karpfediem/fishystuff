@@ -16,6 +16,9 @@ half_life_days = 30.0
 alpha0 = 1.0
 top_k = 30
 
+[zone_masks]
+root = "data/cdn/public/images"
+
 [server]
 cors_allowed_origins = "https://fishystuff.fish,https://www.fishystuff.fish"
 

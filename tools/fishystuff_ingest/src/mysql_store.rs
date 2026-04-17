@@ -292,18 +292,33 @@ impl MySqlIngestStore {
         Ok(conn.affected_rows())
     }
 
-    pub fn ensure_layer_revision(&self, layer_revision_id: &str, layer_id: &str) -> Result<()> {
+    pub fn ensure_layer_revision(
+        &self,
+        layer_revision_id: &str,
+        layer_id: &str,
+        map_version_id: &str,
+        label: &str,
+        revision_hash: Option<&str>,
+        notes: &str,
+    ) -> Result<()> {
         if layer_revision_id.trim().is_empty() {
             bail!("layer_revision_id must be non-empty");
         }
         if layer_id.trim().is_empty() {
             bail!("layer_id must be non-empty");
         }
+        if map_version_id.trim().is_empty() {
+            bail!("map_version_id must be non-empty");
+        }
+        if label.trim().is_empty() {
+            bail!("label must be non-empty");
+        }
         let mut conn = self.pool.get_conn().context("get mysql conn")?;
         conn.exec_drop(
             "INSERT INTO layer_revisions (
                 layer_revision_id,
                 layer_id,
+                map_version_id,
                 label,
                 created_at,
                 effective_from_utc,
@@ -314,21 +329,27 @@ impl MySqlIngestStore {
             ) VALUES (
                 :layer_revision_id,
                 :layer_id,
+                :map_version_id,
                 :label,
                 UTC_TIMESTAMP(6),
                 NULL,
                 NULL,
                 NULL,
-                NULL,
+                :revision_hash,
                 :notes
             ) ON DUPLICATE KEY UPDATE
                 layer_id = VALUES(layer_id),
-                label = VALUES(label)",
+                map_version_id = VALUES(map_version_id),
+                label = VALUES(label),
+                revision_hash = VALUES(revision_hash),
+                notes = VALUES(notes)",
             params! {
                 "layer_revision_id" => layer_revision_id,
                 "layer_id" => layer_id,
-                "label" => layer_revision_id,
-                "notes" => "auto-created by build-event-zone-assignment",
+                "map_version_id" => map_version_id,
+                "label" => label,
+                "revision_hash" => revision_hash,
+                "notes" => notes,
             },
         )
         .context("upsert layer revision")?;
@@ -549,6 +570,7 @@ impl MySqlIngestStore {
             "CREATE TABLE IF NOT EXISTS layer_revisions (
                 layer_revision_id VARCHAR(64) NOT NULL PRIMARY KEY,
                 layer_id VARCHAR(64) NOT NULL,
+                map_version_id VARCHAR(64) NULL,
                 label VARCHAR(128) NOT NULL,
                 created_at DATETIME(6) NOT NULL,
                 effective_from_utc DATETIME(6) NULL,
@@ -557,10 +579,45 @@ impl MySqlIngestStore {
                 revision_hash VARCHAR(128) NULL,
                 notes TEXT NULL,
                 KEY layer_revisions_layer_patch_idx (layer_id, patch_id),
-                KEY layer_revisions_layer_effective_idx (layer_id, effective_from_utc, effective_to_utc)
+                KEY layer_revisions_layer_effective_idx (layer_id, effective_from_utc, effective_to_utc),
+                KEY layer_revisions_layer_map_version_idx (layer_id, map_version_id, created_at)
             )",
         )
         .context("create mysql layer_revisions")?;
+
+        let has_map_version_id: Option<String> = conn
+            .query_first(
+                "SELECT COLUMN_NAME \
+                 FROM information_schema.columns \
+                 WHERE table_schema = DATABASE() \
+                   AND table_name = 'layer_revisions' \
+                   AND column_name = 'map_version_id'",
+            )
+            .context("check mysql layer_revisions.map_version_id column")?;
+        if has_map_version_id.is_none() {
+            conn.query_drop(
+                "ALTER TABLE layer_revisions \
+                 ADD COLUMN map_version_id VARCHAR(64) NULL AFTER layer_id",
+            )
+            .context("add mysql layer_revisions.map_version_id column")?;
+        }
+
+        let has_layer_map_version_idx: Option<String> = conn
+            .query_first(
+                "SELECT INDEX_NAME \
+                 FROM information_schema.statistics \
+                 WHERE table_schema = DATABASE() \
+                   AND table_name = 'layer_revisions' \
+                   AND index_name = 'layer_revisions_layer_map_version_idx'",
+            )
+            .context("check mysql layer_revisions layer/map_version index")?;
+        if has_layer_map_version_idx.is_none() {
+            conn.query_drop(
+                "CREATE INDEX layer_revisions_layer_map_version_idx \
+                 ON layer_revisions (layer_id, map_version_id, created_at)",
+            )
+            .context("create mysql layer_revisions layer/map_version index")?;
+        }
 
         conn.query_drop(
             "CREATE TABLE IF NOT EXISTS water_tiles (

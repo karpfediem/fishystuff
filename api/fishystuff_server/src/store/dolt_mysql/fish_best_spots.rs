@@ -1,5 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
+use fishystuff_api::error::ApiErrorCode;
 use fishystuff_api::ids::Rgb;
 use fishystuff_api::models::fish::{FishBestSpotEntry, FishBestSpotsResponse};
 use mysql::prelude::Queryable;
@@ -192,52 +193,63 @@ impl DoltMySqlStore {
             }
         }
 
-        if let Some(layer_revision_id) = self
-            .defaults
-            .map_version_id
-            .as_ref()
-            .map(|id| id.0.as_str())
-        {
-            if let Some(support_mode) = self.resolve_event_zone_support_mode(layer_revision_id)? {
-                let fish_identities = self.query_fish_identities(ref_id)?;
-                let event_fish_ids = Self::build_event_fish_identity_map(&fish_identities)
-                    .into_iter()
-                    .filter_map(|(fish_id, (mapped_item_id, _, _))| {
-                        (mapped_item_id == item_id).then_some(fish_id)
-                    })
-                    .chain(std::iter::once(item_id))
-                    .collect::<BTreeSet<_>>()
-                    .into_iter()
-                    .collect::<Vec<_>>();
+        if let Some(map_version_id) = self.defaults.map_version_id.as_ref() {
+            let layer_revision_id = match self.resolve_layer_revision_id(
+                None,
+                Some(map_version_id),
+                Some(super::ZONE_MASK_LAYER_ID),
+                None,
+                None,
+                0,
+            ) {
+                Ok(value) => Some(value),
+                Err(err) if err.0.code == ApiErrorCode::NotFound => None,
+                Err(err) => return Err(err),
+            };
+            if let Some(layer_revision_id) = layer_revision_id {
+                if let Some(support_mode) =
+                    self.resolve_event_zone_support_mode(&layer_revision_id)?
+                {
+                    let fish_identities = self.query_fish_identities(ref_id)?;
+                    let event_fish_ids = Self::build_event_fish_identity_map(&fish_identities)
+                        .into_iter()
+                        .filter_map(|(fish_id, (mapped_item_id, _, _))| {
+                            (mapped_item_id == item_id).then_some(fish_id)
+                        })
+                        .chain(std::iter::once(item_id))
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect::<Vec<_>>();
 
-                if !event_fish_ids.is_empty() {
-                    let fish_id_csv = event_fish_ids
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let ranking_query = match support_mode {
-                        EventZoneSupportMode::Assignment => format!(
-                            "SELECT CAST(z.zone_rgb AS UNSIGNED), COUNT(1) \
-                             FROM events e \
-                             JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ? \
-                             WHERE e.water_ok = 1 \
-                               AND e.source_kind = ? \
-                               AND e.fish_id IN ({fish_id_csv}) \
-                             GROUP BY z.zone_rgb"
-                        ),
-                        EventZoneSupportMode::RingSupport => format!(
-                            "SELECT CAST(ring.zone_rgb AS UNSIGNED), COUNT(DISTINCT e.event_id) \
-                             FROM events e \
-                             JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ? \
-                             WHERE e.water_ok = 1 \
-                               AND e.source_kind = ? \
-                               AND e.fish_id IN ({fish_id_csv}) \
-                             GROUP BY ring.zone_rgb"
-                        ),
-                    };
-                    let ranking_rows: Vec<(u64, u64)> =
-                        match conn.exec(ranking_query, (layer_revision_id, SOURCE_KIND_RANKING)) {
+                    if !event_fish_ids.is_empty() {
+                        let fish_id_csv = event_fish_ids
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        let ranking_query = match support_mode {
+                            EventZoneSupportMode::Assignment => format!(
+                                "SELECT CAST(z.zone_rgb AS UNSIGNED), COUNT(1) \
+                                 FROM events e \
+                                 JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ? \
+                                 WHERE e.water_ok = 1 \
+                                   AND e.source_kind = ? \
+                                   AND e.fish_id IN ({fish_id_csv}) \
+                                 GROUP BY z.zone_rgb"
+                            ),
+                            EventZoneSupportMode::RingSupport => format!(
+                                "SELECT CAST(ring.zone_rgb AS UNSIGNED), COUNT(DISTINCT e.event_id) \
+                                 FROM events e \
+                                 JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ? \
+                                 WHERE e.water_ok = 1 \
+                                   AND e.source_kind = ? \
+                                   AND e.fish_id IN ({fish_id_csv}) \
+                                 GROUP BY ring.zone_rgb"
+                            ),
+                        };
+                        let ranking_rows: Vec<(u64, u64)> = match conn
+                            .exec(ranking_query, (&layer_revision_id, SOURCE_KIND_RANKING))
+                        {
                             Ok(rows) => rows,
                             Err(err)
                                 if support_mode == EventZoneSupportMode::Assignment
@@ -253,22 +265,22 @@ impl DoltMySqlStore {
                             }
                             Err(err) => return Err(db_unavailable(err)),
                         };
-                    for (zone_rgb_u32, observation_count) in ranking_rows {
-                        let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
-                            continue;
-                        };
-                        let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);
-                        let spot =
-                            spots
-                                .entry(zone_rgb_u32)
-                                .or_insert_with(|| FishBestSpotAccumulator {
+                        for (zone_rgb_u32, observation_count) in ranking_rows {
+                            let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
+                                continue;
+                            };
+                            let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);
+                            let spot = spots.entry(zone_rgb_u32).or_insert_with(|| {
+                                FishBestSpotAccumulator {
                                     zone_rgb,
                                     zone_name,
                                     ..FishBestSpotAccumulator::default()
-                                });
-                        spot.has_ranking_presence = true;
-                        spot.ranking_observation_count =
-                            u32::try_from(observation_count).unwrap_or(u32::MAX);
+                                }
+                            });
+                            spot.has_ranking_presence = true;
+                            spot.ranking_observation_count =
+                                u32::try_from(observation_count).unwrap_or(u32::MAX);
+                        }
                     }
                 }
             }

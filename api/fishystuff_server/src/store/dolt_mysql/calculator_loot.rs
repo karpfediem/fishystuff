@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use fishystuff_api::error::ApiErrorCode;
 use fishystuff_api::ids::RgbKey;
 use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
 use mysql::prelude::Queryable;
@@ -568,23 +569,32 @@ impl DoltMySqlStore {
             });
         }
         let fish_identities = self.query_fish_identities(ref_id)?;
-        let layer_revision_id = self
-            .defaults
-            .map_version_id
-            .as_ref()
-            .map(|id| id.0.clone())
-            .unwrap_or_else(|| "v1".to_string());
-        let ranking_presence_rows: Vec<(i64, i64, i64)> = match conn.exec(
-            queries::RANKING_RING_SUPPORT_BY_ZONE_SQL,
-            (
-                &layer_revision_id,
-                super::SOURCE_KIND_RANKING,
-                zone_rgb.to_u32(),
-            ),
+        let layer_revision_id = match self.resolve_layer_revision_id(
+            None,
+            self.defaults.map_version_id.as_ref(),
+            Some(super::ZONE_MASK_LAYER_ID),
+            None,
+            None,
+            0,
         ) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "event_zone_ring_support") => Vec::new(),
-            Err(err) => return Err(db_unavailable(err)),
+            Ok(value) => Some(value),
+            Err(err) if err.0.code == ApiErrorCode::NotFound => None,
+            Err(err) => return Err(err),
+        };
+        let ranking_presence_rows: Vec<(i64, i64, i64)> = match layer_revision_id {
+            Some(ref layer_revision_id) => match conn.exec(
+                queries::RANKING_RING_SUPPORT_BY_ZONE_SQL,
+                (
+                    layer_revision_id,
+                    super::SOURCE_KIND_RANKING,
+                    zone_rgb.to_u32(),
+                ),
+            ) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "event_zone_ring_support") => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            },
+            None => Vec::new(),
         };
         let mut ranking_presence_by_item = HashMap::<i32, RankingPresenceMeta>::new();
         for (fish_id, full_count, partial_count) in ranking_presence_rows {
@@ -807,7 +817,9 @@ impl DoltMySqlStore {
                 }
                 if let Some(meta) = ranking_presence_by_item.get(&item_id).copied() {
                     matched_ranking_items.insert(item_id);
-                    push_ranking_presence_evidence(&mut evidence, meta, &layer_revision_id);
+                    if let Some(layer_revision_id) = layer_revision_id.as_deref() {
+                        push_ranking_presence_evidence(&mut evidence, meta, layer_revision_id);
+                    }
                 }
                 Some(CalculatorZoneLootEntry {
                     slot_idx,
@@ -861,7 +873,9 @@ impl DoltMySqlStore {
             push_ranking_presence_evidence(
                 synthetic_evidence_by_key.entry(key).or_default(),
                 meta,
-                &layer_revision_id,
+                layer_revision_id
+                    .as_deref()
+                    .expect("ranking presence rows require a resolved layer revision id"),
             );
         }
         for ((slot_idx, item_id), evidence) in synthetic_evidence_by_key {

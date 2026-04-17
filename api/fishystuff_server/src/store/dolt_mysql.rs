@@ -72,6 +72,7 @@ use util::{
 const EPS: f64 = 1e-9;
 const EPS_FISH: f64 = 1e-9;
 const SOURCE_KIND_RANKING: i32 = 1;
+const ZONE_MASK_LAYER_ID: &str = "zone_mask";
 const DOLT_POOL_MIN_CONNECTIONS: usize = 0;
 const DOLT_POOL_MAX_CONNECTIONS: usize = 16;
 const DOLT_TCP_CONNECT_TIMEOUT_SECS: u64 = 3;
@@ -470,21 +471,46 @@ impl DoltMySqlStore {
                 return Ok(trimmed.to_string());
             }
         }
-        if let Some(value) = map_version_id {
-            let trimmed = value.0.trim();
-            if !trimmed.is_empty() {
-                return Ok(trimmed.to_string());
+        let requested_map_version = map_version_id
+            .map(|value| value.0.trim())
+            .filter(|value| !value.is_empty());
+        let requested_layer_id = layer_id.map(str::trim).filter(|value| !value.is_empty());
+        if let (Some(map_version_id), Some(layer_id)) = (requested_map_version, requested_layer_id)
+        {
+            let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+            let row: Option<String> = match conn.exec_first(
+                "SELECT layer_revision_id \
+                 FROM layer_revisions \
+                 WHERE layer_id = ? AND map_version_id = ? \
+                 ORDER BY created_at DESC \
+                 LIMIT 1",
+                (layer_id, map_version_id),
+            ) {
+                Ok(value) => value,
+                Err(err) if is_missing_table(&err, "layer_revisions") => {
+                    return Err(AppError::unavailable(
+                        "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
+                    ));
+                }
+                Err(err) => return Err(db_unavailable(err)),
+            };
+            if let Some(value) = row {
+                return Ok(value);
             }
+            return Err(AppError::not_found(format!(
+                "no layer revision for layer_id={} map_version_id={}",
+                layer_id, map_version_id
+            )));
+        }
+        if let Some(map_version_id) = requested_map_version {
+            return Ok(map_version_id.to_string());
         }
 
-        let layer_id = layer_id
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                AppError::invalid_argument(
-                    "layer_revision_id is required (or provide layer_id with patch_id/at_ts_utc)",
-                )
-            })?;
+        let layer_id = requested_layer_id.ok_or_else(|| {
+            AppError::invalid_argument(
+                "layer_revision_id is required (or provide layer_id with patch_id/at_ts_utc)",
+            )
+        })?;
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         if let Some(patch_id) = patch_id.map(str::trim).filter(|value| !value.is_empty()) {
@@ -1721,10 +1747,11 @@ impl Store for DoltMySqlStore {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
             let zone_rgb_u32 = request.rgb.to_u32().map_err(AppError::invalid_argument)?;
+            let layer_id = request.layer_id.as_deref().or(Some(ZONE_MASK_LAYER_ID));
             let layer_revision_id = this.resolve_layer_revision_id(
                 request.layer_revision_id.as_deref(),
                 request.map_version_id.as_ref(),
-                request.layer_id.as_deref(),
+                layer_id,
                 request.patch_id.as_deref(),
                 request.at_ts_utc,
                 request.to_ts_utc,

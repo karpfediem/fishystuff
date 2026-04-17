@@ -37,6 +37,7 @@ use ranking::{parse_datetime_utc, RankingRow};
 const SOURCE_KIND_RANKING: u8 = 1;
 const RANKING_RING_RADIUS_WORLD_UNITS: f64 = 500.0;
 const RANKING_RING_SAMPLE_COUNT: usize = 64;
+const ZONE_MASK_LAYER_ID: &str = "zone_mask";
 
 #[derive(Parser)]
 #[command(name = "fishystuff_ingest")]
@@ -163,7 +164,7 @@ enum Commands {
     },
     BuildEventZoneAssignment {
         #[arg(long)]
-        layer_revision_id: String,
+        map_version: String,
         #[arg(long, default_value = "zone_mask")]
         layer_id: String,
         #[arg(long)]
@@ -449,16 +450,24 @@ fn main() -> Result<()> {
             ..
         } => run_index_zone_mask_mysql(map_version, zone_mask, 4096, config.as_ref()),
         Commands::BuildEventZoneAssignment {
-            layer_revision_id,
+            map_version,
             layer_id,
             zone_mask_root,
             batch_size,
-        } => run_build_event_zone_assignment_mysql(
-            layer_revision_id,
-            layer_id,
-            zone_mask_root,
-            batch_size,
-        ),
+        } => {
+            let (zone_mask_path, zone_mask_sha256) =
+                resolve_zone_mask_provenance(&zone_mask_root, &map_version)?;
+            let layer_revision_id =
+                build_layer_revision_id(&layer_id, &map_version, &zone_mask_sha256);
+            run_build_event_zone_assignment_mysql(
+                layer_revision_id,
+                map_version,
+                layer_id,
+                zone_mask_path,
+                zone_mask_sha256,
+                batch_size,
+            )
+        }
         Commands::ImportRegionGroupsMysql {
             map_version,
             geojson,
@@ -756,6 +765,15 @@ fn run_ingest_mysql(
         )
         .context("finish ingest run")?;
 
+    if let Some(zone_mask_root) = resolve_zone_mask_root_for_map_version(&map_version, config)? {
+        run_build_zone_mask_event_zone_assignment_mysql(map_version.clone(), zone_mask_root, 4096)?;
+    } else {
+        eprintln!(
+            "import-ranking: skipped zone support backfill for map_version={} (no zone mask source resolved)",
+            map_version
+        );
+    }
+
     println!(
         "import-ranking: seen={} inserted={} deduped={} skipped={} map_version={}",
         rows_seen, rows_inserted, rows_deduped, rows_skipped, map_version
@@ -997,19 +1015,16 @@ fn run_index_zone_mask_mysql(
     batch_size: usize,
     config: Option<&fishystuff_config::Config>,
 ) -> Result<()> {
-    let layer_revision_id = resolve_map_version(map_version, config)?;
-    run_build_event_zone_assignment_mysql(
-        layer_revision_id,
-        "zone_mask".to_string(),
-        zone_mask_root,
-        batch_size,
-    )
+    let map_version = resolve_map_version(map_version, config)?;
+    run_build_zone_mask_event_zone_assignment_mysql(map_version, zone_mask_root, batch_size)
 }
 
 fn run_build_event_zone_assignment_mysql(
     layer_revision_id: String,
+    layer_label: String,
     layer_id: String,
-    zone_mask_root: PathBuf,
+    zone_mask_path: PathBuf,
+    zone_mask_sha256: String,
     batch_size: usize,
 ) -> Result<()> {
     if batch_size == 0 {
@@ -1021,13 +1036,26 @@ fn run_build_event_zone_assignment_mysql(
     if layer_id.trim().is_empty() {
         bail!("layer_id must be non-empty");
     }
+    if layer_label.trim().is_empty() {
+        bail!("layer_label must be non-empty");
+    }
     let database_url = resolve_database_url()?;
-    let zone_mask = resolve_zone_mask_path(&zone_mask_root, &layer_revision_id)?;
-    let mask = ZoneMask::load_png(&zone_mask).context("load zone mask")?;
+    let mask = ZoneMask::load_png(&zone_mask_path).context("load zone mask")?;
     validate_zonemask_dims(&mask)?;
     let store = MySqlIngestStore::open(&database_url).context("open mysql store")?;
+    let notes = format!(
+        "auto-created by build-event-zone-assignment; label={layer_label}; zone_mask_path={}",
+        zone_mask_path.display()
+    );
     store
-        .ensure_layer_revision(&layer_revision_id, &layer_id)
+        .ensure_layer_revision(
+            &layer_revision_id,
+            &layer_id,
+            &layer_label,
+            &layer_label,
+            Some(&zone_mask_sha256),
+            &notes,
+        )
         .context("ensure layer revision row")?;
 
     let start = std::time::Instant::now();
@@ -1076,9 +1104,11 @@ fn run_build_event_zone_assignment_mysql(
     }
     let skipped = total.saturating_sub(assigned_total as usize);
     println!(
-        "build-event-zone-assignment: layer_revision_id={} layer_id={} total={} assigned={} ring_support={} skipped={} elapsed_ms={}",
+        "build-event-zone-assignment: layer_revision_id={} layer_label={} layer_id={} zone_mask_sha256={} total={} assigned={} ring_support={} skipped={} elapsed_ms={}",
         layer_revision_id,
+        layer_label,
         layer_id,
+        zone_mask_sha256,
         total,
         assigned_total,
         ring_support_total,
@@ -1086,6 +1116,25 @@ fn run_build_event_zone_assignment_mysql(
         start.elapsed().as_millis()
     );
     Ok(())
+}
+
+fn run_build_zone_mask_event_zone_assignment_mysql(
+    map_version: String,
+    zone_mask_root: PathBuf,
+    batch_size: usize,
+) -> Result<()> {
+    let (zone_mask_path, zone_mask_sha256) =
+        resolve_zone_mask_provenance(&zone_mask_root, &map_version)?;
+    let layer_revision_id =
+        build_layer_revision_id(ZONE_MASK_LAYER_ID, &map_version, &zone_mask_sha256);
+    run_build_event_zone_assignment_mysql(
+        layer_revision_id,
+        map_version,
+        ZONE_MASK_LAYER_ID.to_string(),
+        zone_mask_path,
+        zone_mask_sha256,
+        batch_size,
+    )
 }
 
 fn build_event_zone_ring_support_rows(
@@ -1151,6 +1200,90 @@ fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<Pa
         map_version,
         map_version
     )
+}
+
+fn resolve_zone_mask_provenance(
+    zone_mask_root: &Path,
+    map_version: &str,
+) -> Result<(PathBuf, String)> {
+    let zone_mask_path = resolve_zone_mask_path(zone_mask_root, map_version)?;
+    let zone_mask_sha256 = sha256_file(&zone_mask_path)?;
+    Ok((zone_mask_path, zone_mask_sha256))
+}
+
+fn build_layer_revision_id(layer_id: &str, map_version: &str, revision_sha256: &str) -> String {
+    let mut layer_id_slug = layer_id
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    if layer_id_slug.is_empty() {
+        layer_id_slug = "layer".to_string();
+    }
+    let mut map_version_slug = map_version
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    if map_version_slug.is_empty() {
+        map_version_slug = "unknown".to_string();
+    }
+    let hash_prefix_len = revision_sha256.len().min(16);
+    let hash_prefix = &revision_sha256[..hash_prefix_len];
+    let max_layer_and_separators_len = 64usize.saturating_sub(hash_prefix.len()).saturating_sub(2);
+    if layer_id_slug.len() > max_layer_and_separators_len {
+        layer_id_slug.truncate(max_layer_and_separators_len);
+    }
+    let max_map_version_len = 64usize
+        .saturating_sub(layer_id_slug.len())
+        .saturating_sub(2)
+        .saturating_sub(hash_prefix.len());
+    if map_version_slug.len() > max_map_version_len {
+        map_version_slug.truncate(max_map_version_len);
+    }
+    format!("{layer_id_slug}:{map_version_slug}:{hash_prefix}")
+}
+
+fn resolve_zone_mask_root_for_map_version(
+    map_version: &str,
+    config: Option<&fishystuff_config::Config>,
+) -> Result<Option<PathBuf>> {
+    let configured_root = config.and_then(|cfg| {
+        cfg.zone_masks
+            .get(map_version)
+            .or_else(|| cfg.zone_masks.get(ZONE_MASK_LAYER_ID))
+            .or_else(|| cfg.zone_masks.get("root"))
+            .or_else(|| cfg.zone_masks.get("default"))
+            .map(PathBuf::from)
+    });
+    if let Some(root) = configured_root {
+        return Ok(Some(root));
+    }
+
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let candidate_roots = [
+        repo_root.join("data/cdn/public/images"),
+        repo_root.join("data/imagery"),
+    ];
+    for root in candidate_roots {
+        if resolve_zone_mask_path(&root, map_version).is_ok() {
+            return Ok(Some(root));
+        }
+    }
+
+    Ok(None)
 }
 
 fn run_import_region_groups_mysql(
@@ -2364,5 +2497,15 @@ mod tests {
             touched,
             BTreeSet::from([pack_rgb_u32(255, 0, 0), pack_rgb_u32(0, 255, 0)])
         );
+    }
+
+    #[test]
+    fn layer_revision_id_uses_hash_provenance() {
+        let revision_id = build_layer_revision_id(
+            "zone_mask",
+            "v1",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        );
+        assert_eq!(revision_id, "zone_mask:v1:0123456789abcdef");
     }
 }

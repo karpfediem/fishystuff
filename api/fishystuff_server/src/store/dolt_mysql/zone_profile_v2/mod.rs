@@ -23,10 +23,14 @@ impl DoltMySqlStore {
         status_cfg: ZoneStatusConfig,
     ) -> AppResult<ZoneProfileV2Response> {
         let zone_rgb_u32 = request.rgb.to_u32().map_err(AppError::invalid_argument)?;
+        let layer_id = request
+            .layer_id
+            .as_deref()
+            .or(Some(super::ZONE_MASK_LAYER_ID));
         let layer_revision_id = self.resolve_layer_revision_id(
             request.layer_revision_id.as_deref(),
             request.map_version_id.as_ref(),
-            request.layer_id.as_deref(),
+            layer_id,
             request.patch_id.as_deref(),
             request.at_ts_utc,
             request.to_ts_utc,
