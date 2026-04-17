@@ -224,3 +224,39 @@ test("createMapWindowManager does not overwrite the actively dragged window from
     globalThis.removeEventListener = originalRemoveEventListener;
   }
 });
+
+test("createMapWindowManager keeps existing window position on non-position window-ui patches", () => {
+  const shell = new FakeElement({ width: 1000, height: 700 });
+  const layers = new FakeElement({ id: "fishymap-layers-window", left: 42, top: 55, width: 280, height: 48 });
+  layers.dataset.windowId = "layers";
+  shell.setQuery("[data-window-id]", layers);
+
+  const signals = {
+    _map_ui: {
+      windowUi: {
+        layers: { open: true, collapsed: false, x: 42, y: 55 },
+        zoneInfo: { open: true, collapsed: false, x: 18, y: 22, tab: "zone" },
+      },
+    },
+  };
+
+  const manager = createMapWindowManager({
+    shell,
+    getSignals: () => signals,
+    listenToSignalPatches: false,
+  });
+
+  assert.equal(layers.style.left, "42px");
+  assert.equal(layers.style.top, "55px");
+
+  manager.applyFromSignals({
+    _map_ui: {
+      windowUi: {
+        zoneInfo: { tab: "territory" },
+      },
+    },
+  });
+
+  assert.equal(layers.style.left, "42px");
+  assert.equal(layers.style.top, "55px");
+});

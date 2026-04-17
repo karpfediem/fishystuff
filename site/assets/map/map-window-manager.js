@@ -136,12 +136,29 @@ export function createMapWindowManager({
     root.style.zIndex = String(state.nextWindowZIndex);
   }
 
-  function applyFromSignals() {
+  function shouldApplyWindowPositionFromPatch(windowId, patch) {
+    const windowUiPatch = patch && patch._map_ui && typeof patch._map_ui === "object"
+      ? patch._map_ui.windowUi
+      : null;
+    if (!windowUiPatch || typeof windowUiPatch !== "object") {
+      return true;
+    }
+    const nextWindowUiPatch = windowUiPatch[windowId];
+    if (!nextWindowUiPatch || typeof nextWindowUiPatch !== "object") {
+      return false;
+    }
+    return (
+      Object.prototype.hasOwnProperty.call(nextWindowUiPatch, "x")
+      || Object.prototype.hasOwnProperty.call(nextWindowUiPatch, "y")
+    );
+  }
+
+  function applyFromSignals(patch = null) {
     const nextWindowUi = currentWindowUi(getSignals);
     for (const [windowId, part] of Object.entries(parts)) {
       const nextEntry = nextWindowUi[windowId];
       const previousEntry = state.previousWindowUi?.[windowId];
-      if (state.drag.windowId !== windowId) {
+      if (state.drag.windowId !== windowId && shouldApplyWindowPositionFromPatch(windowId, patch)) {
         applyManagedWindowPosition(part.root, nextEntry);
       }
       if (nextEntry?.open !== false && previousEntry?.open === false) {
@@ -151,16 +168,16 @@ export function createMapWindowManager({
     state.previousWindowUi = nextWindowUi;
   }
 
-  function scheduleApplyFromSignals() {
+  function scheduleApplyFromSignals(patch = null) {
     if (state.frameId || typeof globalThis.requestAnimationFrame !== "function") {
       if (!state.frameId) {
-        applyFromSignals();
+        applyFromSignals(patch);
       }
       return;
     }
     state.frameId = globalThis.requestAnimationFrame(() => {
       state.frameId = 0;
-      applyFromSignals();
+      applyFromSignals(patch);
     });
   }
 
@@ -287,7 +304,7 @@ export function createMapWindowManager({
   if (listenToSignalPatches) {
     shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
       if (patchTouchesWindowUi(event?.detail || null)) {
-        scheduleApplyFromSignals();
+        scheduleApplyFromSignals(event?.detail || null);
       }
     });
   }

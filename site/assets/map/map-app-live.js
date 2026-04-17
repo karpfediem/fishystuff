@@ -322,7 +322,10 @@ export async function start() {
       return;
     }
 
-    const nextActionState = signals()?._map_actions || {};
+    const nextActionState = {
+      ...(signals()?._map_actions || {}),
+      ...(patch?._map_actions || {}),
+    };
     const resetUiToken = Number(nextActionState.resetUiToken || 0);
     const previousResetUiToken = Number(actionState.resetUiToken || 0);
     if (resetUiToken > previousResetUiToken) {
