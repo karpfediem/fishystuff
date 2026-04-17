@@ -53,7 +53,9 @@ test("createMapApp emits bridge commands once per consumed action token state", 
     currentState: createEmptySnapshot(),
   });
   assert.equal("commands" in secondPatch, false);
-  assert.deepEqual(secondPatch.filters.fishIds, [77]);
+  assert.deepEqual(secondPatch.filters.fishIds, []);
+  assert.equal(secondPatch.filters.searchExpression.type, "group");
+  assert.equal(secondPatch.filters.searchExpression.children.length, 1);
 });
 
 test("createMapApp exposes coarse runtime and session projections", () => {

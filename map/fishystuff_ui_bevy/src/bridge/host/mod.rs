@@ -11,9 +11,11 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::bridge::contract::{
-    FishyMapCameraSnapshot, FishyMapCommands, FishyMapFiltersState, FishyMapFishSummary,
-    FishyMapHoverSnapshot, FishyMapInputState, FishyMapLayerSummary, FishyMapOutputEvent,
-    FishyMapPatchSummary, FishyMapSelectionSnapshot, FishyMapStatePatch, FishyMapStateSnapshot,
+    FishyMapCameraSnapshot, FishyMapCommands, FishyMapEffectiveFiltersSnapshot,
+    FishyMapEffectiveSemanticFieldFilterSnapshot, FishyMapEffectiveZoneMembershipFilterSnapshot,
+    FishyMapFiltersState, FishyMapFishSummary, FishyMapHoverSnapshot, FishyMapInputState,
+    FishyMapLayerSummary, FishyMapOutputEvent, FishyMapPatchSummary, FishyMapSearchExpressionNode,
+    FishyMapSearchProjection, FishyMapSelectionSnapshot, FishyMapStatePatch, FishyMapStateSnapshot,
     FishyMapStatusSnapshot, FishyMapThemeColors, FishyMapViewMode, FishyMapViewSnapshot,
     FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot, FishyMapZoneEvidenceEntrySnapshot,
     FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
@@ -28,9 +30,9 @@ use crate::map::layers::{LayerKind, LayerRegistry, LayerRuntime};
 use crate::map::terrain::runtime::TerrainDiagnostics;
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{
-    now_utc_seconds, ApiBootstrapState, FishCatalog, FishFilterState, HoverInfo, HoverState,
-    LayerFilterBindingOverrideState, MapDisplayState, PatchFilterState, SelectionState,
-    SemanticFieldFilterState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    now_utc_seconds, ApiBootstrapState, FishCatalog, HoverInfo, HoverState,
+    LayerEffectiveFilterState, LayerFilterBindingOverrideState, MapDisplayState, PatchFilterState,
+    SearchExpressionState, SelectionState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::CameraZoomBounds;
 use crate::plugins::points::{PointIconCache, PointsState};
@@ -465,6 +467,97 @@ mod tests {
                     .semantic_field_ids_by_layer
                     .get("zone_mask"),
                 Some(&vec![15747658])
+            );
+        });
+    }
+
+    #[test]
+    fn browser_patch_propagates_zone_expression_without_flat_projection() {
+        clear_pending_patches();
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            *snapshot.borrow_mut() = snapshot::initial_snapshot();
+        });
+
+        let mut app = App::new();
+        app.insert_resource(BrowserBridgeState::default());
+        app.insert_resource(ApiBootstrapState::default());
+        app.insert_resource(PatchFilterState::default());
+        app.insert_resource(FishFilterState::default());
+        app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(SearchExpressionState::default());
+        app.insert_resource(LayerFilterBindingOverrideState::default());
+        app.insert_resource(LayerEffectiveFilterState::default());
+        app.insert_resource(MapDisplayState::default());
+        app.insert_resource(FishCatalog::default());
+        app.insert_resource(PointsState::default());
+        app.insert_resource(BookmarkState::default());
+        app.insert_resource(SelectionState::default());
+        app.insert_resource(HoverState::default());
+        app.insert_resource(LayerDebugSettings::default());
+        app.insert_resource(ExactLookupCache::default());
+        app.insert_resource(FieldMetadataCache::default());
+        app.insert_resource(ViewModeState::default());
+        app.insert_resource(Map2dViewState::default());
+        app.insert_resource(Terrain3dViewState::default());
+        app.insert_resource(ClearColor(Color::BLACK));
+        seed_layer_resources(&mut app.world_mut());
+        app.add_systems(
+            Update,
+            (
+                input::ingest_pending_browser_patches,
+                input::apply_browser_input_state,
+                input::resolve_browser_search_filters,
+            )
+                .chain(),
+        );
+        app.add_systems(PostUpdate, snapshot::sync_current_snapshot);
+
+        fishymap_apply_state_patch_json(
+            r#"{
+                "version": 1,
+                "filters": {
+                    "searchExpression": {
+                        "type": "group",
+                        "operator": "or",
+                        "children": [
+                            {
+                                "type": "term",
+                                "term": { "kind": "zone", "zoneRgb": 15747658 }
+                            }
+                        ]
+                    }
+                }
+            }"#,
+        )
+        .expect("queue patch");
+
+        app.update();
+
+        let bridge = app.world().resource::<BrowserBridgeState>();
+        assert!(bridge.input.filters.zone_rgbs.is_empty());
+        assert!(bridge
+            .input
+            .filters
+            .semantic_field_ids_by_layer
+            .get("zone_mask")
+            .is_none());
+
+        let semantic = app.world().resource::<SemanticFieldFilterState>();
+        assert_eq!(semantic.selected_zone_rgbs(), &[15747658]);
+
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            let snapshot = snapshot.borrow();
+            assert_eq!(snapshot.filters.zone_rgbs, vec![15747658]);
+            assert_eq!(
+                snapshot
+                    .filters
+                    .semantic_field_ids_by_layer
+                    .get("zone_mask"),
+                Some(&vec![15747658])
+            );
+            assert_eq!(
+                snapshot.effective_filters.search_expression,
+                bridge.input.filters.search_expression
             );
         });
     }

@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
+
 use fishystuff_core::field_metadata::{FieldDetailPaneRef, FieldDetailSection, FieldHoverTarget};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{
-    default_contract_version, FishyMapFiltersState, FishyMapThemeState, FishyMapUiState,
+    default_contract_version, deserialize_search_expression_state, FishyMapFiltersState,
+    FishyMapSearchExpressionNode, FishyMapSharedFishState, FishyMapThemeState, FishyMapUiState,
     FishyMapViewMode, FISHYMAP_CONTRACT_VERSION,
 };
 
@@ -234,6 +237,34 @@ pub struct FishyMapStatusSnapshot {
     pub zone_stats_status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FishyMapEffectiveZoneMembershipFilterSnapshot {
+    pub active: bool,
+    pub zone_rgbs: Vec<u32>,
+    pub revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FishyMapEffectiveSemanticFieldFilterSnapshot {
+    pub active: bool,
+    pub field_ids: Vec<u32>,
+    pub revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FishyMapEffectiveFiltersSnapshot {
+    #[serde(default, deserialize_with = "deserialize_search_expression_state")]
+    pub search_expression: FishyMapSearchExpressionNode,
+    #[serde(skip_serializing_if = "FishyMapSharedFishState::is_empty")]
+    pub shared_fish_state: FishyMapSharedFishState,
+    pub zone_membership_by_layer: BTreeMap<String, FishyMapEffectiveZoneMembershipFilterSnapshot>,
+    pub semantic_field_filters_by_layer:
+        BTreeMap<String, FishyMapEffectiveSemanticFieldFilterSnapshot>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapStateSnapshot {
@@ -248,6 +279,7 @@ pub struct FishyMapStateSnapshot {
     pub hover: FishyMapHoverSnapshot,
     pub catalog: FishyMapCatalogSnapshot,
     pub statuses: FishyMapStatusSnapshot,
+    pub effective_filters: FishyMapEffectiveFiltersSnapshot,
     pub last_diagnostic: Option<Value>,
 }
 
@@ -264,6 +296,7 @@ impl Default for FishyMapStateSnapshot {
             hover: FishyMapHoverSnapshot::default(),
             catalog: FishyMapCatalogSnapshot::default(),
             statuses: FishyMapStatusSnapshot::default(),
+            effective_filters: FishyMapEffectiveFiltersSnapshot::default(),
             last_diagnostic: None,
         }
     }

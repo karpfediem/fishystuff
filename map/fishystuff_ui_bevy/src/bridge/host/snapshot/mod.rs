@@ -14,7 +14,7 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::plugins::bookmarks::BookmarkState;
 
-pub(super) use self::filters::{current_layer_order, effective_filters};
+pub(super) use self::filters::{current_layer_order, effective_filter_snapshot, effective_filters};
 pub(super) use self::state::hover_layer_samples_snapshot;
 pub(super) use self::view::effective_view_snapshot;
 
@@ -33,10 +33,10 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
     let ready_changed = context.bootstrap.is_changed() || context.layer_registry.is_changed();
     let theme_changed = context.bridge.is_changed();
     let filters_changed = context.bridge.is_changed()
-        || context.patch_filter.is_changed()
-        || context.fish_filter.is_changed()
-        || context.semantic_filter.is_changed()
-        || context.layer_registry.is_changed();
+        || context.search_expression.is_changed()
+        || context.layer_effective_filters.is_changed()
+        || context.layer_registry.is_changed()
+        || context.layer_runtime.is_changed();
     let ui_changed = context.bridge.is_changed()
         || context.debug_layers.is_changed()
         || context.bookmarks.is_changed()
@@ -94,11 +94,18 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
                 &mut snapshot.filters,
                 effective_filters(
                     &context.bridge.input,
-                    &context.patch_filter,
-                    &context.fish_filter,
-                    &context.semantic_filter,
+                    &context.search_expression,
+                    &context.layer_effective_filters,
                     &context.layer_registry,
                     &context.layer_runtime,
+                ),
+            );
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.effective_filters,
+                effective_filter_snapshot(
+                    &context.bridge.input,
+                    &context.search_expression,
+                    &context.layer_effective_filters,
                 ),
             );
         }
@@ -237,8 +244,8 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     bridge: Res<'w, BrowserBridgeState>,
     bootstrap: Res<'w, ApiBootstrapState>,
     patch_filter: Res<'w, PatchFilterState>,
-    fish_filter: Res<'w, FishFilterState>,
-    semantic_filter: Res<'w, SemanticFieldFilterState>,
+    search_expression: Res<'w, SearchExpressionState>,
+    layer_effective_filters: Res<'w, LayerEffectiveFilterState>,
     layer_filter_binding_overrides: Res<'w, LayerFilterBindingOverrideState>,
     display_state: Res<'w, MapDisplayState>,
     fish: Res<'w, FishCatalog>,

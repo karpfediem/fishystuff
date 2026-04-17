@@ -5,42 +5,88 @@ use super::layers::{
     current_layer_waypoint_connection_overrides, current_layer_waypoint_label_overrides,
 };
 
+fn effective_search_expression_for_reporting(
+    bridge_input: &FishyMapInputState,
+    search_expression: &SearchExpressionState,
+) -> FishyMapSearchExpressionNode {
+    if !search_expression.expression.is_empty() {
+        return search_expression.expression.clone();
+    }
+    crate::map::search_filters::effective_search_expression(
+        bridge_input,
+        &[],
+        &std::collections::BTreeMap::new(),
+    )
+}
+
+pub(in crate::bridge::host) fn effective_filter_snapshot(
+    bridge_input: &FishyMapInputState,
+    search_expression: &SearchExpressionState,
+    layer_effective_filters: &LayerEffectiveFilterState,
+) -> FishyMapEffectiveFiltersSnapshot {
+    let effective_search_expression =
+        effective_search_expression_for_reporting(bridge_input, search_expression);
+    let shared_fish_state = if search_expression.shared_fish_state.is_empty() {
+        bridge_input.ui.shared_fish_state.clone()
+    } else {
+        search_expression.shared_fish_state.clone()
+    };
+    FishyMapEffectiveFiltersSnapshot {
+        search_expression: effective_search_expression,
+        shared_fish_state,
+        zone_membership_by_layer: layer_effective_filters
+            .zone_membership_filters()
+            .map(|(layer_id, filter)| {
+                let mut zone_rgbs = filter.zone_rgbs.iter().copied().collect::<Vec<_>>();
+                zone_rgbs.sort_unstable();
+                (
+                    layer_id.to_string(),
+                    FishyMapEffectiveZoneMembershipFilterSnapshot {
+                        active: filter.active,
+                        zone_rgbs,
+                        revision: filter.revision,
+                    },
+                )
+            })
+            .collect(),
+        semantic_field_filters_by_layer: layer_effective_filters
+            .semantic_field_filters()
+            .map(|(layer_id, filter)| {
+                (
+                    layer_id.to_string(),
+                    FishyMapEffectiveSemanticFieldFilterSnapshot {
+                        active: filter.active,
+                        field_ids: filter.field_ids.clone(),
+                        revision: filter.revision,
+                    },
+                )
+            })
+            .collect(),
+    }
+}
+
 pub(in crate::bridge::host) fn effective_filters(
     bridge_input: &FishyMapInputState,
-    _patch_filter: &PatchFilterState,
-    fish_filter: &FishFilterState,
-    semantic_filter: &SemanticFieldFilterState,
+    search_expression: &SearchExpressionState,
+    layer_effective_filters: &LayerEffectiveFilterState,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
 ) -> FishyMapFiltersState {
-    let input_from_patch_id = bridge_input
-        .filters
-        .from_patch_id
-        .clone()
-        .or_else(|| bridge_input.filters.patch_id.clone());
-    let input_to_patch_id = bridge_input
-        .filters
-        .to_patch_id
-        .clone()
-        .or_else(|| bridge_input.filters.patch_id.clone());
-    let from_patch_id = input_from_patch_id;
-    let to_patch_id = input_to_patch_id;
+    let effective_filters =
+        effective_filter_snapshot(bridge_input, search_expression, layer_effective_filters);
+    let projection =
+        FishyMapSearchProjection::from_expression(&effective_filters.search_expression);
     FishyMapFiltersState {
-        fish_ids: fish_filter.selected_fish_ids.clone(),
-        zone_rgbs: semantic_filter.selected_zone_rgbs().to_vec(),
-        semantic_field_ids_by_layer: semantic_filter.selected_field_ids_by_layer.clone(),
-        fish_filter_terms: bridge_input.filters.fish_filter_terms.clone(),
-        search_expression: bridge_input.filters.search_expression.clone(),
+        fish_ids: projection.fish_ids,
+        zone_rgbs: projection.zone_rgbs,
+        semantic_field_ids_by_layer: projection.semantic_field_ids_by_layer,
+        fish_filter_terms: projection.fish_filter_terms,
+        search_expression: effective_filters.search_expression,
         search_text: bridge_input.filters.search_text.clone(),
         prize_only: bridge_input.filters.prize_only,
-        patch_id: match (&from_patch_id, &to_patch_id) {
-            (Some(from_patch_id), Some(to_patch_id)) if from_patch_id == to_patch_id => {
-                Some(from_patch_id.clone())
-            }
-            _ => None,
-        },
-        from_patch_id,
-        to_patch_id,
+        patch_id: projection.patch_id,
+        from_patch_id: projection.from_patch_id,
+        to_patch_id: projection.to_patch_id,
         layer_ids_visible: (!layer_registry.ordered().is_empty())
             .then(|| current_layer_order(layer_registry, layer_runtime))
             .map(|layers| {

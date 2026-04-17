@@ -227,6 +227,15 @@ export function createEmptySnapshot() {
       fishStatus: "",
       zoneStatsStatus: "",
     },
+    effectiveFilters: {
+      searchExpression: resolveSearchExpression(undefined),
+      sharedFishState: {
+        caughtIds: [],
+        favouriteIds: [],
+      },
+      zoneMembershipByLayer: {},
+      semanticFieldFiltersByLayer: {},
+    },
     lastDiagnostic: null,
   };
 }

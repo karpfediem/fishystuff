@@ -1,4 +1,4 @@
-use super::super::snapshot::effective_filters;
+use super::super::snapshot::{effective_filter_snapshot, effective_filters};
 use super::super::*;
 use serde_json::json;
 
@@ -6,8 +6,8 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
     bridge: Res<BrowserBridgeState>,
     bootstrap: Res<ApiBootstrapState>,
     patch_filter: Res<PatchFilterState>,
-    fish_filter: Res<FishFilterState>,
-    semantic_filter: Res<SemanticFieldFilterState>,
+    search_expression: Res<SearchExpressionState>,
+    layer_effective_filters: Res<LayerEffectiveFilterState>,
     points: Res<PointsState>,
     point_icons: Res<PointIconCache>,
     selection: Res<SelectionState>,
@@ -23,8 +23,8 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
     if !bridge.is_changed()
         && !bootstrap.is_changed()
         && !patch_filter.is_changed()
-        && !fish_filter.is_changed()
-        && !semantic_filter.is_changed()
+        && !search_expression.is_changed()
+        && !layer_effective_filters.is_changed()
         && !points.is_changed()
         && !point_icons.is_changed()
         && !selection.is_changed()
@@ -38,12 +38,13 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
 
     let filters = effective_filters(
         &bridge.input,
-        &patch_filter,
-        &fish_filter,
-        &semantic_filter,
+        &search_expression,
+        &layer_effective_filters,
         &layer_registry,
         &layer_runtime,
     );
+    let effective_filters =
+        effective_filter_snapshot(&bridge.input, &search_expression, &layer_effective_filters);
     let payload = json!({
         "ready": bootstrap.meta.is_some() && !layer_registry.ordered().is_empty(),
         "viewMode": match view_mode.mode {
@@ -68,6 +69,8 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         },
         "zoneStatsStatus": selection.zone_stats_status,
         "selectedPatch": patch_filter.selected_patch,
+        "filters": filters,
+        "effectiveFilters": effective_filters,
         "patchId": filters.patch_id,
         "fromPatchId": filters.from_patch_id,
         "toPatchId": filters.to_patch_id,

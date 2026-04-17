@@ -52,6 +52,30 @@ pub(in crate::bridge::host) fn resolve_browser_search_filters(
     let expression_projection = (!bridge.input.filters.search_expression.is_empty()).then(|| {
         FishyMapSearchProjection::from_expression(&bridge.input.filters.search_expression)
     });
+    let raw_or_projected_fish_ids = if raw_projection.fish_ids.is_empty() {
+        expression_projection
+            .as_ref()
+            .map(|projection| projection.fish_ids.clone())
+            .unwrap_or_default()
+    } else {
+        raw_projection.fish_ids.clone()
+    };
+    let raw_or_projected_fish_filter_terms = if raw_projection.fish_filter_terms.is_empty() {
+        expression_projection
+            .as_ref()
+            .map(|projection| projection.fish_filter_terms.clone())
+            .unwrap_or_default()
+    } else {
+        raw_projection.fish_filter_terms.clone()
+    };
+    let raw_or_projected_zone_rgbs = if raw_projection.zone_rgbs.is_empty() {
+        expression_projection
+            .as_ref()
+            .map(|projection| projection.zone_rgbs.clone())
+            .unwrap_or_default()
+    } else {
+        raw_projection.zone_rgbs.clone()
+    };
     if search_expression.expression != bridge.input.filters.search_expression {
         search_expression.expression = bridge.input.filters.search_expression.clone();
     }
@@ -60,8 +84,8 @@ pub(in crate::bridge::host) fn resolve_browser_search_filters(
     }
 
     let effective_fish_ids = resolve_effective_fish_ids(
-        &raw_projection.fish_ids,
-        &raw_projection.fish_filter_terms,
+        &raw_or_projected_fish_ids,
+        &raw_or_projected_fish_filter_terms,
         &bridge.input.filters.search_expression,
         &bridge.input.ui.shared_fish_state,
         &fish_catalog.entries,
@@ -71,7 +95,7 @@ pub(in crate::bridge::host) fn resolve_browser_search_filters(
     }
 
     let effective_zone_rgbs = resolve_effective_zone_rgbs(
-        &raw_projection.zone_rgbs,
+        &raw_or_projected_zone_rgbs,
         &bridge.input.filters.search_expression,
         &zone_catalog_rgbs(&layer_registry, &field_metadata),
     );
@@ -167,9 +191,6 @@ fn resolve_effective_fish_ids(
     }
 
     if catalog_fish.is_empty() {
-        if can_use_search_expression {
-            return vec![FISH_FILTER_NO_MATCH_SENTINEL_ID];
-        }
         return if selected_fish_ids.is_empty() {
             vec![FISH_FILTER_NO_MATCH_SENTINEL_ID]
         } else {
@@ -709,5 +730,45 @@ mod tests {
 
         assert!(!projected.representable);
         assert!(projected.expression.is_none());
+    }
+
+    #[test]
+    fn fish_resolution_keeps_explicit_fish_ids_without_catalog() {
+        let expression = FishyMapSearchExpressionNode::Group {
+            operator: FishyMapSearchExpressionOperator::Or,
+            children: vec![FishyMapSearchExpressionNode::Term {
+                term: FishyMapSearchTerm::Fish { fish_id: 77 },
+                negated: false,
+            }],
+            negated: false,
+        };
+
+        assert_eq!(
+            resolve_effective_fish_ids(
+                &[77],
+                &[],
+                &expression,
+                &FishyMapSharedFishState::default(),
+                &[],
+            ),
+            vec![77]
+        );
+    }
+
+    #[test]
+    fn zone_resolution_keeps_explicit_zone_terms_without_catalog() {
+        let expression = FishyMapSearchExpressionNode::Group {
+            operator: FishyMapSearchExpressionOperator::Or,
+            children: vec![FishyMapSearchExpressionNode::Term {
+                term: FishyMapSearchTerm::Zone { zone_rgb: 0x39e58d },
+                negated: false,
+            }],
+            negated: false,
+        };
+
+        assert_eq!(
+            resolve_effective_zone_rgbs(&[0x39e58d], &expression, &[]),
+            vec![0x39e58d]
+        );
     }
 }

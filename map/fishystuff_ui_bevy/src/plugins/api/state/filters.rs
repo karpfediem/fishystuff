@@ -137,8 +137,24 @@ impl LayerEffectiveFilterState {
         self.zone_membership_by_layer.get(layer_id.trim())
     }
 
+    pub fn zone_membership_filters(
+        &self,
+    ) -> impl Iterator<Item = (&str, &ZoneMembershipFilter)> + '_ {
+        self.zone_membership_by_layer
+            .iter()
+            .map(|(layer_id, filter)| (layer_id.as_str(), filter))
+    }
+
     pub fn semantic_field_filter(&self, layer_id: &str) -> Option<&SemanticFieldSelectionFilter> {
         self.semantic_field_filters_by_layer.get(layer_id.trim())
+    }
+
+    pub fn semantic_field_filters(
+        &self,
+    ) -> impl Iterator<Item = (&str, &SemanticFieldSelectionFilter)> + '_ {
+        self.semantic_field_filters_by_layer
+            .iter()
+            .map(|(layer_id, filter)| (layer_id.as_str(), filter))
     }
 
     pub fn semantic_field_ids_for_layer(&self, layer_id: &str) -> &[u32] {

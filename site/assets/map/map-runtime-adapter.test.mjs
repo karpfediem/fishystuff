@@ -86,16 +86,15 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   );
 
   assert.equal(patch.version, 1);
-  assert.deepEqual(patch.filters.fishIds, [77]);
-  assert.deepEqual(patch.filters.zoneRgbs, [123456]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    regions: [11],
-    zone_mask: [123456],
-  });
+  assert.deepEqual(patch.filters.fishIds, []);
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
   assert.deepEqual(patch.filters.fishFilterTerms, []);
   assert.equal(patch.filters.patchId, null);
-  assert.equal(patch.filters.fromPatchId, "a");
-  assert.equal(patch.filters.toPatchId, "b");
+  assert.equal(patch.filters.fromPatchId, null);
+  assert.equal(patch.filters.toPatchId, null);
+  assert.equal(patch.filters.searchExpression.type, "group");
+  assert.equal(patch.filters.searchExpression.children.length, 5);
   assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.filters.layerClipMasks, {
@@ -153,16 +152,15 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
     },
   );
 
-  assert.deepEqual(patch.filters.zoneRgbs, [123456]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    regions: [11],
-    zone_mask: [123456],
-  });
   assert.deepEqual(patch.filters.fishIds, []);
-  assert.deepEqual(patch.filters.fishFilterTerms, ["favourite"]);
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.deepEqual(patch.filters.fishFilterTerms, []);
   assert.equal(patch.filters.patchId, null);
-  assert.equal(patch.filters.fromPatchId, "2026-02-26");
-  assert.equal(patch.filters.toPatchId, "2026-03-12");
+  assert.equal(patch.filters.fromPatchId, null);
+  assert.equal(patch.filters.toPatchId, null);
+  assert.equal(patch.filters.searchExpression.type, "group");
+  assert.equal(patch.filters.searchExpression.children.length, 5);
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.ui.sharedFishState, {
     caughtIds: [],
@@ -230,9 +228,29 @@ test("buildBridgeInputPatchFromSignals forwards raw zone terms from the boolean 
   );
 
   assert.deepEqual(patch.filters.fishIds, []);
-  assert.deepEqual(patch.filters.zoneRgbs, [123456, 654321]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    zone_mask: [123456, 654321],
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.deepEqual(patch.filters.fishFilterTerms, []);
+  assert.deepEqual(patch.filters.searchExpression, {
+    type: "group",
+    operator: "and",
+    children: [
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          { type: "term", term: { kind: "zone", zoneRgb: 123456 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 654321 } },
+        ],
+      },
+      {
+        type: "group",
+        operator: "or",
+        negated: true,
+        children: [{ type: "term", term: { kind: "zone", zoneRgb: 654321 } }],
+      },
+      { type: "term", term: { kind: "fish-filter", term: "red" } },
+    ],
   });
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
 });
@@ -287,7 +305,24 @@ test("buildBridgeInputPatchFromSignals forwards raw fish terms from the boolean 
   );
 
   assert.deepEqual(patch.filters.fishIds, []);
-  assert.deepEqual(patch.filters.fishFilterTerms, ["favourite", "missing", "red"]);
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.deepEqual(patch.filters.fishFilterTerms, []);
+  assert.deepEqual(patch.filters.searchExpression, {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish-filter", term: "missing" } },
+        ],
+      },
+      { type: "term", term: { kind: "fish-filter", term: "red" } },
+    ],
+  });
 });
 
 test("buildBridgeInputPatchFromSignals derives zone-membership clipping from attached layers", () => {
@@ -318,6 +353,10 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
     { currentState: createEmptySnapshot() },
   );
 
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.equal(patch.filters.searchExpression.type, "group");
+  assert.equal(patch.filters.searchExpression.children.length, 1);
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.filters.layerClipMasks, {
     fish_evidence: "zone_mask",
@@ -365,6 +404,12 @@ test("buildBridgeInputPatchFromSignals does not derive zone filters from the cur
 
   assert.deepEqual(patch.filters.zoneRgbs, []);
   assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.deepEqual(patch.filters.fishFilterTerms, []);
+  assert.deepEqual(patch.filters.searchExpression, {
+    type: "group",
+    operator: "or",
+    children: [{ type: "term", term: { kind: "fish-filter", term: "missing" } }],
+  });
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
 });
 
@@ -408,9 +453,12 @@ test("buildBridgeInputPatchFromSignals keeps explicit zone expressions independe
     },
   );
 
-  assert.deepEqual(patch.filters.zoneRgbs, [0x123456]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    zone_mask: [0x123456],
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.deepEqual(patch.filters.searchExpression, {
+    type: "group",
+    operator: "or",
+    children: [{ type: "term", term: { kind: "zone", zoneRgb: 0x123456 } }],
   });
 });
 

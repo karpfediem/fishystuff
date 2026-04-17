@@ -103,6 +103,16 @@ function normalizeRecordObject(value) {
   return isPlainObject(value) ? cloneJson(value) : {};
 }
 
+function hasActiveSearchExpression(expression) {
+  if (!isPlainObject(expression)) {
+    return false;
+  }
+  if (expression.type === "term") {
+    return true;
+  }
+  return Array.isArray(expression.children) && expression.children.length > 0;
+}
+
 function normalizeBridgedFilters(signals) {
   const bridged = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
@@ -188,17 +198,36 @@ export function normalizeMapActionState(raw) {
 export function buildBridgeInputPatchFromSignals(signals, options = {}) {
   const filters = normalizeBridgedFilters(signals);
   const ui = normalizeBridgedUi(signals);
-  const effectiveSemanticFieldIdsByLayer = cloneJson(filters.semanticFieldIdsByLayer);
+  const hasSearchExpression = hasActiveSearchExpression(filters.searchExpression);
+  const projectedSemanticFieldIdsByLayer = cloneJson(filters.semanticFieldIdsByLayer);
   if (filters.zoneRgbs.length) {
-    effectiveSemanticFieldIdsByLayer.zone_mask = cloneJson(filters.zoneRgbs);
+    projectedSemanticFieldIdsByLayer.zone_mask = cloneJson(filters.zoneRgbs);
   } else {
-    delete effectiveSemanticFieldIdsByLayer.zone_mask;
+    delete projectedSemanticFieldIdsByLayer.zone_mask;
   }
-  const effectiveFilters = {
+  const projectedFilters = {
     ...filters,
-    semanticFieldIdsByLayer: effectiveSemanticFieldIdsByLayer,
+    semanticFieldIdsByLayer: projectedSemanticFieldIdsByLayer,
   };
-  const layerSearchEffects = buildLayerSearchEffects(effectiveFilters);
+  const outboundFilters = hasSearchExpression
+    ? {
+        ...filters,
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
+      }
+    : {
+        ...projectedFilters,
+      };
+  const effectiveFilters = {
+    ...outboundFilters,
+    searchExpression: cloneJson(filters.searchExpression),
+  };
+  const layerSearchEffects = buildLayerSearchEffects(projectedFilters);
   const bookmarks = normalizeBookmarkEntries(signals?._map_bookmarks?.entries);
   const bookmarkSelectedIds = normalizeBookmarkSelectedIds(
     bookmarks,
