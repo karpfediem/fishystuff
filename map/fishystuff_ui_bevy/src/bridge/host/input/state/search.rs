@@ -101,13 +101,11 @@ pub(in crate::bridge::host) fn resolve_browser_search_filters(
         .and_then(|projection| projection.to_patch_id.clone())
         .or_else(|| raw_projection.to_patch_id.clone())
         .or_else(|| projected_patch_id);
-    if projected_from_patch_id.is_some() || projected_to_patch_id.is_some() {
-        apply_patch_range_override(
-            &mut patch_filter,
-            projected_from_patch_id.as_deref(),
-            projected_to_patch_id.as_deref(),
-        );
-    }
+    apply_patch_range_override(
+        &mut patch_filter,
+        projected_from_patch_id.as_deref(),
+        projected_to_patch_id.as_deref(),
+    );
 }
 
 fn raw_projection_from_input(

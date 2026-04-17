@@ -111,8 +111,8 @@ impl VisibleTileScope {
 #[derive(Debug, Clone)]
 pub struct LocalEventQuery<'a> {
     pub bbox: &'a MapBboxPx,
-    pub from_ts_utc: i64,
-    pub to_ts_utc: i64,
+    pub from_ts_utc: Option<i64>,
+    pub to_ts_utc: Option<i64>,
     pub fish_ids: &'a [i32],
     pub zone_rgbs: Option<&'a HashSet<u32>>,
     pub tile_scope: Option<VisibleTileScope>,

@@ -28,8 +28,8 @@ fn apply_zone_filter_state(
 
 pub(super) fn collect_evidence_zone_rgbs(
     events: &[EventPointCompact],
-    from_ts_utc: i64,
-    to_ts_utc: i64,
+    from_ts_utc: Option<i64>,
+    to_ts_utc: Option<i64>,
     fish_ids: &[i32],
     resolver: &mut EventZoneSetResolver<'_>,
 ) -> (HashSet<u32>, bool, usize) {
@@ -38,7 +38,9 @@ pub(super) fn collect_evidence_zone_rgbs(
     let mut matched_events = 0usize;
 
     for event in events {
-        if event.ts_utc < from_ts_utc || event.ts_utc >= to_ts_utc {
+        if from_ts_utc.is_some_and(|from_ts_utc| event.ts_utc < from_ts_utc)
+            || to_ts_utc.is_some_and(|to_ts_utc| event.ts_utc >= to_ts_utc)
+        {
             continue;
         }
         if !fish_ids.is_empty() && fish_ids.binary_search(&event.fish_id).is_err() {

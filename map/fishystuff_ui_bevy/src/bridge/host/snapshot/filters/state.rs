@@ -1,4 +1,3 @@
-use super::super::super::persistence::current_patch_range_ids;
 use super::super::super::*;
 use super::layers::{
     current_layer_clip_mask_overrides, current_layer_opacity_overrides, current_layer_order,
@@ -14,7 +13,6 @@ pub(in crate::bridge::host) fn effective_filters(
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
 ) -> FishyMapFiltersState {
-    let (ui_from_patch_id, ui_to_patch_id) = current_patch_range_ids(patch_filter);
     let input_from_patch_id = bridge_input
         .filters
         .from_patch_id
@@ -25,8 +23,8 @@ pub(in crate::bridge::host) fn effective_filters(
         .to_patch_id
         .clone()
         .or_else(|| bridge_input.filters.patch_id.clone());
-    let from_patch_id = input_from_patch_id.or(ui_from_patch_id);
-    let to_patch_id = input_to_patch_id.or(ui_to_patch_id);
+    let from_patch_id = input_from_patch_id;
+    let to_patch_id = input_to_patch_id;
     FishyMapFiltersState {
         fish_ids: fish_filter.selected_fish_ids.clone(),
         zone_rgbs: semantic_filter.selected_zone_rgbs().to_vec(),

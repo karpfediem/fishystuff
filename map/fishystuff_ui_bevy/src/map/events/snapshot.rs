@@ -190,7 +190,13 @@ impl EventsSnapshotState {
                 let Some(event) = self.events.get(idx) else {
                     continue;
                 };
-                if event.ts_utc < query.from_ts_utc || event.ts_utc >= query.to_ts_utc {
+                if query
+                    .from_ts_utc
+                    .is_some_and(|from_ts_utc| event.ts_utc < from_ts_utc)
+                    || query
+                        .to_ts_utc
+                        .is_some_and(|to_ts_utc| event.ts_utc >= to_ts_utc)
+                {
                     continue;
                 }
                 if !query.fish_ids.is_empty()
@@ -329,8 +335,8 @@ mod tests {
         };
         let query = LocalEventQuery {
             bbox: &bbox,
-            from_ts_utc: 150,
-            to_ts_utc: 350,
+            from_ts_utc: Some(150),
+            to_ts_utc: Some(350),
             fish_ids: &[101],
             zone_rgbs: None,
             tile_scope: Some(VisibleTileScope::from_bbox(
@@ -365,8 +371,8 @@ mod tests {
         let zones = HashSet::from([0x445566]);
         let query = LocalEventQuery {
             bbox: &bbox,
-            from_ts_utc: 0,
-            to_ts_utc: 1000,
+            from_ts_utc: Some(0),
+            to_ts_utc: Some(1000),
             fish_ids: &[],
             zone_rgbs: Some(&zones),
             tile_scope: None,
@@ -439,16 +445,16 @@ mod tests {
         };
         let _ = state.select_for_view(&LocalEventQuery {
             bbox: &q1,
-            from_ts_utc: 0,
-            to_ts_utc: 10_000,
+            from_ts_utc: Some(0),
+            to_ts_utc: Some(10_000),
             fish_ids: &[],
             zone_rgbs: None,
             tile_scope: None,
         });
         let _ = state.select_for_view(&LocalEventQuery {
             bbox: &q2,
-            from_ts_utc: 0,
-            to_ts_utc: 10_000,
+            from_ts_utc: Some(0),
+            to_ts_utc: Some(10_000),
             fish_ids: &[],
             zone_rgbs: None,
             tile_scope: None,

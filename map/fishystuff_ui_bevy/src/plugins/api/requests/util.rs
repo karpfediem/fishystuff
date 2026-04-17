@@ -61,10 +61,16 @@ pub(super) fn build_zone_stats_request(
     patch_filter: &PatchFilterState,
     rgb: Rgb,
 ) -> Option<ZoneStatsRequest> {
+    let meta = bootstrap.meta.as_ref()?;
     let defaults = bootstrap.defaults.as_ref()?;
     let map_version = bootstrap.map_version.as_ref()?;
-    let from_ts = patch_filter.from_ts?;
-    let to_ts = patch_filter.to_ts?;
+    let from_ts = patch_filter
+        .from_ts
+        .unwrap_or_else(|| default_from_ts(meta));
+    let to_ts = patch_filter.to_ts.unwrap_or_else(now_utc_seconds);
+    if from_ts >= to_ts {
+        return None;
+    }
 
     Some(ZoneStatsRequest {
         layer_revision_id: Some(map_version.clone()),

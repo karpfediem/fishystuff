@@ -39,6 +39,7 @@ impl Plugin for PointsPlugin {
                     query::refresh_points_from_local_snapshot,
                     render::mark_points_dirty_on_remote_image_update,
                     render::sync_point_markers,
+                    render::request_redraw_for_point_updates,
                 )
                     .chain(),
             );

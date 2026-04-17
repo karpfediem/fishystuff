@@ -1,5 +1,4 @@
 import {
-  buildPatchPickerDefaultSignalPatch,
   buildPatchPickerStateBundle,
   patchTouchesPatchPickerSignals,
 } from "./map-patch-picker-live.js";
@@ -341,11 +340,6 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
     this._rafId = 0;
     const signals = this.signals();
     if (!signals || !this._elements?.fromPicker || !this._elements?.toPicker) {
-      return;
-    }
-    const defaultPatch = buildPatchPickerDefaultSignalPatch(signals);
-    if (defaultPatch) {
-      this.dispatchPatch(defaultPatch);
       return;
     }
     const bundle = buildPatchPickerStateBundle(signals);

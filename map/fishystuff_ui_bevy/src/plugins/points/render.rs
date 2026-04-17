@@ -5,9 +5,11 @@ use bevy::ecs::system::SystemParam;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::window::RequestRedraw;
 use fishystuff_api::models::events::MapBboxPx;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::events::EventsSnapshotState;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
 use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
@@ -369,6 +371,17 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     // next frame. Keep the points dirty so the following frame positions and shows them
     // without needing an unrelated camera movement to retrigger the render pass.
     context.points.dirty = spawned_markers;
+}
+
+pub(super) fn request_redraw_for_point_updates(
+    points: Res<'_, PointsState>,
+    snapshot: Res<'_, EventsSnapshotState>,
+    remote_image_epoch: Res<'_, RemoteImageEpoch>,
+    mut request_redraw: MessageWriter<'_, RequestRedraw>,
+) {
+    if points.is_changed() || snapshot.is_changed() || remote_image_epoch.is_changed() {
+        request_redraw.write(RequestRedraw);
+    }
 }
 
 pub(super) fn mark_points_dirty_on_remote_image_update(

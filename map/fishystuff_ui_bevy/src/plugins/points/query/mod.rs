@@ -14,16 +14,18 @@ const VIEWPORT_SIG_STEP_PX: i32 = 32;
 fn normalized_time_and_fish_filters(
     patch_filter: &PatchFilterState,
     fish_filter: &FishFilterState,
-) -> Option<(i64, i64, Vec<i32>)> {
-    let from_ts_utc = patch_filter.from_ts?;
-    let to_ts_utc = patch_filter.to_ts?;
-    if from_ts_utc >= to_ts_utc {
+) -> Option<(Option<i64>, Option<i64>, Vec<i32>)> {
+    if patch_filter
+        .from_ts
+        .zip(patch_filter.to_ts)
+        .is_some_and(|(from_ts_utc, to_ts_utc)| from_ts_utc >= to_ts_utc)
+    {
         return None;
     }
     let mut fish_ids = fish_filter.selected_fish_ids.clone();
     fish_ids.sort_unstable();
     fish_ids.dedup();
-    Some((from_ts_utc, to_ts_utc, fish_ids))
+    Some((patch_filter.from_ts, patch_filter.to_ts, fish_ids))
 }
 
 fn quantize_px(value: i32, step: i32) -> i32 {
@@ -95,8 +97,8 @@ mod tests {
             zone_filter_revision: 0,
             zone_lookup_url: None,
             zone_lookup_ready: false,
-            from_ts_utc: 10,
-            to_ts_utc: 20,
+            from_ts_utc: Some(10),
+            to_ts_utc: Some(20),
             fish_ids: vec![100],
             viewport_qmin_x: quantize_px(100, VIEWPORT_SIG_STEP_PX),
             viewport_qmin_y: quantize_px(100, VIEWPORT_SIG_STEP_PX),
@@ -113,8 +115,8 @@ mod tests {
             zone_filter_revision: 0,
             zone_lookup_url: None,
             zone_lookup_ready: false,
-            from_ts_utc: 10,
-            to_ts_utc: 20,
+            from_ts_utc: Some(10),
+            to_ts_utc: Some(20),
             fish_ids: vec![100],
             viewport_qmin_x: quantize_px(111, VIEWPORT_SIG_STEP_PX),
             viewport_qmin_y: quantize_px(119, VIEWPORT_SIG_STEP_PX),
@@ -139,6 +141,19 @@ mod tests {
         let (_, _, ids) =
             normalized_time_and_fish_filters(&patch_filter, &fish_filter).expect("filters");
         assert_eq!(ids, vec![10, 20]);
+    }
+
+    #[test]
+    fn normalized_time_and_fish_filters_treats_missing_patch_bounds_as_unbounded() {
+        let patch_filter = PatchFilterState::default();
+        let fish_filter = FishFilterState::default();
+
+        let (from_ts_utc, to_ts_utc, ids) =
+            normalized_time_and_fish_filters(&patch_filter, &fish_filter).expect("filters");
+
+        assert_eq!(from_ts_utc, None);
+        assert_eq!(to_ts_utc, None);
+        assert!(ids.is_empty());
     }
 
     #[test]
@@ -199,8 +214,13 @@ mod tests {
         ];
 
         let mut resolver = EventZoneSetResolver::new(None);
-        let (zones, has_zone_data, matched_events) =
-            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], &mut resolver);
+        let (zones, has_zone_data, matched_events) = evidence::collect_evidence_zone_rgbs(
+            &events,
+            Some(120),
+            Some(170),
+            &[10],
+            &mut resolver,
+        );
 
         assert_eq!(matched_events, 2);
         assert!(has_zone_data);
@@ -256,8 +276,13 @@ mod tests {
             },
         ];
 
-        let (zones, has_zone_data, matched_events) =
-            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], &mut resolver);
+        let (zones, has_zone_data, matched_events) = evidence::collect_evidence_zone_rgbs(
+            &events,
+            Some(120),
+            Some(170),
+            &[10],
+            &mut resolver,
+        );
 
         assert_eq!(matched_events, 2);
         assert!(has_zone_data);
@@ -281,8 +306,13 @@ mod tests {
         }];
 
         let mut resolver = EventZoneSetResolver::new(None);
-        let (zones, has_zone_data, matched_events) =
-            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], &mut resolver);
+        let (zones, has_zone_data, matched_events) = evidence::collect_evidence_zone_rgbs(
+            &events,
+            Some(120),
+            Some(170),
+            &[10],
+            &mut resolver,
+        );
 
         assert_eq!(matched_events, 1);
         assert!(has_zone_data);

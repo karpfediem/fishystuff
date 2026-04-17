@@ -36,17 +36,6 @@ function comparePatchSummariesDescending(left, right) {
   return right.patchId.localeCompare(left.patchId);
 }
 
-function selectedPatchId(filters, bound) {
-  const patchId = normalizePatchId(filters?.patchId);
-  if (bound === "from") {
-    return normalizePatchId(filters?.fromPatchId) || patchId;
-  }
-  if (bound === "to") {
-    return normalizePatchId(filters?.toPatchId) || patchId;
-  }
-  return patchId;
-}
-
 export function normalizePatchCatalog(patches) {
   return (Array.isArray(patches) ? patches : [])
     .map(normalizePatchSummary)
@@ -93,26 +82,4 @@ export function patchTouchesPatchPickerSignals(patch) {
         || filters.toPatchId != null
       ),
   );
-}
-
-export function buildPatchPickerDefaultSignalPatch(signals) {
-  const bundle = buildPatchPickerStateBundle(signals);
-  if (!bundle.state.ready || !bundle.state.catalog.patches.length) {
-    return null;
-  }
-  const fromPatchId = selectedPatchId(bundle.inputState.filters, "from");
-  if (fromPatchId) {
-    return null;
-  }
-  const oldestPatchId = bundle.state.catalog.patches.at(-1)?.patchId;
-  if (!oldestPatchId) {
-    return null;
-  }
-  return {
-    _map_bridged: {
-      filters: {
-        fromPatchId: oldestPatchId,
-      },
-    },
-  };
 }

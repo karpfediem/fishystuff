@@ -466,6 +466,63 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_filters_do_not_echo_implicit_full_range_patch_defaults() {
+        clear_pending_patches();
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            *snapshot.borrow_mut() = snapshot::initial_snapshot();
+        });
+
+        let mut app = App::new();
+        app.insert_resource(BrowserBridgeState::default());
+        app.insert_resource(ApiBootstrapState::default());
+        app.insert_resource(PatchFilterState {
+            from_ts: Some(1_710_000_000),
+            to_ts: Some(1_720_000_000),
+            patches: vec![
+                fishystuff_api::models::meta::PatchInfo {
+                    patch_id: fishystuff_api::ids::PatchId("2024-03-14".to_string()),
+                    start_ts_utc: 1_710_000_000,
+                    patch_name: Some("First Patch".to_string()),
+                },
+                fishystuff_api::models::meta::PatchInfo {
+                    patch_id: fishystuff_api::ids::PatchId("2024-07-05".to_string()),
+                    start_ts_utc: 1_720_000_000,
+                    patch_name: Some("Second Patch".to_string()),
+                },
+            ],
+            selected_patch: None,
+        });
+        app.insert_resource(FishFilterState::default());
+        app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(LayerFilterBindingOverrideState::default());
+        app.insert_resource(LayerEffectiveFilterState::default());
+        app.insert_resource(MapDisplayState::default());
+        app.insert_resource(FishCatalog::default());
+        app.insert_resource(PointsState::default());
+        app.insert_resource(BookmarkState::default());
+        app.insert_resource(SelectionState::default());
+        app.insert_resource(HoverState::default());
+        app.insert_resource(LayerDebugSettings::default());
+        app.insert_resource(ExactLookupCache::default());
+        app.insert_resource(FieldMetadataCache::default());
+        app.insert_resource(ViewModeState::default());
+        app.insert_resource(Map2dViewState::default());
+        app.insert_resource(Terrain3dViewState::default());
+        app.insert_resource(ClearColor(Color::BLACK));
+        seed_layer_resources(&mut app.world_mut());
+        app.add_systems(PostUpdate, snapshot::sync_current_snapshot);
+
+        app.update();
+
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            let snapshot = snapshot.borrow();
+            assert_eq!(snapshot.filters.from_patch_id, None);
+            assert_eq!(snapshot.filters.to_patch_id, None);
+            assert_eq!(snapshot.filters.patch_id, None);
+        });
+    }
+
+    #[test]
     fn prefers_base200_for_theme_background_color() {
         let colors = FishyMapThemeColors {
             base100: Some("#112233".to_string()),
