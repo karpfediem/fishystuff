@@ -41,6 +41,7 @@ test("normalizeZoneCatalog accepts common zone payload shapes", () => {
       hashHexKey: "#70a7c1",
       bareHexKey: "70a7c1",
       _nameSearch: "zenato sea - depth 4",
+      _nameSearchCompact: "zenatoseadepth4",
     },
   ]);
 });
@@ -72,6 +73,41 @@ test("findZoneMatches matches by name and rgb formats", () => {
     findZoneMatches(catalog, "Depth 4").map((zone) => zone.name),
     ["Zenato Sea - Depth 4"],
   );
+});
+
+test("findZoneMatches supports fuzzy zone-name matching", () => {
+  const catalog = normalizeZoneCatalog([
+    {
+      r: 0,
+      g: 0,
+      b: 1,
+      name: "Valencia Sea - Depth 5",
+      confirmed: true,
+      order: 1,
+    },
+    {
+      r: 0,
+      g: 0,
+      b: 2,
+      name: "O'draxxia (Leaf Spot)",
+      confirmed: true,
+      order: 2,
+    },
+    {
+      r: 0,
+      g: 0,
+      b: 3,
+      name: "O'dyllita Waters",
+      confirmed: true,
+      order: 3,
+    },
+  ]);
+
+  const byCompactAlias = findZoneMatches(catalog, "Val D5");
+  assert.equal(byCompactAlias[0]?.name, "Valencia Sea - Depth 5");
+
+  assert.equal(findZoneMatches(catalog, "odraxia")[0]?.name, "O'draxxia Bay");
+  assert.equal(findZoneMatches(catalog, "ody")[0]?.name, "O'dyllita Cove");
 });
 
 test("loadZoneCatalog normalizes the fetched payload", async () => {

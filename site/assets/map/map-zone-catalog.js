@@ -51,12 +51,52 @@ function formatNormalizedRgbComponent(value) {
   return (value / 255).toFixed(6);
 }
 
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function compactSearchText(value) {
+  return normalizeSearchText(value).replace(/[^a-z0-9]/g, "");
+}
+
 function scoreTermMatch(haystack, term, baseScore) {
-  const index = String(haystack || "").indexOf(term);
-  if (index < 0) {
+  const haystackCompact = compactSearchText(haystack);
+  const termCompact = compactSearchText(term);
+  if (!termCompact || !haystackCompact) {
     return Number.NEGATIVE_INFINITY;
   }
-  return baseScore - Math.min(index, baseScore - 1);
+
+  const directIndex = haystackCompact.indexOf(termCompact);
+  if (directIndex >= 0) {
+    return baseScore - Math.min(directIndex, baseScore - 1);
+  }
+
+  if (termCompact.length <= 1) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  let previousIndex = -1;
+  let gapPenalty = 0;
+  let firstIndex = -1;
+  for (const char of termCompact) {
+    const foundIndex = haystackCompact.indexOf(char, previousIndex + 1);
+    if (foundIndex < 0) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    if (firstIndex < 0) {
+      firstIndex = foundIndex;
+    } else {
+      gapPenalty += Math.max(0, foundIndex - previousIndex - 1);
+    }
+    previousIndex = foundIndex;
+  }
+  const spanPenalty = Math.max(0, previousIndex - firstIndex);
+  const scorePenalty = Math.min(spanPenalty + gapPenalty, baseScore - 1);
+  const startPenalty = Math.min(firstIndex, baseScore - 1);
+  return baseScore - Math.min(baseScore - 1, startPenalty + scorePenalty * 2);
 }
 
 function parseZoneRgbSearch(searchText) {
@@ -111,10 +151,18 @@ function scoreZoneMatch(zone, queryTerms, parsedZoneRgb, rawQuery = "") {
     return 0;
   }
   let score = 0;
-  const nameSearch = String(zone._nameSearch || "");
   const normalizedQuery = String(rawQuery || "").trim().toLowerCase();
+  const nameSearch = String(zone._nameSearch || "");
+  const nameSearchCompact = String(zone._nameSearchCompact || "");
+  const normalizedCompactQuery = compactSearchText(rawQuery);
   if (normalizedQuery && nameSearch.includes(normalizedQuery)) {
     score += 320;
+  }
+  if (normalizedCompactQuery) {
+    const fullCompactMatch = scoreTermMatch(nameSearchCompact, normalizedCompactQuery, 280);
+    if (Number.isFinite(fullCompactMatch)) {
+      score += fullCompactMatch;
+    }
   }
   for (const term of queryTerms) {
     const nameScore = scoreTermMatch(nameSearch, term, 120);
@@ -161,7 +209,7 @@ export function normalizeZoneCatalog(rawCatalog) {
       formatNormalizedRgbComponent(b),
     ];
     const hex = Number(zoneRgb).toString(16).padStart(6, "0");
-    const name = String(entry?.name || "").trim() || `Zone ${rgbKey}`;
+  const name = String(entry?.name || "").trim() || `Zone ${rgbKey}`;
     const confirmed = parseCatalogBoolean(entry?.confirmed);
     const active = parseCatalogBoolean(entry?.active);
     const order = parseCatalogInteger(entry?.order ?? entry?.index);
@@ -187,6 +235,7 @@ export function normalizeZoneCatalog(rawCatalog) {
       hashHexKey: `#${hex}`,
       bareHexKey: hex,
       _nameSearch: name.toLowerCase(),
+      _nameSearchCompact: compactSearchText(name),
     });
   }
   normalized.sort((left, right) => {
