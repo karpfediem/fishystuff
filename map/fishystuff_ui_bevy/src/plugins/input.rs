@@ -132,7 +132,7 @@ fn update_map2d_camera_controls(
     working_transform.scale = Vec3::ONE;
     let mut changed = (working_zoom - unclamped_zoom).abs() > 1e-6;
 
-    let ui_input_blocked = controls.ui_capture.blocked || controls.ui_capture.text_input_active;
+    let ui_input_blocked = controls.ui_capture.blocked;
     let active_touches = active_touch_points(&controls.touches);
     let touch_recent = !active_touches.is_empty()
         || controls.touches.any_just_released()
@@ -143,7 +143,7 @@ fn update_map2d_camera_controls(
         touch_gesture.reset();
     }
 
-    if controls.key_buttons.just_pressed(KeyCode::Home) && !controls.ui_capture.text_input_active {
+    if controls.key_buttons.just_pressed(KeyCode::Home) {
         reset_map2d_view(&mut controls.view_state);
         controls.view_state.zoom = controls.zoom_bounds.fit_scale.clamp(
             controls.zoom_bounds.min_scale,

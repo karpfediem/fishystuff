@@ -56,7 +56,7 @@ pub(in crate::map::terrain::runtime) fn update_terrain3d_camera_controls(
     } else {
         OrbitDragMode::Orbit
     };
-    let ui_input_blocked = controls.ui_capture.blocked || controls.ui_capture.text_input_active;
+    let ui_input_blocked = controls.ui_capture.blocked;
     let mut state_changed = false;
 
     let cursor = window.cursor_position().or(controls.cursor_state.last_pos);
@@ -114,9 +114,8 @@ pub(in crate::map::terrain::runtime) fn update_terrain3d_camera_controls(
         state_changed = true;
     }
 
-    if !controls.ui_capture.text_input_active
-        && (controls.key_buttons.just_pressed(KeyCode::Home)
-            || (shift && controls.key_buttons.just_pressed(KeyCode::KeyC)))
+    if controls.key_buttons.just_pressed(KeyCode::Home)
+        || (shift && controls.key_buttons.just_pressed(KeyCode::KeyC))
     {
         reset_terrain3d_view(&mut controls.view);
         state_changed = true;

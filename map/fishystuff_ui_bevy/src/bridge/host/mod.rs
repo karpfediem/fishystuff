@@ -181,6 +181,7 @@ pub struct BrowserBridgePlugin;
 impl Plugin for BrowserBridgePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BrowserBridgeState>()
+            .init_resource::<LayerDebugSettings>()
             .configure_sets(PreUpdate, BrowserInputStateSet)
             .add_systems(
                 PreUpdate,

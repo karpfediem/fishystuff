@@ -24,8 +24,6 @@ use bevy::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use crate::map::terrain::runtime::Terrain3dPlugin;
-#[cfg(target_arch = "wasm32")]
-use crate::map::ui_layers::LayerUiPlugin;
 
 #[cfg(target_arch = "wasm32")]
 pub struct FishystuffPlugins;
@@ -49,7 +47,6 @@ impl PluginGroup for FishystuffPlugins {
             .add(svg_icons::UiSvgIconsPlugin)
             .add(hover_targets::HoverTargetsPlugin)
             .add(ui::UiPlugin)
-            .add(LayerUiPlugin)
             .add(diagnostics::DiagnosticsPlugin)
     }
 }

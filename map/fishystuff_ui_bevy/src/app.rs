@@ -202,7 +202,6 @@ fn build_headless_native_app(options: &NativeAppOptions) -> App {
 #[cfg(test)]
 mod tests {
     use super::{build_native_app, NativeAppOptions};
-    use crate::map::ui_layers::LayerUiPlugin;
     use crate::plugins::mask::MaskPlugin;
     use crate::plugins::ui::UiPlugin;
 
@@ -212,9 +211,7 @@ mod tests {
             renderless: true,
             ..NativeAppOptions::default()
         });
-        app.add_plugins(MaskPlugin)
-            .add_plugins(UiPlugin)
-            .add_plugins(LayerUiPlugin);
+        app.add_plugins(MaskPlugin).add_plugins(UiPlugin);
 
         app.update();
     }

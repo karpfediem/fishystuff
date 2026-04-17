@@ -1,9 +1,5 @@
 use super::super::*;
 
-pub(super) fn text_style(size: f32, color: Color, font: Handle<Font>) -> UiTextStyle {
-    UiTextStyle { font, size, color }
-}
-
 pub(super) fn load_fonts(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     let bytes = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
