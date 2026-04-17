@@ -132,6 +132,7 @@ fn is_events_schema_error(err: &mysql::Error) -> bool {
         || is_unknown_column(err, "source_kind")
         || is_unknown_column(err, "source_id")
         || is_missing_table(err, "event_zone_assignment")
+        || is_missing_table(err, "event_zone_ring_support")
 }
 
 pub(super) fn events_schema_or_db_unavailable(err: mysql::Error) -> AppError {
@@ -139,7 +140,7 @@ pub(super) fn events_schema_or_db_unavailable(err: mysql::Error) -> AppError {
         return AppError::unavailable(
             "events schema is outdated for /api/v1/events_snapshot and /api/v1/zone_stats. \
              Use a Dolt commit or branch that contains the current events schema \
-             (and rebuild events tables and re-import ranking if needed), then rebuild event zone assignments.",
+             (and rebuild events tables and re-import ranking if needed), then rebuild event zone assignments/ring support.",
         );
     }
     db_unavailable(err)

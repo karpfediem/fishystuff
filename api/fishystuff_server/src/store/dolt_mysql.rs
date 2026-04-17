@@ -120,11 +120,25 @@ struct EventZoneRow {
     zone_rgb_u32: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EventZoneSupportRow {
+    event_id: i64,
+    ts_utc: i64,
+    fish_id: i32,
+    zone_rgbs: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EventZoneSupportMode {
+    Assignment,
+    RingSupport,
+}
+
 #[derive(Debug, Clone)]
 struct DerivedEvent {
     ts_utc: i64,
     fish_id: i32,
-    zone_rgb_u32: u32,
+    matches_zone: bool,
     w_time: f64,
 }
 
@@ -230,6 +244,33 @@ impl QueryParams {
         }
         Ok(())
     }
+}
+
+fn group_event_zone_support_rows(
+    rows: &[(i64, i64, i64, i64)],
+) -> AppResult<Vec<EventZoneSupportRow>> {
+    let mut out: Vec<EventZoneSupportRow> = Vec::new();
+    for &(event_id, ts_utc, fish_id, zone_rgb_u32) in rows {
+        let fish_id =
+            i32::try_from(fish_id).map_err(|_| AppError::internal("fish_id out of range"))?;
+        let zone_rgb_u32 = u32::try_from(zone_rgb_u32)
+            .map_err(|_| AppError::internal("zone_rgb_u32 out of range"))?;
+
+        match out.last_mut() {
+            Some(current) if current.event_id == event_id => {
+                if !current.zone_rgbs.contains(&zone_rgb_u32) {
+                    current.zone_rgbs.push(zone_rgb_u32);
+                }
+            }
+            _ => out.push(EventZoneSupportRow {
+                event_id,
+                ts_utc,
+                fish_id,
+                zone_rgbs: vec![zone_rgb_u32],
+            }),
+        }
+    }
+    Ok(out)
 }
 
 impl DoltMySqlStore {
@@ -796,6 +837,32 @@ impl DoltMySqlStore {
         Ok(count.unwrap_or(0) > 0)
     }
 
+    fn has_event_zone_ring_support(&self, layer_revision_id: &str) -> AppResult<bool> {
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let count: Option<i64> = match conn.exec_first(
+            queries::EVENT_ZONE_RING_SUPPORT_COUNT_SQL,
+            (layer_revision_id,),
+        ) {
+            Ok(count) => count,
+            Err(err) if is_missing_table(&err, "event_zone_ring_support") => return Ok(false),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        Ok(count.unwrap_or(0) > 0)
+    }
+
+    fn resolve_event_zone_support_mode(
+        &self,
+        layer_revision_id: &str,
+    ) -> AppResult<Option<EventZoneSupportMode>> {
+        if self.has_event_zone_ring_support(layer_revision_id)? {
+            return Ok(Some(EventZoneSupportMode::RingSupport));
+        }
+        if self.has_event_zone_assignment(layer_revision_id)? {
+            return Ok(Some(EventZoneSupportMode::Assignment));
+        }
+        Ok(None)
+    }
+
     fn load_water_tiles(&self, map_version: &str, tile_px: i32) -> AppResult<(i32, i32, Vec<u32>)> {
         if tile_px <= 0 {
             return Err(AppError::invalid_argument("tile_px must be > 0"));
@@ -889,6 +956,25 @@ impl DoltMySqlStore {
             });
         }
         Ok(out)
+    }
+
+    fn load_ranking_events_with_ring_support_in_window(
+        &self,
+        layer_revision_id: &str,
+        from_ts_utc: i64,
+        to_ts_utc: i64,
+    ) -> AppResult<Vec<EventZoneSupportRow>> {
+        let from_dt = epoch_to_mysql_datetime(from_ts_utc)?;
+        let to_dt = epoch_to_mysql_datetime(to_ts_utc)?;
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(i64, i64, i64, i64)> = conn
+            .exec(
+                queries::RANKING_EVENTS_WITH_RING_SUPPORT_SQL,
+                (layer_revision_id, SOURCE_KIND_RANKING, from_dt, to_dt),
+            )
+            .map_err(events_schema_or_db_unavailable)?;
+
+        group_event_zone_support_rows(&rows)
     }
 
     fn query_events_snapshot_meta(&self) -> AppResult<EventsSnapshotMetaResponse> {
@@ -1118,14 +1204,14 @@ impl DoltMySqlStore {
             alpha0: params.alpha0,
         };
 
-        if !self.has_event_zone_assignment(&params.map_version)? {
+        let Some(support_mode) = self.resolve_event_zone_support_mode(&params.map_version)? else {
             return Err(AppError::not_found(format!(
-                "event_zone_assignment missing for layer_revision_id={}",
+                "event_zone_assignment/event_zone_ring_support missing for layer_revision_id={}",
                 params.map_version
             )));
-        }
+        };
 
-        let summary = self.compute_window_summary(params, zone_rgb_u32)?;
+        let summary = self.compute_window_summary(params, zone_rgb_u32, support_mode)?;
         if summary.alpha_by_fish.is_empty() || summary.alpha_total <= 0.0 {
             return Ok(ZoneStatsResponse {
                 zone_rgb_u32,
@@ -1215,7 +1301,7 @@ impl DoltMySqlStore {
         let mut drift = None;
         if let Some(boundary) = params.drift_boundary_ts {
             let (drift_info, drifting, drift_note) =
-                self.compute_drift_info(params, zone_rgb_u32, boundary, status_cfg)?;
+                self.compute_drift_info(params, zone_rgb_u32, boundary, status_cfg, support_mode)?;
             drift = drift_info;
             if let Some(note) = drift_note {
                 notes.push(note);
@@ -1249,14 +1335,51 @@ impl DoltMySqlStore {
         &self,
         params: &QueryParams,
         zone_rgb_u32: u32,
+        support_mode: EventZoneSupportMode,
     ) -> AppResult<WindowSummary> {
-        let events = self.load_ranking_events_with_zone_in_window(
-            &params.map_version,
-            params.from_ts_utc,
-            params.to_ts_utc,
-        )?;
+        let mut derived: Vec<DerivedEvent> = Vec::new();
+        let mut fish_time: HashMap<i32, f64> = HashMap::new();
 
-        if events.is_empty() {
+        match support_mode {
+            EventZoneSupportMode::Assignment => {
+                let events = self.load_ranking_events_with_zone_in_window(
+                    &params.map_version,
+                    params.from_ts_utc,
+                    params.to_ts_utc,
+                )?;
+                derived.reserve(events.len());
+                for event in events {
+                    let w_time = time_weight(params, event.ts_utc)?;
+                    *fish_time.entry(event.fish_id).or_insert(0.0) += w_time;
+                    derived.push(DerivedEvent {
+                        ts_utc: event.ts_utc,
+                        fish_id: event.fish_id,
+                        matches_zone: event.zone_rgb_u32 == zone_rgb_u32,
+                        w_time,
+                    });
+                }
+            }
+            EventZoneSupportMode::RingSupport => {
+                let events = self.load_ranking_events_with_ring_support_in_window(
+                    &params.map_version,
+                    params.from_ts_utc,
+                    params.to_ts_utc,
+                )?;
+                derived.reserve(events.len());
+                for event in events {
+                    let w_time = time_weight(params, event.ts_utc)?;
+                    *fish_time.entry(event.fish_id).or_insert(0.0) += w_time;
+                    derived.push(DerivedEvent {
+                        ts_utc: event.ts_utc,
+                        fish_id: event.fish_id,
+                        matches_zone: event.zone_rgbs.contains(&zone_rgb_u32),
+                        w_time,
+                    });
+                }
+            }
+        }
+
+        if derived.is_empty() {
             return Ok(WindowSummary {
                 alpha_total: 0.0,
                 alpha_by_fish: HashMap::new(),
@@ -1265,20 +1388,6 @@ impl DoltMySqlStore {
                 ess: 0.0,
                 total_weight: 0.0,
                 last_seen: None,
-            });
-        }
-
-        let mut derived: Vec<DerivedEvent> = Vec::with_capacity(events.len());
-        let mut fish_time: HashMap<i32, f64> = HashMap::new();
-
-        for event in events {
-            let w_time = time_weight(params, event.ts_utc)?;
-            *fish_time.entry(event.fish_id).or_insert(0.0) += w_time;
-            derived.push(DerivedEvent {
-                ts_utc: event.ts_utc,
-                fish_id: event.fish_id,
-                zone_rgb_u32: event.zone_rgb_u32,
-                w_time,
             });
         }
 
@@ -1304,7 +1413,7 @@ impl DoltMySqlStore {
             };
 
             *c_global.entry(event.fish_id).or_insert(0.0) += w;
-            if event.zone_rgb_u32 == zone_rgb_u32 {
+            if event.matches_zone {
                 *c_zone.entry(event.fish_id).or_insert(0.0) += w;
                 w_sum += u;
                 w2_sum += u * u;
@@ -1371,6 +1480,7 @@ impl DoltMySqlStore {
         zone_rgb_u32: u32,
         boundary: i64,
         cfg: &ZoneStatusConfig,
+        support_mode: EventZoneSupportMode,
     ) -> AppResult<(Option<DriftInfo>, bool, Option<String>)> {
         let mut old_params = params.clone();
         old_params.to_ts_utc = boundary;
@@ -1380,8 +1490,8 @@ impl DoltMySqlStore {
         new_params.from_ts_utc = boundary;
         new_params.drift_boundary_ts = None;
 
-        let old = self.compute_window_summary(&old_params, zone_rgb_u32)?;
-        let new = self.compute_window_summary(&new_params, zone_rgb_u32)?;
+        let old = self.compute_window_summary(&old_params, zone_rgb_u32, support_mode)?;
+        let new = self.compute_window_summary(&new_params, zone_rgb_u32, support_mode)?;
 
         let mut union: Vec<i32> = old
             .alpha_by_fish
@@ -1750,10 +1860,11 @@ mod tests {
     use super::{
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
         compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
-        fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
-        parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
+        fish_is_dried, group_event_zone_support_rows, merge_fish_catalog_row, parse_layer_kind,
+        parse_positive_i64, parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
         synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
-        FishCatalogRow, FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
+        EventZoneSupportRow, FishCatalogRow, FishIdentityEntry, FishIdentityIndex,
+        VectorSourceFields, WindowSummary,
     };
 
     fn vector_source_fields(
@@ -2091,5 +2202,52 @@ mod tests {
         };
 
         assert_eq!(zone_distribution_fish_ids(&summary), vec![1]);
+    }
+
+    #[test]
+    fn group_event_zone_support_rows_merges_multiple_zone_rows_per_event() {
+        let grouped = group_event_zone_support_rows(&[
+            (10, 1_700_000_000, 8201, 0x010203),
+            (10, 1_700_000_000, 8201, 0x040506),
+            (11, 1_700_000_010, 8202, 0x070809),
+        ])
+        .expect("group rows");
+
+        assert_eq!(
+            grouped,
+            vec![
+                EventZoneSupportRow {
+                    event_id: 10,
+                    ts_utc: 1_700_000_000,
+                    fish_id: 8201,
+                    zone_rgbs: vec![0x010203, 0x040506],
+                },
+                EventZoneSupportRow {
+                    event_id: 11,
+                    ts_utc: 1_700_000_010,
+                    fish_id: 8202,
+                    zone_rgbs: vec![0x070809],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn group_event_zone_support_rows_deduplicates_duplicate_zone_rows() {
+        let grouped = group_event_zone_support_rows(&[
+            (10, 1_700_000_000, 8201, 0x010203),
+            (10, 1_700_000_000, 8201, 0x010203),
+        ])
+        .expect("group rows");
+
+        assert_eq!(
+            grouped,
+            vec![EventZoneSupportRow {
+                event_id: 10,
+                ts_utc: 1_700_000_000,
+                fish_id: 8201,
+                zone_rgbs: vec![0x010203],
+            }]
+        );
     }
 }

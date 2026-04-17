@@ -8,7 +8,7 @@ use crate::error::AppResult;
 use crate::store::{validate_dolt_ref, FishLang};
 
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
-use super::{DoltMySqlStore, SOURCE_KIND_RANKING};
+use super::{DoltMySqlStore, EventZoneSupportMode, SOURCE_KIND_RANKING};
 
 const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
 const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess";
@@ -198,7 +198,7 @@ impl DoltMySqlStore {
             .as_ref()
             .map(|id| id.0.as_str())
         {
-            if self.has_event_zone_assignment(layer_revision_id)? {
+            if let Some(support_mode) = self.resolve_event_zone_support_mode(layer_revision_id)? {
                 let fish_identities = self.query_fish_identities(ref_id)?;
                 let event_fish_ids = Self::build_event_fish_identity_map(&fish_identities)
                     .into_iter()
@@ -216,18 +216,43 @@ impl DoltMySqlStore {
                         .map(ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(",");
-                    let ranking_query = format!(
-                        "SELECT CAST(z.zone_rgb AS UNSIGNED), COUNT(1) \
-                         FROM events e \
-                         JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ? \
-                         WHERE e.water_ok = 1 \
-                           AND e.source_kind = ? \
-                           AND e.fish_id IN ({fish_id_csv}) \
-                         GROUP BY z.zone_rgb"
-                    );
-                    let ranking_rows: Vec<(u64, u64)> = conn
-                        .exec(ranking_query, (layer_revision_id, SOURCE_KIND_RANKING))
-                        .map_err(db_unavailable)?;
+                    let ranking_query = match support_mode {
+                        EventZoneSupportMode::Assignment => format!(
+                            "SELECT CAST(z.zone_rgb AS UNSIGNED), COUNT(1) \
+                             FROM events e \
+                             JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ? \
+                             WHERE e.water_ok = 1 \
+                               AND e.source_kind = ? \
+                               AND e.fish_id IN ({fish_id_csv}) \
+                             GROUP BY z.zone_rgb"
+                        ),
+                        EventZoneSupportMode::RingSupport => format!(
+                            "SELECT CAST(ring.zone_rgb AS UNSIGNED), COUNT(DISTINCT e.event_id) \
+                             FROM events e \
+                             JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ? \
+                             WHERE e.water_ok = 1 \
+                               AND e.source_kind = ? \
+                               AND e.fish_id IN ({fish_id_csv}) \
+                             GROUP BY ring.zone_rgb"
+                        ),
+                    };
+                    let ranking_rows: Vec<(u64, u64)> =
+                        match conn.exec(ranking_query, (layer_revision_id, SOURCE_KIND_RANKING)) {
+                            Ok(rows) => rows,
+                            Err(err)
+                                if support_mode == EventZoneSupportMode::Assignment
+                                    && is_missing_table(&err, "event_zone_assignment") =>
+                            {
+                                Vec::new()
+                            }
+                            Err(err)
+                                if support_mode == EventZoneSupportMode::RingSupport
+                                    && is_missing_table(&err, "event_zone_ring_support") =>
+                            {
+                                Vec::new()
+                            }
+                            Err(err) => return Err(db_unavailable(err)),
+                        };
                     for (zone_rgb_u32, observation_count) in ranking_rows {
                         let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
                             continue;

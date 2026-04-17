@@ -37,6 +37,9 @@ pub const ZONES_SQL: &str =
 pub const EVENT_ZONE_ASSIGNMENT_COUNT_SQL: &str =
     "SELECT COUNT(1) FROM event_zone_assignment WHERE layer_revision_id = ?";
 
+pub const EVENT_ZONE_RING_SUPPORT_COUNT_SQL: &str =
+    "SELECT COUNT(1) FROM event_zone_ring_support WHERE layer_revision_id = ?";
+
 pub const WATER_TILES_SQL: &str =
     "SELECT tile_x, tile_y, water_count FROM water_tiles WHERE map_version = ? AND tile_px = ?";
 
@@ -65,5 +68,19 @@ WHERE e.water_ok = 1
   AND e.source_kind = ?
   AND ring.zone_rgb = ?
 GROUP BY e.fish_id";
+
+pub const RANKING_EVENTS_WITH_RING_SUPPORT_SQL: &str = "
+SELECT
+  e.event_id,
+  CAST(TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', e.ts_utc) AS SIGNED) AS ts_utc,
+  e.fish_id,
+  ring.zone_rgb
+FROM events e
+JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ?
+WHERE e.water_ok = 1
+  AND e.source_kind = ?
+  AND e.ts_utc >= ?
+  AND e.ts_utc < ?
+ORDER BY e.event_id, ring.zone_rgb";
 
 pub const HEALTHCHECK_SQL: &str = "SELECT 1";
