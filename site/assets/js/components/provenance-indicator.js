@@ -3,6 +3,19 @@ function trimString(value) {
     return normalized || "";
 }
 
+const PROVENANCE_INACTIVE_COLOR =
+    "color-mix(in oklab, var(--color-neutral) 28%, var(--color-base-300) 72%)";
+const PROVENANCE_NEUTRAL_COLOR =
+    "color-mix(in oklab, var(--color-neutral) 62%, var(--color-base-content) 38%)";
+const PROVENANCE_RATE_DATABASE_COLOR =
+    "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
+const PROVENANCE_RATE_COMMUNITY_COLOR =
+    "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
+const PROVENANCE_PRESENCE_FULL_COLOR =
+    "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
+const PROVENANCE_PRESENCE_PARTIAL_COLOR =
+    "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
+
 function normalizeSourceKind(value) {
     const normalized = trimString(value).toLowerCase();
     if (normalized === "database") {
@@ -13,6 +26,9 @@ function normalizeSourceKind(value) {
     }
     if (normalized === "community") {
         return "community";
+    }
+    if (normalized === "derived") {
+        return "derived";
     }
     if (normalized === "mixed") {
         return "mixed";
@@ -29,6 +45,9 @@ function sourceLabel(channel, sourceKind) {
     }
     if (sourceKind === "community") {
         return channel === "rate" ? "Community guess" : "Community";
+    }
+    if (sourceKind === "derived") {
+        return "Derived";
     }
     if (sourceKind === "mixed") {
         return channel === "presence" ? "Mixed support" : "Mixed provenance";
@@ -54,6 +73,13 @@ function defaultDetail(channel, sourceKind, valueText) {
             ? "Community-maintained guessed rate."
             : "Community-maintained presence support.";
     }
+    if (sourceKind === "derived") {
+        return channel === "rate"
+            ? trimString(valueText)
+                ? `Derived rate. Current value: ${trimString(valueText)}.`
+                : "Derived rate."
+            : "Derived presence support.";
+    }
     if (sourceKind === "mixed") {
         return channel === "presence"
             ? "Multiple presence provenance sources support this row."
@@ -62,37 +88,68 @@ function defaultDetail(channel, sourceKind, valueText) {
     return `No ${channel} provenance recorded yet.`;
 }
 
-export function provenanceIndicatorColor(channel, sourceKind, { active = true } = {}) {
-    const databaseColor =
-        "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
-    const rankingColor =
-        "color-mix(in oklab, var(--color-info) 46%, var(--color-success) 54%)";
-    const communityPresenceColor =
-        "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
-    const communityRateColor =
-        "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
+function presenceRingSupport(detail, valueText) {
+    const normalized = `${trimString(detail)} | ${trimString(valueText)}`.toLowerCase();
+    if (
+        normalized.includes("ring fully inside zone")
+        || normalized.includes("fully contained")
+        || normalized.includes("ring_full")
+    ) {
+        return "full";
+    }
+    if (
+        normalized.includes("ring overlaps zone edge")
+        || normalized.includes("ring overlaps zone")
+        || normalized.includes("ring overlap")
+        || normalized.includes("partially contained")
+        || normalized.includes("ring_partial")
+    ) {
+        return "partial";
+    }
+    return "none";
+}
+
+function normalizedRateSourceKind(sourceKind, detail) {
+    const normalizedSourceKind = normalizeSourceKind(sourceKind);
+    if (normalizedSourceKind === "database" || normalizedSourceKind === "community") {
+        return normalizedSourceKind;
+    }
+    const normalizedDetail = trimString(detail).toLowerCase();
+    if (normalizedDetail.includes("database") || normalizedDetail.includes("db ")) {
+        return "database";
+    }
+    if (normalizedDetail.includes("community")) {
+        return "community";
+    }
+    return normalizedSourceKind;
+}
+
+export function provenanceIndicatorColor(
+    channel,
+    sourceKind,
+    { active = true, detail = "", valueText = "" } = {},
+) {
     if (!active) {
-        return "color-mix(in oklab, var(--color-neutral) 28%, var(--color-base-300) 72%)";
+        return PROVENANCE_INACTIVE_COLOR;
     }
-    if (sourceKind === "database") {
-        return databaseColor;
-    }
-    if (sourceKind === "ranking") {
-        return rankingColor;
-    }
-    if (sourceKind === "community") {
-        if (channel === "presence") {
-            return communityPresenceColor;
+    if (channel === "presence") {
+        const ringSupport = presenceRingSupport(detail, valueText);
+        if (ringSupport === "full") {
+            return PROVENANCE_PRESENCE_FULL_COLOR;
         }
-        return communityRateColor;
-    }
-    if (sourceKind === "mixed") {
-        if (channel === "presence") {
-            return `linear-gradient(180deg, ${rankingColor} 0 50%, ${communityPresenceColor} 50% 100%)`;
+        if (ringSupport === "partial") {
+            return PROVENANCE_PRESENCE_PARTIAL_COLOR;
         }
-        return `linear-gradient(180deg, ${databaseColor} 0 50%, ${communityRateColor} 50% 100%)`;
+        return PROVENANCE_NEUTRAL_COLOR;
     }
-    return "color-mix(in oklab, var(--color-neutral) 62%, var(--color-base-content) 38%)";
+    const normalizedSourceKind = normalizedRateSourceKind(sourceKind, detail);
+    if (normalizedSourceKind === "database") {
+        return PROVENANCE_RATE_DATABASE_COLOR;
+    }
+    if (normalizedSourceKind === "community") {
+        return PROVENANCE_RATE_COMMUNITY_COLOR;
+    }
+    return PROVENANCE_NEUTRAL_COLOR;
 }
 
 function buildSegment({
@@ -110,16 +167,21 @@ function buildSegment({
         || normalizedDetail.length > 0
         || normalizedValueText.length > 0;
     const source = sourceLabel(channel, normalizedSourceKind);
+    const resolvedDetail =
+        normalizedDetail
+        || (channel === "presence" && normalizedValueText ? normalizedValueText : "")
+        || defaultDetail(channel, normalizedSourceKind, normalizedValueText);
     return {
         channel,
         label,
         sourceKind: normalizedSourceKind,
         sourceLabel: source,
-        detail:
-            normalizedDetail
-            || (channel === "presence" && normalizedValueText ? normalizedValueText : "")
-            || defaultDetail(channel, normalizedSourceKind, normalizedValueText),
-        color: provenanceIndicatorColor(channel, normalizedSourceKind, { active }),
+        detail: resolvedDetail,
+        color: provenanceIndicatorColor(channel, normalizedSourceKind, {
+            active,
+            detail: resolvedDetail,
+            valueText: normalizedValueText,
+        }),
         active,
     };
 }
