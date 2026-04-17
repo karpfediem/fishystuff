@@ -1,11 +1,14 @@
 use anyhow::{bail, Context, Result};
-use mysql::{params, prelude::Queryable, Pool};
+use mysql::{params, prelude::Queryable, Params, Pool, TxOpts, Value};
 
 use fishystuff_store::WaterTile;
 
 pub struct MySqlIngestStore {
     pool: Pool,
 }
+
+const EVENT_ZONE_ASSIGNMENT_INSERT_CHUNK_ROWS: usize = 1024;
+const EVENT_ZONE_RING_SUPPORT_INSERT_CHUNK_ROWS: usize = 1024;
 
 #[derive(Debug, Clone)]
 pub struct RankingEventRow {
@@ -50,6 +53,12 @@ pub struct EventZoneRingSupportInsertRow {
     pub ring_fully_contained: bool,
     pub ring_center_px_x: i32,
     pub ring_center_px_y: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventZoneSupportProgress {
+    pub has_assignment_rows: bool,
+    pub has_ring_rows: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -185,16 +194,21 @@ impl MySqlIngestStore {
             .exec(
                 "SELECT e.event_id, e.snap_px_x, e.snap_px_y, e.map_px_x, e.map_px_y \
                  FROM events e \
-                 LEFT JOIN event_zone_assignment z \
-                   ON z.event_id = e.event_id AND z.layer_revision_id = :layer_revision_id \
-                 LEFT JOIN ( \
-                   SELECT DISTINCT event_id \
-                   FROM event_zone_ring_support \
-                   WHERE layer_revision_id = :layer_revision_id \
-                 ) ring \
-                   ON ring.event_id = e.event_id \
                  WHERE e.water_ok = 1 \
-                   AND (z.event_id IS NULL OR ring.event_id IS NULL) \
+                   AND ( \
+                     NOT EXISTS ( \
+                       SELECT 1 \
+                       FROM event_zone_assignment z \
+                       WHERE z.layer_revision_id = :layer_revision_id \
+                         AND z.event_id = e.event_id \
+                     ) \
+                     OR NOT EXISTS ( \
+                       SELECT 1 \
+                       FROM event_zone_ring_support ring \
+                       WHERE ring.layer_revision_id = :layer_revision_id \
+                         AND ring.event_id = e.event_id \
+                     ) \
+                   ) \
                  ORDER BY e.event_id \
                  LIMIT :limit_rows",
                 params! {
@@ -223,73 +237,198 @@ impl MySqlIngestStore {
             .collect())
     }
 
-    pub fn insert_event_zones(
+    pub fn load_events_missing_zone_assignment(
         &self,
         layer_revision_id: &str,
-        rows: &[EventZoneInsertRow],
-    ) -> Result<u64> {
-        if rows.is_empty() {
-            return Ok(0);
+        limit: usize,
+    ) -> Result<Vec<EventZoneSupportSampleRow>> {
+        if limit == 0 {
+            return Ok(Vec::new());
         }
         let mut conn = self.pool.get_conn().context("get mysql conn")?;
-        conn.exec_batch(
-            "INSERT IGNORE INTO event_zone_assignment \
-             (layer_revision_id, event_id, zone_rgb, zone_r, zone_g, zone_b, sample_px_x, sample_px_y) \
-             VALUES \
-             (:layer_revision_id, :event_id, :zone_rgb, :zone_r, :zone_g, :zone_b, :sample_px_x, :sample_px_y)",
-            rows.iter().map(|row| {
-                let zone_r = ((row.zone_rgb >> 16) & 0xFF) as u8;
-                let zone_g = ((row.zone_rgb >> 8) & 0xFF) as u8;
-                let zone_b = (row.zone_rgb & 0xFF) as u8;
+        let rows: Vec<(i64, i64, i64, i64, i64)> = conn
+            .exec(
+                "SELECT e.event_id, e.snap_px_x, e.snap_px_y, e.map_px_x, e.map_px_y \
+                 FROM events e \
+                 WHERE e.water_ok = 1 \
+                   AND NOT EXISTS ( \
+                     SELECT 1 \
+                     FROM event_zone_assignment z \
+                     WHERE z.layer_revision_id = :layer_revision_id \
+                       AND z.event_id = e.event_id \
+                   ) \
+                 ORDER BY e.event_id \
+                 LIMIT :limit_rows",
                 params! {
                     "layer_revision_id" => layer_revision_id,
-                    "event_id" => row.event_id,
-                    "zone_rgb" => i64::from(row.zone_rgb),
-                    "zone_r" => i64::from(zone_r),
-                    "zone_g" => i64::from(zone_g),
-                    "zone_b" => i64::from(zone_b),
-                    "sample_px_x" => row.sample_px_x,
-                    "sample_px_y" => row.sample_px_y,
-                }
-            }),
-        )
-        .context("insert mysql event_zone_assignment")?;
-        Ok(conn.affected_rows())
+                    "limit_rows" => limit as u64,
+                },
+            )
+            .context("query mysql events missing zone assignment rows")?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    event_id,
+                    assignment_sample_px_x,
+                    assignment_sample_px_y,
+                    ring_center_px_x,
+                    ring_center_px_y,
+                )| EventZoneSupportSampleRow {
+                    event_id,
+                    assignment_sample_px_x: assignment_sample_px_x as i32,
+                    assignment_sample_px_y: assignment_sample_px_y as i32,
+                    ring_center_px_x: ring_center_px_x as i32,
+                    ring_center_px_y: ring_center_px_y as i32,
+                },
+            )
+            .collect())
     }
 
-    pub fn insert_event_zone_ring_support(
+    pub fn load_events_missing_zone_ring_support(
         &self,
         layer_revision_id: &str,
-        rows: &[EventZoneRingSupportInsertRow],
-    ) -> Result<u64> {
-        if rows.is_empty() {
-            return Ok(0);
+        limit: usize,
+    ) -> Result<Vec<EventZoneSupportSampleRow>> {
+        if limit == 0 {
+            return Ok(Vec::new());
         }
         let mut conn = self.pool.get_conn().context("get mysql conn")?;
-        conn.exec_batch(
-            "INSERT IGNORE INTO event_zone_ring_support \
-             (layer_revision_id, event_id, zone_rgb, zone_r, zone_g, zone_b, ring_fully_contained, ring_center_px_x, ring_center_px_y) \
-             VALUES \
-             (:layer_revision_id, :event_id, :zone_rgb, :zone_r, :zone_g, :zone_b, :ring_fully_contained, :ring_center_px_x, :ring_center_px_y)",
-            rows.iter().map(|row| {
-                let zone_r = ((row.zone_rgb >> 16) & 0xFF) as u8;
-                let zone_g = ((row.zone_rgb >> 8) & 0xFF) as u8;
-                let zone_b = (row.zone_rgb & 0xFF) as u8;
+        let rows: Vec<(i64, i64, i64, i64, i64)> = conn
+            .exec(
+                "SELECT e.event_id, e.snap_px_x, e.snap_px_y, e.map_px_x, e.map_px_y \
+                 FROM events e \
+                 WHERE e.water_ok = 1 \
+                   AND NOT EXISTS ( \
+                     SELECT 1 \
+                     FROM event_zone_ring_support ring \
+                     WHERE ring.layer_revision_id = :layer_revision_id \
+                       AND ring.event_id = e.event_id \
+                   ) \
+                 ORDER BY e.event_id \
+                 LIMIT :limit_rows",
                 params! {
                     "layer_revision_id" => layer_revision_id,
-                    "event_id" => row.event_id,
-                    "zone_rgb" => i64::from(row.zone_rgb),
-                    "zone_r" => i64::from(zone_r),
-                    "zone_g" => i64::from(zone_g),
-                    "zone_b" => i64::from(zone_b),
-                    "ring_fully_contained" => if row.ring_fully_contained { 1_i64 } else { 0_i64 },
-                    "ring_center_px_x" => row.ring_center_px_x,
-                    "ring_center_px_y" => row.ring_center_px_y,
-                }
-            }),
-        )
-        .context("insert mysql event_zone_ring_support")?;
-        Ok(conn.affected_rows())
+                    "limit_rows" => limit as u64,
+                },
+            )
+            .context("query mysql events missing zone ring support rows")?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    event_id,
+                    assignment_sample_px_x,
+                    assignment_sample_px_y,
+                    ring_center_px_x,
+                    ring_center_px_y,
+                )| EventZoneSupportSampleRow {
+                    event_id,
+                    assignment_sample_px_x: assignment_sample_px_x as i32,
+                    assignment_sample_px_y: assignment_sample_px_y as i32,
+                    ring_center_px_x: ring_center_px_x as i32,
+                    ring_center_px_y: ring_center_px_y as i32,
+                },
+            )
+            .collect())
+    }
+
+    pub fn load_events_after_id(
+        &self,
+        after_event_id: i64,
+        limit: usize,
+    ) -> Result<Vec<EventZoneSupportSampleRow>> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let mut conn = self.pool.get_conn().context("get mysql conn")?;
+        let rows: Vec<(i64, i64, i64, i64, i64)> = conn
+            .exec(
+                "SELECT e.event_id, e.snap_px_x, e.snap_px_y, e.map_px_x, e.map_px_y \
+                 FROM events e \
+                 WHERE e.water_ok = 1 \
+                   AND e.event_id > :after_event_id \
+                 ORDER BY e.event_id \
+                 LIMIT :limit_rows",
+                params! {
+                    "after_event_id" => after_event_id,
+                    "limit_rows" => limit as u64,
+                },
+            )
+            .context("query mysql events after event id")?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    event_id,
+                    assignment_sample_px_x,
+                    assignment_sample_px_y,
+                    ring_center_px_x,
+                    ring_center_px_y,
+                )| EventZoneSupportSampleRow {
+                    event_id,
+                    assignment_sample_px_x: assignment_sample_px_x as i32,
+                    assignment_sample_px_y: assignment_sample_px_y as i32,
+                    ring_center_px_x: ring_center_px_x as i32,
+                    ring_center_px_y: ring_center_px_y as i32,
+                },
+            )
+            .collect())
+    }
+
+    pub fn zone_support_progress(
+        &self,
+        layer_revision_id: &str,
+    ) -> Result<EventZoneSupportProgress> {
+        let mut conn = self.pool.get_conn().context("get mysql conn")?;
+        let row: Option<(u8, u8)> = conn
+            .exec_first(
+                "SELECT \
+                    EXISTS( \
+                        SELECT 1 \
+                        FROM event_zone_assignment \
+                        WHERE layer_revision_id = :layer_revision_id \
+                    ), \
+                    EXISTS( \
+                        SELECT 1 \
+                        FROM event_zone_ring_support \
+                        WHERE layer_revision_id = :layer_revision_id \
+                    )",
+                params! {
+                    "layer_revision_id" => layer_revision_id,
+                },
+            )
+            .context("query mysql zone support progress")?;
+        let (has_assignment_rows, has_ring_rows) = row.unwrap_or((0, 0));
+        Ok(EventZoneSupportProgress {
+            has_assignment_rows: has_assignment_rows != 0,
+            has_ring_rows: has_ring_rows != 0,
+        })
+    }
+
+    pub fn insert_event_zone_support_batch(
+        &self,
+        layer_revision_id: &str,
+        assignment_rows: &[EventZoneInsertRow],
+        ring_rows: &[EventZoneRingSupportInsertRow],
+    ) -> Result<(u64, u64)> {
+        if assignment_rows.is_empty() && ring_rows.is_empty() {
+            return Ok((0, 0));
+        }
+
+        let mut tx = self
+            .pool
+            .start_transaction(TxOpts::default())
+            .context("start mysql zone support transaction")?;
+        let assigned =
+            insert_event_zone_assignment_rows(&mut tx, layer_revision_id, assignment_rows)
+                .context("insert mysql event_zone_assignment batch")?;
+        let ring_assigned =
+            insert_event_zone_ring_support_rows(&mut tx, layer_revision_id, ring_rows)
+                .context("insert mysql event_zone_ring_support batch")?;
+        tx.commit()
+            .context("commit mysql zone support transaction")?;
+        Ok((assigned, ring_assigned))
     }
 
     pub fn ensure_layer_revision(
@@ -619,6 +758,23 @@ impl MySqlIngestStore {
             .context("create mysql layer_revisions layer/map_version index")?;
         }
 
+        let has_events_water_ok_event_idx: Option<String> = conn
+            .query_first(
+                "SELECT INDEX_NAME \
+                 FROM information_schema.statistics \
+                 WHERE table_schema = DATABASE() \
+                   AND table_name = 'events' \
+                   AND index_name = 'events_water_ok_event_idx'",
+            )
+            .context("check mysql events water_ok/event_id index")?;
+        if has_events_water_ok_event_idx.is_none() {
+            conn.query_drop(
+                "CREATE INDEX events_water_ok_event_idx \
+                 ON events (water_ok, event_id)",
+            )
+            .context("create mysql events water_ok/event_id index")?;
+        }
+
         conn.query_drop(
             "CREATE TABLE IF NOT EXISTS water_tiles (
                 map_version VARCHAR(64) NOT NULL,
@@ -686,4 +842,102 @@ impl MySqlIngestStore {
 
         Ok(())
     }
+}
+
+fn append_values_placeholders(query: &mut String, row_placeholder: &str, row_count: usize) {
+    for idx in 0..row_count {
+        if idx > 0 {
+            query.push_str(", ");
+        }
+        query.push_str(row_placeholder);
+    }
+}
+
+fn insert_event_zone_assignment_rows<Q: Queryable>(
+    conn: &mut Q,
+    layer_revision_id: &str,
+    rows: &[EventZoneInsertRow],
+) -> Result<u64> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+
+    let mut inserted = 0u64;
+    for chunk in rows.chunks(EVENT_ZONE_ASSIGNMENT_INSERT_CHUNK_ROWS) {
+        let mut query = String::from(
+            "INSERT IGNORE INTO event_zone_assignment \
+             (layer_revision_id, event_id, zone_rgb, zone_r, zone_g, zone_b, sample_px_x, sample_px_y) \
+             VALUES ",
+        );
+        append_values_placeholders(&mut query, "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+
+        let mut params = Vec::with_capacity(chunk.len() * 8);
+        for row in chunk {
+            let zone_r = ((row.zone_rgb >> 16) & 0xFF) as u8;
+            let zone_g = ((row.zone_rgb >> 8) & 0xFF) as u8;
+            let zone_b = (row.zone_rgb & 0xFF) as u8;
+            params.push(Value::from(layer_revision_id));
+            params.push(Value::from(row.event_id));
+            params.push(Value::from(row.zone_rgb));
+            params.push(Value::from(zone_r));
+            params.push(Value::from(zone_g));
+            params.push(Value::from(zone_b));
+            params.push(Value::from(row.sample_px_x));
+            params.push(Value::from(row.sample_px_y));
+        }
+
+        let result = conn
+            .exec_iter(query, Params::Positional(params))
+            .context("insert mysql event_zone_assignment rows")?;
+        inserted += result.affected_rows();
+    }
+
+    Ok(inserted)
+}
+
+fn insert_event_zone_ring_support_rows<Q: Queryable>(
+    conn: &mut Q,
+    layer_revision_id: &str,
+    rows: &[EventZoneRingSupportInsertRow],
+) -> Result<u64> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+
+    let mut inserted = 0u64;
+    for chunk in rows.chunks(EVENT_ZONE_RING_SUPPORT_INSERT_CHUNK_ROWS) {
+        let mut query = String::from(
+            "INSERT IGNORE INTO event_zone_ring_support \
+             (layer_revision_id, event_id, zone_rgb, zone_r, zone_g, zone_b, ring_fully_contained, ring_center_px_x, ring_center_px_y) \
+             VALUES ",
+        );
+        append_values_placeholders(&mut query, "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+
+        let mut params = Vec::with_capacity(chunk.len() * 9);
+        for row in chunk {
+            let zone_r = ((row.zone_rgb >> 16) & 0xFF) as u8;
+            let zone_g = ((row.zone_rgb >> 8) & 0xFF) as u8;
+            let zone_b = (row.zone_rgb & 0xFF) as u8;
+            params.push(Value::from(layer_revision_id));
+            params.push(Value::from(row.event_id));
+            params.push(Value::from(row.zone_rgb));
+            params.push(Value::from(zone_r));
+            params.push(Value::from(zone_g));
+            params.push(Value::from(zone_b));
+            params.push(Value::from(if row.ring_fully_contained {
+                1_i64
+            } else {
+                0_i64
+            }));
+            params.push(Value::from(row.ring_center_px_x));
+            params.push(Value::from(row.ring_center_px_y));
+        }
+
+        let result = conn
+            .exec_iter(query, Params::Positional(params))
+            .context("insert mysql event_zone_ring_support rows")?;
+        inserted += result.affected_rows();
+    }
+
+    Ok(inserted)
 }

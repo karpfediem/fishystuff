@@ -4,10 +4,10 @@ mod ranking;
 mod region_groups;
 mod region_layers;
 
-use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{bail, Context, Result};
 use chrono::{TimeZone, Utc};
@@ -1058,14 +1058,48 @@ fn run_build_event_zone_assignment_mysql(
         )
         .context("ensure layer revision row")?;
 
+    let progress = store
+        .zone_support_progress(&layer_revision_id)
+        .context("query zone support progress")?;
+    let use_fresh_scan = !progress.has_assignment_rows && !progress.has_ring_rows;
+    let mut after_event_id = 0_i64;
+    println!(
+        "build-event-zone-assignment: mode={} existing_assignment_rows={} existing_ring_rows={}",
+        if use_fresh_scan {
+            "fresh-sequential-scan"
+        } else if progress.has_assignment_rows && !progress.has_ring_rows {
+            "resume-ring-only"
+        } else if !progress.has_assignment_rows && progress.has_ring_rows {
+            "resume-assignment-only"
+        } else {
+            "resume-mixed"
+        },
+        progress.has_assignment_rows,
+        progress.has_ring_rows,
+    );
+
     let start = std::time::Instant::now();
     let mut total = 0usize;
     let mut assigned_total = 0u64;
     let mut ring_support_total = 0u64;
     loop {
-        let samples = store
-            .load_events_missing_zone_support(&layer_revision_id, batch_size)
-            .context("load events missing zone support rows")?;
+        let samples = if use_fresh_scan {
+            store
+                .load_events_after_id(after_event_id, batch_size)
+                .context("load mysql events for fresh zone support scan")?
+        } else if progress.has_assignment_rows && !progress.has_ring_rows {
+            store
+                .load_events_missing_zone_ring_support(&layer_revision_id, batch_size)
+                .context("load mysql events missing zone ring support rows")?
+        } else if !progress.has_assignment_rows && progress.has_ring_rows {
+            store
+                .load_events_missing_zone_assignment(&layer_revision_id, batch_size)
+                .context("load mysql events missing zone assignment rows")?
+        } else {
+            store
+                .load_events_missing_zone_support(&layer_revision_id, batch_size)
+                .context("load mysql events missing zone support rows")?
+        };
         if samples.is_empty() {
             break;
         }
@@ -1090,14 +1124,17 @@ fn run_build_event_zone_assignment_mysql(
                 sample.ring_center_px_y,
             ));
         }
-        let assigned = store
-            .insert_event_zones(&layer_revision_id, &rows)
-            .context("insert event zone assignments")?;
-        let ring_assigned = store
-            .insert_event_zone_ring_support(&layer_revision_id, &ring_rows)
-            .context("insert event zone ring support rows")?;
+        let (assigned, ring_assigned) = store
+            .insert_event_zone_support_batch(&layer_revision_id, &rows, &ring_rows)
+            .context("insert mysql event zone support batch")?;
         assigned_total += assigned;
         ring_support_total += ring_assigned;
+        if use_fresh_scan {
+            after_event_id = rows
+                .last()
+                .map(|row| row.event_id)
+                .unwrap_or(after_event_id);
+        }
         if rows.len() < batch_size {
             break;
         }
@@ -1165,17 +1202,37 @@ fn ranking_ring_zone_overlaps(
     ring_center_px_x: i32,
     ring_center_px_y: i32,
 ) -> Vec<u32> {
-    let radius_px = RANKING_RING_RADIUS_WORLD_UNITS / DISTANCE_PER_PIXEL;
-    let mut zones = BTreeSet::new();
-    for idx in 0..RANKING_RING_SAMPLE_COUNT {
-        let theta = (idx as f64 / RANKING_RING_SAMPLE_COUNT as f64) * std::f64::consts::TAU;
-        let sample_px_x = ring_center_px_x as f64 + radius_px * theta.cos();
-        let sample_px_y = ring_center_px_y as f64 + radius_px * theta.sin();
-        let zone_rgb =
-            mask.sample_rgb_u32_clamped(sample_px_x.round() as i32, sample_px_y.round() as i32);
-        zones.insert(zone_rgb);
+    let mut zones = Vec::with_capacity(4);
+    for &(offset_px_x, offset_px_y) in ranking_ring_sample_offsets() {
+        let zone_rgb = mask.sample_rgb_u32_clamped(
+            ring_center_px_x + offset_px_x,
+            ring_center_px_y + offset_px_y,
+        );
+        if !zones.contains(&zone_rgb) {
+            zones.push(zone_rgb);
+        }
     }
-    zones.into_iter().collect()
+    zones.sort_unstable();
+    zones
+}
+
+fn ranking_ring_sample_offsets() -> &'static [(i32, i32)] {
+    static OFFSETS: OnceLock<Vec<(i32, i32)>> = OnceLock::new();
+    OFFSETS
+        .get_or_init(|| {
+            let radius_px = RANKING_RING_RADIUS_WORLD_UNITS / DISTANCE_PER_PIXEL;
+            (0..RANKING_RING_SAMPLE_COUNT)
+                .map(|idx| {
+                    let theta =
+                        (idx as f64 / RANKING_RING_SAMPLE_COUNT as f64) * std::f64::consts::TAU;
+                    (
+                        (radius_px * theta.cos()).round() as i32,
+                        (radius_px * theta.sin()).round() as i32,
+                    )
+                })
+                .collect()
+        })
+        .as_slice()
 }
 
 fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<PathBuf> {
@@ -2256,6 +2313,8 @@ fn index_zone_mask_with_mask(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
     use fishystuff_core::masks::pack_rgb_u32;
 
     fn set_pixel(data: &mut [u8], width: u32, px: u32, py: u32, r: u8, g: u8, b: u8) {
