@@ -54,7 +54,6 @@ pub(crate) fn sync_display_layer_controls(
             display_state.show_points = state.visible;
             display_state.show_point_icons = state.point_icons_visible;
             display_state.point_icon_scale = state.point_icon_scale;
-            display_state.point_opacity = state.opacity;
             display_state.point_z_base = state.z_base;
         }
     }

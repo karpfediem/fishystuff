@@ -206,6 +206,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     }
 
     let needs_refresh = context.points.dirty
+        || context.layer_runtime.is_changed()
         || icons_mode_changed
         || (context.points.icons_enabled
             && (context.fish.is_changed()
@@ -259,7 +260,10 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
 
     let mut visible_icon_count = 0usize;
     let mut visible_fish_ids = Vec::new();
-    let point_opacity = context.display_state.point_opacity.clamp(0.0, 1.0);
+    let point_opacity = fish_evidence_layer_id
+        .map(|layer_id| context.layer_runtime.opacity(layer_id))
+        .unwrap_or(1.0)
+        .clamp(0.0, 1.0);
     let ring_z = context.display_state.point_z_base + RING_Z_OFFSET;
     let icon_z = context.display_state.point_z_base + ICON_Z_OFFSET;
     let inactive_filter = EvidenceZoneFilter::default();
@@ -377,9 +381,14 @@ pub(super) fn request_redraw_for_point_updates(
     points: Res<'_, PointsState>,
     snapshot: Res<'_, EventsSnapshotState>,
     remote_image_epoch: Res<'_, RemoteImageEpoch>,
+    layer_runtime: Res<'_, LayerRuntime>,
     mut request_redraw: MessageWriter<'_, RequestRedraw>,
 ) {
     if points.is_changed() || snapshot.is_changed() || remote_image_epoch.is_changed() {
+        request_redraw.write(RequestRedraw);
+        return;
+    }
+    if layer_runtime.is_changed() {
         request_redraw.write(RequestRedraw);
     }
 }
