@@ -5,7 +5,8 @@ use bevy::prelude::Resource;
 use super::{LayerId, LayerRegistry, LayerSpec, LayerVectorStatus, FISH_EVIDENCE_LAYER_KEY};
 
 const POINT_ICON_SCALE_MIN: f32 = 1.0;
-const POINT_ICON_SCALE_MAX: f32 = 3.0;
+const POINT_ICON_SCALE_MAX: f32 = 5.0;
+const POINT_ICON_SCALE_DEFAULT: f32 = 2.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LayerManifestStatus {
@@ -103,7 +104,7 @@ impl LayerRuntime {
             }
             if !supports_point_icons(spec) {
                 state.point_icons_visible = false;
-                state.point_icon_scale = POINT_ICON_SCALE_MIN;
+                state.point_icon_scale = POINT_ICON_SCALE_DEFAULT;
             } else {
                 state.point_icon_scale = state
                     .point_icon_scale
@@ -209,7 +210,7 @@ impl LayerRuntime {
     pub fn point_icon_scale(&self, id: LayerId) -> f32 {
         self.get(id)
             .map(|state| state.point_icon_scale)
-            .unwrap_or(POINT_ICON_SCALE_MIN)
+            .unwrap_or(POINT_ICON_SCALE_DEFAULT)
     }
 
     pub fn set_point_icon_scale(&mut self, id: LayerId, scale: f32) {
@@ -260,7 +261,7 @@ fn default_state_for_spec(spec: &LayerSpec) -> LayerRuntimeState {
             .as_ref()
             .is_some_and(|source| source.supports_labels && source.show_labels_default),
         point_icons_visible: supports_point_icons(spec),
-        point_icon_scale: POINT_ICON_SCALE_MIN,
+        point_icon_scale: POINT_ICON_SCALE_DEFAULT,
         z_base: spec.z_base,
         display_order: spec.display_order,
         current_base_lod: None,

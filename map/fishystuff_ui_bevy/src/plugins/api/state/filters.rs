@@ -7,7 +7,8 @@ use crate::prelude::*;
 
 pub type Patch = PatchInfo;
 pub const POINT_ICON_SCALE_MIN: f32 = 1.0;
-pub const POINT_ICON_SCALE_MAX: f32 = 3.0;
+pub const POINT_ICON_SCALE_DEFAULT: f32 = 2.0;
+pub const POINT_ICON_SCALE_MAX: f32 = 5.0;
 
 #[derive(Resource, Default)]
 pub struct PatchFilterState {
@@ -406,7 +407,7 @@ impl Default for MapDisplayState {
             show_effort: true,
             show_points: true,
             show_point_icons: true,
-            point_icon_scale: POINT_ICON_SCALE_MIN,
+            point_icon_scale: POINT_ICON_SCALE_DEFAULT,
             point_opacity: 1.0,
             point_z_base: 40.0,
             show_drift: false,

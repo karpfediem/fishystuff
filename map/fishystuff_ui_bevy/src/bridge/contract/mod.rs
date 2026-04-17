@@ -33,7 +33,8 @@ pub use snapshot::{
 
 pub const FISHYMAP_CONTRACT_VERSION: u8 = 1;
 pub const FISHYMAP_POINT_ICON_SCALE_MIN: f32 = 1.0;
-pub const FISHYMAP_POINT_ICON_SCALE_MAX: f32 = 3.0;
+pub const FISHYMAP_POINT_ICON_SCALE_MAX: f32 = 5.0;
+pub const FISHYMAP_POINT_ICON_SCALE_DEFAULT: f32 = 2.0;
 
 fn default_contract_version() -> u8 {
     FISHYMAP_CONTRACT_VERSION

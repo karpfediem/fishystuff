@@ -220,7 +220,7 @@ pub(in crate::bridge::host) fn reset_layer_point_icon_scale_override(
     for layer in layer_registry.ordered() {
         layer_runtime.set_point_icon_scale(
             layer.id,
-            crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
+            crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_DEFAULT,
         );
     }
 }

@@ -17,7 +17,8 @@ use super::search::{
 use super::snapshot::FishyMapSelectionPointKind;
 use super::{
     default_contract_version, FishyMapViewSnapshot, FISHYMAP_CONTRACT_VERSION,
-    FISHYMAP_POINT_ICON_SCALE_MAX, FISHYMAP_POINT_ICON_SCALE_MIN,
+    FISHYMAP_POINT_ICON_SCALE_DEFAULT, FISHYMAP_POINT_ICON_SCALE_MAX,
+    FISHYMAP_POINT_ICON_SCALE_MIN,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -255,7 +256,7 @@ impl Default for FishyMapUiState {
             left_panel_open: true,
             show_points: true,
             show_point_icons: true,
-            point_icon_scale: FISHYMAP_POINT_ICON_SCALE_MIN,
+            point_icon_scale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
             shared_fish_state: FishyMapSharedFishState::default(),
             active_detail_pane_id: None,
             bookmark_selected_ids: Vec::new(),

@@ -142,8 +142,9 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                 point_icons_default: is_fish_evidence,
                 point_icon_scale: runtime_state
                     .map(|state| state.point_icon_scale)
-                    .unwrap_or(crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN),
-                point_icon_scale_default: crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
+                    .unwrap_or(crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_DEFAULT),
+                point_icon_scale_default:
+                    crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_DEFAULT,
                 filter_bindings: layer
                     .filter_bindings
                     .iter()
@@ -303,7 +304,9 @@ pub(in crate::bridge::host::snapshot::filters) fn current_layer_point_icon_scale
             continue;
         }
         let scale = layer_runtime.point_icon_scale(layer.id);
-        if (scale - crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN).abs() <= f32::EPSILON {
+        if (scale - crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_DEFAULT).abs()
+            <= f32::EPSILON
+        {
             continue;
         }
         overrides.insert(layer.key.clone(), scale);
