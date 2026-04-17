@@ -329,7 +329,7 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
   });
 });
 
-test("buildBridgeInputPatchFromSignals falls back to the current selection zone when no explicit zone filter exists", () => {
+test("buildBridgeInputPatchFromSignals does not derive zone filters from the current selection", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
       _map_bridged: {
@@ -363,14 +363,12 @@ test("buildBridgeInputPatchFromSignals falls back to the current selection zone 
     },
   );
 
-  assert.deepEqual(patch.filters.zoneRgbs, [0x39e58d]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    zone_mask: [0x39e58d],
-  });
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
 });
 
-test("buildBridgeInputPatchFromSignals keeps explicit zone expressions ahead of the current selection zone", () => {
+test("buildBridgeInputPatchFromSignals keeps explicit zone expressions independent from the current selection zone", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
       _map_ui: {

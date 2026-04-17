@@ -2,7 +2,6 @@ import {
   FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_POINT_ICON_SCALE_MIN,
   createEmptySnapshot,
-  zoneRgbFromLayerSamples,
 } from "./map-host.js";
 import {
   DEFAULT_ENABLED_LAYER_IDS,
@@ -103,48 +102,6 @@ function normalizeRecordObject(value) {
   return isPlainObject(value) ? cloneJson(value) : {};
 }
 
-function searchExpressionHasZoneTerms(expression) {
-  const visit = (node) => {
-    if (!isPlainObject(node)) {
-      return false;
-    }
-    if (node.type === "term") {
-      return String(node.term?.kind || "").trim() === "zone";
-    }
-    return Array.isArray(node.children) && node.children.some((child) => visit(child));
-  };
-  return visit(resolveSearchExpression(expression));
-}
-
-function hasExplicitZoneFilter(filters) {
-  const semanticFieldIdsByLayer = isPlainObject(filters?.semanticFieldIdsByLayer)
-    ? filters.semanticFieldIdsByLayer
-    : {};
-  return (
-    normalizeIntegerList(filters?.zoneRgbs).length > 0
-    || normalizeIntegerList(semanticFieldIdsByLayer.zone_mask).length > 0
-    || searchExpressionHasZoneTerms(filters?.searchExpression)
-  );
-}
-
-function selectedZoneRgbFromSignals(signals, currentState = null) {
-  const runtimeSelection = isPlainObject(signals?._map_runtime?.selection)
-    ? signals._map_runtime.selection
-    : null;
-  const currentSelection = isPlainObject(currentState?.selection) ? currentState.selection : null;
-  for (const selection of [runtimeSelection, currentSelection]) {
-    const zoneStatsRgb = Number.parseInt(selection?.zoneStats?.zoneRgb, 10);
-    if (Number.isInteger(zoneStatsRgb) && zoneStatsRgb >= 0) {
-      return zoneStatsRgb;
-    }
-    const layerSampleRgb = zoneRgbFromLayerSamples(selection?.layerSamples);
-    if (Number.isInteger(layerSampleRgb) && layerSampleRgb >= 0) {
-      return layerSampleRgb;
-    }
-  }
-  return null;
-}
-
 function normalizeBridgedFilters(signals) {
   const bridged = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
@@ -230,22 +187,14 @@ export function normalizeMapActionState(raw) {
 export function buildBridgeInputPatchFromSignals(signals, options = {}) {
   const filters = normalizeBridgedFilters(signals);
   const ui = normalizeBridgedUi(signals);
-  let selectedZoneRgbs = cloneJson(filters.zoneRgbs);
-  if (!selectedZoneRgbs.length && !hasExplicitZoneFilter(filters)) {
-    const selectedZoneRgb = selectedZoneRgbFromSignals(signals, options.currentState);
-    if (Number.isInteger(selectedZoneRgb) && selectedZoneRgb >= 0) {
-      selectedZoneRgbs = [selectedZoneRgb];
-    }
-  }
   const effectiveSemanticFieldIdsByLayer = cloneJson(filters.semanticFieldIdsByLayer);
-  if (selectedZoneRgbs.length) {
-    effectiveSemanticFieldIdsByLayer.zone_mask = cloneJson(selectedZoneRgbs);
+  if (filters.zoneRgbs.length) {
+    effectiveSemanticFieldIdsByLayer.zone_mask = cloneJson(filters.zoneRgbs);
   } else {
     delete effectiveSemanticFieldIdsByLayer.zone_mask;
   }
   const effectiveFilters = {
     ...filters,
-    zoneRgbs: selectedZoneRgbs,
     semanticFieldIdsByLayer: effectiveSemanticFieldIdsByLayer,
   };
   const layerSearchEffects = buildLayerSearchEffects(effectiveFilters);
