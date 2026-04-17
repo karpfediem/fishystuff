@@ -21,6 +21,7 @@ test("normalizeWindowUiState applies defaults and normalizes coordinates", () =>
   assert.equal(state.search.collapsed, false);
   assert.equal(state.search.x, 43);
   assert.equal(state.search.y, 13);
+  assert.equal(state.settings.open, false);
   assert.equal(state.settings.autoAdjustView, false);
   assert.equal(state.zoneInfo.tab, "fish");
   assert.equal(state.layers.open, true);

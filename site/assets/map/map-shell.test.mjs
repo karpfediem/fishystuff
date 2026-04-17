@@ -5,6 +5,11 @@ import { readFileSync } from "node:fs";
 const shellHtml = readFileSync(new URL("./map-shell.html", import.meta.url), "utf8");
 
 test("map shell windows are Datastar-driven for open and collapsed state", () => {
+  assert.match(
+    shellHtml,
+    /settings: \{ open: false, collapsed: false, x: null, y: null, autoAdjustView: true \}/,
+  );
+  assert.match(shellHtml, /layers: \{ open: true, collapsed: false, x: null, y: null \}/);
   assert.match(shellHtml, /layers: \{ expandedLayerIds: \[\], hoverFactsVisibleByLayer: \{\} \}/);
   assert.match(shellHtml, /id="fishymap-search-window"[\s\S]*data-show="\$_map_ui\.windowUi\.search\.open"/);
   assert.match(

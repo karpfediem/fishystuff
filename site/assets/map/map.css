@@ -609,13 +609,15 @@ fishymap-search-panel {
 }
 
 #fishymap-layers-window {
-  right: 1rem;
-  bottom: 1rem;
+  top: 1rem;
+  right: auto;
+  bottom: auto;
+  left: 5rem;
   z-index: 19;
-  width: min(25rem, calc(100vw - 2rem));
-  height: min(40rem, calc(100% - 10rem));
-  max-height: calc(100% - 10rem);
-  min-height: min(35rem, calc(100% - 10rem));
+  width: min(25rem, calc(100vw - 6rem));
+  height: min(40rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  min-height: min(35rem, calc(100% - 2rem));
 }
 
 #fishymap-view-toggle {
@@ -649,7 +651,7 @@ fishymap-search-panel {
   padding: 1rem;
 }
 
-#fishymap-layers {
+#fishymap-layer-panel {
   display: flex;
   min-height: 0;
   flex: 1 1 auto;

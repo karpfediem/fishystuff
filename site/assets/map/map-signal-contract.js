@@ -20,7 +20,7 @@ export const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
 export const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({
-    open: true,
+    open: false,
     collapsed: false,
     x: null,
     y: null,
