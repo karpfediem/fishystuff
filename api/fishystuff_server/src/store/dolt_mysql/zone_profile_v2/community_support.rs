@@ -7,6 +7,7 @@ use super::super::{db_unavailable, is_missing_table, DoltMySqlStore};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CommunitySupportStatus {
     Confirmed,
+    Guessed,
     Unconfirmed,
     DataIncomplete,
 }
@@ -29,6 +30,7 @@ pub(super) struct CommunityZoneSupportSummary {
 fn parse_support_status(value: &str) -> CommunitySupportStatus {
     match value.trim().to_ascii_lowercase().as_str() {
         "confirmed" => CommunitySupportStatus::Confirmed,
+        "guessed" => CommunitySupportStatus::Guessed,
         "data_incomplete" => CommunitySupportStatus::DataIncomplete,
         _ => CommunitySupportStatus::Unconfirmed,
     }
@@ -36,7 +38,8 @@ fn parse_support_status(value: &str) -> CommunitySupportStatus {
 
 fn status_priority(status: CommunitySupportStatus) -> u8 {
     match status {
-        CommunitySupportStatus::Confirmed => 2,
+        CommunitySupportStatus::Confirmed => 3,
+        CommunitySupportStatus::Guessed => 2,
         CommunitySupportStatus::Unconfirmed => 1,
         CommunitySupportStatus::DataIncomplete => 0,
     }

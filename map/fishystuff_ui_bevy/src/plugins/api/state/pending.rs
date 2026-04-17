@@ -1,4 +1,5 @@
 use async_channel::Receiver;
+use fishystuff_api::models::fish::CommunityFishZoneSupportResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
 use fishystuff_api::models::zones::ZonesResponse;
@@ -13,4 +14,6 @@ pub struct PendingRequests {
     pub zones: Option<Receiver<Result<ZonesResponse, String>>>,
     pub zone_stats: Option<(u32, Receiver<Result<ZoneStatsResponse, String>>)>,
     pub(crate) fish_catalog: Option<Receiver<Result<FishCatalogPayload, String>>>,
+    pub(crate) community_fish_zone_support:
+        Option<Receiver<Result<CommunityFishZoneSupportResponse, String>>>,
 }

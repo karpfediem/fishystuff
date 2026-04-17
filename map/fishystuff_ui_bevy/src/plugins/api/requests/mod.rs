@@ -11,7 +11,10 @@ use fishystuff_api::Rgb;
 
 use crate::prelude::*;
 
-use super::state::{ApiBootstrapState, FishCatalog, PatchFilterState, PendingRequests};
+use super::state::{
+    ApiBootstrapState, CommunityFishZoneSupportIndex, FishCatalog, PatchFilterState,
+    PendingRequests,
+};
 
 pub(super) fn ensure_meta_request(
     pending: ResMut<PendingRequests>,
@@ -33,6 +36,14 @@ pub(super) fn ensure_fish_catalog_request(
     bootstrap: Res<ApiBootstrapState>,
 ) {
     ensure::ensure_fish_catalog_request(pending, fish, bootstrap);
+}
+
+pub(super) fn ensure_community_fish_zone_support_request(
+    pending: ResMut<PendingRequests>,
+    community: Res<CommunityFishZoneSupportIndex>,
+    bootstrap: Res<ApiBootstrapState>,
+) {
+    ensure::ensure_community_fish_zone_support_request(pending, community, bootstrap);
 }
 
 pub(super) fn poll_requests(state: poll::RequestPollState<'_, '_>) {

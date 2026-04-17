@@ -220,6 +220,8 @@ After the row is present in Dolt:
 - zone presence should show up on the map/calculator summary as community
   presence
 - guessed rates should show up as community guesses
+- guessed-rate rows also imply community presence for zone filtering and other
+  presence-support surfaces
 
 If the row looks correct in `community_zone_fish_support` but does not appear in
 the product, inspect the structural lineage in `notes` first. The runtime now

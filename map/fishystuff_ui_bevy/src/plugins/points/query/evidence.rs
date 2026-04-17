@@ -4,12 +4,10 @@ use bevy::prelude::*;
 use fishystuff_api::models::events::EventPointCompact;
 
 use crate::map::events::{EventZoneSetResolver, EventsSnapshotState};
-use crate::map::exact_lookup::ExactLookupCache;
-use crate::map::field_view::loaded_field_layer;
 use crate::map::layers::LayerRegistry;
 use crate::plugins::api::{
-    FishFilterState, LayerEffectiveFilterState, LayerFilterBindingOverrideState, PatchFilterState,
-    SemanticFieldFilterState,
+    CommunityFishZoneSupportIndex, FishCatalog, FishFilterState, LayerEffectiveFilterState,
+    LayerFilterBindingOverrideState, PatchFilterState, SemanticFieldFilterState,
 };
 
 use super::{normalized_time_and_fish_filters, EvidenceZoneFilter};
@@ -31,7 +29,7 @@ pub(super) fn collect_evidence_zone_rgbs(
     from_ts_utc: Option<i64>,
     to_ts_utc: Option<i64>,
     fish_ids: &[i32],
-    resolver: &mut EventZoneSetResolver<'_>,
+    resolver: &mut EventZoneSetResolver,
 ) -> (HashSet<u32>, bool, usize) {
     let mut zones = HashSet::new();
     let mut has_zone_data = false;
@@ -57,12 +55,27 @@ pub(super) fn collect_evidence_zone_rgbs(
     (zones, has_zone_data, matched_events)
 }
 
+fn collect_community_zone_rgbs(
+    fish_ids: &[i32],
+    fish_catalog: &FishCatalog,
+    community: &CommunityFishZoneSupportIndex,
+) -> HashSet<u32> {
+    let mut zones = HashSet::new();
+    for fish_id in fish_ids {
+        let Some(item_id) = fish_catalog.item_id_for_fish(*fish_id) else {
+            continue;
+        };
+        zones.extend(community.zone_rgbs_for_item(item_id).iter().copied());
+    }
+    zones
+}
+
 pub(crate) fn sync_evidence_zone_filter(
     patch_filter: Res<PatchFilterState>,
     fish_filter: Res<FishFilterState>,
+    fish_catalog: Res<FishCatalog>,
+    community: Res<CommunityFishZoneSupportIndex>,
     snapshot: Res<EventsSnapshotState>,
-    layer_registry: Res<LayerRegistry>,
-    exact_lookups: Res<ExactLookupCache>,
     mut filter: ResMut<EvidenceZoneFilter>,
 ) {
     let active_terms = !fish_filter.selected_fish_ids.is_empty();
@@ -79,24 +92,19 @@ pub(crate) fn sync_evidence_zone_filter(
     };
     fish_ids.sort_unstable();
     fish_ids.dedup();
+    let mut next_zone_rgbs = collect_community_zone_rgbs(&fish_ids, &fish_catalog, &community);
 
-    if !snapshot.loaded {
-        apply_zone_filter_state(filter.as_mut(), false, HashSet::new());
-        return;
+    let mut resolver = EventZoneSetResolver::new();
+    if snapshot.loaded {
+        let (ranking_zone_rgbs, _, _) = collect_evidence_zone_rgbs(
+            &snapshot.events,
+            from_ts_utc,
+            to_ts_utc,
+            &fish_ids,
+            &mut resolver,
+        );
+        next_zone_rgbs.extend(ranking_zone_rgbs);
     }
-
-    let zone_mask_field = layer_registry
-        .get_by_key(SemanticFieldFilterState::ZONE_MASK_LAYER_ID)
-        .and_then(|layer| loaded_field_layer(layer, exact_lookups.as_ref()));
-    let mut resolver = EventZoneSetResolver::new(zone_mask_field);
-
-    let (next_zone_rgbs, _, _) = collect_evidence_zone_rgbs(
-        &snapshot.events,
-        from_ts_utc,
-        to_ts_utc,
-        &fish_ids,
-        &mut resolver,
-    );
     apply_zone_filter_state(filter.as_mut(), !next_zone_rgbs.is_empty(), next_zone_rgbs);
 }
 
@@ -124,4 +132,162 @@ pub(crate) fn sync_layer_effective_filters(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use std::collections::HashSet;
+
+    use fishystuff_api::models::events::EventPointCompact;
+    use fishystuff_api::models::fish::{
+        CommunityFishZoneSupportEntry, CommunityFishZoneSupportResponse,
+    };
+
+    use super::{collect_community_zone_rgbs, sync_evidence_zone_filter};
+    use crate::map::events::EventsSnapshotState;
+    use crate::plugins::api::{
+        CommunityFishZoneSupportIndex, FishCatalog, FishEntry, FishFilterState, PatchFilterState,
+    };
+    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::prelude::*;
+
+    #[test]
+    fn collect_community_zone_rgbs_maps_selected_fish_to_item_ids() {
+        let mut fish_catalog = FishCatalog::default();
+        fish_catalog.replace(vec![FishEntry {
+            id: 240,
+            item_id: 820240,
+            encyclopedia_key: Some(240),
+            encyclopedia_id: Some(9240),
+            name: "Blobfish".to_string(),
+            name_lower: "blobfish".to_string(),
+            grade: Some("Rare".to_string()),
+            is_prize: false,
+        }]);
+        let mut community = CommunityFishZoneSupportIndex::default();
+        community.replace_from_response(CommunityFishZoneSupportResponse {
+            revision: "community-rev".to_string(),
+            fish: vec![CommunityFishZoneSupportEntry {
+                item_id: 820240,
+                zone_rgbs: vec![0x112233, 0x445566],
+            }],
+            ..CommunityFishZoneSupportResponse::default()
+        });
+
+        let zones = collect_community_zone_rgbs(&[240], &fish_catalog, &community);
+
+        assert_eq!(zones, HashSet::from([0x112233, 0x445566]));
+    }
+
+    #[test]
+    fn sync_evidence_zone_filter_uses_community_support_without_snapshot() {
+        let mut app = App::new();
+        app.init_resource::<PatchFilterState>()
+            .init_resource::<FishFilterState>()
+            .init_resource::<FishCatalog>()
+            .init_resource::<CommunityFishZoneSupportIndex>()
+            .init_resource::<EventsSnapshotState>()
+            .init_resource::<EvidenceZoneFilter>()
+            .add_systems(Update, sync_evidence_zone_filter);
+
+        {
+            let mut fish_filter = app.world_mut().resource_mut::<FishFilterState>();
+            fish_filter.selected_fish_ids = vec![240];
+        }
+        {
+            let mut fish_catalog = app.world_mut().resource_mut::<FishCatalog>();
+            fish_catalog.replace(vec![FishEntry {
+                id: 240,
+                item_id: 820240,
+                encyclopedia_key: Some(240),
+                encyclopedia_id: Some(9240),
+                name: "Blobfish".to_string(),
+                name_lower: "blobfish".to_string(),
+                grade: Some("Rare".to_string()),
+                is_prize: false,
+            }]);
+        }
+        {
+            let mut community = app
+                .world_mut()
+                .resource_mut::<CommunityFishZoneSupportIndex>();
+            community.replace_from_response(CommunityFishZoneSupportResponse {
+                revision: "community-rev".to_string(),
+                fish: vec![CommunityFishZoneSupportEntry {
+                    item_id: 820240,
+                    zone_rgbs: vec![0x112233, 0x445566],
+                }],
+                ..CommunityFishZoneSupportResponse::default()
+            });
+        }
+
+        app.update();
+
+        let filter = app.world().resource::<EvidenceZoneFilter>();
+        assert!(filter.active);
+        assert_eq!(filter.zone_rgbs, HashSet::from([0x112233, 0x445566]));
+    }
+
+    #[test]
+    fn sync_evidence_zone_filter_unions_community_and_ranking_support() {
+        let mut app = App::new();
+        app.init_resource::<PatchFilterState>()
+            .init_resource::<FishFilterState>()
+            .init_resource::<FishCatalog>()
+            .init_resource::<CommunityFishZoneSupportIndex>()
+            .init_resource::<EvidenceZoneFilter>();
+        app.insert_resource(EventsSnapshotState {
+            loaded: true,
+            events: vec![EventPointCompact {
+                event_id: 1,
+                fish_id: 240,
+                ts_utc: 100,
+                map_px_x: 0,
+                map_px_y: 0,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: None,
+                zone_rgbs: vec![0x778899],
+                source_kind: None,
+                source_id: None,
+            }],
+            ..EventsSnapshotState::default()
+        });
+        app.add_systems(Update, sync_evidence_zone_filter);
+
+        {
+            let mut fish_filter = app.world_mut().resource_mut::<FishFilterState>();
+            fish_filter.selected_fish_ids = vec![240];
+        }
+        {
+            let mut fish_catalog = app.world_mut().resource_mut::<FishCatalog>();
+            fish_catalog.replace(vec![FishEntry {
+                id: 240,
+                item_id: 820240,
+                encyclopedia_key: Some(240),
+                encyclopedia_id: Some(9240),
+                name: "Blobfish".to_string(),
+                name_lower: "blobfish".to_string(),
+                grade: Some("Rare".to_string()),
+                is_prize: false,
+            }]);
+        }
+        {
+            let mut community = app
+                .world_mut()
+                .resource_mut::<CommunityFishZoneSupportIndex>();
+            community.replace_from_response(CommunityFishZoneSupportResponse {
+                revision: "community-rev".to_string(),
+                fish: vec![CommunityFishZoneSupportEntry {
+                    item_id: 820240,
+                    zone_rgbs: vec![0x112233],
+                }],
+                ..CommunityFishZoneSupportResponse::default()
+            });
+        }
+
+        app.update();
+
+        let filter = app.world().resource::<EvidenceZoneFilter>();
+        assert!(filter.active);
+        assert_eq!(filter.zone_rgbs, HashSet::from([0x112233, 0x778899]));
+    }
+}

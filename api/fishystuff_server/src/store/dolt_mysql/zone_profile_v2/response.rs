@@ -91,7 +91,9 @@ fn map_drift_info(drift: DriftInfo) -> ZoneRankingDrift {
 
 fn support_grade_from_community_status(status: CommunitySupportStatus) -> ZoneSupportGrade {
     match status {
-        CommunitySupportStatus::Confirmed => ZoneSupportGrade::ReferenceSupported,
+        CommunitySupportStatus::Confirmed | CommunitySupportStatus::Guessed => {
+            ZoneSupportGrade::ReferenceSupported
+        }
         CommunitySupportStatus::Unconfirmed | CommunitySupportStatus::DataIncomplete => {
             ZoneSupportGrade::WeakHint
         }
@@ -102,6 +104,9 @@ fn support_note_from_community_status(status: CommunitySupportStatus) -> &'stati
     match status {
         CommunitySupportStatus::Confirmed => {
             "supported by curated community zone data for this zone"
+        }
+        CommunitySupportStatus::Guessed => {
+            "supported by curated community guessed-rate data for this zone"
         }
         CommunitySupportStatus::Unconfirmed => {
             "listed in curated community zone data as an unconfirmed fish for this zone"

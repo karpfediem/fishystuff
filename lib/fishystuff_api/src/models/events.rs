@@ -39,6 +39,8 @@ pub struct EventPointCompact {
     #[serde(default)]
     pub zone_rgb_u32: Option<u32>,
     #[serde(default)]
+    pub zone_rgbs: Vec<u32>,
+    #[serde(default)]
     pub source_kind: Option<EventSourceKind>,
     #[serde(default)]
     pub source_id: Option<String>,
@@ -77,6 +79,8 @@ pub struct EventPoint {
     pub world_z: Option<i32>,
     #[serde(default)]
     pub zone_rgb_u32: Option<u32>,
+    #[serde(default)]
+    pub zone_rgbs: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

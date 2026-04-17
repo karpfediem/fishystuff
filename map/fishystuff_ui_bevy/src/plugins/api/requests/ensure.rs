@@ -1,7 +1,12 @@
 use crate::prelude::*;
 
-use super::super::state::{ApiBootstrapState, FishCatalog, PendingRequests};
-use super::spawn::{spawn_fish_catalog_request, spawn_meta_request, spawn_zones_request};
+use super::super::state::{
+    ApiBootstrapState, CommunityFishZoneSupportIndex, FishCatalog, PendingRequests,
+};
+use super::spawn::{
+    spawn_community_fish_zone_support_request, spawn_fish_catalog_request, spawn_meta_request,
+    spawn_zones_request,
+};
 
 pub(super) fn ensure_meta_request(
     mut pending: ResMut<PendingRequests>,
@@ -32,4 +37,18 @@ pub(super) fn ensure_fish_catalog_request(
         return;
     }
     pending.fish_catalog = Some(spawn_fish_catalog_request());
+}
+
+pub(super) fn ensure_community_fish_zone_support_request(
+    mut pending: ResMut<PendingRequests>,
+    community: Res<CommunityFishZoneSupportIndex>,
+    bootstrap: Res<ApiBootstrapState>,
+) {
+    if bootstrap.meta.is_none()
+        || community.revision.is_some()
+        || pending.community_fish_zone_support.is_some()
+    {
+        return;
+    }
+    pending.community_fish_zone_support = Some(spawn_community_fish_zone_support_request());
 }

@@ -2,7 +2,10 @@ use std::collections::{BTreeSet, HashMap};
 
 use fishystuff_api::error::ApiErrorCode;
 use fishystuff_api::ids::Rgb;
-use fishystuff_api::models::fish::{FishBestSpotEntry, FishBestSpotsResponse};
+use fishystuff_api::models::fish::{
+    CommunityFishZoneSupportEntry, CommunityFishZoneSupportResponse, FishBestSpotEntry,
+    FishBestSpotsResponse,
+};
 use mysql::prelude::Queryable;
 
 use crate::error::AppResult;
@@ -72,7 +75,71 @@ fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessM
     None
 }
 
+fn support_status_implies_presence(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "confirmed" | "guessed"
+    )
+}
+
 impl DoltMySqlStore {
+    pub(super) fn query_community_fish_zone_support(
+        &self,
+        ref_id: Option<&str>,
+    ) -> AppResult<CommunityFishZoneSupportResponse> {
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+
+        let query = format!(
+            "SELECT CAST(item_id AS SIGNED), CAST(zone_rgb AS UNSIGNED), support_status \
+             FROM community_zone_fish_support{as_of} \
+             ORDER BY item_id, zone_rgb"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(i64, u64, String)> = match conn.exec(query, ()) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "community_zone_fish_support") => Vec::new(),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut fish = Vec::<CommunityFishZoneSupportEntry>::new();
+        for (item_id, zone_rgb, support_status) in rows {
+            if !support_status_implies_presence(&support_status) {
+                continue;
+            }
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
+            let Ok(zone_rgb) = u32::try_from(zone_rgb) else {
+                continue;
+            };
+            match fish.last_mut() {
+                Some(current) if current.item_id == item_id => {
+                    if current.zone_rgbs.last().copied() != Some(zone_rgb) {
+                        current.zone_rgbs.push(zone_rgb);
+                    }
+                }
+                _ => fish.push(CommunityFishZoneSupportEntry {
+                    item_id,
+                    zone_rgbs: vec![zone_rgb],
+                }),
+            }
+        }
+
+        Ok(CommunityFishZoneSupportResponse {
+            revision: self
+                .query_dolt_revision(ref_id)
+                .unwrap_or_else(|| synthetic_community_fish_zone_support_revision(ref_id, &fish)),
+            count: fish.len(),
+            fish,
+        })
+    }
+
     pub(super) fn query_fish_best_spots(
         &self,
         _lang: FishLang,
@@ -353,5 +420,33 @@ impl DoltMySqlStore {
             count: spots.len(),
             spots,
         })
+    }
+}
+
+fn synthetic_community_fish_zone_support_revision(
+    source_revision: Option<&str>,
+    fish: &[CommunityFishZoneSupportEntry],
+) -> String {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source_revision.unwrap_or("").hash(&mut hasher);
+    for entry in fish {
+        entry.item_id.hash(&mut hasher);
+        entry.zone_rgbs.hash(&mut hasher);
+    }
+    format!("fish-community-zone-support-{:016x}", hasher.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::support_status_implies_presence;
+
+    #[test]
+    fn support_status_implies_presence_for_confirmed_and_guessed_rows() {
+        assert!(support_status_implies_presence("confirmed"));
+        assert!(support_status_implies_presence(" guessed "));
+        assert!(!support_status_implies_presence("unconfirmed"));
+        assert!(!support_status_implies_presence("data_incomplete"));
     }
 }

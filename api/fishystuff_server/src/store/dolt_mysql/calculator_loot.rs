@@ -124,7 +124,8 @@ fn community_presence_specificity(meta: &CommunityPresenceMeta) -> u8 {
 
 fn community_status_priority(status: &str) -> u8 {
     match status.trim().to_ascii_lowercase().as_str() {
-        "confirmed" => 2,
+        "confirmed" => 3,
+        "guessed" => 2,
         "unconfirmed" => 1,
         "data_incomplete" => 0,
         _ => 0,
@@ -543,30 +544,42 @@ impl DoltMySqlStore {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
+            let support_status = support_status.trim().to_ascii_lowercase();
+            let claim_count = u32::try_from(claim_count.max(0)).unwrap_or(u32::MAX);
             if is_community_guess_source_id(&source_id) {
                 let Some(notes) = normalize_optional_string(notes) else {
                     continue;
                 };
+                let parsed_meta = parse_community_support_notes(&notes);
                 let Some(guess) = parse_community_prize_guess_notes(&notes) else {
                     continue;
                 };
-                community_guess_by_key.insert((guess.slot_idx, item_id), (source_id, guess));
-                continue;
+                community_guess_by_key
+                    .insert((guess.slot_idx, item_id), (source_id.clone(), guess));
+                community_presence_rows.push(CommunityPresenceMeta {
+                    source_id,
+                    item_id,
+                    support_status,
+                    claim_count,
+                    slot_idx: parsed_meta.slot_idx.or(Some(guess.slot_idx)),
+                    item_main_group_key: parsed_meta.item_main_group_key,
+                    subgroup_key: parsed_meta.subgroup_key.or(guess.subgroup_key),
+                });
+            } else {
+                let meta = notes
+                    .as_deref()
+                    .map(parse_community_support_notes)
+                    .unwrap_or_default();
+                community_presence_rows.push(CommunityPresenceMeta {
+                    source_id,
+                    item_id,
+                    support_status,
+                    claim_count,
+                    slot_idx: meta.slot_idx,
+                    item_main_group_key: meta.item_main_group_key,
+                    subgroup_key: meta.subgroup_key,
+                });
             }
-            let meta = notes
-                .as_deref()
-                .map(parse_community_support_notes)
-                .unwrap_or_default();
-            let claim_count = u32::try_from(claim_count.max(0)).unwrap_or(u32::MAX);
-            community_presence_rows.push(CommunityPresenceMeta {
-                source_id,
-                item_id,
-                support_status: support_status.trim().to_ascii_lowercase(),
-                claim_count,
-                slot_idx: meta.slot_idx,
-                item_main_group_key: meta.item_main_group_key,
-                subgroup_key: meta.subgroup_key,
-            });
         }
         let fish_identities = self.query_fish_identities(ref_id)?;
         let layer_revision_id = match self.resolve_layer_revision_id(
@@ -923,7 +936,7 @@ mod tests {
 
     use super::{
         apply_community_guess_weights, community_presence_matches_row, community_presence_scope,
-        community_presence_slot_idx, is_community_guess_source_id,
+        community_presence_slot_idx, community_status_priority, is_community_guess_source_id,
         parse_community_prize_guess_notes, parse_community_support_notes, CommunityPresenceMeta,
         CommunityPrizeGuessMeta, MANUAL_COMMUNITY_GUESS_SOURCE_ID,
     };
@@ -960,6 +973,12 @@ mod tests {
         assert_eq!(meta.slot_idx, Some(1));
         assert_eq!(meta.item_main_group_key, Some(9001));
         assert_eq!(meta.subgroup_key, Some(11054));
+    }
+
+    #[test]
+    fn community_status_priority_treats_guessed_as_presence_support() {
+        assert!(community_status_priority("confirmed") > community_status_priority("guessed"));
+        assert!(community_status_priority("guessed") > community_status_priority("unconfirmed"));
     }
 
     #[test]

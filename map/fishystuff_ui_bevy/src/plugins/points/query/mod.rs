@@ -37,58 +37,9 @@ mod tests {
     use std::collections::HashSet;
 
     use fishystuff_api::models::events::EventPointCompact;
-    use fishystuff_core::field::DiscreteFieldRows;
 
     use super::*;
     use crate::map::events::EventZoneSetResolver;
-    use crate::map::exact_lookup::ExactLookupCache;
-    use crate::map::field_view::loaded_field_layer;
-    use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
-    use crate::map::spaces::layer_transform::LayerTransform;
-
-    fn test_zone_mask_layer() -> LayerSpec {
-        LayerSpec {
-            id: LayerId::from_raw(7),
-            key: "zone_mask".to_string(),
-            name: "Zone Mask".to_string(),
-            visible_default: true,
-            opacity_default: 1.0,
-            z_base: 0.0,
-            kind: LayerKind::TiledRaster,
-            tileset_url: "/images/tiles/zone_mask_visual/v1/tileset.json".to_string(),
-            tile_url_template: "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string(),
-            tileset_version: "v1".to_string(),
-            vector_source: None,
-            waypoint_source: None,
-            transform: LayerTransform::IdentityMapSpace,
-            tile_px: 2048,
-            max_level: 0,
-            y_flip: false,
-            field_source: None,
-            field_metadata_source: None,
-            filter_bindings: Vec::new(),
-            lod_policy: LodPolicy {
-                target_tiles: 64,
-                hysteresis_hi: 80.0,
-                hysteresis_lo: 40.0,
-                margin_tiles: 0,
-                enable_refine: false,
-                refine_debounce_ms: 0,
-                max_detail_tiles: 128,
-                max_resident_tiles: 256,
-                pinned_coarse_levels: 0,
-                coarse_pin_min_level: None,
-                warm_margin_tiles: 1,
-                protected_margin_tiles: 0,
-                detail_eviction_weight: 4.0,
-                max_detail_requests_while_camera_moving: 1,
-                motion_suppresses_refine: true,
-            },
-            request_weight: 1.0,
-            pick_mode: PickMode::ExactTilePixel,
-            display_order: 0,
-        }
-    }
 
     #[test]
     fn quantized_signature_ignores_sub_step_viewport_motion() {
@@ -169,6 +120,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: Some(0x112233),
+                zone_rgbs: vec![0x112233],
                 source_kind: None,
                 source_id: None,
             },
@@ -182,6 +134,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: Some(0x445566),
+                zone_rgbs: vec![0x445566],
                 source_kind: None,
                 source_id: None,
             },
@@ -195,6 +148,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: Some(0x778899),
+                zone_rgbs: vec![0x778899],
                 source_kind: None,
                 source_id: None,
             },
@@ -208,12 +162,13 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: None,
+                zone_rgbs: Vec::new(),
                 source_kind: None,
                 source_id: None,
             },
         ];
 
-        let mut resolver = EventZoneSetResolver::new(None);
+        let mut resolver = EventZoneSetResolver::new();
         let (zones, has_zone_data, matched_events) = evidence::collect_evidence_zone_rgbs(
             &events,
             Some(120),
@@ -228,25 +183,8 @@ mod tests {
     }
 
     #[test]
-    fn collect_evidence_zone_rgbs_prefers_zone_mask_exact_lookup() {
-        let layer = test_zone_mask_layer();
-        let mut exact_lookups = ExactLookupCache::default();
-        exact_lookups.insert_ready(
-            layer.id,
-            layer.field_url().expect("field url"),
-            DiscreteFieldRows::from_u32_grid(
-                5,
-                5,
-                &[
-                    0, 0, 0x654321, 0x123456, 0x123456, 0, 0, 0x654321, 0x123456, 0x123456, 0, 0,
-                    0x654321, 0x123456, 0x123456, 0, 0, 0x654321, 0x123456, 0x123456, 0, 0,
-                    0x654321, 0x123456, 0x123456,
-                ],
-            )
-            .expect("field"),
-        );
-        let zone_mask_field = loaded_field_layer(&layer, &exact_lookups);
-        let mut resolver = EventZoneSetResolver::new(zone_mask_field);
+    fn collect_evidence_zone_rgbs_uses_precomputed_zone_support_sets() {
+        let mut resolver = EventZoneSetResolver::new();
         let events = vec![
             EventPointCompact {
                 event_id: 1,
@@ -258,6 +196,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: None,
+                zone_rgbs: vec![0x654321, 0x123456],
                 source_kind: None,
                 source_id: None,
             },
@@ -271,6 +210,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: Some(0xaabbcc),
+                zone_rgbs: vec![0x123456],
                 source_kind: None,
                 source_id: None,
             },
@@ -301,11 +241,12 @@ mod tests {
             world_x: None,
             world_z: None,
             zone_rgb_u32: Some(0x112233),
+            zone_rgbs: Vec::new(),
             source_kind: None,
             source_id: None,
         }];
 
-        let mut resolver = EventZoneSetResolver::new(None);
+        let mut resolver = EventZoneSetResolver::new();
         let (zones, has_zone_data, matched_events) = evidence::collect_evidence_zone_rgbs(
             &events,
             Some(120),

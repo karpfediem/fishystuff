@@ -16,10 +16,10 @@ pub use requests::{
     pick_map_version, spawn_zone_stats_request,
 };
 pub use state::{
-    ApiBootstrapState, FishCatalog, FishEntry, FishFilterState, HoverInfo, HoverState,
-    LayerEffectiveFilterState, LayerFilterBindingOverrideState, MapDisplayState, Patch,
-    PatchFilterState, PendingRequests, SelectedInfo, SelectionState, SemanticFieldFilterState,
-    ZoneMembershipFilter, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    ApiBootstrapState, CommunityFishZoneSupportIndex, FishCatalog, FishEntry, FishFilterState,
+    HoverInfo, HoverState, LayerEffectiveFilterState, LayerFilterBindingOverrideState,
+    MapDisplayState, Patch, PatchFilterState, PendingRequests, SelectedInfo, SelectionState,
+    SemanticFieldFilterState, ZoneMembershipFilter, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 
 pub struct ApiPlugin;
@@ -37,6 +37,7 @@ impl Plugin for ApiPlugin {
             .init_resource::<HoverState>()
             .init_resource::<SelectionState>()
             .init_resource::<FishCatalog>()
+            .init_resource::<CommunityFishZoneSupportIndex>()
             .init_resource::<RemoteImageCache>()
             .init_resource::<RemoteImageEpoch>()
             .add_systems(
@@ -45,6 +46,7 @@ impl Plugin for ApiPlugin {
                     requests::ensure_meta_request,
                     requests::ensure_zones_request,
                     requests::ensure_fish_catalog_request,
+                    requests::ensure_community_fish_zone_support_request,
                     requests::poll_requests,
                     local_layers::sync_local_layers,
                     remote_images::poll_remote_image_requests,

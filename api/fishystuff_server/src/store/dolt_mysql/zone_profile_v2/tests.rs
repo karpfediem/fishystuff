@@ -405,3 +405,53 @@ fn zone_profile_v2_maps_unconfirmed_community_rows_to_weak_hint() {
         .as_deref()
         .is_some_and(|note| note.contains("unconfirmed")));
 }
+
+#[test]
+fn zone_profile_v2_maps_guessed_community_rows_to_reference_supported_presence() {
+    let request = zone_profile_request();
+    let profile = build_zone_profile_v2_response(
+        &request,
+        "v1",
+        ZoneStatsResponse {
+            zone_rgb_u32: 0x010203,
+            zone_rgb: RgbKey("1,2,3".to_string()),
+            zone_name: Some("Test Zone".to_string()),
+            window: ZoneStatsWindow::default(),
+            confidence: ZoneConfidence {
+                ess: 0.0,
+                total_weight: 0.0,
+                last_seen_ts_utc: None,
+                age_days_last: None,
+                status: ZoneStatus::Unknown,
+                notes: vec!["no evidence in window".to_string()],
+                drift: None,
+            },
+            distribution: Vec::new(),
+        },
+        LegacyZoneSupportSummary::default(),
+        CommunityZoneSupportSummary {
+            evaluated: true,
+            fish: vec![CommunityZoneFishSupport {
+                item_id: 8202,
+                fish_name: Some("Sea Eel".to_string()),
+                status: CommunitySupportStatus::Guessed,
+                claim_count: 1,
+            }],
+            notes: Vec::new(),
+        },
+    );
+
+    assert_eq!(profile.presence_support.fish.len(), 1);
+    assert_eq!(
+        profile.presence_support.fish[0].support_grade,
+        ZoneSupportGrade::ReferenceSupported
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].source_badges,
+        vec![ZoneSourceFamily::Community]
+    );
+    assert!(profile.presence_support.fish[0].claims[0]
+        .confidence_note
+        .as_deref()
+        .is_some_and(|note| note.contains("guessed-rate")));
+}

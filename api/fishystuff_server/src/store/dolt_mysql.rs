@@ -28,7 +28,9 @@ use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
 };
-use fishystuff_api::models::fish::{FishBestSpotsResponse, FishEntry, FishListResponse};
+use fishystuff_api::models::fish::{
+    CommunityFishZoneSupportResponse, FishBestSpotsResponse, FishEntry, FishListResponse,
+};
 use fishystuff_api::models::meta::{
     CanonicalMapInfo, MapVersionInfo, MetaDefaults, MetaResponse, PatchInfo,
 };
@@ -184,19 +186,20 @@ type FishIdentityDbRow = (i64, i64, Option<String>, Option<String>, Option<Strin
 
 type EventsSnapshotMetaDbRow = (u64, Option<i64>, Option<i64>, Option<String>);
 
-type EventPointCompactDbRow = (
+type EventPointCompactBaseDbRow = (
     i64,
     i64,
     i64,
     i64,
     i64,
     i64,
-    Option<i64>,
     Option<i64>,
     Option<i64>,
     i64,
     Option<String>,
 );
+
+type EventZoneMembershipDbRow = (i64, i64);
 
 #[derive(Debug, Clone)]
 struct FishCatalogRow {
@@ -270,6 +273,31 @@ fn group_event_zone_support_rows(
                 zone_rgbs: vec![zone_rgb_u32],
             }),
         }
+    }
+    Ok(out)
+}
+
+fn group_event_zone_membership_rows(
+    rows: &[EventZoneMembershipDbRow],
+) -> AppResult<HashMap<i64, Vec<u32>>> {
+    let mut out: HashMap<i64, Vec<u32>> = HashMap::new();
+    for &(event_id, zone_rgb_u32) in rows {
+        let zone_rgb_u32 = u32::try_from(zone_rgb_u32)
+            .map_err(|_| AppError::internal("zone_rgb_u32 out of range"))?;
+        let zones = out.entry(event_id).or_default();
+        if zones.last().copied() != Some(zone_rgb_u32) {
+            zones.push(zone_rgb_u32);
+        }
+    }
+    Ok(out)
+}
+
+fn event_zone_assignment_map(rows: &[EventZoneMembershipDbRow]) -> AppResult<HashMap<i64, u32>> {
+    let mut out = HashMap::new();
+    for &(event_id, zone_rgb_u32) in rows {
+        let zone_rgb_u32 = u32::try_from(zone_rgb_u32)
+            .map_err(|_| AppError::internal("zone_rgb_u32 out of range"))?;
+        out.entry(event_id).or_insert(zone_rgb_u32);
     }
     Ok(out)
 }
@@ -1003,6 +1031,34 @@ impl DoltMySqlStore {
         group_event_zone_support_rows(&rows)
     }
 
+    fn load_events_snapshot_assignment_map(
+        &self,
+        layer_revision_id: &str,
+    ) -> AppResult<HashMap<i64, u32>> {
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<EventZoneMembershipDbRow> = conn
+            .exec(
+                queries::EVENTS_SNAPSHOT_ASSIGNMENT_SQL,
+                (layer_revision_id, SOURCE_KIND_RANKING),
+            )
+            .map_err(events_schema_or_db_unavailable)?;
+        event_zone_assignment_map(&rows)
+    }
+
+    fn load_events_snapshot_ring_support_map(
+        &self,
+        layer_revision_id: &str,
+    ) -> AppResult<HashMap<i64, Vec<u32>>> {
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<EventZoneMembershipDbRow> = conn
+            .exec(
+                queries::EVENTS_SNAPSHOT_RING_SUPPORT_SQL,
+                (layer_revision_id, SOURCE_KIND_RANKING),
+            )
+            .map_err(events_schema_or_db_unavailable)?;
+        group_event_zone_membership_rows(&rows)
+    }
+
     fn query_events_snapshot_meta(&self) -> AppResult<EventsSnapshotMetaResponse> {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let row: Option<EventsSnapshotMetaDbRow> = conn
@@ -1041,37 +1097,35 @@ impl DoltMySqlStore {
     }
 
     fn load_events_snapshot(&self) -> AppResult<Vec<EventPointCompact>> {
-        let layer_revision_id = self
-            .defaults
-            .map_version_id
-            .as_ref()
-            .map(|id| id.0.as_str())
-            .unwrap_or("v1");
+        let layer_revision_id = self.resolve_layer_revision_id(
+            None,
+            self.defaults.map_version_id.as_ref(),
+            Some(ZONE_MASK_LAYER_ID),
+            None,
+            None,
+            0,
+        )?;
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<EventPointCompactDbRow> = conn
-            .exec(
-                "SELECT \
-                    e.event_id, \
-                    e.fish_id, \
-                    CAST(TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', e.ts_utc) AS SIGNED) AS ts_utc, \
-                    e.length_milli, \
-                    e.map_px_x, \
-                    e.map_px_y, \
-                    e.world_x, \
-                    e.world_z, \
-                    z.zone_rgb, \
-                    e.source_kind, \
-                    e.source_id \
-                 FROM events e \
-                 LEFT JOIN event_zone_assignment z \
-                   ON z.event_id = e.event_id \
-                  AND z.layer_revision_id = ? \
-                 WHERE e.water_ok = 1 \
-                   AND e.source_kind = ? \
-                 ORDER BY e.ts_utc, e.event_id",
-                (layer_revision_id, SOURCE_KIND_RANKING),
-            )
+        let rows: Vec<EventPointCompactBaseDbRow> = conn
+            .exec(queries::EVENTS_SNAPSHOT_BASE_SQL, (SOURCE_KIND_RANKING,))
             .map_err(events_schema_or_db_unavailable)?;
+        let has_assignment = self.has_event_zone_assignment(&layer_revision_id)?;
+        let support_mode = self.resolve_event_zone_support_mode(&layer_revision_id)?;
+        let assignment_by_event = if has_assignment {
+            self.load_events_snapshot_assignment_map(&layer_revision_id)?
+        } else {
+            HashMap::new()
+        };
+        let zone_support_by_event = match support_mode {
+            Some(EventZoneSupportMode::RingSupport) => {
+                self.load_events_snapshot_ring_support_map(&layer_revision_id)?
+            }
+            Some(EventZoneSupportMode::Assignment) => assignment_by_event
+                .iter()
+                .map(|(&event_id, &zone_rgb)| (event_id, vec![zone_rgb]))
+                .collect(),
+            None => HashMap::new(),
+        };
 
         let mut out = Vec::with_capacity(rows.len());
         for (
@@ -1083,11 +1137,15 @@ impl DoltMySqlStore {
             map_px_y,
             world_x,
             world_z,
-            zone_rgb_u32,
             source_kind,
             source_id,
         ) in rows
         {
+            let zone_rgb_u32 = assignment_by_event.get(&event_id).copied();
+            let zone_rgbs = zone_support_by_event
+                .get(&event_id)
+                .cloned()
+                .unwrap_or_else(|| zone_rgb_u32.into_iter().collect());
             out.push(EventPointCompact {
                 event_id,
                 fish_id: i32::try_from(fish_id)
@@ -1109,12 +1167,8 @@ impl DoltMySqlStore {
                         i32::try_from(value).map_err(|_| AppError::internal("world_z out of range"))
                     })
                     .transpose()?,
-                zone_rgb_u32: zone_rgb_u32
-                    .map(|value| {
-                        u32::try_from(value)
-                            .map_err(|_| AppError::internal("zone_rgb_u32 out of range"))
-                    })
-                    .transpose()?,
+                zone_rgb_u32,
+                zone_rgbs,
                 source_kind: event_source_kind_from_db(source_kind),
                 source_id: normalize_optional_string(source_id),
             });
@@ -1707,6 +1761,18 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    async fn community_fish_zone_support(
+        &self,
+        ref_id: Option<String>,
+    ) -> AppResult<CommunityFishZoneSupportResponse> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            this.query_community_fish_zone_support(ref_id.as_deref())
+        })
+        .await
+        .map_err(|err| AppError::internal(err.to_string()))?
+    }
+
     async fn calculator_catalog(
         &self,
         lang: FishLang,
@@ -1886,8 +1952,9 @@ mod tests {
 
     use super::{
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
-        compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
-        fish_is_dried, group_event_zone_support_rows, merge_fish_catalog_row, parse_layer_kind,
+        compute_status, event_source_kind_from_db, event_zone_assignment_map,
+        fish_catch_methods_from_description, fish_is_dried, group_event_zone_membership_rows,
+        group_event_zone_support_rows, merge_fish_catalog_row, parse_layer_kind,
         parse_positive_i64, parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
         synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
         EventZoneSupportRow, FishCatalogRow, FishIdentityEntry, FishIdentityIndex,
@@ -2275,6 +2342,34 @@ mod tests {
                 fish_id: 8201,
                 zone_rgbs: vec![0x010203],
             }]
+        );
+    }
+
+    #[test]
+    fn group_event_zone_membership_rows_merges_and_deduplicates_zone_sets() {
+        let grouped = group_event_zone_membership_rows(&[
+            (10, 0x010203),
+            (10, 0x010203),
+            (10, 0x040506),
+            (11, 0x070809),
+        ])
+        .expect("group rows");
+
+        assert_eq!(
+            grouped,
+            HashMap::from([(10_i64, vec![0x010203, 0x040506]), (11_i64, vec![0x070809]),]),
+        );
+    }
+
+    #[test]
+    fn event_zone_assignment_map_keeps_first_zone_per_event() {
+        let assignment =
+            event_zone_assignment_map(&[(10, 0x010203), (10, 0x040506), (11, 0x070809)])
+                .expect("assignment map");
+
+        assert_eq!(
+            assignment,
+            HashMap::from([(10_i64, 0x010203_u32), (11_i64, 0x070809_u32)]),
         );
     }
 }

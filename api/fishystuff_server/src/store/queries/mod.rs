@@ -40,6 +40,45 @@ pub const EVENT_ZONE_ASSIGNMENT_COUNT_SQL: &str =
 pub const EVENT_ZONE_RING_SUPPORT_COUNT_SQL: &str =
     "SELECT COUNT(1) FROM event_zone_ring_support WHERE layer_revision_id = ?";
 
+pub const EVENTS_SNAPSHOT_BASE_SQL: &str = "
+SELECT
+  e.event_id,
+  e.fish_id,
+  CAST(TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', e.ts_utc) AS SIGNED) AS ts_utc,
+  e.length_milli,
+  e.map_px_x,
+  e.map_px_y,
+  e.world_x,
+  e.world_z,
+  e.source_kind,
+  e.source_id
+FROM events e
+WHERE e.water_ok = 1
+  AND e.source_kind = ?
+ORDER BY e.ts_utc, e.event_id";
+
+pub const EVENTS_SNAPSHOT_ASSIGNMENT_SQL: &str = "
+SELECT
+  z.event_id,
+  z.zone_rgb
+FROM event_zone_assignment z
+JOIN events e ON e.event_id = z.event_id
+WHERE z.layer_revision_id = ?
+  AND e.water_ok = 1
+  AND e.source_kind = ?
+ORDER BY z.event_id";
+
+pub const EVENTS_SNAPSHOT_RING_SUPPORT_SQL: &str = "
+SELECT
+  ring.event_id,
+  ring.zone_rgb
+FROM event_zone_ring_support ring
+JOIN events e ON e.event_id = ring.event_id
+WHERE ring.layer_revision_id = ?
+  AND e.water_ok = 1
+  AND e.source_kind = ?
+ORDER BY ring.event_id, ring.zone_rgb";
+
 pub const WATER_TILES_SQL: &str =
     "SELECT tile_x, tile_y, water_count FROM water_tiles WHERE map_version = ? AND tile_px = ?";
 

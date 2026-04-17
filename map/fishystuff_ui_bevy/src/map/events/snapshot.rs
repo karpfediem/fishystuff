@@ -205,10 +205,17 @@ impl EventsSnapshotState {
                     continue;
                 }
                 if let Some(zone_rgbs) = query.zone_rgbs.as_ref() {
-                    let Some(zone_rgb) = event.zone_rgb_u32 else {
-                        continue;
+                    let matches_zone = if event.zone_rgbs.is_empty() {
+                        event
+                            .zone_rgb_u32
+                            .is_some_and(|zone_rgb| zone_rgbs.contains(&zone_rgb))
+                    } else {
+                        event
+                            .zone_rgbs
+                            .iter()
+                            .any(|zone_rgb| zone_rgbs.contains(zone_rgb))
                     };
-                    if !zone_rgbs.contains(&zone_rgb) {
+                    if !matches_zone {
                         continue;
                     }
                 }
@@ -287,6 +294,7 @@ mod tests {
                 world_x: Some(1000),
                 world_z: Some(2000),
                 zone_rgb_u32: Some(0x112233),
+                zone_rgbs: vec![0x112233],
                 source_kind: None,
                 source_id: None,
             },
@@ -300,6 +308,7 @@ mod tests {
                 world_x: Some(1300),
                 world_z: Some(2200),
                 zone_rgb_u32: Some(0x445566),
+                zone_rgbs: vec![0x445566],
                 source_kind: None,
                 source_id: None,
             },
@@ -313,6 +322,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: Some(0x112233),
+                zone_rgbs: vec![0x112233, 0x778899],
                 source_kind: None,
                 source_id: None,
             },
@@ -380,6 +390,34 @@ mod tests {
 
         let selected = state.select_for_view(&query);
         assert_eq!(selected.filtered_indices, vec![1]);
+    }
+
+    #[test]
+    fn local_selection_matches_any_precomputed_zone_support_rgb() {
+        let mut state = EventsSnapshotState::default();
+        state.loaded = true;
+        state.events = sample_events();
+        state.event_count = state.events.len();
+        state.spatial_index.rebuild(&state.events);
+
+        let bbox = MapBboxPx {
+            min_x: 0,
+            min_y: 0,
+            max_x: 5000,
+            max_y: 5000,
+        };
+        let zones = HashSet::from([0x778899]);
+        let query = LocalEventQuery {
+            bbox: &bbox,
+            from_ts_utc: Some(0),
+            to_ts_utc: Some(1000),
+            fish_ids: &[],
+            zone_rgbs: Some(&zones),
+            tile_scope: None,
+        };
+
+        let selected = state.select_for_view(&query);
+        assert_eq!(selected.filtered_indices, vec![2]);
     }
 
     #[test]

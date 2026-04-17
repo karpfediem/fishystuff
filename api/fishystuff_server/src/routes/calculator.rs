@@ -3590,6 +3590,7 @@ fn loot_species_presence_priority(evidence: &CalculatorZoneLootEvidence) -> u8 {
     ) {
         ("ranking", "ring_full", _) => 5,
         ("community", _, Some("confirmed")) => 4,
+        ("community", _, Some("guessed")) => 4,
         ("ranking", "ring_partial", _) => 3,
         ("community", _, Some("unconfirmed")) => 2,
         ("community", _, Some("data_incomplete")) => 1,
@@ -3648,6 +3649,7 @@ fn loot_species_presence_line(
         "community" => {
             let status = match evidence.status.as_deref().unwrap_or_default() {
                 "confirmed" => "Community confirmed",
+                "guessed" => "Community guessed presence",
                 "data_incomplete" => "Community incomplete",
                 _ => "Community unconfirmed",
             };

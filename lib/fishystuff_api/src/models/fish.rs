@@ -41,6 +41,21 @@ pub struct FishBestSpotsResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CommunityFishZoneSupportEntry {
+    pub item_id: i32,
+    #[serde(default)]
+    pub zone_rgbs: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CommunityFishZoneSupportResponse {
+    pub revision: String,
+    pub count: usize,
+    #[serde(default)]
+    pub fish: Vec<CommunityFishZoneSupportEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FishListResponse {
     pub revision: String,
     pub count: usize,

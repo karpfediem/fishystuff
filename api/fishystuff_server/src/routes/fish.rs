@@ -1,10 +1,11 @@
 use axum::extract::{rejection::QueryRejection, Extension, Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue};
-use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 
-use fishystuff_api::models::fish::{FishBestSpotsResponse, FishListResponse};
+use fishystuff_api::models::fish::{
+    CommunityFishZoneSupportResponse, FishBestSpotsResponse, FishListResponse,
+};
 
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
@@ -14,6 +15,11 @@ use crate::store::FishLang;
 #[derive(Debug, Deserialize)]
 pub struct FishQuery {
     pub lang: Option<String>,
+    pub r#ref: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FishSupportQuery {
     pub r#ref: Option<String>,
 }
 
@@ -53,6 +59,23 @@ pub async fn fish_best_spots(
     Ok((response_headers, Json(response)))
 }
 
+pub async fn community_fish_zone_support(
+    State(state): State<SharedState>,
+    query: Result<Query<FishSupportQuery>, QueryRejection>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<(HeaderMap, Json<CommunityFishZoneSupportResponse>)> {
+    let Query(query) = query.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+
+    let response =
+        load_community_fish_zone_support_response(&state, query.r#ref, &request_id).await?;
+
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok((response_headers, Json(response)))
+}
+
 async fn load_fish_response(
     state: &SharedState,
     lang: FishLang,
@@ -82,6 +105,19 @@ async fn load_fish_best_spots_response(
     .map_err(|err| map_request_id(err, request_id))
 }
 
+async fn load_community_fish_zone_support_response(
+    state: &SharedState,
+    ref_id: Option<String>,
+    request_id: &RequestId,
+) -> AppResult<CommunityFishZoneSupportResponse> {
+    with_timeout(
+        state.config.request_timeout_secs,
+        state.store.community_fish_zone_support(ref_id),
+    )
+    .await
+    .map_err(|err| map_request_id(err, request_id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,12 +125,14 @@ mod tests {
 
     use async_trait::async_trait;
     use axum::http::StatusCode;
+    use axum::response::IntoResponse;
     use fishystuff_api::ids::MapVersionId;
     use fishystuff_api::models::calculator::CalculatorCatalogResponse;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
     use fishystuff_api::models::fish::{
-        FishBestSpotEntry, FishBestSpotsResponse, FishEntry, FishListResponse,
+        CommunityFishZoneSupportEntry, CommunityFishZoneSupportResponse, FishBestSpotEntry,
+        FishBestSpotsResponse, FishEntry, FishListResponse,
     };
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
@@ -185,6 +223,20 @@ mod tests {
                         ..FishBestSpotEntry::default()
                     },
                 ],
+            })
+        }
+
+        async fn community_fish_zone_support(
+            &self,
+            _ref_id: Option<String>,
+        ) -> AppResult<CommunityFishZoneSupportResponse> {
+            Ok(CommunityFishZoneSupportResponse {
+                revision: "dolt:test-fish-rev".to_string(),
+                count: 1,
+                fish: vec![CommunityFishZoneSupportEntry {
+                    item_id: 8474,
+                    zone_rgbs: vec![0x102030, 0xf04a4a],
+                }],
             })
         }
 
@@ -325,5 +377,34 @@ mod tests {
         assert_eq!(spots[0]["zone_name"], "Velia Beach");
         assert_eq!(spots[0]["db_groups"][0], "Prize");
         assert_eq!(spots[1]["has_ranking_presence"], true);
+    }
+
+    #[tokio::test]
+    async fn community_fish_zone_support_route_returns_revisioned_json_and_no_store_headers() {
+        let response = community_fish_zone_support(
+            State(test_state()),
+            Ok(Query(FishSupportQuery { r#ref: None })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .expect("community fish support response")
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CACHE_CONTROL)
+                .and_then(|value| value.to_str().ok()),
+            Some("no-store")
+        );
+
+        let body = to_bytes(response.into_body()).await.expect("body bytes");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        assert_eq!(payload["revision"], "dolt:test-fish-rev");
+        assert_eq!(payload["count"], 1);
+        let fish = payload["fish"].as_array().expect("fish array");
+        assert_eq!(fish[0]["item_id"], 8474);
+        assert_eq!(fish[0]["zone_rgbs"][0], 0x102030);
     }
 }

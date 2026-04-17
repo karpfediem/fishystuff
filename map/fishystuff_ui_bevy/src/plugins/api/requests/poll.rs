@@ -7,8 +7,8 @@ use bevy::ecs::system::SystemParam;
 
 use super::super::fish::build_fish_catalog_entries;
 use super::super::state::{
-    ApiBootstrapState, FishCatalog, MapDisplayState, PatchFilterState, PendingRequests,
-    SelectionState,
+    ApiBootstrapState, CommunityFishZoneSupportIndex, FishCatalog, MapDisplayState,
+    PatchFilterState, PendingRequests, SelectionState,
 };
 use super::apply::apply_meta_response;
 use crate::plugins::local_layers::sync_display_layer_controls;
@@ -117,6 +117,27 @@ pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
         }
     }
 
+    if let Some(receiver) = state.pending.community_fish_zone_support.as_ref() {
+        match receiver.try_recv() {
+            Ok(result) => {
+                state.pending.community_fish_zone_support = None;
+                match result {
+                    Ok(response) => {
+                        state.community.replace_from_response(response);
+                    }
+                    Err(err) => {
+                        state.community.status = format!("fish community support: {err}");
+                    }
+                }
+            }
+            Err(TryRecvError::Closed) => {
+                state.pending.community_fish_zone_support = None;
+                state.community.status = "fish community support: request closed".to_string();
+            }
+            Err(TryRecvError::Empty) => {}
+        }
+    }
+
     sync_display_layer_controls(
         &mut state.display_state,
         &state.layer_registry,
@@ -135,5 +156,6 @@ pub(crate) struct RequestPollState<'w, 's> {
     terrain_config: ResMut<'w, Terrain3dConfig>,
     selection: ResMut<'w, SelectionState>,
     fish: ResMut<'w, FishCatalog>,
+    community: ResMut<'w, CommunityFishZoneSupportIndex>,
     _marker: std::marker::PhantomData<&'s ()>,
 }

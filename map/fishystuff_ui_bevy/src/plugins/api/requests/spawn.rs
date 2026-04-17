@@ -1,7 +1,9 @@
 use async_channel::Receiver;
 use bevy::tasks::IoTaskPool;
+#[cfg(not(target_arch = "wasm32"))]
+use fishystuff_api::models::fish::CommunityFishZoneSupportResponse;
 #[cfg(target_arch = "wasm32")]
-use fishystuff_api::models::fish::FishListResponse;
+use fishystuff_api::models::fish::{CommunityFishZoneSupportResponse, FishListResponse};
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZonesResponse;
@@ -80,6 +82,39 @@ pub(super) fn spawn_fish_catalog_request() -> Receiver<Result<FishCatalogPayload
                     .fish()
                     .await
                     .map(|fish| FishCatalogPayload { fish })
+                    .map_err(client_error_to_string);
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        receiver
+    }
+}
+
+pub(super) fn spawn_community_fish_zone_support_request(
+) -> Receiver<Result<CommunityFishZoneSupportResponse, String>> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = resolve_api_request_url("/api/v1/fish/community_zone_support");
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let result =
+                    runtime_io::load_json_async::<CommunityFishZoneSupportResponse>(&url).await;
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        return receiver;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let client = FishyClient::new("");
+                let result = client
+                    .community_fish_zone_support()
+                    .await
                     .map_err(client_error_to_string);
                 let _ = sender.send(result).await;
             })

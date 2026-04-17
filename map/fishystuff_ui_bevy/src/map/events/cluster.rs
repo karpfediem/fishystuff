@@ -190,6 +190,7 @@ mod tests {
                 world_x: None,
                 world_z: None,
                 zone_rgb_u32: None,
+                zone_rgbs: Vec::new(),
                 source_kind: None,
                 source_id: None,
             });
@@ -223,6 +224,7 @@ mod tests {
                 world_x: Some(10_000 + idx as i32),
                 world_z: Some(20_000 + idx as i32),
                 zone_rgb_u32: None,
+                zone_rgbs: Vec::new(),
                 source_kind: None,
                 source_id: None,
             });

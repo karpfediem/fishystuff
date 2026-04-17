@@ -44,6 +44,7 @@ pub async fn openapi_json() -> Json<serde_json::Value> {
         "/api/v1/region_groups": { "get": { "summary": "Get region-group metadata" } },
         "/api/v1/zones": { "get": { "summary": "List zones" } },
         "/api/v1/fish": { "get": { "summary": "List fish metadata" } },
+        "/api/v1/fish/community_zone_support": { "get": { "summary": "List community fish-zone presence" } },
         "/api/v1/calculator": { "get": { "summary": "Get calculator catalog data" } },
         "/api/v1/calculator/datastar/init": { "get": { "summary": "Render Datastar calculator controls and initial derived state" } },
         "/api/v1/calculator/datastar/eval": { "post": { "summary": "Recalculate Datastar calculator derived state" } },

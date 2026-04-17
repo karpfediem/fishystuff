@@ -22,6 +22,14 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/zones", get(routes::zones::list_zones))
         .route("/fish", get(routes::fish::list_fish))
         .route("/fish/", get(routes::fish::list_fish))
+        .route(
+            "/fish/community_zone_support",
+            get(routes::fish::community_fish_zone_support),
+        )
+        .route(
+            "/fish/community_zone_support/",
+            get(routes::fish::community_fish_zone_support),
+        )
         .route("/fish/:item_id/spots", get(routes::fish::fish_best_spots))
         .route("/fish/:item_id/spots/", get(routes::fish::fish_best_spots))
         .route(
