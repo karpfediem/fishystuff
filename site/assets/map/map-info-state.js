@@ -34,6 +34,9 @@ function normalizeSelectionLayerSamples(selection) {
   return selection.layerSamples.filter((sample) => isPlainObject(sample)).map((sample) => cloneJson(sample));
 }
 
+const INFO_WINDOW_TITLE = "Details";
+const INFO_WINDOW_ICON = "information-circle";
+
 function pointKindStatusText(pointKind, pointLabel) {
   const normalizedLabel = trimString(pointLabel);
   switch (normalizePointKind(pointKind)) {
@@ -45,19 +48,6 @@ function pointKindStatusText(pointKind, pointLabel) {
       return "Clicked point";
     default:
       return "no selection";
-  }
-}
-
-function pointKindIcon(pointKind) {
-  switch (normalizePointKind(pointKind)) {
-    case "bookmark":
-      return "bookmark";
-    case "waypoint":
-      return "map-pin";
-    case "clicked":
-      return "hover-zone";
-    default:
-      return "information-circle";
   }
 }
 
@@ -73,12 +63,7 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
   if (preferred?.value) {
     return preferred.value;
   }
-  const worldX = Number(selection?.worldX);
-  const worldZ = Number(selection?.worldZ);
-  if (Number.isFinite(worldX) && Number.isFinite(worldZ)) {
-    return `${Math.round(worldX).toLocaleString("en-US")}, ${Math.round(worldZ).toLocaleString("en-US")}`;
-  }
-  return "Info";
+  return INFO_WINDOW_TITLE;
 }
 
 function buildZoneLootGroups(summary) {
@@ -238,8 +223,8 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
   return {
     descriptor: {
       title: titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers),
-      titleIcon: pointKindIcon(pointKind),
-      statusIcon: pointKindIcon(pointKind),
+      titleIcon: INFO_WINDOW_ICON,
+      statusIcon: INFO_WINDOW_ICON,
       statusText: pointKindStatusText(pointKind, selection?.pointLabel),
       pointKind,
       overviewRows,
