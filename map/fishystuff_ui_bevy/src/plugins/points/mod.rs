@@ -6,6 +6,7 @@ use bevy::prelude::*;
 
 use crate::bridge::BrowserInputStateSet;
 use crate::map::events::EventsSnapshotState;
+use crate::plugins::api::LayerEffectiveFilterState;
 
 pub use query::{EvidenceZoneFilter, PointsState, RenderPoint};
 pub(crate) use render::PointIconCache;
@@ -18,12 +19,16 @@ impl Plugin for PointsPlugin {
         app.init_resource::<PointsState>()
             .init_resource::<EventsSnapshotState>()
             .init_resource::<EvidenceZoneFilter>()
+            .init_resource::<LayerEffectiveFilterState>()
             .init_resource::<render::PointRingAssets>()
             .init_resource::<render::PointMarkerPool>()
             .init_resource::<render::PointIconCache>()
             .add_systems(
                 PreUpdate,
-                query::sync_evidence_zone_filter.after(BrowserInputStateSet),
+                (
+                    query::sync_evidence_zone_filter.after(BrowserInputStateSet),
+                    query::sync_layer_effective_filters.after(query::sync_evidence_zone_filter),
+                ),
             )
             .add_systems(
                 Update,

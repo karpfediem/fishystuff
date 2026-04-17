@@ -4,7 +4,7 @@ mod compose;
 use crate::map::camera::mode::ViewMode;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::api::{LayerEffectiveFilterState, ZoneMembershipFilter};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
@@ -16,7 +16,7 @@ use self::compose::{
 use super::{RasterTileCache, TileState};
 
 pub(crate) struct VisualFilterContext<'a> {
-    pub(crate) filter: &'a EvidenceZoneFilter,
+    pub(crate) layer_filters: &'a LayerEffectiveFilterState,
     pub(crate) hover_zone_rgb: Option<u32>,
     pub(crate) layer_registry: &'a LayerRegistry,
     pub(crate) layer_runtime: &'a LayerRuntime,
@@ -111,7 +111,7 @@ impl RasterTileCache {
     ) {
         crate::perf_scope!("raster.sync_visual_filters");
         let VisualFilterContext {
-            filter,
+            layer_filters,
             hover_zone_rgb,
             layer_registry,
             layer_runtime,
@@ -125,6 +125,10 @@ impl RasterTileCache {
             let Some(spec) = layer_registry.get(key.layer) else {
                 continue;
             };
+            let inactive_filter = ZoneMembershipFilter::default();
+            let filter = layer_filters
+                .zone_membership_filter(spec.key.as_str())
+                .unwrap_or(&inactive_filter);
             let Some(read_entry) = self.entries.get(&key) else {
                 continue;
             };
@@ -349,6 +353,7 @@ mod tests {
             request_weight: 1.0,
             pick_mode,
             display_order: 0,
+            filter_bindings: Vec::new(),
         }
     }
 

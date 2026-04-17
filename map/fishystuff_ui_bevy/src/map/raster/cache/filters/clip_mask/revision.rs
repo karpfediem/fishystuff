@@ -1,13 +1,13 @@
 use crate::map::layers::{
     LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, LayerVectorStatus, PickMode,
 };
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::api::ZoneMembershipFilter;
 
 pub(crate) fn clip_mask_state_revision(
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
     clip_mask_layer: Option<LayerId>,
-    filter: &EvidenceZoneFilter,
+    filter: &ZoneMembershipFilter,
 ) -> u64 {
     let Some(mask_layer_id) = clip_mask_layer else {
         return 0;

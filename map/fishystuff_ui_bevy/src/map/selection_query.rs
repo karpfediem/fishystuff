@@ -8,6 +8,7 @@ use crate::map::layers::LayerRegistry;
 use crate::map::raster::cache::clip_mask_allows_world_point;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
+use crate::plugins::points::EvidenceZoneFilter;
 use fishystuff_core::field_metadata::{detail_facts, preferred_detail_fact_value};
 use std::collections::HashMap;
 
@@ -87,17 +88,24 @@ pub fn selected_info_at_world_point(
         .into_iter()
         .filter(|layer| {
             !matches!(
-                clip_mask_allows_world_point(
-                    layer.id,
-                    world_point,
-                    context.layer_registry,
-                    context.layer_runtime,
-                    context.exact_lookups,
-                    context.tile_cache,
-                    context.vector_runtime,
-                    context.evidence_zone_filter,
-                    context.layer_registry.map_version_id(),
-                ),
+                {
+                    let inactive_filter = EvidenceZoneFilter::default();
+                    let zone_filter = context
+                        .layer_filters
+                        .zone_membership_filter(layer.key.as_str())
+                        .unwrap_or(&inactive_filter);
+                    clip_mask_allows_world_point(
+                        layer.id,
+                        world_point,
+                        context.layer_registry,
+                        context.layer_runtime,
+                        context.exact_lookups,
+                        context.tile_cache,
+                        context.vector_runtime,
+                        zone_filter,
+                        context.layer_registry.map_version_id(),
+                    )
+                },
                 Some(false)
             )
         })
@@ -212,6 +220,7 @@ mod tests {
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::MapPoint;
     use crate::plugins::api::HoverInfo;
+    use crate::plugins::api::LayerEffectiveFilterState;
     use crate::plugins::points::EvidenceZoneFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::Rgb;
@@ -469,7 +478,8 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
-        let evidence_zone_filter = EvidenceZoneFilter::default();
+        let _evidence_zone_filter = EvidenceZoneFilter::default();
+        let layer_filters = LayerEffectiveFilterState::default();
         let selected = selected_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
             &WorldPointQueryContext {
@@ -479,7 +489,7 @@ mod tests {
                 field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
-                evidence_zone_filter: &evidence_zone_filter,
+                layer_filters: &layer_filters,
                 map_to_world,
             },
             FishyMapSelectionPointKind::Clicked,
@@ -683,7 +693,8 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
-        let evidence_zone_filter = EvidenceZoneFilter::default();
+        let _evidence_zone_filter = EvidenceZoneFilter::default();
+        let layer_filters = LayerEffectiveFilterState::default();
         let selected = selected_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
             &WorldPointQueryContext {
@@ -693,7 +704,7 @@ mod tests {
                 field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
-                evidence_zone_filter: &evidence_zone_filter,
+                layer_filters: &layer_filters,
                 map_to_world,
             },
             FishyMapSelectionPointKind::Clicked,

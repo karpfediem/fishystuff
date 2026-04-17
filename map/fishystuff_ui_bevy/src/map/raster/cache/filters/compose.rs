@@ -6,7 +6,7 @@ use crate::map::field_view::{loaded_field_layer, FieldLayerView};
 use crate::map::layers::{LayerId, LayerRegistry, LayerRuntime, LayerSpec};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::LayerPoint;
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::api::ZoneMembershipFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
 use super::super::super::TileKey;
@@ -18,7 +18,7 @@ const HOVER_HIGHLIGHT_RGB: [u8; 3] = [48, 255, 96];
 pub(super) struct RasterVisualComposeContext<'a> {
     pub(super) key: TileKey,
     pub(super) layer: &'a LayerSpec,
-    pub(super) filter: &'a EvidenceZoneFilter,
+    pub(super) filter: &'a ZoneMembershipFilter,
     pub(super) requires_pixel_filter: bool,
     pub(super) hover_zone_rgb: Option<u32>,
     pub(super) clip_mask_layer: Option<LayerId>,
@@ -258,6 +258,7 @@ mod tests {
             request_weight: 1.0,
             pick_mode: PickMode::ExactTilePixel,
             display_order: 0,
+            filter_bindings: Vec::new(),
         }
     }
 

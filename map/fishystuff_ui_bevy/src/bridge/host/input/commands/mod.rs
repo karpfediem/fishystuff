@@ -10,9 +10,10 @@ use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layers::LayerRegistry;
 use crate::map::layers::LayerRuntime;
 use crate::map::raster::RasterTileCache;
-use crate::plugins::api::{ApiBootstrapState, PatchFilterState, PendingRequests, SelectionState};
+use crate::plugins::api::{
+    ApiBootstrapState, LayerEffectiveFilterState, PatchFilterState, PendingRequests, SelectionState,
+};
 use crate::plugins::camera::CameraZoomBounds;
-use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
@@ -27,7 +28,7 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     field_metadata: Res<FieldMetadataCache>,
     tile_cache: Res<RasterTileCache>,
     vector_runtime: Res<VectorLayerRuntime>,
-    evidence_zone_filter: Res<EvidenceZoneFilter>,
+    layer_filters: Res<LayerEffectiveFilterState>,
     mut selection: ResMut<SelectionState>,
     mut pending: ResMut<PendingRequests>,
     mut view_mode: ResMut<ViewModeState>,
@@ -70,7 +71,7 @@ pub(in crate::bridge::host) fn apply_browser_commands(
                 &field_metadata,
                 &tile_cache,
                 &vector_runtime,
-                &evidence_zone_filter,
+                &layer_filters,
                 &mut selection,
                 &mut pending,
                 &select_semantic_field.layer_id,
@@ -88,7 +89,7 @@ pub(in crate::bridge::host) fn apply_browser_commands(
                 &field_metadata,
                 &tile_cache,
                 &vector_runtime,
-                &evidence_zone_filter,
+                &layer_filters,
                 &mut selection,
                 &mut pending,
                 world_point.world_x,

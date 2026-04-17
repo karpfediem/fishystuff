@@ -27,7 +27,7 @@ use crate::map::vector::cache::{
     BuiltVectorChunk, BuiltVectorGeometry, VectorFinishedCache, VectorLayerStats,
 };
 use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
-use crate::plugins::api::SemanticFieldFilterState;
+use crate::plugins::api::{LayerEffectiveFilterState, ZoneMembershipFilter};
 use crate::plugins::points::EvidenceZoneFilter;
 
 const VECTOR_MIN_PROGRESS_BUDGET_MS: f64 = 0.25;
@@ -191,8 +191,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         layer_runtime,
         &active_by_layer,
         map_version_id,
-        &update.semantic_filter,
-        &update.evidence_zone_filter,
+        &update.layer_filters,
     );
     for evicted in vector_runtime
         .finished
@@ -202,13 +201,14 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     }
 
     for layer in registry.ordered() {
+        let inactive_filter = EvidenceZoneFilter::default();
+        let zone_filter = update
+            .layer_filters
+            .zone_membership_filter(layer.key.as_str())
+            .unwrap_or(&inactive_filter);
         let clip_mask_layer_id = layer_runtime.clip_mask_layer(layer.id);
-        let clip_mask_revision = clip_mask_state_revision(
-            registry,
-            layer_runtime,
-            clip_mask_layer_id,
-            &update.evidence_zone_filter,
-        );
+        let clip_mask_revision =
+            clip_mask_state_revision(registry, layer_runtime, clip_mask_layer_id, zone_filter);
         let Some(mut runtime_state) = layer_runtime.get(layer.id) else {
             continue;
         };
@@ -251,8 +251,8 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         }
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
         let selected_field_ids = update
-            .semantic_filter
-            .field_ids_for_layer(layer.key.as_str())
+            .layer_filters
+            .semantic_field_ids_for_layer(layer.key.as_str())
             .to_vec();
         let revision = effective_revision(&source, &selected_field_ids, clip_mask_revision);
         invalidate_non_active_revisions(vector_runtime, layer.id, &revision, &mut commands);
@@ -393,7 +393,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                                 &update.exact_lookups,
                                 &update.raster_cache,
                                 vector_runtime,
-                                &update.evidence_zone_filter,
+                                zone_filter,
                             );
                             let bundle = spawn_vector_meshes(
                                 &mut commands,
@@ -513,7 +513,7 @@ fn maybe_clip_built_geometry(
     exact_lookups: &ExactLookupCache,
     raster_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    zone_filter: &ZoneMembershipFilter,
 ) -> BuiltVectorGeometry {
     let Some(mask_layer_id) = clip_mask_layer_id else {
         return geometry;
@@ -529,7 +529,7 @@ fn maybe_clip_built_geometry(
             exact_lookups,
             raster_cache,
             vector_runtime,
-            evidence_zone_filter,
+            zone_filter,
         ) else {
             continue;
         };
@@ -572,7 +572,7 @@ fn clip_vector_chunk_against_mask(
     exact_lookups: &ExactLookupCache,
     raster_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    zone_filter: &ZoneMembershipFilter,
 ) -> Option<BuiltVectorChunk> {
     let mut positions = Vec::new();
     let mut vertex_colors = Vec::new();
@@ -598,7 +598,7 @@ fn clip_vector_chunk_against_mask(
             exact_lookups,
             raster_cache,
             vector_runtime,
-            evidence_zone_filter,
+            zone_filter,
         ) {
             continue;
         }
@@ -662,7 +662,7 @@ fn triangle_overlaps_visible_clip_mask(
     exact_lookups: &ExactLookupCache,
     raster_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    zone_filter: &ZoneMembershipFilter,
 ) -> bool {
     let sample_points = [
         WorldPoint::new(a[0] as f64, a[1] as f64),
@@ -686,7 +686,7 @@ fn triangle_overlaps_visible_clip_mask(
                 exact_lookups,
                 raster_cache,
                 vector_runtime,
-                evidence_zone_filter,
+                zone_filter,
                 layer_registry.map_version_id(),
             ),
             Some(false)
@@ -755,8 +755,7 @@ fn collect_visible_cache_keys(
     layer_runtime: &LayerRuntime,
     visible_by_layer: &HashMap<LayerId, bool>,
     map_version_id: Option<&str>,
-    semantic_filter: &SemanticFieldFilterState,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    layer_filters: &LayerEffectiveFilterState,
 ) -> HashSet<(LayerId, String)> {
     let mut out = HashSet::new();
     for layer in registry.ordered() {
@@ -770,18 +769,20 @@ fn collect_visible_cache_keys(
             continue;
         };
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
-        let selected_field_ids = semantic_filter
-            .field_ids_for_layer(layer.key.as_str())
-            .to_vec();
+        let selected_field_ids = layer_filters.semantic_field_ids_for_layer(layer.key.as_str());
+        let inactive_filter = EvidenceZoneFilter::default();
+        let zone_filter = layer_filters
+            .zone_membership_filter(layer.key.as_str())
+            .unwrap_or(&inactive_filter);
         let clip_mask_revision = clip_mask_state_revision(
             registry,
             layer_runtime,
             layer_runtime.clip_mask_layer(layer.id),
-            evidence_zone_filter,
+            zone_filter,
         );
         out.insert((
             layer.id,
-            effective_revision(&source, &selected_field_ids, clip_mask_revision),
+            effective_revision(&source, selected_field_ids, clip_mask_revision),
         ));
     }
     out
@@ -865,8 +866,7 @@ struct VectorLayerUpdate<'w, 's> {
     registry: Res<'w, LayerRegistry>,
     layer_runtime: ResMut<'w, LayerRuntime>,
     vector_runtime: ResMut<'w, VectorLayerRuntime>,
-    semantic_filter: Res<'w, SemanticFieldFilterState>,
-    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     exact_lookups: Res<'w, ExactLookupCache>,
     raster_cache: Res<'w, RasterTileCache>,
     build_config: Res<'w, VectorBuildConfig>,

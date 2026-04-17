@@ -35,6 +35,8 @@ pub struct LayerDescriptor {
     pub lod_policy: LodPolicyDto,
     #[serde(default)]
     pub ui: LayerUiInfo,
+    #[serde(default)]
+    pub filter_bindings: Vec<LayerFilterBindingDescriptor>,
     #[serde(default = "default_request_weight")]
     pub request_weight: f32,
     #[serde(default = "default_pick_mode")]
@@ -58,6 +60,7 @@ impl Default for LayerDescriptor {
             vector_source: None,
             lod_policy: LodPolicyDto::default(),
             ui: LayerUiInfo::default(),
+            filter_bindings: Vec::new(),
             request_weight: default_request_weight(),
             pick_mode: default_pick_mode(),
         }
@@ -143,6 +146,41 @@ pub struct VectorSourceRef {
     /// Optional feature color property name.
     #[serde(default)]
     pub color_property: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum LayerFilterTargetKind {
+    ZoneMembership,
+    SemanticFieldSelection,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum LayerFilterSourceKind {
+    FishSelection,
+    ZoneSelection,
+    SemanticSelection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LayerFilterBindingDescriptor {
+    pub binding_id: String,
+    pub target: LayerFilterTargetKind,
+    pub source: LayerFilterSourceKind,
+    #[serde(default = "default_layer_filter_binding_enabled")]
+    pub default_enabled: bool,
+}
+
+impl Default for LayerFilterBindingDescriptor {
+    fn default() -> Self {
+        Self {
+            binding_id: String::new(),
+            target: LayerFilterTargetKind::ZoneMembership,
+            source: LayerFilterSourceKind::ZoneSelection,
+            default_enabled: default_layer_filter_binding_enabled(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -251,6 +289,10 @@ const fn default_request_weight() -> f32 {
 
 fn default_pick_mode() -> String {
     "none".to_string()
+}
+
+const fn default_layer_filter_binding_enabled() -> bool {
+    true
 }
 
 const fn default_max_resident_tiles() -> usize {

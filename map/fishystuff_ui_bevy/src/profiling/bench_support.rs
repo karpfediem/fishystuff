@@ -74,6 +74,7 @@ pub fn raster_fixture() -> RasterBenchFixture {
         field_metadata_source: None,
         vector_source: None,
         waypoint_source: None,
+        filter_bindings: Vec::new(),
         transform: LayerTransform::IdentityMapSpace,
         tile_px: 512,
         max_level: 3,

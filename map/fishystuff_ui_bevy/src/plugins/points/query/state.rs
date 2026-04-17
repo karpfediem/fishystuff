@@ -1,7 +1,7 @@
-use std::collections::HashSet;
-
 use bevy::prelude::*;
 use fishystuff_api::models::events::EventsQueryMode;
+
+pub use crate::plugins::api::ZoneMembershipFilter as EvidenceZoneFilter;
 
 #[derive(Resource)]
 pub struct PointsState {
@@ -72,11 +72,4 @@ pub struct RenderPoint {
     pub zone_rgb_u32: Option<u32>,
     pub sample_count: u32,
     pub aggregated: bool,
-}
-
-#[derive(Resource, Default, Debug, Clone)]
-pub struct EvidenceZoneFilter {
-    pub active: bool,
-    pub zone_rgbs: HashSet<u32>,
-    pub revision: u64,
 }

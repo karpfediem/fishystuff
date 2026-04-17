@@ -30,6 +30,7 @@ pub(in crate::bridge::host) fn current_layer_order<'a>(
 pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
+    filter_binding_overrides: &LayerFilterBindingOverrideState,
 ) -> Vec<FishyMapLayerSummary> {
     current_layer_order(layer_registry, layer_runtime)
         .into_iter()
@@ -141,9 +142,37 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                     .map(|state| state.point_icon_scale)
                     .unwrap_or(crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN),
                 point_icon_scale_default: crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
+                filter_bindings: layer
+                    .filter_bindings
+                    .iter()
+                    .map(|binding| FishyMapLayerFilterBindingSummary {
+                        binding_id: binding.binding_id.clone(),
+                        source: layer_filter_source_label(binding.source).to_string(),
+                        target: layer_filter_target_label(binding.target).to_string(),
+                        enabled: filter_binding_overrides.is_binding_enabled(layer, binding),
+                        default_enabled: binding.default_enabled,
+                    })
+                    .collect(),
             }
         })
         .collect()
+}
+
+fn layer_filter_source_label(source: crate::map::layers::LayerFilterSourceKind) -> &'static str {
+    match source {
+        crate::map::layers::LayerFilterSourceKind::FishSelection => "fish_selection",
+        crate::map::layers::LayerFilterSourceKind::ZoneSelection => "zone_selection",
+        crate::map::layers::LayerFilterSourceKind::SemanticSelection => "semantic_selection",
+    }
+}
+
+fn layer_filter_target_label(target: crate::map::layers::LayerFilterTargetKind) -> &'static str {
+    match target {
+        crate::map::layers::LayerFilterTargetKind::ZoneMembership => "zone_membership",
+        crate::map::layers::LayerFilterTargetKind::SemanticFieldSelection => {
+            "semantic_field_selection"
+        }
+    }
 }
 
 fn manifest_status_label(status: LayerManifestStatus) -> &'static str {

@@ -1,6 +1,7 @@
 mod events;
 mod input;
 mod normalize;
+mod search;
 mod snapshot;
 
 pub use events::FishyMapOutputEvent;
@@ -14,13 +15,20 @@ pub use normalize::{
     normalize_i32_list, normalize_layer_clip_mask_map, normalize_layer_opacity_map,
     normalize_string_list, normalize_u32_list, normalize_u32_map,
 };
+pub use search::{
+    deserialize_search_expression_field, deserialize_search_expression_state,
+    normalize_fish_filter_term, normalize_fish_filter_terms, selected_search_terms_from_expression,
+    FishyMapPatchBound, FishyMapSearchExpressionNode, FishyMapSearchExpressionOperator,
+    FishyMapSearchProjection, FishyMapSearchTerm, FishyMapSharedFishState,
+};
 pub use snapshot::{
     FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapFishSummary,
-    FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot, FishyMapLayerSummary,
-    FishyMapPatchSummary, FishyMapSelectionPointKind, FishyMapSelectionSnapshot,
-    FishyMapSemanticTermSummary, FishyMapStateSnapshot, FishyMapStatusSnapshot,
-    FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot,
-    FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
+    FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot, FishyMapLayerFilterBindingSummary,
+    FishyMapLayerSummary, FishyMapPatchSummary, FishyMapSelectionPointKind,
+    FishyMapSelectionSnapshot, FishyMapSemanticTermSummary, FishyMapStateSnapshot,
+    FishyMapStatusSnapshot, FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot,
+    FishyMapZoneDriftSnapshot, FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot,
+    FishyMapZoneWindowSnapshot,
 };
 
 pub const FISHYMAP_CONTRACT_VERSION: u8 = 1;
@@ -47,7 +55,10 @@ mod tests {
                     "fromPatchId": "2026-02-26",
                     "toPatchId": "2026-03-12",
                     "layerIdsOrdered": ["zones", "terrain", "minimap"],
-                    "zoneMembershipLayerIds": ["fish_evidence", "regions"],
+                    "layerFilterBindingIdsDisabledByLayer": {
+                        "fish_evidence": ["zone_selection"],
+                        "regions": ["fish_selection"]
+                    },
                     "layerOpacities": {
                         "zones": 0.8,
                         "terrain": 0.35
@@ -120,8 +131,14 @@ mod tests {
             patch
                 .filters
                 .as_ref()
-                .and_then(|filters| filters.zone_membership_layer_ids.clone()),
-            Some(vec!["fish_evidence".to_string(), "regions".to_string()])
+                .and_then(|filters| filters.layer_filter_binding_ids_disabled_by_layer.clone()),
+            Some(BTreeMap::from([
+                (
+                    "fish_evidence".to_string(),
+                    vec!["zone_selection".to_string()],
+                ),
+                ("regions".to_string(), vec!["fish_selection".to_string()]),
+            ]))
         );
         assert_eq!(
             patch
@@ -230,7 +247,10 @@ mod tests {
                     "zoneRgbs": [1193046, 1193046, 6636321],
                     "layerIdsVisible": ["zones", "zones", "terrain"],
                     "layerIdsOrdered": ["zones", "terrain", "zones", "minimap"],
-                    "zoneMembershipLayerIds": ["fish_evidence", "fish_evidence", "regions"],
+                    "layerFilterBindingIdsDisabledByLayer": {
+                        "fish_evidence": [" zone_selection ", "zone_selection"],
+                        "regions": ["fish_selection", ""]
+                    },
                     "layerOpacities": {
                         "zones": 1.2,
                         " terrain ": 0.25,
@@ -267,8 +287,14 @@ mod tests {
             ])
         );
         assert_eq!(
-            state.filters.zone_membership_layer_ids,
-            Some(vec!["fish_evidence".to_string(), "regions".to_string()])
+            state.filters.layer_filter_binding_ids_disabled_by_layer,
+            Some(BTreeMap::from([
+                (
+                    "fish_evidence".to_string(),
+                    vec!["zone_selection".to_string()],
+                ),
+                ("regions".to_string(), vec!["fish_selection".to_string()]),
+            ]))
         );
         assert_eq!(
             state.filters.layer_opacities,
@@ -330,23 +356,29 @@ mod tests {
     }
 
     #[test]
-    fn empty_zone_membership_layer_ids_clear_existing_overrides() {
+    fn empty_layer_filter_binding_override_map_clears_existing_overrides() {
         let mut state = FishyMapInputState::default();
-        state.filters.zone_membership_layer_ids = Some(vec!["fish_evidence".to_string()]);
+        state.filters.layer_filter_binding_ids_disabled_by_layer = Some(BTreeMap::from([(
+            "fish_evidence".to_string(),
+            vec!["zone_selection".to_string()],
+        )]));
 
         state.apply_patch(
             serde_json::from_str(
                 r#"{
                     "version": 1,
                     "filters": {
-                        "zoneMembershipLayerIds": []
+                        "layerFilterBindingIdsDisabledByLayer": {}
                     }
                 }"#,
             )
             .expect("patch"),
         );
 
-        assert_eq!(state.filters.zone_membership_layer_ids, None);
+        assert_eq!(
+            state.filters.layer_filter_binding_ids_disabled_by_layer,
+            None
+        );
     }
 
     #[test]

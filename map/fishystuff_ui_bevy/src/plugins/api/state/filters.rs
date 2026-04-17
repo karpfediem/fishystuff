@@ -1,5 +1,7 @@
 use fishystuff_api::models::meta::PatchInfo;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+use crate::map::layers::{LayerFilterBindingSpec, LayerSpec};
 
 use crate::prelude::*;
 
@@ -26,25 +28,62 @@ pub struct SemanticFieldFilterState {
 }
 
 #[derive(Resource, Default)]
-pub struct ZoneMembershipLayerFilterState {
-    pub selected_layer_ids: BTreeSet<String>,
+pub struct LayerFilterBindingOverrideState {
+    pub disabled_binding_ids_by_layer: BTreeMap<String, BTreeSet<String>>,
 }
 
-impl ZoneMembershipLayerFilterState {
-    pub fn set_layer_ids(&mut self, layer_ids: Vec<String>) {
-        self.selected_layer_ids = layer_ids
-            .into_iter()
-            .map(|layer_id| layer_id.trim().to_string())
-            .filter(|layer_id| !layer_id.is_empty())
-            .collect();
+#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ZoneMembershipFilter {
+    pub active: bool,
+    pub zone_rgbs: HashSet<u32>,
+    pub revision: u64,
+}
+
+#[derive(Resource, Default)]
+pub struct LayerEffectiveFilterState {
+    zone_membership_by_layer: BTreeMap<String, ZoneMembershipFilter>,
+    semantic_field_ids_by_layer: BTreeMap<String, Vec<u32>>,
+}
+
+impl LayerFilterBindingOverrideState {
+    pub fn set_disabled_binding_ids_by_layer(
+        &mut self,
+        disabled_binding_ids_by_layer: BTreeMap<String, Vec<String>>,
+    ) {
+        let mut next = BTreeMap::new();
+        for (layer_id_raw, binding_ids) in disabled_binding_ids_by_layer {
+            let layer_id = layer_id_raw.trim();
+            if layer_id.is_empty() {
+                continue;
+            }
+            let normalized = binding_ids
+                .into_iter()
+                .map(|binding_id| binding_id.trim().to_string())
+                .filter(|binding_id| !binding_id.is_empty())
+                .collect::<BTreeSet<_>>();
+            if normalized.is_empty() {
+                continue;
+            }
+            next.insert(layer_id.to_string(), normalized);
+        }
+        self.disabled_binding_ids_by_layer = next;
     }
 
-    pub fn layer_ids(&self) -> Vec<String> {
-        self.selected_layer_ids.iter().cloned().collect()
+    pub fn disabled_binding_ids_for_layer(&self, layer_id: &str) -> Vec<String> {
+        self.disabled_binding_ids_by_layer
+            .get(layer_id.trim())
+            .map(|binding_ids| binding_ids.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
-    pub fn includes(&self, layer_id: &str) -> bool {
-        self.selected_layer_ids.contains(layer_id.trim())
+    pub fn is_binding_enabled(&self, layer: &LayerSpec, binding: &LayerFilterBindingSpec) -> bool {
+        if !binding.default_enabled {
+            return false;
+        }
+        !self
+            .disabled_binding_ids_by_layer
+            .get(layer.key.as_str())
+            .is_some_and(|disabled| disabled.contains(binding.binding_id.as_str()))
     }
 }
 
@@ -78,9 +117,154 @@ impl SemanticFieldFilterState {
     }
 }
 
+impl LayerEffectiveFilterState {
+    pub fn zone_membership_filter(&self, layer_id: &str) -> Option<&ZoneMembershipFilter> {
+        self.zone_membership_by_layer.get(layer_id.trim())
+    }
+
+    pub fn semantic_field_ids_for_layer(&self, layer_id: &str) -> &[u32] {
+        self.semantic_field_ids_by_layer
+            .get(layer_id.trim())
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    pub fn sync_zone_membership_filter_for_layer(
+        &mut self,
+        layer_id: impl Into<String>,
+        next_active: bool,
+        next_zone_rgbs: HashSet<u32>,
+    ) {
+        let layer_id = layer_id.into();
+        let filter = self.zone_membership_by_layer.entry(layer_id).or_default();
+        if filter.active != next_active || filter.zone_rgbs != next_zone_rgbs {
+            filter.active = next_active;
+            filter.zone_rgbs = next_zone_rgbs;
+            filter.revision = filter.revision.wrapping_add(1);
+        }
+    }
+
+    pub fn set_semantic_field_ids_for_layer(
+        &mut self,
+        layer_id: impl Into<String>,
+        mut field_ids: Vec<u32>,
+    ) {
+        field_ids.sort_unstable();
+        field_ids.dedup();
+        let layer_id = layer_id.into();
+        if field_ids.is_empty() {
+            self.semantic_field_ids_by_layer.remove(&layer_id);
+            return;
+        }
+        self.semantic_field_ids_by_layer.insert(layer_id, field_ids);
+    }
+
+    pub fn sync_to_registry(&mut self, layer_registry: &crate::map::layers::LayerRegistry) {
+        let active_layer_ids = layer_registry
+            .ordered()
+            .iter()
+            .map(|layer| layer.key.clone())
+            .collect::<BTreeSet<_>>();
+        self.zone_membership_by_layer
+            .retain(|layer_id, _| active_layer_ids.contains(layer_id));
+        self.semantic_field_ids_by_layer
+            .retain(|layer_id, _| active_layer_ids.contains(layer_id));
+        for layer in layer_registry.ordered() {
+            if !self
+                .zone_membership_by_layer
+                .contains_key(layer.key.as_str())
+                && layer.zone_membership_filter_bindings().next().is_some()
+            {
+                self.zone_membership_by_layer
+                    .insert(layer.key.clone(), ZoneMembershipFilter::default());
+            }
+            if !self
+                .semantic_field_ids_by_layer
+                .contains_key(layer.key.as_str())
+                && layer.semantic_selection_filter_bindings().next().is_some()
+            {
+                self.semantic_field_ids_by_layer
+                    .insert(layer.key.clone(), Vec::new());
+            }
+        }
+    }
+
+    pub fn resolve_zone_membership_filter_for_layer(
+        &mut self,
+        layer: &LayerSpec,
+        overrides: &LayerFilterBindingOverrideState,
+        fish_selection_filter: &ZoneMembershipFilter,
+        semantic_filter: &SemanticFieldFilterState,
+    ) {
+        let explicit_zone_rgbs = semantic_filter
+            .selected_zone_rgbs()
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        let mut active_sources = Vec::new();
+        for binding in layer.zone_membership_filter_bindings() {
+            if !overrides.is_binding_enabled(layer, binding) {
+                continue;
+            }
+            match binding.source {
+                crate::map::layers::LayerFilterSourceKind::FishSelection
+                    if fish_selection_filter.active =>
+                {
+                    active_sources.push(fish_selection_filter.zone_rgbs.clone());
+                }
+                crate::map::layers::LayerFilterSourceKind::ZoneSelection
+                    if !explicit_zone_rgbs.is_empty() =>
+                {
+                    active_sources.push(explicit_zone_rgbs.clone());
+                }
+                _ => {}
+            }
+        }
+        let mut next_zone_rgbs = active_sources.into_iter();
+        let Some(mut intersection) = next_zone_rgbs.next() else {
+            self.sync_zone_membership_filter_for_layer(layer.key.clone(), false, HashSet::new());
+            return;
+        };
+        for source_zones in next_zone_rgbs {
+            intersection.retain(|zone_rgb| source_zones.contains(zone_rgb));
+        }
+        let next_active = !intersection.is_empty();
+        self.sync_zone_membership_filter_for_layer(layer.key.clone(), next_active, intersection);
+    }
+
+    pub fn resolve_semantic_field_filter_for_layer(
+        &mut self,
+        layer: &LayerSpec,
+        overrides: &LayerFilterBindingOverrideState,
+        semantic_filter: &SemanticFieldFilterState,
+    ) {
+        let next_field_ids = if layer
+            .semantic_selection_filter_bindings()
+            .any(|binding| overrides.is_binding_enabled(layer, binding))
+        {
+            semantic_filter
+                .field_ids_for_layer(layer.key.as_str())
+                .to_vec()
+        } else {
+            Vec::new()
+        };
+        self.set_semantic_field_ids_for_layer(layer.key.clone(), next_field_ids);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{SemanticFieldFilterState, ZoneMembershipLayerFilterState};
+    use std::collections::{BTreeMap, HashSet};
+
+    use crate::map::layers::{
+        LayerFilterBindingSpec, LayerFilterSourceKind, LayerFilterTargetKind,
+        LAYER_FILTER_BINDING_ZONE_SELECTION,
+    };
+
+    use super::{
+        LayerEffectiveFilterState, LayerFilterBindingOverrideState, SemanticFieldFilterState,
+        ZoneMembershipFilter,
+    };
 
     #[test]
     fn semantic_field_filter_state_normalizes_and_clears_layer_ids() {
@@ -100,24 +284,105 @@ mod tests {
     }
 
     #[test]
-    fn zone_membership_layer_filter_state_normalizes_and_clears_layer_ids() {
-        let mut filter = ZoneMembershipLayerFilterState::default();
-        filter.set_layer_ids(vec![
+    fn layer_filter_binding_override_state_normalizes_and_clears_layer_ids() {
+        let mut overrides = LayerFilterBindingOverrideState::default();
+        overrides.set_disabled_binding_ids_by_layer(BTreeMap::from([(
             " fish_evidence ".to_string(),
-            "".to_string(),
-            "regions".to_string(),
-            "fish_evidence".to_string(),
-        ]);
+            vec![
+                format!(" {} ", LAYER_FILTER_BINDING_ZONE_SELECTION),
+                "".to_string(),
+                LAYER_FILTER_BINDING_ZONE_SELECTION.to_string(),
+            ],
+        )]));
 
         assert_eq!(
-            filter.layer_ids(),
-            vec!["fish_evidence".to_string(), "regions".to_string()]
+            overrides.disabled_binding_ids_for_layer("fish_evidence"),
+            vec![LAYER_FILTER_BINDING_ZONE_SELECTION.to_string()]
         );
-        assert!(filter.includes("fish_evidence"));
-        assert!(!filter.includes("bookmarks"));
 
-        filter.set_layer_ids(Vec::new());
-        assert!(filter.layer_ids().is_empty());
+        overrides.set_disabled_binding_ids_by_layer(BTreeMap::new());
+        assert!(overrides
+            .disabled_binding_ids_for_layer("fish_evidence")
+            .is_empty());
+    }
+
+    #[test]
+    fn layer_effective_filter_state_intersects_active_zone_sources() {
+        let layer = crate::map::layers::LayerSpec {
+            id: crate::map::layers::LayerId::from_raw(1),
+            key: "fish_evidence".to_string(),
+            name: "Fish Evidence".to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 0.0,
+            kind: crate::map::layers::LayerKind::Waypoints,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: String::new(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: crate::map::spaces::layer_transform::LayerTransform::IdentityMapSpace,
+            tile_px: 0,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            filter_bindings: vec![
+                LayerFilterBindingSpec {
+                    binding_id: "fish_selection".to_string(),
+                    target: LayerFilterTargetKind::ZoneMembership,
+                    source: LayerFilterSourceKind::FishSelection,
+                    default_enabled: true,
+                },
+                LayerFilterBindingSpec {
+                    binding_id: "zone_selection".to_string(),
+                    target: LayerFilterTargetKind::ZoneMembership,
+                    source: LayerFilterSourceKind::ZoneSelection,
+                    default_enabled: true,
+                },
+            ],
+            lod_policy: crate::map::layers::LodPolicy {
+                target_tiles: 1,
+                hysteresis_hi: 1.0,
+                hysteresis_lo: 0.0,
+                margin_tiles: 0,
+                enable_refine: false,
+                refine_debounce_ms: 0,
+                max_detail_tiles: 0,
+                max_resident_tiles: 1,
+                pinned_coarse_levels: 0,
+                coarse_pin_min_level: None,
+                warm_margin_tiles: 0,
+                protected_margin_tiles: 0,
+                detail_eviction_weight: 1.0,
+                max_detail_requests_while_camera_moving: 1,
+                motion_suppresses_refine: true,
+            },
+            request_weight: 1.0,
+            pick_mode: crate::map::layers::PickMode::None,
+            display_order: 0,
+        };
+        let mut semantic_filter = SemanticFieldFilterState::default();
+        semantic_filter.set_field_ids_for_layer("zone_mask", vec![0x222222, 0x333333]);
+        let fish_filter = ZoneMembershipFilter {
+            active: true,
+            zone_rgbs: HashSet::from([0x111111, 0x222222]),
+            revision: 1,
+        };
+        let mut effective = LayerEffectiveFilterState::default();
+
+        effective.resolve_zone_membership_filter_for_layer(
+            &layer,
+            &LayerFilterBindingOverrideState::default(),
+            &fish_filter,
+            &semantic_filter,
+        );
+
+        let resolved = effective
+            .zone_membership_filter("fish_evidence")
+            .expect("layer filter");
+        assert!(resolved.active);
+        assert_eq!(resolved.zone_rgbs, HashSet::from([0x222222]));
     }
 }
 

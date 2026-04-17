@@ -315,6 +315,7 @@ mod tests {
             request_weight: 1.0,
             pick_mode: PickMode::None,
             display_order: 0,
+            filter_bindings: Vec::new(),
         }
     }
 

@@ -2,8 +2,6 @@ import {
   FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_POINT_ICON_SCALE_MIN,
   createEmptySnapshot,
-  resolveEffectiveFishIdsForWasm,
-  resolveEffectiveZoneRgbsForWasm,
   zoneRgbFromLayerSamples,
 } from "./map-host.js";
 import {
@@ -34,6 +32,25 @@ function normalizeStringList(values) {
     }
     seen.add(normalized);
     next.push(normalized);
+  }
+  return next;
+}
+
+function normalizeLayerStringListMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const next = {};
+  for (const [layerIdRaw, bindingIdsRaw] of Object.entries(values)) {
+    const layerId = String(layerIdRaw ?? "").trim();
+    if (!layerId) {
+      continue;
+    }
+    const bindingIds = normalizeStringList(bindingIdsRaw);
+    if (!bindingIds.length) {
+      continue;
+    }
+    next[layerId] = bindingIds;
   }
   return next;
 }
@@ -150,6 +167,9 @@ function normalizeBridgedFilters(signals) {
       ? normalizeStringList(bridged.layerIdsVisible)
       : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
     layerIdsOrdered: normalizeStringList(bridged.layerIdsOrdered),
+    layerFilterBindingIdsDisabledByLayer: normalizeLayerStringListMap(
+      bridged.layerFilterBindingIdsDisabledByLayer,
+    ),
     layerOpacities: normalizeRecordObject(bridged.layerOpacities),
     layerClipMasks: normalizeRecordObject(bridged.layerClipMasks),
     layerWaypointConnectionsVisible: normalizeRecordObject(
@@ -210,30 +230,22 @@ export function normalizeMapActionState(raw) {
 export function buildBridgeInputPatchFromSignals(signals, options = {}) {
   const filters = normalizeBridgedFilters(signals);
   const ui = normalizeBridgedUi(signals);
-  let effectiveZoneRgbs = resolveEffectiveZoneRgbsForWasm(
-    {
-      filters: {
-        zoneRgbs: filters.zoneRgbs,
-        searchExpression: filters.searchExpression,
-      },
-    },
-    options.zoneCatalog,
-  );
-  if (!effectiveZoneRgbs.length && !hasExplicitZoneFilter(filters)) {
+  let selectedZoneRgbs = cloneJson(filters.zoneRgbs);
+  if (!selectedZoneRgbs.length && !hasExplicitZoneFilter(filters)) {
     const selectedZoneRgb = selectedZoneRgbFromSignals(signals, options.currentState);
     if (Number.isInteger(selectedZoneRgb) && selectedZoneRgb >= 0) {
-      effectiveZoneRgbs = [selectedZoneRgb];
+      selectedZoneRgbs = [selectedZoneRgb];
     }
   }
   const effectiveSemanticFieldIdsByLayer = cloneJson(filters.semanticFieldIdsByLayer);
-  if (effectiveZoneRgbs.length) {
-    effectiveSemanticFieldIdsByLayer.zone_mask = cloneJson(effectiveZoneRgbs);
+  if (selectedZoneRgbs.length) {
+    effectiveSemanticFieldIdsByLayer.zone_mask = cloneJson(selectedZoneRgbs);
   } else {
     delete effectiveSemanticFieldIdsByLayer.zone_mask;
   }
   const effectiveFilters = {
     ...filters,
-    zoneRgbs: effectiveZoneRgbs,
+    zoneRgbs: selectedZoneRgbs,
     semanticFieldIdsByLayer: effectiveSemanticFieldIdsByLayer,
   };
   const layerSearchEffects = buildLayerSearchEffects(effectiveFilters);
@@ -246,25 +258,11 @@ export function buildBridgeInputPatchFromSignals(signals, options = {}) {
     caughtIds: normalizeIntegerList(signals?._shared_fish?.caughtIds),
     favouriteIds: normalizeIntegerList(signals?._shared_fish?.favouriteIds),
   };
-  const currentState = isPlainObject(options.currentState) ? options.currentState : createEmptySnapshot();
-  const effectiveFishIds = resolveEffectiveFishIdsForWasm(
-    {
-      filters: {
-        fishIds: filters.fishIds,
-        fishFilterTerms: filters.fishFilterTerms,
-        searchExpression: filters.searchExpression,
-      },
-      ui: {
-        sharedFishState,
-      },
-    },
-    currentState,
-  );
 
   return {
     version: FISHYMAP_CONTRACT_VERSION,
     filters: {
-      fishIds: cloneJson(effectiveFishIds),
+      fishIds: cloneJson(effectiveFilters.fishIds),
       zoneRgbs: cloneJson(effectiveFilters.zoneRgbs),
       semanticFieldIdsByLayer: cloneJson(effectiveFilters.semanticFieldIdsByLayer),
       fishFilterTerms: cloneJson(effectiveFilters.fishFilterTerms),
@@ -274,9 +272,11 @@ export function buildBridgeInputPatchFromSignals(signals, options = {}) {
       toPatchId: effectiveFilters.toPatchId,
       layerIdsVisible: cloneJson(effectiveFilters.layerIdsVisible),
       layerIdsOrdered: cloneJson(effectiveFilters.layerIdsOrdered),
+      layerFilterBindingIdsDisabledByLayer: cloneJson(
+        effectiveFilters.layerFilterBindingIdsDisabledByLayer,
+      ),
       layerOpacities: cloneJson(effectiveFilters.layerOpacities),
       layerClipMasks: cloneJson(layerSearchEffects.effectiveLayerClipMasks),
-      zoneMembershipLayerIds: cloneJson(layerSearchEffects.zoneMembershipLayerIds),
       layerWaypointConnectionsVisible: cloneJson(effectiveFilters.layerWaypointConnectionsVisible),
       layerWaypointLabelsVisible: cloneJson(effectiveFilters.layerWaypointLabelsVisible),
       layerPointIconsVisible: cloneJson(effectiveFilters.layerPointIconsVisible),

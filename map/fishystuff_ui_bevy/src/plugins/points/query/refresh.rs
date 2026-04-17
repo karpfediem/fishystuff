@@ -9,7 +9,7 @@ use crate::map::events::{
 };
 use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
 use crate::plugins::api::{
-    FishFilterState, MapDisplayState, PatchFilterState, ZoneMembershipLayerFilterState,
+    FishFilterState, LayerEffectiveFilterState, MapDisplayState, PatchFilterState,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::points::EvidenceZoneFilter;
@@ -84,14 +84,15 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         max_y: viewport_bbox.max_y,
     };
     let cluster_bucket_px = suggested_cluster_bucket_px(&viewport_bbox);
-    let zone_membership_active = refresh
-        .zone_membership_filter
-        .includes(FISH_EVIDENCE_LAYER_KEY)
-        && refresh.zone_filter.active;
+    let inactive_filter = EvidenceZoneFilter::default();
+    let zone_filter = refresh
+        .layer_filters
+        .zone_membership_filter(FISH_EVIDENCE_LAYER_KEY)
+        .unwrap_or(&inactive_filter);
     let signature = PointsQuerySignature {
         revision: refresh.snapshot.revision.clone(),
-        zone_filter_revision: if zone_membership_active {
-            refresh.zone_filter.revision
+        zone_filter_revision: if zone_filter.active {
+            zone_filter.revision
         } else {
             0
         },
@@ -119,7 +120,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         from_ts_utc,
         to_ts_utc,
         fish_ids: fish_ids.as_slice(),
-        zone_rgbs: zone_membership_active.then_some(&refresh.zone_filter.zone_rgbs),
+        zone_rgbs: zone_filter.active.then_some(&zone_filter.zone_rgbs),
         tile_scope: Some(VisibleTileScope::from_bbox(
             &tile_scope,
             VISIBLE_TILE_SCOPE_PX,
@@ -177,8 +178,7 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     points: ResMut<'w, PointsState>,
     patch_filter: Res<'w, PatchFilterState>,
     fish_filter: Res<'w, FishFilterState>,
-    zone_filter: Res<'w, EvidenceZoneFilter>,
-    zone_membership_filter: Res<'w, ZoneMembershipLayerFilterState>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     display_state: Res<'w, MapDisplayState>,
     view_mode: Res<'w, ViewModeState>,
     layer_registry: Res<'w, LayerRegistry>,

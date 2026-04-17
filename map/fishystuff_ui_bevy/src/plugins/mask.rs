@@ -15,11 +15,10 @@ use crate::map::spaces::WorldPoint;
 use crate::map::terrain::runtime::TerrainViewEstimate;
 use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverState,
-    MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
+    LayerEffectiveFilterState, MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
-use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
@@ -87,7 +86,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
             field_metadata: &context.field_metadata,
             tile_cache: &context.tile_cache,
             vector_runtime: &context.vector_runtime,
-            evidence_zone_filter: &context.evidence_zone_filter,
+            layer_filters: &context.layer_filters,
             map_to_world: MapToWorld::default(),
         },
     ) else {
@@ -143,7 +142,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
             field_metadata: &context.field_metadata,
             tile_cache: &context.tile_cache,
             vector_runtime: &context.vector_runtime,
-            evidence_zone_filter: &context.evidence_zone_filter,
+            layer_filters: &context.layer_filters,
             map_to_world: MapToWorld::default(),
         },
         crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
@@ -250,7 +249,7 @@ struct HoverUpdateContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
-    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     view_mode: Res<'w, ViewModeState>,
 }
 
@@ -268,7 +267,7 @@ struct MaskClickContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
-    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,
     pan: Res<'w, PanState>,

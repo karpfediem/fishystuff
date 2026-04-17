@@ -31,6 +31,8 @@ pub(in crate::bridge::host) fn effective_filters(
         fish_ids: fish_filter.selected_fish_ids.clone(),
         zone_rgbs: semantic_filter.selected_zone_rgbs().to_vec(),
         semantic_field_ids_by_layer: semantic_filter.selected_field_ids_by_layer.clone(),
+        fish_filter_terms: bridge_input.filters.fish_filter_terms.clone(),
+        search_expression: bridge_input.filters.search_expression.clone(),
         search_text: bridge_input.filters.search_text.clone(),
         prize_only: bridge_input.filters.prize_only,
         patch_id: match (&from_patch_id, &to_patch_id) {
@@ -56,7 +58,10 @@ pub(in crate::bridge::host) fn effective_filters(
                 .map(|layer| layer.key.clone())
                 .collect()
         }),
-        zone_membership_layer_ids: bridge_input.filters.zone_membership_layer_ids.clone(),
+        layer_filter_binding_ids_disabled_by_layer: bridge_input
+            .filters
+            .layer_filter_binding_ids_disabled_by_layer
+            .clone(),
         layer_opacities: current_layer_opacity_overrides(layer_registry, layer_runtime),
         layer_clip_masks: current_layer_clip_mask_overrides(layer_registry, layer_runtime),
         layer_waypoint_connections_visible: current_layer_waypoint_connection_overrides(

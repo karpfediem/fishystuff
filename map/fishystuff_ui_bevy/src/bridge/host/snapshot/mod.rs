@@ -47,8 +47,9 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         || context.terrain_view.is_changed();
     let selection_changed = context.selection.is_changed();
     let hover_changed = context.hover.is_changed();
-    let layer_catalog_changed =
-        context.layer_registry.is_changed() || context.layer_runtime.is_changed();
+    let layer_catalog_changed = context.layer_registry.is_changed()
+        || context.layer_runtime.is_changed()
+        || context.layer_filter_binding_overrides.is_changed();
     let patch_catalog_changed = context.patch_filter.is_changed();
     let fish_catalog_changed = context.fish.is_changed();
     let semantic_catalog_changed = context.layer_registry.is_changed()
@@ -145,7 +146,11 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         if layer_catalog_changed {
             snapshot_changed |= replace_if_changed(
                 &mut snapshot.catalog.layers,
-                current_layer_summaries(&context.layer_registry, &context.layer_runtime),
+                current_layer_summaries(
+                    &context.layer_registry,
+                    &context.layer_runtime,
+                    &context.layer_filter_binding_overrides,
+                ),
             );
         }
         if patch_catalog_changed {
@@ -234,6 +239,7 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     patch_filter: Res<'w, PatchFilterState>,
     fish_filter: Res<'w, FishFilterState>,
     semantic_filter: Res<'w, SemanticFieldFilterState>,
+    layer_filter_binding_overrides: Res<'w, LayerFilterBindingOverrideState>,
     display_state: Res<'w, MapDisplayState>,
     fish: Res<'w, FishCatalog>,
     points: Res<'w, PointsState>,

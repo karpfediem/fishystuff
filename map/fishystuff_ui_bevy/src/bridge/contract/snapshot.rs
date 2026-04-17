@@ -135,6 +135,16 @@ pub struct FishyMapZoneEvidenceEntrySnapshot {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+pub struct FishyMapLayerFilterBindingSummary {
+    pub binding_id: String,
+    pub source: String,
+    pub target: String,
+    pub enabled: bool,
+    pub default_enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct FishyMapLayerSummary {
     pub layer_id: String,
     pub name: String,
@@ -169,6 +179,7 @@ pub struct FishyMapLayerSummary {
     pub point_icons_default: bool,
     pub point_icon_scale: f32,
     pub point_icon_scale_default: f32,
+    pub filter_bindings: Vec<FishyMapLayerFilterBindingSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

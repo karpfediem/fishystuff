@@ -14,8 +14,9 @@ use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::{
-    fish_item_icon_url, remote_image_handle, FishCatalog, MapDisplayState, RemoteImageCache,
-    RemoteImageEpoch, RemoteImageStatus, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    fish_item_icon_url, remote_image_handle, FishCatalog, LayerEffectiveFilterState,
+    MapDisplayState, RemoteImageCache, RemoteImageEpoch, RemoteImageStatus, ZoneMembershipFilter,
+    POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -259,6 +260,11 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     let point_opacity = context.display_state.point_opacity.clamp(0.0, 1.0);
     let ring_z = context.display_state.point_z_base + RING_Z_OFFSET;
     let icon_z = context.display_state.point_z_base + ICON_Z_OFFSET;
+    let inactive_filter = EvidenceZoneFilter::default();
+    let fish_evidence_filter = context
+        .layer_filters
+        .zone_membership_filter(FISH_EVIDENCE_LAYER_KEY)
+        .unwrap_or(&inactive_filter);
     for (idx, point) in context.points.points.iter().enumerate() {
         let world = map_point_to_world(point);
         let pair = context.pool.markers[idx];
@@ -271,7 +277,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
                 &context.exact_lookups,
                 &context.tile_cache,
                 &context.vector_runtime,
-                &context.evidence_zone_filter,
+                fish_evidence_filter,
             )
         });
         let (ring_scale, ring_alpha) = ring_style_for_point(point);
@@ -374,10 +380,10 @@ pub(super) struct PointMarkerSync<'w, 's> {
     view_mode: Res<'w, ViewModeState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     exact_lookups: Res<'w, ExactLookupCache>,
     tile_cache: Res<'w, RasterTileCache>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
-    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
     fish: Res<'w, FishCatalog>,
     points: ResMut<'w, PointsState>,
     ring_assets: Res<'w, PointRingAssets>,
@@ -512,7 +518,7 @@ fn ring_style_for_point(point: &RenderPoint) -> (f32, f32) {
         return (1.0, 1.0);
     }
     let count = point.sample_count.max(1) as f32;
-    let scale = (1.0 + count.log2() / 5.0).clamp(1.1, 3.0);
+    let scale = (1.0_f32 + count.log2() / 5.0).clamp(1.1, 3.0);
     let alpha = (AGGREGATE_RING_ALPHA_MIN + count.log10() * 0.22)
         .clamp(AGGREGATE_RING_ALPHA_MIN, AGGREGATE_RING_ALPHA_MAX);
     (scale, alpha)
@@ -537,7 +543,7 @@ fn world_point_visible_in_layer_clip(
     exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    zone_filter: &ZoneMembershipFilter,
 ) -> bool {
     !matches!(
         clip_mask_allows_world_point(
@@ -548,7 +554,7 @@ fn world_point_visible_in_layer_clip(
             exact_lookups,
             tile_cache,
             vector_runtime,
-            evidence_zone_filter,
+            zone_filter,
             layer_registry.map_version_id(),
         ),
         Some(false)

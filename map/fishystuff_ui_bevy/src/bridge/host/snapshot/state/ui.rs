@@ -32,6 +32,7 @@ pub(in crate::bridge::host::snapshot) fn effective_ui_state(
         point_icon_scale: display_state
             .point_icon_scale
             .clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX),
+        shared_fish_state: bridge_input.ui.shared_fish_state.clone(),
         active_detail_pane_id: bridge_input.ui.active_detail_pane_id.clone(),
         bookmark_selected_ids: bookmarks.selected_ids.clone(),
         bookmarks: effective_ui_bookmarks(

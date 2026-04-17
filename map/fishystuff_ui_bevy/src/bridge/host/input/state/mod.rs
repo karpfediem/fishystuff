@@ -1,27 +1,24 @@
 mod bookmarks;
 mod filters;
 mod layers;
+mod search;
 mod theme;
 
 use crate::bridge::host::BrowserBridgeState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::ui_layers::LayerDebugSettings;
-use crate::plugins::api::{
-    FishFilterState, MapDisplayState, PatchFilterState, SemanticFieldFilterState,
-    ZoneMembershipLayerFilterState,
-};
+use crate::plugins::api::{LayerFilterBindingOverrideState, MapDisplayState};
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::{Map2dCamera, Terrain3dCamera};
 use crate::plugins::local_layers::sync_display_layer_controls;
 use crate::prelude::*;
 use bevy::window::RequestRedraw;
 
+pub(in crate::bridge::host) use search::resolve_browser_search_filters;
+
 pub(in crate::bridge::host) fn apply_browser_input_state(
     bridge: Res<BrowserBridgeState>,
-    mut patch_filter: ResMut<PatchFilterState>,
-    mut fish_filter: ResMut<FishFilterState>,
-    mut semantic_filter: ResMut<SemanticFieldFilterState>,
-    mut zone_membership_filter: ResMut<ZoneMembershipLayerFilterState>,
+    mut layer_filter_binding_overrides: ResMut<LayerFilterBindingOverrideState>,
     mut bookmarks: ResMut<BookmarkState>,
     mut display_state: ResMut<MapDisplayState>,
     mut debug_layers: ResMut<LayerDebugSettings>,
@@ -41,10 +38,10 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     layer_runtime.sync_to_registry(&layer_registry);
     bookmarks::apply_bookmarks(&bridge.input, &mut bookmarks);
     filters::apply_display_flags(&bridge.input, &mut display_state, &mut debug_layers);
-    filters::apply_fish_filters(&bridge.input, &mut fish_filter);
-    filters::apply_semantic_field_filters(&bridge.input, &mut semantic_filter);
-    filters::apply_patch_filters(&bridge.input, &mut patch_filter);
-    filters::apply_zone_membership_layer_filters(&bridge.input, &mut zone_membership_filter);
+    filters::apply_layer_filter_binding_overrides(
+        &bridge.input,
+        &mut layer_filter_binding_overrides,
+    );
     layers::apply_layer_filters(&bridge.input, &layer_registry, &mut layer_runtime);
     sync_display_layer_controls(&mut display_state, &layer_registry, &layer_runtime);
     theme::apply_theme_background(

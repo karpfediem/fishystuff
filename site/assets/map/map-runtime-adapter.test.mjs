@@ -97,7 +97,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.equal(patch.filters.fromPatchId, "a");
   assert.equal(patch.filters.toPatchId, "b");
   assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
-  assert.deepEqual(patch.filters.zoneMembershipLayerIds, []);
+  assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.filters.layerClipMasks, {
     minimap: "manual-mask",
   });
@@ -158,19 +158,19 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
     regions: [11],
     zone_mask: [123456],
   });
-  assert.deepEqual(patch.filters.fishIds, [912]);
+  assert.deepEqual(patch.filters.fishIds, []);
   assert.deepEqual(patch.filters.fishFilterTerms, ["favourite"]);
   assert.equal(patch.filters.patchId, null);
   assert.equal(patch.filters.fromPatchId, "2026-02-26");
   assert.equal(patch.filters.toPatchId, "2026-03-12");
-  assert.deepEqual(patch.filters.zoneMembershipLayerIds, []);
+  assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.ui.sharedFishState, {
     caughtIds: [],
     favouriteIds: [912],
   });
 });
 
-test("buildBridgeInputPatchFromSignals derives effective zone filters from the boolean search expression tree", () => {
+test("buildBridgeInputPatchFromSignals forwards raw zone terms from the boolean search expression tree", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
       _map_ui: {
@@ -229,15 +229,15 @@ test("buildBridgeInputPatchFromSignals derives effective zone filters from the b
     },
   );
 
-  assert.deepEqual(patch.filters.fishIds, [61]);
-  assert.deepEqual(patch.filters.zoneRgbs, [123456]);
+  assert.deepEqual(patch.filters.fishIds, []);
+  assert.deepEqual(patch.filters.zoneRgbs, [123456, 654321]);
   assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    zone_mask: [123456],
+    zone_mask: [123456, 654321],
   });
-  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+  assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
 });
 
-test("buildBridgeInputPatchFromSignals derives fish ids from the boolean search expression tree", () => {
+test("buildBridgeInputPatchFromSignals forwards raw fish terms from the boolean search expression tree", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
       _map_ui: {
@@ -286,7 +286,7 @@ test("buildBridgeInputPatchFromSignals derives fish ids from the boolean search 
     },
   );
 
-  assert.deepEqual(patch.filters.fishIds, [61, 77]);
+  assert.deepEqual(patch.filters.fishIds, []);
   assert.deepEqual(patch.filters.fishFilterTerms, ["favourite", "missing", "red"]);
 });
 
@@ -318,7 +318,7 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
     { currentState: createEmptySnapshot() },
   );
 
-  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+  assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.filters.layerClipMasks, {
     fish_evidence: "zone_mask",
     regions: "zone_mask",
@@ -367,7 +367,7 @@ test("buildBridgeInputPatchFromSignals falls back to the current selection zone 
   assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
     zone_mask: [0x39e58d],
   });
-  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+  assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
 });
 
 test("buildBridgeInputPatchFromSignals keeps explicit zone expressions ahead of the current selection zone", () => {

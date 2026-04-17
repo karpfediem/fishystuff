@@ -1587,7 +1587,7 @@ test("getCurrentState refreshes dirty snapshots after live input patches", async
           toPatchId: null,
           layerIdsVisible: ["zone_mask", "fish_evidence"],
           layerIdsOrdered: ["bookmarks", "fish_evidence", "zone_mask", "minimap"],
-          zoneMembershipLayerIds: [],
+          layerFilterBindingIdsDisabledByLayer: {},
         },
         ui: {
           diagnosticsOpen: false,
@@ -1620,24 +1620,30 @@ test("getCurrentState refreshes dirty snapshots after live input patches", async
       ...snapshotRef.current,
       filters: {
         ...snapshotRef.current.filters,
-        zoneMembershipLayerIds: ["fish_evidence"],
+        layerFilterBindingIdsDisabledByLayer: {
+          fish_evidence: ["zone_selection"],
+        },
       },
     };
 
     bridge.setState({
       version: 1,
       filters: {
-        zoneMembershipLayerIds: ["fish_evidence"],
+        layerFilterBindingIdsDisabledByLayer: {
+          fish_evidence: ["zone_selection"],
+        },
       },
     });
 
     const current = bridge.getCurrentState();
 
     assert.equal(wasm.calls.stateReads, 1);
-    assert.deepEqual(current.filters.zoneMembershipLayerIds, ["fish_evidence"]);
-    assert.deepEqual(bridge.getCurrentInputState().filters.zoneMembershipLayerIds, [
-      "fish_evidence",
-    ]);
+    assert.deepEqual(current.filters.layerFilterBindingIdsDisabledByLayer, {
+      fish_evidence: ["zone_selection"],
+    });
+    assert.deepEqual(bridge.getCurrentInputState().filters.layerFilterBindingIdsDisabledByLayer, {
+      fish_evidence: ["zone_selection"],
+    });
   } finally {
     bridge?.destroy();
     env.restore();

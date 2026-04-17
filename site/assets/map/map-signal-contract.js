@@ -66,7 +66,7 @@ export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
       "toPatchId",
       "layerIdsVisible",
       "layerIdsOrdered",
-      "zoneMembershipLayerIds",
+      "layerFilterBindingIdsDisabledByLayer",
       "layerOpacities",
       "layerClipMasks",
       "layerWaypointConnectionsVisible",
@@ -139,7 +139,7 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     toPatchId: null,
     layerIdsVisible: DEFAULT_ENABLED_LAYER_IDS,
     layerIdsOrdered: [],
-    zoneMembershipLayerIds: [],
+    layerFilterBindingIdsDisabledByLayer: {},
     layerOpacities: {},
     layerClipMasks: Object.freeze({
       fish_evidence: "zone_mask",
@@ -277,6 +277,25 @@ export function normalizeExpandedLayerIds(values) {
   return next;
 }
 
+export function normalizeLayerStringListMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const next = {};
+  for (const [layerIdRaw, bindingIdsRaw] of Object.entries(values)) {
+    const layerId = String(layerIdRaw ?? "").trim();
+    if (!layerId) {
+      continue;
+    }
+    const bindingIds = normalizeExpandedLayerIds(bindingIdsRaw);
+    if (!bindingIds.length) {
+      continue;
+    }
+    next[layerId] = bindingIds;
+  }
+  return next;
+}
+
 function normalizeWindowUiEntry(rawEntry, fallbackEntry) {
   const baseEntry = isPlainObject(rawEntry) ? rawEntry : {};
   return {
@@ -410,8 +429,8 @@ export function normalizeMapBridgedSignalState(raw) {
         current.filters?.layerIdsVisible || DEFAULT_ENABLED_LAYER_IDS,
       ),
       layerIdsOrdered: normalizeExpandedLayerIds(current.filters?.layerIdsOrdered || []),
-      zoneMembershipLayerIds: normalizeExpandedLayerIds(
-        current.filters?.zoneMembershipLayerIds || [],
+      layerFilterBindingIdsDisabledByLayer: normalizeLayerStringListMap(
+        current.filters?.layerFilterBindingIdsDisabledByLayer || {},
       ),
       layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
       layerClipMasks:

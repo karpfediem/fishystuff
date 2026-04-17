@@ -6,7 +6,7 @@ use crate::map::raster::cache::clip_mask_allows_world_point;
 use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
-use crate::plugins::api::HoverInfo;
+use crate::plugins::api::{HoverInfo, LayerEffectiveFilterState};
 use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
@@ -17,7 +17,7 @@ pub struct WorldPointQueryContext<'a> {
     pub field_metadata: &'a FieldMetadataCache,
     pub tile_cache: &'a RasterTileCache,
     pub vector_runtime: &'a VectorLayerRuntime,
-    pub evidence_zone_filter: &'a EvidenceZoneFilter,
+    pub layer_filters: &'a LayerEffectiveFilterState,
     pub map_to_world: MapToWorld,
 }
 
@@ -43,6 +43,11 @@ pub fn hover_info_at_world_point(
         &hover_layers
             .into_iter()
             .filter(|layer| {
+                let inactive_filter = EvidenceZoneFilter::default();
+                let zone_filter = context
+                    .layer_filters
+                    .zone_membership_filter(layer.key.as_str())
+                    .unwrap_or(&inactive_filter);
                 !matches!(
                     clip_mask_allows_world_point(
                         layer.id,
@@ -52,7 +57,7 @@ pub fn hover_info_at_world_point(
                         context.exact_lookups,
                         context.tile_cache,
                         context.vector_runtime,
-                        context.evidence_zone_filter,
+                        zone_filter,
                         context.layer_registry.map_version_id(),
                     ),
                     Some(false)
@@ -118,6 +123,7 @@ mod tests {
     use crate::map::raster::RasterTileCache;
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::MapPoint;
+    use crate::plugins::api::LayerEffectiveFilterState;
     use crate::plugins::points::EvidenceZoneFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::models::layers::{
@@ -288,7 +294,8 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
-        let evidence_zone_filter = EvidenceZoneFilter::default();
+        let _evidence_zone_filter = EvidenceZoneFilter::default();
+        let layer_filters = LayerEffectiveFilterState::default();
         let info = hover_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.0, 0.0)),
             &super::WorldPointQueryContext {
@@ -298,7 +305,7 @@ mod tests {
                 field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
-                evidence_zone_filter: &evidence_zone_filter,
+                layer_filters: &layer_filters,
                 map_to_world,
             },
         )

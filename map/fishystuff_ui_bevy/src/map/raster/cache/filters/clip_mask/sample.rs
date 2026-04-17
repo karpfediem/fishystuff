@@ -7,7 +7,7 @@ use crate::map::layers::{LayerSpec, PickMode};
 use crate::map::raster::{layer_map_version, TileKey};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::api::ZoneMembershipFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
 use super::super::super::RasterTileCache;
@@ -20,7 +20,7 @@ pub(crate) fn clip_mask_allows_world_point(
     exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    filter: &EvidenceZoneFilter,
+    filter: &ZoneMembershipFilter,
     map_version: Option<&str>,
 ) -> Option<bool> {
     clip_mask_allows_world_point_inner(
@@ -45,7 +45,7 @@ fn clip_mask_allows_world_point_inner(
     exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    filter: &EvidenceZoneFilter,
+    filter: &ZoneMembershipFilter,
     map_version: Option<&str>,
     visited: &mut HashSet<crate::map::layers::LayerId>,
 ) -> Option<bool> {
@@ -89,7 +89,7 @@ fn clip_mask_allows_world_point_inner(
     )
 }
 
-fn zone_filter_applies(layer: &LayerSpec, filter: &EvidenceZoneFilter) -> bool {
+fn zone_filter_applies(layer: &LayerSpec, filter: &ZoneMembershipFilter) -> bool {
     filter.active && layer.pick_mode == PickMode::ExactTilePixel && layer.key == "zone_mask"
 }
 
@@ -97,7 +97,7 @@ fn sample_field_clip_mask(
     layer: &LayerSpec,
     field: impl FieldLayerView,
     world_point: WorldPoint,
-    filter: &EvidenceZoneFilter,
+    filter: &ZoneMembershipFilter,
 ) -> Option<bool> {
     let map_to_world = MapToWorld::default();
     if !field.contains_at_world_point(layer, map_to_world, world_point) {
@@ -114,7 +114,7 @@ fn sample_raster_clip_mask(
     layer: &LayerSpec,
     world_point: WorldPoint,
     tile_cache: &RasterTileCache,
-    filter: &EvidenceZoneFilter,
+    filter: &ZoneMembershipFilter,
     map_version: Option<&str>,
 ) -> Option<bool> {
     let world_transform = layer.world_transform(MapToWorld::default())?;
@@ -268,6 +268,7 @@ mod tests {
             request_weight: 1.0,
             pick_mode: PickMode::None,
             display_order: 0,
+            filter_bindings: Vec::new(),
         }
     }
 

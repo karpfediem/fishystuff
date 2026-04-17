@@ -15,8 +15,9 @@ use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
 use crate::map::spaces::world::MapToWorld;
 
 use super::{
-    FieldColorMode, FieldMetadataSourceSpec, FieldSourceSpec, GeometrySpace, LayerId, LayerKind,
-    LayerSpec, LodPolicy, PickMode, StyleMode, VectorSourceSpec,
+    default_layer_filter_bindings_for_runtime_layer, FieldColorMode, FieldMetadataSourceSpec,
+    FieldSourceSpec, GeometrySpace, LayerId, LayerKind, LayerSpec, LodPolicy, PickMode, StyleMode,
+    VectorSourceSpec,
 };
 
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
@@ -172,6 +173,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         vector_source,
         lod_policy,
         ui,
+        filter_bindings,
         request_weight,
         pick_mode,
     } = descriptor;
@@ -274,6 +276,12 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         lod_policy.max_detail_requests_while_camera_moving = 1;
         lod_policy.motion_suppresses_refine = true;
     }
+    let has_semantic_field_data = field_metadata_source.is_some();
+    let filter_bindings = if filter_bindings.is_empty() {
+        default_layer_filter_bindings_for_runtime_layer(&layer_id, kind, has_semantic_field_data)
+    } else {
+        filter_bindings
+    };
 
     Some(LayerSpec {
         id,
@@ -290,6 +298,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         field_metadata_source,
         vector_source,
         waypoint_source: None,
+        filter_bindings,
         transform,
         tile_px,
         max_level,

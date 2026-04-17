@@ -29,7 +29,6 @@ test("buildLayerSearchEffects derives search-driven clipping from actual layer a
         regions: "zone_mask",
         minimap: "manual-mask",
       },
-      zoneMembershipLayerIds: ["fish_evidence"],
     },
   );
 });
@@ -52,7 +51,6 @@ test("buildLayerSearchEffects leaves attachment-driven clipping idle without act
         fish_evidence: "zone_mask",
         regions: "zone_mask",
       },
-      zoneMembershipLayerIds: [],
     },
   );
 });

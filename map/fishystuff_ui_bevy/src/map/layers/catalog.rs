@@ -1,9 +1,9 @@
 use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 
 use super::{
-    FieldColorMode, FieldMetadataSourceSpec, FieldSourceSpec, GeometrySpace, LayerKind, LayerSpec,
-    LayerTransform, LodPolicy, PickMode, VectorSourceSpec, WaypointSourceSpec,
-    FISH_EVIDENCE_LAYER_KEY,
+    default_layer_filter_bindings_for_runtime_layer, FieldColorMode, FieldMetadataSourceSpec,
+    FieldSourceSpec, GeometrySpace, LayerKind, LayerSpec, LayerTransform, LodPolicy, PickMode,
+    VectorSourceSpec, WaypointSourceSpec, FISH_EVIDENCE_LAYER_KEY,
 };
 
 const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v2";
@@ -170,6 +170,11 @@ fn build_local_layer_spec(
             y_flip: false,
             field_source: None,
             field_metadata_source: None,
+            filter_bindings: default_layer_filter_bindings_for_runtime_layer(
+                &entry.layer_id,
+                LayerKind::Waypoints,
+                false,
+            ),
             lod_policy: default_lod_policy(),
             request_weight: 1.0,
             pick_mode: PickMode::None,
@@ -200,6 +205,11 @@ fn build_local_layer_spec(
             y_flip: false,
             field_source: None,
             field_metadata_source: None,
+            filter_bindings: default_layer_filter_bindings_for_runtime_layer(
+                &entry.layer_id,
+                LayerKind::TiledRaster,
+                false,
+            ),
             lod_policy: LodPolicy {
                 target_tiles: 16,
                 hysteresis_hi: 24.0,
@@ -267,6 +277,11 @@ fn build_local_layer_spec(
                 ),
                 revision: "zone-meta-v1".to_string(),
             }),
+            filter_bindings: default_layer_filter_bindings_for_runtime_layer(
+                &entry.layer_id,
+                LayerKind::TiledRaster,
+                true,
+            ),
             lod_policy: LodPolicy {
                 target_tiles: 220,
                 hysteresis_hi: 280.0,
@@ -307,6 +322,11 @@ fn build_local_layer_spec(
             y_flip: false,
             field_source: None,
             field_metadata_source: None,
+            filter_bindings: default_layer_filter_bindings_for_runtime_layer(
+                &entry.layer_id,
+                LayerKind::Waypoints,
+                false,
+            ),
             lod_policy: default_lod_policy(),
             request_weight: 1.0,
             pick_mode: PickMode::None,
@@ -377,6 +397,11 @@ fn build_local_layer_spec(
             y_flip: false,
             field_source: None,
             field_metadata_source: None,
+            filter_bindings: default_layer_filter_bindings_for_runtime_layer(
+                &entry.layer_id,
+                LayerKind::Waypoints,
+                false,
+            ),
             lod_policy: default_lod_policy(),
             request_weight: 1.0,
             pick_mode: PickMode::None,
@@ -445,6 +470,11 @@ fn build_vector_field_layer(
             ),
             revision: metadata_revision.to_string(),
         }),
+        filter_bindings: default_layer_filter_bindings_for_runtime_layer(
+            &entry.layer_id,
+            LayerKind::VectorGeoJson,
+            true,
+        ),
         lod_policy: default_lod_policy(),
         request_weight: 1.0,
         pick_mode: PickMode::None,

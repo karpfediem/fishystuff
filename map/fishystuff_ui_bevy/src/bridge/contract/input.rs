@@ -7,8 +7,12 @@ use super::snapshot::FishyMapHoverLayerSampleSnapshot;
 use super::normalize::{
     deserialize_nullable_string_field, normalize_i32_list, normalize_layer_bool_map,
     normalize_layer_clip_mask_map, normalize_layer_opacity_map,
-    normalize_layer_point_icon_scale_map, normalize_string_list, normalize_u32_list,
-    normalize_u32_map,
+    normalize_layer_point_icon_scale_map, normalize_string_list, normalize_string_list_map,
+    normalize_u32_list, normalize_u32_map,
+};
+use super::search::{
+    deserialize_search_expression_field, deserialize_search_expression_state,
+    normalize_fish_filter_terms, FishyMapSearchExpressionNode, FishyMapSharedFishState,
 };
 use super::snapshot::FishyMapSelectionPointKind;
 use super::{
@@ -127,6 +131,9 @@ pub struct FishyMapFiltersPatch {
     pub fish_ids: Option<Vec<i32>>,
     pub zone_rgbs: Option<Vec<u32>>,
     pub semantic_field_ids_by_layer: Option<BTreeMap<String, Vec<u32>>>,
+    pub fish_filter_terms: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_search_expression_field")]
+    pub search_expression: Option<FishyMapSearchExpressionNode>,
     pub search_text: Option<String>,
     pub prize_only: Option<bool>,
     #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
@@ -137,7 +144,7 @@ pub struct FishyMapFiltersPatch {
     pub to_patch_id: Option<Option<String>>,
     pub layer_ids_visible: Option<Vec<String>>,
     pub layer_ids_ordered: Option<Vec<String>>,
-    pub zone_membership_layer_ids: Option<Vec<String>>,
+    pub layer_filter_binding_ids_disabled_by_layer: Option<BTreeMap<String, Vec<String>>>,
     pub layer_opacities: Option<BTreeMap<String, f32>>,
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
     pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
@@ -152,6 +159,9 @@ pub struct FishyMapFiltersState {
     pub fish_ids: Vec<i32>,
     pub zone_rgbs: Vec<u32>,
     pub semantic_field_ids_by_layer: BTreeMap<String, Vec<u32>>,
+    pub fish_filter_terms: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_search_expression_state")]
+    pub search_expression: FishyMapSearchExpressionNode,
     pub search_text: String,
     pub prize_only: bool,
     pub patch_id: Option<String>,
@@ -159,7 +169,7 @@ pub struct FishyMapFiltersState {
     pub to_patch_id: Option<String>,
     pub layer_ids_visible: Option<Vec<String>>,
     pub layer_ids_ordered: Option<Vec<String>>,
-    pub zone_membership_layer_ids: Option<Vec<String>>,
+    pub layer_filter_binding_ids_disabled_by_layer: Option<BTreeMap<String, Vec<String>>>,
     pub layer_opacities: Option<BTreeMap<String, f32>>,
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
     pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
@@ -230,6 +240,8 @@ pub struct FishyMapUiState {
     pub show_points: bool,
     pub show_point_icons: bool,
     pub point_icon_scale: f32,
+    #[serde(skip_serializing_if = "FishyMapSharedFishState::is_empty")]
+    pub shared_fish_state: FishyMapSharedFishState,
     pub active_detail_pane_id: Option<String>,
     pub bookmark_selected_ids: Vec<String>,
     pub bookmarks: Vec<FishyMapBookmarkEntry>,
@@ -244,6 +256,7 @@ impl Default for FishyMapUiState {
             show_points: true,
             show_point_icons: true,
             point_icon_scale: FISHYMAP_POINT_ICON_SCALE_MIN,
+            shared_fish_state: FishyMapSharedFishState::default(),
             active_detail_pane_id: None,
             bookmark_selected_ids: Vec::new(),
             bookmarks: Vec::new(),
@@ -260,6 +273,7 @@ pub struct FishyMapUiPatch {
     pub show_points: Option<bool>,
     pub show_point_icons: Option<bool>,
     pub point_icon_scale: Option<f32>,
+    pub shared_fish_state: Option<FishyMapSharedFishState>,
     #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
     pub active_detail_pane_id: Option<Option<String>>,
     pub bookmark_selected_ids: Option<Vec<String>>,
@@ -370,6 +384,12 @@ impl FishyMapInputState {
                     .cloned()
                     .unwrap_or_default();
             }
+            if let Some(fish_filter_terms) = filters.fish_filter_terms {
+                self.filters.fish_filter_terms = normalize_fish_filter_terms(fish_filter_terms);
+            }
+            if let Some(search_expression) = filters.search_expression {
+                self.filters.search_expression = search_expression;
+            }
             if let Some(search_text) = filters.search_text {
                 self.filters.search_text = search_text;
             }
@@ -409,9 +429,12 @@ impl FishyMapInputState {
             if let Some(layer_ids_ordered) = filters.layer_ids_ordered {
                 self.filters.layer_ids_ordered = Some(normalize_string_list(layer_ids_ordered));
             }
-            if let Some(zone_membership_layer_ids) = filters.zone_membership_layer_ids {
-                let normalized = normalize_string_list(zone_membership_layer_ids);
-                self.filters.zone_membership_layer_ids =
+            if let Some(layer_filter_binding_ids_disabled_by_layer) =
+                filters.layer_filter_binding_ids_disabled_by_layer
+            {
+                let normalized =
+                    normalize_string_list_map(layer_filter_binding_ids_disabled_by_layer);
+                self.filters.layer_filter_binding_ids_disabled_by_layer =
                     (!normalized.is_empty()).then_some(normalized);
             }
             if let Some(layer_opacities) = filters.layer_opacities {
@@ -469,6 +492,9 @@ impl FishyMapInputState {
             if let Some(value) = ui.point_icon_scale {
                 self.ui.point_icon_scale =
                     value.clamp(FISHYMAP_POINT_ICON_SCALE_MIN, FISHYMAP_POINT_ICON_SCALE_MAX);
+            }
+            if let Some(shared_fish_state) = ui.shared_fish_state {
+                self.ui.shared_fish_state = shared_fish_state.normalize();
             }
             if let Some(active_detail_pane_id) = ui.active_detail_pane_id {
                 self.ui.active_detail_pane_id = active_detail_pane_id.and_then(|value| {

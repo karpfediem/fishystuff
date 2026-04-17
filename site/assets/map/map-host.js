@@ -69,7 +69,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     toPatchId?: string | null,
  *     layerIdsVisible?: string[],
  *     layerIdsOrdered?: string[],
- *     zoneMembershipLayerIds?: string[],
+ *     layerFilterBindingIdsDisabledByLayer?: Record<string, string[]>,
  *     layerOpacities?: Record<string, number>,
  *     layerClipMasks?: Record<string, string>,
  *     layerWaypointConnectionsVisible?: Record<string, boolean>,
@@ -150,7 +150,7 @@ export function createEmptyInputState() {
       toPatchId: null,
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
-      zoneMembershipLayerIds: undefined,
+      layerFilterBindingIdsDisabledByLayer: undefined,
       layerOpacities: undefined,
       layerClipMasks: undefined,
       layerWaypointConnectionsVisible: undefined,
@@ -189,7 +189,7 @@ export function createEmptySnapshot() {
       toPatchId: null,
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
-      zoneMembershipLayerIds: undefined,
+      layerFilterBindingIdsDisabledByLayer: undefined,
       layerOpacities: undefined,
       layerClipMasks: undefined,
       layerWaypointConnectionsVisible: undefined,
@@ -610,6 +610,25 @@ function normalizeLayerBoolMap(values) {
       continue;
     }
     out[layerId] = value;
+  }
+  return out;
+}
+
+function normalizeLayerStringListMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [key, rawValue] of Object.entries(values)) {
+    const layerId = String(key ?? "").trim();
+    if (!layerId) {
+      continue;
+    }
+    const bindingIds = normalizeStringList(rawValue);
+    if (!bindingIds.length) {
+      continue;
+    }
+    out[layerId] = bindingIds;
   }
   return out;
 }
@@ -1476,9 +1495,9 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "layerIdsOrdered")) {
       normalized.filters.layerIdsOrdered = normalizeStringList(patch.filters.layerIdsOrdered);
     }
-    if (hasOwn(patch.filters, "zoneMembershipLayerIds")) {
-      normalized.filters.zoneMembershipLayerIds = normalizeStringList(
-        patch.filters.zoneMembershipLayerIds,
+    if (hasOwn(patch.filters, "layerFilterBindingIdsDisabledByLayer")) {
+      normalized.filters.layerFilterBindingIdsDisabledByLayer = normalizeLayerStringListMap(
+        patch.filters.layerFilterBindingIdsDisabledByLayer,
       );
     }
     if (hasOwn(patch.filters, "layerOpacities")) {
@@ -1713,8 +1732,10 @@ export function applyStatePatch(inputState, patch) {
     layerIdsOrdered: Array.isArray(current.filters?.layerIdsOrdered)
       ? normalizeStringList(current.filters.layerIdsOrdered)
       : undefined,
-    zoneMembershipLayerIds: Array.isArray(current.filters?.zoneMembershipLayerIds)
-      ? normalizeStringList(current.filters.zoneMembershipLayerIds)
+    layerFilterBindingIdsDisabledByLayer: isPlainObject(
+      current.filters?.layerFilterBindingIdsDisabledByLayer,
+    )
+      ? normalizeLayerStringListMap(current.filters.layerFilterBindingIdsDisabledByLayer)
       : undefined,
     layerOpacities: isPlainObject(current.filters?.layerOpacities)
       ? normalizeLayerOpacityMap(current.filters.layerOpacities)
@@ -1798,9 +1819,9 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.filters, "layerIdsOrdered")) {
       next.filters.layerIdsOrdered = normalizeStringList(normalized.filters.layerIdsOrdered);
     }
-    if (hasOwn(normalized.filters, "zoneMembershipLayerIds")) {
-      next.filters.zoneMembershipLayerIds = normalizeStringList(
-        normalized.filters.zoneMembershipLayerIds,
+    if (hasOwn(normalized.filters, "layerFilterBindingIdsDisabledByLayer")) {
+      next.filters.layerFilterBindingIdsDisabledByLayer = normalizeLayerStringListMap(
+        normalized.filters.layerFilterBindingIdsDisabledByLayer,
       );
     }
     if (hasOwn(normalized.filters, "layerOpacities")) {

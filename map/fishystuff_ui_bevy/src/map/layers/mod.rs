@@ -5,6 +5,10 @@ mod runtime;
 use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
 use crate::map::spaces::world::MapToWorld;
 use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
+pub use fishystuff_api::models::layers::{
+    LayerFilterBindingDescriptor as LayerFilterBindingSpec, LayerFilterSourceKind,
+    LayerFilterTargetKind,
+};
 
 pub use catalog::{
     build_local_layer_specs, AvailableLayerCatalog, AvailableLayerDefinition,
@@ -14,6 +18,9 @@ pub use registry::LayerRegistry;
 pub use runtime::{LayerManifestStatus, LayerRuntime, LayerRuntimeState, LayerSettings};
 
 pub const FISH_EVIDENCE_LAYER_KEY: &str = "fish_evidence";
+pub const LAYER_FILTER_BINDING_FISH_SELECTION: &str = "fish_selection";
+pub const LAYER_FILTER_BINDING_ZONE_SELECTION: &str = "zone_selection";
+pub const LAYER_FILTER_BINDING_SEMANTIC_SELECTION: &str = "semantic_selection";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LayerId(u16);
@@ -154,6 +161,7 @@ pub struct LayerSpec {
     pub y_flip: bool,
     pub field_source: Option<FieldSourceSpec>,
     pub field_metadata_source: Option<FieldMetadataSourceSpec>,
+    pub filter_bindings: Vec<LayerFilterBindingSpec>,
     pub lod_policy: LodPolicy,
     pub request_weight: f32,
     pub pick_mode: PickMode,
@@ -225,6 +233,27 @@ impl LayerSpec {
         })
     }
 
+    pub fn filter_binding(&self, binding_id: &str) -> Option<&LayerFilterBindingSpec> {
+        let binding_id = binding_id.trim();
+        self.filter_bindings
+            .iter()
+            .find(|binding| binding.binding_id == binding_id)
+    }
+
+    pub fn zone_membership_filter_bindings(&self) -> impl Iterator<Item = &LayerFilterBindingSpec> {
+        self.filter_bindings
+            .iter()
+            .filter(|binding| binding.target == LayerFilterTargetKind::ZoneMembership)
+    }
+
+    pub fn semantic_selection_filter_bindings(
+        &self,
+    ) -> impl Iterator<Item = &LayerFilterBindingSpec> {
+        self.filter_bindings
+            .iter()
+            .filter(|binding| binding.target == LayerFilterTargetKind::SemanticFieldSelection)
+    }
+
     pub fn exact_lookup_url(&self) -> Option<String> {
         if self.pick_mode != PickMode::ExactTilePixel {
             return None;
@@ -239,6 +268,40 @@ impl LayerSpec {
             normalize_public_base_url(None).as_deref(),
         )
     }
+}
+
+pub fn default_layer_filter_bindings_for_runtime_layer(
+    layer_key: &str,
+    kind: LayerKind,
+    has_semantic_field_data: bool,
+) -> Vec<LayerFilterBindingSpec> {
+    let mut bindings = Vec::new();
+    if matches!(
+        kind,
+        LayerKind::TiledRaster | LayerKind::VectorGeoJson | LayerKind::Waypoints
+    ) {
+        bindings.push(LayerFilterBindingSpec {
+            binding_id: LAYER_FILTER_BINDING_FISH_SELECTION.to_string(),
+            target: LayerFilterTargetKind::ZoneMembership,
+            source: LayerFilterSourceKind::FishSelection,
+            default_enabled: true,
+        });
+        bindings.push(LayerFilterBindingSpec {
+            binding_id: LAYER_FILTER_BINDING_ZONE_SELECTION.to_string(),
+            target: LayerFilterTargetKind::ZoneMembership,
+            source: LayerFilterSourceKind::ZoneSelection,
+            default_enabled: true,
+        });
+    }
+    if has_semantic_field_data && layer_key.trim() != "zone_mask" {
+        bindings.push(LayerFilterBindingSpec {
+            binding_id: LAYER_FILTER_BINDING_SEMANTIC_SELECTION.to_string(),
+            target: LayerFilterTargetKind::SemanticFieldSelection,
+            source: LayerFilterSourceKind::SemanticSelection,
+            default_enabled: true,
+        });
+    }
+    bindings
 }
 
 #[cfg(test)]

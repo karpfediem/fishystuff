@@ -6,7 +6,7 @@ use crate::bridge::contract::FishyMapCommands;
 
 pub(super) use commands::apply_browser_commands;
 pub(super) use queue::ingest_pending_browser_patches;
-pub(super) use state::apply_browser_input_state;
+pub(super) use state::{apply_browser_input_state, resolve_browser_search_filters};
 
 fn commands_is_empty(commands: &FishyMapCommands) -> bool {
     !commands.reset_view.unwrap_or(false)

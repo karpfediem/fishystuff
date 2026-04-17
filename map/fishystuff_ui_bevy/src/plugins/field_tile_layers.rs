@@ -24,7 +24,7 @@ use crate::map::render::tile_z;
 use crate::map::spaces::layer_transform::{LayerTransform, TileSpace};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{LayerPoint, MapPoint, MapRect, WorldPoint, WorldRect};
-use crate::plugins::api::HoverState;
+use crate::plugins::api::{HoverState, LayerEffectiveFilterState, ZoneMembershipFilter};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -100,7 +100,7 @@ struct FieldLevelCandidate {
 }
 
 struct FieldTileVisualContext<'a> {
-    filter: &'a EvidenceZoneFilter,
+    filter: &'a ZoneMembershipFilter,
     clip_mask_layer: Option<LayerId>,
     layer_registry: &'a LayerRegistry,
     layer_runtime: &'a LayerRuntime,
@@ -226,7 +226,7 @@ fn update_field_tile_layer_visuals(
     exact_lookups: Res<ExactLookupCache>,
     tile_cache: Res<RasterTileCache>,
     vector_runtime: Res<VectorLayerRuntime>,
-    filter: Res<EvidenceZoneFilter>,
+    layer_filters: Res<LayerEffectiveFilterState>,
     hover: Res<HoverState>,
     mut field_runtime: ResMut<FieldTileRuntime>,
 ) {
@@ -289,8 +289,16 @@ fn update_field_tile_layer_visuals(
             continue;
         };
         let clip_mask_layer = layer_runtime.clip_mask_layer(layer.id);
-        let clip_mask_revision =
-            clip_mask_state_revision(&layer_registry, &layer_runtime, clip_mask_layer, &filter);
+        let inactive_filter = EvidenceZoneFilter::default();
+        let zone_filter = layer_filters
+            .zone_membership_filter(layer.key.as_str())
+            .unwrap_or(&inactive_filter);
+        let clip_mask_revision = clip_mask_state_revision(
+            &layer_registry,
+            &layer_runtime,
+            clip_mask_layer,
+            zone_filter,
+        );
         if exact_lookups.get(layer.id, &url).is_none()
             || !runtime_visible
             || !matches!(layer.transform, LayerTransform::IdentityMapSpace)
@@ -306,9 +314,9 @@ fn update_field_tile_layer_visuals(
             generated_field_max_level(field.width(), field.height(), layer.tile_px.max(1));
         let layer_cache = field_runtime.layers.entry(layer.id).or_default();
         let visual_revision =
-            field_tile_visual_revision(layer, &filter, clip_mask_layer, clip_mask_revision);
+            field_tile_visual_revision(layer, zone_filter, clip_mask_layer, clip_mask_revision);
         let visual_context = FieldTileVisualContext {
-            filter: &filter,
+            filter: zone_filter,
             clip_mask_layer,
             layer_registry: &layer_registry,
             layer_runtime: &layer_runtime,
@@ -768,7 +776,7 @@ fn render_field_tile_image(
 
 fn field_tile_visual_revision(
     layer: &crate::map::layers::LayerSpec,
-    filter: &EvidenceZoneFilter,
+    filter: &ZoneMembershipFilter,
     clip_mask_layer: Option<LayerId>,
     clip_mask_revision: u64,
 ) -> u64 {
@@ -1253,6 +1261,7 @@ mod tests {
             request_weight: 1.0,
             pick_mode: PickMode::None,
             display_order: 0,
+            filter_bindings: Vec::new(),
         }
     }
 

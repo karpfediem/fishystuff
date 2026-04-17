@@ -16,7 +16,7 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::WorldPoint;
-use crate::plugins::api::{HoverInfo, HoverState};
+use crate::plugins::api::{HoverInfo, HoverState, LayerEffectiveFilterState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -116,7 +116,7 @@ struct BookmarkRenderContext<'w, 's> {
     exact_lookups: Res<'w, ExactLookupCache>,
     tile_cache: Res<'w, RasterTileCache>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
-    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     asset_server: Res<'w, AssetServer>,
     fonts: Res<'w, UiFonts>,
     render_assets: Res<'w, BookmarkRenderAssets>,
@@ -480,6 +480,16 @@ fn bookmark_visible_in_layer_clip(
     world_point: WorldPoint,
     render_context: &BookmarkRenderContext<'_, '_>,
 ) -> bool {
+    let inactive_filter = EvidenceZoneFilter::default();
+    let zone_filter = render_context
+        .layer_registry
+        .get(layer_id)
+        .and_then(|layer| {
+            render_context
+                .layer_filters
+                .zone_membership_filter(layer.key.as_str())
+        })
+        .unwrap_or(&inactive_filter);
     !matches!(
         clip_mask_allows_world_point(
             layer_id,
@@ -489,7 +499,7 @@ fn bookmark_visible_in_layer_clip(
             &render_context.exact_lookups,
             &render_context.tile_cache,
             &render_context.vector_runtime,
-            &render_context.evidence_zone_filter,
+            zone_filter,
             render_context.layer_registry.map_version_id(),
         ),
         Some(false)

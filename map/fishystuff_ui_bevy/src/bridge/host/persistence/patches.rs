@@ -56,7 +56,14 @@ pub(in crate::bridge::host) fn apply_patch_range_override(
     if to_ts < from_ts {
         to_ts = from_ts;
     }
-    patch_filter.selected_patch = resolved_from_idx.map(|idx| ordered[idx].patch_id.0.clone());
+    let next_selected_patch = resolved_from_idx.map(|idx| ordered[idx].patch_id.0.clone());
+    if patch_filter.selected_patch == next_selected_patch
+        && patch_filter.from_ts == Some(from_ts)
+        && patch_filter.to_ts == Some(to_ts)
+    {
+        return;
+    }
+    patch_filter.selected_patch = next_selected_patch;
     patch_filter.from_ts = Some(from_ts);
     patch_filter.to_ts = Some(to_ts);
 }

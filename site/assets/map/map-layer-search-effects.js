@@ -1,7 +1,4 @@
-import {
-  layerSupportsAttachmentClipMode,
-  MAP_SEARCH_LAYER_SUPPORT,
-} from "./map-search-contract.js";
+import { MAP_SEARCH_LAYER_SUPPORT } from "./map-search-contract.js";
 
 const TERM_KIND_LABELS = Object.freeze({
   fish: "Fish",
@@ -89,23 +86,9 @@ export function buildLayerSearchEffects(filters) {
   const source = isPlainObject(filters) ? filters : {};
   const activeZoneSearch = hasActiveZoneSearchFilters(source);
   const effectiveLayerClipMasks = normalizeLayerClipMasks(source.layerClipMasks);
-  const zoneMembershipLayerIds = [];
-
-  if (activeZoneSearch) {
-    for (const [layerId, clipMaskLayerId] of Object.entries(effectiveLayerClipMasks)) {
-      if (clipMaskLayerId !== "zone_mask") {
-        continue;
-      }
-      if (!layerSupportsAttachmentClipMode(layerId, "zone-membership")) {
-        continue;
-      }
-      zoneMembershipLayerIds.push(layerId);
-    }
-  }
 
   return {
     activeZoneSearch,
     effectiveLayerClipMasks: cloneJson(effectiveLayerClipMasks),
-    zoneMembershipLayerIds,
   };
 }

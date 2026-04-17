@@ -15,7 +15,7 @@ use crate::map::layers::{
 use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
-use crate::plugins::api::MapDisplayState;
+use crate::plugins::api::{LayerEffectiveFilterState, MapDisplayState, ZoneMembershipFilter};
 use crate::plugins::camera::CameraZoomBounds;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::points::EvidenceZoneFilter;
@@ -249,7 +249,7 @@ fn sync_waypoint_entities(
     exact_lookups: Res<ExactLookupCache>,
     tile_cache: Res<RasterTileCache>,
     vector_runtime: Res<VectorLayerRuntime>,
-    evidence_zone_filter: Res<EvidenceZoneFilter>,
+    layer_filters: Res<LayerEffectiveFilterState>,
     camera_q: Query<(&Camera, &GlobalTransform, &Projection), With<Map2dCamera>>,
     mut markers: Query<
         (
@@ -323,6 +323,11 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
+        let inactive_filter = EvidenceZoneFilter::default();
+        let zone_filter = layer_registry
+            .get(marker.layer_id)
+            .and_then(|layer| layer_filters.zone_membership_filter(layer.key.as_str()))
+            .unwrap_or(&inactive_filter);
         let layer_visible = ui_visible
             && state.visible
             && marker.default_visible
@@ -334,7 +339,7 @@ fn sync_waypoint_entities(
                 &exact_lookups,
                 &tile_cache,
                 &vector_runtime,
-                &evidence_zone_filter,
+                zone_filter,
             );
         transform.translation = Vec3::new(
             marker.world_x,
@@ -355,6 +360,11 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
+        let inactive_filter = EvidenceZoneFilter::default();
+        let zone_filter = layer_registry
+            .get(connection.layer_id)
+            .and_then(|layer| layer_filters.zone_membership_filter(layer.key.as_str()))
+            .unwrap_or(&inactive_filter);
         let layer_visible = ui_visible
             && state.visible
             && state.waypoint_connections_visible
@@ -382,7 +392,7 @@ fn sync_waypoint_entities(
                 &exact_lookups,
                 &tile_cache,
                 &vector_runtime,
-                &evidence_zone_filter,
+                zone_filter,
             );
         transform.translation = Vec3::new(
             connection.center_x,
@@ -404,6 +414,11 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
+        let inactive_filter = EvidenceZoneFilter::default();
+        let zone_filter = layer_registry
+            .get(label.layer_id)
+            .and_then(|layer| layer_filters.zone_membership_filter(layer.key.as_str()))
+            .unwrap_or(&inactive_filter);
         let layer_visible = ui_visible
             && state.visible
             && state.waypoint_labels_visible
@@ -417,7 +432,7 @@ fn sync_waypoint_entities(
                 &exact_lookups,
                 &tile_cache,
                 &vector_runtime,
-                &evidence_zone_filter,
+                zone_filter,
             );
         let Some(viewport_position) = world_to_viewport(
             camera,
@@ -463,7 +478,7 @@ fn world_point_visible_in_layer_clip(
     exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    zone_filter: &ZoneMembershipFilter,
 ) -> bool {
     !matches!(
         clip_mask_allows_world_point(
@@ -474,7 +489,7 @@ fn world_point_visible_in_layer_clip(
             exact_lookups,
             tile_cache,
             vector_runtime,
-            evidence_zone_filter,
+            zone_filter,
             layer_registry.map_version_id(),
         ),
         Some(false)
@@ -490,7 +505,7 @@ fn connection_intersects_visible_clip_mask(
     exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
-    evidence_zone_filter: &EvidenceZoneFilter,
+    zone_filter: &ZoneMembershipFilter,
 ) -> bool {
     const SAMPLE_STEPS: [f64; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
     SAMPLE_STEPS.into_iter().any(|t| {
@@ -506,7 +521,7 @@ fn connection_intersects_visible_clip_mask(
             exact_lookups,
             tile_cache,
             vector_runtime,
-            evidence_zone_filter,
+            zone_filter,
         )
     })
 }

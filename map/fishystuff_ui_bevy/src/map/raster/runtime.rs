@@ -8,10 +8,9 @@ use crate::map::layers::{LayerManifestStatus, LayerRegistry, LayerRuntime, PickM
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{WorldPoint, WorldRect};
 use crate::map::terrain::runtime::TerrainViewEstimate;
-use crate::plugins::api::{ApiBootstrapState, MapDisplayState};
+use crate::plugins::api::{ApiBootstrapState, LayerEffectiveFilterState, MapDisplayState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
-use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
@@ -70,7 +69,7 @@ struct RasterUpdateContext<'w, 's> {
     cache: ResMut<'w, RasterTileCache>,
     stats: ResMut<'w, TileStats>,
     time: Res<'w, Time>,
-    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     exact_lookups: Res<'w, ExactLookupCache>,
 }
@@ -79,7 +78,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     crate::perf_scope!("raster.update_tiles");
     let display_state_changed = ctx.display_state.is_changed();
     let bootstrap_changed = ctx.bootstrap.is_changed();
-    let evidence_zone_filter_changed = ctx.evidence_zone_filter.is_changed();
+    let layer_filters_changed = ctx.layer_filters.is_changed();
     let vector_runtime_changed = ctx.vector_runtime.is_changed();
     let view_mode_changed = ctx.view_mode.is_changed();
     let commands = &mut ctx.commands;
@@ -107,7 +106,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     let cache = &mut ctx.cache;
     let stats = &mut ctx.stats;
     let time = &ctx.time;
-    let evidence_zone_filter = &ctx.evidence_zone_filter;
+    let layer_filters = &ctx.layer_filters;
     let vector_runtime = &ctx.vector_runtime;
     let exact_lookups = &ctx.exact_lookups;
 
@@ -440,19 +439,21 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         && !loaded_changed
         && !visibility_changed
         && !bootstrap_changed
-        && !evidence_zone_filter_changed
+        && !layer_filters_changed
         && !vector_runtime_changed
         && !view_mode_changed
         && view_mode.mode == ViewMode::Map2D
         && display_state_changed
-        && !evidence_zone_filter.active
+        && !layer_filters
+            .zone_membership_filter("zone_mask")
+            .is_some_and(|filter| filter.active)
         && cache.applied_hover_zone_rgb != display_state.hovered_zone_rgb;
     let should_sync_visual_filters = has_active_raster_clip_masks
         || loaded_changed
         || visibility_changed
         || display_state_changed
         || bootstrap_changed
-        || evidence_zone_filter_changed
+        || layer_filters_changed
         || vector_runtime_changed
         || view_mode_changed;
     if hover_only_visual_update {
@@ -467,7 +468,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
             images,
             commands,
             VisualFilterContext {
-                filter: evidence_zone_filter,
+                layer_filters,
                 hover_zone_rgb: display_state.hovered_zone_rgb,
                 layer_registry,
                 layer_runtime,
