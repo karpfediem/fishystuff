@@ -13,7 +13,8 @@ const MAX_BOOTSTRAP_SYNC_PASSES = 120;
 
 export const FISHYMAP_CONTRACT_VERSION = 1;
 export const FISHYMAP_POINT_ICON_SCALE_MIN = 1;
-export const FISHYMAP_POINT_ICON_SCALE_MAX = 3;
+export const FISHYMAP_POINT_ICON_SCALE_MAX = 5;
+export const FISHYMAP_POINT_ICON_SCALE_DEFAULT = 2;
 
 export const FISHYMAP_EVENTS = Object.freeze({
   setState: "fishymap:set-state",
@@ -163,7 +164,7 @@ export function createEmptyInputState() {
       showPoints: true,
       showPointIcons: true,
       viewMode: null,
-      pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      pointIconScale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
       bookmarkSelectedIds: [],
       bookmarks: [],
     },
@@ -201,7 +202,7 @@ export function createEmptySnapshot() {
       diagnosticsOpen: false,
       showPoints: true,
       showPointIcons: true,
-      pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      pointIconScale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
       bookmarkSelectedIds: [],
       bookmarks: [],
     },
@@ -1762,7 +1763,7 @@ export function applyStatePatch(inputState, patch) {
     showPointIcons: current.ui?.showPointIcons !== false,
     viewMode: normalizeNullableViewMode(current.ui?.viewMode) ?? null,
     pointIconScale:
-      normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
+      normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_DEFAULT,
     bookmarkSelectedIds: normalizeStringList(current.ui?.bookmarkSelectedIds),
     bookmarks: normalizeBookmarksState(current.ui?.bookmarks),
   };

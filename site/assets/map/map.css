@@ -901,15 +901,21 @@ fishymap-search-panel {
 .fishymap-zone-loot-item-surface {
   width: 100%;
   min-height: 100%;
-  align-items: center;
+  align-items: stretch;
   gap: 0.45rem;
   padding-inline-end: 0.34rem;
+}
+
+.fishymap-zone-loot-item-surface .fishy-item-row {
+  align-items: stretch;
 }
 
 .fishymap-zone-loot-item-surface .fishy-item-icon-frame.is-sm {
   --fishy-item-icon-size: 2.65rem;
   --fishy-item-icon-inset: 1px;
   --fishy-item-border-width: 1.75px;
+  height: 100%;
+  align-self: stretch;
 }
 
 .fishymap-zone-loot-item-label {

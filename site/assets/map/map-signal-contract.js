@@ -1,5 +1,6 @@
 import {
   FISHYMAP_CONTRACT_VERSION,
+  FISHYMAP_POINT_ICON_SCALE_DEFAULT,
   FISHYMAP_POINT_ICON_SCALE_MIN,
 } from "./map-host.js";
 import {
@@ -154,7 +155,7 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     showPoints: true,
     showPointIcons: true,
     viewMode: null,
-    pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+    pointIconScale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
     bookmarkSelectedIds: [],
     bookmarks: [],
   }),
@@ -453,7 +454,7 @@ export function normalizeMapBridgedSignalState(raw) {
       viewMode: current.ui?.viewMode === "3d" ? "3d" : normalizeNullableString(current.ui?.viewMode),
       pointIconScale: Number.isFinite(pointIconScale)
         ? pointIconScale
-        : FISHYMAP_POINT_ICON_SCALE_MIN,
+        : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
       bookmarkSelectedIds: normalizeExpandedLayerIds(current.ui?.bookmarkSelectedIds || []),
       bookmarks: normalizeBridgeBookmarkEntries(current.ui?.bookmarks || []),
     },

@@ -260,3 +260,36 @@ test("createMapWindowManager keeps existing window position on non-position wind
   assert.equal(layers.style.left, "42px");
   assert.equal(layers.style.top, "55px");
 });
+
+test("createMapWindowManager keeps window position when window-ui patch carries null coordinates", () => {
+  const shell = new FakeElement({ width: 1000, height: 700 });
+  const layers = new FakeElement({ id: "fishymap-layers-window", left: 42, top: 55, width: 280, height: 48 });
+  layers.dataset.windowId = "layers";
+  shell.setQuery("[data-window-id]", layers);
+
+  const manager = createMapWindowManager({
+    shell,
+    getSignals: () => ({
+      _map_ui: {
+        windowUi: {
+          layers: { open: true, collapsed: false, x: 42, y: 55 },
+        },
+      },
+    }),
+    listenToSignalPatches: false,
+  });
+
+  assert.equal(layers.style.left, "42px");
+  assert.equal(layers.style.top, "55px");
+
+  manager.applyFromSignals({
+    _map_ui: {
+      windowUi: {
+        layers: { x: null, y: null },
+      },
+    },
+  });
+
+  assert.equal(layers.style.left, "42px");
+  assert.equal(layers.style.top, "55px");
+});

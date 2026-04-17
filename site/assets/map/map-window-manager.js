@@ -148,8 +148,8 @@ export function createMapWindowManager({
       return false;
     }
     return (
-      Object.prototype.hasOwnProperty.call(nextWindowUiPatch, "x")
-      || Object.prototype.hasOwnProperty.call(nextWindowUiPatch, "y")
+      isFiniteCoordinate(nextWindowUiPatch.x)
+      || isFiniteCoordinate(nextWindowUiPatch.y)
     );
   }
 

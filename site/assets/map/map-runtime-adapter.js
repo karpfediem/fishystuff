@@ -1,6 +1,7 @@
 import {
   FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_POINT_ICON_SCALE_MIN,
+  FISHYMAP_POINT_ICON_SCALE_DEFAULT,
   createEmptySnapshot,
 } from "./map-host.js";
 import {
@@ -147,7 +148,7 @@ function normalizeBridgedUi(signals) {
     viewMode: bridged.viewMode === "3d" ? "3d" : "2d",
     pointIconScale: Number.isFinite(bridged.pointIconScale)
       ? Number(bridged.pointIconScale)
-      : FISHYMAP_POINT_ICON_SCALE_MIN,
+      : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
   };
 }
 

@@ -4,6 +4,7 @@ import {
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
 import { resolveSearchProjection } from "./map-search-projection.js";
+import { FISHYMAP_POINT_ICON_SCALE_DEFAULT } from "./map-host.js";
 
 export const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
@@ -197,7 +198,7 @@ function storedUiSignals(signals) {
         viewMode: bridgedUi?.viewMode === "3d" ? "3d" : "2d",
         pointIconScale: Number.isFinite(bridgedUi?.pointIconScale)
           ? Number(bridgedUi.pointIconScale)
-          : 1,
+          : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
       },
       filters: {
         fishIds: cloneJson(searchProjection.fishIds),
@@ -277,7 +278,7 @@ function uiStorageSnapshot(stored) {
       viewMode: bridgedUi.viewMode === "3d" ? "3d" : "2d",
       pointIconScale: Number.isFinite(bridgedUi.pointIconScale)
         ? Number(bridgedUi.pointIconScale)
-        : 1,
+        : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
     },
     bridgedFilters: {
       fishIds: cloneJson(searchProjection.fishIds),
@@ -382,7 +383,7 @@ function restoreUiPatch(parsed) {
       viewMode: bridgedUi.viewMode === "3d" ? "3d" : "2d",
       pointIconScale: Number.isFinite(bridgedUi.pointIconScale)
         ? Number(bridgedUi.pointIconScale)
-        : 1,
+        : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
     };
   }
   if (bridgedFilters) {
@@ -487,7 +488,7 @@ function ensureUiSnapshot(stored) {
           showPoints: true,
           showPointIcons: true,
           viewMode: "2d",
-          pointIconScale: 1,
+          pointIconScale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
         },
         bridgedFilters: {
           searchExpression: cloneJson(EMPTY_SEARCH_EXPRESSION),
