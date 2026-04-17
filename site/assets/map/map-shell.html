@@ -65,6 +65,12 @@
            _map_runtime: {
              ready: false,
              theme: {},
+             effectiveFilters: {
+               searchExpression: { type: 'group', operator: 'or', children: [] },
+               sharedFishState: { caughtIds: [], favouriteIds: [] },
+               zoneMembershipByLayer: {},
+               semanticFieldFiltersByLayer: {}
+             },
              view: { viewMode: '2d', camera: {} },
              selection: {},
              catalog: { layers: [], patches: [], fish: [], semanticTerms: [] },

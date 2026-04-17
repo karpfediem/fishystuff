@@ -555,6 +555,14 @@ test("projectRuntimeSnapshotToSignals keeps only coarse runtime fields", () => {
   const patch = projectRuntimeSnapshotToSignals({
     ready: true,
     theme: { name: "night" },
+    effectiveFilters: {
+      searchExpression: { type: "group", operator: "or", children: [] },
+      sharedFishState: { caughtIds: [77], favouriteIds: [912] },
+      zoneMembershipByLayer: {
+        fish_evidence: { active: true, zoneRgbs: [0x39e58d], revision: 4 },
+      },
+      semanticFieldFiltersByLayer: {},
+    },
     view: { viewMode: "3d" },
     selection: { pointKind: "clicked" },
     catalog: { layers: [{ layerId: "zone_mask" }] },
@@ -568,6 +576,14 @@ test("projectRuntimeSnapshotToSignals keeps only coarse runtime fields", () => {
     _map_runtime: {
       ready: true,
       theme: { name: "night" },
+      effectiveFilters: {
+        searchExpression: { type: "group", operator: "or", children: [] },
+        sharedFishState: { caughtIds: [77], favouriteIds: [912] },
+        zoneMembershipByLayer: {
+          fish_evidence: { active: true, zoneRgbs: [0x39e58d], revision: 4 },
+        },
+        semanticFieldFiltersByLayer: {},
+      },
       ui: { bookmarks: [] },
       view: { viewMode: "3d" },
       selection: { pointKind: "clicked" },
@@ -613,6 +629,12 @@ test("projectRuntimeSnapshotToSignals keeps runtime bookmark details ephemeral",
     _map_runtime: {
       ready: false,
       theme: {},
+      effectiveFilters: {
+        searchExpression: { type: "group", operator: "or", children: [] },
+        sharedFishState: { caughtIds: [], favouriteIds: [] },
+        zoneMembershipByLayer: {},
+        semanticFieldFiltersByLayer: {},
+      },
       ui: {
         bookmarks: [
           {

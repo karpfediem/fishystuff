@@ -14,6 +14,7 @@ export const MAP_PAGE_EXACT_PATCH_PATHS = Object.freeze([
   "_map_bridged.filters.layerPointIconsVisible",
   "_map_bridged.filters.layerPointIconScales",
   "_map_runtime.theme",
+  "_map_runtime.effectiveFilters",
   "_map_runtime.view",
   "_map_runtime.selection",
   "_map_runtime.catalog",

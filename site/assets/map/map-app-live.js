@@ -67,6 +67,10 @@ export function resolveBridgeSnapshot(eventDetail, readCurrentState) {
     hover: mergeSnapshotBranch(baseSnapshot.hover, patchSnapshot.hover),
     catalog: mergeSnapshotBranch(baseSnapshot.catalog, patchSnapshot.catalog),
     statuses: mergeSnapshotBranch(baseSnapshot.statuses, patchSnapshot.statuses),
+    effectiveFilters: mergeSnapshotBranch(
+      baseSnapshot.effectiveFilters,
+      patchSnapshot.effectiveFilters,
+    ),
   };
 }
 

@@ -31,16 +31,6 @@ function stateBundle(filters = {}) {
           layer("minimap", 10),
         ],
       },
-      filters: {
-        layerIdsOrdered: [
-          "bookmarks",
-          "fish_evidence",
-          "regions",
-          "region_groups",
-          "zone_mask",
-          "minimap",
-        ],
-      },
     },
     inputState: {
       filters,

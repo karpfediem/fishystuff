@@ -63,6 +63,12 @@ test("createMapApp exposes coarse runtime and session projections", () => {
   assert.deepEqual(
     app.projectRuntimeSnapshot({
       ready: true,
+      effectiveFilters: {
+        searchExpression: { type: "group", operator: "or", children: [] },
+        sharedFishState: { caughtIds: [77], favouriteIds: [912] },
+        zoneMembershipByLayer: { fish_evidence: { active: true, zoneRgbs: [0x39e58d], revision: 4 } },
+        semanticFieldFiltersByLayer: {},
+      },
       view: { viewMode: "3d" },
       selection: { pointKind: "clicked" },
       catalog: { layers: [] },
@@ -74,6 +80,14 @@ test("createMapApp exposes coarse runtime and session projections", () => {
       _map_runtime: {
         ready: true,
         theme: {},
+        effectiveFilters: {
+          searchExpression: { type: "group", operator: "or", children: [] },
+          sharedFishState: { caughtIds: [77], favouriteIds: [912] },
+          zoneMembershipByLayer: {
+            fish_evidence: { active: true, zoneRgbs: [0x39e58d], revision: 4 },
+          },
+          semanticFieldFiltersByLayer: {},
+        },
         ui: { bookmarks: [] },
         view: { viewMode: "3d" },
         selection: { pointKind: "clicked" },

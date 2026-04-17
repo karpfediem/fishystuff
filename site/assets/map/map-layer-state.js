@@ -56,63 +56,35 @@ export function resolveLayerEntries(stateBundle) {
     : [];
   const orderedIds = Array.isArray(stateBundle.inputState?.filters?.layerIdsOrdered)
     ? stateBundle.inputState.filters.layerIdsOrdered
-    : Array.isArray(stateBundle.state?.filters?.layerIdsOrdered)
-      ? stateBundle.state.filters.layerIdsOrdered
-      : [];
+    : [];
   const visibleOverride = Array.isArray(stateBundle.inputState?.filters?.layerIdsVisible)
     ? new Set(stateBundle.inputState.filters.layerIdsVisible)
     : null;
   const inputOpacityOverride = isPlainObject(stateBundle.inputState?.filters?.layerOpacities)
     ? stateBundle.inputState.filters.layerOpacities
     : null;
-  const stateOpacityOverride = isPlainObject(stateBundle.state?.filters?.layerOpacities)
-    ? stateBundle.state.filters.layerOpacities
-    : null;
   const inputClipMaskOverride = isPlainObject(stateBundle.inputState?.filters?.layerClipMasks)
     ? stateBundle.inputState.filters.layerClipMasks
-    : null;
-  const stateClipMaskOverride = isPlainObject(stateBundle.state?.filters?.layerClipMasks)
-    ? stateBundle.state.filters.layerClipMasks
     : null;
   const inputWaypointConnectionsOverride = isPlainObject(
     stateBundle.inputState?.filters?.layerWaypointConnectionsVisible,
   )
     ? stateBundle.inputState.filters.layerWaypointConnectionsVisible
     : null;
-  const stateWaypointConnectionsOverride = isPlainObject(
-    stateBundle.state?.filters?.layerWaypointConnectionsVisible,
-  )
-    ? stateBundle.state.filters.layerWaypointConnectionsVisible
-    : null;
   const inputWaypointLabelsOverride = isPlainObject(
     stateBundle.inputState?.filters?.layerWaypointLabelsVisible,
   )
     ? stateBundle.inputState.filters.layerWaypointLabelsVisible
-    : null;
-  const stateWaypointLabelsOverride = isPlainObject(
-    stateBundle.state?.filters?.layerWaypointLabelsVisible,
-  )
-    ? stateBundle.state.filters.layerWaypointLabelsVisible
     : null;
   const inputPointIconsOverride = isPlainObject(
     stateBundle.inputState?.filters?.layerPointIconsVisible,
   )
     ? stateBundle.inputState.filters.layerPointIconsVisible
     : null;
-  const statePointIconsOverride = isPlainObject(
-    stateBundle.state?.filters?.layerPointIconsVisible,
-  )
-    ? stateBundle.state.filters.layerPointIconsVisible
-    : null;
   const inputPointIconScaleOverride = isPlainObject(
     stateBundle.inputState?.filters?.layerPointIconScales,
   )
     ? stateBundle.inputState.filters.layerPointIconScales
-    : null;
-  const statePointIconScaleOverride = isPlainObject(
-    stateBundle.state?.filters?.layerPointIconScales,
-  )
-    ? stateBundle.state.filters.layerPointIconScales
     : null;
   const byId = new Map(layers.map((layer) => [layer.layerId, layer]));
   const seen = new Set();
@@ -131,16 +103,12 @@ export function resolveLayerEntries(stateBundle) {
       opacity = hasOwnKey(inputOpacityOverride, layer.layerId)
         ? clampLayerOpacity(inputOpacityOverride[layer.layerId])
         : opacityDefault;
-    } else if (stateOpacityOverride && hasOwnKey(stateOpacityOverride, layer.layerId)) {
-      opacity = clampLayerOpacity(stateOpacityOverride[layer.layerId]);
     }
     let clipMaskLayerId = null;
     if (inputClipMaskOverride) {
       clipMaskLayerId = hasOwnKey(inputClipMaskOverride, layer.layerId)
         ? String(inputClipMaskOverride[layer.layerId] || "").trim() || null
         : null;
-    } else if (stateClipMaskOverride && hasOwnKey(stateClipMaskOverride, layer.layerId)) {
-      clipMaskLayerId = String(stateClipMaskOverride[layer.layerId] || "").trim() || null;
     }
     const supportsWaypointConnections = layer.supportsWaypointConnections === true;
     const waypointConnectionsDefault = supportsWaypointConnections
@@ -153,12 +121,6 @@ export function resolveLayerEntries(stateBundle) {
       waypointConnectionsVisible = hasOwnKey(inputWaypointConnectionsOverride, layer.layerId)
         ? inputWaypointConnectionsOverride[layer.layerId] !== false
         : waypointConnectionsDefault;
-    } else if (
-      supportsWaypointConnections &&
-      stateWaypointConnectionsOverride &&
-      hasOwnKey(stateWaypointConnectionsOverride, layer.layerId)
-    ) {
-      waypointConnectionsVisible = stateWaypointConnectionsOverride[layer.layerId] !== false;
     }
     const supportsWaypointLabels = layer.supportsWaypointLabels === true;
     const waypointLabelsDefault = supportsWaypointLabels
@@ -171,12 +133,6 @@ export function resolveLayerEntries(stateBundle) {
       waypointLabelsVisible = hasOwnKey(inputWaypointLabelsOverride, layer.layerId)
         ? inputWaypointLabelsOverride[layer.layerId] !== false
         : waypointLabelsDefault;
-    } else if (
-      supportsWaypointLabels &&
-      stateWaypointLabelsOverride &&
-      hasOwnKey(stateWaypointLabelsOverride, layer.layerId)
-    ) {
-      waypointLabelsVisible = stateWaypointLabelsOverride[layer.layerId] !== false;
     }
     const supportsPointIcons = layer.supportsPointIcons === true;
     const pointIconsDefault = supportsPointIcons ? layer.pointIconsDefault !== false : false;
@@ -185,12 +141,6 @@ export function resolveLayerEntries(stateBundle) {
       pointIconsVisible = hasOwnKey(inputPointIconsOverride, layer.layerId)
         ? inputPointIconsOverride[layer.layerId] !== false
         : pointIconsDefault;
-    } else if (
-      supportsPointIcons &&
-      statePointIconsOverride &&
-      hasOwnKey(statePointIconsOverride, layer.layerId)
-    ) {
-      pointIconsVisible = statePointIconsOverride[layer.layerId] !== false;
     }
     const pointIconScaleDefault = supportsPointIcons
       ? clampPointIconScale(layer.pointIconScaleDefault ?? FISHYMAP_POINT_ICON_SCALE_MIN)
@@ -202,12 +152,6 @@ export function resolveLayerEntries(stateBundle) {
       pointIconScale = hasOwnKey(inputPointIconScaleOverride, layer.layerId)
         ? clampPointIconScale(inputPointIconScaleOverride[layer.layerId])
         : pointIconScaleDefault;
-    } else if (
-      supportsPointIcons &&
-      statePointIconScaleOverride &&
-      hasOwnKey(statePointIconScaleOverride, layer.layerId)
-    ) {
-      pointIconScale = clampPointIconScale(statePointIconScaleOverride[layer.layerId]);
     }
     const entry = {
       ...layer,

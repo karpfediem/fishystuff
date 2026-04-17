@@ -33,6 +33,43 @@ test("map-page-signals applies exact replacement branches", () => {
   });
 });
 
+test("map-page-signals replaces runtime effective filters atomically", () => {
+  const signals = {
+    _map_runtime: {
+      effectiveFilters: {
+        searchExpression: { type: "group", operator: "or", children: [] },
+        sharedFishState: { caughtIds: [77], favouriteIds: [] },
+        zoneMembershipByLayer: {
+          fish_evidence: { active: true, zoneRgbs: [0x39e58d], revision: 4 },
+        },
+        semanticFieldFiltersByLayer: {},
+      },
+    },
+  };
+
+  applyMapPageSignalsPatch(signals, {
+    _map_runtime: {
+      effectiveFilters: {
+        searchExpression: { type: "group", operator: "or", children: [] },
+        sharedFishState: { caughtIds: [], favouriteIds: [912] },
+        zoneMembershipByLayer: {},
+        semanticFieldFiltersByLayer: {
+          regions: { active: true, fieldIds: [12], revision: 7 },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(signals._map_runtime.effectiveFilters, {
+    searchExpression: { type: "group", operator: "or", children: [] },
+    sharedFishState: { caughtIds: [], favouriteIds: [912] },
+    zoneMembershipByLayer: {},
+    semanticFieldFiltersByLayer: {
+      regions: { active: true, fieldIds: [12], revision: 7 },
+    },
+  });
+});
+
 test("map-page-signals persists only durable map branches", () => {
   assert.equal(
     patchMatchesMapPagePersistFilter({

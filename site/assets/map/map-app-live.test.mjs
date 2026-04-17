@@ -15,6 +15,12 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
   const currentSnapshot = {
     ready: true,
     theme: { name: "fishy" },
+    effectiveFilters: {
+      searchExpression: { type: "group", operator: "or", children: [] },
+      sharedFishState: { caughtIds: [77], favouriteIds: [912] },
+      zoneMembershipByLayer: {},
+      semanticFieldFiltersByLayer: {},
+    },
     ui: {
       bookmarks: [{ id: "bookmark-a", worldX: 1, worldZ: 2 }],
       bookmarkSelectedIds: ["bookmark-a"],
@@ -48,6 +54,12 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
 
   assert.equal(resolved.ready, true);
   assert.deepEqual(resolved.theme, { name: "fishy" });
+  assert.deepEqual(resolved.effectiveFilters, {
+    searchExpression: { type: "group", operator: "or", children: [] },
+    sharedFishState: { caughtIds: [77], favouriteIds: [912] },
+    zoneMembershipByLayer: {},
+    semanticFieldFiltersByLayer: {},
+  });
   assert.deepEqual(resolved.ui, {
     bookmarks: [{ id: "bookmark-a", worldX: 1, worldZ: 2 }],
     bookmarkSelectedIds: ["bookmark-a"],
@@ -68,6 +80,12 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
 test("resolveBridgeSnapshot falls back to the current full snapshot when event state is missing", () => {
   const currentSnapshot = {
     ready: true,
+    effectiveFilters: {
+      searchExpression: { type: "group", operator: "or", children: [] },
+      sharedFishState: { caughtIds: [], favouriteIds: [] },
+      zoneMembershipByLayer: {},
+      semanticFieldFiltersByLayer: {},
+    },
     ui: {
       bookmarks: [{ id: "bookmark-a", worldX: 1, worldZ: 2 }],
     },

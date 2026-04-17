@@ -296,6 +296,7 @@ export function projectRuntimeSnapshotToSignals(snapshot) {
     _map_runtime: {
       ready: current.ready === true,
       theme: cloneJson(current.theme || {}),
+      effectiveFilters: cloneJson(current.effectiveFilters || createEmptySnapshot().effectiveFilters),
       ui: {
         bookmarks: cloneJson(current.ui?.bookmarks || []),
       },
