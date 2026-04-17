@@ -280,6 +280,7 @@ mod tests {
                 vector_source: None,
                 lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
                 ui: fishystuff_api::models::layers::LayerUiInfo::default(),
+                filter_bindings: Vec::new(),
                 request_weight: 1.0,
                 pick_mode: "exact_tile_pixel".to_string(),
             }],
@@ -320,6 +321,7 @@ mod tests {
                         display_order: 20,
                         ..Default::default()
                     },
+                    filter_bindings: Vec::new(),
                     request_weight: 1.0,
                     pick_mode: "exact_tile_pixel".to_string(),
                 },
@@ -350,6 +352,7 @@ mod tests {
                         display_order: 40,
                         ..Default::default()
                     },
+                    filter_bindings: Vec::new(),
                     request_weight: 1.0,
                     pick_mode: "none".to_string(),
                 },
@@ -606,6 +609,7 @@ mod tests {
                 vector_source: None,
                 lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
                 ui: fishystuff_api::models::layers::LayerUiInfo::default(),
+                filter_bindings: Vec::new(),
                 request_weight: 1.0,
                 pick_mode: "none".to_string(),
             }],

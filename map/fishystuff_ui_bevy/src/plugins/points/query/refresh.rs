@@ -272,10 +272,23 @@ mod tests {
     fn exact_lookup_zone_filter_keeps_events_with_matching_zone_mask_even_without_event_zone_ids() {
         let layer = test_zone_mask_layer();
         let mut exact_lookups = ExactLookupCache::default();
+        let mut zone_rows = vec![0_u32; 9 * 9];
+        for (x, y) in [
+            (3_usize, 3_usize),
+            (4, 3),
+            (5, 3),
+            (3, 4),
+            (5, 4),
+            (3, 5),
+            (4, 5),
+            (5, 5),
+        ] {
+            zone_rows[y * 9 + x] = 0x222222;
+        }
         exact_lookups.insert_ready(
             layer.id,
             layer.field_url().expect("field url"),
-            DiscreteFieldRows::from_u32_grid(3, 1, &[0x111111, 0x222222, 0x333333]).expect("field"),
+            DiscreteFieldRows::from_u32_grid(9, 9, &zone_rows).expect("field"),
         );
         let zone_mask_field = loaded_field_layer(&layer, &exact_lookups);
         let mut resolver = EventZoneSetResolver::new(zone_mask_field);
@@ -284,8 +297,8 @@ mod tests {
                 event_id: 1,
                 fish_id: 10,
                 ts_utc: 100,
-                map_px_x: 1,
-                map_px_y: 0,
+                map_px_x: 4,
+                map_px_y: 4,
                 length_milli: 1,
                 world_x: None,
                 world_z: None,
@@ -297,7 +310,7 @@ mod tests {
                 event_id: 2,
                 fish_id: 10,
                 ts_utc: 100,
-                map_px_x: 2,
+                map_px_x: 0,
                 map_px_y: 0,
                 length_milli: 1,
                 world_x: None,

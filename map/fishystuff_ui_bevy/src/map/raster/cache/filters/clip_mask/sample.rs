@@ -224,6 +224,7 @@ mod tests {
     use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
     use crate::map::raster::cache::{RasterTileEntry, TilePixelData, TileState};
     use crate::map::spaces::layer_transform::LayerTransform;
+    use crate::plugins::points::EvidenceZoneFilter;
     use crate::prelude::*;
 
     use super::*;

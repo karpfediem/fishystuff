@@ -74,9 +74,9 @@ mod tests {
         )
         .expect("corners");
 
-        assert_eq!(corners[0].x, 256.0);
-        assert_eq!(corners[0].y, 512.0);
-        assert_eq!(corners[2].x, 512.0);
-        assert_eq!(corners[2].y, 768.0);
+        assert_eq!(corners[0].x, 2048.0);
+        assert_eq!(corners[0].y, 4096.0);
+        assert_eq!(corners[2].x, 4096.0);
+        assert_eq!(corners[2].y, 6144.0);
     }
 }

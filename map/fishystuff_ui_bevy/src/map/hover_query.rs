@@ -229,6 +229,7 @@ mod tests {
                 z_base: 0.0,
                 display_order,
             },
+            filter_bindings: Vec::new(),
             request_weight: 1.0,
             pick_mode: "none".to_string(),
         }

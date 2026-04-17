@@ -606,6 +606,7 @@ mod tests {
                 }),
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
+                filter_bindings: Vec::new(),
                 request_weight: 1.0,
                 pick_mode: "none".to_string(),
             }],

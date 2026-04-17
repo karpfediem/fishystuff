@@ -331,6 +331,7 @@ mod tests {
             vector_source: None,
             lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
             ui: fishystuff_api::models::layers::LayerUiInfo::default(),
+            filter_bindings: Vec::new(),
             request_weight: 1.0,
             pick_mode: "none".to_string(),
         }
@@ -393,6 +394,7 @@ mod tests {
                         display_order: 10,
                         ..Default::default()
                     },
+                    filter_bindings: Vec::new(),
                     request_weight: 1.0,
                     pick_mode: "none".to_string(),
                 },
@@ -424,6 +426,7 @@ mod tests {
                         display_order: 50,
                         ..Default::default()
                     },
+                    filter_bindings: Vec::new(),
                     request_weight: 1.0,
                     pick_mode: "none".to_string(),
                 },
