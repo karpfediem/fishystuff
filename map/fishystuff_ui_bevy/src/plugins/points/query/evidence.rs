@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 use fishystuff_api::models::events::EventPointCompact;
 
-use crate::map::events::EventsSnapshotState;
+use crate::map::events::{EventZoneSetResolver, EventsSnapshotState};
 use crate::map::exact_lookup::ExactLookupCache;
-use crate::map::field_view::{loaded_field_layer, FieldLayerView, LoadedFieldLayer};
+use crate::map::field_view::loaded_field_layer;
 use crate::map::layers::LayerRegistry;
 use crate::plugins::api::{
     FishFilterState, LayerEffectiveFilterState, LayerFilterBindingOverrideState, PatchFilterState,
@@ -31,7 +31,7 @@ pub(super) fn collect_evidence_zone_rgbs(
     from_ts_utc: i64,
     to_ts_utc: i64,
     fish_ids: &[i32],
-    zone_mask_field: Option<LoadedFieldLayer<'_>>,
+    resolver: &mut EventZoneSetResolver<'_>,
 ) -> (HashSet<u32>, bool, usize) {
     let mut zones = HashSet::new();
     let mut has_zone_data = false;
@@ -45,25 +45,14 @@ pub(super) fn collect_evidence_zone_rgbs(
             continue;
         }
         matched_events = matched_events.saturating_add(1);
-        if let Some(zone_rgb) = resolved_event_zone_rgb(event, zone_mask_field) {
+        let event_zone_rgbs = resolver.zone_rgbs(event);
+        if !event_zone_rgbs.is_empty() {
             has_zone_data = true;
-            zones.insert(zone_rgb);
+            zones.extend(event_zone_rgbs.iter().copied());
         }
     }
 
     (zones, has_zone_data, matched_events)
-}
-
-pub(super) fn resolved_event_zone_rgb(
-    event: &EventPointCompact,
-    zone_mask_field: Option<LoadedFieldLayer<'_>>,
-) -> Option<u32> {
-    if let Some(zone_mask_field) = zone_mask_field {
-        return zone_mask_field
-            .field_id_at_map_px(event.map_px_x, event.map_px_y)
-            .filter(|zone_rgb| *zone_rgb != 0);
-    }
-    event.zone_rgb_u32
 }
 
 pub(crate) fn sync_evidence_zone_filter(
@@ -97,13 +86,14 @@ pub(crate) fn sync_evidence_zone_filter(
     let zone_mask_field = layer_registry
         .get_by_key(SemanticFieldFilterState::ZONE_MASK_LAYER_ID)
         .and_then(|layer| loaded_field_layer(layer, exact_lookups.as_ref()));
+    let mut resolver = EventZoneSetResolver::new(zone_mask_field);
 
     let (next_zone_rgbs, _, _) = collect_evidence_zone_rgbs(
         &snapshot.events,
         from_ts_utc,
         to_ts_utc,
         &fish_ids,
-        zone_mask_field,
+        &mut resolver,
     );
     apply_zone_filter_state(filter.as_mut(), !next_zone_rgbs.is_empty(), next_zone_rgbs);
 }

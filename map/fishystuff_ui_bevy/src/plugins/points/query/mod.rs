@@ -38,6 +38,7 @@ mod tests {
     use fishystuff_core::field::DiscreteFieldRows;
 
     use super::*;
+    use crate::map::events::EventZoneSetResolver;
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_view::loaded_field_layer;
     use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
@@ -197,8 +198,9 @@ mod tests {
             },
         ];
 
+        let mut resolver = EventZoneSetResolver::new(None);
         let (zones, has_zone_data, matched_events) =
-            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], None);
+            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], &mut resolver);
 
         assert_eq!(matched_events, 2);
         assert!(has_zone_data);
@@ -212,16 +214,26 @@ mod tests {
         exact_lookups.insert_ready(
             layer.id,
             layer.field_url().expect("field url"),
-            DiscreteFieldRows::from_u32_grid(3, 1, &[0, 0x654321, 0x123456]).expect("field"),
+            DiscreteFieldRows::from_u32_grid(
+                5,
+                5,
+                &[
+                    0, 0, 0x654321, 0x123456, 0x123456, 0, 0, 0x654321, 0x123456, 0x123456, 0, 0,
+                    0x654321, 0x123456, 0x123456, 0, 0, 0x654321, 0x123456, 0x123456, 0, 0,
+                    0x654321, 0x123456, 0x123456,
+                ],
+            )
+            .expect("field"),
         );
         let zone_mask_field = loaded_field_layer(&layer, &exact_lookups);
+        let mut resolver = EventZoneSetResolver::new(zone_mask_field);
         let events = vec![
             EventPointCompact {
                 event_id: 1,
                 fish_id: 10,
                 ts_utc: 150,
-                map_px_x: 1,
-                map_px_y: 0,
+                map_px_x: 2,
+                map_px_y: 2,
                 length_milli: 1,
                 world_x: None,
                 world_z: None,
@@ -245,11 +257,11 @@ mod tests {
         ];
 
         let (zones, has_zone_data, matched_events) =
-            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], zone_mask_field);
+            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], &mut resolver);
 
         assert_eq!(matched_events, 2);
         assert!(has_zone_data);
-        assert_eq!(zones, HashSet::from([0x654321]));
+        assert_eq!(zones, HashSet::from([0x123456, 0x654321]));
     }
 
     #[test]
@@ -268,8 +280,9 @@ mod tests {
             source_id: None,
         }];
 
+        let mut resolver = EventZoneSetResolver::new(None);
         let (zones, has_zone_data, matched_events) =
-            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], None);
+            evidence::collect_evidence_zone_rgbs(&events, 120, 170, &[10], &mut resolver);
 
         assert_eq!(matched_events, 1);
         assert!(has_zone_data);

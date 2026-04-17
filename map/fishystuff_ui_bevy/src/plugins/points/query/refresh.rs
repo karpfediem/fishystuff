@@ -4,8 +4,8 @@ use fishystuff_api::models::events::{EventsQueryMode, MapBboxPx};
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::events::{
-    cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, LocalEventQuery,
-    VisibleTileScope, VISIBLE_TILE_SCOPE_PX,
+    cluster_view_events, suggested_cluster_bucket_px, EventZoneSetResolver, EventsSnapshotState,
+    LocalEventQuery, VisibleTileScope, VISIBLE_TILE_SCOPE_PX,
 };
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_view::loaded_field_layer;
@@ -20,8 +20,7 @@ use crate::plugins::points::EvidenceZoneFilter;
 use super::super::render::view_bbox_map_px;
 use super::state::PointsQuerySignature;
 use super::{
-    evidence::resolved_event_zone_rgb, normalized_time_and_fish_filters, quantize_px, PointsState,
-    RenderPoint, VIEWPORT_SIG_STEP_PX,
+    normalized_time_and_fish_filters, quantize_px, PointsState, RenderPoint, VIEWPORT_SIG_STEP_PX,
 };
 
 pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
@@ -99,6 +98,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     let zone_lookup_url = zone_mask_layer.and_then(|layer| layer.field_url());
     let zone_mask_field =
         zone_mask_layer.and_then(|layer| loaded_field_layer(layer, refresh.exact_lookups.as_ref()));
+    let mut zone_set_resolver = EventZoneSetResolver::new(zone_mask_field);
     let signature = PointsQuerySignature {
         revision: refresh.snapshot.revision.clone(),
         zone_filter_revision: if zone_filter.active {
@@ -142,12 +142,12 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     let mut selection = refresh.snapshot.select_for_view(&local_query);
     if zone_filter.active && zone_mask_field.is_some() {
         selection.filtered_indices.retain(|idx| {
-            refresh
-                .snapshot
-                .events
-                .get(*idx)
-                .and_then(|event| resolved_event_zone_rgb(event, zone_mask_field))
-                .is_some_and(|zone_rgb| zone_filter.zone_rgbs.contains(&zone_rgb))
+            refresh.snapshot.events.get(*idx).is_some_and(|event| {
+                zone_set_resolver
+                    .zone_rgbs(event)
+                    .iter()
+                    .any(|zone_rgb| zone_filter.zone_rgbs.contains(zone_rgb))
+            })
         });
     }
     let clustered = {
@@ -278,6 +278,7 @@ mod tests {
             DiscreteFieldRows::from_u32_grid(3, 1, &[0x111111, 0x222222, 0x333333]).expect("field"),
         );
         let zone_mask_field = loaded_field_layer(&layer, &exact_lookups);
+        let mut resolver = EventZoneSetResolver::new(zone_mask_field);
         let events = [
             EventPointCompact {
                 event_id: 1,
@@ -310,10 +311,12 @@ mod tests {
         let zone_rgbs = HashSet::from([0x222222]);
 
         filtered_indices.retain(|idx| {
-            events
-                .get(*idx)
-                .and_then(|event| resolved_event_zone_rgb(event, zone_mask_field))
-                .is_some_and(|zone_rgb| zone_rgbs.contains(&zone_rgb))
+            events.get(*idx).is_some_and(|event| {
+                resolver
+                    .zone_rgbs(event)
+                    .iter()
+                    .any(|zone_rgb| zone_rgbs.contains(zone_rgb))
+            })
         });
 
         assert_eq!(filtered_indices, vec![0]);

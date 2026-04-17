@@ -268,18 +268,25 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     for (idx, point) in context.points.points.iter().enumerate() {
         let world = map_point_to_world(point);
         let pair = context.pool.markers[idx];
-        let point_visible_here = fish_evidence_layer_id.is_none_or(|layer_id| {
-            world_point_visible_in_layer_clip(
-                layer_id,
-                world,
-                &context.layer_registry,
-                &context.layer_runtime,
-                &context.exact_lookups,
-                &context.tile_cache,
-                &context.vector_runtime,
-                fish_evidence_filter,
-            )
-        });
+        let point_visible_here = if fish_evidence_filter.active {
+            // The points query has already applied fish_evidence zone filtering using the sample
+            // ring footprint. Reapplying the layer clip here would fall back to center-point
+            // sampling and incorrectly hide samples whose ring touches the active zone.
+            true
+        } else {
+            fish_evidence_layer_id.is_none_or(|layer_id| {
+                world_point_visible_in_layer_clip(
+                    layer_id,
+                    world,
+                    &context.layer_registry,
+                    &context.layer_runtime,
+                    &context.exact_lookups,
+                    &context.tile_cache,
+                    &context.vector_runtime,
+                    fish_evidence_filter,
+                )
+            })
+        };
         let (ring_scale, ring_alpha) = ring_style_for_point(point);
         let ring_diameter_world = context.ring_assets.diameter_map_px * ring_scale;
         let icon_diameter_world = icon_size_world_units.max(ring_diameter_world);
