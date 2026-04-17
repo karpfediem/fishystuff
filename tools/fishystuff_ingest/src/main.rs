@@ -1058,28 +1058,44 @@ fn run_build_event_zone_assignment_mysql(
         )
         .context("ensure layer revision row")?;
 
-    let progress = store
-        .zone_support_progress(&layer_revision_id)
-        .context("query zone support progress")?;
-    let use_fresh_scan = !progress.has_assignment_rows && !progress.has_ring_rows;
+    let coverage = store
+        .zone_support_coverage(&layer_revision_id)
+        .context("query zone support coverage")?;
+    let use_fresh_scan = coverage.assignment_event_count == 0 && coverage.ring_event_count == 0;
     let mut after_event_id = 0_i64;
+    if coverage.assignment_event_count == coverage.water_event_count
+        && coverage.ring_event_count == coverage.water_event_count
+    {
+        println!(
+            "build-event-zone-assignment: mode=complete-noop water_events={} assignment_events={} ring_events={}",
+            coverage.water_event_count,
+            coverage.assignment_event_count,
+            coverage.ring_event_count,
+        );
+        println!(
+            "build-event-zone-assignment: layer_revision_id={} layer_label={} layer_id={} zone_mask_sha256={} total=0 assigned=0 ring_support=0 skipped=0 elapsed_ms=0",
+            layer_revision_id,
+            layer_label,
+            layer_id,
+            zone_mask_sha256,
+        );
+        return Ok(());
+    }
     println!(
-        "build-event-zone-assignment: mode={} existing_assignment_rows={} existing_ring_rows={}",
+        "build-event-zone-assignment: mode={} water_events={} assignment_events={} ring_events={}",
         if use_fresh_scan {
             "fresh-sequential-scan"
-        } else if progress.has_assignment_rows && !progress.has_ring_rows {
-            "resume-ring-only"
-        } else if !progress.has_assignment_rows && progress.has_ring_rows {
-            "resume-assignment-only"
         } else {
-            "resume-mixed"
+            "resume-sequential-scan"
         },
-        progress.has_assignment_rows,
-        progress.has_ring_rows,
+        coverage.water_event_count,
+        coverage.assignment_event_count,
+        coverage.ring_event_count,
     );
 
     let start = std::time::Instant::now();
     let mut total = 0usize;
+    let mut work_event_total = 0usize;
     let mut assigned_total = 0u64;
     let mut ring_support_total = 0u64;
     loop {
@@ -1087,59 +1103,67 @@ fn run_build_event_zone_assignment_mysql(
             store
                 .load_events_after_id(after_event_id, batch_size)
                 .context("load mysql events for fresh zone support scan")?
-        } else if progress.has_assignment_rows && !progress.has_ring_rows {
-            store
-                .load_events_missing_zone_ring_support(&layer_revision_id, batch_size)
-                .context("load mysql events missing zone ring support rows")?
-        } else if !progress.has_assignment_rows && progress.has_ring_rows {
-            store
-                .load_events_missing_zone_assignment(&layer_revision_id, batch_size)
-                .context("load mysql events missing zone assignment rows")?
         } else {
             store
-                .load_events_missing_zone_support(&layer_revision_id, batch_size)
-                .context("load mysql events missing zone support rows")?
+                .load_events_with_zone_support_status_after_id(
+                    &layer_revision_id,
+                    after_event_id,
+                    batch_size,
+                )
+                .context("load mysql events with zone support status rows")?
         };
         if samples.is_empty() {
             break;
         }
-        total += samples.len();
+        let samples_len = samples.len();
+        total += samples_len;
+        let last_event_id = samples
+            .last()
+            .map(|sample| sample.event_id)
+            .unwrap_or(after_event_id);
         let mut rows = Vec::with_capacity(samples.len());
         let mut ring_rows = Vec::new();
         for sample in samples {
-            let zone_rgb = mask.sample_rgb_u32_clamped(
-                sample.assignment_sample_px_x,
-                sample.assignment_sample_px_y,
-            );
-            rows.push(EventZoneInsertRow {
-                event_id: sample.event_id,
-                zone_rgb,
-                sample_px_x: sample.assignment_sample_px_x,
-                sample_px_y: sample.assignment_sample_px_y,
-            });
-            ring_rows.extend(build_event_zone_ring_support_rows(
-                &mask,
-                sample.event_id,
-                sample.ring_center_px_x,
-                sample.ring_center_px_y,
-            ));
+            let needs_assignment = use_fresh_scan || !sample.has_assignment;
+            let needs_ring_support = use_fresh_scan || !sample.has_ring_support;
+            if !needs_assignment && !needs_ring_support {
+                continue;
+            }
+            work_event_total += 1;
+            if needs_assignment {
+                let zone_rgb = mask.sample_rgb_u32_clamped(
+                    sample.assignment_sample_px_x,
+                    sample.assignment_sample_px_y,
+                );
+                rows.push(EventZoneInsertRow {
+                    event_id: sample.event_id,
+                    zone_rgb,
+                    sample_px_x: sample.assignment_sample_px_x,
+                    sample_px_y: sample.assignment_sample_px_y,
+                });
+            }
+            if needs_ring_support {
+                ring_rows.extend(build_event_zone_ring_support_rows(
+                    &mask,
+                    sample.event_id,
+                    sample.ring_center_px_x,
+                    sample.ring_center_px_y,
+                ));
+            }
         }
-        let (assigned, ring_assigned) = store
-            .insert_event_zone_support_batch(&layer_revision_id, &rows, &ring_rows)
-            .context("insert mysql event zone support batch")?;
-        assigned_total += assigned;
-        ring_support_total += ring_assigned;
-        if use_fresh_scan {
-            after_event_id = rows
-                .last()
-                .map(|row| row.event_id)
-                .unwrap_or(after_event_id);
+        if !rows.is_empty() || !ring_rows.is_empty() {
+            let (assigned, ring_assigned) = store
+                .insert_event_zone_support_batch(&layer_revision_id, &rows, &ring_rows)
+                .context("insert mysql event zone support batch")?;
+            assigned_total += assigned;
+            ring_support_total += ring_assigned;
         }
-        if rows.len() < batch_size {
+        after_event_id = last_event_id;
+        if samples_len < batch_size {
             break;
         }
     }
-    let skipped = total.saturating_sub(assigned_total as usize);
+    let skipped = total.saturating_sub(work_event_total);
     println!(
         "build-event-zone-assignment: layer_revision_id={} layer_label={} layer_id={} zone_mask_sha256={} total={} assigned={} ring_support={} skipped={} elapsed_ms={}",
         layer_revision_id,
