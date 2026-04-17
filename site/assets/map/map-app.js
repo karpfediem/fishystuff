@@ -51,11 +51,8 @@ export function createMapApp(options = {}) {
   let lastActionState = normalizeMapActionState(options.initialActionState);
 
   return {
-    nextBridgePatch(signals, context = {}) {
-      const inputPatch = buildBridgeInputPatchFromSignals(signals, {
-        currentState: context.currentState,
-        zoneCatalog: context.zoneCatalog,
-      });
+    nextBridgePatch(signals) {
+      const inputPatch = buildBridgeInputPatchFromSignals(signals);
       const commandPatch = buildBridgeCommandPatchFromSignals(signals, lastActionState);
       return commandPatch ? mergeBridgePatches(inputPatch, commandPatch) : inputPatch;
     },

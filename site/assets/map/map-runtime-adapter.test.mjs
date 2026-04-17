@@ -8,82 +8,71 @@ import {
   projectRuntimeSnapshotToSignals,
   projectSessionSnapshotToSignals,
 } from "./map-runtime-adapter.js";
-import { createEmptySnapshot } from "./map-host.js";
 
 test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () => {
-  const patch = buildBridgeInputPatchFromSignals(
-    {
-      _map_ui: {
-        windowUi: {
-          search: { open: false },
-        },
-        bookmarks: {
-          selectedIds: ["bookmark-a", "missing"],
-        },
+  const patch = buildBridgeInputPatchFromSignals({
+    _map_ui: {
+      windowUi: {
+        search: { open: false },
       },
-      _map_controls: {
-        filters: {
-          searchText: "cron",
-          fishFilterTerms: ["favourite"],
-        },
-        ui: {
-          legendOpen: true,
-          leftPanelOpen: false,
-        },
-      },
-      _map_bridged: {
-        filters: {
-          fishIds: [77],
-          zoneRgbs: [123456],
-          semanticFieldIdsByLayer: { regions: [11] },
-          patchId: "p1",
-          fromPatchId: "a",
-          toPatchId: "b",
-          layerIdsVisible: ["bookmarks", "fish_evidence"],
-          layerIdsOrdered: ["fish_evidence", "bookmarks"],
-          layerOpacities: { fish_evidence: 0.5 },
-          layerClipMasks: { minimap: "manual-mask" },
-          layerWaypointConnectionsVisible: { bookmarks: true },
-          layerWaypointLabelsVisible: { bookmarks: false },
-          layerPointIconsVisible: { fish_evidence: true },
-          layerPointIconScales: { fish_evidence: 1.4 },
-        },
-        ui: {
-          diagnosticsOpen: true,
-          showPoints: false,
-          showPointIcons: true,
-          viewMode: "3d",
-          pointIconScale: 1.8,
-        },
-      },
-      _map_bookmarks: {
-        entries: [
-          {
-            id: "bookmark-a",
-            label: "Cron",
-            pointLabel: "Cron Islands",
-            worldX: 12.5,
-            worldZ: 34.5,
-            layerSamples: [{ nope: 1 }],
-          },
-          { id: "bookmark-b", worldX: 1, worldZ: 2 },
-          { id: "", worldX: 9, worldZ: 9 },
-        ],
-      },
-      _shared_fish: {
-        caughtIds: [5],
-        favouriteIds: [77],
+      bookmarks: {
+        selectedIds: ["bookmark-a", "missing"],
       },
     },
-    {
-      currentState: {
-        ...createEmptySnapshot(),
-        catalog: {
-          fish: [{ fishId: 912 }],
-        },
+    _map_controls: {
+      filters: {
+        searchText: "cron",
+        fishFilterTerms: ["favourite"],
+      },
+      ui: {
+        legendOpen: true,
+        leftPanelOpen: false,
       },
     },
-  );
+    _map_bridged: {
+      filters: {
+        fishIds: [77],
+        zoneRgbs: [123456],
+        semanticFieldIdsByLayer: { regions: [11] },
+        patchId: "p1",
+        fromPatchId: "a",
+        toPatchId: "b",
+        layerIdsVisible: ["bookmarks", "fish_evidence"],
+        layerIdsOrdered: ["fish_evidence", "bookmarks"],
+        layerOpacities: { fish_evidence: 0.5 },
+        layerClipMasks: { minimap: "manual-mask" },
+        layerWaypointConnectionsVisible: { bookmarks: true },
+        layerWaypointLabelsVisible: { bookmarks: false },
+        layerPointIconsVisible: { fish_evidence: true },
+        layerPointIconScales: { fish_evidence: 1.4 },
+      },
+      ui: {
+        diagnosticsOpen: true,
+        showPoints: false,
+        showPointIcons: true,
+        viewMode: "3d",
+        pointIconScale: 1.8,
+      },
+    },
+    _map_bookmarks: {
+      entries: [
+        {
+          id: "bookmark-a",
+          label: "Cron",
+          pointLabel: "Cron Islands",
+          worldX: 12.5,
+          worldZ: 34.5,
+          layerSamples: [{ nope: 1 }],
+        },
+        { id: "bookmark-b", worldX: 1, worldZ: 2 },
+        { id: "", worldX: 9, worldZ: 9 },
+      ],
+    },
+    _shared_fish: {
+      caughtIds: [5],
+      favouriteIds: [77],
+    },
+  });
 
   assert.equal(patch.version, 1);
   assert.deepEqual(patch.filters.fishIds, []);
@@ -116,41 +105,31 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
 });
 
 test("buildBridgeInputPatchFromSignals derives search filters from selected terms", () => {
-  const patch = buildBridgeInputPatchFromSignals(
-    {
-      _map_ui: {
-        search: {
-          selectedTerms: [
-            { kind: "zone", zoneRgb: 123456 },
-            { kind: "semantic", layerId: "regions", fieldId: 11 },
-            { kind: "fish-filter", term: "favorite" },
-            { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
-            { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
-          ],
-        },
-      },
-      _map_bridged: {
-        filters: {
-          fishIds: [77],
-          zoneRgbs: [],
-          semanticFieldIdsByLayer: {},
-          fishFilterTerms: [],
-        },
-      },
-      _shared_fish: {
-        caughtIds: [],
-        favouriteIds: [912],
+  const patch = buildBridgeInputPatchFromSignals({
+    _map_ui: {
+      search: {
+        selectedTerms: [
+          { kind: "zone", zoneRgb: 123456 },
+          { kind: "semantic", layerId: "regions", fieldId: 11 },
+          { kind: "fish-filter", term: "favorite" },
+          { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+          { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
+        ],
       },
     },
-    {
-      currentState: {
-        ...createEmptySnapshot(),
-        catalog: {
-          fish: [{ fishId: 912 }],
-        },
+    _map_bridged: {
+      filters: {
+        fishIds: [77],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
       },
     },
-  );
+    _shared_fish: {
+      caughtIds: [],
+      favouriteIds: [912],
+    },
+  });
 
   assert.deepEqual(patch.filters.fishIds, []);
   assert.deepEqual(patch.filters.zoneRgbs, []);
@@ -169,63 +148,48 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
 });
 
 test("buildBridgeInputPatchFromSignals forwards raw zone terms from the boolean search expression tree", () => {
-  const patch = buildBridgeInputPatchFromSignals(
-    {
-      _map_ui: {
-        search: {
-          expression: {
-            type: "group",
-            operator: "and",
-            children: [
-              {
-                type: "group",
-                operator: "or",
-                children: [
-                  { type: "term", term: { kind: "zone", zoneRgb: 123456 } },
-                  { type: "term", term: { kind: "zone", zoneRgb: 654321 } },
-                ],
-              },
-              {
-                type: "group",
-                operator: "or",
-                negated: true,
-                children: [{ type: "term", term: { kind: "zone", zoneRgb: 654321 } }],
-              },
-              { type: "term", term: { kind: "fish-filter", term: "red" } },
-            ],
-          },
+  const patch = buildBridgeInputPatchFromSignals({
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "and",
+          children: [
+            {
+              type: "group",
+              operator: "or",
+              children: [
+                { type: "term", term: { kind: "zone", zoneRgb: 123456 } },
+                { type: "term", term: { kind: "zone", zoneRgb: 654321 } },
+              ],
+            },
+            {
+              type: "group",
+              operator: "or",
+              negated: true,
+              children: [{ type: "term", term: { kind: "zone", zoneRgb: 654321 } }],
+            },
+            { type: "term", term: { kind: "fish-filter", term: "red" } },
+          ],
         },
-      },
-      _map_bridged: {
-        filters: {
-          fishIds: [],
-          zoneRgbs: [],
-          semanticFieldIdsByLayer: {},
-          fishFilterTerms: ["red"],
-          layerClipMasks: {
-            fish_evidence: "zone_mask",
-          },
-        },
-      },
-      _shared_fish: {
-        caughtIds: [],
-        favouriteIds: [],
       },
     },
-    {
-      currentState: {
-        ...createEmptySnapshot(),
-        catalog: {
-          fish: [{ fishId: 61, itemId: 6100, name: "Ancient Relic Crystal Shard", grade: "Prize", isPrize: true }],
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["red"],
+        layerClipMasks: {
+          fish_evidence: "zone_mask",
         },
       },
-      zoneCatalog: [
-        { zoneRgb: 123456, name: "Alpha Sea" },
-        { zoneRgb: 654321, name: "Beta Sea" },
-        { zoneRgb: 777777, name: "Gamma Sea" },
-      ],
     },
-  );
+    _shared_fish: {
+      caughtIds: [],
+      favouriteIds: [],
+    },
+  });
 
   assert.deepEqual(patch.filters.fishIds, []);
   assert.deepEqual(patch.filters.zoneRgbs, []);
@@ -290,18 +254,6 @@ test("buildBridgeInputPatchFromSignals forwards raw fish terms from the boolean 
         favouriteIds: [77],
       },
     },
-    {
-      currentState: {
-        ...createEmptySnapshot(),
-        catalog: {
-          fish: [
-            { fishId: 61, itemId: 6100, name: "Ancient Relic Crystal Shard", grade: "Prize", isPrize: true },
-            { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
-            { fishId: 912, itemId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
-          ],
-        },
-      },
-    },
   );
 
   assert.deepEqual(patch.filters.fishIds, []);
@@ -350,7 +302,6 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
         favouriteIds: [],
       },
     },
-    { currentState: createEmptySnapshot() },
   );
 
   assert.deepEqual(patch.filters.zoneRgbs, []);
@@ -396,9 +347,6 @@ test("buildBridgeInputPatchFromSignals does not derive zone filters from the cur
         caughtIds: [],
         favouriteIds: [],
       },
-    },
-    {
-      currentState: createEmptySnapshot(),
     },
   );
 
@@ -448,9 +396,6 @@ test("buildBridgeInputPatchFromSignals keeps explicit zone expressions independe
         favouriteIds: [],
       },
     },
-    {
-      currentState: createEmptySnapshot(),
-    },
   );
 
   assert.deepEqual(patch.filters.zoneRgbs, []);
@@ -475,7 +420,6 @@ test("buildBridgeInputPatchFromSignals ignores transitional control filters", ()
         },
       },
     },
-    { currentState: createEmptySnapshot() },
   );
 
   assert.deepEqual(patch.filters.fishIds, []);

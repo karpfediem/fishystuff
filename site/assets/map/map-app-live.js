@@ -86,20 +86,6 @@ function patchTouchesLiveBridgeInputs(patch) {
   );
 }
 
-function hasActiveFishFilterTerms(signals) {
-  return Array.isArray(signals?._map_bridged?.filters?.fishFilterTerms)
-    && signals._map_bridged.filters.fishFilterTerms.length > 0;
-}
-
-export function shouldRefreshBridgeFromRuntimeEvent(signals, eventDetail) {
-  if (isPlainObject(eventDetail?.state) && "selection" in eventDetail.state) {
-    return true;
-  }
-  return hasActiveFishFilterTerms(signals)
-    && isPlainObject(eventDetail?.state)
-    && "catalog" in eventDetail.state;
-}
-
 function buildResetUiPatch() {
   return {
     _map_ui: cloneJson(DEFAULT_MAP_UI_SIGNAL_STATE),
@@ -233,7 +219,6 @@ export async function start() {
   let mounted = false;
   let lastBridgePatchJson = "";
   let actionState = app.readLastActionState();
-  let zoneCatalog = [];
   const bridgeStateRefresher = createDeferredBridgeStateRefresher({
     bridge,
     onSnapshot: patchSignalsFromBridge,
@@ -259,14 +244,11 @@ export async function start() {
     }
   }
 
-  function patchBridgeFromSignals(currentStateOverride = null) {
+  function patchBridgeFromSignals() {
     if (!mounted || syncingFromBridge) {
       return;
     }
-    const patch = app.nextBridgePatch(signals(), {
-      currentState: isPlainObject(currentStateOverride) ? currentStateOverride : currentBridgeState(),
-      zoneCatalog,
-    });
+    const patch = app.nextBridgePatch(signals());
     const patchJson = JSON.stringify(patch);
     if (patchJson === lastBridgePatchJson) {
       return;
@@ -304,9 +286,6 @@ export async function start() {
   function handleBridgeStateEvent(event) {
     const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
     patchSignalsFromBridge(snapshot);
-    if (shouldRefreshBridgeFromRuntimeEvent(signals(), event?.detail)) {
-      patchBridgeFromSignals(snapshot);
-    }
   }
 
   shell.addEventListener("fishymap:ready", handleBridgeStateEvent);
@@ -342,10 +321,7 @@ export async function start() {
     }
   });
 
-  const initialPatch = app.nextBridgePatch(signals(), {
-    currentState: createEmptySnapshot(),
-    zoneCatalog,
-  });
+  const initialPatch = app.nextBridgePatch(signals());
   const initialRestorePatch = snapshotToRestorePatch(signals()?._map_session || {});
   await bridge.mount(shell, {
     canvas,
@@ -386,11 +362,12 @@ export async function start() {
   actionState = app.consumeSignals(signals());
   lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());
-  patchBridgeFromSignals(currentBridgeState());
+  patchBridgeFromSignals();
   void loadZoneCatalog().then((loadedZoneCatalog) => {
-    zoneCatalog = Array.isArray(loadedZoneCatalog) ? cloneJson(loadedZoneCatalog) : [];
-    dispatchShellZoneCatalogReadyEvent(shell, zoneCatalog);
-    patchBridgeFromSignals();
+    dispatchShellZoneCatalogReadyEvent(
+      shell,
+      Array.isArray(loadedZoneCatalog) ? cloneJson(loadedZoneCatalog) : [],
+    );
   });
 }
 

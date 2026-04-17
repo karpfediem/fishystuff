@@ -2218,17 +2218,32 @@ test("buildInitialRestorePatch ignores session semantic selection state", () => 
   assert.equal("commands" in patch, false);
 });
 
-test("session snapshots do not persist the no-match fish sentinel as a selection", () => {
+test("session snapshots do not infer fish selection from filter state", () => {
   const snapshot = createSessionSnapshotFromState({
     version: 1,
     filters: {
-      fishIds: [-1],
+      fishIds: [77],
     },
     selection: {},
     view: { viewMode: "2d", camera: {} },
   });
 
   assert.equal(snapshot.selection.fishId, null);
+});
+
+test("session snapshots persist explicit fish selection state", () => {
+  const snapshot = createSessionSnapshotFromState({
+    version: 1,
+    filters: {
+      fishIds: [77, 91],
+    },
+    selection: {
+      fishId: 91,
+    },
+    view: { viewMode: "2d", camera: {} },
+  });
+
+  assert.equal(snapshot.selection.fishId, 91);
 });
 
 test("state patch normalizes selectWorldPoint commands", () => {

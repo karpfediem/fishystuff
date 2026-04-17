@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMapApp, mergeBridgePatches } from "./map-app.js";
-import { createEmptySnapshot } from "./map-host.js";
 
 test("mergeBridgePatches merges input and commands without losing nested fields", () => {
   assert.deepEqual(
@@ -42,16 +41,12 @@ test("createMapApp emits bridge commands once per consumed action token state", 
     },
   };
 
-  const firstPatch = app.nextBridgePatch(signals, {
-    currentState: createEmptySnapshot(),
-  });
+  const firstPatch = app.nextBridgePatch(signals);
   assert.deepEqual(firstPatch.commands, { resetView: true });
 
   app.consumeSignals(signals);
 
-  const secondPatch = app.nextBridgePatch(signals, {
-    currentState: createEmptySnapshot(),
-  });
+  const secondPatch = app.nextBridgePatch(signals);
   assert.equal("commands" in secondPatch, false);
   assert.deepEqual(secondPatch.filters.fishIds, []);
   assert.equal(secondPatch.filters.searchExpression.type, "group");

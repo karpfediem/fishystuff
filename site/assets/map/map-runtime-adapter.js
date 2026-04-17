@@ -1,6 +1,5 @@
 import {
   FISHYMAP_CONTRACT_VERSION,
-  FISHYMAP_POINT_ICON_SCALE_MIN,
   FISHYMAP_POINT_ICON_SCALE_DEFAULT,
   createEmptySnapshot,
 } from "./map-host.js";
@@ -195,7 +194,7 @@ export function normalizeMapActionState(raw) {
   };
 }
 
-export function buildBridgeInputPatchFromSignals(signals, options = {}) {
+export function buildBridgeInputPatchFromSignals(signals) {
   const filters = normalizeBridgedFilters(signals);
   const ui = normalizeBridgedUi(signals);
   const hasSearchExpression = hasActiveSearchExpression(filters.searchExpression);

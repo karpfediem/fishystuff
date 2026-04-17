@@ -2397,10 +2397,7 @@ export function createSessionSnapshotFromState(stateInput) {
   const semanticSelection = semanticFieldSelectionFromLayerSamples(
     state.selection?.layerSamples,
   );
-  const selectedFishId = normalizeFishIds([
-    state.selection?.fishId,
-    state.filters?.fishIds?.[0],
-  ])[0] ?? null;
+  const selectedFishId = normalizeFishIds([state.selection?.fishId])[0] ?? null;
   return {
     version: FISHYMAP_CONTRACT_VERSION,
     savedAt: new Date().toISOString(),
