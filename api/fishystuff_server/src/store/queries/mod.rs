@@ -79,6 +79,18 @@ WHERE ring.layer_revision_id = ?
   AND e.source_kind = ?
 ORDER BY ring.event_id, ring.zone_rgb";
 
+pub const EVENTS_SNAPSHOT_FULL_RING_SUPPORT_SQL: &str = "
+SELECT
+  ring.event_id,
+  ring.zone_rgb
+FROM event_zone_ring_support ring
+JOIN events e ON e.event_id = ring.event_id
+WHERE ring.layer_revision_id = ?
+  AND ring.ring_fully_contained = 1
+  AND e.water_ok = 1
+  AND e.source_kind = ?
+ORDER BY ring.event_id, ring.zone_rgb";
+
 pub const WATER_TILES_SQL: &str =
     "SELECT tile_x, tile_y, water_count FROM water_tiles WHERE map_version = ? AND tile_px = ?";
 

@@ -121,6 +121,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: Some(0x112233),
                 zone_rgbs: vec![0x112233],
+                full_zone_rgbs: vec![0x112233],
                 source_kind: None,
                 source_id: None,
             },
@@ -135,6 +136,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: Some(0x445566),
                 zone_rgbs: vec![0x445566],
+                full_zone_rgbs: vec![0x445566],
                 source_kind: None,
                 source_id: None,
             },
@@ -149,6 +151,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: Some(0x778899),
                 zone_rgbs: vec![0x778899],
+                full_zone_rgbs: vec![0x778899],
                 source_kind: None,
                 source_id: None,
             },
@@ -163,6 +166,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: None,
                 zone_rgbs: Vec::new(),
+                full_zone_rgbs: Vec::new(),
                 source_kind: None,
                 source_id: None,
             },
@@ -197,6 +201,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: None,
                 zone_rgbs: vec![0x654321, 0x123456],
+                full_zone_rgbs: vec![0x123456],
                 source_kind: None,
                 source_id: None,
             },
@@ -211,6 +216,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: Some(0xaabbcc),
                 zone_rgbs: vec![0x123456],
+                full_zone_rgbs: vec![0x123456],
                 source_kind: None,
                 source_id: None,
             },
@@ -226,7 +232,7 @@ mod tests {
 
         assert_eq!(matched_events, 2);
         assert!(has_zone_data);
-        assert_eq!(zones, HashSet::from([0x123456, 0x654321]));
+        assert_eq!(zones, HashSet::from([0x123456]));
     }
 
     #[test]
@@ -242,6 +248,7 @@ mod tests {
             world_z: None,
             zone_rgb_u32: Some(0x112233),
             zone_rgbs: Vec::new(),
+            full_zone_rgbs: Vec::new(),
             source_kind: None,
             source_id: None,
         }];
@@ -258,5 +265,37 @@ mod tests {
         assert_eq!(matched_events, 1);
         assert!(has_zone_data);
         assert_eq!(zones, HashSet::from([0x112233]));
+    }
+
+    #[test]
+    fn collect_evidence_zone_rgbs_omits_partial_only_zone_support() {
+        let mut resolver = EventZoneSetResolver::new();
+        let events = vec![EventPointCompact {
+            event_id: 1,
+            fish_id: 10,
+            ts_utc: 150,
+            map_px_x: 2,
+            map_px_y: 2,
+            length_milli: 1,
+            world_x: None,
+            world_z: None,
+            zone_rgb_u32: Some(0x123456),
+            zone_rgbs: vec![0x123456, 0x654321],
+            full_zone_rgbs: Vec::new(),
+            source_kind: None,
+            source_id: None,
+        }];
+
+        let (zones, has_zone_data, matched_events) = evidence::collect_evidence_zone_rgbs(
+            &events,
+            Some(120),
+            Some(170),
+            &[10],
+            &mut resolver,
+        );
+
+        assert_eq!(matched_events, 1);
+        assert!(!has_zone_data);
+        assert!(zones.is_empty());
     }
 }

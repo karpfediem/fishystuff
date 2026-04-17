@@ -1048,11 +1048,16 @@ impl DoltMySqlStore {
     fn load_events_snapshot_ring_support_map(
         &self,
         layer_revision_id: &str,
+        fully_contained_only: bool,
     ) -> AppResult<HashMap<i64, Vec<u32>>> {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let rows: Vec<EventZoneMembershipDbRow> = conn
             .exec(
-                queries::EVENTS_SNAPSHOT_RING_SUPPORT_SQL,
+                if fully_contained_only {
+                    queries::EVENTS_SNAPSHOT_FULL_RING_SUPPORT_SQL
+                } else {
+                    queries::EVENTS_SNAPSHOT_RING_SUPPORT_SQL
+                },
                 (layer_revision_id, SOURCE_KIND_RANKING),
             )
             .map_err(events_schema_or_db_unavailable)?;
@@ -1118,7 +1123,17 @@ impl DoltMySqlStore {
         };
         let zone_support_by_event = match support_mode {
             Some(EventZoneSupportMode::RingSupport) => {
-                self.load_events_snapshot_ring_support_map(&layer_revision_id)?
+                self.load_events_snapshot_ring_support_map(&layer_revision_id, false)?
+            }
+            Some(EventZoneSupportMode::Assignment) => assignment_by_event
+                .iter()
+                .map(|(&event_id, &zone_rgb)| (event_id, vec![zone_rgb]))
+                .collect(),
+            None => HashMap::new(),
+        };
+        let full_zone_support_by_event = match support_mode {
+            Some(EventZoneSupportMode::RingSupport) => {
+                self.load_events_snapshot_ring_support_map(&layer_revision_id, true)?
             }
             Some(EventZoneSupportMode::Assignment) => assignment_by_event
                 .iter()
@@ -1146,6 +1161,10 @@ impl DoltMySqlStore {
                 .get(&event_id)
                 .cloned()
                 .unwrap_or_else(|| zone_rgb_u32.into_iter().collect());
+            let full_zone_rgbs = full_zone_support_by_event
+                .get(&event_id)
+                .cloned()
+                .unwrap_or_default();
             out.push(EventPointCompact {
                 event_id,
                 fish_id: i32::try_from(fish_id)
@@ -1169,6 +1188,7 @@ impl DoltMySqlStore {
                     .transpose()?,
                 zone_rgb_u32,
                 zone_rgbs,
+                full_zone_rgbs,
                 source_kind: event_source_kind_from_db(source_kind),
                 source_id: normalize_optional_string(source_id),
             });

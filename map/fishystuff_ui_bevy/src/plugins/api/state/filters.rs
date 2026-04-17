@@ -229,8 +229,7 @@ impl LayerEffectiveFilterState {
         for source_zones in next_zone_rgbs {
             intersection.retain(|zone_rgb| source_zones.contains(zone_rgb));
         }
-        let next_active = !intersection.is_empty();
-        self.sync_zone_membership_filter_for_layer(layer.key.clone(), next_active, intersection);
+        self.sync_zone_membership_filter_for_layer(layer.key.clone(), true, intersection);
     }
 
     pub fn resolve_semantic_field_filter_for_layer(
@@ -384,6 +383,85 @@ mod tests {
             .expect("layer filter");
         assert!(resolved.active);
         assert_eq!(resolved.zone_rgbs, HashSet::from([0x222222]));
+    }
+
+    #[test]
+    fn layer_effective_filter_state_keeps_empty_zone_intersections_active() {
+        let layer = crate::map::layers::LayerSpec {
+            id: crate::map::layers::LayerId::from_raw(1),
+            key: "fish_evidence".to_string(),
+            name: "Fish Evidence".to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 0.0,
+            kind: crate::map::layers::LayerKind::Waypoints,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: String::new(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: crate::map::spaces::layer_transform::LayerTransform::IdentityMapSpace,
+            tile_px: 0,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            filter_bindings: vec![
+                LayerFilterBindingSpec {
+                    binding_id: "fish_selection".to_string(),
+                    target: LayerFilterTargetKind::ZoneMembership,
+                    source: LayerFilterSourceKind::FishSelection,
+                    default_enabled: true,
+                },
+                LayerFilterBindingSpec {
+                    binding_id: "zone_selection".to_string(),
+                    target: LayerFilterTargetKind::ZoneMembership,
+                    source: LayerFilterSourceKind::ZoneSelection,
+                    default_enabled: true,
+                },
+            ],
+            lod_policy: crate::map::layers::LodPolicy {
+                target_tiles: 1,
+                hysteresis_hi: 1.0,
+                hysteresis_lo: 0.0,
+                margin_tiles: 0,
+                enable_refine: false,
+                refine_debounce_ms: 0,
+                max_detail_tiles: 0,
+                max_resident_tiles: 1,
+                pinned_coarse_levels: 0,
+                coarse_pin_min_level: None,
+                warm_margin_tiles: 0,
+                protected_margin_tiles: 0,
+                detail_eviction_weight: 1.0,
+                max_detail_requests_while_camera_moving: 1,
+                motion_suppresses_refine: true,
+            },
+            request_weight: 1.0,
+            pick_mode: crate::map::layers::PickMode::None,
+            display_order: 0,
+        };
+        let mut semantic_filter = SemanticFieldFilterState::default();
+        semantic_filter.set_field_ids_for_layer("zone_mask", vec![0x333333]);
+        let fish_filter = ZoneMembershipFilter {
+            active: true,
+            zone_rgbs: HashSet::from([0x111111, 0x222222]),
+            revision: 1,
+        };
+        let mut effective = LayerEffectiveFilterState::default();
+
+        effective.resolve_zone_membership_filter_for_layer(
+            &layer,
+            &LayerFilterBindingOverrideState::default(),
+            &fish_filter,
+            &semantic_filter,
+        );
+
+        let resolved = effective
+            .zone_membership_filter("fish_evidence")
+            .expect("layer filter");
+        assert!(resolved.active);
+        assert!(resolved.zone_rgbs.is_empty());
     }
 }
 

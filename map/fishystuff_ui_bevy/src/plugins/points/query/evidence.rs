@@ -45,7 +45,7 @@ pub(super) fn collect_evidence_zone_rgbs(
             continue;
         }
         matched_events = matched_events.saturating_add(1);
-        let event_zone_rgbs = resolver.zone_rgbs(event);
+        let event_zone_rgbs = resolver.full_zone_rgbs(event);
         if !event_zone_rgbs.is_empty() {
             has_zone_data = true;
             zones.extend(event_zone_rgbs.iter().copied());
@@ -105,7 +105,7 @@ pub(crate) fn sync_evidence_zone_filter(
         );
         next_zone_rgbs.extend(ranking_zone_rgbs);
     }
-    apply_zone_filter_state(filter.as_mut(), !next_zone_rgbs.is_empty(), next_zone_rgbs);
+    apply_zone_filter_state(filter.as_mut(), true, next_zone_rgbs);
 }
 
 pub(crate) fn sync_layer_effective_filters(
@@ -246,6 +246,7 @@ mod tests {
                 world_z: None,
                 zone_rgb_u32: None,
                 zone_rgbs: vec![0x778899],
+                full_zone_rgbs: vec![0x778899],
                 source_kind: None,
                 source_id: None,
             }],
@@ -289,5 +290,59 @@ mod tests {
         let filter = app.world().resource::<EvidenceZoneFilter>();
         assert!(filter.active);
         assert_eq!(filter.zone_rgbs, HashSet::from([0x112233, 0x778899]));
+    }
+
+    #[test]
+    fn sync_evidence_zone_filter_omits_partial_only_ranking_zones() {
+        let mut app = App::new();
+        app.init_resource::<PatchFilterState>()
+            .init_resource::<FishFilterState>()
+            .init_resource::<FishCatalog>()
+            .init_resource::<CommunityFishZoneSupportIndex>()
+            .init_resource::<EvidenceZoneFilter>();
+        app.insert_resource(EventsSnapshotState {
+            loaded: true,
+            events: vec![EventPointCompact {
+                event_id: 1,
+                fish_id: 240,
+                ts_utc: 100,
+                map_px_x: 0,
+                map_px_y: 0,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: Some(0x778899),
+                zone_rgbs: vec![0x778899],
+                full_zone_rgbs: Vec::new(),
+                source_kind: None,
+                source_id: None,
+            }],
+            ..EventsSnapshotState::default()
+        });
+        app.add_systems(Update, sync_evidence_zone_filter);
+
+        {
+            let mut fish_filter = app.world_mut().resource_mut::<FishFilterState>();
+            fish_filter.selected_fish_ids = vec![240];
+        }
+        {
+            let mut fish_catalog = app.world_mut().resource_mut::<FishCatalog>();
+            fish_catalog.replace(vec![FishEntry {
+                id: 240,
+                item_id: 820240,
+                encyclopedia_key: Some(240),
+                encyclopedia_id: Some(9240),
+                name: "Blobfish".to_string(),
+                name_lower: "blobfish".to_string(),
+                grade: Some("Rare".to_string()),
+                is_prize: false,
+            }]);
+        }
+
+        app.update();
+
+        let filter = app.world().resource::<EvidenceZoneFilter>();
+        assert!(filter.active);
+        assert!(filter.zone_rgbs.is_empty());
     }
 }
