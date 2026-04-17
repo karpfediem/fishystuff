@@ -383,9 +383,9 @@ fishymap-search-panel {
   right: 1rem;
   z-index: 18;
   width: min(30rem, calc(100vw - 2rem));
-  height: min(40rem, calc(100% - 10rem));
+  height: auto;
   max-height: calc(100% - 10rem);
-  min-height: min(35rem, calc(100% - 10rem));
+  min-height: min(40rem, calc(100% - 10rem));
 }
 
 #fishymap-zone-info-body {
@@ -1328,8 +1328,9 @@ fishymap-search-panel {
     bottom: 8.5rem;
     left: 0.75rem;
     width: auto;
-    height: min(28dvh, 20rem);
-    max-height: min(28dvh, 20rem);
+    height: auto;
+    max-height: min(55dvh, 34rem);
+    min-height: min(28dvh, 20rem);
   }
 
   #fishymap-layers-window {
