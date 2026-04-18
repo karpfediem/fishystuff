@@ -152,4 +152,4 @@ dev-watch-site:
 
 # Start the local dev servers except the API, for use with `just dev-watch-api`
 dev-up-no-api:
-  devenv up db jaeger otel-collector caddy
+  devenv up db jaeger otel-collector prometheus caddy

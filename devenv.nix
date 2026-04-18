@@ -8,10 +8,14 @@ let
   apiPort = 8080;
   otelCollectorHttpPort = 4818;
   otelCollectorHealthPort = 13133;
+  otelCollectorSpanmetricsPort = 8889;
   jaegerUiPort = 16686;
-  jaegerAdminPort = 14269;
+  jaegerQueryGrpcPort = 16685;
+  jaegerHealthPort = 14269;
+  jaegerMetricsPort = 8888;
   jaegerOtlpGrpcPort = 4317;
   jaegerOtlpHttpPort = 4318;
+  prometheusPort = 9090;
   cdnHost = "127.0.0.1";
   cdnPort = 4040;
   siteHost = "127.0.0.1";
@@ -27,6 +31,7 @@ let
     ];
   };
   jaegerLocal = pkgs.callPackage ./nix/packages/jaeger-local.nix { };
+  prometheusLocal = pkgs.callPackage ./nix/packages/prometheus-local.nix { };
 in {
   name = "default";
 
@@ -73,6 +78,7 @@ in {
       xxd
       linuxPackages.perf
       (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
+      prometheusLocal
     ];
 
   languages.python = {
@@ -126,6 +132,16 @@ in {
     FISHYSTUFF_DEV_API_PORT = toString apiPort;
     FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
     FISHYSTUFF_DEV_SITE_PORT = toString sitePort;
+    FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT = toString otelCollectorHttpPort;
+    FISHYSTUFF_DEV_OTEL_COLLECTOR_HEALTH_PORT = toString otelCollectorHealthPort;
+    FISHYSTUFF_DEV_OTEL_SPANMETRICS_PORT = toString otelCollectorSpanmetricsPort;
+    FISHYSTUFF_DEV_JAEGER_UI_PORT = toString jaegerUiPort;
+    FISHYSTUFF_DEV_JAEGER_QUERY_GRPC_PORT = toString jaegerQueryGrpcPort;
+    FISHYSTUFF_DEV_JAEGER_HEALTH_PORT = toString jaegerHealthPort;
+    FISHYSTUFF_DEV_JAEGER_METRICS_PORT = toString jaegerMetricsPort;
+    FISHYSTUFF_DEV_JAEGER_OTLP_GRPC_PORT = toString jaegerOtlpGrpcPort;
+    FISHYSTUFF_DEV_JAEGER_OTLP_HTTP_PORT = toString jaegerOtlpHttpPort;
+    FISHYSTUFF_DEV_PROMETHEUS_PORT = toString prometheusPort;
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
@@ -252,16 +268,13 @@ in {
   processes.jaeger = {
     cwd = config.devenv.root;
     exec = ''
-      exec env LOG_TS_LABEL=jaeger COLLECTOR_OTLP_ENABLED=true ${logTimestampRunner} \
-        ${jaegerLocal}/bin/jaeger-all-in-one \
-        --admin.http.host-port 127.0.0.1:${toString jaegerAdminPort} \
-        --query.http-server.host-port 127.0.0.1:${toString jaegerUiPort} \
-        --collector.otlp.grpc.host-port 127.0.0.1:${toString jaegerOtlpGrpcPort} \
-        --collector.otlp.http.host-port 127.0.0.1:${toString jaegerOtlpHttpPort}
+      exec env LOG_TS_LABEL=jaeger ${logTimestampRunner} \
+        ${jaegerLocal}/bin/jaeger \
+        --config ${config.devenv.root}/tools/telemetry/jaeger.local.yaml
     '';
     ready = {
       exec = ''
-        curl -fsS http://127.0.0.1:${toString jaegerAdminPort}/ >/dev/null
+        curl -fsS http://127.0.0.1:${toString jaegerHealthPort}/status >/dev/null
       '';
       success_threshold = 3;
       period = 1;
@@ -281,6 +294,29 @@ in {
     ready = {
       exec = ''
         curl -fsS http://127.0.0.1:${toString otelCollectorHealthPort}/ >/dev/null
+      '';
+      success_threshold = 3;
+      period = 1;
+      probe_timeout = 1;
+      timeout = 30;
+    };
+  };
+
+  processes.prometheus = {
+    cwd = config.devenv.root;
+    exec = ''
+      mkdir -p ${config.devenv.root}/data/prometheus
+      exec env LOG_TS_LABEL=prometheus ${logTimestampRunner} \
+        ${prometheusLocal}/bin/prometheus \
+        --config.file ${config.devenv.root}/tools/telemetry/prometheus.local.yaml \
+        --storage.tsdb.path ${config.devenv.root}/data/prometheus \
+        --storage.tsdb.retention.time 24h \
+        --web.listen-address 127.0.0.1:${toString prometheusPort}
+    '';
+    after = [ "devenv:processes:otel-collector" ];
+    ready = {
+      exec = ''
+        curl -fsS http://127.0.0.1:${toString prometheusPort}/-/ready >/dev/null
       '';
       success_threshold = 3;
       period = 1;

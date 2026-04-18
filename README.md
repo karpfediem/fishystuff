@@ -32,8 +32,9 @@ just up
 long-lived local servers:
 
 - `db` must become ready before `api`
-- `jaeger` serves the local trace UI on `127.0.0.1:16686`
-- `otel-collector` accepts browser OTLP/HTTP on `127.0.0.1:4818` and forwards to Jaeger
+- `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
+- `otel-collector` accepts browser OTLP/HTTP on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
+- `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
 Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
@@ -49,7 +50,7 @@ Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
 - `just dev-watch-builds`
   - one command for the map/CDN/site rebuild watchers; use it with a running `just up`
 - `just dev-watch-api`
-  - restart the API on source changes; use it with `just dev-up-no-api`, which keeps `db`, `jaeger`, `otel-collector`, and `caddy` running
+  - restart the API on source changes; use it with `just dev-up-no-api`, which keeps `db`, `jaeger`, `otel-collector`, `prometheus`, and `caddy` running
 
 If you want `devenv` to own the local rebuild/restart loop too, use the opt-in
 watch profile instead of the default stack:
@@ -91,12 +92,18 @@ just dev-build-site
 just up
 ```
 
-Then open `http://127.0.0.1:1990/` and `http://127.0.0.1:16686/`. The site
+Then open `http://127.0.0.1:1990/`, `http://127.0.0.1:16686/`, and optionally
+`http://127.0.0.1:9090/`. The site
 runtime emits browser fetch spans through the JS OpenTelemetry Web SDK and the
 API emits server/store spans directly from Rust. The static site uses direct
 absolute API and OTLP collector URLs from `site/.out/runtime-config.js`; there
 is no site-side trace proxy. Local API CORS and local OTLP receiver CORS must
 explicitly allow the site origin.
+
+Jaeger Service Performance Monitoring now uses Prometheus-backed RED metrics
+derived from the collector's `spanmetrics` connector. Expect the Monitor tab to
+remain empty until spans have been emitted and Prometheus has completed at least
+one scrape cycle.
 
 This tracing path is intentionally request-scoped. It does not stream
 high-frequency Bevy/WASM spans over the browser bridge. Continuous runtime
