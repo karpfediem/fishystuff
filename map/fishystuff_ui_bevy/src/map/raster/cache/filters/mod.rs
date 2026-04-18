@@ -39,16 +39,25 @@ impl RasterTileCache {
     pub(crate) fn sync_hover_highlights_only(
         &mut self,
         images: &mut Assets<Image>,
-        _commands: &mut Commands,
-        layer_registry: &LayerRegistry,
-        hover_zone_rgb: Option<u32>,
+        context: VisualFilterContext<'_>,
     ) {
         crate::perf_scope!("raster.sync_visual_filters");
         let previous_hover_zone_rgb = self.applied_hover_zone_rgb;
+        let VisualFilterContext {
+            layer_filters,
+            hover_zone_rgb,
+            layer_registry,
+            layer_runtime,
+            exact_lookups,
+            vector_runtime,
+            map_version,
+            view_mode,
+        } = context;
         if previous_hover_zone_rgb == hover_zone_rgb {
             return;
         }
 
+        // Hover-only updates only need to touch tiles that contain the old or new zone.
         for key in self.hovered_zone_transition_keys(previous_hover_zone_rgb, hover_zone_rgb) {
             let Some(spec) = layer_registry.get(key.layer) else {
                 continue;
@@ -66,20 +75,75 @@ impl RasterTileCache {
                 Some(source) => source,
                 None => continue,
             };
-            let zone_rows = match read_entry.zone_lookup_rows.as_ref() {
-                Some(zone_rows) => zone_rows,
-                None => continue,
+            let zone_rows = read_entry.zone_lookup_rows.as_ref();
+            let zone_rgbs = &read_entry.zone_rgbs;
+            let handle = read_entry.handle.clone();
+            let previous_hover_highlight_zone = read_entry.hover_highlight_zone;
+            let previous_filter_active = read_entry.filter_active;
+            let previous_filter_revision = read_entry.filter_revision;
+            let previous_pixel_filtered = read_entry.pixel_filtered;
+            let previous_clip_mask_layer = read_entry.clip_mask_layer;
+            let previous_clip_mask_revision = read_entry.clip_mask_revision;
+            let previous_clip_mask_applied = read_entry.clip_mask_applied;
+
+            let inactive_filter = ZoneMembershipFilter::default();
+            let filter = layer_filters
+                .zone_membership_filter(spec.key.as_str())
+                .unwrap_or(&inactive_filter);
+            let apply_texture_pick_filter = texture_pick_filter_enabled(spec, view_mode);
+            let next_filter_active = apply_texture_pick_filter && filter.active;
+            let next_filter_revision = if next_filter_active {
+                filter.revision
+            } else {
+                0
             };
-            let target_hover_zone = hover_zone_rgb.filter(|hover_rgb| {
-                read_entry
-                    .zone_rgbs
+            let force_exact_zone_mask_filter =
+                next_filter_active && spec.is_zone_mask_visual_layer();
+            let has_intersection = if force_exact_zone_mask_filter {
+                true
+            } else if next_filter_active {
+                zone_rgbs
                     .iter()
-                    .any(|zone_rgb| zone_rgb == hover_rgb)
-            });
-            if read_entry.hover_highlight_zone == target_hover_zone {
+                    .any(|zone_rgb| filter.zone_rgbs.contains(zone_rgb))
+            } else {
+                true
+            };
+            let all_selected = next_filter_active
+                && !force_exact_zone_mask_filter
+                && !zone_rgbs.is_empty()
+                && zone_rgbs
+                    .iter()
+                    .all(|zone_rgb| filter.zone_rgbs.contains(zone_rgb));
+            let target_hover_zone = if apply_texture_pick_filter {
+                if spec.is_zone_mask_visual_layer() {
+                    hover_zone_rgb
+                } else {
+                    hover_zone_rgb
+                        .filter(|hover_rgb| zone_rgbs.iter().any(|zone_rgb| zone_rgb == hover_rgb))
+                }
+            } else {
+                None
+            };
+            let requires_pixel_filter = force_exact_zone_mask_filter
+                || (has_intersection && next_filter_active && !all_selected);
+            let clip_mask_layer = layer_runtime.clip_mask_layer(key.layer);
+            let clip_mask_revision =
+                clip_mask_state_revision(layer_registry, layer_runtime, clip_mask_layer, filter);
+            let filter_state_same = previous_filter_active == next_filter_active
+                && previous_filter_revision == next_filter_revision;
+            let hover_state_same = previous_hover_highlight_zone == target_hover_zone;
+            let clip_state_same = previous_clip_mask_layer == clip_mask_layer
+                && previous_clip_mask_revision == clip_mask_revision
+                && previous_clip_mask_applied == clip_mask_layer.is_some();
+            if filter_state_same
+                && hover_state_same
+                && clip_state_same
+                && previous_pixel_filtered == requires_pixel_filter
+            {
                 continue;
             }
-            let Some(image) = images.get_mut(&read_entry.handle) else {
+
+            let Some(image) = images.get_mut(&handle) else {
                 continue;
             };
             let Some(image_data) = image.data.as_mut() else {
@@ -88,15 +152,63 @@ impl RasterTileCache {
             if image_data.len() != source.data.len() {
                 continue;
             }
-            update_hover_highlight_in_place(
-                source,
-                image_data,
-                zone_rows,
-                read_entry.hover_highlight_zone,
-                target_hover_zone,
-            );
+
+            let hover_only_fast_path = !next_filter_active
+                && !previous_filter_active
+                && !previous_pixel_filtered
+                && clip_mask_layer.is_none()
+                && !previous_clip_mask_applied
+                && zone_rows.is_some();
+
+            if hover_only_fast_path {
+                if let Some(zone_rows) = zone_rows {
+                    update_hover_highlight_in_place(
+                        source,
+                        image_data,
+                        zone_rows,
+                        previous_hover_highlight_zone,
+                        target_hover_zone,
+                    );
+                }
+            } else if !requires_pixel_filter
+                && target_hover_zone.is_none()
+                && clip_mask_layer.is_none()
+            {
+                if previous_pixel_filtered
+                    || previous_hover_highlight_zone.is_some()
+                    || previous_clip_mask_applied
+                {
+                    restore_rgba_in_place(source, image_data);
+                }
+            } else {
+                compose_raster_visuals_in_place(
+                    source,
+                    image_data,
+                    &RasterVisualComposeContext {
+                        key,
+                        layer: spec,
+                        filter,
+                        requires_pixel_filter,
+                        hover_zone_rgb: target_hover_zone,
+                        clip_mask_layer,
+                        layer_registry,
+                        layer_runtime,
+                        exact_lookups,
+                        tile_cache: self,
+                        vector_runtime,
+                        map_version,
+                    },
+                );
+            }
+
             if let Some(entry) = self.entries.get_mut(&key) {
+                entry.filter_active = next_filter_active;
+                entry.filter_revision = next_filter_revision;
+                entry.pixel_filtered = requires_pixel_filter;
                 entry.hover_highlight_zone = target_hover_zone;
+                entry.clip_mask_layer = clip_mask_layer;
+                entry.clip_mask_revision = clip_mask_revision;
+                entry.clip_mask_applied = clip_mask_layer.is_some();
             }
         }
 

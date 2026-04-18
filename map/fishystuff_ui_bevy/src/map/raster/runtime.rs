@@ -444,9 +444,6 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         && !view_mode_changed
         && view_mode.mode == ViewMode::Map2D
         && display_state_changed
-        && !layer_filters
-            .zone_membership_filter("zone_mask")
-            .is_some_and(|filter| filter.active)
         && cache.applied_hover_zone_rgb != display_state.hovered_zone_rgb;
     let should_sync_visual_filters = has_active_raster_clip_masks
         || loaded_changed
@@ -459,9 +456,16 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     if hover_only_visual_update {
         cache.sync_hover_highlights_only(
             images,
-            commands,
-            layer_registry,
-            display_state.hovered_zone_rgb,
+            VisualFilterContext {
+                layer_filters,
+                hover_zone_rgb: display_state.hovered_zone_rgb,
+                layer_registry,
+                layer_runtime,
+                exact_lookups,
+                vector_runtime,
+                map_version: bootstrap.map_version.as_deref(),
+                view_mode: view_mode.mode,
+            },
         );
     } else if should_sync_visual_filters {
         cache.sync_visual_filters(

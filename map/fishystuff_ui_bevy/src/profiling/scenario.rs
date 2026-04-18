@@ -1,13 +1,18 @@
 use bevy::prelude::World;
 use clap::ValueEnum;
 
+use crate::bridge::contract::{
+    FishyMapSearchExpressionNode, FishyMapSearchExpressionOperator, FishyMapSearchTerm,
+};
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::camera::terrain3d::Terrain3dViewState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::MapPoint;
-use crate::plugins::api::{FishFilterState, MapDisplayState};
+use crate::plugins::api::{
+    FishFilterState, LayerEffectiveFilterState, MapDisplayState, SearchExpressionState,
+};
 
 const MAP_MIN: f32 = 256.0;
 const MAP_MAX: f32 = 1792.0;
@@ -21,6 +26,8 @@ pub enum ScenarioName {
     Raster2dPanZoom,
     #[value(name = "points_overlay_filtering")]
     PointsOverlayFiltering,
+    #[value(name = "zone_mask_hover_filtering")]
+    ZoneMaskHoverFiltering,
     #[value(name = "vector_region_groups_enable")]
     VectorRegionGroupsEnable,
     #[value(name = "terrain3d_enter_and_orbit")]
@@ -35,6 +42,7 @@ impl ScenarioName {
             Self::LoadMap => "load_map",
             Self::Raster2dPanZoom => "raster_2d_pan_zoom",
             Self::PointsOverlayFiltering => "points_overlay_filtering",
+            Self::ZoneMaskHoverFiltering => "zone_mask_hover_filtering",
             Self::VectorRegionGroupsEnable => "vector_region_groups_enable",
             Self::Terrain3dEnterAndOrbit => "terrain3d_enter_and_orbit",
             Self::ModeSwitch2d3d2d => "mode_switch_2d_3d_2d",
@@ -46,6 +54,7 @@ impl ScenarioName {
             Self::LoadMap => 240,
             Self::Raster2dPanZoom => 600,
             Self::PointsOverlayFiltering => 600,
+            Self::ZoneMaskHoverFiltering => 600,
             Self::VectorRegionGroupsEnable => 480,
             Self::Terrain3dEnterAndOrbit => 540,
             Self::ModeSwitch2d3d2d => 540,
@@ -84,6 +93,12 @@ impl ScenarioName {
                     _ => &[101, 202],
                 };
                 set_selected_fish_ids(world, selected_fish_ids);
+            }
+            Self::ZoneMaskHoverFiltering => {
+                configure_common_layers(world, false, false);
+                set_map_2d_view(world, MAP_CENTER, MAP_CENTER, 1.0);
+                set_search_expression(world, broad_color_expression());
+                set_hovered_zone_from_effective_zone_mask_filter(world, frame / 30);
             }
             Self::VectorRegionGroupsEnable => {
                 configure_common_layers(world, false, true);
@@ -238,6 +253,49 @@ fn set_selected_fish_ids(world: &mut World, selected_fish_ids: &[i32]) {
         != selected_fish_ids
     {
         world.resource_mut::<FishFilterState>().selected_fish_ids = selected_fish_ids.to_vec();
+    }
+}
+
+fn set_search_expression(world: &mut World, expression: FishyMapSearchExpressionNode) {
+    if world.resource::<SearchExpressionState>().expression != expression {
+        world.resource_mut::<SearchExpressionState>().expression = expression;
+    }
+}
+
+fn set_hovered_zone_from_effective_zone_mask_filter(world: &mut World, step: u64) {
+    let zone_rgbs = world
+        .resource::<LayerEffectiveFilterState>()
+        .zone_membership_filter("zone_mask")
+        .filter(|filter| filter.active && !filter.zone_rgbs.is_empty())
+        .map(|filter| {
+            let mut zone_rgbs = filter.zone_rgbs.iter().copied().collect::<Vec<_>>();
+            zone_rgbs.sort_unstable();
+            zone_rgbs
+        })
+        .unwrap_or_default();
+    let hovered_zone_rgb = if zone_rgbs.is_empty() {
+        None
+    } else {
+        Some(zone_rgbs[step as usize % zone_rgbs.len()])
+    };
+    if world.resource::<MapDisplayState>().hovered_zone_rgb != hovered_zone_rgb {
+        world.resource_mut::<MapDisplayState>().hovered_zone_rgb = hovered_zone_rgb;
+    }
+}
+
+fn broad_color_expression() -> FishyMapSearchExpressionNode {
+    FishyMapSearchExpressionNode::Group {
+        operator: FishyMapSearchExpressionOperator::Or,
+        children: ["red", "yellow", "blue", "green", "white"]
+            .into_iter()
+            .map(|term| FishyMapSearchExpressionNode::Term {
+                term: FishyMapSearchTerm::FishFilter {
+                    term: term.to_string(),
+                },
+                negated: false,
+            })
+            .collect(),
+        negated: false,
     }
 }
 
