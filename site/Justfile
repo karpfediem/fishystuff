@@ -15,6 +15,7 @@ build-release-no-tailwind:
     fi; \
     bun run datastar:build; \
     bun run d3:build; \
+    bun run otel:build; \
     bun run images:build; \
     zine release --output "$build_dir"; \
     FISHYSTUFF_WEB_FONT_OUTPUT_ROOT="$build_dir/css/fonts" bash ./scripts/build-web-fonts.sh; \
