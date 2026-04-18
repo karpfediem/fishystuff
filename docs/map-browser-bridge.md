@@ -218,6 +218,15 @@ Examples:
 ## Future Performance Follow-up
 
 - Fish icons currently work by resolving `fish_id -> item_id -> CDN image URL` and then fetching/decoding individual PNGs inside Bevy WASM.
+
+## Browser Request Tracing
+
+- Local distributed tracing is request-scoped, not frame-scoped.
+- The browser host uses the JS OpenTelemetry Web SDK to instrument `fetch` and export to a same-origin `/otel/v1/traces` endpoint.
+- The API emits request and store spans directly from Rust and propagates W3C trace context headers.
+- `site/.out/runtime-config.js` is authoritative for whether browser tracing is enabled and which local endpoints it uses.
+- The local site origin proxies `/api/*` and `/otel/*` so trace headers do not force cross-origin preflights during measurement.
+- Bevy WASM does not stream `tracing` events into JS/OTEL continuously. If we need continuous runtime telemetry later, it must be a separate Rust-side bounded batch path designed around the browser bridge as a scarce bus.
 - This is correct but not ideal for web performance because WASM image decode work still runs on the single browser/WASM thread.
 - If icon load cost becomes a problem again, replace the per-icon remote image pipeline with one CDN-served fish icon atlas plus a small manifest keyed by `item_id`.
 - Target shape:

@@ -32,6 +32,8 @@ just up
 long-lived local servers:
 
 - `db` must become ready before `api`
+- `jaeger` serves the local trace UI on `127.0.0.1:16686`
+- `otel-collector` accepts browser OTLP/HTTP on `127.0.0.1:4818` and forwards to Jaeger
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
 Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
@@ -66,6 +68,25 @@ just watch
 The site build still emits `.out/runtime-config.js` from the current
 environment. That file is the single local-development source of truth for the
 site/API/CDN base URLs consumed by the browser host and Bevy runtime.
+
+For browser request tracing in local development, the supported path is:
+
+```bash
+devenv shell
+just dev-build-site
+just up
+```
+
+Then open `http://127.0.0.1:1990/` and `http://127.0.0.1:16686/`. The site
+runtime emits browser fetch spans through the JS OpenTelemetry Web SDK and the
+API emits server/store spans directly from Rust. The local site origin proxies
+both `/api/*` and `/otel/*`, so the browser stays same-origin and avoids
+trace-header preflights skewing request timings.
+
+This tracing path is intentionally request-scoped. It does not stream
+high-frequency Bevy/WASM spans over the browser bridge. Continuous runtime
+profiling should continue to use the existing browser/native profiling harnesses
+under `tools/scripts/`.
 
 The API uses a strict explicit CORS allowlist. Production origins are declared
 in [api/config.toml](/home/carp/code/fishystuff/api/config.toml), and `devenv`

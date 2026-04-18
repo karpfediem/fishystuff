@@ -209,6 +209,28 @@
       }));
     })();
   </script>
+  <script>
+    (function () {
+      var runtimeConfig = window.__fishystuffRuntimeConfig || {};
+      var tracing = runtimeConfig.tracing || {};
+      var params = new URLSearchParams(window.location.search || '');
+      var override = String(params.get('trace') || '').trim().toLowerCase();
+      var enabled = !!tracing.enabled;
+      if (override === '1' || override === 'true' || override === 'yes' || override === 'on') {
+        enabled = true;
+      } else if (override === '0' || override === 'false' || override === 'no' || override === 'off') {
+        enabled = false;
+      }
+      if (!enabled || !String(tracing.exporterEndpoint || '').trim()) {
+        return;
+      }
+      var script = document.createElement('script');
+      script.type = 'module';
+      script.src = "$site.asset('js/otel.js').link()";
+      script.dataset.fishystuffTelemetry = 'otel';
+      document.head.appendChild(script);
+    })();
+  </script>
 
   <script type="module" src="$site.asset('js/components/registry.js').link()"></script>
   <script src="$site.asset('js/theme.js').link()"></script>

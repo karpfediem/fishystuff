@@ -42,6 +42,34 @@ function normalizeBaseUrl(value) {
   return normalized.replace(/\/+$/, "");
 }
 
+function normalizeFlag(value, fallback = false) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function normalizeFloat(value, fallback) {
+  const numeric = Number.parseFloat(String(value ?? "").trim());
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  if (numeric <= 0) {
+    return 0;
+  }
+  if (numeric >= 1) {
+    return 1;
+  }
+  return numeric;
+}
+
 function normalizeCacheKey(value) {
   const normalized = String(value ?? "").trim();
   return normalized || "";
@@ -62,6 +90,21 @@ async function main() {
     cdnBaseUrl:
       normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_CDN_BASE_URL) || "https://cdn.fishystuff.fish",
     mapAssetCacheKey: normalizeCacheKey(process.env.FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY),
+    tracing: {
+      enabled: normalizeFlag(process.env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false),
+      debug: normalizeFlag(process.env.FISHYSTUFF_RUNTIME_OTEL_DEBUG, false),
+      serviceName:
+        String(process.env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME ?? "").trim() || "fishystuff-site",
+      deploymentEnvironment:
+        String(process.env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT ?? "").trim()
+        || "production",
+      serviceVersion:
+        String(process.env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
+      exporterEndpoint:
+        String(process.env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT ?? "").trim(),
+      jaegerUiUrl: normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL),
+      sampleRatio: normalizeFloat(process.env.FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO, 0.25),
+    },
   };
 
   const outPath = path.resolve(process.cwd(), args.out);

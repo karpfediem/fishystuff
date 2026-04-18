@@ -1,11 +1,16 @@
+use axum::extract::MatchedPath;
 use axum::http::{header, HeaderName, HeaderValue, Method, Request};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::Router;
+use opentelemetry::global;
+use opentelemetry::propagation::Extractor;
+use opentelemetry::trace::TraceContextExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tower_http::trace::TraceLayer;
+use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
 use crate::routes;
@@ -75,14 +80,20 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/readyz", get(routes::meta::readyz))
         .nest("/api/v1", api)
         .with_state(state)
+        .layer(middleware::from_fn(request_trace_middleware))
         .layer(middleware::from_fn(request_id_middleware))
         .layer(cors)
         .layer(CompressionLayer::new())
-        .layer(TraceLayer::new_for_http())
 }
 
 fn build_cors_layer(cors_allowed_origins: &[String]) -> CorsLayer {
     let datastar_request = HeaderName::from_static("datastar-request");
+    let traceparent = HeaderName::from_static("traceparent");
+    let tracestate = HeaderName::from_static("tracestate");
+    let baggage = HeaderName::from_static("baggage");
+    let x_trace_id = HeaderName::from_static("x-trace-id");
+    let x_span_id = HeaderName::from_static("x-span-id");
+    let x_request_id = HeaderName::from_static("x-request-id");
     let allowed_origins = cors_allowed_origins
         .iter()
         .filter_map(|origin| HeaderValue::from_str(origin).ok())
@@ -92,7 +103,27 @@ fn build_cors_layer(cors_allowed_origins: &[String]) -> CorsLayer {
     CorsLayer::new()
         .allow_origin(allowed_origins)
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([header::ACCEPT, header::CONTENT_TYPE, datastar_request])
+        .allow_headers([
+            header::ACCEPT,
+            header::CONTENT_TYPE,
+            datastar_request,
+            traceparent,
+            tracestate,
+            baggage,
+        ])
+        .expose_headers([x_request_id, x_trace_id, x_span_id])
+}
+
+struct AxumHeaderExtractor<'a>(&'a axum::http::HeaderMap);
+
+impl Extractor for AxumHeaderExtractor<'_> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|value| value.to_str().ok())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.keys().map(HeaderName::as_str).collect()
+    }
 }
 
 #[cfg(test)]
@@ -113,7 +144,7 @@ mod tests {
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
 
-    use crate::config::{AppConfig, ZoneStatusConfig};
+    use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::state::AppState;
     use crate::store::{FishLang, Store};
 
@@ -274,6 +305,7 @@ mod tests {
             cache_effort_max: 4,
             cache_log: false,
             request_timeout_secs: 5,
+            telemetry: TelemetryConfig::default(),
         }
     }
 
@@ -393,6 +425,58 @@ async fn request_id_middleware<B>(mut request: Request<B>, next: Next<B>) -> Res
             header::HeaderName::from_static("x-request-id"),
             header_value,
         );
+    }
+
+    response
+}
+
+async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Response {
+    let parent_context = global::get_text_map_propagator(|propagator| {
+        propagator.extract(&AxumHeaderExtractor(request.headers()))
+    });
+    let method = request.method().clone();
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(MatchedPath::as_str)
+        .unwrap_or_else(|| request.uri().path())
+        .to_string();
+    let span = tracing::info_span!(
+        "http.request",
+        otel.kind = "server",
+        http.request.method = %method,
+        http.route = %route,
+        request.id = tracing::field::Empty,
+        http.response.status_code = tracing::field::Empty,
+    );
+    let _ = span.set_parent(parent_context);
+
+    let mut response = next.run(request).instrument(span.clone()).await;
+    if let Some(request_id) = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty())
+    {
+        span.record("request.id", tracing::field::display(request_id));
+    }
+    span.record(
+        "http.response.status_code",
+        tracing::field::display(response.status().as_u16()),
+    );
+
+    let span_context = span.context().span().span_context().clone();
+    if span_context.is_valid() {
+        if let Ok(trace_id) = HeaderValue::from_str(&span_context.trace_id().to_string()) {
+            response
+                .headers_mut()
+                .insert(HeaderName::from_static("x-trace-id"), trace_id);
+        }
+        if let Ok(span_id) = HeaderValue::from_str(&span_context.span_id().to_string()) {
+            response
+                .headers_mut()
+                .insert(HeaderName::from_static("x-span-id"), span_id);
+        }
     }
 
     response

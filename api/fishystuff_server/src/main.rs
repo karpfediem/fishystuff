@@ -7,10 +7,113 @@ mod store;
 
 use anyhow::{Context, Result};
 use std::time::Duration;
+use tracing::{info, warn};
+
+mod telemetry {
+    use std::time::Duration;
+
+    use anyhow::{Context, Result};
+    use opentelemetry::global;
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry::KeyValue;
+    use opentelemetry_otlp::WithExportConfig;
+    use opentelemetry_sdk::propagation::TraceContextPropagator;
+    use opentelemetry_sdk::trace::{
+        BatchConfigBuilder, BatchSpanProcessor, Sampler, SdkTracerProvider,
+    };
+    use opentelemetry_sdk::Resource;
+    use tracing::Level;
+    use tracing_subscriber::filter::Targets;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::Layer;
+
+    use crate::config::TelemetryConfig;
+
+    pub struct TelemetryHandle {
+        tracer_provider: Option<SdkTracerProvider>,
+    }
+
+    impl TelemetryHandle {
+        pub fn shutdown(self) {
+            if let Some(tracer_provider) = self.tracer_provider {
+                let _ = tracer_provider.shutdown();
+            }
+        }
+    }
+
+    pub fn init(config: &TelemetryConfig) -> Result<TelemetryHandle> {
+        global::set_text_map_propagator(TraceContextPropagator::new());
+
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_target(false)
+            .with_ansi(false)
+            .without_time()
+            .compact();
+        let targets = Targets::new()
+            .with_target("fishystuff_server", Level::TRACE)
+            .with_default(Level::WARN);
+
+        let tracer_provider = if config.enabled && !config.otlp_traces_endpoint.is_empty() {
+            Some(build_tracer_provider(config)?)
+        } else {
+            None
+        };
+
+        let otel_layer = tracer_provider.as_ref().map(|provider| {
+            tracing_opentelemetry::layer()
+                .with_tracer(provider.tracer(config.service_name.clone()))
+                .with_filter(targets.clone())
+        });
+
+        tracing_subscriber::registry()
+            .with(fmt_layer.with_filter(targets))
+            .with(otel_layer)
+            .try_init()
+            .context("initialize tracing subscriber")?;
+
+        Ok(TelemetryHandle { tracer_provider })
+    }
+
+    fn build_tracer_provider(config: &TelemetryConfig) -> Result<SdkTracerProvider> {
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_endpoint(config.otlp_traces_endpoint.clone())
+            .with_timeout(Duration::from_secs(4))
+            .build()
+            .context("build OTLP trace exporter")?;
+
+        let span_processor = BatchSpanProcessor::builder(exporter)
+            .with_batch_config(
+                BatchConfigBuilder::default()
+                    .with_max_queue_size(512)
+                    .with_max_export_batch_size(32)
+                    .with_scheduled_delay(Duration::from_millis(250))
+                    .build(),
+            )
+            .build();
+
+        let resource = Resource::builder_empty()
+            .with_attributes([
+                KeyValue::new("service.name", config.service_name.clone()),
+                KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+            ])
+            .build();
+
+        Ok(SdkTracerProvider::builder()
+            .with_resource(resource)
+            .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
+                config.sample_ratio,
+            ))))
+            .with_span_processor(span_processor)
+            .build())
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = config::AppConfig::parse()?;
+    let telemetry = telemetry::init(&config.telemetry)?;
     let bind = config.bind.clone();
     let state = state::AppState::new(config)?;
     let startup_store = state.store.clone();
@@ -28,7 +131,7 @@ async fn main() -> Result<()> {
             }
         }
         if let Some(err) = last_err {
-            eprintln!("startup cache prewarm failed after retries: {:?}", err);
+            warn!(error = ?err, "startup cache prewarm failed after retries");
         }
     });
     let app = app::build_router(state);
@@ -36,12 +139,14 @@ async fn main() -> Result<()> {
     let addr = bind
         .parse()
         .with_context(|| format!("invalid bind address {bind}"))?;
-    println!("fishystuff_server listening on {}", addr);
+    info!(%addr, "fishystuff_server listening");
 
-    axum::Server::bind(&addr)
+    let serve_result = axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
-        .context("serve axum")?;
+        .context("serve axum");
 
-    Ok(())
+    telemetry.shutdown();
+
+    serve_result
 }

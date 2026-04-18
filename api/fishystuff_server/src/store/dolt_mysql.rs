@@ -48,6 +48,7 @@ use fishystuff_core::tile::tile_dimensions;
 use mysql::prelude::Queryable;
 use mysql::OptsBuilder;
 use mysql::{Opts, Pool, PoolConstraints, PoolOpts, Row};
+use tracing::instrument;
 
 use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
@@ -1660,6 +1661,7 @@ fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
 
 #[async_trait]
 impl Store for DoltMySqlStore {
+    #[instrument(name = "store.prime_startup_caches", skip_all)]
     async fn prime_startup_caches(&self) -> AppResult<()> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1672,6 +1674,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.get_meta", skip_all)]
     async fn get_meta(&self) -> AppResult<MetaResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1692,6 +1695,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.get_region_groups", skip_all)]
     async fn get_region_groups(
         &self,
         map_version_id: Option<String>,
@@ -1718,6 +1722,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.list_fish", skip_all)]
     async fn list_fish(
         &self,
         lang: FishLang,
@@ -1767,6 +1772,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.fish_best_spots", skip_all)]
     async fn fish_best_spots(
         &self,
         lang: FishLang,
@@ -1781,6 +1787,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.community_fish_zone_support", skip_all)]
     async fn community_fish_zone_support(
         &self,
         ref_id: Option<String>,
@@ -1793,6 +1800,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.calculator_catalog", skip_all)]
     async fn calculator_catalog(
         &self,
         lang: FishLang,
@@ -1804,6 +1812,7 @@ impl Store for DoltMySqlStore {
             .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.calculator_zone_loot", skip_all)]
     async fn calculator_zone_loot(
         &self,
         lang: FishLang,
@@ -1818,6 +1827,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.list_zones", skip_all)]
     async fn list_zones(&self, ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || this.query_zones(ref_id.as_deref()))
@@ -1825,6 +1835,7 @@ impl Store for DoltMySqlStore {
             .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.zone_stats", skip_all)]
     async fn zone_stats(
         &self,
         request: ZoneStatsRequest,
@@ -1880,6 +1891,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.zone_profile_v2", skip_all)]
     async fn zone_profile_v2(
         &self,
         request: ZoneProfileV2Request,
@@ -1891,6 +1903,7 @@ impl Store for DoltMySqlStore {
             .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.effort_grid", skip_all)]
     async fn effort_grid(&self, request: EffortGridRequest) -> AppResult<EffortGridResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1912,6 +1925,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.events_snapshot_meta", skip_all)]
     async fn events_snapshot_meta(&self) -> AppResult<EventsSnapshotMetaResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || this.query_events_snapshot_meta())
@@ -1919,6 +1933,7 @@ impl Store for DoltMySqlStore {
             .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.events_snapshot", skip_all)]
     async fn events_snapshot(
         &self,
         requested_revision: Option<String>,
@@ -1946,6 +1961,7 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    #[instrument(name = "store.healthcheck", skip_all)]
     async fn healthcheck(&self) -> AppResult<()> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {

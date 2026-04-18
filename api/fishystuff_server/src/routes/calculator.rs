@@ -8404,7 +8404,7 @@ mod tests {
     use hyper::body::to_bytes;
     use serde_json::{json, Value};
 
-    use crate::config::{AppConfig, ZoneStatusConfig};
+    use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::error::AppResult;
     use crate::state::{AppState, RequestId};
     use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang, Store};
@@ -8711,6 +8711,7 @@ mod tests {
             cache_effort_max: 4,
             cache_log: false,
             request_timeout_secs: 5,
+            telemetry: TelemetryConfig::default(),
         };
         AppState::for_tests(config, Arc::new(MockStore))
     }

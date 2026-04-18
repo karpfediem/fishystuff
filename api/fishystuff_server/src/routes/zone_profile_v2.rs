@@ -51,7 +51,7 @@ mod tests {
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
 
-    use crate::config::{AppConfig, ZoneStatusConfig};
+    use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::error::AppResult;
     use crate::state::{AppState, RequestId};
     use crate::store::{FishLang, Store};
@@ -195,6 +195,7 @@ mod tests {
             cache_effort_max: 4,
             cache_log: false,
             request_timeout_secs: 5,
+            telemetry: TelemetryConfig::default(),
         };
         AppState::for_tests(config, Arc::new(MockStore))
     }

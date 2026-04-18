@@ -18,7 +18,7 @@ devenv.local.nix
 .direnv
 
 # nix
-result
+result*
 
 # pre-commit
 .pre-commit-config.yaml
@@ -29,6 +29,8 @@ target
 # zine
 public
 site/assets/js/datastar.js
+site/assets/js/otel.js
+site/.tmp-otel-build/
 
 .env
 config.yaml

@@ -30,6 +30,25 @@ impl Default for ZoneStatusConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct TelemetryConfig {
+    pub enabled: bool,
+    pub service_name: String,
+    pub otlp_traces_endpoint: String,
+    pub sample_ratio: f64,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            service_name: "fishystuff-api".to_string(),
+            otlp_traces_endpoint: String::new(),
+            sample_ratio: 0.25,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     pub bind: String,
     pub database_url: String,
@@ -41,6 +60,7 @@ pub struct AppConfig {
     pub cache_effort_max: usize,
     pub cache_log: bool,
     pub request_timeout_secs: u64,
+    pub telemetry: TelemetryConfig,
 }
 
 impl AppConfig {
@@ -113,6 +133,20 @@ impl AppConfig {
         let mut cache_effort_max = fs_config.server_cache.effort_grid_max_entries.unwrap_or(16);
         let mut cache_log = fs_config.server_cache.log.unwrap_or(false);
         let mut request_timeout_secs = 15u64;
+        let telemetry = TelemetryConfig {
+            enabled: parse_env_flag("FISHYSTUFF_OTEL_ENABLED", false),
+            service_name: std::env::var("FISHYSTUFF_OTEL_SERVICE_NAME")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "fishystuff-api".to_string()),
+            otlp_traces_endpoint: std::env::var("FISHYSTUFF_OTEL_TRACES_ENDPOINT")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_default(),
+            sample_ratio: parse_env_f64("FISHYSTUFF_OTEL_SAMPLE_RATIO", 0.25).clamp(0.0, 1.0),
+        };
 
         let mut i = 0usize;
         while i < args.len() {
@@ -229,6 +263,7 @@ impl AppConfig {
             cache_effort_max,
             cache_log,
             request_timeout_secs,
+            telemetry,
         })
     }
 }
@@ -265,6 +300,24 @@ fn normalize_origin(value: &str) -> Option<String> {
         return None;
     }
     Some(format!("{scheme}://{rest}"))
+}
+
+fn parse_env_flag(name: &str, fallback: bool) -> bool {
+    let Some(value) = std::env::var(name).ok() else {
+        return fallback;
+    };
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => true,
+        "0" | "false" | "no" | "off" => false,
+        _ => fallback,
+    }
+}
+
+fn parse_env_f64(name: &str, fallback: f64) -> f64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .unwrap_or(fallback)
 }
 
 #[cfg(test)]

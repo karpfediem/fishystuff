@@ -6,6 +6,12 @@ let
   dbName = "fishystuff";
   apiHost = "127.0.0.1";
   apiPort = 8080;
+  otelCollectorHttpPort = 4818;
+  otelCollectorHealthPort = 13133;
+  jaegerUiPort = 16686;
+  jaegerAdminPort = 14269;
+  jaegerOtlpGrpcPort = 4317;
+  jaegerOtlpHttpPort = 4318;
   cdnHost = "127.0.0.1";
   cdnPort = 4040;
   siteHost = "127.0.0.1";
@@ -20,6 +26,7 @@ let
       pkgs.stdenv.cc
     ];
   };
+  jaegerLocal = pkgs.callPackage ./nix/packages/jaeger-local.nix { };
 in {
   name = "default";
 
@@ -46,11 +53,13 @@ in {
       libxkbfile
       lsof
       mesa
+      opentelemetry-collector-contrib
       rsync
       skopeo
       xlsx2csv
       clang
       chromium
+      jaegerLocal
       mariadb
       python3Packages.fonttools
       valgrind
@@ -117,9 +126,16 @@ in {
     FISHYSTUFF_DEV_API_PORT = toString apiPort;
     FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
     FISHYSTUFF_DEV_SITE_PORT = toString sitePort;
-    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
+    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${siteHost}:${toString sitePort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED = "true";
+    FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME = "fishystuff-site-local";
+    FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT = "local";
+    FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION = "dev";
+    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT = "/otel/v1/traces";
+    FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL = "http://${siteHost}:${toString jaegerUiPort}";
+    FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO = "0.25";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
       pkgs.libX11
       pkgs.libXcursor
@@ -138,12 +154,32 @@ in {
   services.caddy = {
     enable = true;
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
+      @api path /api/*
+      handle @api {
+        reverse_proxy ${apiHost}:${toString apiPort}
+      }
+
+      handle /otel/* {
+        uri strip_prefix /otel
+        reverse_proxy 127.0.0.1:${toString otelCollectorHttpPort}
+      }
+
       root * ${config.devenv.root}/site/.out
       header Cache-Control "no-store"
       try_files {path} {path}.html {path}/index.html =404
       file_server
     '';
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
+      @api path /api/*
+      handle @api {
+        reverse_proxy ${apiHost}:${toString apiPort}
+      }
+
+      handle /otel/* {
+        uri strip_prefix /otel
+        reverse_proxy 127.0.0.1:${toString otelCollectorHttpPort}
+      }
+
       root * ${config.devenv.root}/site/.out
       header Cache-Control "no-store"
       try_files {path} {path}.html {path}/index.html =404
@@ -217,17 +253,55 @@ in {
   processes.api = {
     cwd = config.devenv.root;
     exec = ''
-      exec env LOG_TS_LABEL=api ${logTimestampRunner} \
-        cargo run --manifest-path ${config.devenv.root}/Cargo.toml -p fishystuff_server -- \
-        --config ${config.devenv.root}/api/config.toml \
-        --bind ${apiHost}:${toString apiPort}
+      exec env API_BIND_HOST=${apiHost} API_PORT=${toString apiPort} \
+        ${config.devenv.root}/tools/scripts/run_api.sh
     '';
-    after = [ "devenv:processes:db" ];
+    after = [ "devenv:processes:db" "devenv:processes:otel-collector" ];
     ready = {
       exec = ''
         curl -fsS http://${apiHost}:${toString apiPort}/api/v1/meta >/dev/null
       '';
       initial_delay = 1;
+      period = 1;
+      probe_timeout = 1;
+      timeout = 30;
+    };
+  };
+
+  processes.jaeger = {
+    cwd = config.devenv.root;
+    exec = ''
+      exec env LOG_TS_LABEL=jaeger COLLECTOR_OTLP_ENABLED=true ${logTimestampRunner} \
+        ${jaegerLocal}/bin/jaeger-all-in-one \
+        --admin.http.host-port 127.0.0.1:${toString jaegerAdminPort} \
+        --query.http-server.host-port 127.0.0.1:${toString jaegerUiPort} \
+        --collector.otlp.grpc.host-port 127.0.0.1:${toString jaegerOtlpGrpcPort} \
+        --collector.otlp.http.host-port 127.0.0.1:${toString jaegerOtlpHttpPort}
+    '';
+    ready = {
+      exec = ''
+        curl -fsS http://127.0.0.1:${toString jaegerAdminPort}/ >/dev/null
+      '';
+      success_threshold = 3;
+      period = 1;
+      probe_timeout = 1;
+      timeout = 30;
+    };
+  };
+
+  processes.otel-collector = {
+    cwd = config.devenv.root;
+    exec = ''
+      exec env LOG_TS_LABEL=otelcol ${logTimestampRunner} \
+        ${pkgs.opentelemetry-collector-contrib}/bin/otelcol-contrib \
+        --config ${config.devenv.root}/tools/telemetry/otel-collector.local.yaml
+    '';
+    after = [ "devenv:processes:jaeger" ];
+    ready = {
+      exec = ''
+        curl -fsS http://127.0.0.1:${toString otelCollectorHealthPort}/ >/dev/null
+      '';
+      success_threshold = 3;
       period = 1;
       probe_timeout = 1;
       timeout = 30;
@@ -296,6 +370,7 @@ in {
           ignore = [
             "site/assets/js/datastar.js"
             "site/assets/js/d3.js"
+            "site/assets/js/otel.js"
             "site/assets/img/icons.svg"
             "site/assets/img/guides/*-320.webp"
             "site/assets/img/guides/*-640.webp"

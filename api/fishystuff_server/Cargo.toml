@@ -19,10 +19,16 @@ fishystuff_config = { path = "../../lib/fishystuff_config" }
 fishystuff_core = { path = "../../lib/fishystuff_core" }
 fuzzy-matcher = "0.3.7"
 mysql = { workspace = true }
+opentelemetry = "0.31"
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"] }
+opentelemetry_sdk = { version = "0.31", default-features = false, features = ["trace"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-tower-http = { version = "0.4", features = ["compression-br", "compression-gzip", "cors", "trace"] }
+tower-http = { version = "0.4", features = ["compression-br", "compression-gzip", "cors"] }
+tracing = "0.1"
+tracing-opentelemetry = "0.32"
+tracing-subscriber = { version = "0.3", features = ["fmt", "registry"] }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
