@@ -1,0 +1,40 @@
+apiVersion: 1
+
+prune: true
+
+datasources:
+  - name: Loki
+    uid: fishystuff-loki
+    type: loki
+    access: proxy
+    url: http://127.0.0.1:${FISHYSTUFF_DEV_LOKI_HTTP_PORT}
+    isDefault: true
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: fishystuff-jaeger
+          matcherRegex: '"trace_id":"([A-Fa-f0-9]+)"'
+          name: trace_id
+          url: '$${__value.raw}'
+          urlDisplayLabel: View trace
+
+  - name: Prometheus
+    uid: fishystuff-prometheus
+    type: prometheus
+    access: proxy
+    url: http://127.0.0.1:${FISHYSTUFF_DEV_PROMETHEUS_PORT}
+    editable: false
+    jsonData:
+      httpMethod: POST
+      prometheusType: Prometheus
+
+  - name: Jaeger
+    uid: fishystuff-jaeger
+    type: jaeger
+    access: proxy
+    url: http://127.0.0.1:${FISHYSTUFF_DEV_JAEGER_UI_PORT}
+    editable: false
+    jsonData:
+      nodeGraph:
+        enabled: true

@@ -22,6 +22,7 @@ let
   jaegerOtlpGrpcPort = 4317;
   jaegerOtlpHttpPort = 4318;
   prometheusPort = 9090;
+  grafanaPort = 3000;
   cdnHost = "127.0.0.1";
   cdnPort = 4040;
   siteHost = "127.0.0.1";
@@ -64,6 +65,7 @@ in {
       libxkbfile
       lsof
       mesa
+      grafana
       grafana-loki
       opentelemetry-collector-contrib
       vector
@@ -156,6 +158,7 @@ in {
     FISHYSTUFF_DEV_JAEGER_OTLP_GRPC_PORT = toString jaegerOtlpGrpcPort;
     FISHYSTUFF_DEV_JAEGER_OTLP_HTTP_PORT = toString jaegerOtlpHttpPort;
     FISHYSTUFF_DEV_PROMETHEUS_PORT = toString prometheusPort;
+    FISHYSTUFF_DEV_GRAFANA_PORT = toString grafanaPort;
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
@@ -359,6 +362,48 @@ in {
         --web.listen-address 127.0.0.1:${toString prometheusPort}
     '';
     after = [ "devenv:processes:otel-collector@started" ];
+  };
+
+  processes.grafana = {
+    cwd = config.devenv.root;
+    exec = ''
+      mkdir -p ${config.devenv.root}/data/grafana
+
+      if [ -x ${pkgs.grafana}/bin/grafana-server ]; then
+        exec env LOG_TS_LABEL=grafana LOG_TS_FILE=${config.devenv.root}/data/vector/process/grafana.log \
+          GF_SERVER_HTTP_ADDR=127.0.0.1 \
+          GF_SERVER_HTTP_PORT=${toString grafanaPort} \
+          GF_PATHS_DATA=${config.devenv.root}/data/grafana \
+          GF_PATHS_PROVISIONING=${config.devenv.root}/tools/telemetry/grafana/provisioning \
+          GF_AUTH_ANONYMOUS_ENABLED=true \
+          GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
+          GF_AUTH_DISABLE_LOGIN_FORM=true \
+          ${logTimestampRunner} \
+          ${pkgs.grafana}/bin/grafana-server \
+          --homepath ${pkgs.grafana}/share/grafana \
+          --config ${config.devenv.root}/tools/telemetry/grafana.local.ini
+      fi
+
+      exec env LOG_TS_LABEL=grafana LOG_TS_FILE=${config.devenv.root}/data/vector/process/grafana.log \
+        GF_SERVER_HTTP_ADDR=127.0.0.1 \
+        GF_SERVER_HTTP_PORT=${toString grafanaPort} \
+        GF_PATHS_DATA=${config.devenv.root}/data/grafana \
+        GF_PATHS_PROVISIONING=${config.devenv.root}/tools/telemetry/grafana/provisioning \
+        GF_AUTH_ANONYMOUS_ENABLED=true \
+        GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
+        GF_AUTH_DISABLE_LOGIN_FORM=true \
+        ${logTimestampRunner} \
+        ${pkgs.grafana}/bin/grafana \
+        server \
+        --homepath ${pkgs.grafana}/share/grafana \
+        --config ${config.devenv.root}/tools/telemetry/grafana.local.ini
+    '';
+    after = [
+      "devenv:processes:jaeger@started"
+      "devenv:processes:loki@started"
+      "devenv:processes:prometheus@started"
+      "devenv:processes:vector@started"
+    ];
   };
 
   profiles.watch.module = {
