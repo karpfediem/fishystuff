@@ -230,21 +230,15 @@ in {
     '';
   };
 
+  # Keep the local stack on plain process supervision. The inner devenv task
+  # runner's readiness probes flap under process-compose and restart healthy
+  # services mid-query.
   processes.db = {
     cwd = config.devenv.root;
     exec = ''
       exec env LOG_TS_LABEL=db ${logTimestampRunner} \
         dolt sql-server --host ${dbHost} --port ${toString dbPort}
     '';
-    ready = {
-      exec = ''
-        mysql --protocol tcp --host ${dbHost} --port ${toString dbPort} --user ${dbUser} ${dbName} --execute "select 1" >/dev/null
-      '';
-      success_threshold = 3;
-      period = 1;
-      probe_timeout = 1;
-      timeout = 30;
-    };
   };
 
   processes.api = {
@@ -253,16 +247,10 @@ in {
       exec env API_BIND_HOST=${apiHost} API_PORT=${toString apiPort} \
         ${config.devenv.root}/tools/scripts/run_api.sh
     '';
-    after = [ "devenv:processes:db" "devenv:processes:otel-collector" ];
-    ready = {
-      exec = ''
-        curl -fsS http://${apiHost}:${toString apiPort}/api/v1/meta >/dev/null
-      '';
-      initial_delay = 1;
-      period = 1;
-      probe_timeout = 1;
-      timeout = 30;
-    };
+    after = [
+      "devenv:processes:db@started"
+      "devenv:processes:otel-collector@started"
+    ];
   };
 
   processes.jaeger = {
@@ -272,15 +260,6 @@ in {
         ${jaegerLocal}/bin/jaeger \
         --config ${config.devenv.root}/tools/telemetry/jaeger.local.yaml
     '';
-    ready = {
-      exec = ''
-        curl -fsS http://127.0.0.1:${toString jaegerHealthPort}/status >/dev/null
-      '';
-      success_threshold = 3;
-      period = 1;
-      probe_timeout = 1;
-      timeout = 30;
-    };
   };
 
   processes.otel-collector = {
@@ -290,16 +269,7 @@ in {
         ${pkgs.opentelemetry-collector-contrib}/bin/otelcol-contrib \
         --config ${config.devenv.root}/tools/telemetry/otel-collector.local.yaml
     '';
-    after = [ "devenv:processes:jaeger" ];
-    ready = {
-      exec = ''
-        curl -fsS http://127.0.0.1:${toString otelCollectorHealthPort}/ >/dev/null
-      '';
-      success_threshold = 3;
-      period = 1;
-      probe_timeout = 1;
-      timeout = 30;
-    };
+    after = [ "devenv:processes:jaeger@started" ];
   };
 
   processes.prometheus = {
@@ -313,16 +283,7 @@ in {
         --storage.tsdb.retention.time 24h \
         --web.listen-address 127.0.0.1:${toString prometheusPort}
     '';
-    after = [ "devenv:processes:otel-collector" ];
-    ready = {
-      exec = ''
-        curl -fsS http://127.0.0.1:${toString prometheusPort}/-/ready >/dev/null
-      '';
-      success_threshold = 3;
-      period = 1;
-      probe_timeout = 1;
-      timeout = 30;
-    };
+    after = [ "devenv:processes:otel-collector@started" ];
   };
 
   profiles.watch.module = {
