@@ -1,3 +1,9 @@
+import {
+  projectSelectedSearchTermsToBridgedFilters,
+  resolveSearchExpression,
+  resolveSelectedSearchTerms,
+} from "./map-search-contract.js";
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -45,7 +51,11 @@ export function normalizePatchCatalog(patches) {
 
 export function buildPatchPickerStateBundle(signals) {
   const runtime = isPlainObject(signals?._map_runtime) ? signals._map_runtime : {};
-  const bridgedFilters = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
+  const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
+  const searchExpression = resolveSearchExpression(search.expression, search.selectedTerms);
+  const searchProjection = projectSelectedSearchTermsToBridgedFilters(
+    resolveSelectedSearchTerms(search.selectedTerms, null, searchExpression),
+  );
   return {
     state: {
       ready: runtime.ready === true,
@@ -55,9 +65,9 @@ export function buildPatchPickerStateBundle(signals) {
     },
     inputState: {
       filters: {
-        patchId: normalizePatchId(bridgedFilters.patchId) || null,
-        fromPatchId: normalizePatchId(bridgedFilters.fromPatchId) || null,
-        toPatchId: normalizePatchId(bridgedFilters.toPatchId) || null,
+        patchId: normalizePatchId(searchProjection.patchId) || null,
+        fromPatchId: normalizePatchId(searchProjection.fromPatchId) || null,
+        toPatchId: normalizePatchId(searchProjection.toPatchId) || null,
       },
     },
   };
@@ -73,13 +83,12 @@ export function patchTouchesPatchPickerSignals(patch) {
   if (patch._map_runtime?.catalog?.patches != null) {
     return true;
   }
-  const filters = patch._map_bridged?.filters;
+  const search = patch._map_ui?.search;
   return Boolean(
-    filters
+    search
       && (
-        filters.patchId != null
-        || filters.fromPatchId != null
-        || filters.toPatchId != null
+        search.expression != null
+        || search.selectedTerms != null
       ),
   );
 }

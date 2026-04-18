@@ -17,10 +17,6 @@ import {
   buildSemanticTermLookup,
   fishFilterTermMetadata,
   patchTouchesSearchPanelSignals,
-  resolveSelectedFishFilterTerms,
-  resolveSelectedFishIds,
-  resolveSelectedSemanticFieldIdsByLayer,
-  resolveSelectedZoneRgbs,
 } from "./map-search-state.js";
 import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
@@ -703,10 +699,6 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
 
     renderSearchSelection(this._elements, bundle, fishLookup, {
       activeDragPath: this._dragState.sourcePath,
-      resolveSelectedFishIds,
-      resolveSelectedFishFilterTerms,
-      resolveSelectedSemanticFieldIdsByLayer,
-      resolveSelectedZoneRgbs,
       buildSemanticTermLookup,
       setBooleanProperty,
       setTextContent,

@@ -89,4 +89,26 @@ test("map-page-signals persists only durable map branches", () => {
     }),
     false,
   );
+  assert.equal(
+    patchMatchesMapPagePersistFilter({
+      _map_bridged: {
+        filters: {
+          fishIds: [77],
+        },
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    patchMatchesMapPagePersistFilter({
+      _map_bridged: {
+        filters: {
+          layerFilterBindingIdsDisabledByLayer: {
+            fish_evidence: ["zone_mask"],
+          },
+        },
+      },
+    }),
+    true,
+  );
 });

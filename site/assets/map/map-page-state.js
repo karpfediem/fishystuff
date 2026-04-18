@@ -3,7 +3,6 @@ import {
   resolveSearchExpression,
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
-import { resolveSearchProjection } from "./map-search-projection.js";
 import { FISHYMAP_POINT_ICON_SCALE_DEFAULT } from "./map-host.js";
 
 export const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
@@ -27,6 +26,10 @@ function cloneJson(value) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasOwnKey(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
 }
 
 function stripEmptyRestorePatchBranches(patch) {
@@ -153,12 +156,10 @@ function storedUiSignals(signals) {
   const searchExpression = resolveSearchExpression(
     search?.expression,
     search?.selectedTerms,
-    bridgedFilters,
   );
-  const searchProjection = resolveSearchProjection(signals);
   const selectedTerms = resolveSelectedSearchTerms(
     search?.selectedTerms,
-    bridgedFilters,
+    null,
     searchExpression,
   );
   const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
@@ -201,20 +202,17 @@ function storedUiSignals(signals) {
           : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
       },
       filters: {
-        fishIds: cloneJson(searchProjection.fishIds),
-        zoneRgbs: cloneJson(searchProjection.zoneRgbs),
-        semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
-        fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
-        searchExpression: cloneJson(searchExpression),
-        patchId: searchProjection.patchId,
-        fromPatchId: searchProjection.fromPatchId,
-        toPatchId: searchProjection.toPatchId,
         layerIdsVisible: Array.isArray(bridgedFilters?.layerIdsVisible)
           ? cloneJson(bridgedFilters.layerIdsVisible)
           : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
         layerIdsOrdered: Array.isArray(bridgedFilters?.layerIdsOrdered)
           ? cloneJson(bridgedFilters.layerIdsOrdered)
           : [],
+        layerFilterBindingIdsDisabledByLayer: isPlainObject(
+          bridgedFilters?.layerFilterBindingIdsDisabledByLayer,
+        )
+          ? cloneJson(bridgedFilters.layerFilterBindingIdsDisabledByLayer)
+          : {},
         layerOpacities: isPlainObject(bridgedFilters?.layerOpacities)
           ? cloneJson(bridgedFilters.layerOpacities)
           : {},
@@ -248,12 +246,10 @@ function uiStorageSnapshot(stored) {
   const searchExpression = resolveSearchExpression(
     stored?._map_ui?.search?.expression,
     stored?._map_ui?.search?.selectedTerms,
-    bridgedFilters,
   );
-  const searchProjection = resolveSearchProjection(stored);
   const selectedTerms = resolveSelectedSearchTerms(
     stored?._map_ui?.search?.selectedTerms,
-    bridgedFilters,
+    null,
     searchExpression,
   );
   return {
@@ -281,20 +277,17 @@ function uiStorageSnapshot(stored) {
         : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
     },
     bridgedFilters: {
-      fishIds: cloneJson(searchProjection.fishIds),
-      zoneRgbs: cloneJson(searchProjection.zoneRgbs),
-      semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
-      fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
-      searchExpression: cloneJson(searchExpression),
-      patchId: searchProjection.patchId,
-      fromPatchId: searchProjection.fromPatchId,
-      toPatchId: searchProjection.toPatchId,
       layerIdsVisible: Array.isArray(bridgedFilters.layerIdsVisible)
         ? cloneJson(bridgedFilters.layerIdsVisible)
         : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
       layerIdsOrdered: Array.isArray(bridgedFilters.layerIdsOrdered)
         ? cloneJson(bridgedFilters.layerIdsOrdered)
         : [],
+      layerFilterBindingIdsDisabledByLayer: isPlainObject(
+        bridgedFilters.layerFilterBindingIdsDisabledByLayer,
+      )
+        ? cloneJson(bridgedFilters.layerFilterBindingIdsDisabledByLayer)
+        : {},
       layerOpacities: isPlainObject(bridgedFilters.layerOpacities)
         ? cloneJson(bridgedFilters.layerOpacities)
         : {},
@@ -338,19 +331,9 @@ function restoreUiPatch(parsed) {
   }
   const search = isPlainObject(parsed.search)
     ? parsed.search
-    : isPlainObject(parsed.inputFilters)
-      ? { query: parsed.inputFilters.searchText }
-      : {};
-  const bridgedUi = isPlainObject(parsed.bridgedUi)
-    ? parsed.bridgedUi
-    : isPlainObject(parsed.inputUi)
-      ? parsed.inputUi
-      : null;
-  const bridgedFilters = isPlainObject(parsed.bridgedFilters)
-    ? parsed.bridgedFilters
-    : isPlainObject(parsed.inputFilters)
-      ? parsed.inputFilters
-      : null;
+    : {};
+  const bridgedUi = isPlainObject(parsed.bridgedUi) ? parsed.bridgedUi : null;
+  const bridgedFilters = isPlainObject(parsed.bridgedFilters) ? parsed.bridgedFilters : null;
 
   const hasStoredSearchSelection =
     Object.prototype.hasOwnProperty.call(search, "expression") ||
@@ -362,7 +345,7 @@ function restoreUiPatch(parsed) {
     ? resolveSelectedSearchTerms(search.selectedTerms, null, searchExpression)
     : [];
 
-  if (Object.keys(search).length) {
+  if (Object.keys(search).length || searchExpression) {
     patch._map_ui = patch._map_ui || {};
     patch._map_ui.search = {
       query: String(search.query || ""),
@@ -386,34 +369,34 @@ function restoreUiPatch(parsed) {
         : FISHYMAP_POINT_ICON_SCALE_DEFAULT,
     };
   }
-  if (bridgedFilters) {
-    const bridgedSearchExpression = resolveSearchExpression(
-      Object.prototype.hasOwnProperty.call(bridgedFilters, "searchExpression")
-        ? bridgedFilters.searchExpression
-        : undefined,
-      undefined,
-      bridgedFilters,
-    );
+  const hasPersistedLayerFilterState =
+    bridgedFilters
+    && [
+      "layerIdsVisible",
+      "layerIdsOrdered",
+      "layerFilterBindingIdsDisabledByLayer",
+      "layerOpacities",
+      "layerClipMasks",
+      "layerWaypointConnectionsVisible",
+      "layerWaypointLabelsVisible",
+      "layerPointIconsVisible",
+      "layerPointIconScales",
+    ].some((key) => hasOwnKey(bridgedFilters, key));
+
+  if (hasPersistedLayerFilterState) {
     patch._map_bridged = patch._map_bridged || {};
     patch._map_bridged.filters = {
-      fishIds: Array.isArray(bridgedFilters.fishIds) ? cloneJson(bridgedFilters.fishIds) : [],
-      zoneRgbs: Array.isArray(bridgedFilters.zoneRgbs) ? cloneJson(bridgedFilters.zoneRgbs) : [],
-      semanticFieldIdsByLayer: isPlainObject(bridgedFilters.semanticFieldIdsByLayer)
-        ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
-        : {},
-      fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
-        ? cloneJson(bridgedFilters.fishFilterTerms)
-        : [],
-      searchExpression: cloneJson(bridgedSearchExpression),
-      patchId: bridgedFilters.patchId == null ? null : String(bridgedFilters.patchId),
-      fromPatchId: bridgedFilters.fromPatchId == null ? null : String(bridgedFilters.fromPatchId),
-      toPatchId: bridgedFilters.toPatchId == null ? null : String(bridgedFilters.toPatchId),
       layerIdsVisible: Array.isArray(bridgedFilters.layerIdsVisible)
         ? cloneJson(bridgedFilters.layerIdsVisible)
         : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
       layerIdsOrdered: Array.isArray(bridgedFilters.layerIdsOrdered)
         ? cloneJson(bridgedFilters.layerIdsOrdered)
         : [],
+      layerFilterBindingIdsDisabledByLayer: isPlainObject(
+        bridgedFilters.layerFilterBindingIdsDisabledByLayer,
+      )
+        ? cloneJson(bridgedFilters.layerFilterBindingIdsDisabledByLayer)
+        : {},
       layerOpacities: isPlainObject(bridgedFilters.layerOpacities)
         ? cloneJson(bridgedFilters.layerOpacities)
         : {},
@@ -490,9 +473,7 @@ function ensureUiSnapshot(stored) {
           viewMode: "2d",
           pointIconScale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
         },
-        bridgedFilters: {
-          searchExpression: cloneJson(EMPTY_SEARCH_EXPRESSION),
-        },
+        bridgedFilters: {},
       };
 }
 

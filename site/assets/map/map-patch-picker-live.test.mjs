@@ -22,7 +22,7 @@ test("normalizePatchCatalog orders patches by newest first and falls back to pat
   );
 });
 
-test("buildPatchPickerStateBundle keeps only runtime patch catalog and bridged patch selections", () => {
+test("buildPatchPickerStateBundle keeps only runtime patch catalog and derived patch selections", () => {
   assert.deepEqual(
     buildPatchPickerStateBundle({
       _map_runtime: {
@@ -32,12 +32,16 @@ test("buildPatchPickerStateBundle keeps only runtime patch catalog and bridged p
           fish: [{ fishId: 1 }],
         },
       },
-      _map_bridged: {
-        filters: {
-          patchId: "legacy-patch",
-          fromPatchId: "2026-02-26",
-          toPatchId: "2026-03-12",
-          fishIds: [42],
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+              { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } },
+            ],
+          },
         },
       },
     }),
@@ -50,7 +54,7 @@ test("buildPatchPickerStateBundle keeps only runtime patch catalog and bridged p
       },
       inputState: {
         filters: {
-          patchId: "legacy-patch",
+          patchId: null,
           fromPatchId: "2026-02-26",
           toPatchId: "2026-03-12",
         },
@@ -68,10 +72,9 @@ test("buildPatchPickerStateBundle preserves an open-ended until selection as nul
           patches: [{ patchId: "2026-03-12", patchName: "New Era", startTsUtc: 200 }],
         },
       },
-      _map_bridged: {
-        filters: {
-          fromPatchId: "2026-02-26",
-          toPatchId: null,
+      _map_ui: {
+        search: {
+          selectedTerms: [{ kind: "patch-bound", bound: "from", patchId: "2026-02-26" }],
         },
       },
     }),
@@ -105,10 +108,9 @@ test("buildPatchPickerStateBundle leaves the patch window unbounded by default",
           ],
         },
       },
-      _map_bridged: {
-        filters: {
-          fromPatchId: null,
-          toPatchId: null,
+      _map_ui: {
+        search: {
+          expression: { type: "group", operator: "or", children: [] },
         },
       },
     }),
@@ -146,9 +148,9 @@ test("patchTouchesPatchPickerSignals only reacts to patch-relevant branches", ()
   );
   assert.equal(
     patchTouchesPatchPickerSignals({
-      _map_bridged: {
-        filters: {
-          fromPatchId: "2026-02-26",
+      _map_ui: {
+        search: {
+          selectedTerms: [{ kind: "patch-bound", bound: "from", patchId: "2026-02-26" }],
         },
       },
     }),

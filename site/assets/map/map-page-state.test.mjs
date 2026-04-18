@@ -27,11 +27,7 @@ test("map-page-state loadRestoreState strips query-owned fields", () => {
       search: { query: "eel" },
       bridgedUi: { diagnosticsOpen: true, showPoints: true, showPointIcons: true, viewMode: "2d" },
       bridgedFilters: {
-        fishIds: [77],
-        fishFilterTerms: [{ type: "fish", fishId: 77 }],
         layerIdsVisible: ["bookmarks"],
-        fromPatchId: "oldest",
-        toPatchId: "latest",
       },
     }),
   });
@@ -49,9 +45,26 @@ test("map-page-state loadRestoreState strips query-owned fields", () => {
   assert.equal(restoreState.uiPatch._map_bridged?.ui?.diagnosticsOpen, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.fishIds, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.layerIdsVisible, undefined);
-  assert.equal(restoreState.uiPatch._map_bridged?.filters?.patchId, undefined);
-  assert.equal(restoreState.uiPatch._map_bridged?.filters?.fromPatchId, undefined);
-  assert.equal(restoreState.uiPatch._map_bridged?.filters?.toPatchId, undefined);
+});
+
+test("map-page-state loadRestoreState ignores legacy bridged search filters", () => {
+  const localStorage = new MemoryStorage({
+    "fishystuff.map.window_ui.v1": JSON.stringify({
+      bridgedFilters: {
+        fishIds: [77],
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
+      },
+    }),
+  });
+
+  const restoreState = loadRestoreState({
+    localStorage,
+    sessionStorage: new MemoryStorage(),
+    locationHref: "https://fishystuff.fish/map/",
+  });
+
+  assert.equal(restoreState.uiPatch, null);
 });
 
 test("map-page-state createPersistedState captures durable map branches", () => {
@@ -81,6 +94,9 @@ test("map-page-state createPersistedState captures durable map branches", () => 
       },
       filters: {
         layerIdsVisible: ["bookmarks", "zone_mask"],
+        layerFilterBindingIdsDisabledByLayer: {
+          fish_evidence: ["zone_mask"],
+        },
       },
     },
     _map_bookmarks: {
@@ -119,20 +135,11 @@ test("map-page-state createPersistedState captures durable map branches", () => 
       pointIconScale: 1.5,
     },
     bridgedFilters: {
-      fishIds: [77],
-      zoneRgbs: [],
-      semanticFieldIdsByLayer: {},
-      fishFilterTerms: [],
-      searchExpression: {
-        type: "group",
-        operator: "or",
-        children: [{ type: "term", term: { kind: "fish", fishId: 77 } }],
-      },
-      patchId: null,
-      fromPatchId: null,
-      toPatchId: null,
       layerIdsVisible: ["bookmarks", "zone_mask"],
       layerIdsOrdered: [],
+      layerFilterBindingIdsDisabledByLayer: {
+        fish_evidence: ["zone_mask"],
+      },
       layerOpacities: {},
       layerClipMasks: {},
       layerWaypointConnectionsVisible: {},

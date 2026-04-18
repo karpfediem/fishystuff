@@ -1,5 +1,4 @@
 import { buildAppliedSearchTermsView } from "../js/components/applied-search-terms.js";
-import { buildSearchExpressionFromSelectedTerms } from "./map-search-contract.js";
 
 function normalizeExpressionOperator(value) {
   return String(value ?? "").trim().toLowerCase() === "and" ? "and" : "or";
@@ -11,42 +10,6 @@ function patchBoundLabel(bound) {
 
 function nextPatchBoundLabel(bound) {
   return String(bound || "").trim().toLowerCase() === "to" ? "After" : "Before";
-}
-
-function buildFallbackSelectedTerms(stateBundle, resolvers) {
-  const selectedFishIds = resolvers.resolveSelectedFishIds(stateBundle);
-  const selectedFishFilterTerms = resolvers.resolveSelectedFishFilterTerms(stateBundle);
-  const selectedSemanticFieldIdsByLayer = resolvers.resolveSelectedSemanticFieldIdsByLayer(stateBundle);
-  const selectedZoneRgbs = resolvers.resolveSelectedZoneRgbs(stateBundle);
-  const fromPatchId = String(stateBundle?.inputState?.filters?.fromPatchId || "").trim();
-  const toPatchId = String(stateBundle?.inputState?.filters?.toPatchId || "").trim();
-  const selectedTerms = [];
-
-  if (fromPatchId) {
-    selectedTerms.push({ kind: "patch-bound", bound: "from", patchId: fromPatchId });
-  }
-  if (toPatchId) {
-    selectedTerms.push({ kind: "patch-bound", bound: "to", patchId: toPatchId });
-  }
-  for (const fishFilterTerm of selectedFishFilterTerms) {
-    selectedTerms.push({ kind: "fish-filter", term: fishFilterTerm });
-  }
-  for (const fishId of selectedFishIds) {
-    selectedTerms.push({ kind: "fish", fishId });
-  }
-  for (const zoneRgb of selectedZoneRgbs) {
-    selectedTerms.push({ kind: "zone", zoneRgb });
-  }
-  for (const [layerId, fieldIds] of Object.entries(selectedSemanticFieldIdsByLayer)) {
-    if (layerId === "zone_mask") {
-      continue;
-    }
-    for (const fieldId of Array.isArray(fieldIds) ? fieldIds : []) {
-      selectedTerms.push({ kind: "semantic", layerId, fieldId });
-    }
-  }
-
-  return selectedTerms;
 }
 
 function searchControlId(prefix, path) {
@@ -345,22 +308,6 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
     typeof options.resolveSearchExpression === "function"
       ? options.resolveSearchExpression
       : (bundle) => bundle?.inputState?.search?.expression ?? null;
-  const resolveSelectedFishIds =
-    typeof options.resolveSelectedFishIds === "function"
-      ? options.resolveSelectedFishIds
-      : () => [];
-  const resolveSelectedFishFilterTerms =
-    typeof options.resolveSelectedFishFilterTerms === "function"
-      ? options.resolveSelectedFishFilterTerms
-      : () => [];
-  const resolveSelectedSemanticFieldIdsByLayer =
-    typeof options.resolveSelectedSemanticFieldIdsByLayer === "function"
-      ? options.resolveSelectedSemanticFieldIdsByLayer
-      : () => ({});
-  const resolveSelectedZoneRgbs =
-    typeof options.resolveSelectedZoneRgbs === "function"
-      ? options.resolveSelectedZoneRgbs
-      : () => [];
   const buildSemanticTermLookup =
     typeof options.buildSemanticTermLookup === "function"
       ? options.buildSemanticTermLookup
@@ -390,16 +337,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
   );
   const patchCatalog = stateBundle?.state?.catalog?.patches || [];
   const semanticLookup = buildSemanticTermLookup(stateBundle);
-  const fallbackSelectedTerms = Array.isArray(stateBundle?.inputState?.search?.selectedTerms)
-    ? stateBundle.inputState.search.selectedTerms
-    : buildFallbackSelectedTerms(stateBundle, {
-        resolveSelectedFishIds,
-        resolveSelectedFishFilterTerms,
-        resolveSelectedSemanticFieldIdsByLayer,
-        resolveSelectedZoneRgbs,
-      });
-  const expression =
-    resolveSearchExpression(stateBundle) || buildSearchExpressionFromSelectedTerms(fallbackSelectedTerms);
+  const expression = resolveSearchExpression(stateBundle);
   const expressionView = buildAppliedSearchExpressionNode(
     expression,
     {

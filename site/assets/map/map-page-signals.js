@@ -1,5 +1,5 @@
 export const MAP_PAGE_PERSIST_SIGNAL_FILTER =
-  /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.(?:query|selectedTerms|expression))|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchExpression|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+  /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.(?:query|selectedTerms|expression))|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:layerIdsVisible|layerIdsOrdered|layerFilterBindingIdsDisabledByLayer|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
 
 export const MAP_PAGE_EXACT_PATCH_PATHS = Object.freeze([
   "_map_ui.layers.expandedLayerIds",
@@ -7,6 +7,7 @@ export const MAP_PAGE_EXACT_PATCH_PATHS = Object.freeze([
   "_map_ui.search.expression",
   "_map_bridged.filters.searchExpression",
   "_map_bridged.filters.semanticFieldIdsByLayer",
+  "_map_bridged.filters.layerFilterBindingIdsDisabledByLayer",
   "_map_bridged.filters.layerOpacities",
   "_map_bridged.filters.layerClipMasks",
   "_map_bridged.filters.layerWaypointConnectionsVisible",

@@ -208,17 +208,20 @@ function normalizeSharedFishState(value) {
 export function buildSearchPanelStateBundle(signals) {
   const runtime = isPlainObject(signals?._map_runtime) ? signals._map_runtime : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
-  const expression = resolveSearchExpression(
-    search.expression,
-    search.selectedTerms,
-    signals?._map_bridged?.filters,
-  );
+  const expression = resolveSearchExpression(search.expression, search.selectedTerms);
   const selectedTerms = resolveSelectedSearchTerms(
     search.selectedTerms,
-    signals?._map_bridged?.filters,
+    null,
     expression,
   );
-  const projectedFilters = resolveSearchProjection(signals);
+  const projectedFilters = resolveSearchProjection({
+    _map_ui: {
+      search: {
+        expression,
+        selectedTerms,
+      },
+    },
+  });
   return {
     state: {
       ready: runtime.ready === true,
@@ -252,20 +255,15 @@ export function buildSearchPanelStateBundle(signals) {
 }
 
 export function resolveSelectedSearchTermsFromBundle(stateBundle) {
-  const expression = resolveSearchExpression(stateBundle?.inputState?.search?.expression);
-  const selectedTerms = resolveSelectedSearchTerms(
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+  );
+  return resolveSelectedSearchTerms(
     stateBundle?.inputState?.search?.selectedTerms,
     null,
     expression,
   );
-  if (
-    selectedTerms.length ||
-    Array.isArray(stateBundle?.inputState?.search?.selectedTerms) ||
-    stateBundle?.inputState?.search?.expression !== undefined
-  ) {
-    return selectedTerms;
-  }
-  return resolveSelectedSearchTerms(undefined, stateBundle?.inputState?.filters);
 }
 
 export function resolveSelectedFishIds(stateBundle) {
