@@ -888,7 +888,7 @@
     if (!(button instanceof HTMLButtonElement)) {
       return;
     }
-    button.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}${isStamping ? " is-stamping" : ""}`;
+    button.className = `fishydex-favourite-button btn btn-sm btn-circle shadow-none ${isFavourite ? "btn-soft btn-error is-favourite" : "btn-ghost"}${isStamping ? " is-stamping" : ""}`;
     button.setAttribute("aria-pressed", isFavourite ? "true" : "false");
     button.setAttribute(
       "aria-label",
@@ -901,7 +901,7 @@
     if (!(button instanceof HTMLButtonElement)) {
       return;
     }
-    button.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${isCaught ? " is-caught" : ""}${isStamping ? " is-stamping" : ""}`;
+    button.className = `fishydex-caught-button btn btn-sm btn-circle shadow-none ${isCaught ? "btn-soft btn-success is-caught" : "btn-ghost"}${isStamping ? " is-stamping" : ""}`;
     button.setAttribute("aria-pressed", isCaught ? "true" : "false");
     button.setAttribute("aria-label", `Mark ${fishName} as ${isCaught ? "not caught" : "caught"}`);
     button.innerHTML = isCaught ? ICON_CAUGHT_FILL : ICON_CAUGHT_LINE;
@@ -957,8 +957,8 @@
       currentStamp(snapshot, "_caught_stamp_fish_id", itemId)
     );
 
-    actions.append(favouriteButton, caughtButton);
-    top.appendChild(actions);
+    actions.append(caughtButton);
+    top.append(favouriteButton, actions);
 
     const main = createElement("div", "fishydex-card-main");
     const iconWrap = createElement(

@@ -19,8 +19,11 @@
     --dex-surface: var(--color-base-200, #efe7d6);
     --dex-surface-strong: var(--color-base-100, #fffdf4);
     --dex-surface-soft: var(--color-base-200, #efe7d6);
-    --dex-card: color-mix(in oklab, var(--dex-surface) 68%, var(--dex-surface-strong) 32%);
-    --dex-card-hover: color-mix(in oklab, var(--dex-surface) 80%, var(--dex-surface-strong) 20%);
+    --dex-card: var(--dex-surface-strong);
+    --dex-card-hover: color-mix(in oklab, var(--dex-surface) 42%, var(--dex-surface-strong) 58%);
+    --dex-card-caught: color-mix(in oklab, var(--dex-caught) 12%, var(--dex-surface-strong) 88%);
+    --dex-card-caught-hover: color-mix(in oklab, var(--dex-caught) 18%, var(--dex-surface-strong) 82%);
+    --dex-card-chip: color-mix(in oklab, var(--color-base-content, #1f2937) 6%, var(--dex-surface-strong) 94%);
     --dex-field: var(--color-base-100, #fffdf4);
     --dex-focus: color-mix(in srgb, var(--color-primary, #e07a5f) 28%, transparent);
     --dex-text-muted: color-mix(in srgb, var(--color-base-content, #1f2937) 68%, transparent);
@@ -537,42 +540,50 @@
   .fishydex-card {
     display: grid;
     min-height: 12rem;
-    border: 2px solid var(--dex-line);
+    border: 1px solid var(--dex-screen-border);
     border-radius: 1rem;
     background: var(--dex-card);
     color: var(--color-base-content, #1f2937);
     overflow: hidden;
     padding: 0;
     position: relative;
-    transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+    transform: translateY(0);
+    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
   }
 
-  .fishydex-card.is-entering {
+  .fishydex-card.is-entering .fishydex-card-content {
     animation: fishydex-card-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: var(--fishydex-card-delay, 0ms);
   }
 
   .fishydex-card:hover {
-    border-color: color-mix(in srgb, var(--dex-highlight) 28%, var(--color-base-content, #1f2937));
+    border-color: color-mix(in srgb, var(--dex-highlight) 22%, var(--color-base-content, #1f2937));
     background: var(--dex-card-hover);
-    transform: translateY(-1px);
+    transform: translateY(-3px);
   }
 
   .fishydex-card:focus-within {
-    border-color: color-mix(in srgb, var(--dex-highlight) 28%, var(--color-base-content, #1f2937));
+    border-color: color-mix(in srgb, var(--dex-highlight) 22%, var(--color-base-content, #1f2937));
     background: var(--dex-card-hover);
-    transform: translateY(-1px);
+    transform: translateY(-3px);
   }
 
   .fishydex-card.is-caught {
-    border-color: color-mix(in oklab, var(--dex-caught) 70%, var(--color-base-content, #1f2937) 30%);
+    border-color: color-mix(in oklab, var(--dex-caught) 34%, var(--dex-screen-border) 66%);
+    background: var(--dex-card-caught);
+  }
+
+  .fishydex-card.is-caught:hover,
+  .fishydex-card.is-caught:focus-within {
+    background: var(--dex-card-caught-hover);
   }
 
   .fishydex-card-top {
-    position: absolute;
-    top: 0.85rem;
-    right: 0.85rem;
-    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+    min-height: 2rem;
   }
 
   .fishydex-card-open {
@@ -595,10 +606,11 @@
     position: relative;
     z-index: 1;
     display: grid;
+    grid-template-rows: auto 1fr;
     height: 100%;
-    padding: 0.95rem;
+    gap: 0.45rem;
+    padding: 1rem;
     pointer-events: none;
-    transition: transform 90ms ease;
   }
 
   .fishydex-card-actions {
@@ -615,36 +627,44 @@
     height: 2.25rem;
     min-height: 2.25rem;
     padding: 0;
+    border-color: transparent;
+    box-shadow: none;
     color: color-mix(in oklab, var(--color-base-content, #1f2937) 60%, transparent);
-    transition: color 120ms ease, background 120ms ease, outline-color 120ms ease;
+    transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
   }
 
   .fishydex-caught-button:hover,
   .fishydex-favourite-button:hover {
     color: var(--color-base-content, #1f2937);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 4%, var(--dex-surface-strong) 96%);
   }
 
   .fishydex-caught-button:focus-visible,
   .fishydex-favourite-button:focus-visible {
     color: var(--color-base-content, #1f2937);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 4%, var(--dex-surface-strong) 96%);
   }
 
   .fishydex-caught-button.is-caught {
+    border-color: transparent;
+    background: color-mix(in oklab, var(--dex-caught) 16%, var(--dex-surface-strong) 84%);
     color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
   }
 
   .fishydex-caught-button.is-caught:hover,
   .fishydex-caught-button.is-caught:focus-visible {
-    background: color-mix(in oklab, var(--dex-caught) 16%, var(--dex-surface-soft) 84%);
+    background: color-mix(in oklab, var(--dex-caught) 22%, var(--dex-surface-strong) 78%);
   }
 
   .fishydex-favourite-button.is-favourite {
+    border-color: transparent;
+    background: transparent;
     color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
   }
 
   .fishydex-favourite-button.is-favourite:hover,
   .fishydex-favourite-button.is-favourite:focus-visible {
-    background: color-mix(in oklab, var(--color-error, #d64545) 14%, var(--dex-surface-soft) 86%);
+    background: color-mix(in oklab, var(--color-error, #d64545) 20%, var(--dex-surface-strong) 80%);
   }
 
   .fishydex-caught-button .fishy-icon,
@@ -741,28 +761,17 @@
     height: 100%;
     align-content: center;
     justify-items: center;
-    gap: 0.75rem;
+    gap: 0.7rem;
     min-height: 0;
-    padding: 0.35rem 0.25rem 0.15rem;
-    transition: transform 120ms ease;
-  }
-
-  .fishydex-card:hover .fishydex-card-main,
-  .fishydex-card:focus-within .fishydex-card-main {
-    transform: translateY(-2px);
-  }
-
-  .fishydex-card-open:active + .fishydex-card-content {
-    transform: translateY(1px);
-  }
-
-  .fishydex-card-open:active + .fishydex-card-content .fishydex-card-main {
-    transform: translateY(0);
+    padding: 0.2rem 0.2rem 0.15rem;
   }
 
   .fishydex-icon-wrap {
+    position: relative;
     width: 4.75rem;
     height: 4.75rem;
+    border-color: color-mix(in oklab, var(--fishy-item-grade-color) 58%, var(--color-base-300, #d6d3d1) 42%);
+    background: color-mix(in oklab, var(--color-base-100, #fffdf4) 92%, var(--fishy-item-grade-color) 8%);
   }
 
   .fishydex-icon {
@@ -776,6 +785,7 @@
 
   .fishydex-name {
     max-width: 100%;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 88%, var(--fishy-item-grade-color, var(--dex-grade-unknown)) 12%);
     font-weight: 800;
     line-height: 1.25;
     text-align: center;
@@ -793,11 +803,18 @@
   }
 
   .fishydex-card-price {
-    align-items: baseline;
+    align-items: center;
     justify-content: center;
-    font-size: 0.88rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    background: var(--dex-card-chip);
+    font-size: 0.82rem;
     text-align: center;
     text-wrap: balance;
+  }
+
+  .fishydex-card.is-caught .fishydex-card-price {
+    background: color-mix(in oklab, var(--dex-caught) 12%, var(--dex-surface-strong) 88%);
   }
 
   .fishydex-details-price {
@@ -856,7 +873,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .fishydex-card.is-entering {
+    .fishydex-card.is-entering .fishydex-card-content {
       animation: none;
     }
 
