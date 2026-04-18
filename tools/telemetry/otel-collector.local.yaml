@@ -3,6 +3,10 @@ receivers:
     protocols:
       http:
         endpoint: 127.0.0.1:4818
+        cors:
+          allowed_origins:
+            - http://127.0.0.1:1990
+            - http://localhost:1990
 
 processors:
   batch:

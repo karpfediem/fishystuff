@@ -79,9 +79,10 @@ just up
 
 Then open `http://127.0.0.1:1990/` and `http://127.0.0.1:16686/`. The site
 runtime emits browser fetch spans through the JS OpenTelemetry Web SDK and the
-API emits server/store spans directly from Rust. The local site origin proxies
-both `/api/*` and `/otel/*`, so the browser stays same-origin and avoids
-trace-header preflights skewing request timings.
+API emits server/store spans directly from Rust. The static site uses direct
+absolute API and OTLP collector URLs from `site/.out/runtime-config.js`; there
+is no site-side trace proxy. Local API CORS and local OTLP receiver CORS must
+explicitly allow the site origin.
 
 This tracing path is intentionally request-scoped. It does not stream
 high-frequency Bevy/WASM spans over the browser bridge. Continuous runtime

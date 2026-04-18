@@ -133,7 +133,8 @@ in {
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME = "fishystuff-site-local";
     FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT = "local";
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION = "dev";
-    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT = "/otel/v1/traces";
+    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT =
+      "http://127.0.0.1:${toString otelCollectorHttpPort}/v1/traces";
     FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL = "http://${siteHost}:${toString jaegerUiPort}";
     FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO = "0.25";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
@@ -154,32 +155,12 @@ in {
   services.caddy = {
     enable = true;
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
-      @api path /api/*
-      handle @api {
-        reverse_proxy ${apiHost}:${toString apiPort}
-      }
-
-      handle /otel/* {
-        uri strip_prefix /otel
-        reverse_proxy 127.0.0.1:${toString otelCollectorHttpPort}
-      }
-
       root * ${config.devenv.root}/site/.out
       header Cache-Control "no-store"
       try_files {path} {path}.html {path}/index.html =404
       file_server
     '';
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
-      @api path /api/*
-      handle @api {
-        reverse_proxy ${apiHost}:${toString apiPort}
-      }
-
-      handle /otel/* {
-        uri strip_prefix /otel
-        reverse_proxy 127.0.0.1:${toString otelCollectorHttpPort}
-      }
-
       root * ${config.devenv.root}/site/.out
       header Cache-Control "no-store"
       try_files {path} {path}.html {path}/index.html =404
