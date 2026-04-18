@@ -11,7 +11,6 @@ use crate::app::{build_native_app, NativeAppOptions};
 use crate::map::events::EventsSnapshotState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::{RasterTileCache, TileStats};
-use crate::map::terrain::runtime::TerrainDiagnostics;
 use crate::plugins::points::PointsState;
 use crate::profiling::fixtures::FixtureData;
 use crate::profiling::scenario::ScenarioName;
@@ -151,7 +150,6 @@ fn sample_counters(world: &World) {
     let layer_runtime = world.resource::<LayerRuntime>();
     let tile_stats = world.resource::<TileStats>();
     let tile_cache = world.resource::<RasterTileCache>();
-    let terrain = world.resource::<TerrainDiagnostics>();
     let points = world.resource::<PointsState>();
     let snapshot = world.resource::<EventsSnapshotState>();
 
@@ -231,38 +229,12 @@ fn sample_counters(world: &World) {
     );
     crate::perf_gauge!("vector.feature_count", vector_features);
     crate::perf_gauge!("vector.triangle_count", vector_triangles);
-    let terrain_visible = terrain
-        .visible_chunks_by_level
-        .values()
-        .copied()
-        .sum::<u32>();
-    let terrain_resident = terrain
-        .resident_chunks_by_level
-        .values()
-        .copied()
-        .sum::<u32>();
-    crate::perf_gauge!("terrain.visible_chunks", terrain_visible);
-    crate::perf_gauge!("terrain.resident_chunks", terrain_resident);
-    crate::perf_gauge!("terrain.fallback_chunks", terrain.fallback_chunks);
-    crate::perf_gauge!("terrain.drape_patches", terrain.drape_patch_count);
     crate::perf_gauge!("events.snapshot_size", snapshot.event_count);
     crate::perf_gauge!("events.candidate_count", points.candidate_count);
     crate::perf_gauge!("events.rendered_clusters", points.rendered_cluster_count);
     crate::perf_gauge!("events.rendered_points", points.rendered_point_count);
     crate::perf_last!("raster.cache_entries_current", tile_cache.len());
-    crate::perf_last!("terrain.visible_chunks_current", terrain_visible);
-    crate::perf_last!("terrain.resident_chunks_current", terrain_resident);
-    crate::perf_last!("terrain.cache_hits_current", terrain.cache_hits);
-    crate::perf_last!("terrain.cache_misses_current", terrain.cache_misses);
-    crate::perf_last!("terrain.cache_evictions_current", terrain.cache_evictions);
     crate::perf_last!("events.snapshot_size_current", snapshot.event_count);
-
-    for (level, count) in &terrain.visible_chunks_by_level {
-        crate::perf_gauge!(format!("terrain.visible_chunks.lod.{}", level), *count);
-    }
-    for (level, count) in &terrain.resident_chunks_by_level {
-        crate::perf_gauge!(format!("terrain.resident_chunks.lod.{}", level), *count);
-    }
 }
 
 pub fn hotspot_summary(summary: &profiling::ProfileSummary, limit: usize) -> String {

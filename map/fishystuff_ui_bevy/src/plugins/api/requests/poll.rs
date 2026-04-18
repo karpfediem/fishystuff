@@ -1,7 +1,6 @@
 use async_channel::TryRecvError;
 
 use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
 use bevy::ecs::system::SystemParam;
 
@@ -19,12 +18,9 @@ pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
             Ok(result) => {
                 state.pending.meta = None;
                 match result {
-                    Ok(meta) => apply_meta_response(
-                        &mut state.bootstrap,
-                        &mut state.patch_filter,
-                        &mut state.terrain_config,
-                        meta,
-                    ),
+                    Ok(meta) => {
+                        apply_meta_response(&mut state.bootstrap, &mut state.patch_filter, meta)
+                    }
                     Err(err) => {
                         state.bootstrap.meta_status = format!("meta: {err}");
                         state.bootstrap.layers_status = "layers: blocked".to_string();
@@ -153,7 +149,6 @@ pub(crate) struct RequestPollState<'w, 's> {
     pending: ResMut<'w, PendingRequests>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
-    terrain_config: ResMut<'w, Terrain3dConfig>,
     selection: ResMut<'w, SelectionState>,
     fish: ResMut<'w, FishCatalog>,
     community: ResMut<'w, CommunityFishZoneSupportIndex>,

@@ -8,12 +8,6 @@ use fishystuff_api::models::layers::LayersResponse;
 
 use crate::map::events::EventsSnapshotState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::map::spaces::world::MapToWorld;
-use crate::map::spaces::MapPoint;
-use crate::map::terrain::{
-    default_terrain_drape_manifest_url, default_terrain_height_tiles_url,
-    default_terrain_manifest_url, Terrain3dConfig,
-};
 use crate::plugins::api::{
     ApiBootstrapState, FishCatalog, FishEntry, MapDisplayState, PatchFilterState,
 };
@@ -116,8 +110,6 @@ impl FixtureData {
             snapshot.last_meta_poll_at_secs = 0.0;
             snapshot.snapshot_refresh_reason = "fixture".to_string();
         }
-
-        *world.resource_mut::<Terrain3dConfig>() = terrain_config_fixture();
     }
 }
 
@@ -129,47 +121,4 @@ where
     runtime_io::load_json(path.to_string_lossy().as_ref())
         .map_err(anyhow::Error::msg)
         .with_context(|| format!("load fixture {}", path.display()))
-}
-
-fn terrain_config_fixture() -> Terrain3dConfig {
-    let map_to_world = MapToWorld::default();
-    let top_left = map_to_world.map_to_world(MapPoint::new(0.0, 0.0));
-    Terrain3dConfig {
-        enabled_default: true,
-        terrain_manifest_url: default_terrain_manifest_url(),
-        map_width: 2048,
-        map_height: 2048,
-        bbox_y_min: -80.0,
-        bbox_y_max: 420.0,
-        terrain_chunk_requests_per_frame: 8,
-        terrain_chunk_max_inflight: 16,
-        terrain_cache_max_chunks: 64,
-        terrain_pinned_coarse_levels: 1,
-        terrain_target_chunks_radius: 4.0,
-        use_chunk_aligned_drape: false,
-        drape_manifest_url: default_terrain_drape_manifest_url(),
-        height_tile_root_url: default_terrain_height_tiles_url(),
-        height_tile_size: 1024,
-        height_tile_source_width: 2048,
-        height_tile_source_height: 2048,
-        height_tile_min_tx: 0,
-        height_tile_max_tx: 1,
-        height_tile_min_ty: 0,
-        height_tile_max_ty: 1,
-        height_tile_flip_y: false,
-        height_tile_world_left: top_left.x as f32,
-        height_tile_world_top: top_left.z as f32,
-        height_tile_world_units_per_px: map_to_world.distance_per_pixel as f32,
-        height_tile_cache_max: 8,
-        height_tile_loads_per_frame: 8,
-        chunk_map_px: 1024,
-        verts_per_chunk_edge: 33,
-        build_chunks_per_frame: 4,
-        build_ms_per_frame: 4.0,
-        show_drape: true,
-        drape_subdivisions: 6,
-        drape_builds_per_frame: 4,
-        drape_offset_base: 10.0,
-        drape_offset_per_layer: 0.5,
-    }
 }

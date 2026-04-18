@@ -23,9 +23,6 @@ use bevy::app::PluginGroupBuilder;
 use bevy::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use crate::map::terrain::runtime::Terrain3dPlugin;
-
-#[cfg(target_arch = "wasm32")]
 pub struct FishystuffPlugins;
 
 #[cfg(target_arch = "wasm32")]
@@ -33,7 +30,6 @@ impl PluginGroup for FishystuffPlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
             .add(camera::CameraPlugin)
-            .add(Terrain3dPlugin)
             .add(input::InputPlugin)
             .add(raster::RasterPlugin)
             .add(field_tile_layers::FieldTileLayersPlugin)

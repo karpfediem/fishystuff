@@ -12,7 +12,6 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
     point_icons: Res<PointIconCache>,
     selection: Res<SelectionState>,
     view_mode: Res<ViewModeState>,
-    terrain_diag: Res<TerrainDiagnostics>,
     layer_registry: Res<LayerRegistry>,
     layer_runtime: Res<LayerRuntime>,
 ) {
@@ -29,7 +28,6 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         && !point_icons.is_changed()
         && !selection.is_changed()
         && !view_mode.is_changed()
-        && !terrain_diag.is_changed()
         && !layer_registry.is_changed()
         && !layer_runtime.is_changed()
     {
@@ -49,7 +47,6 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         "ready": bootstrap.meta.is_some() && !layer_registry.ordered().is_empty(),
         "viewMode": match view_mode.mode {
             ViewMode::Map2D => "2d",
-            ViewMode::Terrain3D => "3d",
         },
         "metaStatus": bootstrap.meta_status,
         "layersStatus": bootstrap.layers_status,
@@ -79,15 +76,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
             .iter()
             .filter(|layer| layer_runtime.visible(layer.id))
             .map(|layer| layer.key.clone())
-            .collect::<Vec<_>>(),
-        "terrain": {
-            "ready": terrain_diag.terrain_ready,
-            "revision": terrain_diag.terrain_revision,
-            "chunksRequested": terrain_diag.chunks_requested,
-            "chunksReady": terrain_diag.chunks_ready,
-            "cacheHits": terrain_diag.cache_hits,
-            "cacheMisses": terrain_diag.cache_misses,
-        }
+            .collect::<Vec<_>>()
     });
     let event = FishyMapOutputEvent::Diagnostic {
         version: 1,

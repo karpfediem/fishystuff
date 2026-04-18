@@ -4,7 +4,6 @@ mod view;
 use crate::bridge::host::BrowserBridgeState;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::ViewModeState;
-use crate::map::camera::terrain3d::Terrain3dViewState;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layers::LayerRegistry;
@@ -33,7 +32,6 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     mut pending: ResMut<PendingRequests>,
     mut view_mode: ResMut<ViewModeState>,
     mut map_view: ResMut<Map2dViewState>,
-    mut terrain_view: ResMut<Terrain3dViewState>,
 ) {
     crate::perf_scope!("bridge.command_apply");
     let mut commands = Vec::new();
@@ -42,13 +40,7 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     crate::perf_counter_add!("bridge.commands.applied", commands.len());
 
     for command in commands {
-        view::apply_view_commands(
-            &command,
-            &zoom_bounds,
-            &mut view_mode,
-            &mut map_view,
-            &mut terrain_view,
-        );
+        view::apply_view_commands(&command, &zoom_bounds, &mut view_mode, &mut map_view);
 
         if let Some(zone_rgb) = command.select_zone_rgb {
             selection::apply_zone_selection_command(

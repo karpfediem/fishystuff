@@ -20,7 +20,6 @@ Native:
 ```bash
 tools/scripts/perf-run-scenario.sh raster_2d_pan_zoom /tmp/perf-raster-nav.json
 tools/scripts/perf-run-scenario.sh vector_region_groups_enable /tmp/perf-vector-enable-native.json
-tools/scripts/perf-run-scenario.sh terrain3d_enter_and_orbit /tmp/perf-terrain-orbit-native.json
 ```
 
 Browser:
@@ -43,14 +42,6 @@ tools/scripts/map-browser-profile.sh vector_region_groups_enable /tmp/map-browse
   - frame p95: `0.396 ms`
   - top span: `vector.layer_update total_ms=0.622`
   - counters: `vector.cache_hits=446`, `vector.cache_misses=4`
-- `terrain3d_enter_and_orbit`
-  - frame avg: `0.135 ms`
-  - frame p95: `0.272 ms`
-  - top spans:
-    - `raster.update_tiles total_ms=4.406`
-    - `raster.desired_tile_set_build total_ms=2.084`
-    - `terrain.visible_chunk_computation total_ms=0.733`
-
 Conclusion:
 
 - The native harness does not explain a browser drop from high FPS to `10-20 FPS`.

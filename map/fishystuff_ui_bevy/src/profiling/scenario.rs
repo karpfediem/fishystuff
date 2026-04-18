@@ -6,7 +6,6 @@ use crate::bridge::contract::{
 };
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::camera::terrain3d::Terrain3dViewState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::MapPoint;
@@ -30,10 +29,6 @@ pub enum ScenarioName {
     ZoneMaskHoverFiltering,
     #[value(name = "vector_region_groups_enable")]
     VectorRegionGroupsEnable,
-    #[value(name = "terrain3d_enter_and_orbit")]
-    Terrain3dEnterAndOrbit,
-    #[value(name = "mode_switch_2d_3d_2d")]
-    ModeSwitch2d3d2d,
 }
 
 impl ScenarioName {
@@ -44,8 +39,6 @@ impl ScenarioName {
             Self::PointsOverlayFiltering => "points_overlay_filtering",
             Self::ZoneMaskHoverFiltering => "zone_mask_hover_filtering",
             Self::VectorRegionGroupsEnable => "vector_region_groups_enable",
-            Self::Terrain3dEnterAndOrbit => "terrain3d_enter_and_orbit",
-            Self::ModeSwitch2d3d2d => "mode_switch_2d_3d_2d",
         }
     }
 
@@ -56,8 +49,6 @@ impl ScenarioName {
             Self::PointsOverlayFiltering => 600,
             Self::ZoneMaskHoverFiltering => 600,
             Self::VectorRegionGroupsEnable => 480,
-            Self::Terrain3dEnterAndOrbit => 540,
-            Self::ModeSwitch2d3d2d => 540,
         }
     }
 
@@ -111,55 +102,6 @@ impl ScenarioName {
                 let enable_after = total_frames / 4;
                 set_layer_visibility(world, "region_groups", frame >= enable_after);
             }
-            Self::Terrain3dEnterAndOrbit => {
-                configure_common_layers(world, false, false);
-                let enter_after = total_frames / 5;
-                if frame < enter_after {
-                    set_map_2d_view(world, MAP_CENTER, MAP_CENTER, 0.9);
-                } else {
-                    let orbit_progress = (frame.saturating_sub(enter_after)) as f32
-                        / (total_frames - enter_after).max(1) as f32;
-                    let yaw = orbit_progress * std::f32::consts::TAU * 0.8;
-                    let pitch = -0.55 + oscillate(orbit_progress * 1.3) * 0.28;
-                    let distance = 60_000.0 + oscillate(orbit_progress * 1.8) * 20_000.0;
-                    set_terrain_view(world, MAP_CENTER, MAP_CENTER, yaw, pitch, distance);
-                }
-            }
-            Self::ModeSwitch2d3d2d => {
-                configure_common_layers(world, false, true);
-                let first = total_frames / 3;
-                let second = (total_frames * 2) / 3;
-                if frame < first {
-                    let progress = frame as f32 / first.max(1) as f32;
-                    set_map_2d_view(
-                        world,
-                        sweep(progress, MAP_MIN, MAP_MAX),
-                        MAP_CENTER,
-                        0.8 + oscillate(progress) * 1.4,
-                    );
-                    set_layer_visibility(world, "region_groups", false);
-                } else if frame < second {
-                    let progress = (frame - first) as f32 / (second - first).max(1) as f32;
-                    set_layer_visibility(world, "region_groups", true);
-                    set_terrain_view(
-                        world,
-                        MAP_CENTER,
-                        MAP_CENTER,
-                        progress * std::f32::consts::TAU * 0.6,
-                        -0.6 + oscillate(progress * 1.2) * 0.22,
-                        70_000.0 + oscillate(progress * 2.2) * 15_000.0,
-                    );
-                } else {
-                    let progress = (frame - second) as f32 / (total_frames - second).max(1) as f32;
-                    set_map_2d_view(
-                        world,
-                        MAP_CENTER,
-                        sweep(progress, MAP_MAX, MAP_MIN),
-                        0.7 + oscillate(progress * 2.0) * 2.2,
-                    );
-                    set_layer_visibility(world, "region_groups", true);
-                }
-            }
         }
     }
 }
@@ -200,36 +142,6 @@ fn set_map_2d_view(world: &mut World, map_x: f32, map_y: f32, zoom: f32) {
     };
     if *world.resource::<Map2dViewState>() != desired_view {
         *world.resource_mut::<Map2dViewState>() = desired_view;
-    }
-}
-
-fn set_terrain_view(
-    world: &mut World,
-    map_x: f32,
-    map_y: f32,
-    yaw: f32,
-    pitch: f32,
-    distance: f32,
-) {
-    let map_to_world = MapToWorld::default();
-    let world_point = map_to_world.map_to_world(MapPoint::new(map_x as f64, map_y as f64));
-    let needs_mode_update = {
-        let mode = world.resource::<ViewModeState>();
-        mode.mode != ViewMode::Terrain3D || !mode.terrain_initialized
-    };
-    if needs_mode_update {
-        let mut mode = world.resource_mut::<ViewModeState>();
-        mode.mode = ViewMode::Terrain3D;
-        mode.terrain_initialized = true;
-    }
-    let mut desired_view = *world.resource::<Terrain3dViewState>();
-    desired_view.pivot_world =
-        bevy::math::Vec3::new(world_point.x as f32, 0.0, world_point.z as f32);
-    desired_view.yaw = yaw;
-    desired_view.pitch = pitch;
-    desired_view.set_distance_clamped(distance);
-    if *world.resource::<Terrain3dViewState>() != desired_view {
-        *world.resource_mut::<Terrain3dViewState>() = desired_view;
     }
 }
 

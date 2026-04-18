@@ -4,7 +4,6 @@ use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
 use crate::map::camera::map2d::map2d_cursor_to_world;
-use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
@@ -13,7 +12,6 @@ use crate::map::raster::RasterTileCache;
 use crate::map::selection_query::selected_info_at_world_point;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
-use crate::map::terrain::runtime::TerrainViewEstimate;
 use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverState,
     LayerEffectiveFilterState, MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
@@ -56,13 +54,6 @@ fn clear_hover_state(hover: &mut HoverState, display_state: &mut MapDisplayState
 }
 
 fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
-    if !matches!(
-        context.view_mode.mode,
-        ViewMode::Map2D | ViewMode::Terrain3D
-    ) {
-        clear_hover_state(&mut context.hover, &mut context.display_state);
-        return;
-    }
     if hover_interaction_blocked(&context) {
         let next_hovered_zone_rgb = hovered_zone_rgb(context.hover.info.as_ref());
         if context.display_state.hovered_zone_rgb != next_hovered_zone_rgb {
@@ -102,19 +93,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
 }
 
 fn handle_click(mut context: MaskClickContext<'_, '_>) {
-    if !matches!(
-        context.view_mode.mode,
-        ViewMode::Map2D | ViewMode::Terrain3D
-    ) {
-        return;
-    }
     if context.ui_capture.blocked {
-        return;
-    }
-    if context.view_mode.mode == ViewMode::Terrain3D
-        && (context.key_buttons.pressed(KeyCode::AltLeft)
-            || context.key_buttons.pressed(KeyCode::AltRight))
-    {
         return;
     }
     if !context.mouse_buttons.just_released(MouseButton::Left)
@@ -125,13 +104,9 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     if context.pan.drag_distance > DRAG_THRESHOLD {
         return;
     }
-    let Some(world_point) = interaction_world_point(
-        context.view_mode.mode,
-        &context.windows,
-        &context.camera_q,
-        &context.touches,
-        &context.terrain_view,
-    ) else {
+    let Some(world_point) =
+        interaction_world_point(&context.windows, &context.camera_q, &context.touches)
+    else {
         return;
     };
     let Some(selected_info) = selected_info_at_world_point(
@@ -179,61 +154,37 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
 }
 
 fn hover_world_point(context: &HoverUpdateContext<'_, '_>) -> Option<WorldPoint> {
-    interaction_world_point(
-        context.view_mode.mode,
-        &context.windows,
-        &context.camera_q,
-        &context.touches,
-        &context.terrain_view,
-    )
+    interaction_world_point(&context.windows, &context.camera_q, &context.touches)
 }
 
 fn interaction_world_point(
-    view_mode: ViewMode,
     windows: &Query<&Window, With<PrimaryWindow>>,
     camera_q: &Query<(&Projection, &Transform), With<Map2dCamera>>,
     touches: &Touches,
-    terrain_view: &TerrainViewEstimate,
 ) -> Option<WorldPoint> {
-    match view_mode {
-        ViewMode::Map2D => {
-            let Ok(window) = windows.single() else {
-                return None;
-            };
-            let Ok((projection, camera_transform)) = camera_q.single() else {
-                return None;
-            };
-            let cursor = window
-                .cursor_position()
-                .or_else(|| touch_hover_position(touches))?;
-            let world = map2d_cursor_to_world(window, projection, camera_transform, cursor)?;
-            Some(WorldPoint::new(world.x as f64, world.y as f64))
-        }
-        ViewMode::Terrain3D => terrain_view.cursor_world,
-    }
+    let Ok(window) = windows.single() else {
+        return None;
+    };
+    let Ok((projection, camera_transform)) = camera_q.single() else {
+        return None;
+    };
+    let cursor = window
+        .cursor_position()
+        .or_else(|| touch_hover_position(touches))?;
+    let world = map2d_cursor_to_world(window, projection, camera_transform, cursor)?;
+    Some(WorldPoint::new(world.x as f64, world.y as f64))
 }
 
 fn hover_interaction_blocked(context: &HoverUpdateContext<'_, '_>) -> bool {
-    match context.view_mode.mode {
-        ViewMode::Map2D => {
-            let active_touch_count = context.touches.iter().count();
-            context.mouse_buttons.pressed(MouseButton::Left)
-                || active_touch_count >= 2
-                || (active_touch_count == 1 && context.pan.drag_distance > DRAG_THRESHOLD)
-        }
-        ViewMode::Terrain3D => {
-            context.mouse_buttons.pressed(MouseButton::Middle)
-                || ((context.key_buttons.pressed(KeyCode::AltLeft)
-                    || context.key_buttons.pressed(KeyCode::AltRight))
-                    && context.mouse_buttons.pressed(MouseButton::Left))
-        }
-    }
+    let active_touch_count = context.touches.iter().count();
+    context.mouse_buttons.pressed(MouseButton::Left)
+        || active_touch_count >= 2
+        || (active_touch_count == 1 && context.pan.drag_distance > DRAG_THRESHOLD)
 }
 
 #[derive(SystemParam)]
 struct HoverUpdateContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
-    key_buttons: Res<'w, ButtonInput<KeyCode>>,
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Projection, &'static Transform), With<Map2dCamera>>,
@@ -244,25 +195,21 @@ struct HoverUpdateContext<'w, 's> {
     ui_capture: Res<'w, UiPointerCapture>,
     hover: ResMut<'w, HoverState>,
     pan: Res<'w, PanState>,
-    terrain_view: Res<'w, TerrainViewEstimate>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
-    view_mode: Res<'w, ViewModeState>,
 }
 
 #[derive(SystemParam)]
 struct MaskClickContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
-    key_buttons: Res<'w, ButtonInput<KeyCode>>,
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Projection, &'static Transform), With<Map2dCamera>>,
     exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
     tile_cache: Res<'w, RasterTileCache>,
-    terrain_view: Res<'w, TerrainViewEstimate>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
@@ -273,7 +220,6 @@ struct MaskClickContext<'w, 's> {
     bootstrap: Res<'w, ApiBootstrapState>,
     patch_filter: Res<'w, PatchFilterState>,
     ui_capture: Res<'w, UiPointerCapture>,
-    view_mode: Res<'w, ViewModeState>,
     _marker: std::marker::PhantomData<&'s ()>,
 }
 

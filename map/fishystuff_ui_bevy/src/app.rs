@@ -29,8 +29,6 @@ use bevy_resvg::prelude::SvgPlugin as BevyResvgPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::bridge::host::BrowserBridgePlugin;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::map::terrain::runtime::Terrain3dPlugin;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::bookmarks::BookmarksPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::camera::initial_resolution;
@@ -121,7 +119,6 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         .init_resource::<UiFonts>()
         .add_plugins(ApiPlugin)
         .add_plugins(CameraPlugin)
-        .add_plugins(Terrain3dPlugin)
         .add_plugins(InputPlugin)
         .add_plugins(RasterPlugin)
         .add_plugins(FieldTileLayersPlugin)

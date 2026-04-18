@@ -24,10 +24,8 @@ use crate::bridge::theme::parse_css_color;
 use crate::bridge::BrowserInputStateSet;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::camera::terrain3d::Terrain3dViewState;
 use crate::map::layer_query::LayerQuerySample;
 use crate::map::layers::{LayerKind, LayerRegistry, LayerRuntime};
-use crate::map::terrain::runtime::TerrainDiagnostics;
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{
     now_utc_seconds, ApiBootstrapState, FishCatalog, HoverInfo, HoverState,
@@ -256,7 +254,6 @@ mod tests {
     use crate::bridge::theme::parse_css_color;
     use crate::map::camera::map2d::Map2dViewState;
     use crate::map::camera::mode::ViewModeState;
-    use crate::map::camera::terrain3d::Terrain3dViewState;
     use crate::map::layers::{
         build_local_layer_specs, AvailableLayerCatalog, FISH_EVIDENCE_LAYER_KEY,
     };
@@ -319,7 +316,6 @@ mod tests {
         app.insert_resource(FieldMetadataCache::default());
         app.insert_resource(ViewModeState::default());
         app.insert_resource(Map2dViewState::default());
-        app.insert_resource(Terrain3dViewState::default());
         seed_layer_resources(&mut app.world_mut());
         app.add_systems(PostUpdate, snapshot::sync_current_snapshot);
 
@@ -420,7 +416,6 @@ mod tests {
         app.insert_resource(FieldMetadataCache::default());
         app.insert_resource(ViewModeState::default());
         app.insert_resource(Map2dViewState::default());
-        app.insert_resource(Terrain3dViewState::default());
         app.insert_resource(ClearColor(Color::BLACK));
         seed_layer_resources(&mut app.world_mut());
         app.add_systems(
@@ -504,7 +499,6 @@ mod tests {
         app.insert_resource(FieldMetadataCache::default());
         app.insert_resource(ViewModeState::default());
         app.insert_resource(Map2dViewState::default());
-        app.insert_resource(Terrain3dViewState::default());
         app.insert_resource(ClearColor(Color::BLACK));
         seed_layer_resources(&mut app.world_mut());
         app.add_systems(
@@ -611,7 +605,6 @@ mod tests {
         app.insert_resource(FieldMetadataCache::default());
         app.insert_resource(ViewModeState::default());
         app.insert_resource(Map2dViewState::default());
-        app.insert_resource(Terrain3dViewState::default());
         app.insert_resource(ClearColor(Color::BLACK));
         seed_layer_resources(&mut app.world_mut());
         app.add_systems(PostUpdate, snapshot::sync_current_snapshot);

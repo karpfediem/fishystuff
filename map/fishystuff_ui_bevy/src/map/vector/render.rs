@@ -1,23 +1,17 @@
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::Indices;
 use bevy::prelude::{
-    Assets, Color, ColorMaterial, Commands, Mesh, Mesh2d, Mesh3d, MeshMaterial2d, MeshMaterial3d,
-    StandardMaterial, Transform, Vec3,
+    Assets, Color, ColorMaterial, Commands, Mesh, Mesh2d, MeshMaterial2d, Transform,
 };
 use bevy::render::render_resource::PrimitiveTopology;
 
 use crate::map::vector::cache::{BuiltVectorGeometry, VectorMeshBundleSet, VectorMeshChunk};
-use crate::plugins::render_domain::{
-    world_2d_layers, world_3d_layers, World2dRenderEntity, World3dRenderEntity,
-};
-
-pub const VECTOR_3D_BASE_Y: f32 = 24_500.0;
+use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 
 pub fn spawn_vector_meshes(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials_2d: &mut Assets<ColorMaterial>,
-    materials_3d: &mut Assets<StandardMaterial>,
     geometry: BuiltVectorGeometry,
     z_base: f32,
     opacity: f32,
@@ -58,18 +52,6 @@ pub fn spawn_vector_meshes(
             color: Color::srgba(1.0, 1.0, 1.0, alpha),
             ..Default::default()
         });
-        let material_3d = materials_3d.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 1.0, 1.0, alpha),
-            alpha_mode: if alpha >= 0.999 {
-                bevy::prelude::AlphaMode::Opaque
-            } else {
-                bevy::prelude::AlphaMode::Blend
-            },
-            unlit: true,
-            cull_mode: None,
-            depth_bias: 2.0,
-            ..Default::default()
-        });
 
         let entity_2d = commands
             .spawn((
@@ -80,21 +62,10 @@ pub fn spawn_vector_meshes(
                 Transform::from_translation(bevy::math::Vec3::new(0.0, 0.0, z_base)),
             ))
             .id();
-        let entity_3d = commands
-            .spawn((
-                World3dRenderEntity,
-                world_3d_layers(),
-                Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(material_3d.clone()),
-                Transform::from_translation(Vec3::new(0.0, VECTOR_3D_BASE_Y + z_base, 0.0)),
-            ))
-            .id();
 
         chunks.push(VectorMeshChunk {
             entity_2d,
             material_2d,
-            entity_3d,
-            material_3d,
         });
     }
 

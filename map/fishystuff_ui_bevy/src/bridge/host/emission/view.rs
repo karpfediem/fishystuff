@@ -6,13 +6,12 @@ pub(in crate::bridge::host) fn emit_view_changed_event(
     time: Res<Time>,
     view_mode: Res<ViewModeState>,
     map_view: Res<Map2dViewState>,
-    terrain_view: Res<Terrain3dViewState>,
 ) {
     crate::perf_scope!("bridge.emit.view");
     let payload = FishyMapOutputEvent::ViewChanged {
         version: 1,
         view_mode: contract_view_mode(view_mode.mode),
-        camera: effective_view_snapshot(&view_mode, &map_view, &terrain_view).camera,
+        camera: effective_view_snapshot(&view_mode, &map_view).camera,
     };
     let serialized = match serde_json::to_string(&payload) {
         Ok(value) => value,

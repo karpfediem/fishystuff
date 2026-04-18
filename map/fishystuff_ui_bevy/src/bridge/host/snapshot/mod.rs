@@ -42,9 +42,7 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         || context.bookmarks.is_changed()
         || context.exact_lookups.is_changed()
         || context.field_metadata.is_changed();
-    let view_changed = context.view_mode.is_changed()
-        || context.map_view.is_changed()
-        || context.terrain_view.is_changed();
+    let view_changed = context.view_mode.is_changed() || context.map_view.is_changed();
     let selection_changed = context.selection.is_changed();
     let hover_changed = context.hover.is_changed();
     let layer_catalog_changed = context.layer_registry.is_changed()
@@ -128,11 +126,7 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         if view_changed {
             snapshot_changed |= replace_if_changed(
                 &mut snapshot.view,
-                effective_view_snapshot(
-                    &context.view_mode,
-                    &context.map_view,
-                    &context.terrain_view,
-                ),
+                effective_view_snapshot(&context.view_mode, &context.map_view),
             );
         }
         if selection_changed {
@@ -260,6 +254,5 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     field_metadata: Res<'w, FieldMetadataCache>,
     view_mode: Res<'w, ViewModeState>,
     map_view: Res<'w, Map2dViewState>,
-    terrain_view: Res<'w, Terrain3dViewState>,
     _marker: std::marker::PhantomData<&'s ()>,
 }

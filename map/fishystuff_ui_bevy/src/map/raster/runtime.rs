@@ -7,7 +7,6 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerManifestStatus, LayerRegistry, LayerRuntime, PickMode};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{WorldPoint, WorldRect};
-use crate::map::terrain::runtime::TerrainViewEstimate;
 use crate::plugins::api::{ApiBootstrapState, LayerEffectiveFilterState, MapDisplayState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
@@ -53,7 +52,6 @@ struct RasterUpdateContext<'w, 's> {
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
     pan_state: Res<'w, PanState>,
     view_mode: Res<'w, ViewModeState>,
-    terrain_view: Res<'w, TerrainViewEstimate>,
     bootstrap: ResMut<'w, ApiBootstrapState>,
     display_state: ResMut<'w, MapDisplayState>,
     debug_controls: Res<'w, TileDebugControls>,
@@ -90,7 +88,6 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     let camera_q = &ctx.camera_q;
     let pan_state = &ctx.pan_state;
     let view_mode = &ctx.view_mode;
-    let terrain_view = &ctx.terrain_view;
     let bootstrap = &mut ctx.bootstrap;
     let display_state = &mut ctx.display_state;
     let debug_controls = &ctx.debug_controls;
@@ -152,32 +149,19 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         return;
     };
     let map_to_world = MapToWorld::default();
-    let (view_world, cursor_world) = match view_mode.mode {
-        ViewMode::Map2D => {
-            let Ok((camera, camera_transform)) = camera_q.single() else {
-                return;
-            };
-            let Some(view_world) = view_rect(camera, camera_transform, window) else {
-                return;
-            };
-            let cursor_world = window.cursor_position().and_then(|cursor| {
-                camera
-                    .viewport_to_world_2d(&GlobalTransform::from(*camera_transform), cursor)
-                    .ok()
-                    .map(|world| (world.x, world.y))
-            });
-            (view_world, cursor_world)
-        }
-        ViewMode::Terrain3D => {
-            let view = terrain_view
-                .view_world
-                .unwrap_or_else(|| map_to_world.world_bounds());
-            let cursor_world = terrain_view
-                .cursor_world
-                .map(|world| (world.x as f32, world.z as f32));
-            (view, cursor_world)
-        }
+    let _ = view_mode;
+    let Ok((camera, camera_transform)) = camera_q.single() else {
+        return;
     };
+    let Some(view_world) = view_rect(camera, camera_transform, window) else {
+        return;
+    };
+    let cursor_world = window.cursor_position().and_then(|cursor| {
+        camera
+            .viewport_to_world_2d(&GlobalTransform::from(*camera_transform), cursor)
+            .ok()
+            .map(|world| (world.x, world.y))
+    });
 
     stats.view_min = Some((view_world.min.x as f32, view_world.min.z as f32));
     stats.view_max = Some((view_world.max.x as f32, view_world.max.z as f32));

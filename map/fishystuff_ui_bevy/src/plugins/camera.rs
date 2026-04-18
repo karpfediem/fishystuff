@@ -1,19 +1,15 @@
 use bevy::camera::ClearColorConfig;
-use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::{PrimaryWindow, WindowResolution};
 
 use crate::map::camera::map2d::{apply_map2d_camera_state, Map2dViewState};
-use crate::map::camera::terrain3d::reset_for_world_bounds;
+use crate::map::camera::mode::ViewModeState;
 use crate::map::spaces::world::MapToWorld;
-use crate::plugins::render_domain::{ui_layers, world_2d_layers, world_3d_layers};
+use crate::plugins::render_domain::{ui_layers, world_2d_layers};
 use crate::prelude::*;
 
 #[derive(Component, Debug)]
 pub struct Map2dCamera;
-
-#[derive(Component, Debug)]
-pub struct Terrain3dCamera;
 
 #[derive(Component, Debug)]
 pub struct UiCamera;
@@ -45,6 +41,8 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraFitState>()
+            .init_resource::<ViewModeState>()
+            .init_resource::<Map2dViewState>()
             .init_resource::<CameraZoomBounds>()
             .add_systems(Startup, spawn_cameras)
             .add_systems(Update, fit_camera_once);
@@ -73,18 +71,10 @@ fn spawn_cameras(mut commands: Commands) {
     let world_bounds = MapToWorld::default().world_bounds();
     let center_x = ((world_bounds.min.x + world_bounds.max.x) * 0.5) as f32;
     let center_z = ((world_bounds.min.z + world_bounds.max.z) * 0.5) as f32;
-    let terrain_view = reset_for_world_bounds(world_bounds);
-    let perspective = PerspectiveProjection {
-        fov: 55.0_f32.to_radians(),
-        near: 1.0,
-        far: 12_000_000.0,
-        ..default()
-    };
 
     commands.spawn((
         Map2dCamera,
         Camera2d,
-        Tonemapping::None,
         Camera {
             order: 0,
             is_active: true,
@@ -97,25 +87,8 @@ fn spawn_cameras(mut commands: Commands) {
     ));
 
     commands.spawn((
-        Terrain3dCamera,
-        Camera3d::default(),
-        Tonemapping::None,
-        Camera {
-            order: 0,
-            is_active: false,
-            clear_color: ClearColorConfig::Default,
-            ..default()
-        },
-        Projection::Perspective(perspective),
-        world_3d_layers(),
-        terrain_view.camera_transform(),
-        GlobalTransform::default(),
-    ));
-
-    commands.spawn((
         UiCamera,
         Camera2d,
-        Tonemapping::None,
         IsDefaultUiCamera,
         Camera {
             order: 100,

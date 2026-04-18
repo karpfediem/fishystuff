@@ -26,7 +26,7 @@ use crate::map::vector::build::{
 use crate::map::vector::cache::{
     BuiltVectorChunk, BuiltVectorGeometry, VectorFinishedCache, VectorLayerStats,
 };
-use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
+use crate::map::vector::render::spawn_vector_meshes;
 use crate::plugins::api::{LayerEffectiveFilterState, ZoneMembershipFilter};
 
 const VECTOR_MIN_PROGRESS_BUDGET_MS: f64 = 0.25;
@@ -121,7 +121,6 @@ fn vector_layers_need_update(
 fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_, '_>) {
     let meshes = &mut update.meshes;
     let materials_2d = &mut update.materials_2d;
-    let materials_3d = &mut update.materials_3d;
     let registry = &update.registry;
     let layer_runtime = &mut update.layer_runtime;
     let vector_runtime = &mut update.vector_runtime;
@@ -270,7 +269,6 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             FinishedVisibilityContext {
                 commands: &mut commands,
                 materials_2d,
-                materials_3d,
                 z_base: runtime_state.z_base,
                 opacity: runtime_state.opacity,
                 visible: render_visible,
@@ -282,9 +280,9 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             runtime_state.vector_cache_last_hit = true;
             runtime_state.vector_cache_hits = runtime_state.vector_cache_hits.saturating_add(1);
             crate::perf_counter_add!("vector.cache_hits", 1);
-            bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
+            bundle.set_depth(&mut commands, runtime_state.z_base);
             bundle.set_visibility(&mut commands, render_visible);
-            bundle.set_opacity(materials_2d, materials_3d, runtime_state.opacity);
+            bundle.set_opacity(materials_2d, runtime_state.opacity);
             apply_stats(&mut runtime_state, bundle.stats, LayerVectorStatus::Ready);
             runtime_state.vector_cache_entries = vector_runtime.finished.layer_len(layer.id) as u32;
             vector_runtime
@@ -405,14 +403,13 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                                 &mut commands,
                                 meshes,
                                 materials_2d,
-                                materials_3d,
                                 geometry,
                                 runtime_state.z_base,
                                 runtime_state.opacity,
                             );
-                            bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
+                            bundle.set_depth(&mut commands, runtime_state.z_base);
                             bundle.set_visibility(&mut commands, render_visible);
-                            bundle.set_opacity(materials_2d, materials_3d, runtime_state.opacity);
+                            bundle.set_opacity(materials_2d, runtime_state.opacity);
                             apply_stats(&mut runtime_state, bundle.stats, LayerVectorStatus::Ready);
                             if let Some(replaced) = vector_runtime
                                 .finished
@@ -497,7 +494,6 @@ fn should_activate_vector_layer(
             }
             required_for_clip_mask || layer_visible
         }
-        ViewMode::Terrain3D => required_for_clip_mask || layer_visible,
     }
 }
 
@@ -508,7 +504,6 @@ fn should_render_vector_layer(
 ) -> bool {
     match view_mode {
         ViewMode::Map2D => layer_visible && layer.field_url().is_none(),
-        ViewMode::Terrain3D => layer_visible,
     }
 }
 
@@ -852,7 +847,6 @@ fn hide_non_active_finished(
     let FinishedVisibilityContext {
         commands,
         materials_2d,
-        materials_3d,
         z_base,
         opacity,
         visible,
@@ -864,9 +858,9 @@ fn hide_non_active_finished(
             continue;
         };
         if key.1 == active_revision {
-            bundle.set_depth(commands, z_base, VECTOR_3D_BASE_Y);
+            bundle.set_depth(commands, z_base);
             bundle.set_visibility(commands, visible);
-            bundle.set_opacity(materials_2d, materials_3d, opacity);
+            bundle.set_opacity(materials_2d, opacity);
         } else {
             bundle.set_visibility(commands, false);
         }
@@ -877,7 +871,6 @@ fn hide_non_active_finished(
 struct VectorLayerUpdate<'w, 's> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials_2d: ResMut<'w, Assets<ColorMaterial>>,
-    materials_3d: ResMut<'w, Assets<StandardMaterial>>,
     registry: Res<'w, LayerRegistry>,
     layer_runtime: ResMut<'w, LayerRuntime>,
     vector_runtime: ResMut<'w, VectorLayerRuntime>,
@@ -893,7 +886,6 @@ struct VectorLayerUpdate<'w, 's> {
 struct FinishedVisibilityContext<'a, 'w, 's> {
     commands: &'a mut Commands<'w, 's>,
     materials_2d: &'a mut Assets<ColorMaterial>,
-    materials_3d: &'a mut Assets<StandardMaterial>,
     z_base: f32,
     opacity: f32,
     visible: bool,
@@ -1122,23 +1114,6 @@ mod tests {
             ViewMode::Map2D,
         ));
         assert!(!should_render_vector_layer(&layer, true, ViewMode::Map2D));
-    }
-
-    #[test]
-    fn field_backed_vector_layers_still_activate_in_terrain_3d() {
-        let layer = field_backed_vector_layer();
-
-        assert!(should_activate_vector_layer(
-            &layer,
-            true,
-            false,
-            ViewMode::Terrain3D,
-        ));
-        assert!(should_render_vector_layer(
-            &layer,
-            true,
-            ViewMode::Terrain3D,
-        ));
     }
 
     #[test]

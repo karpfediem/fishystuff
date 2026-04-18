@@ -29,12 +29,12 @@ The single-threaded-web baseline and future threading constraints are recorded i
   ```
 - Write to a specific report path:
   ```bash
-  tools/scripts/perf-run-scenario.sh terrain3d_enter_and_orbit /tmp/terrain.json
+  tools/scripts/perf-run-scenario.sh raster_2d_pan_zoom /tmp/raster.json
   ```
 - Emit a Chrome trace in addition to the JSON report:
   ```bash
-  PERF_TRACE_CHROME_PATH=target/perf/terrain.trace.json \
-    tools/scripts/perf-run-scenario.sh terrain3d_enter_and_orbit
+  PERF_TRACE_CHROME_PATH=target/perf/raster.trace.json \
+    tools/scripts/perf-run-scenario.sh raster_2d_pan_zoom
   ```
 - The wrapper uses local `cargo`/`xvfb-run` when they are already on `PATH` and otherwise falls back to `devenv shell`.
 - `load_map` is the simplest scenario and is the recommended canonical baseline when you want to measure the plain startup/load path before comparing more behavior-heavy scenarios.

@@ -469,21 +469,17 @@ mod tests {
     }
 
     #[test]
-    fn exact_layers_do_not_use_raster_texture_filtering_in_terrain_3d() {
+    fn zone_mask_exact_layers_only_filter_in_map_2d() {
         let zone_mask = layer("zone_mask", PickMode::ExactTilePixel);
 
-        assert!(!texture_pick_filter_enabled(
-            &zone_mask,
-            ViewMode::Terrain3D
-        ));
-        assert!(!entity_pick_filter_enabled(&zone_mask, ViewMode::Terrain3D));
+        assert!(texture_pick_filter_enabled(&zone_mask, ViewMode::Map2D));
+        assert!(entity_pick_filter_enabled(&zone_mask, ViewMode::Map2D));
     }
 
     #[test]
     fn non_zone_exact_layers_only_filter_in_map_2d() {
         let exact = layer("regions", PickMode::ExactTilePixel);
 
-        assert!(!texture_pick_filter_enabled(&exact, ViewMode::Terrain3D));
         assert!(texture_pick_filter_enabled(&exact, ViewMode::Map2D));
         assert!(entity_pick_filter_enabled(&exact, ViewMode::Map2D));
     }

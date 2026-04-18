@@ -26,8 +26,6 @@ pub enum FishyMapViewMode {
     #[default]
     #[serde(rename = "2d")]
     TwoD,
-    #[serde(rename = "3d")]
-    ThreeD,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

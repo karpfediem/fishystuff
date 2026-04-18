@@ -1,19 +1,13 @@
 use fishystuff_api::models::meta::MetaResponse;
 
-use crate::map::terrain::Terrain3dConfig;
-
 use super::super::state::{ApiBootstrapState, PatchFilterState};
 use super::util::pick_map_version;
 
 pub(super) fn apply_meta_response(
     bootstrap: &mut ApiBootstrapState,
     patch_filter: &mut PatchFilterState,
-    terrain_config: &mut Terrain3dConfig,
     meta: MetaResponse,
 ) {
-    terrain_config.map_width = meta.canonical_map.image_size_x;
-    terrain_config.map_height = meta.canonical_map.image_size_y;
-
     let map_version = pick_map_version(&meta);
     if map_version != bootstrap.map_version {
         bootstrap.map_version_dirty = true;
@@ -29,7 +23,6 @@ pub(super) fn apply_meta_response(
 #[cfg(test)]
 mod tests {
     use super::apply_meta_response;
-    use crate::map::terrain::Terrain3dConfig;
     use crate::plugins::api::{ApiBootstrapState, PatchFilterState};
     use fishystuff_api::ids::PatchId;
     use fishystuff_api::models::meta::{CanonicalMapInfo, MetaDefaults, MetaResponse, PatchInfo};
@@ -59,21 +52,13 @@ mod tests {
     fn apply_meta_response_does_not_seed_patch_range_defaults() {
         let mut bootstrap = ApiBootstrapState::default();
         let mut patch_filter = PatchFilterState::default();
-        let mut terrain_config = Terrain3dConfig::default();
 
-        apply_meta_response(
-            &mut bootstrap,
-            &mut patch_filter,
-            &mut terrain_config,
-            meta_with_patches(),
-        );
+        apply_meta_response(&mut bootstrap, &mut patch_filter, meta_with_patches());
 
         assert_eq!(patch_filter.from_ts, None);
         assert_eq!(patch_filter.to_ts, None);
         assert_eq!(patch_filter.selected_patch, None);
         assert_eq!(patch_filter.patches.len(), 2);
-        assert_eq!(terrain_config.map_width, 4096);
-        assert_eq!(terrain_config.map_height, 2048);
     }
 
     #[test]
@@ -85,14 +70,8 @@ mod tests {
             selected_patch: Some("2026-03-12".to_string()),
             ..PatchFilterState::default()
         };
-        let mut terrain_config = Terrain3dConfig::default();
 
-        apply_meta_response(
-            &mut bootstrap,
-            &mut patch_filter,
-            &mut terrain_config,
-            meta_with_patches(),
-        );
+        apply_meta_response(&mut bootstrap, &mut patch_filter, meta_with_patches());
 
         assert_eq!(patch_filter.from_ts, Some(150));
         assert_eq!(patch_filter.to_ts, Some(250));

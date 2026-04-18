@@ -83,7 +83,7 @@ mod tests {
                     ]
                 },
                 "commands": {
-                    "setViewMode": "3d"
+                    "setViewMode": "2d"
                 }
             }"#,
         )
@@ -167,7 +167,7 @@ mod tests {
                 .commands
                 .as_ref()
                 .and_then(|commands| commands.set_view_mode),
-            Some(FishyMapViewMode::ThreeD)
+            Some(FishyMapViewMode::TwoD)
         );
         assert_eq!(
             patch.ui.as_ref().and_then(|ui| ui.point_icon_scale),
@@ -518,7 +518,7 @@ mod tests {
                 "version": 1,
                 "commands": {
                     "restoreView": {
-                        "viewMode": "3d",
+                        "viewMode": "2d",
                         "camera": {
                             "pivotWorldX": 10.5,
                             "pivotWorldY": 15.0,
@@ -538,7 +538,7 @@ mod tests {
             .expect("commands")
             .restore_view
             .expect("restore view");
-        assert_eq!(restore_view.view_mode, FishyMapViewMode::ThreeD);
+        assert_eq!(restore_view.view_mode, FishyMapViewMode::TwoD);
         assert_eq!(restore_view.camera.pivot_world_x, Some(10.5));
         assert_eq!(restore_view.camera.distance, Some(4200.0));
     }

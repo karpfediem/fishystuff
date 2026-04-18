@@ -10,7 +10,6 @@ use crate::map::camera::map2d::{
     apply_map2d_camera_state, map2d_cursor_to_world_with_scale, reset_map2d_view, Map2dViewState,
 };
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::terrain::mode::CameraControlMutationFlags;
 use crate::plugins::camera::{CameraZoomBounds, Map2dCamera};
 use crate::plugins::ui::{UiPointerBlocker, UiPointerCapture};
 use crate::prelude::*;
@@ -71,7 +70,8 @@ impl Plugin for InputPlugin {
 }
 
 fn map2d_controls_should_run(mode: ViewMode, camera_active: bool) -> bool {
-    mode == ViewMode::Map2D && camera_active
+    let _ = mode;
+    camera_active
 }
 
 fn track_cursor(
@@ -381,7 +381,6 @@ fn update_map2d_camera_controls(
         controls.view_state.center_world_x = working_center.x;
         controls.view_state.center_world_z = working_center.y;
         controls.view_state.zoom = working_zoom;
-        controls.control_mutations.map2d_updated = true;
     }
     // Always enforce the known 2D pose/projection to avoid transform contamination from 3D mode.
     apply_map2d_camera_state(&controls.view_state, &mut transform, &mut projection);
@@ -395,7 +394,6 @@ struct Map2dCameraControls<'w, 's> {
     touches: Res<'w, Touches>,
     mouse_wheel: MessageReader<'w, 's, MouseWheel>,
     pan: ResMut<'w, PanState>,
-    control_mutations: ResMut<'w, CameraControlMutationFlags>,
     view_state: ResMut<'w, Map2dViewState>,
     cursor: Res<'w, CursorState>,
     ui_capture: Res<'w, UiPointerCapture>,
@@ -491,7 +489,5 @@ mod tests {
     fn map2d_controls_require_map_mode_and_active_camera() {
         assert!(map2d_controls_should_run(ViewMode::Map2D, true));
         assert!(!map2d_controls_should_run(ViewMode::Map2D, false));
-        assert!(!map2d_controls_should_run(ViewMode::Terrain3D, true));
-        assert!(!map2d_controls_should_run(ViewMode::Terrain3D, false));
     }
 }

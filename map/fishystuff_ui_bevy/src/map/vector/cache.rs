@@ -1,8 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use bevy::prelude::{
-    Assets, Color, ColorMaterial, Commands, Entity, Handle, StandardMaterial, Transform, Vec3,
-    Visibility,
+    Assets, Color, ColorMaterial, Commands, Entity, Handle, Transform, Vec3, Visibility,
 };
 use serde_json::{Map, Value};
 
@@ -48,8 +47,6 @@ pub struct BuiltVectorGeometry {
 pub struct VectorMeshChunk {
     pub entity_2d: Entity,
     pub material_2d: Handle<ColorMaterial>,
-    pub entity_3d: Entity,
-    pub material_3d: Handle<StandardMaterial>,
 }
 
 #[derive(Debug, Default)]
@@ -80,18 +77,11 @@ pub struct HoverPolygon {
 }
 
 impl VectorMeshBundleSet {
-    pub fn set_depth(&self, commands: &mut Commands, z_base: f32, y_base: f32) {
+    pub fn set_depth(&self, commands: &mut Commands, z_base: f32) {
         for chunk in &self.chunks {
             commands
                 .entity(chunk.entity_2d)
                 .insert(Transform::from_translation(Vec3::new(0.0, 0.0, z_base)));
-            commands
-                .entity(chunk.entity_3d)
-                .insert(Transform::from_translation(Vec3::new(
-                    0.0,
-                    y_base + z_base,
-                    0.0,
-                )));
         }
     }
 
@@ -103,30 +93,15 @@ impl VectorMeshBundleSet {
         };
         for chunk in &self.chunks {
             commands.entity(chunk.entity_2d).insert(visibility);
-            commands.entity(chunk.entity_3d).insert(visibility);
         }
     }
 
-    pub fn set_opacity(
-        &self,
-        materials_2d: &mut Assets<ColorMaterial>,
-        materials_3d: &mut Assets<StandardMaterial>,
-        opacity: f32,
-    ) {
+    pub fn set_opacity(&self, materials_2d: &mut Assets<ColorMaterial>, opacity: f32) {
         let alpha = opacity.clamp(0.0, 1.0);
         for chunk in &self.chunks {
             if let Some(material) = materials_2d.get_mut(&chunk.material_2d) {
                 let base = material.color.to_srgba();
                 material.color = Color::srgba(base.red, base.green, base.blue, alpha);
-            }
-            if let Some(material) = materials_3d.get_mut(&chunk.material_3d) {
-                let base = material.base_color.to_srgba();
-                material.base_color = Color::srgba(base.red, base.green, base.blue, alpha);
-                material.alpha_mode = if alpha >= 0.999 {
-                    bevy::prelude::AlphaMode::Opaque
-                } else {
-                    bevy::prelude::AlphaMode::Blend
-                };
             }
         }
     }
@@ -134,7 +109,6 @@ impl VectorMeshBundleSet {
     pub fn despawn(self, commands: &mut Commands) {
         for chunk in self.chunks {
             commands.entity(chunk.entity_2d).despawn();
-            commands.entity(chunk.entity_3d).despawn();
         }
     }
 
