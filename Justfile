@@ -9,7 +9,7 @@ watch:
 
 # Open a local service UI in the default browser
 open target:
-  bash -eu -c 'target="$1"; case "$target" in site) url="http://127.0.0.1:1990/" ;; map) url="http://127.0.0.1:1990/map/" ;; api) url="http://127.0.0.1:8080/api/v1/meta" ;; cdn) url="http://127.0.0.1:4040/" ;; jaeger) url="http://127.0.0.1:16686/" ;; loki) url="http://127.0.0.1:3100/ready" ;; prometheus) url="http://127.0.0.1:9090/" ;; vector) url="http://127.0.0.1:8686/playground" ;; *) echo "unknown open target: $target" >&2; echo "available targets: site map api cdn jaeger loki prometheus vector" >&2; exit 2 ;; esac; exec xdg-open "$url"' -- "{{target}}"
+  bash -eu -c 'target="$1"; case "$target" in site) url="http://127.0.0.1:1990/" ;; map) url="http://127.0.0.1:1990/map/" ;; api) url="http://127.0.0.1:8080/api/v1/meta" ;; cdn) url="http://127.0.0.1:4040/" ;; jaeger) url="http://127.0.0.1:16686/" ;; loki) url="http://127.0.0.1:3100/services" ;; prometheus) url="http://127.0.0.1:9090/" ;; vector) url="http://127.0.0.1:8686/playground" ;; *) echo "unknown open target: $target" >&2; echo "available targets: site map api cdn jaeger loki prometheus vector" >&2; exit 2 ;; esac; exec xdg-open "$url"' -- "{{target}}"
 
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
