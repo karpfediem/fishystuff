@@ -1,6 +1,6 @@
 # Current Map Performance Workstream
 
-Last updated: 2026-03-22
+Last updated: 2026-04-18
 
 This note keeps the latest direction visible without rereading the full task history.
 
@@ -13,16 +13,12 @@ This note keeps the latest direction visible without rereading the full task his
 ## Latest pivot
 
 - The zone-mask pyramid / retry branch was rolled back.
-- Exact zone semantics are now separated from visual raster residency.
 - The map no longer uses raster pick-probe requests for hover or click on the exact zone mask.
-- A dedicated exact-lookup asset is now built from the canonical zone mask PNG and loaded directly into Wasm memory.
+- The canonical zone-mask field asset is now built from the source PNG and loaded directly into Wasm memory.
+- `zone_mask`, `region_groups`, and `regions` now use the same field-backed runtime shape.
+- There is no separate zone-mask raster tileset anymore.
 - The direct full-image `zone_mask` experiment was removed.
   - It caused WebGL upload failures and was not viable on the browser path.
-- The visual `zone_mask` now uses a fixed display-tileset:
-  - `/images/tiles/zone_mask_visual/v1/tileset.json`
-  - tile size: `2048`
-  - single level: `z=0`
-  - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
 - The visual `minimap` now uses a map-space display pyramid:
   - `/images/tiles/minimap_visual/v1/tileset.json`
   - logical tile size: `512`
@@ -50,48 +46,37 @@ This note keeps the latest direction visible without rereading the full task his
   - the minimap rebuild guard now tracks both `tile_size_px` and maximum generated level so stale pyramids do not survive config changes
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
   - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
-- The current hover path is now correctness-first and exact-lookup-backed:
-  - exact lookup still determines which zone is hovered
+- The current hover path is now correctness-first and field-backed:
+  - the zone-mask field still determines which zone is hovered
   - the filter path is no longer called every 2D frame while idle
-  - all hover transitions currently use the targeted CPU span-delta path
-  - the previous large-fanout shader overlay was disabled because sampled display-color matching missed some sea-depth and Kamasylvia zones
+  - all hover transitions currently use the targeted CPU path
   - the hover highlight color is now bright green
-  - clip-mask and evidence-filter cases still use the compose path
+  - clip-mask and evidence-filter cases still use the compose path where needed
 - The 2D zoom-in clamp has been loosened again.
   - the current minimum zoom factor is `0.0025 * fit_scale`
   - this restores deeper zooming without changing the initial fit-to-world behavior
 
 ## Current diagnosis
 
-- The browser slowdown is not just "Bevy is slow". The hotter architectural problem is coupling exact semantics to the visual raster tile cache.
+- The browser slowdown is not just "Bevy is slow". A major past problem was coupling exact semantics to the visual raster tile cache.
 - A concrete cache bug also existed in the raster runtime:
   - eviction only ran on LOD changes
   - panning at a fixed zoom could keep accumulating decoded raster tiles without ever trimming the cache
   - that pattern matches the recent minimap OOMs after exploration better than startup alone
-- Exact hover/click work should not depend on whether the display tiles for that pixel happen to be resident.
-- Exact/static assets must resolve through the configured public CDN base just like tiles and GeoJSON.
-  - Site-root relative URLs (`/images/...`) are wrong in the integrated site shell and break both display tiles and exact-lookup hover.
+- Exact hover/click work should not depend on whether any unrelated raster tiles happen to be resident.
+- Static assets must resolve through the configured public CDN base just like tiles and GeoJSON.
 - Visual transport format and semantic lookup format must be treated as separate concerns.
+- For `zone_mask`, that split has now been removed at the transport level:
+  - the canonical field asset is both the semantic source and the 2D visual source
+  - the old separate visual tileset path is gone
 - The same rule now applies to minimap transport:
   - the browser should not pay tens of thousands of tiny PNG decodes for a static visual layer
   - the right runtime shape is a map-space display pyramid with far fewer, larger tiles than the raw source set
   - high-zoom detail is a hard requirement, so minimap work must preserve source-equivalent finest-level density
 - The first stable target is:
-  - exact lookup is cheap, bounded, and independent
-  - visual raster work is measured and bounded separately
+  - field-backed semantic lookup is cheap, bounded, and independent
+  - raster work is measured and bounded separately where raster transport is still required
   - bridge work stays coarse and batched
-- Current measured result of the current exact span path:
-  - browser smoke passes again and the map is visible
-  - previous `zone_mask_hover_sweep` baseline was `9.653 ms` avg with `46.0 ms` p95
-  - first hover optimization reduced `zone_mask_hover_sweep` to `4.635 ms` avg with `9.6 ms` p95
-  - previous targeted hover path reduced `zone_mask_hover_sweep` to `3.026 ms` avg with `6.2 ms` p95
-  - the now-disabled shader-overlay branch reduced `zone_mask_hover_sweep` to `2.684 ms` avg with `4.5 ms` p95, but it was incorrect for some zones
-  - current all-CPU `zone_mask_hover_sweep` is `4.946 ms` avg with `18.4 ms` p95
-  - current all-CPU `zone_mask_hover_far_jumps` is `5.207 ms` avg with `16.3 ms` p95
-  - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms`, then to `13.8 ms`, and now sits at `22.9 ms` total in the correctness-first all-CPU path
-  - `raster.update_tiles` is now `32.6 ms` total on `zone_mask_hover_sweep`
-  - top hover spans are now `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.desired_tile_set_build`
-  - the current source of truth is the exact span path; any future fast path must derive from exact zone semantics, not sampled display color
 - Current integrated vector activation result on the same zone-mask path:
   - the browser vector scenarios now explicitly isolate a single vector layer instead of accidentally inheriting both default-visible vector layers
   - the first measured fix stopped forcing `regions` active when `region_groups` is enabled, and stopped `vector.layer_update` from running every frame just because a layer stayed `Ready`
@@ -161,9 +146,9 @@ Backend-neutral stages:
 - Map-side exact lookup cache in `map/exact_lookup.rs`
 - Hover/click path in `plugins/mask.rs` now samples the exact lookup asset instead of queueing raster pick probes
 - Old raster pick-probe request path was removed from `map/streaming.rs` and `map/raster/policy/requests.rs`
-- `zone_mask` visual rendering now uses fixed display chunks instead of the old visual/semantic tile coupling
-  - build output: `/images/tiles/zone_mask_visual/v1`
-  - runtime override: `map/layers/registry.rs`
+- `zone_mask`, `region_groups`, and `regions` now use field-backed runtime layers
+  - build outputs live under `/fields/`
+  - `zone_mask` no longer has a separate visual tileset path
 - `minimap` visual rendering now uses a source-equivalent map-space display pyramid instead of the old 128px decode-heavy source pyramid
   - build output: `/images/tiles/minimap_visual/v1`
   - generator: `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
@@ -174,33 +159,28 @@ Backend-neutral stages:
   - the raster cache now evicts whenever it is actually over budget, not just when the chosen LOD changes
   - parent minimap levels are now direct source resamples, not stitched child quadrants
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
-- Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
-- Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
-- Hover-only visual updates now use a zone-to-tile index so only tiles containing the old/new hovered zones are touched
-- Larger hover fanout currently stays on the exact span path until a non-color-matching fast path replaces it
 - Browser profiling now includes a `minimap_enable` scenario for minimap visibility regressions after startup
 - Browser profiling now includes a `minimap_pan_zoom` scenario for exploration-time minimap regressions
 - Browser profiling now includes a `zone_mask_hover_far_jumps` scenario for large-distance hover transitions
 - Browser profiling now includes both `vector_region_groups_enable` and `vector_regions_enable` as isolated single-layer scenarios
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
-Current generated lookup asset:
+Current generated zone-mask field asset:
 
-- `/images/exact_lookup/zone_mask.v1.bin`
+- `/fields/zone_mask.v1.bin`
 - size: `1,790,476` bytes
 - dimensions: `11560x10540`
 - row segments: `291,382`
 
 ## Current priorities
 
-1. Keep exact semantics off the visual raster path.
+1. Keep `zone_mask` on the canonical field-backed path.
    - no reintroduction of pick-probe tile fetches
-   - exact hover/click should stay available even when visual raster is still converging
+   - no reintroduction of a separate visual tileset path
 2. Restore a fast large-fanout hover path without regressing correctness.
-  - exact lookup should remain the semantic source
+  - the field asset should remain the semantic source
   - keep the filter path change-driven, not per-frame
-  - the current CPU span/delta path is the correctness baseline for all hover transitions
-  - do not reintroduce sampled-display-color matching
+  - the current CPU path is the correctness baseline for hover transitions
   - the next fast path must derive overlay coverage from exact zone semantics
 3. Reduce the remaining visual raster working set.
    - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
@@ -219,20 +199,19 @@ Current generated lookup asset:
 
 ## Current plan
 
-1. Keep the exact-lookup split and fixed display-tileset path measured.
-2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
-3. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid with `z=0..2` unless a replacement beats it with data.
-4. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
+1. Keep the canonical field-backed `zone_mask` path measured and documented.
+2. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid with `z=0..2` unless a replacement beats it with data.
+3. Re-measure hover hotspots on the field-backed `zone_mask` path before optimizing further.
+4. Reduce residual raster startup/backlog for `minimap` without breaking exact semantics elsewhere.
 5. Add explicit stage measurements for:
-   - exact lookup load
-   - exact lookup sample
+   - field asset load
+   - field sample
    - visual tile fetch/decode
    - visual tile upload
    - bridge event flush
 6. Attack the next measured hotspot after the vector draw-call collapse.
   - current top activation hotspot: `vector.layer_update`
   - current top one-shot vector hotspot: `vector.geojson_parse`
-  - current top hover hotspots: `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
   - current startup raster hotspot after the minimap cut: `raster.update_tiles` / `raster.tile_entity_update`
   - `minimap_enable` and `minimap_pan_zoom` are now the dedicated browser regression scenarios for that layer
 7. Keep browser smoke/profile automation trustworthy.
@@ -244,6 +223,6 @@ Current generated lookup asset:
 
 - Do not wait on future Bevy web multithreading.
 - Do not reintroduce the raw source-space 128px `minimap` pyramid.
-- Do not go back to the direct full-image `zone_mask` path.
-- Do not let exact hover/click depend on display-tile residency again.
+- Do not reintroduce a second transport path for `zone_mask`.
+- Do not let exact hover/click depend on raster-tile residency again.
 - Do not make performance claims without a browser or native profiling run.
