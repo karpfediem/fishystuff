@@ -37,6 +37,7 @@ impl Default for ZoneStatusConfig {
 pub struct TelemetryConfig {
     pub enabled: bool,
     pub service_name: String,
+    pub deployment_environment: String,
     pub otlp_traces_endpoint: String,
     pub sample_ratio: f64,
 }
@@ -46,6 +47,7 @@ impl Default for TelemetryConfig {
         Self {
             enabled: false,
             service_name: "fishystuff-api".to_string(),
+            deployment_environment: "unknown".to_string(),
             otlp_traces_endpoint: String::new(),
             sample_ratio: 0.25,
         }
@@ -143,6 +145,11 @@ impl AppConfig {
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| "fishystuff-api".to_string()),
+            deployment_environment: std::env::var("FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "unknown".to_string()),
             otlp_traces_endpoint: std::env::var("FISHYSTUFF_OTEL_TRACES_ENDPOINT")
                 .ok()
                 .map(|value| value.trim().to_string())
@@ -329,7 +336,7 @@ fn parse_env_f64(name: &str, fallback: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_cors_allowed_origins;
+    use super::{parse_cors_allowed_origins, TelemetryConfig};
     use fishystuff_core::public_endpoints::derive_sibling_public_base_url;
 
     #[test]
@@ -362,5 +369,14 @@ mod tests {
             derive_sibling_public_base_url(Some("https://beta.fishystuff.fish"), "api").as_deref(),
             Some("https://api.beta.fishystuff.fish")
         );
+    }
+
+    #[test]
+    fn telemetry_defaults_include_a_stable_deployment_environment() {
+        let telemetry = TelemetryConfig::default();
+
+        assert_eq!(telemetry.service_name, "fishystuff-api");
+        assert_eq!(telemetry.deployment_environment, "unknown");
+        assert_eq!(telemetry.sample_ratio, 0.25);
     }
 }

@@ -14,10 +14,11 @@ mod telemetry {
 
     use anyhow::{Context, Result};
     use opentelemetry::global;
+    use opentelemetry::propagation::TextMapCompositePropagator;
     use opentelemetry::trace::TracerProvider as _;
     use opentelemetry::KeyValue;
     use opentelemetry_otlp::WithExportConfig;
-    use opentelemetry_sdk::propagation::TraceContextPropagator;
+    use opentelemetry_sdk::propagation::{BaggagePropagator, TraceContextPropagator};
     use opentelemetry_sdk::trace::{
         BatchConfigBuilder, BatchSpanProcessor, Sampler, SdkTracerProvider,
     };
@@ -43,7 +44,10 @@ mod telemetry {
     }
 
     pub fn init(config: &TelemetryConfig) -> Result<TelemetryHandle> {
-        global::set_text_map_propagator(TraceContextPropagator::new());
+        global::set_text_map_propagator(TextMapCompositePropagator::new(vec![
+            Box::new(TraceContextPropagator::new()),
+            Box::new(BaggagePropagator::new()),
+        ]));
 
         let fmt_layer = tracing_subscriber::fmt::layer()
             .with_target(false)
@@ -97,6 +101,10 @@ mod telemetry {
             .with_attributes([
                 KeyValue::new("service.name", config.service_name.clone()),
                 KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+                KeyValue::new(
+                    "deployment.environment",
+                    config.deployment_environment.clone(),
+                ),
             ])
             .build();
 

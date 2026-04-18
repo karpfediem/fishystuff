@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
 
 import {
+  applyFishystuffResponseAttributes,
   buildBaseUrlPrefixPattern,
   buildIgnorePatterns,
   buildPropagationTargets,
+  classifyFetchTarget,
+  createHttpError,
+  extractFishystuffResponseContext,
 } from "./otel-entry.mjs";
 
 test("buildBaseUrlPrefixPattern matches URLs rooted under the configured base", () => {
@@ -40,4 +44,79 @@ test("buildIgnorePatterns keeps ignoring the exporter endpoint and CDN prefix", 
   expect(patterns[0].test("http://localhost:1990/otel/v1/traces?x=1")).toBe(true);
   expect(patterns[1].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
   expect(patterns[1].test("http://localhost:8080/api/v1/meta")).toBe(false);
+});
+
+test("classifyFetchTarget consistently labels API, site, and CDN requests", () => {
+  const config = {
+    apiBaseUrl: "https://api.beta.fishystuff.fish",
+    cdnBaseUrl: "https://cdn.beta.fishystuff.fish",
+    siteBaseUrl: "https://beta.fishystuff.fish",
+  };
+
+  expect(classifyFetchTarget("https://api.beta.fishystuff.fish/api/v1/meta", config)).toBe("api");
+  expect(classifyFetchTarget("https://cdn.beta.fishystuff.fish/map/runtime-manifest.json", config)).toBe("cdn");
+  expect(classifyFetchTarget("https://beta.fishystuff.fish/fishydex/", config)).toBe("site");
+  expect(classifyFetchTarget("https://example.com/elsewhere", config)).toBe("other");
+});
+
+test("extractFishystuffResponseContext reads request and trace identifiers from headers", () => {
+  const context = extractFishystuffResponseContext({
+    status: 503,
+    headers: new Headers({
+      "x-request-id": "req-123",
+      "x-trace-id": "trace-abc",
+      "x-span-id": "span-def",
+    }),
+  });
+
+  expect(context).toEqual({
+    statusCode: 503,
+    requestId: "req-123",
+    traceId: "trace-abc",
+    spanId: "span-def",
+  });
+});
+
+test("applyFishystuffResponseAttributes adds correlation identifiers to spans", () => {
+  const attributes = {};
+  const span = {
+    setAttribute(key, value) {
+      attributes[key] = value;
+    },
+  };
+
+  applyFishystuffResponseAttributes(span, {
+    headers: new Headers({
+      "x-request-id": "req-123",
+      "x-trace-id": "trace-abc",
+      "x-span-id": "span-def",
+    }),
+  });
+
+  expect(attributes).toEqual({
+    "fishystuff.response.request_id": "req-123",
+    "fishystuff.response.trace_id": "trace-abc",
+    "fishystuff.response.span_id": "span-def",
+  });
+});
+
+test("createHttpError carries status and trace context into the thrown message", () => {
+  const error = createHttpError(
+    {
+      status: 500,
+      headers: new Headers({
+        "x-request-id": "req-123",
+        "x-trace-id": "trace-abc",
+      }),
+    },
+    "best spots request failed",
+  );
+
+  expect(error.message).toBe(
+    "best spots request failed (HTTP 500 request_id=req-123 trace_id=trace-abc)",
+  );
+  expect(error.statusCode).toBe(500);
+  expect(error.requestId).toBe("req-123");
+  expect(error.traceId).toBe("trace-abc");
+  expect(error.spanId).toBe("");
 });
