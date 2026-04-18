@@ -663,10 +663,9 @@ fishymap-search-panel {
 
 .fishymap-layer-card {
   position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: start;
-  gap: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
   margin-left: calc(var(--fishymap-layer-indent, 0) * 1.4rem);
   padding: 0.8rem 0.9rem;
   transition:
@@ -720,6 +719,14 @@ fishymap-search-panel {
   opacity: 0.45;
 }
 
+.fishymap-layer-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
 .fishymap-layer-visibility .fishy-icon,
 .fishymap-layer-drag .fishy-icon,
 .fishymap-layer-settings .fishy-icon {
@@ -731,13 +738,15 @@ fishymap-search-panel {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding-top: 0.15rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .fishymap-layer-header {
   display: flex;
   min-width: 0;
   align-items: center;
+  padding-top: 0.15rem;
 }
 
 .fishymap-layer-controls {

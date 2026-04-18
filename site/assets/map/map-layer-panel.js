@@ -257,24 +257,50 @@ export function renderLayerStack(container, stateBundle, options = {}) {
           data-clip-mask-source="${locked ? "false" : "true"}"
           style="--fishymap-layer-indent:${indentLevel};"
         >
-          <button
-            class="fishymap-layer-drag btn btn-sm btn-circle btn-ghost"
-            data-layer-drag="${escapeAttribute(layer.layerId)}"
-            type="button"
-            aria-label="${locked ? `${layer.name} is pinned to the ground layer` : `Drag ${layer.name}`}"
-            draggable="${locked ? "false" : "true"}"
-            ${locked ? "disabled" : ""}
-            tabindex="-1"
-          >
-            ${dragHandleIcon()}
-          </button>
-          <div class="fishymap-layer-body min-w-0">
+          <div class="fishymap-layer-summary">
+            <button
+              class="fishymap-layer-drag btn btn-sm btn-circle btn-ghost"
+              data-layer-drag="${escapeAttribute(layer.layerId)}"
+              type="button"
+              aria-label="${locked ? `${layer.name} is pinned to the ground layer` : `Drag ${layer.name}`}"
+              draggable="${locked ? "false" : "true"}"
+              ${locked ? "disabled" : ""}
+              tabindex="-1"
+            >
+              ${dragHandleIcon()}
+            </button>
             <div class="fishymap-layer-header">
               <span class="truncate text-sm font-semibold">${escapeHtml(layer.name)}</span>
             </div>
-            ${
-              settingsExpanded
-                ? `
+            <button
+              class="fishymap-layer-settings btn btn-sm btn-circle ${
+                settingsExpanded ? "btn-soft btn-primary" : "btn-ghost"
+              }"
+              data-layer-settings-toggle="${escapeAttribute(layer.layerId)}"
+              type="button"
+              aria-label="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
+              aria-expanded="${settingsExpanded ? "true" : "false"}"
+              title="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
+            >
+              ${layerSettingsIcon()}
+            </button>
+            <button
+              class="fishymap-layer-visibility btn btn-sm btn-circle ${
+                visible ? "btn-soft btn-primary" : "btn-ghost"
+              }"
+              data-layer-visibility="${escapeAttribute(layer.layerId)}"
+              data-layer-visible="${visible ? "true" : "false"}"
+              type="button"
+              aria-label="${visibilityLabel} ${escapeHtml(layer.name)}"
+              title="${visibilityLabel} ${escapeHtml(layer.name)}"
+            >
+              ${eyeIcon(visible)}
+            </button>
+          </div>
+          ${
+            settingsExpanded
+              ? `
+                <div class="fishymap-layer-body min-w-0">
                   <div class="fishymap-layer-controls">
                     <div class="fishymap-layer-relations">
                       <span class="badge badge-ghost badge-xs">${kind}</span>
@@ -416,34 +442,10 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                         : ""
                     }
                   </div>
-                `
-                : ""
-            }
-          </div>
-          <button
-            class="fishymap-layer-settings btn btn-sm btn-circle ${
-              settingsExpanded ? "btn-soft btn-primary" : "btn-ghost"
-            }"
-            data-layer-settings-toggle="${escapeAttribute(layer.layerId)}"
-            type="button"
-            aria-label="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
-            aria-expanded="${settingsExpanded ? "true" : "false"}"
-            title="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
-          >
-            ${layerSettingsIcon()}
-          </button>
-          <button
-            class="fishymap-layer-visibility btn btn-sm btn-circle ${
-              visible ? "btn-soft btn-primary" : "btn-ghost"
-            }"
-            data-layer-visibility="${escapeAttribute(layer.layerId)}"
-            data-layer-visible="${visible ? "true" : "false"}"
-            type="button"
-            aria-label="${visibilityLabel} ${escapeHtml(layer.name)}"
-            title="${visibilityLabel} ${escapeHtml(layer.name)}"
-          >
-            ${eyeIcon(visible)}
-          </button>
+                </div>
+              `
+              : ""
+          }
         </article>
       `;
     })
