@@ -19,8 +19,7 @@ maintained source of truth for this workflow.
 
 Use this workflow when you need to:
 
-- rebuild `data/cdn/public/images/tiles/minimap/` from original source-backed
-  archive data
+- rebuild the raw source-backed `rader_*.png` cache from original archive data
 - refresh `data/cdn/public/images/tiles/minimap_visual/v1/` after a game patch
 - verify that the repo can regenerate minimap tile state without depending on
   the legacy ZIP baseline
@@ -87,7 +86,7 @@ Raw baseline generation only:
 ```bash
 devenv shell -- cargo run -q -p fishystuff_tilegen --bin minimap_source_tiles -- \
   --source-archive data/scratch/paz \
-  --out-dir data/cdn/public/images/tiles/minimap
+  --out-dir data/scratch/minimap/source_tiles
 ```
 
 ## What Owns What
@@ -98,9 +97,9 @@ devenv shell -- cargo run -q -p fishystuff_tilegen --bin minimap_source_tiles --
    `ui_texture/new_ui_common_forlua/widget/rader/minimap_data_pack/rader_*.dds`
 2. extracts the required source payloads through `pazifista` archive handling
 3. converts them to raw `rader_*.png` tiles under
-   `data/cdn/public/images/tiles/minimap/`
+   `data/scratch/minimap/source_tiles/`
 4. prunes stale raw PNG tiles that no longer exist in the source archive set
-5. writes `data/cdn/public/images/tiles/minimap/source-manifest.json`
+5. writes `data/scratch/minimap/source_tiles/source-manifest.json`
 
 The wrapper script owns:
 
@@ -112,8 +111,8 @@ The wrapper script owns:
 
 Raw source-backed tile state:
 
-- `data/cdn/public/images/tiles/minimap/rader_*.png`
-- `data/cdn/public/images/tiles/minimap/source-manifest.json`
+- `data/scratch/minimap/source_tiles/rader_*.png`
+- `data/scratch/minimap/source_tiles/source-manifest.json`
 
 Display pyramid:
 
@@ -122,10 +121,9 @@ Display pyramid:
 
 ## Notes
 
-- These outputs live under `data/cdn/public/`, which is local CDN payload
-  state. Do not commit unrelated generated payloads.
 - The display pyramid is the runtime visual surface. The raw `rader_*.png`
-  tiles are intermediate source-backed inputs used to rebuild that surface.
+  tiles are intermediate source-backed inputs used to rebuild that surface and
+  are not part of the staged CDN payload.
 - The raw baseline command is incremental by default. It only rebuilds raw PNG
   tiles that are missing unless you pass `--force`.
 - The wrapper only rebuilds the visual pyramid when the raw source manifest or

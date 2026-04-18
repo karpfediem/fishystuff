@@ -85,14 +85,11 @@ sync_root_for_path() {
   local path="$1"
   case "$path" in
     map/*) printf '%s\n' "map" ;;
-    region_groups/*) printf '%s\n' "region_groups" ;;
     images/items/*) printf '%s\n' "images/items" ;;
     images/terrain_fullres/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
     images/terrain_height/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
     images/terrain/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
     images/tiles/mask/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-4)" ;;
-    images/tiles/minimap/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-4)" ;;
-    images/tiles/region_groups/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-4)" ;;
     images/*) printf '%s\n' "images" ;;
     *) dirname "$path" ;;
   esac
@@ -104,7 +101,7 @@ is_delete_root() {
   fi
 
   case "$1" in
-    map|region_groups) return 0 ;;
+    map) return 0 ;;
     *) return 1 ;;
   esac
 }

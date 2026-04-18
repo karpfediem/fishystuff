@@ -199,21 +199,32 @@ canonical layer representation.
 
 Current real files in this repo:
 
-- [zone_mask.v1.bin](/home/carp/code/fishystuff/data/cdn/public/images/exact_lookup/zone_mask.v1.bin)
+- [zone_mask.v1.bin](/home/carp/code/fishystuff/data/cdn/public/fields/zone_mask.v1.bin)
   - `1,790,476` bytes
-- [zones_mask_v1.png](/home/carp/code/fishystuff/data/cdn/public/images/zones_mask_v1.png)
+- [zone_mask.v1.meta.json](/home/carp/code/fishystuff/data/cdn/public/fields/zone_mask.v1.meta.json)
+  - `62,055` bytes
+- [zones_mask_v1.png](/home/carp/code/fishystuff/data/imagery/zones_mask_2025_12.png)
   - `1,472,702` bytes
-- current `zone_mask` visual tile set under
-  [zone_mask_visual/v1](/home/carp/code/fishystuff/data/cdn/public/images/tiles/zone_mask_visual/v1)
-  - `3,476,127` bytes total PNG payload
 - [regionmap_new.bmp.bkd](/home/carp/code/fishystuff/data/scratch/ui_texture/minimap/area/regionmap_new.bmp.bkd)
   - `1,808,420` bytes
 - [regionmap_new.bmp.rid](/home/carp/code/fishystuff/data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid)
   - `2,587` bytes
-- [regions.v1.geojson](/home/carp/code/fishystuff/data/cdn/public/region_groups/regions.v1.geojson)
-  - `10,106,053` bytes
-- [v1.geojson](/home/carp/code/fishystuff/data/cdn/public/region_groups/v1.geojson)
-  - `3,412,400` bytes
+- [regions.v1.bin](/home/carp/code/fishystuff/data/cdn/public/fields/regions.v1.bin)
+  - `2,801,716` bytes
+- [regions.v1.meta.json](/home/carp/code/fishystuff/data/cdn/public/fields/regions.v1.meta.json)
+  - `2,226,837` bytes
+- [region_groups.v1.bin](/home/carp/code/fishystuff/data/cdn/public/fields/region_groups.v1.bin)
+  - `1,127,470` bytes
+- [region_groups.v1.meta.json](/home/carp/code/fishystuff/data/cdn/public/fields/region_groups.v1.meta.json)
+  - `362,668` bytes
+- [region_nodes.v1.geojson](/home/carp/code/fishystuff/data/cdn/public/waypoints/region_nodes.v1.geojson)
+  - `755,815` bytes
+
+Legacy note:
+
+- older `images/exact_lookup/*`, `images/tiles/zone_mask_visual/*`, and
+  `region_groups/*.geojson` outputs are no longer the maintained runtime path
+  for these semantic layers
 
 Practical conclusion:
 

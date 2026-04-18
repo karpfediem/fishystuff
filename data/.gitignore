@@ -8,8 +8,6 @@
 !cdn/public/.gitkeep
 !cdn/public/images/
 !cdn/public/images/.gitkeep
-!cdn/public/region_groups/
-!cdn/public/region_groups/.gitkeep
 !landmarks/
 !landmarks/*.csv
 !spec/

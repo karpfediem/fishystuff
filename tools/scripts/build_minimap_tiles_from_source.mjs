@@ -9,7 +9,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
-const defaultRawOutputDir = path.join(repoRoot, "data/cdn/public/images/tiles/minimap");
+const defaultRawOutputDir = path.join(repoRoot, "data/scratch/minimap/source_tiles");
 const defaultVisualOutputDir = path.join(
   repoRoot,
   "data/cdn/public/images/tiles/minimap_visual/v1",

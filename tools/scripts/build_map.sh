@@ -31,8 +31,6 @@ resolve_map_runtime_manifest_cache_key() {
 }
 
 PROFILE="${FISHYSTUFF_WASM_PROFILE:-release}"
-MAP_RUNTIME_RETENTION_DAYS="${MAP_RUNTIME_RETENTION_DAYS:-14}"
-PRUNE_OLD_MAP_RUNTIME_FILES="${PRUNE_OLD_MAP_RUNTIME_FILES:-0}"
 MAP_RUNTIME_MANIFEST_CACHE_KEY="$(resolve_map_runtime_manifest_cache_key)"
 MAP_RUNTIME_MANIFEST_FILE="runtime-manifest.${MAP_RUNTIME_MANIFEST_CACHE_KEY}.json"
 if [ "$PROFILE" = "release" ]; then
@@ -49,6 +47,7 @@ CDN_MAP_ASSET_DIR="$CDN_ROOT/map"
 CDN_IMAGE_ASSET_DIR="$CDN_ROOT/images"
 CDN_FIELD_ASSET_DIR="$CDN_ROOT/fields"
 CDN_WAYPOINT_ASSET_DIR="$CDN_ROOT/waypoints"
+MINIMAP_SOURCE_TILE_DIR="${MINIMAP_SOURCE_TILE_DIR:-$ROOT_DIR/data/scratch/minimap/source_tiles}"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
 mkdir -p "$CDN_MAP_ASSET_DIR"
 mkdir -p "$CDN_IMAGE_ASSET_DIR"
@@ -105,15 +104,12 @@ EOF
 printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
 printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/$MAP_RUNTIME_MANIFEST_FILE"
 
-if [ "$PRUNE_OLD_MAP_RUNTIME_FILES" = "1" ]; then
-  find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
-    \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'runtime-manifest.*.json' \) \
-    ! -name "$JS_BUNDLE_FILE" \
-    ! -name "$WASM_BUNDLE_FILE" \
-    ! -name "$MAP_RUNTIME_MANIFEST_FILE" \
-    -mtime +"$MAP_RUNTIME_RETENTION_DAYS" \
-    -delete
-fi
+find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
+  \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'runtime-manifest.*.json' \) \
+  ! -name "$JS_BUNDLE_FILE" \
+  ! -name "$WASM_BUNDLE_FILE" \
+  ! -name "$MAP_RUNTIME_MANIFEST_FILE" \
+  -delete
 
 first_existing_path() {
   local candidate
@@ -154,6 +150,17 @@ if isinstance(value, int):
     print(value)
 PY
 }
+
+prune_legacy_map_assets() {
+  rm -rf \
+    "$CDN_ROOT/images/exact_lookup" \
+    "$CDN_ROOT/images/tiles/minimap" \
+    "$CDN_ROOT/images/tiles/region_groups" \
+    "$CDN_ROOT/images/tiles/zone_mask_visual" \
+    "$CDN_ROOT/region_groups"
+}
+
+prune_legacy_map_assets
 
 prepare_terrain_source_tiles() {
   : "${TERRAIN_SOURCE_IMAGE:?set TERRAIN_SOURCE_IMAGE to the canonical terrain source image path}"
@@ -252,7 +259,7 @@ fi
 
 MINIMAP_DISPLAY_TILE_PX=512
 MINIMAP_DISPLAY_MAX_LEVEL=2
-minimap_display_source_dir="$CDN_IMAGE_ASSET_DIR/tiles/minimap"
+minimap_display_source_dir="$MINIMAP_SOURCE_TILE_DIR"
 minimap_display_root="$CDN_IMAGE_ASSET_DIR/tiles/minimap_visual/v1"
 minimap_display_manifest="$minimap_display_root/tileset.json"
 minimap_display_manifest_tile_px=""

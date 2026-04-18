@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 struct Args {
     #[arg(long, default_value = "data/scratch/paz")]
     source_archive: PathBuf,
-    #[arg(long, default_value = "data/cdn/public/images/tiles/minimap")]
+    #[arg(long, default_value = "data/scratch/minimap/source_tiles")]
     out_dir: PathBuf,
     #[arg(long)]
     force: bool,

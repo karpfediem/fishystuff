@@ -26,8 +26,8 @@ Current contents:
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
   - builds the wasm map runtime
-  - rebuilds the non-terrain map CDN assets consumed by the runtime:
-    fields, region vectors, region-node waypoints, zone-mask visuals, and exact lookup
+  - rebuilds the maintained non-terrain map runtime assets:
+    semantic fields, region-node waypoints, and the minimap display pyramid
 - `tools/scripts/stage_cdn_assets.sh`
   - stages CDN-owned site and map assets under `data/cdn/public/`
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
@@ -47,6 +47,8 @@ Current contents:
   - converts them to `44x44` WebP under `data/cdn/public/images/items/`
 - `tools/scripts/build_minimap_tiles_from_source.mjs`
   - wraps `minimap_source_tiles` plus `minimap_display_tiles`
+  - rebuilds the raw source-backed `rader_*.png` cache under
+    `data/scratch/minimap/source_tiles`
   - rebuilds the display pyramid under `data/cdn/public/images/tiles/minimap_visual/v1/`
   - workflow is documented in
     [`docs/minimap-source-workflow.md`](../docs/minimap-source-workflow.md)

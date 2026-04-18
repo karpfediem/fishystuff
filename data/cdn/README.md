@@ -59,13 +59,9 @@ pushes only the CDN `map/` subtree instead of scanning unrelated image roots.
 `cdn-push` intentionally excludes local placeholder and metadata files such as
 `.gitkeep` and `.cdn-metadata.json` from the Bunny upload. It keeps a local sync
 manifest so normal runs can upload only locally changed files without asking the
-remote for a full file listing. Only delete-semantic roots such as `map/` and
-`region_groups/` perform a remote listing, and those are small when remote
-deletes are explicitly enabled.
-
-The local map build now keeps older hashed wasm/js bundles by default. Opt into
-local pruning with `PRUNE_OLD_MAP_RUNTIME_FILES=1`; `MAP_RUNTIME_RETENTION_DAYS`
-still controls the retention window when pruning is enabled.
+remote for a full file listing. Only delete-semantic roots such as `map/`
+perform a remote listing, and those are small when remote deletes are
+explicitly enabled.
 
 Map pushes also upload only the current deployment runtime set:
 
