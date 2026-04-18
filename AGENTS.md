@@ -43,6 +43,9 @@ Repository-level notes for working in this monorepo.
   output.
 - Use `just build`, `just build-map`, and `just build-site` for one-shot local
   output builds without starting the stack.
+- For live local observability inspection, prefer
+  `tools/scripts/vector-tap.sh` as the first entrypoint before falling back to
+  Loki queries or archive greps.
 - The managed stack uses SecretSpec's `api` profile by default for the local API.
 - Local API CORS origins are injected explicitly through
   `FISHYSTUFF_CORS_ALLOWED_ORIGINS`. Do not reintroduce inferred site-origin

@@ -33,6 +33,7 @@ transforms:
       .level = "info"
       .correlation = {}
       .http = {}
+      .browser = {}
 
       wrapped = parse_regex(.raw_line, r'^\[(?P<wrapped_timestamp>[^\]]+)\] \[(?P<process>[^\]]+)\] (?P<body>.*)$') ?? null
       if wrapped != null {
@@ -110,6 +111,118 @@ transforms:
         .span_id = .correlation.span_id
       }
 
+  normalized_telemetry_logs:
+    type: remap
+    inputs:
+      - telemetry_ingress.logs
+    source: |
+      .app = "fishystuff"
+      .deployment_environment = "local"
+      .observability_kind = "log"
+      .log_schema = "fishystuff.browser-otel.v1"
+      .process = "browser"
+      .correlation = {}
+      .http = {}
+      .browser = {}
+
+      event_timestamp = null
+      if exists(.timestamp) && !is_null(.timestamp) {
+        event_timestamp = parse_timestamp(string!(.timestamp), format: "%+") ?? null
+      }
+      if event_timestamp == null && exists(.observed_timestamp) && !is_null(.observed_timestamp) {
+        event_timestamp = parse_timestamp(string!(.observed_timestamp), format: "%+") ?? null
+      }
+      if event_timestamp != null {
+        .timestamp = event_timestamp
+      }
+
+      .service = string!(get(.resources, ["service.name"]) ?? "fishystuff-site-local")
+
+      deployment_environment = get(.resources, ["deployment.environment"]) ?? null
+      if deployment_environment != null && string!(deployment_environment) != "" {
+        .deployment_environment = string!(deployment_environment)
+      }
+
+      severity_text = get(., ["severity_text"]) ?? null
+      if severity_text != null && string!(severity_text) != "" {
+        .level = downcase(string!(severity_text))
+      } else {
+        .level = "info"
+      }
+
+      logger_name = get(.scope, ["name"]) ?? null
+      if logger_name != null && string!(logger_name) != "" {
+        .logger = string!(logger_name)
+      }
+
+      if !exists(.message) || is_null(.message) || string!(.message) == "" {
+        .message = "browser log"
+      } else {
+        .message = string!(.message)
+      }
+
+      request_id = get(.attributes, ["request.id"]) ?? null
+      if request_id != null && string!(request_id) != "" {
+        .correlation.request_id = string!(request_id)
+        .request_id = .correlation.request_id
+      }
+
+      trace_id = get(.attributes, ["trace.id"]) ?? null
+      if trace_id != null && string!(trace_id) != "" {
+        .correlation.trace_id = string!(trace_id)
+        .trace_id = .correlation.trace_id
+      }
+
+      span_id = get(.attributes, ["span.id"]) ?? null
+      if span_id != null && string!(span_id) != "" {
+        .correlation.span_id = string!(span_id)
+        .span_id = .correlation.span_id
+      }
+
+      http_status_code = get(.attributes, ["http.response.status_code"]) ?? null
+      if http_status_code != null {
+        .http.status_code = http_status_code
+      }
+
+      url_full = get(.attributes, ["url.full"]) ?? null
+      if url_full != null && string!(url_full) != "" {
+        .browser.url_full = string!(url_full)
+      }
+
+      url_path = get(.attributes, ["url.path"]) ?? null
+      if url_path != null && string!(url_path) != "" {
+        .browser.url_path = string!(url_path)
+      }
+
+      url_query = get(.attributes, ["url.query"]) ?? null
+      if url_query != null && string!(url_query) != "" {
+        .browser.url_query = string!(url_query)
+      }
+
+      log_source = get(.attributes, ["fishystuff.log.source"]) ?? null
+      if log_source != null && string!(log_source) != "" {
+        .browser.source = string!(log_source)
+      }
+
+      error_type = get(.attributes, ["error.type"]) ?? null
+      if error_type != null && string!(error_type) != "" {
+        .browser.error_type = string!(error_type)
+      }
+
+      error_message = get(.attributes, ["error.message"]) ?? null
+      if error_message != null && string!(error_message) != "" {
+        .browser.error_message = string!(error_message)
+      }
+
+      error_stack = get(.attributes, ["error.stack"]) ?? null
+      if error_stack != null && string!(error_stack) != "" {
+        .browser.error_stack = string!(error_stack)
+      }
+
+      if !exists(.browser.source) {
+        .browser.source = "browser"
+      }
+
 sinks:
   logs_archive:
     type: file
@@ -123,6 +236,7 @@ sinks:
     type: loki
     inputs:
       - normalized_process_logs
+      - normalized_telemetry_logs
     endpoint: "http://127.0.0.1:3100"
     encoding:
       codec: json
@@ -136,6 +250,7 @@ sinks:
       log_schema: "{{ log_schema }}"
       '"correlation_*"': "{{ correlation }}"
       '"http_*"': "{{ http }}"
+      '"browser_*"': "{{ browser }}"
     healthcheck:
       enabled: false
 

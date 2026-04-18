@@ -323,7 +323,7 @@ in {
         ${config.devenv.root}/data/vector/archive/logs \
         ${config.devenv.root}/data/vector/archive/traces \
         ${config.devenv.root}/data/vector/state
-      exec env LOG_TS_LABEL=vector ${logTimestampRunner} \
+      exec env LOG_TS_LABEL=vector LOG_TS_FILE=${config.devenv.root}/data/vector/process/vector.log ${logTimestampRunner} \
         ${pkgs.vector}/bin/vector \
         --config-yaml ${config.devenv.root}/tools/telemetry/vector.local.yaml
     '';

@@ -10,9 +10,9 @@ import { logs as otelLogs, SeverityNumber } from "@opentelemetry/api-logs";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
 import {
-  JsonLogsSerializer,
-  JsonMetricsSerializer,
-  JsonTraceSerializer,
+  ProtobufLogsSerializer,
+  ProtobufMetricsSerializer,
+  ProtobufTraceSerializer,
 } from "@opentelemetry/otlp-transformer";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs";
@@ -37,6 +37,7 @@ const DEFAULT_METRIC_EXPORT_TIMEOUT_MS = 4000;
 const DEFAULT_LOG_EXPORT_DELAY_MS = 1000;
 const DEFAULT_LOG_EXPORT_QUEUE_SIZE = 128;
 const DEFAULT_LOG_EXPORT_BATCH_SIZE = 16;
+const OTLP_PROTOBUF_CONTENT_TYPE = "application/x-protobuf";
 
 function parseBoolean(value, fallback = false) {
   if (typeof value === "boolean") {
@@ -502,8 +503,12 @@ function installFlushHooks(providers) {
   globalThis[OTEL_FLUSH_HOOK_KEY] = true;
 }
 
-function createOtlpHttpMetricExporter({
+function createOtlpHttpExporter({
   url,
+  serializer,
+  unavailableMessage,
+  busyMessage,
+  failureLabel,
   concurrencyLimit = 1,
   timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
 } = {}) {
@@ -515,18 +520,18 @@ function createOtlpHttpMetricExporter({
   }
 
   return {
-    export(metrics, resultCallback) {
+    export(items, resultCallback) {
       if (shutdown || !url || typeof globalThis.fetch !== "function") {
         finish(resultCallback, {
           code: 1,
-          error: new Error("OTLP metric exporter is unavailable"),
+          error: new Error(unavailableMessage || "OTLP exporter is unavailable"),
         });
         return;
       }
       if (inFlight.size >= Math.max(1, concurrencyLimit)) {
         finish(resultCallback, {
           code: 1,
-          error: new Error("OTLP metric exporter is busy"),
+          error: new Error(busyMessage || "OTLP exporter is busy"),
         });
         return;
       }
@@ -537,10 +542,13 @@ function createOtlpHttpMetricExporter({
         controller && timeoutMillis > 0
           ? globalThis.setTimeout(() => controller.abort(), timeoutMillis)
           : 0;
-      const body = JsonMetricsSerializer.serializeRequest(metrics);
+      const body = serializer.serializeRequest(items);
       const request = Promise.resolve(
         globalThis.fetch(url, {
           method: "POST",
+          headers: {
+            "content-type": OTLP_PROTOBUF_CONTENT_TYPE,
+          },
           body,
           keepalive: true,
           signal: controller?.signal,
@@ -548,7 +556,9 @@ function createOtlpHttpMetricExporter({
       )
         .then((response) => {
           if (!response?.ok) {
-            throw new Error(`OTLP metrics export failed with HTTP ${response?.status ?? "unknown"}`);
+            throw new Error(
+              `${failureLabel || "OTLP export"} failed with HTTP ${response?.status ?? "unknown"}`,
+            );
           }
           finish(resultCallback, { code: 0 });
         })
@@ -567,15 +577,34 @@ function createOtlpHttpMetricExporter({
 
       inFlight.add(request);
     },
+  };
+}
+
+function createOtlpHttpMetricExporter({
+  url,
+  concurrencyLimit = 1,
+  timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+} = {}) {
+  const exporter = createOtlpHttpExporter({
+    url,
+    serializer: ProtobufMetricsSerializer,
+    unavailableMessage: "OTLP metric exporter is unavailable",
+    busyMessage: "OTLP metric exporter is busy",
+    failureLabel: "OTLP metrics export",
+    concurrencyLimit,
+    timeoutMillis,
+  });
+
+  return {
+    export: exporter.export,
     forceFlush() {
-      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+      return exporter.forceFlush();
     },
     selectAggregationTemporality() {
       return AggregationTemporality.CUMULATIVE;
     },
     shutdown() {
-      shutdown = true;
-      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+      return exporter.shutdown();
     },
   };
 }
@@ -585,74 +614,15 @@ function createOtlpHttpTraceExporter({
   concurrencyLimit = 1,
   timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
 } = {}) {
-  let shutdown = false;
-  const inFlight = new Set();
-
-  function finish(resultCallback, result) {
-    queueMicrotask(() => resultCallback(result));
-  }
-
-  return {
-    export(spans, resultCallback) {
-      if (shutdown || !url || typeof globalThis.fetch !== "function") {
-        finish(resultCallback, {
-          code: 1,
-          error: new Error("OTLP trace exporter is unavailable"),
-        });
-        return;
-      }
-      if (inFlight.size >= Math.max(1, concurrencyLimit)) {
-        finish(resultCallback, {
-          code: 1,
-          error: new Error("OTLP trace exporter is busy"),
-        });
-        return;
-      }
-
-      const controller =
-        typeof AbortController === "function" ? new AbortController() : null;
-      const timeoutId =
-        controller && timeoutMillis > 0
-          ? globalThis.setTimeout(() => controller.abort(), timeoutMillis)
-          : 0;
-      const body = JsonTraceSerializer.serializeRequest(spans);
-      const request = Promise.resolve(
-        globalThis.fetch(url, {
-          method: "POST",
-          body,
-          keepalive: true,
-          signal: controller?.signal,
-        }),
-      )
-        .then((response) => {
-          if (!response?.ok) {
-            throw new Error(`OTLP traces export failed with HTTP ${response?.status ?? "unknown"}`);
-          }
-          finish(resultCallback, { code: 0 });
-        })
-        .catch((error) => {
-          finish(resultCallback, {
-            code: 1,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
-        })
-        .finally(() => {
-          if (timeoutId) {
-            globalThis.clearTimeout(timeoutId);
-          }
-          inFlight.delete(request);
-        });
-
-      inFlight.add(request);
-    },
-    forceFlush() {
-      return Promise.allSettled(Array.from(inFlight)).then(() => {});
-    },
-    shutdown() {
-      shutdown = true;
-      return Promise.allSettled(Array.from(inFlight)).then(() => {});
-    },
-  };
+  return createOtlpHttpExporter({
+    url,
+    serializer: ProtobufTraceSerializer,
+    unavailableMessage: "OTLP trace exporter is unavailable",
+    busyMessage: "OTLP trace exporter is busy",
+    failureLabel: "OTLP traces export",
+    concurrencyLimit,
+    timeoutMillis,
+  });
 }
 
 function createOtlpHttpLogExporter({
@@ -660,74 +630,15 @@ function createOtlpHttpLogExporter({
   concurrencyLimit = 1,
   timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
 } = {}) {
-  let shutdown = false;
-  const inFlight = new Set();
-
-  function finish(resultCallback, result) {
-    queueMicrotask(() => resultCallback(result));
-  }
-
-  return {
-    export(logs, resultCallback) {
-      if (shutdown || !url || typeof globalThis.fetch !== "function") {
-        finish(resultCallback, {
-          code: 1,
-          error: new Error("OTLP log exporter is unavailable"),
-        });
-        return;
-      }
-      if (inFlight.size >= Math.max(1, concurrencyLimit)) {
-        finish(resultCallback, {
-          code: 1,
-          error: new Error("OTLP log exporter is busy"),
-        });
-        return;
-      }
-
-      const controller =
-        typeof AbortController === "function" ? new AbortController() : null;
-      const timeoutId =
-        controller && timeoutMillis > 0
-          ? globalThis.setTimeout(() => controller.abort(), timeoutMillis)
-          : 0;
-      const body = JsonLogsSerializer.serializeRequest(logs);
-      const request = Promise.resolve(
-        globalThis.fetch(url, {
-          method: "POST",
-          body,
-          keepalive: true,
-          signal: controller?.signal,
-        }),
-      )
-        .then((response) => {
-          if (!response?.ok) {
-            throw new Error(`OTLP logs export failed with HTTP ${response?.status ?? "unknown"}`);
-          }
-          finish(resultCallback, { code: 0 });
-        })
-        .catch((error) => {
-          finish(resultCallback, {
-            code: 1,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
-        })
-        .finally(() => {
-          if (timeoutId) {
-            globalThis.clearTimeout(timeoutId);
-          }
-          inFlight.delete(request);
-        });
-
-      inFlight.add(request);
-    },
-    forceFlush() {
-      return Promise.allSettled(Array.from(inFlight)).then(() => {});
-    },
-    shutdown() {
-      shutdown = true;
-      return Promise.allSettled(Array.from(inFlight)).then(() => {});
-    },
-  };
+  return createOtlpHttpExporter({
+    url,
+    serializer: ProtobufLogsSerializer,
+    unavailableMessage: "OTLP log exporter is unavailable",
+    busyMessage: "OTLP log exporter is busy",
+    failureLabel: "OTLP logs export",
+    concurrencyLimit,
+    timeoutMillis,
+  });
 }
 
 function installBrowserLogHooks(loggerProvider, config) {
@@ -1092,6 +1003,7 @@ export {
   buildPropagationTargets,
   classifyFetchTarget,
   createHttpError,
+  createOtlpHttpLogExporter,
   extractFishystuffResponseContext,
   resolveAbsoluteUrl,
   resolveBaseUrl,

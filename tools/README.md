@@ -29,6 +29,11 @@ Current contents:
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
 - `tools/scripts/push_bunnycdn.sh`
 - `tools/scripts/run_api.sh`
+- `tools/scripts/vector-tap.sh`
+  - repo-native entrypoint for live local Vector inspection
+  - defaults to bounded JSON samples from the local Vector API
+  - exposes stable presets such as `browser-logs`, `process-logs`,
+    `raw-traces`, and `to-loki`
 - `tools/scripts/rebuild_detailed_regions_layer.sh`
 - `tools/scripts/rebuild_detailed_regions_layer_from_pabr.sh`
 - `tools/scripts/rebuild_region_groups_vector_layer.sh`

@@ -127,10 +127,37 @@ The current local archive/query paths are:
 - `data/vector/archive/traces/*.ndjson`
   - Vector-serialized trace events captured at the local OTLP ingress
 
-For LLM- or shell-driven inspection you can use either Loki or the NDJSON
-archives. Loki is useful when you already know a stable low-cardinality stream
-selector, while `data/vector/archive/*.ndjson` is easier when you want direct
-`rg`/`jq` access to the raw normalized events.
+For live LLM- or shell-driven inspection, the preferred entrypoint is:
+
+```bash
+tools/scripts/vector-tap.sh browser-logs
+```
+
+That wrapper follows the official Vector `tap` flow, targets the repo's local
+Vector API, emits bounded JSON samples by default, and exposes stable presets
+for the current pipeline graph. Use `tools/scripts/vector-tap.sh --list-presets`
+to see the current tap surface.
+
+Example live flows:
+
+```bash
+tools/scripts/vector-tap.sh process-logs
+tools/scripts/vector-tap.sh browser-logs --follow
+tools/scripts/vector-tap.sh raw-traces --duration-ms 3000
+tools/scripts/vector-tap.sh to-loki -- --format logfmt
+```
+
+If you are not already inside the active `devenv` shell, wrap the same entrypoint
+with:
+
+```bash
+devenv shell -- tools/scripts/vector-tap.sh browser-logs
+```
+
+Use Loki or the NDJSON archives when you need historical queries or raw files
+instead of a live stream. Loki is useful when you already know a stable
+low-cardinality stream selector, while `data/vector/archive/*.ndjson` is easier
+when you want direct `rg`/`jq` access to the raw normalized events.
 
 Example Loki query flow:
 

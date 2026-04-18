@@ -89,4 +89,6 @@ runtime also exports a small OTLP metrics surface through the repo's local
 Vector ingress and downstream collector path. Those live gauges land on the
 same Prometheus target as the Jaeger spanmetrics and are intended for always-on
 map runtime dashboards, while the JSON report harnesses remain the deeper
-investigation path.
+investigation path. For live event inspection of the browser and Vector
+pipeline itself, use `tools/scripts/vector-tap.sh browser-logs`,
+`tools/scripts/vector-tap.sh raw-traces`, or another repo preset.

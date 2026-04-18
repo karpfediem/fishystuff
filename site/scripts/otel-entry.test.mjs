@@ -7,6 +7,7 @@ import {
   buildPropagationTargets,
   classifyFetchTarget,
   createHttpError,
+  createOtlpHttpLogExporter,
   extractFishystuffResponseContext,
   resolveRuntimeConfig,
 } from "./otel-entry.mjs";
@@ -159,4 +160,36 @@ test("resolveRuntimeConfig keeps browser metrics and logs separate from trace ex
 
   delete globalThis.__fishystuffRuntimeConfig;
   delete globalThis.location;
+});
+
+test("createOtlpHttpLogExporter sends OTLP protobuf with the expected content type", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response("", { status: 200 });
+  };
+
+  try {
+    const exporter = createOtlpHttpLogExporter({
+      url: "http://127.0.0.1:4820/v1/logs",
+    });
+
+    await new Promise((resolve, reject) => {
+      exporter.export([], (result) => {
+        if (result.code === 0) {
+          resolve();
+          return;
+        }
+        reject(result.error || new Error("log export failed"));
+      });
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("http://127.0.0.1:4820/v1/logs");
+    expect(calls[0].init.headers["content-type"]).toBe("application/x-protobuf");
+    expect(calls[0].init.body).toBeInstanceOf(Uint8Array);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
