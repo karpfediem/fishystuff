@@ -68,6 +68,7 @@ pub(crate) fn sync_layer_effective_filters(
     field_metadata: Res<FieldMetadataCache>,
     mut effective_filters: ResMut<LayerEffectiveFilterState>,
 ) {
+    crate::perf_scope!("filters.layer_effective.sync");
     if !layer_registry.is_changed()
         && !binding_overrides.is_changed()
         && !patch_filter.is_changed()
@@ -98,6 +99,9 @@ pub(crate) fn sync_layer_effective_filters(
         &fish_filter.selected_fish_ids,
         &semantic_filter.selected_field_ids_by_layer,
     );
+    crate::perf_last!("filters.expression.nodes", expression.node_count());
+    crate::perf_last!("filters.expression.terms", expression.term_count());
+    crate::perf_last!("filters.expression.max_depth", expression.max_depth());
     let zone_catalog = zone_catalog_rgbs(&layer_registry, &field_metadata);
     let mut evaluator = LayerSearchEvaluator::new(
         &fish_catalog,
@@ -108,39 +112,58 @@ pub(crate) fn sync_layer_effective_filters(
         &search_expression.shared_fish_state.caught_ids,
         &search_expression.shared_fish_state.favourite_ids,
     );
+    let mut total_layers = 0usize;
+    let mut zone_projected_layers = 0usize;
+    let mut zone_active_layers = 0usize;
+    let mut zone_candidate_zones = 0usize;
+    let mut zone_matched_zones = 0usize;
+    let mut semantic_projected_layers = 0usize;
+    let mut semantic_active_layers = 0usize;
+    let mut semantic_candidate_fields = 0usize;
+    let mut semantic_matched_fields = 0usize;
 
     for layer in layer_registry.ordered() {
+        total_layers = total_layers.saturating_add(1);
         let zone_support = zone_membership_binding_support(layer, &binding_overrides);
-        let (zone_active, next_zone_rgbs) = if let Some(projected) =
+        let (zone_active, next_zone_rgbs, zone_candidate_count) = if let Some(projected) =
             project_expression_for_zone_membership(&expression, zone_support)
         {
+            zone_projected_layers = zone_projected_layers.saturating_add(1);
             let mut candidates = zone_catalog.clone();
             candidates.extend(evaluator.collect_zone_candidates(&projected));
+            let candidate_count = candidates.len();
             if candidates.is_empty() && expression_contains_negation(&projected) {
-                (false, HashSet::new())
+                (false, HashSet::new(), candidate_count)
             } else {
                 let next_zone_rgbs = candidates
                     .into_iter()
                     .filter(|zone_rgb| evaluator.zone_matches_expression(*zone_rgb, &projected))
                     .collect::<HashSet<_>>();
-                (true, next_zone_rgbs)
+                (true, next_zone_rgbs, candidate_count)
             }
         } else {
-            (false, HashSet::new())
+            (false, HashSet::new(), 0)
         };
+        zone_candidate_zones = zone_candidate_zones.saturating_add(zone_candidate_count);
+        if zone_active {
+            zone_active_layers = zone_active_layers.saturating_add(1);
+        }
+        zone_matched_zones = zone_matched_zones.saturating_add(next_zone_rgbs.len());
         effective_filters.sync_zone_membership_filter_for_layer(
             layer.key.clone(),
             zone_active,
             next_zone_rgbs,
         );
         let semantic_support = semantic_binding_support(layer, &binding_overrides);
-        let (semantic_active, next_field_ids) = if let Some(projected) =
+        let (semantic_active, next_field_ids, semantic_candidate_count) = if let Some(projected) =
             project_expression_for_semantic_layer(&expression, semantic_support, layer.key.as_str())
         {
+            semantic_projected_layers = semantic_projected_layers.saturating_add(1);
             let candidates =
                 semantic_field_candidates_for_layer(layer, &field_metadata, &projected);
+            let candidate_count = candidates.len();
             if candidates.is_empty() && expression_contains_negation(&projected) {
-                (false, Vec::new())
+                (false, Vec::new(), candidate_count)
             } else {
                 let next_field_ids = candidates
                     .into_iter()
@@ -152,17 +175,57 @@ pub(crate) fn sync_layer_effective_filters(
                         )
                     })
                     .collect::<Vec<_>>();
-                (true, next_field_ids)
+                (true, next_field_ids, candidate_count)
             }
         } else {
-            (false, Vec::new())
+            (false, Vec::new(), 0)
         };
+        semantic_candidate_fields =
+            semantic_candidate_fields.saturating_add(semantic_candidate_count);
+        if semantic_active {
+            semantic_active_layers = semantic_active_layers.saturating_add(1);
+        }
+        semantic_matched_fields = semantic_matched_fields.saturating_add(next_field_ids.len());
         effective_filters.sync_semantic_field_filter_for_layer(
             layer.key.clone(),
             semantic_active,
             next_field_ids,
         );
     }
+
+    crate::perf_last!("filters.layer_effective.layers", total_layers);
+    crate::perf_last!(
+        "filters.layer_effective.zone_projected_layers",
+        zone_projected_layers
+    );
+    crate::perf_last!(
+        "filters.layer_effective.zone_active_layers",
+        zone_active_layers
+    );
+    crate::perf_last!(
+        "filters.layer_effective.zone_candidate_zones",
+        zone_candidate_zones
+    );
+    crate::perf_last!(
+        "filters.layer_effective.zone_matched_zones",
+        zone_matched_zones
+    );
+    crate::perf_last!(
+        "filters.layer_effective.semantic_projected_layers",
+        semantic_projected_layers
+    );
+    crate::perf_last!(
+        "filters.layer_effective.semantic_active_layers",
+        semantic_active_layers
+    );
+    crate::perf_last!(
+        "filters.layer_effective.semantic_candidate_fields",
+        semantic_candidate_fields
+    );
+    crate::perf_last!(
+        "filters.layer_effective.semantic_matched_fields",
+        semantic_matched_fields
+    );
 }
 
 pub(super) fn zone_membership_binding_support(

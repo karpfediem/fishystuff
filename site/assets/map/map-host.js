@@ -312,6 +312,8 @@ function createPerformanceCollector(scenario = "browser") {
     startedAtMs: performanceNowMs(),
     spanSamples: new Map(),
     counters: new Map(),
+    gaugeTotals: new Map(),
+    lastValues: new Map(),
   };
 }
 
@@ -339,6 +341,32 @@ function addPerformanceCounter(collector, name, delta = 1) {
   }
   const nextValue = (collector.counters.get(name) || 0) + Number(delta || 0);
   collector.counters.set(name, nextValue);
+}
+
+function addPerformanceGauge(collector, name, value) {
+  if (!collector || !name) {
+    return;
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return;
+  }
+  const current = collector.gaugeTotals.get(name) || { sum: 0, count: 0 };
+  collector.gaugeTotals.set(name, {
+    sum: current.sum + numericValue,
+    count: current.count + 1,
+  });
+}
+
+function setPerformanceLast(collector, name, value) {
+  if (!collector || !name) {
+    return;
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return;
+  }
+  collector.lastValues.set(name, numericValue);
 }
 
 function summarizeSamples(samples) {
@@ -376,12 +404,115 @@ function snapshotPerformanceCollector(collector) {
   for (const [name, value] of collector?.counters || []) {
     counters[name] = value;
   }
+  for (const [name, value] of collector?.lastValues || []) {
+    counters[name] = value;
+  }
+  for (const [name, value] of collector?.gaugeTotals || []) {
+    counters[`${name}_avg`] = value.count > 0 ? value.sum / value.count : 0;
+  }
   return {
     scenario: collector?.scenario || "browser",
     elapsed_ms: Math.max(0, performanceNowMs() - (collector?.startedAtMs || performanceNowMs())),
     named_spans: namedSpans,
     counters,
   };
+}
+
+function searchExpressionStats(expression) {
+  const visit = (node, depth) => {
+    if (!isPlainObject(node)) {
+      return { nodes: 0, terms: 0, maxDepth: 0 };
+    }
+    if (
+      node.type === "group" &&
+      node.negated !== true &&
+      (!Array.isArray(node.children) || node.children.length === 0)
+    ) {
+      return { nodes: 0, terms: 0, maxDepth: 0 };
+    }
+    if (node.type === "term") {
+      return { nodes: 1, terms: 1, maxDepth: depth };
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    let nodes = 1;
+    let terms = 0;
+    let maxDepth = depth;
+    for (const child of children) {
+      const childStats = visit(child, depth + 1);
+      nodes += childStats.nodes;
+      terms += childStats.terms;
+      maxDepth = Math.max(maxDepth, childStats.maxDepth);
+    }
+    return { nodes, terms, maxDepth };
+  };
+  return visit(expression, 1);
+}
+
+function countArrayValues(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function countRecordListValues(value) {
+  if (!isPlainObject(value)) {
+    return { groups: 0, values: 0 };
+  }
+  let groups = 0;
+  let values = 0;
+  for (const entry of Object.values(value)) {
+    if (!Array.isArray(entry) || entry.length === 0) {
+      continue;
+    }
+    groups += 1;
+    values += entry.length;
+  }
+  return { groups, values };
+}
+
+function countRecordEntries(value) {
+  if (!isPlainObject(value)) {
+    return 0;
+  }
+  return Object.keys(value).length;
+}
+
+function summarizeFilterPerfMetrics(filters) {
+  const semantic = countRecordListValues(filters?.semanticFieldIdsByLayer);
+  const disabledBindings = countRecordListValues(filters?.layerFilterBindingIdsDisabledByLayer);
+  const searchStats = searchExpressionStats(filters?.searchExpression);
+  return {
+    fishIds: countArrayValues(filters?.fishIds),
+    zoneRgbs: countArrayValues(filters?.zoneRgbs),
+    fishFilterTerms: countArrayValues(filters?.fishFilterTerms),
+    semanticLayers: semantic.groups,
+    semanticFields: semantic.values,
+    searchNodes: searchStats.nodes,
+    searchTerms: searchStats.terms,
+    searchMaxDepth: searchStats.maxDepth,
+    visibleLayers: countArrayValues(filters?.layerIdsVisible),
+    orderedLayers: countArrayValues(filters?.layerIdsOrdered),
+    disabledBindingLayers: disabledBindings.groups,
+    disabledBindingIds: disabledBindings.values,
+    clipMaskLayers: countRecordEntries(filters?.layerClipMasks),
+  };
+}
+
+function recordFilterPerfMetrics(bridge, prefix, metrics) {
+  bridge.setPerformanceLast(`${prefix}.fish_ids`, metrics.fishIds);
+  bridge.setPerformanceLast(`${prefix}.zone_rgbs`, metrics.zoneRgbs);
+  bridge.setPerformanceLast(`${prefix}.fish_filter_terms`, metrics.fishFilterTerms);
+  bridge.setPerformanceLast(`${prefix}.semantic_layers`, metrics.semanticLayers);
+  bridge.setPerformanceLast(`${prefix}.semantic_fields`, metrics.semanticFields);
+  bridge.setPerformanceLast(`${prefix}.search_nodes`, metrics.searchNodes);
+  bridge.setPerformanceLast(`${prefix}.search_terms`, metrics.searchTerms);
+  bridge.setPerformanceLast(`${prefix}.search_max_depth`, metrics.searchMaxDepth);
+  bridge.setPerformanceLast(`${prefix}.visible_layers`, metrics.visibleLayers);
+  bridge.setPerformanceLast(`${prefix}.ordered_layers`, metrics.orderedLayers);
+  bridge.setPerformanceLast(
+    `${prefix}.disabled_binding_layers`,
+    metrics.disabledBindingLayers,
+  );
+  bridge.setPerformanceLast(`${prefix}.disabled_binding_ids`, metrics.disabledBindingIds);
+  bridge.setPerformanceLast(`${prefix}.clip_mask_layers`, metrics.clipMaskLayers);
 }
 
 function emptyQuantileSummary() {
@@ -2524,6 +2655,14 @@ class FishyMapBridgeImpl {
     addPerformanceCounter(this.performanceCollector, name, delta);
   }
 
+  addPerformanceGauge(name, value) {
+    addPerformanceGauge(this.performanceCollector, name, value);
+  }
+
+  setPerformanceLast(name, value) {
+    setPerformanceLast(this.performanceCollector, name, value);
+  }
+
   syncWasmProfiling() {
     if (!this.wasmReady || !this.wasmModule?.fishymap_reset_profiling_json) {
       return;
@@ -2913,9 +3052,15 @@ class FishyMapBridgeImpl {
         return;
       }
       const patch = this.pendingStatePatch;
+      const patchMetrics = summarizeFilterPerfMetrics(patch.filters);
       this.pendingStatePatch = normalizeStatePatch({});
       this.addPerformanceCounter("host.patches.flushed");
-      this.wasmModule.fishymap_apply_state_patch_json(JSON.stringify(patch));
+      const json = this.measurePerformanceSpan("host.patch_serialize", () => JSON.stringify(patch));
+      this.addPerformanceCounter("host.patch_json_chars.total", json.length);
+      this.addPerformanceGauge("host.patch_json_chars", json.length);
+      this.setPerformanceLast("host.patch_json_chars", json.length);
+      recordFilterPerfMetrics(this, "host.patch.filters", patchMetrics);
+      this.wasmModule.fishymap_apply_state_patch_json(json);
     });
   }
 

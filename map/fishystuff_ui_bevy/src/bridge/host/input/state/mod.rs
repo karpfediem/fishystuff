@@ -50,7 +50,100 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
         &mut map_camera_q,
         &mut terrain_camera_q,
     );
+    record_bridge_input_metrics(&bridge.input);
     if bridge.is_changed() {
         request_redraw.write(RequestRedraw);
     }
+}
+
+fn record_bridge_input_metrics(input: &crate::bridge::contract::FishyMapInputState) {
+    let semantic_layers = input.filters.semantic_field_ids_by_layer.len();
+    let semantic_fields = input
+        .filters
+        .semantic_field_ids_by_layer
+        .values()
+        .map(Vec::len)
+        .sum::<usize>();
+    let disabled_binding_layers = input
+        .filters
+        .layer_filter_binding_ids_disabled_by_layer
+        .as_ref()
+        .map(|disabled| disabled.len())
+        .unwrap_or(0);
+    let disabled_binding_ids = input
+        .filters
+        .layer_filter_binding_ids_disabled_by_layer
+        .as_ref()
+        .map(|disabled| disabled.values().map(Vec::len).sum::<usize>())
+        .unwrap_or(0);
+
+    crate::perf_last!(
+        "bridge.input.filters.fish_ids",
+        input.filters.fish_ids.len()
+    );
+    crate::perf_last!(
+        "bridge.input.filters.zone_rgbs",
+        input.filters.zone_rgbs.len()
+    );
+    crate::perf_last!(
+        "bridge.input.filters.fish_filter_terms",
+        input.filters.fish_filter_terms.len()
+    );
+    crate::perf_last!("bridge.input.filters.semantic_layers", semantic_layers);
+    crate::perf_last!("bridge.input.filters.semantic_fields", semantic_fields);
+    crate::perf_last!(
+        "bridge.input.filters.search_nodes",
+        input.filters.search_expression.node_count()
+    );
+    crate::perf_last!(
+        "bridge.input.filters.search_terms",
+        input.filters.search_expression.term_count()
+    );
+    crate::perf_last!(
+        "bridge.input.filters.search_max_depth",
+        input.filters.search_expression.max_depth()
+    );
+    crate::perf_last!(
+        "bridge.input.filters.visible_layers",
+        input
+            .filters
+            .layer_ids_visible
+            .as_ref()
+            .map(Vec::len)
+            .unwrap_or(0)
+    );
+    crate::perf_last!(
+        "bridge.input.filters.ordered_layers",
+        input
+            .filters
+            .layer_ids_ordered
+            .as_ref()
+            .map(Vec::len)
+            .unwrap_or(0)
+    );
+    crate::perf_last!(
+        "bridge.input.filters.disabled_binding_layers",
+        disabled_binding_layers
+    );
+    crate::perf_last!(
+        "bridge.input.filters.disabled_binding_ids",
+        disabled_binding_ids
+    );
+    crate::perf_last!(
+        "bridge.input.filters.clip_mask_layers",
+        input
+            .filters
+            .layer_clip_masks
+            .as_ref()
+            .map(|clip_masks| clip_masks.len())
+            .unwrap_or(0)
+    );
+    crate::perf_last!(
+        "bridge.input.shared_fish.caught_ids",
+        input.ui.shared_fish_state.caught_ids.len()
+    );
+    crate::perf_last!(
+        "bridge.input.shared_fish.favourite_ids",
+        input.ui.shared_fish_state.favourite_ids.len()
+    );
 }

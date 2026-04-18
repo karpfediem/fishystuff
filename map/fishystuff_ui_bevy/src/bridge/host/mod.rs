@@ -85,6 +85,9 @@ pub fn fishymap_mount() {}
 #[wasm_bindgen]
 pub fn fishymap_apply_state_patch_json(json: &str) -> Result<(), JsValue> {
     let _profiling_scope = crate::profiling::scope("bridge.patch_json_parse");
+    crate::perf_counter_add!("bridge.patch_json_bytes.total", json.len());
+    crate::perf_gauge!("bridge.patch_json_bytes", json.len());
+    crate::perf_last!("bridge.patch_json_bytes", json.len());
     let patch: FishyMapStatePatch =
         serde_json::from_str(json).map_err(|err| JsValue::from_str(&err.to_string()))?;
     crate::perf_counter_add!("bridge.patch_json_parse.count", 1);
@@ -97,6 +100,9 @@ pub fn fishymap_apply_state_patch_json(json: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub fn fishymap_send_command_json(json: &str) -> Result<(), JsValue> {
     let _profiling_scope = crate::profiling::scope("bridge.command_json_parse");
+    crate::perf_counter_add!("bridge.command_json_bytes.total", json.len());
+    crate::perf_gauge!("bridge.command_json_bytes", json.len());
+    crate::perf_last!("bridge.command_json_bytes", json.len());
     let commands: FishyMapCommands =
         serde_json::from_str(json).map_err(|err| JsValue::from_str(&err.to_string()))?;
     crate::perf_counter_add!("bridge.command_json_parse.count", 1);

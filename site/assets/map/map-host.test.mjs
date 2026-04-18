@@ -2635,6 +2635,36 @@ test("performance snapshot merges host and wasm profiling summaries", async () =
       warmupFrames: 12,
     });
     bridge.sendCommand({ resetView: true });
+    bridge.setState({
+      filters: {
+        fishIds: [1, 2, 3],
+        zoneRgbs: [12],
+        semanticFieldIdsByLayer: {
+          zone_mask: [12],
+          sea_region: [3, 4],
+        },
+        fishFilterTerms: ["red", "yellow"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "term",
+              term: { kind: "fish-filter", term: "red" },
+            },
+            {
+              type: "term",
+              term: { kind: "fish-filter", term: "yellow" },
+            },
+          ],
+        },
+        layerIdsVisible: ["zone_mask", "samples"],
+        layerFilterBindingIdsDisabledByLayer: {
+          samples: ["zone-membership"],
+        },
+      },
+    });
+    bridge.flushPendingPatchNow();
 
     const report = bridge.getPerformanceSnapshot();
     assert.deepEqual(wasm.calls.profilingResets.at(-1), {
@@ -2647,7 +2677,16 @@ test("performance snapshot merges host and wasm profiling summaries", async () =
     assert.equal(report.warmup_frames, 12);
     assert.equal(report.counters["bridge.events.ready"], 1);
     assert.ok(report.counters["host.commands.sent"] >= 1);
+    assert.ok(report.counters["host.patch_json_chars"] > 0);
+    assert.equal(report.counters["host.patch.filters.fish_ids"], 3);
+    assert.equal(report.counters["host.patch.filters.semantic_layers"], 2);
+    assert.equal(report.counters["host.patch.filters.semantic_fields"], 3);
+    assert.equal(report.counters["host.patch.filters.search_nodes"], 3);
+    assert.equal(report.counters["host.patch.filters.search_terms"], 2);
+    assert.equal(report.counters["host.patch.filters.visible_layers"], 2);
+    assert.equal(report.counters["host.patch.filters.disabled_binding_ids"], 1);
     assert.ok(report.named_spans["host.send_command"]);
+    assert.ok(report.named_spans["host.patch_serialize"]);
     assert.deepEqual(
       report.named_spans["bridge.state_apply"],
       wasm.profilingSummary.named_spans["bridge.state_apply"],

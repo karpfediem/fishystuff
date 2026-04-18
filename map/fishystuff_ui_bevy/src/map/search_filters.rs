@@ -260,9 +260,12 @@ impl<'a> LayerSearchEvaluator<'a> {
     fn zone_support_for_term(&mut self, term: &FishyMapSearchTerm) -> &HashSet<u32> {
         let key = serde_json::to_string(term).unwrap_or_default();
         if !self.zone_term_cache.contains_key(&key) {
+            crate::perf_counter_add!("filters.zone_term_cache.miss", 1);
             let matching_fish_ids = self.fish_ids_for_term(term);
             let zones = self.collect_zone_support_for_fish_ids(&matching_fish_ids);
             self.zone_term_cache.insert(key.clone(), zones);
+        } else {
+            crate::perf_counter_add!("filters.zone_term_cache.hit", 1);
         }
         self.zone_term_cache.get(&key).expect("term cache entry")
     }
@@ -310,14 +313,29 @@ impl<'a> LayerSearchEvaluator<'a> {
     }
 
     fn collect_zone_support_for_fish_ids(&mut self, fish_ids: &[i32]) -> HashSet<u32> {
+        let _profiling_scope = crate::profiling::scope("filters.zone_support.collect");
         let mut normalized_fish_ids = normalize_i32_list(fish_ids.to_vec());
         if normalized_fish_ids.is_empty() {
             return HashSet::new();
         }
         normalized_fish_ids.sort_unstable();
+        crate::perf_counter_add!("filters.zone_support.lookups", 1);
+        crate::perf_gauge!(
+            "filters.zone_support.lookup_fish_ids",
+            normalized_fish_ids.len()
+        );
+        crate::perf_last!(
+            "filters.zone_support.lookup_fish_ids",
+            normalized_fish_ids.len()
+        );
 
         let mut zones = HashSet::new();
         if self.snapshot.loaded {
+            crate::perf_counter_add!(
+                "filters.zone_support.snapshot_events_scanned",
+                self.snapshot.events.len()
+            );
+            let mut matched_events = 0usize;
             for event in &self.snapshot.events {
                 if self
                     .from_ts_utc
@@ -331,15 +349,28 @@ impl<'a> LayerSearchEvaluator<'a> {
                 if normalized_fish_ids.binary_search(&event.fish_id).is_err() {
                     continue;
                 }
+                matched_events = matched_events.saturating_add(1);
                 zones.extend(self.zone_resolver.full_zone_rgbs(event).iter().copied());
             }
+            crate::perf_counter_add!(
+                "filters.zone_support.snapshot_events_matched",
+                matched_events
+            );
         }
 
+        let mut community_item_ids = 0usize;
         for fish_id in normalized_fish_ids {
             if let Some(item_id) = self.fish_catalog.item_id_for_fish(fish_id) {
+                community_item_ids = community_item_ids.saturating_add(1);
                 zones.extend(self.community.zone_rgbs_for_item(item_id).iter().copied());
             }
         }
+        crate::perf_counter_add!(
+            "filters.zone_support.community_item_ids",
+            community_item_ids
+        );
+        crate::perf_gauge!("filters.zone_support.matched_zones", zones.len());
+        crate::perf_last!("filters.zone_support.matched_zones", zones.len());
         zones
     }
 

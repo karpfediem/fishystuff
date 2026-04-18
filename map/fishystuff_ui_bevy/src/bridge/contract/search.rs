@@ -126,6 +126,39 @@ impl FishyMapSearchExpressionNode {
             } if children.is_empty()
         )
     }
+
+    pub fn node_count(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
+        match self {
+            FishyMapSearchExpressionNode::Term { .. } => 1,
+            FishyMapSearchExpressionNode::Group { children, .. } => {
+                1 + children.iter().map(Self::node_count).sum::<usize>()
+            }
+        }
+    }
+
+    pub fn term_count(&self) -> usize {
+        match self {
+            FishyMapSearchExpressionNode::Term { .. } => 1,
+            FishyMapSearchExpressionNode::Group { children, .. } => {
+                children.iter().map(Self::term_count).sum()
+            }
+        }
+    }
+
+    pub fn max_depth(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
+        match self {
+            FishyMapSearchExpressionNode::Term { .. } => 1,
+            FishyMapSearchExpressionNode::Group { children, .. } => {
+                1 + children.iter().map(Self::max_depth).max().unwrap_or(0)
+            }
+        }
+    }
 }
 
 impl FishyMapSearchProjection {
