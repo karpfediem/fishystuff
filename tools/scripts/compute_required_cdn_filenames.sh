@@ -61,6 +61,17 @@ WHERE i.icon_id IS NOT NULL
 ORDER BY CAST(i.icon_id AS SIGNED)
 "
 
+run_query "calculator-source-metadata-icons" "
+SELECT DISTINCT
+  CAST(item_id AS SIGNED) AS item_id,
+  COALESCE(NULLIF(TRIM(item_name_ko), ''), NULLIF(TRIM(item_name_en), '')) AS display_name,
+  NULLIF(TRIM(item_icon_file), '') AS item_icon_file
+FROM calculator_item_source_metadata
+WHERE item_id IS NOT NULL
+  AND NULLIF(TRIM(item_icon_file), '') IS NOT NULL
+ORDER BY CAST(item_id AS SIGNED)
+"
+
 run_query "consumable-icons" "
 SELECT DISTINCT
   CAST(item_id AS SIGNED) AS item_id,
@@ -123,6 +134,7 @@ python3 "$ROOT_DIR/tools/scripts/compute_required_cdn_filenames.py" \
   --runtime-config "$SITE_RUNTIME_CONFIG" \
   --expected-map-cache-key "$EXPECTED_MAP_CACHE_KEY" \
   --legacy-icons-json "$tmpdir/legacy-icons.json" \
+  --calculator-source-metadata-icons-json "$tmpdir/calculator-source-metadata-icons.json" \
   --consumable-icons-json "$tmpdir/consumable-icons.json" \
   --enchant-icons-json "$tmpdir/enchant-icons.json" \
   --lightstone-icons-json "$tmpdir/lightstone-icons.json" \

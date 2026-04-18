@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use fishystuff_api::error::ApiErrorCode;
 use fishystuff_api::ids::RgbKey;
-use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
+use fishystuff_core::fish_icons::{fish_icon_path_from_asset_file, parse_fish_icon_asset_id};
 use mysql::prelude::Queryable;
 use serde::Deserialize;
 
@@ -17,6 +17,17 @@ use super::DoltMySqlStore;
 
 fn calculator_loot_item_icon_path(icon_id: i32) -> String {
     format!("/images/items/{icon_id:08}.webp")
+}
+
+fn resolve_calculator_loot_item_icon(item_id: i32, icon_file: Option<&str>) -> String {
+    icon_file
+        .and_then(fish_icon_path_from_asset_file)
+        .or_else(|| {
+            icon_file
+                .and_then(parse_fish_icon_asset_id)
+                .map(calculator_loot_item_icon_path)
+        })
+        .unwrap_or_else(|| calculator_loot_item_icon_path(item_id))
 }
 
 const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
@@ -705,10 +716,11 @@ impl DoltMySqlStore {
                 continue;
             };
             let name = normalize_optional_string(name).unwrap_or_else(|| item_id.to_string());
-            let icon = normalize_optional_string(icon_file)
-                .and_then(|value| parse_fish_icon_asset_id(&value))
-                .map(calculator_loot_item_icon_path)
-                .or_else(|| Some(calculator_loot_item_icon_path(item_id)));
+            let icon_file = normalize_optional_string(icon_file);
+            let icon = Some(resolve_calculator_loot_item_icon(
+                item_id,
+                icon_file.as_deref(),
+            ));
             let (grade, _, _is_prize) = item_grade_from_db(grade_type);
             let vendor_price = parse_positive_i64(original_price);
             item_meta.insert(item_id, (name, icon, grade, vendor_price, is_fish > 0));
@@ -937,9 +949,29 @@ mod tests {
     use super::{
         apply_community_guess_weights, community_presence_matches_row, community_presence_scope,
         community_presence_slot_idx, community_status_priority, is_community_guess_source_id,
-        parse_community_prize_guess_notes, parse_community_support_notes, CommunityPresenceMeta,
-        CommunityPrizeGuessMeta, MANUAL_COMMUNITY_GUESS_SOURCE_ID,
+        parse_community_prize_guess_notes, parse_community_support_notes,
+        resolve_calculator_loot_item_icon, CommunityPresenceMeta, CommunityPrizeGuessMeta,
+        MANUAL_COMMUNITY_GUESS_SOURCE_ID,
     };
+
+    #[test]
+    fn loot_icons_prefer_explicit_source_stems() {
+        assert_eq!(
+            resolve_calculator_loot_item_icon(
+                24277,
+                Some("New_Icon/03_ETC/06_Housing/InHouse_DPFO_birthdayCake_01.dds"),
+            ),
+            "/images/items/InHouse_DPFO_birthdayCake_01.webp"
+        );
+    }
+
+    #[test]
+    fn loot_icons_fall_back_to_item_ids_when_no_source_icon_file_exists() {
+        assert_eq!(
+            resolve_calculator_loot_item_icon(9307, None),
+            "/images/items/00009307.webp"
+        );
+    }
 
     #[test]
     fn parse_community_prize_guess_notes_reads_slot_and_rate() {

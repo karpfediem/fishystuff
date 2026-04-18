@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runtime-config", default="")
     parser.add_argument("--expected-map-cache-key", default="")
     parser.add_argument("--legacy-icons-json", required=True)
+    parser.add_argument("--calculator-source-metadata-icons-json", required=True)
     parser.add_argument("--consumable-icons-json", required=True)
     parser.add_argument("--enchant-icons-json", required=True)
     parser.add_argument("--lightstone-icons-json", required=True)
@@ -78,19 +79,6 @@ def parse_asset_stem(raw_path: str | None) -> str:
         return ""
     stem = file_name.rsplit(".", 1)[0]
     return stem.strip()
-
-
-def parse_icon_id_from_asset_name(raw_path: str | None) -> int | None:
-    stem = parse_asset_stem(raw_path)
-    if not stem:
-        return None
-    digits = "".join(ch for ch in stem if ch.isdigit())
-    if not digits:
-        return None
-    try:
-        return int(digits)
-    except ValueError:
-        return None
 
 
 def pad_icon_id(icon_id: int) -> str:
@@ -255,25 +243,23 @@ def add_icon_filename(report: Report, icon_name: str) -> None:
 def add_icon_rows(report: Report, rows: list[dict], prefer_icon_id: bool = False, raw_key: str = "") -> None:
     for row in rows:
         raw_source = row.get(raw_key) if raw_key else None
-        icon_id = None
-        if prefer_icon_id:
+        icon_name = parse_asset_stem(raw_source)
+        if not icon_name and prefer_icon_id:
             raw_icon_id = row.get("icon_id")
             if raw_icon_id not in (None, ""):
                 try:
-                    icon_id = int(raw_icon_id)
+                    icon_name = pad_icon_id(int(raw_icon_id))
                 except ValueError:
-                    icon_id = None
-        if icon_id is None:
-            icon_id = parse_icon_id_from_asset_name(raw_source)
-        if icon_id is None:
+                    icon_name = ""
+        if not icon_name:
             raw_item_id = row.get("item_id")
             if raw_item_id not in (None, ""):
                 try:
-                    icon_id = int(raw_item_id)
+                    icon_name = pad_icon_id(int(raw_item_id))
                 except ValueError:
-                    icon_id = None
-        if icon_id is not None and icon_id > 0:
-            add_icon_filename(report, pad_icon_id(icon_id))
+                    icon_name = ""
+        if icon_name:
+            add_icon_filename(report, icon_name)
 
 
 def add_lightstone_icons(report: Report, rows: list[dict]) -> None:
@@ -356,6 +342,11 @@ def main() -> None:
         report,
         load_rows(Path(args.legacy_icons_json)),
         prefer_icon_id=True,
+        raw_key="item_icon_file",
+    )
+    add_icon_rows(
+        report,
+        load_rows(Path(args.calculator_source_metadata_icons_json)),
         raw_key="item_icon_file",
     )
     add_icon_rows(

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use fishystuff_api::models::calculator::CalculatorItemEntry;
-use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
+use fishystuff_core::fish_icons::{fish_icon_path_from_asset_file, parse_fish_icon_asset_id};
 
 use crate::error::AppResult;
 use crate::store::FishLang;
@@ -16,6 +16,44 @@ use super::DoltMySqlStore;
 
 fn calculator_item_icon_path(icon_id: i32) -> String {
     format!("/images/items/{icon_id:08}.webp")
+}
+
+fn source_backed_icon_path(
+    item_icon_file: Option<&str>,
+    metadata: Option<&ItemSourceMetadata>,
+) -> Option<String> {
+    item_icon_file
+        .and_then(fish_icon_path_from_asset_file)
+        .or_else(|| metadata.and_then(|meta| meta.icon_path.clone()))
+}
+
+fn canonical_source_icon_id(
+    item_icon_file: Option<&str>,
+    metadata: Option<&ItemSourceMetadata>,
+) -> Option<i32> {
+    item_icon_file
+        .and_then(parse_fish_icon_asset_id)
+        .or_else(|| metadata.and_then(|meta| meta.icon_id))
+}
+
+fn resolve_calculator_item_icon(
+    item_id: Option<i32>,
+    explicit_icon_id: Option<i32>,
+    item_icon_file: Option<&str>,
+    metadata: Option<&ItemSourceMetadata>,
+) -> (Option<i32>, Option<String>) {
+    let source_icon_path = source_backed_icon_path(item_icon_file, metadata);
+    let source_icon_id = canonical_source_icon_id(item_icon_file, metadata);
+    let icon_id = if source_icon_path.is_some() {
+        source_icon_id
+    } else {
+        explicit_icon_id.or(source_icon_id).or(item_id)
+    };
+    let icon = source_icon_path
+        .clone()
+        .or_else(|| icon_id.map(calculator_item_icon_path))
+        .or_else(|| item_id.map(calculator_item_icon_path));
+    (icon_id, icon)
 }
 
 fn slugify_calculator_effect_key(name: &str) -> String {
@@ -39,8 +77,9 @@ pub(super) fn build_source_item(
     item_type: &str,
     source_name_en: Option<&str>,
     source_name_ko: Option<&str>,
-    _item_icon_file: Option<&str>,
+    item_icon_file: Option<&str>,
     icon_id: Option<i32>,
+    metadata: Option<&ItemSourceMetadata>,
     fish_multiplier: Option<f32>,
     source_durability: Option<i32>,
     override_values: CalculatorItemEffectValues,
@@ -56,7 +95,8 @@ pub(super) fn build_source_item(
             .or_else(|| source_name_ko.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     };
-    let icon_id = icon_id.or(Some(item_id));
+    let (icon_id, icon) =
+        resolve_calculator_item_icon(Some(item_id), icon_id, item_icon_file, metadata);
 
     CalculatorItemEntry {
         key: format!("item:{item_id}"),
@@ -76,7 +116,7 @@ pub(super) fn build_source_item(
         grade: None,
         item_id: Some(item_id),
         icon_id,
-        icon: icon_id.map(calculator_item_icon_path),
+        icon,
     }
 }
 
@@ -132,7 +172,7 @@ pub(super) fn build_source_lightstone_item(
             .or_else(|| name_ko.map(ToOwned::to_owned))
             .unwrap_or_else(|| source_key.to_string())
     };
-    let icon_id = item_icon_file.and_then(parse_fish_icon_asset_id);
+    let (icon_id, icon) = resolve_calculator_item_icon(None, None, item_icon_file, None);
 
     CalculatorItemEntry {
         key: source_key.to_string(),
@@ -152,7 +192,7 @@ pub(super) fn build_source_lightstone_item(
         grade: None,
         item_id: None,
         icon_id,
-        icon: icon_id.map(calculator_item_icon_path),
+        icon,
     }
 }
 
@@ -199,15 +239,8 @@ impl DoltMySqlStore {
             } else {
                 format!("effect:{}", slugify_calculator_effect_key(&legacy_name))
             };
-            let icon_id = item_id
-                .and_then(|item_id| {
-                    item_source_metadata
-                        .get(&item_id)
-                        .and_then(|metadata| metadata.icon_id)
-                })
-                .or(icon_id)
-                .or(item_id);
-            let icon = icon_id.map(calculator_item_icon_path);
+            let metadata = item_id.and_then(|item_id| item_source_metadata.get(&item_id));
+            let (icon_id, icon) = resolve_calculator_item_icon(item_id, icon_id, None, metadata);
             items.push(CalculatorItemEntry {
                 key,
                 name: display_name,
@@ -267,6 +300,7 @@ impl DoltMySqlStore {
                         row.source_name_ko.as_deref(),
                         row.item_icon_file.as_deref(),
                         row.icon_id,
+                        item_source_metadata.get(&item_id),
                         row.fish_multiplier,
                         row.durability,
                         override_values,
@@ -351,8 +385,8 @@ mod tests {
     use super::super::calculator_effects::CalculatorItemEffectValues;
     use super::super::item_metadata::ItemSourceMetadata;
     use super::{
-        build_source_item, build_source_lightstone_item, source_backed_effect_values,
-        CalculatorSourceBackedItemRow, DoltMySqlStore,
+        build_source_item, build_source_lightstone_item, resolve_calculator_item_icon,
+        source_backed_effect_values, CalculatorSourceBackedItemRow, DoltMySqlStore,
     };
 
     #[test]
@@ -365,6 +399,7 @@ mod tests {
             Some("발락스 도시락"),
             Some("00009359.dds"),
             Some(42),
+            None,
             Some(1.5),
             Some(11),
             CalculatorItemEffectValues {
@@ -378,8 +413,8 @@ mod tests {
         assert_eq!(sourced.name, "발락스 도시락");
         assert_eq!(sourced.r#type, "food");
         assert_eq!(sourced.durability, Some(11));
-        assert_eq!(sourced.icon_id, Some(42));
-        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00000042.webp"));
+        assert_eq!(sourced.icon_id, Some(9359));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00009359.webp"));
         assert_eq!(sourced.fish_multiplier, Some(1.5));
         assert_eq!(sourced.afr, Some(0.07));
         assert_eq!(sourced.exp_fish, Some(0.10));
@@ -422,9 +457,51 @@ mod tests {
         assert_eq!(sourced.key, "item:16162");
         assert_eq!(sourced.name, "Balenos Fishing Rod");
         assert_eq!(sourced.r#type, "rod");
-        assert_eq!(sourced.icon_id, Some(1));
+        assert_eq!(sourced.icon_id, Some(16162));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00016162.webp"));
         assert_eq!(sourced.durability, Some(100));
         assert_eq!(sourced.afr, Some(0.25));
+    }
+
+    #[test]
+    fn source_backed_items_prefer_explicit_source_stems_over_legacy_icon_ids() {
+        let items = DoltMySqlStore::build_source_backed_items(
+            FishLang::En,
+            &[CalculatorSourceBackedItemRow {
+                source_key: "item:24277".to_string(),
+                source_kind: "item".to_string(),
+                item_id: Some(24277),
+                item_type: "buff".to_string(),
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
+                source_name_en: Some("[11th Anniversary] Celebration Cake (Life)".to_string()),
+                source_name_ko: Some("[11주년 기념] 케이크".to_string()),
+                item_icon_file: Some(
+                    "New_Icon/03_ETC/06_Housing/InHouse_DPFO_birthdayCake_01.dds".to_string(),
+                ),
+                icon_id: Some(1),
+                durability: None,
+                fish_multiplier: None,
+                effect_description_ko: Some("생활 경험치 획득량 +10%".to_string()),
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                item_drr: None,
+                exp_fish: None,
+                exp_life: None,
+            }],
+            &HashMap::new(),
+        )
+        .expect("source-backed rows should build");
+
+        assert_eq!(items.len(), 1);
+        let sourced = &items[0];
+        assert_eq!(sourced.icon_id, None);
+        assert_eq!(
+            sourced.icon.as_deref(),
+            Some("/images/items/InHouse_DPFO_birthdayCake_01.webp")
+        );
     }
 
     #[test]
@@ -764,6 +841,48 @@ mod tests {
         assert_eq!(sourced.fish_multiplier, Some(1.25));
         assert_eq!(sourced.bonus_rare, Some(0.05));
         assert_eq!(sourced.exp_fish, Some(0.10));
+    }
+
+    #[test]
+    fn source_lightstone_item_keeps_non_numeric_source_icon_stems() {
+        let sourced = build_source_lightstone_item(
+            FishLang::En,
+            "lightstone-set:999",
+            Some("Event Buff"),
+            Some("이벤트 버프"),
+            "lightstone_set",
+            Some("ui_texture/icon/new_icon/04_pc_skill/03_buff/event_item_00790580.dds"),
+            None,
+            None,
+            CalculatorItemEffectValues {
+                afr: Some(0.15),
+                ..CalculatorItemEffectValues::default()
+            },
+        );
+
+        assert_eq!(sourced.icon_id, None);
+        assert_eq!(
+            sourced.icon.as_deref(),
+            Some("/images/items/event_item_00790580.webp")
+        );
+    }
+
+    #[test]
+    fn metadata_icon_paths_override_legacy_numeric_icon_ids() {
+        let metadata = ItemSourceMetadata {
+            icon_path: Some("/images/items/InHouse_DPFO_birthdayCake_01.webp".to_string()),
+            icon_id: None,
+            ..ItemSourceMetadata::default()
+        };
+
+        let (icon_id, icon) =
+            resolve_calculator_item_icon(Some(24277), Some(1), None, Some(&metadata));
+
+        assert_eq!(icon_id, None);
+        assert_eq!(
+            icon.as_deref(),
+            Some("/images/items/InHouse_DPFO_birthdayCake_01.webp")
+        );
     }
 
     #[test]

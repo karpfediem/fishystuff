@@ -17,6 +17,7 @@ pub(super) struct ItemSourceMetadata {
     pub(super) item_type: Option<String>,
     pub(super) durability: Option<i32>,
     pub(super) grade: Option<String>,
+    pub(super) icon_path: Option<String>,
     pub(super) icon_id: Option<i32>,
 }
 
@@ -211,6 +212,7 @@ impl DoltMySqlStore {
                 |(item_id, name_ko, name_en, equip_type, icon_file, grade_type, durability)| {
                     let item_id = i32::try_from(item_id).ok()?;
                     let (grade, _, _) = item_grade_from_db(grade_type);
+                    let icon_file = normalize_optional_string(icon_file);
                     Some((
                         item_id,
                         ItemSourceMetadata {
@@ -224,9 +226,12 @@ impl DoltMySqlStore {
                                 .map(str::to_string),
                             durability: durability.and_then(|value| i32::try_from(value).ok()),
                             grade,
-                            icon_id: normalize_optional_string(icon_file).and_then(|value| {
-                                fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
-                            }),
+                            icon_path: icon_file.as_deref().and_then(
+                                fishystuff_core::fish_icons::fish_icon_path_from_asset_file,
+                            ),
+                            icon_id: icon_file
+                                .as_deref()
+                                .and_then(fishystuff_core::fish_icons::parse_fish_icon_asset_id),
                         },
                     ))
                 },

@@ -12,13 +12,12 @@ const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
 const defaultOutputDir = path.join(repoRoot, "data/cdn/public/images/items");
-const defaultCalculatorApiUrl =
-  process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "http://127.0.0.1:8080/api/v1/calculator";
+const defaultCalculatorApiUrl = process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "";
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
 const buildStateVersion = 1;
-const targetCacheVersion = 2;
+const targetCacheVersion = 3;
 const sourceResolutionCacheVersion = 2;
 const defaultConvertConcurrency = Math.max(
   2,
@@ -113,6 +112,7 @@ function runCommand(command, args, { capture = true } = {}) {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
     encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
     stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
   });
   if (result.error) {
@@ -440,12 +440,39 @@ function chooseBestArchiveMatch(matches) {
 }
 
 function addIconTarget(targets, row) {
+  const rawIconPath = row.icon ?? null;
   const rawSourcePath = row.item_icon_file ?? row.skill_icon_file ?? null;
+  const assetStem = parseAssetStemFromPath(rawIconPath) || parseAssetStemFromPath(rawSourcePath);
   const itemId = Number(row.item_id);
-  const iconId =
+  const normalizedSourcePath = normalizeArchivePath(rawSourcePath);
+  const canonicalIconId =
     Number(row.icon_id) ||
-    (Number.isFinite(itemId) && itemId > 0 ? itemId : null) ||
+    parseIconIdFromAssetName(rawIconPath) ||
     parseIconIdFromAssetName(rawSourcePath) ||
+    null;
+
+  if (assetStem) {
+    const key = `stem:${assetStem.toLowerCase()}`;
+    const existing = targets.get(key) ?? {
+      assetStem,
+      displayName: row.display_name || row.source_name_en || row.set_name_ko || `icon:${assetStem}`,
+      sourcePath: null,
+      kind: row.kind || "item",
+    };
+    if (normalizedSourcePath) {
+      existing.sourcePath = normalizedSourcePath;
+    }
+    const overrideSourcePath = normalizeArchivePath(sourceIconPathOverrides.get(canonicalIconId));
+    if (overrideSourcePath) {
+      existing.sourcePath = overrideSourcePath;
+    }
+    targets.set(key, existing);
+    return;
+  }
+
+  const iconId =
+    canonicalIconId ||
+    (Number.isFinite(itemId) && itemId > 0 ? itemId : null) ||
     null;
   if (!Number.isFinite(iconId) || iconId <= 0) {
     return;
@@ -456,7 +483,6 @@ function addIconTarget(targets, row) {
     displayName: row.display_name || row.source_name_en || row.set_name_ko || `icon:${iconId}`,
     sourcePath: null,
   };
-  const normalizedSourcePath = normalizeArchivePath(rawSourcePath);
   if (normalizedSourcePath) {
     existing.sourcePath = normalizedSourcePath;
   }
@@ -500,6 +526,19 @@ function queryLegacyIconRows() {
       ON CAST(it.Index AS SIGNED) = CAST(i.id AS SIGNED)
     WHERE i.icon_id IS NOT NULL
     ORDER BY CAST(i.icon_id AS SIGNED)
+  `);
+}
+
+function queryCalculatorSourceMetadataIconRows() {
+  return doltQueryJson(`
+    SELECT DISTINCT
+      CAST(item_id AS SIGNED) AS item_id,
+      COALESCE(NULLIF(TRIM(item_name_ko), ''), NULLIF(TRIM(item_name_en), '')) AS display_name,
+      NULLIF(TRIM(item_icon_file), '') AS item_icon_file
+    FROM calculator_item_source_metadata
+    WHERE item_id IS NOT NULL
+      AND NULLIF(TRIM(item_icon_file), '') IS NOT NULL
+    ORDER BY CAST(item_id AS SIGNED)
   `);
 }
 
@@ -575,18 +614,38 @@ function queryCalculatorApiIconRows(calculatorApiUrl) {
       const itemId = Number(item?.item_id);
       const metadata = Number.isFinite(itemId) ? metadataByItemId.get(itemId) : null;
       return {
+        icon: item?.icon ?? null,
         icon_id: item?.icon_id ?? null,
         item_id: Number.isFinite(itemId) ? itemId : null,
         display_name: item?.name ?? metadata?.display_name ?? null,
         item_icon_file: metadata?.item_icon_file ?? null,
       };
     })
-    .filter((row) => row.icon_id != null || row.item_icon_file || row.item_id != null);
+    .filter((row) => row.icon || row.icon_id != null || row.item_icon_file || row.item_id != null);
+  const coveredTargetIds = new Set(
+    apiRows
+      .map((row) => {
+        const rawIconPath = row.icon ?? null;
+        const rawSourcePath = row.item_icon_file ?? row.skill_icon_file ?? null;
+        const itemId = Number(row.item_id);
+        const iconId =
+          Number(row.icon_id) ||
+          parseIconIdFromAssetName(rawIconPath) ||
+          (Number.isFinite(itemId) && itemId > 0 ? itemId : null) ||
+          parseIconIdFromAssetName(rawSourcePath) ||
+          null;
+        return Number.isFinite(iconId) && iconId > 0 ? iconId : null;
+      })
+      .filter((iconId) => iconId != null),
+  );
 
-  const referencedRows = referencedItemIds.map((itemId) => {
+  const referencedRows = referencedItemIds
+    .filter((itemId) => !coveredTargetIds.has(itemId))
+    .map((itemId) => {
     const metadata = metadataByItemId.get(itemId);
     if (metadata) {
       return {
+        icon: null,
         icon_id: null,
         item_id: itemId,
         display_name: metadata.display_name ?? null,
@@ -594,12 +653,13 @@ function queryCalculatorApiIconRows(calculatorApiUrl) {
       };
     }
     return {
+      icon: null,
       icon_id: itemId,
       item_id: null,
       display_name: null,
       item_icon_file: null,
     };
-  });
+    });
 
   return [...apiRows, ...referencedRows];
 }
@@ -704,6 +764,9 @@ function queryFishTableIconRows() {
 
 function queryCalculatorIconTargets(calculatorApiUrl) {
   const targets = new Map();
+  for (const row of queryCalculatorSourceMetadataIconRows()) {
+    addIconTarget(targets, row);
+  }
   const apiRows = queryCalculatorApiIconRows(calculatorApiUrl);
   for (const row of apiRows) {
     addIconTarget(targets, row);
