@@ -136,6 +136,8 @@ sinks:
       log_schema: "{{ log_schema }}"
       '"correlation_*"': "{{ correlation }}"
       '"http_*"': "{{ http }}"
+    healthcheck:
+      enabled: false
 
   traces_archive:
     type: file
@@ -145,6 +147,30 @@ sinks:
     encoding:
       codec: json
 
+  telemetry_ingress_traces_to_collector:
+    type: opentelemetry
+    inputs:
+      - telemetry_ingress.traces
+    protocol:
+      type: http
+      uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/traces"
+      encoding:
+        codec: json
+    healthcheck:
+      enabled: false
+
+  telemetry_ingress_metrics_to_collector:
+    type: opentelemetry
+    inputs:
+      - telemetry_ingress.metrics
+    protocol:
+      type: http
+      uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/metrics"
+      encoding:
+        codec: json
+    healthcheck:
+      enabled: false
+
   telemetry_ingress_logs_archive:
     type: file
     inputs:
@@ -152,8 +178,3 @@ sinks:
     path: "./data/vector/archive/otel-logs/%Y-%m-%d.ndjson"
     encoding:
       codec: json
-
-  telemetry_ingress_metrics_drop:
-    type: blackhole
-    inputs:
-      - telemetry_ingress.metrics

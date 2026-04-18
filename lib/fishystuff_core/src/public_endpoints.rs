@@ -1,7 +1,8 @@
 pub const DEFAULT_PUBLIC_SITE_BASE_URL: &str = "https://fishystuff.fish";
 pub const DEFAULT_PUBLIC_API_BASE_URL: &str = "https://api.fishystuff.fish";
 pub const DEFAULT_PUBLIC_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
-pub const DEFAULT_PUBLIC_OTEL_BASE_URL: &str = "https://otel.fishystuff.fish";
+pub const DEFAULT_PUBLIC_TELEMETRY_BASE_URL: &str = "https://telemetry.fishystuff.fish";
+pub const DEFAULT_PUBLIC_OTEL_BASE_URL: &str = DEFAULT_PUBLIC_TELEMETRY_BASE_URL;
 
 pub fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
     let raw = value?.trim().trim_end_matches('/');
@@ -37,6 +38,7 @@ mod tests {
     use super::{
         derive_sibling_public_base_url, normalize_public_base_url, DEFAULT_PUBLIC_API_BASE_URL,
         DEFAULT_PUBLIC_CDN_BASE_URL, DEFAULT_PUBLIC_OTEL_BASE_URL, DEFAULT_PUBLIC_SITE_BASE_URL,
+        DEFAULT_PUBLIC_TELEMETRY_BASE_URL,
     };
 
     #[test]
@@ -44,7 +46,14 @@ mod tests {
         assert_eq!(DEFAULT_PUBLIC_SITE_BASE_URL, "https://fishystuff.fish");
         assert_eq!(DEFAULT_PUBLIC_API_BASE_URL, "https://api.fishystuff.fish");
         assert_eq!(DEFAULT_PUBLIC_CDN_BASE_URL, "https://cdn.fishystuff.fish");
-        assert_eq!(DEFAULT_PUBLIC_OTEL_BASE_URL, "https://otel.fishystuff.fish");
+        assert_eq!(
+            DEFAULT_PUBLIC_TELEMETRY_BASE_URL,
+            "https://telemetry.fishystuff.fish"
+        );
+        assert_eq!(
+            DEFAULT_PUBLIC_OTEL_BASE_URL,
+            DEFAULT_PUBLIC_TELEMETRY_BASE_URL
+        );
     }
 
     #[test]
@@ -78,8 +87,9 @@ mod tests {
             Some("https://cdn.beta.fishystuff.fish")
         );
         assert_eq!(
-            derive_sibling_public_base_url(Some("https://beta.fishystuff.fish"), "otel").as_deref(),
-            Some("https://otel.beta.fishystuff.fish")
+            derive_sibling_public_base_url(Some("https://beta.fishystuff.fish"), "telemetry")
+                .as_deref(),
+            Some("https://telemetry.beta.fishystuff.fish")
         );
         assert_eq!(
             derive_sibling_public_base_url(Some("http://localhost:1990"), "api"),

@@ -15,8 +15,14 @@ test("runtime config defaults to the production sibling-host layout", () => {
   assert.equal(runtimeConfig.siteBaseUrl, "https://fishystuff.fish");
   assert.equal(runtimeConfig.apiBaseUrl, "https://api.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.fishystuff.fish");
-  assert.equal(runtimeConfig.tracing.exporterEndpoint, "https://otel.fishystuff.fish/v1/traces");
-  assert.equal(runtimeConfig.metrics.exporterEndpoint, "https://otel.fishystuff.fish/v1/metrics");
+  assert.equal(
+    runtimeConfig.tracing.exporterEndpoint,
+    "https://telemetry.fishystuff.fish/v1/traces",
+  );
+  assert.equal(
+    runtimeConfig.metrics.exporterEndpoint,
+    "https://telemetry.fishystuff.fish/v1/metrics",
+  );
   assert.equal(runtimeConfig.metrics.exportIntervalMs, 5000);
 });
 
@@ -30,11 +36,11 @@ test("runtime config derives beta sibling hosts from the public site base", () =
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.beta.fishystuff.fish");
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
-    "https://otel.beta.fishystuff.fish/v1/traces",
+    "https://telemetry.beta.fishystuff.fish/v1/traces",
   );
   assert.equal(
     runtimeConfig.metrics.exporterEndpoint,
-    "https://otel.beta.fishystuff.fish/v1/metrics",
+    "https://telemetry.beta.fishystuff.fish/v1/metrics",
   );
 });
 
@@ -47,8 +53,10 @@ test("public base URL resolution is reusable across site build helpers", () => {
     publicSiteBaseUrl: "https://beta.fishystuff.fish",
     publicApiBaseUrl: "https://api.beta.fishystuff.fish",
     publicCdnBaseUrl: "https://cdn.beta.fishystuff.fish",
-    publicOtelBaseUrl: "https://otel.beta.fishystuff.fish",
-    publicOtelTracesEndpoint: "https://otel.beta.fishystuff.fish/v1/traces",
+    publicTelemetryBaseUrl: "https://telemetry.beta.fishystuff.fish",
+    publicTelemetryTracesEndpoint: "https://telemetry.beta.fishystuff.fish/v1/traces",
+    publicOtelBaseUrl: "https://telemetry.beta.fishystuff.fish",
+    publicOtelTracesEndpoint: "https://telemetry.beta.fishystuff.fish/v1/traces",
   });
 });
 
@@ -57,11 +65,23 @@ test("runtime config prefers explicit public overrides over derived sibling host
     FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
     FISHYSTUFF_PUBLIC_API_BASE_URL: "https://api-preview.fishystuff.fish",
     FISHYSTUFF_PUBLIC_CDN_BASE_URL: "https://cdn-preview.fishystuff.fish",
-    FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT: "https://otel-preview.fishystuff.fish/custom/traces",
+    FISHYSTUFF_PUBLIC_TELEMETRY_TRACES_ENDPOINT:
+      "https://telemetry-preview.fishystuff.fish/custom/traces",
   });
 
   assert.equal(runtimeConfig.apiBaseUrl, "https://api-preview.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn-preview.fishystuff.fish");
+  assert.equal(
+    runtimeConfig.tracing.exporterEndpoint,
+    "https://telemetry-preview.fishystuff.fish/custom/traces",
+  );
+});
+
+test("runtime config still accepts legacy public OTEL overrides", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT: "https://otel-preview.fishystuff.fish/custom/traces",
+  });
+
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
     "https://otel-preview.fishystuff.fish/custom/traces",
@@ -97,8 +117,8 @@ test("sibling-host derivation skips loopback and preserves explicit paths when j
   );
   assert.equal(deriveSiblingBaseUrl("http://localhost:1990", "api"), "");
   assert.equal(
-    joinUrl("https://otel.beta.fishystuff.fish", "/v1/traces"),
-    "https://otel.beta.fishystuff.fish/v1/traces",
+    joinUrl("https://telemetry.beta.fishystuff.fish", "/v1/traces"),
+    "https://telemetry.beta.fishystuff.fish/v1/traces",
   );
   assert.equal(
     siblingEndpointUrl("http://127.0.0.1:4818/v1/traces", "/v1/metrics"),

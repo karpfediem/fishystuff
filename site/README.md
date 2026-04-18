@@ -13,13 +13,15 @@ Hand-edited browser-host source stays under `site/assets/map/`. The generated wa
 Each site build also emits `.out/runtime-config.js`, which is the single browser
 runtime source of truth for the resolved site/API/CDN base URLs in local
 development.
-For static deploys, the same generator can derive the public API/CDN/OTEL
+For static deploys, the same generator can derive the public API/CDN/telemetry
 origins from one site base like `https://fishystuff.fish` or
 `https://beta.fishystuff.fish` via `FISHYSTUFF_PUBLIC_SITE_BASE_URL`, with
 explicit per-service overrides available through
 `FISHYSTUFF_PUBLIC_API_BASE_URL`, `FISHYSTUFF_PUBLIC_CDN_BASE_URL`,
-`FISHYSTUFF_PUBLIC_OTEL_BASE_URL`, and
-`FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT`.
+`FISHYSTUFF_PUBLIC_TELEMETRY_BASE_URL`, and
+`FISHYSTUFF_PUBLIC_TELEMETRY_TRACES_ENDPOINT`.
+The legacy `FISHYSTUFF_PUBLIC_OTEL_*` names are still accepted as compatibility
+aliases.
 The repo-managed release build also rewrites `zine.ziggy` through
 `site/scripts/run-zine-release.sh`, so canonical URLs, Open Graph URLs, RSS
 links, and the runtime config all resolve from the same public site base.
@@ -83,7 +85,8 @@ time, inspect `browser_action.frame_wait_timed_out` in the report. That is a
 signal that the integrated page became too slow or stalled during the scenario.
 
 For continuous local visibility between deep profiling runs, the browser map
-runtime also exports a small OTLP metrics surface through the repo's local OTEL
-collector. Those live gauges land on the same Prometheus target as the Jaeger
-spanmetrics and are intended for always-on map runtime dashboards, while the
-JSON report harnesses remain the deeper investigation path.
+runtime also exports a small OTLP metrics surface through the repo's local
+Vector ingress and downstream collector path. Those live gauges land on the
+same Prometheus target as the Jaeger spanmetrics and are intended for always-on
+map runtime dashboards, while the JSON report harnesses remain the deeper
+investigation path.

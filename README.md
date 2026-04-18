@@ -33,8 +33,8 @@ long-lived local services:
 - `db` must become ready before `api`
 - `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
 - `loki` serves local log ingestion and queries on `127.0.0.1:3100`
-- `otel-collector` accepts browser OTLP/HTTP on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
-- `vector` tails repo-local process logs under `data/vector/process/*.log`, receives a trace copy from the local collector on `127.0.0.1:4820`, writes newline-delimited JSON archives under `data/vector/archive/`, and ships normalized logs to Loki
+- `otel-collector` receives traces and metrics from Vector on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
+- `vector` tails repo-local process logs under `data/vector/process/*.log`, accepts local OTLP on `127.0.0.1:4820`, writes newline-delimited JSON archives under `data/vector/archive/`, ships normalized logs to Loki, and forwards traces plus metrics downstream to the collector
 - `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
@@ -66,12 +66,16 @@ environment. That file is the single local-development source of truth for the
 site/API/CDN base URLs consumed by the browser host and Bevy runtime.
 Public/static deployments can set `FISHYSTUFF_PUBLIC_SITE_BASE_URL` and let the
 site build derive sibling defaults like `api.<site-host>`, `cdn.<site-host>`,
-and `otel.<site-host>`, or override any of them explicitly with:
+and `telemetry.<site-host>`, or override any of them explicitly with:
 
 - `FISHYSTUFF_PUBLIC_API_BASE_URL`
 - `FISHYSTUFF_PUBLIC_CDN_BASE_URL`
-- `FISHYSTUFF_PUBLIC_OTEL_BASE_URL`
-- `FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT`
+- `FISHYSTUFF_PUBLIC_TELEMETRY_BASE_URL`
+- `FISHYSTUFF_PUBLIC_TELEMETRY_TRACES_ENDPOINT`
+
+The legacy `FISHYSTUFF_PUBLIC_OTEL_BASE_URL` and
+`FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT` names are still accepted as
+compatibility aliases.
 
 Local development still uses the explicit `FISHYSTUFF_RUNTIME_*` overrides from
 `devenv.nix`, which take precedence over the public-origin layer.
@@ -89,23 +93,26 @@ just up
 Then open `http://127.0.0.1:1990/`, `http://127.0.0.1:16686/`, and optionally
 `http://127.0.0.1:9090/`. The site
 runtime emits browser fetch spans through the JS OpenTelemetry Web SDK and the
-API emits server/store spans directly from Rust. The static site uses direct
-absolute API and OTLP collector URLs from `site/.out/runtime-config.js`; there
-is no site-side trace proxy. Local API CORS and local OTLP receiver CORS must
-explicitly allow the site origin.
+API emits server/store spans directly from Rust. The browser uses same-origin
+`/telemetry/v1/*` endpoints from `site/.out/runtime-config.js`; Caddy proxies
+those requests to Vector, and Vector forwards traces and metrics downstream to
+the collector. Local API CORS still has to allow the site origin, but browser
+OTLP CORS no longer depends on the collector.
 
 Jaeger Service Performance Monitoring now uses Prometheus-backed RED metrics
 derived from the collector's `spanmetrics` connector. Expect the Monitor tab to
 remain empty until spans have been emitted and Prometheus has completed at least
 one scrape cycle.
 
-Vector now runs alongside that path as the repo-owned collection layer for local
-developer logs and trace copies, and Loki is the local query surface for those
-normalized logs. Vector is intentionally not the browser OTLP ingress because
-the current local collector config explicitly handles browser CORS for
-`http://127.0.0.1:1990` and `http://localhost:1990`, while Vector’s
-OpenTelemetry source is being used here as a local backend receiver. The
-correlation flow is:
+Vector now owns the local OTLP ingress as well as the log/archive layer, and
+Loki is the local query surface for normalized logs. The local flow is:
+
+- browser telemetry -> Caddy `/telemetry/v1/*` -> Vector
+- API traces -> Vector OTLP HTTP
+- Vector traces/metrics -> collector -> Jaeger + Prometheus
+- Vector logs -> Loki + local NDJSON archives
+
+The correlation flow is:
 
 - frontend fetch spans record `fishystuff.response.request_id`, `fishystuff.response.trace_id`, and `fishystuff.response.span_id`
 - the API now emits structured request-completion/error logs with matching `request.id`, `trace.id`, and `span.id` fields
@@ -118,7 +125,7 @@ The current local archive/query paths are:
 - `data/vector/archive/logs/*.ndjson`
   - Vector-normalized log events with process/service/correlation fields
 - `data/vector/archive/traces/*.ndjson`
-  - Vector-serialized trace events copied from the local OTLP collector
+  - Vector-serialized trace events captured at the local OTLP ingress
 
 For LLM- or shell-driven inspection you can use either Loki or the NDJSON
 archives. Loki is useful when you already know a stable low-cardinality stream

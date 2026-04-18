@@ -3,10 +3,6 @@ receivers:
     protocols:
       http:
         endpoint: "127.0.0.1:${env:FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}"
-        cors:
-          allowed_origins:
-            - http://127.0.0.1:1990
-            - http://localhost:1990
 
 processors:
   batch:
@@ -24,8 +20,6 @@ exporters:
     endpoint: "127.0.0.1:${env:FISHYSTUFF_DEV_JAEGER_OTLP_GRPC_PORT:-4317}"
     tls:
       insecure: true
-  otlphttp/vector:
-    endpoint: "http://127.0.0.1:${env:FISHYSTUFF_DEV_VECTOR_OTLP_HTTP_PORT:-4820}"
   prometheus:
     endpoint: "127.0.0.1:${env:FISHYSTUFF_DEV_OTEL_SPANMETRICS_PORT:-8889}"
 
@@ -39,7 +33,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/jaeger, otlphttp/vector, spanmetrics]
+      exporters: [otlp/jaeger, spanmetrics]
     metrics:
       receivers: [otlp, spanmetrics]
       processors: [batch]

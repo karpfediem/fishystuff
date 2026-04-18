@@ -156,19 +156,24 @@ export function resolvePublicBaseUrls(env = process.env) {
     normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_CDN_BASE_URL)
     || deriveSiblingBaseUrl(publicSiteBaseUrl, "cdn")
     || "https://cdn.fishystuff.fish";
-  const publicOtelBaseUrl =
-    normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_OTEL_BASE_URL)
-    || deriveSiblingBaseUrl(publicSiteBaseUrl, "otel")
-    || "https://otel.fishystuff.fish";
+  const publicTelemetryBaseUrl =
+    normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_TELEMETRY_BASE_URL)
+    || normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_OTEL_BASE_URL)
+    || deriveSiblingBaseUrl(publicSiteBaseUrl, "telemetry")
+    || "https://telemetry.fishystuff.fish";
+  const publicTelemetryTracesEndpoint =
+    normalizeEndpointUrl(env.FISHYSTUFF_PUBLIC_TELEMETRY_TRACES_ENDPOINT)
+    || normalizeEndpointUrl(env.FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT)
+    || joinUrl(publicTelemetryBaseUrl, "/v1/traces");
 
   return {
     publicSiteBaseUrl,
     publicApiBaseUrl,
     publicCdnBaseUrl,
-    publicOtelBaseUrl,
-    publicOtelTracesEndpoint:
-      normalizeEndpointUrl(env.FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT)
-      || joinUrl(publicOtelBaseUrl, "/v1/traces"),
+    publicTelemetryBaseUrl,
+    publicTelemetryTracesEndpoint,
+    publicOtelBaseUrl: publicTelemetryBaseUrl,
+    publicOtelTracesEndpoint: publicTelemetryTracesEndpoint,
   };
 }
 
@@ -177,12 +182,12 @@ export function buildRuntimeConfig(env = process.env) {
     publicSiteBaseUrl,
     publicApiBaseUrl,
     publicCdnBaseUrl,
-    publicOtelBaseUrl,
-    publicOtelTracesEndpoint,
+    publicTelemetryBaseUrl,
+    publicTelemetryTracesEndpoint,
   } = resolvePublicBaseUrls(env);
   const traceExporterEndpoint =
     normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
-    || publicOtelTracesEndpoint;
+    || publicTelemetryTracesEndpoint;
 
   return {
     siteBaseUrl:
@@ -214,7 +219,7 @@ export function buildRuntimeConfig(env = process.env) {
       exporterEndpoint:
         normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT)
         || siblingEndpointUrl(traceExporterEndpoint, "/v1/metrics")
-        || joinUrl(publicOtelBaseUrl, "/v1/metrics"),
+        || joinUrl(publicTelemetryBaseUrl, "/v1/metrics"),
       exportIntervalMs: Math.max(
         1000,
         Number.parseInt(String(env.FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS ?? "5000"), 10)

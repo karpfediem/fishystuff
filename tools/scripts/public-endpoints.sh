@@ -73,10 +73,16 @@ fishystuff_resolve_public_base_urls() {
       || fishystuff_derive_sibling_base_url "$FISHYSTUFF_RESOLVED_PUBLIC_SITE_BASE_URL" "cdn" \
       || printf '%s\n' "https://cdn.fishystuff.fish"
   )"
-  FISHYSTUFF_RESOLVED_PUBLIC_OTEL_BASE_URL="$(
-    fishystuff_normalize_base_url "${FISHYSTUFF_PUBLIC_OTEL_BASE_URL:-}" \
-      || fishystuff_derive_sibling_base_url "$FISHYSTUFF_RESOLVED_PUBLIC_SITE_BASE_URL" "otel" \
-      || printf '%s\n' "https://otel.fishystuff.fish"
+  FISHYSTUFF_RESOLVED_PUBLIC_TELEMETRY_BASE_URL="$(
+    fishystuff_normalize_base_url "${FISHYSTUFF_PUBLIC_TELEMETRY_BASE_URL:-}" \
+      || fishystuff_normalize_base_url "${FISHYSTUFF_PUBLIC_OTEL_BASE_URL:-}" \
+      || fishystuff_derive_sibling_base_url "$FISHYSTUFF_RESOLVED_PUBLIC_SITE_BASE_URL" "telemetry" \
+      || printf '%s\n' "https://telemetry.fishystuff.fish"
   )"
-  FISHYSTUFF_RESOLVED_PUBLIC_OTEL_TRACES_ENDPOINT="${FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT:-$FISHYSTUFF_RESOLVED_PUBLIC_OTEL_BASE_URL/v1/traces}"
+  FISHYSTUFF_RESOLVED_PUBLIC_TELEMETRY_TRACES_ENDPOINT="$(
+    fishystuff_trim_ascii_whitespace \
+      "${FISHYSTUFF_PUBLIC_TELEMETRY_TRACES_ENDPOINT:-${FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT:-$FISHYSTUFF_RESOLVED_PUBLIC_TELEMETRY_BASE_URL/v1/traces}}"
+  )"
+  FISHYSTUFF_RESOLVED_PUBLIC_OTEL_BASE_URL="$FISHYSTUFF_RESOLVED_PUBLIC_TELEMETRY_BASE_URL"
+  FISHYSTUFF_RESOLVED_PUBLIC_OTEL_TRACES_ENDPOINT="$FISHYSTUFF_RESOLVED_PUBLIC_TELEMETRY_TRACES_ENDPOINT"
 }

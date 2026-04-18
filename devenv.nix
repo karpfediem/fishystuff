@@ -163,11 +163,9 @@ in {
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME = "fishystuff-site-local";
     FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT = "local";
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION = "dev";
-    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT =
-      "http://127.0.0.1:${toString otelCollectorHttpPort}/v1/traces";
+    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT = "/telemetry/v1/traces";
     FISHYSTUFF_RUNTIME_OTEL_METRICS_ENABLED = "true";
-    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT =
-      "http://127.0.0.1:${toString otelCollectorHttpPort}/v1/metrics";
+    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT = "/telemetry/v1/metrics";
     FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS = "5000";
     FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL = "http://${siteHost}:${toString jaegerUiPort}";
     FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO = "0.25";
@@ -191,12 +189,22 @@ in {
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
       header Cache-Control "no-store"
+
+      handle_path /telemetry/* {
+        reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+      }
+
       try_files {path} {path}.html {path}/index.html =404
       file_server
     '';
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
       header Cache-Control "no-store"
+
+      handle_path /telemetry/* {
+        reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+      }
+
       try_files {path} {path}.html {path}/index.html =404
       file_server
     '';
@@ -269,7 +277,6 @@ in {
     after = [
       "devenv:processes:db@started"
       "devenv:processes:vector@started"
-      "devenv:processes:otel-collector@started"
     ];
   };
 
