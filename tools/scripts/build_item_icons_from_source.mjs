@@ -688,11 +688,21 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   mkdirSync(options.outputDir, { recursive: true });
 
+  if (!options.quiet) {
+    console.log(`resolving source-backed item icon targets into ${path.relative(repoRoot, options.outputDir)}`);
+  }
+
   const targets = queryCalculatorIconTargets(options.calculatorApiUrl);
   pruneStaleOutputs(options.outputDir, targets, options.quiet);
   const pendingTargets = targets.filter((target) =>
     shouldBuild(outputPathForTarget(options.outputDir, target), options.force),
   );
+
+  if (!options.quiet) {
+    console.log(
+      `resolved ${targets.length} source-backed item icon targets (${pendingTargets.length} pending)`,
+    );
+  }
 
   if (pendingTargets.length === 0) {
     if (!options.quiet) {
@@ -708,6 +718,9 @@ async function main() {
     );
   }
 
+  if (!options.quiet) {
+    console.log(`verifying source icon paths from ${options.sourceArchive}`);
+  }
   resolveMissingSourcePaths(pendingTargets, options.sourceArchive);
   const unresolvedTargets = pendingTargets.filter((target) => target.unresolved);
   for (const target of unresolvedTargets) {
@@ -716,14 +729,25 @@ async function main() {
     );
   }
   const readyTargets = pendingTargets.filter((target) => target.sourcePath && !target.unresolved);
+  if (!options.quiet) {
+    console.log(
+      `preparing ${readyTargets.length} source-backed item icons (${unresolvedTargets.length} unresolved)`,
+    );
+  }
 
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "fishystuff-item-icons-"));
   try {
+    if (!options.quiet) {
+      console.log(`extracting ${new Set(readyTargets.map((target) => target.sourcePath)).size} source icon files`);
+    }
     extractSelectedSources(
       options.sourceArchive,
       [...new Set(readyTargets.map((target) => target.sourcePath))],
       tempDir,
     );
+    if (!options.quiet) {
+      console.log(`building ${readyTargets.length} source-backed item icons`);
+    }
     await buildReadyTargets(readyTargets, options, tempDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });

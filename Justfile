@@ -46,6 +46,10 @@ bot-run:
 cdn-stage:
   ./tools/scripts/stage_cdn_assets.sh
 
+# Rebuild source-backed CDN item icons only
+cdn-stage-icons:
+  node tools/scripts/build_item_icons_from_source.mjs --output-dir data/cdn/public/images/items
+
 # Push the staged CDN tree to Bunny Storage via HTTP API.
 # Override BUNNY_STORAGE_PARALLEL (or legacy BUNNY_FTP_PARALLEL) in the shell if needed.
 cdn-push:
@@ -81,6 +85,40 @@ build-site:
 
 # Build the current local dev outputs once
 build:
-  just build-map
-  just cdn-stage
-  just build-site
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  pids=()
+  labels=()
+
+  cleanup() {
+    local pid
+    for pid in "${pids[@]}"; do
+      kill "$pid" 2>/dev/null || true
+    done
+  }
+
+  trap cleanup EXIT
+
+  just build-map &
+  pids+=("$!")
+  labels+=("build-map")
+
+  just cdn-stage-icons &
+  pids+=("$!")
+  labels+=("cdn-stage-icons")
+
+  just build-site &
+  pids+=("$!")
+  labels+=("build-site")
+
+  status=0
+  for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+      echo "build step failed: ${labels[$i]}" >&2
+      status=1
+    fi
+  done
+
+  trap - EXIT
+  exit "$status"

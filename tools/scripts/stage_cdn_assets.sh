@@ -24,7 +24,10 @@ done
 source "$ROOT_DIR/tools/scripts/public-endpoints.sh"
 fishystuff_resolve_public_base_urls
 
+echo "staging CDN payload under $CDN_ROOT"
+
 if [ "$BUILD_ITEM_ICONS" = "1" ]; then
+  echo "rebuilding source-backed item icons"
   node "$ROOT_DIR/tools/scripts/build_item_icons_from_source.mjs" --output-dir "$CDN_ROOT/images/items"
 fi
 

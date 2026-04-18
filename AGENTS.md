@@ -30,9 +30,10 @@ Repository notes for working in this monorepo.
 - Use `just open grafana` or `just open loki` for logs-first Explore, `just open jaeger` for Jaeger's native trace/SPM UI, and `just open loki-status` only when you need Loki's raw module status page.
 - Use one-shot local build commands without starting the stack:
   - `just build-map` rebuilds the map runtime plus map-serving CDN assets such as fields, waypoints, and `minimap_visual`
+  - `just cdn-stage-icons` rebuilds only the source-backed item icon payload
   - `just cdn-stage` refreshes the broader staged CDN payload, including source-backed item icons
   - `just build-site` rebuilds the site output
-  - `just build` runs the map build, full CDN staging, and site build together
+  - `just build` runs `build-map`, `cdn-stage-icons`, and `build-site` concurrently
 - Use the same `devenv` environment for both JS host checks and Rust/WASM map builds.
 - The managed local API uses SecretSpec profile `api`.
 - Local API CORS is set explicitly through `FISHYSTUFF_CORS_ALLOWED_ORIGINS`. Do not reintroduce inferred site-origin CORS logic.
