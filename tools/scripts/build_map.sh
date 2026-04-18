@@ -6,7 +6,11 @@ cd "$ROOT_DIR"
 
 : "${CARGO_HOME:=/tmp/cargo}"
 export CARGO_HOME
-export RUSTFLAGS='--cfg getrandom_backend="wasm_js"'
+
+wasm_rustflags='--cfg getrandom_backend="wasm_js"'
+if [ -n "${RUSTFLAGS:-}" ]; then
+  wasm_rustflags="${RUSTFLAGS} ${wasm_rustflags}"
+fi
 
 resolve_map_runtime_manifest_cache_key() {
   local cache_key="${FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY:-}"
@@ -32,10 +36,10 @@ PRUNE_OLD_MAP_RUNTIME_FILES="${PRUNE_OLD_MAP_RUNTIME_FILES:-0}"
 MAP_RUNTIME_MANIFEST_CACHE_KEY="$(resolve_map_runtime_manifest_cache_key)"
 MAP_RUNTIME_MANIFEST_FILE="runtime-manifest.${MAP_RUNTIME_MANIFEST_CACHE_KEY}.json"
 if [ "$PROFILE" = "release" ]; then
-  cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown --release
+  RUSTFLAGS="$wasm_rustflags" cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown --release
   WASM_INPUT="target/wasm32-unknown-unknown/release/fishystuff_ui_bevy.wasm"
 else
-  cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown
+  RUSTFLAGS="$wasm_rustflags" cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown
   WASM_INPUT="target/wasm32-unknown-unknown/debug/fishystuff_ui_bevy.wasm"
 fi
 
@@ -122,6 +126,17 @@ first_existing_path() {
   printf '%s\n' "$1"
 }
 
+resolve_existing_path() {
+  local candidate
+  for candidate in "$@"; do
+    if [ -e "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 read_json_u32_field() {
   local json_path="$1"
   local field_name="$2"
@@ -141,9 +156,7 @@ PY
 }
 
 prepare_terrain_source_tiles() {
-  : "${TERRAIN_SOURCE_IMAGE:=$(first_existing_path \
-    data/terrain/Karpfen/terraintiles/whole_fullres.png \
-    zonegen/data/Karpfen/terraintiles/whole_fullres.png)}"
+  : "${TERRAIN_SOURCE_IMAGE:?set TERRAIN_SOURCE_IMAGE to the canonical terrain source image path}"
   : "${TERRAIN_SOURCE_TILE_DIR:=/tmp/fishystuff-terrain-whole_fullres-tiles}"
   : "${TERRAIN_SOURCE_TILE_SIZE:=512}"
   : "${TERRAIN_SOURCE_EXPECT_WIDTH:=32000}"
@@ -185,12 +198,23 @@ ensure_terrain_height_tiles() {
 }
 
 : "${TERRAIN_HEIGHT_TILE_OUT_DIR:=$CDN_IMAGE_ASSET_DIR/terrain_height/v1}"
+terrain_source_image="${TERRAIN_SOURCE_IMAGE:-}"
+if [ -z "$terrain_source_image" ]; then
+  terrain_source_image="$(resolve_existing_path \
+    data/terrain/Karpfen/terraintiles/whole_fullres.png \
+    zonegen/data/Karpfen/terraintiles/whole_fullres.png || true)"
+fi
 if [ "${REBUILD_TERRAIN_HEIGHT_TILES:-0}" = "1" ] || [ ! -f "$TERRAIN_HEIGHT_TILE_OUT_DIR/0_0.png" ]; then
-  ensure_terrain_height_tiles
+  if [ -n "$terrain_source_image" ] && [ -f "$terrain_source_image" ]; then
+    TERRAIN_SOURCE_IMAGE="$terrain_source_image"
+    ensure_terrain_height_tiles
+  else
+    echo "warning: terrain source image not found; skipping terrain_height/v1 build" >&2
+  fi
 fi
 
 if [ "${REBUILD_TERRAIN_PYRAMID:-0}" = "1" ]; then
-  : "${TERRAIN_PYRAMID_SOURCE_ROOT:=$(first_existing_path \
+  : "${TERRAIN_PYRAMID_SOURCE_ROOT:=$(resolve_existing_path \
     data/terrain/Karpfen/terraintiles/7 \
     zonegen/data/Karpfen/terraintiles/7)}"
   : "${TERRAIN_PYRAMID_OUT_DIR:=$CDN_IMAGE_ASSET_DIR/terrain/v1}"
@@ -351,6 +375,8 @@ region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
 regions_field_metadata_output="$CDN_FIELD_ASSET_DIR/regions.v1.meta.json"
 region_groups_field_metadata_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.meta.json"
 region_nodes_output="$CDN_WAYPOINT_ASSET_DIR/region_nodes.v1.geojson"
+region_groups_geojson_output="$CDN_ROOT/region_groups/v1.geojson"
+detailed_regions_geojson_output="$CDN_ROOT/region_groups/regions.v1.geojson"
 waypoint_xml_args=()
 if [ -f "$waypoint_xml_primary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_primary")
@@ -358,6 +384,7 @@ fi
 if [ -f "$waypoint_xml_secondary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_secondary")
 fi
+mkdir -p "$(dirname "$region_groups_geojson_output")"
 
 if [ -f "$regions_field_input" ] && { [ "${REBUILD_REGIONS_FIELD:-0}" = "1" ] || [ ! -f "$regions_field_output" ] || [ "$regions_field_input" -nt "$regions_field_output" ]; }; then
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
@@ -415,6 +442,55 @@ if [ -f "$region_groups_field_output" ] && [ -f "$regioninfo_bss_input" ] && [ -
     --loc "$region_loc_input" \
     "${waypoint_xml_args[@]}" \
     --out "$region_groups_field_metadata_output"
+fi
+
+if [ -f "$regions_field_input" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+  [ "${REBUILD_REGION_GROUPS_VECTOR_LAYER:-0}" = "1" ] ||
+  [ ! -f "$region_groups_geojson_output" ] ||
+  [ "$regions_field_input" -nt "$region_groups_geojson_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$region_groups_geojson_output" ] ||
+  [ "$regiongroupinfo_bss_input" -nt "$region_groups_geojson_output" ] ||
+  [ "$region_loc_input" -nt "$region_groups_geojson_output" ];
+}; then
+  raw_region_groups_geojson="$(mktemp)"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
+    pabr export-region-groups-geojson \
+    "$regions_field_input" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --output "$raw_region_groups_geojson"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-region-groups-geojson \
+    --region-groups-geojson "$raw_region_groups_geojson" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
+    --loc "$region_loc_input" \
+    "${waypoint_xml_args[@]}" \
+    --out "$region_groups_geojson_output"
+  rm -f "$raw_region_groups_geojson"
+fi
+
+if [ -f "$regions_field_input" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+  [ "${REBUILD_DETAILED_REGIONS_LAYER:-0}" = "1" ] ||
+  [ ! -f "$detailed_regions_geojson_output" ] ||
+  [ "$regions_field_input" -nt "$detailed_regions_geojson_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$detailed_regions_geojson_output" ] ||
+  [ "$regiongroupinfo_bss_input" -nt "$detailed_regions_geojson_output" ] ||
+  [ "$region_loc_input" -nt "$detailed_regions_geojson_output" ];
+}; then
+  raw_regions_geojson="$(mktemp)"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
+    pabr export-regions-geojson \
+    "$regions_field_input" \
+    --output "$raw_regions_geojson"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-detailed-regions-geojson \
+    --regions-geojson "$raw_regions_geojson" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
+    --loc "$region_loc_input" \
+    "${waypoint_xml_args[@]}" \
+    --out "$detailed_regions_geojson_output"
+  rm -f "$raw_regions_geojson"
 fi
 
 if [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {

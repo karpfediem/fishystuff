@@ -24,6 +24,9 @@ Current contents:
     [`docs/dolt-schema-workflow.md`](../docs/dolt-schema-workflow.md)
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
+  - builds the wasm map runtime
+  - rebuilds the non-terrain map CDN assets consumed by the runtime:
+    fields, region vectors, region-node waypoints, zone-mask visuals, and exact lookup
 - `tools/scripts/stage_cdn_assets.sh`
   - stages CDN-owned site and map assets under `data/cdn/public/`
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
@@ -34,10 +37,6 @@ Current contents:
   - defaults to bounded JSON samples from the local Vector API
   - exposes stable presets such as `browser-logs`, `process-logs`,
     `raw-traces`, and `to-loki`
-- `tools/scripts/rebuild_detailed_regions_layer.sh`
-- `tools/scripts/rebuild_detailed_regions_layer_from_pabr.sh`
-- `tools/scripts/rebuild_region_groups_vector_layer.sh`
-- `tools/scripts/rebuild_region_groups_vector_layer_from_pabr.sh`
 - `tools/scripts/rebuild_region_groups_overlay.sh`
 - `tools/scripts/rebuild_water_overlay.sh`
 - `tools/scripts/extract_fishing_workbooks_from_paz.sh`
