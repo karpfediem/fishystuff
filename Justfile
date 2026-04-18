@@ -7,10 +7,6 @@ up:
 watch:
   devenv up --profile watch
 
-# Stop detached local dev processes started via `devenv up -d`
-down:
-  devenv processes down
-
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
     dolt clone fishystuff/fishystuff .
@@ -45,10 +41,6 @@ bot-run:
 # Stage CDN-served runtime assets under data/cdn/public
 cdn-stage:
   ./tools/scripts/stage_cdn_assets.sh
-
-# Serve the staged CDN tree locally with cache headers
-cdn-serve:
-  ./tools/scripts/run_cdn_server.sh
 
 # Push the staged CDN tree to Bunny Storage via HTTP API.
 # Override BUNNY_STORAGE_PARALLEL (or legacy BUNNY_FTP_PARALLEL) in the shell if needed.

@@ -29,9 +29,6 @@ Current contents:
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
 - `tools/scripts/push_bunnycdn.sh`
 - `tools/scripts/run_api.sh`
-- `tools/scripts/run_cdn_server.sh`
-  - standalone CDN file server helper; `devenv up` now uses `services.caddy` instead
-- `tools/scripts/serve_cdn.py`
 - `tools/scripts/rebuild_detailed_regions_layer.sh`
 - `tools/scripts/rebuild_detailed_regions_layer_from_pabr.sh`
 - `tools/scripts/rebuild_region_groups_vector_layer.sh`
