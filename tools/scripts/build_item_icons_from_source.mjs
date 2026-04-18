@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, statSync } from "node:fs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +12,7 @@ const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
 const defaultOutputDir = path.join(repoRoot, "data/cdn/public/images/items");
-const defaultCalculatorApiUrl =
-  process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "http://127.0.0.1:8080/api/v1/calculator";
+const defaultCalculatorApiUrl = process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "";
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
@@ -31,6 +30,14 @@ const sourceIconPathOverrides = new Map([
   [
     768425,
     "ui_texture/icon/new_icon/03_etc/00768388.dds",
+  ],
+  [
+    15647,
+    "ui_texture/icon/new_icon/09_cash/03_product/00015647.dds",
+  ],
+  [
+    790580,
+    "ui_texture/icon/new_icon/04_pc_skill/03_buff/event_item_00790580.dds",
   ],
   [
     830349,
@@ -156,6 +163,12 @@ function outputPathForStem(outputDir, stem) {
   return path.join(outputDir, `${stem}.webp`);
 }
 
+function outputPathForTarget(outputDir, target) {
+  return target.assetStem
+    ? outputPathForStem(outputDir, target.assetStem)
+    : outputPathForIcon(outputDir, target.iconId);
+}
+
 function targetStem(target) {
   if (target?.assetStem) {
     return String(target.assetStem);
@@ -217,11 +230,11 @@ function parseIconIdFromAssetName(rawPath) {
   const file = String(rawPath).trim().split(/[?#]/, 1)[0];
   const basename = file.split("/").pop() ?? file;
   const stem = basename.replace(/\.[^.]+$/, "");
-  const digits = [...stem].filter((ch) => ch >= "0" && ch <= "9").join("");
-  if (!digits) {
+  const match = stem.match(/(\d{5,8})(?:_[0-9]+)?$/i);
+  if (!match) {
     return null;
   }
-  const parsed = Number(digits);
+  const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -293,10 +306,11 @@ function chooseBestArchiveMatch(matches) {
 
 function addIconTarget(targets, row) {
   const rawSourcePath = row.item_icon_file ?? row.skill_icon_file ?? null;
+  const itemId = Number(row.item_id);
   const iconId =
     Number(row.icon_id) ||
+    (Number.isFinite(itemId) && itemId > 0 ? itemId : null) ||
     parseIconIdFromAssetName(rawSourcePath) ||
-    Number(row.item_id) ||
     null;
   if (!Number.isFinite(iconId) || iconId <= 0) {
     return;
@@ -583,6 +597,32 @@ function resolveMissingSourcePaths(targets, sourceArchive) {
   }
 }
 
+function pruneStaleOutputs(outputDir, targets, quiet) {
+  if (!existsSync(outputDir)) {
+    return 0;
+  }
+
+  const expectedFiles = new Set(
+    targets.map((target) => path.basename(outputPathForTarget(outputDir, target))),
+  );
+  let pruned = 0;
+  for (const entry of readdirSync(outputDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".webp")) {
+      continue;
+    }
+    if (expectedFiles.has(entry.name)) {
+      continue;
+    }
+    rmSync(path.join(outputDir, entry.name), { force: true });
+    pruned += 1;
+  }
+
+  if (pruned > 0 && !quiet) {
+    console.log(`pruned ${pruned} stale source-backed item icons from ${path.relative(repoRoot, outputDir)}`);
+  }
+  return pruned;
+}
+
 function extractSelectedSources(sourceArchive, sourcePaths, tempDir) {
   if (sourcePaths.length === 0) {
     return;
@@ -630,9 +670,7 @@ async function buildReadyTargets(readyTargets, options, tempDir) {
       if (!existsSync(extractedPath)) {
         fail(`expected extracted source icon is missing: ${extractedPath}`);
       }
-      const outputPath = target.assetStem
-        ? outputPathForStem(options.outputDir, target.assetStem)
-        : outputPathForIcon(options.outputDir, target.iconId);
+      const outputPath = outputPathForTarget(options.outputDir, target);
       await convertToWebp(extractedPath, outputPath, target);
       if (!options.quiet) {
         console.log(
@@ -651,13 +689,9 @@ async function main() {
   mkdirSync(options.outputDir, { recursive: true });
 
   const targets = queryCalculatorIconTargets(options.calculatorApiUrl);
+  pruneStaleOutputs(options.outputDir, targets, options.quiet);
   const pendingTargets = targets.filter((target) =>
-    shouldBuild(
-      target.assetStem
-        ? outputPathForStem(options.outputDir, target.assetStem)
-        : outputPathForIcon(options.outputDir, target.iconId),
-      options.force,
-    ),
+    shouldBuild(outputPathForTarget(options.outputDir, target), options.force),
   );
 
   if (pendingTargets.length === 0) {
