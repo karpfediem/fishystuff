@@ -16,17 +16,36 @@
   const METHOD_ORDER = ["rod", "harpoon"];
   const SORT_FIELD_ORDER = ["name", "price"];
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
+  const CATALOG_VIEW_ORDER = ["grade", "guide"];
+  const FISH_GUIDE_CATEGORY_ORDER = [
+    "harpoon",
+    "freshwater",
+    "saltwater",
+    "crustacean",
+    "unknown",
+  ];
+  const FISH_GUIDE_CATEGORY_LABELS = {
+    harpoon: "Harpoon",
+    freshwater: "Freshwater Fish",
+    saltwater: "Saltwater Fish",
+    crustacean: "Crustacean",
+    unknown: "Unmapped",
+  };
+  // Derived from data/data/excel/Encyclopedia_Table.xlsx Category by encyclopedia Key.
+  // Index 0 in this string corresponds to encyclopedia key 1; '?' marks gaps in the source.
+  const FISH_GUIDE_CATEGORY_SEQUENCE =
+    "ssssfssssshschcffsffffssssssssshhsssfsfffffcfcfffffffffssssssssssssssssssssssssssssssffffffffffssfsssssssssssssssssssssssssssssssssssssssssssssssssssssssfffffffffffffffffffffffhhhhhhhhhhhhhfffsscsshhhshffffffffffffffffffffchsssshsssssfsf?ssssssfssfsssssfssssfsss?ssssssf?sfssssffff";
   const SILVER_FORMATTER = new Intl.NumberFormat();
   const FISHYDEX_ACTION_DEFAULTS = Object.freeze({
     exportCaughtToken: 0,
     importCaughtToken: 0,
     closeDetailsToken: 0,
   });
-  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
+  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter|guide_view)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const DEX_FEEDBACK_CLEAR_SIGNAL_PATTERN =
-    /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction)(?:\.|$)/;
+    /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction|catalog_view)(?:\.|$)/;
   const DEX_SYNC_SIGNAL_PATTERN =
-    /^(fish(?:\.|$)|revision(?:\.|$)|search_query(?:\.|$)|caught_filter(?:\.|$)|favourite_filter(?:\.|$)|grade_filters(?:\.|$)|method_filters(?:\.|$)|show_dried(?:\.|$)|sort_field(?:\.|$)|sort_direction(?:\.|$)|_shared_fish(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_fishydex_actions(?:\.|$))/;
+    /^(fish(?:\.|$)|revision(?:\.|$)|search_query(?:\.|$)|caught_filter(?:\.|$)|favourite_filter(?:\.|$)|grade_filters(?:\.|$)|method_filters(?:\.|$)|show_dried(?:\.|$)|sort_field(?:\.|$)|sort_direction(?:\.|$)|catalog_view(?:\.|$)|_shared_fish(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const state = {
     persistBinding: null,
     feedbackBinding: null,
@@ -264,6 +283,11 @@
     return SORT_DIRECTION_ORDER.includes(normalized) ? normalized : "desc";
   }
 
+  function normalizeCatalogView(value) {
+    const normalized = String(value || "grade").trim().toLowerCase();
+    return CATALOG_VIEW_ORDER.includes(normalized) ? normalized : "grade";
+  }
+
   function normalizeCaughtFilter(value) {
     const normalized = String(value || "all").trim().toLowerCase();
     return normalized === "caught" || normalized === "missing" ? normalized : "all";
@@ -294,6 +318,7 @@
       show_dried: normalizeBooleanFlag(signals && signals.show_dried),
       sort_field: normalizeSortField(signals && signals.sort_field),
       sort_direction: normalizeSortDirection(signals && signals.sort_direction),
+      catalog_view: normalizeCatalogView(signals && signals.catalog_view),
       _progress_panel_collapsed: normalizeBooleanFlag(
         signals && signals._progress_panel_collapsed,
       ),
@@ -488,6 +513,38 @@
     return Number.isInteger(value) && value > 0 ? value : null;
   }
 
+  function fishGuideOrderForEntry(entry) {
+    const value = Number(entry && entry.encyclopedia_key);
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+
+  function fishGuideCategoryCharForKey(key) {
+    const index = Number(key) - 1;
+    if (!Number.isInteger(index) || index < 0 || index >= FISH_GUIDE_CATEGORY_SEQUENCE.length) {
+      return "?";
+    }
+    return FISH_GUIDE_CATEGORY_SEQUENCE.charAt(index) || "?";
+  }
+
+  function fishGuideCategoryForEntry(entry) {
+    switch (fishGuideCategoryCharForKey(fishGuideOrderForEntry(entry))) {
+      case "h":
+        return "harpoon";
+      case "f":
+        return "freshwater";
+      case "s":
+        return "saltwater";
+      case "c":
+        return "crustacean";
+      default:
+        return "unknown";
+    }
+  }
+
+  function fishGuideCategoryLabel(category) {
+    return FISH_GUIDE_CATEGORY_LABELS[category] || FISH_GUIDE_CATEGORY_LABELS.unknown;
+  }
+
   function filterGradeForEntry(entry) {
     const resolver = window.__fishystuffItemPresentation
       && typeof window.__fishystuffItemPresentation.resolveGradeTone === "function"
@@ -577,11 +634,37 @@
     return fishItemId(left) - fishItemId(right);
   }
 
+  function compareFishGuideEntries(left, right) {
+    const leftCategoryIndex = FISH_GUIDE_CATEGORY_ORDER.indexOf(fishGuideCategoryForEntry(left));
+    const rightCategoryIndex = FISH_GUIDE_CATEGORY_ORDER.indexOf(fishGuideCategoryForEntry(right));
+    if (leftCategoryIndex !== rightCategoryIndex) {
+      return leftCategoryIndex - rightCategoryIndex;
+    }
+
+    const leftGuideOrder = fishGuideOrderForEntry(left);
+    const rightGuideOrder = fishGuideOrderForEntry(right);
+    if (leftGuideOrder === null && rightGuideOrder !== null) {
+      return 1;
+    }
+    if (leftGuideOrder !== null && rightGuideOrder === null) {
+      return -1;
+    }
+    if (leftGuideOrder !== null && rightGuideOrder !== null && leftGuideOrder !== rightGuideOrder) {
+      return leftGuideOrder - rightGuideOrder;
+    }
+
+    const nameOrder = compareFishNames(left, right);
+    if (nameOrder !== 0) {
+      return nameOrder;
+    }
+    return fishItemId(left) - fishItemId(right);
+  }
+
   function fishRenderSignature(fish) {
     let hash = 2166136261;
     for (const entry of fish) {
       const raw = entry
-        ? `${fishItemId(entry)}|${fishEncyclopediaId(entry) || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}|${entryIsDried(entry) ? 1 : 0}|${entryCatchMethods(entry).join(",")}|${entry.vendor_price || 0}`
+        ? `${fishItemId(entry)}|${fishEncyclopediaId(entry) || 0}|${fishGuideOrderForEntry(entry) || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}|${entryIsDried(entry) ? 1 : 0}|${entryCatchMethods(entry).join(",")}|${entry.vendor_price || 0}`
         : "null";
       for (let index = 0; index < raw.length; index += 1) {
         hash ^= raw.charCodeAt(index);
@@ -903,12 +986,12 @@
     return card;
   }
 
-  function renderGroup(grade, fish, caughtSet, favouriteSet, snapshot, animationIndex, animateCards) {
+  function renderGroup(groupLabel, fish, caughtSet, favouriteSet, snapshot, animationIndex, animateCards) {
     if (!fish.length) {
       return null;
     }
     const section = createElement("fieldset", "fishydex-group card card-border bg-base-100");
-    const legend = createElement("legend", "fishydex-group-title fieldset-legend ml-6 px-2", gradeLabelForKey(grade));
+    const legend = createElement("legend", "fishydex-group-title fieldset-legend ml-6 px-2", groupLabel);
     const body = createElement("div", "card-body pt-0");
     const header = createElement("div", "fishydex-group-header");
     header.appendChild(createElement("span", "fishydex-group-count badge badge-ghost", `${fish.length} fish`));
@@ -1404,6 +1487,7 @@
       const showDried = normalizeBooleanFlag(snapshot.show_dried);
       const sortField = normalizeSortField(snapshot.sort_field);
       const sortDirection = normalizeSortDirection(snapshot.sort_direction);
+      const requestedCatalogView = normalizeCatalogView(snapshot.catalog_view);
       const searchQuery = String(snapshot.search_query || "").trim().toLowerCase();
       const isLoading = normalizeBooleanFlag(snapshot._loading);
 
@@ -1446,10 +1530,6 @@
         return true;
       });
 
-      const sorted = filtered.slice().sort(function (left, right) {
-        return compareFishEntries(left, right, sortField, sortDirection);
-      });
-
       const supportsGradeFilter = fish.some(function (entry) {
         return entry && (entry.is_prize !== null || entry.grade);
       });
@@ -1459,6 +1539,21 @@
       const supportsDriedFilter = fish.some(function (entry) {
         return entry && entryIsDried(entry);
       });
+      const supportsGuideView = fish.some(function (entry) {
+        return entry && fishGuideOrderForEntry(entry) !== null;
+      });
+      const guideSupportKnown = fish.length > 0 || !isLoading;
+      const supportsGuideViewState = guideSupportKnown
+        ? supportsGuideView
+        : normalizeBooleanFlag(snapshot.supports_guide_view) || requestedCatalogView === "guide";
+      const catalogView = guideSupportKnown
+        ? supportsGuideView ? requestedCatalogView : "grade"
+        : requestedCatalogView;
+      const sortedEntries = catalogView === "guide"
+        ? filtered.slice().sort(compareFishGuideEntries)
+        : filtered.slice().sort(function (left, right) {
+          return compareFishEntries(left, right, sortField, sortDirection);
+        });
 
       const gradeProgress = {
         red: { total: 0, caught: 0 },
@@ -1487,6 +1582,7 @@
         gradeFilters.join(","),
         methodFilters.join(","),
         showDried ? "1" : "0",
+        catalogView,
         sortField,
         sortDirection,
         caughtFilter !== "all" ? caughtIds.join(",") : "",
@@ -1500,12 +1596,27 @@
           const fragment = document.createDocumentFragment();
           const animateCards = !state.suppressCardAnimation;
           let animationIndex = 0;
-          for (const grade of GRADE_COLOR_ORDER) {
-            const groupEntries = sorted.filter(function (entry) {
-              return filterGradeForEntry(entry) === grade;
+          const groupDefinitions = catalogView === "guide"
+            ? FISH_GUIDE_CATEGORY_ORDER.map(function (category) {
+              return {
+                label: fishGuideCategoryLabel(category),
+                match(entry) {
+                  return fishGuideCategoryForEntry(entry) === category;
+                },
+              };
+            })
+            : GRADE_COLOR_ORDER.map(function (grade) {
+              return {
+                label: gradeLabelForKey(grade),
+                match(entry) {
+                  return filterGradeForEntry(entry) === grade;
+                },
+              };
             });
+          for (const group of groupDefinitions) {
+            const groupEntries = sortedEntries.filter(group.match);
             const rendered = renderGroup(
-              grade,
+              group.label,
               groupEntries,
               new Set(caughtIds),
               new Set(favouriteIds),
@@ -1518,7 +1629,7 @@
               animationIndex = rendered.nextAnimationIndex;
             }
           }
-          if (!sorted.length && !isLoading) {
+          if (!sortedEntries.length && !isLoading) {
             fragment.appendChild(
               renderEmptyState(
                 Boolean(searchQuery)
@@ -1543,7 +1654,7 @@
       patchSignals({
         catalog_count: catalogEntries.length,
         total_count: fish.length,
-        visible_count: sorted.length,
+        visible_count: sortedEntries.length,
         caught_count: caughtCount,
         completion_percent: completionPercent(caughtCount, catalogEntries.length),
         red_total_count: gradeProgress.red.total,
@@ -1564,6 +1675,8 @@
         supports_grade_filter: supportsGradeFilter,
         supports_method_filter: supportsMethodFilter,
         supports_dried_filter: supportsDriedFilter,
+        supports_guide_view: supportsGuideViewState,
+        catalog_view: catalogView,
         _api_error_message: fish.length > 0 ? "" : snapshot._api_error_message,
         _api_error_hint: fish.length > 0 ? "" : snapshot._api_error_hint,
       });

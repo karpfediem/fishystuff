@@ -11,6 +11,7 @@
        show_dried: false,
        sort_field: 'price',
        sort_direction: 'desc',
+       catalog_view: 'grade',
        _shared_fish: {
          caughtIds: [],
          favouriteIds: [],
@@ -41,6 +42,7 @@
        supports_grade_filter: false,
        supports_method_filter: false,
        supports_dried_filter: false,
+       supports_guide_view: false,
        _loading: true,
        _caught_stamp_fish_id: null,
        _favourite_stamp_fish_id: null,
@@ -346,19 +348,34 @@
     <fieldset class="fishydex-grid-shell card card-border bg-base-100">
       <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
         <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-nav-dex"></use></svg><span>Catalog</span></span>
-        <span class="fishydex-panel-controls" role="group" aria-label="Catalog sort controls">
-          <button type="button"
-                  class="btn btn-sm btn-ghost fishydex-sort-button"
-                  data-class:is-active="$sort_field === 'price'"
-                  data-attr:aria-pressed="($sort_field === 'price').toString()"
-                  data-attr:aria-label="$sort_field === 'price' ? 'Toggle price sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by price ascending.'"
-                  data-on:click="$sort_direction = $sort_field === 'price' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'price'"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><span data-show="$sort_field === 'price' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span><span data-show="$sort_field === 'price' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span></span><span>Price</span></button>
-          <button type="button"
-                  class="btn btn-sm btn-ghost fishydex-sort-button"
-                  data-class:is-active="$sort_field === 'name'"
-                  data-attr:aria-pressed="($sort_field === 'name').toString()"
-                  data-attr:aria-label="$sort_field === 'name' ? 'Toggle name sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by name ascending.'"
-                  data-on:click="$sort_direction = $sort_field === 'name' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'name'"><span data-show="$sort_field === 'name' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg></span><span data-show="$sort_field === 'name' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-za-sort-descending-letters-fill"></use></svg></span><span>Name</span></button>
+        <span class="fishydex-panel-controls" role="group" aria-label="Catalog controls">
+          <span class="join" role="group" aria-label="Catalog view">
+            <button type="button"
+                    class="btn btn-sm btn-ghost join-item"
+                    data-show="$supports_guide_view"
+                    data-class:is-active="$catalog_view === 'guide'"
+                    data-attr:aria-pressed="($catalog_view === 'guide').toString()"
+                    data-on:click="$catalog_view = 'guide'">Fish Guide</button>
+            <button type="button"
+                    class="btn btn-sm btn-ghost join-item"
+                    data-class:is-active="$catalog_view === 'grade'"
+                    data-attr:aria-pressed="($catalog_view === 'grade').toString()"
+                    data-on:click="$catalog_view = 'grade'">Grade</button>
+          </span>
+          <span role="group" aria-label="Catalog sort controls" data-show="$catalog_view === 'grade'">
+            <button type="button"
+                    class="btn btn-sm btn-ghost fishydex-sort-button"
+                    data-class:is-active="$sort_field === 'price'"
+                    data-attr:aria-pressed="($sort_field === 'price').toString()"
+                    data-attr:aria-label="$sort_field === 'price' ? 'Toggle price sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by price ascending.'"
+                    data-on:click="$sort_direction = $sort_field === 'price' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'price'"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><span data-show="$sort_field === 'price' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span><span data-show="$sort_field === 'price' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span></span><span>Price</span></button>
+            <button type="button"
+                    class="btn btn-sm btn-ghost fishydex-sort-button"
+                    data-class:is-active="$sort_field === 'name'"
+                    data-attr:aria-pressed="($sort_field === 'name').toString()"
+                    data-attr:aria-label="$sort_field === 'name' ? 'Toggle name sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by name ascending.'"
+                    data-on:click="$sort_direction = $sort_field === 'name' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'name'"><span data-show="$sort_field === 'name' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg></span><span data-show="$sort_field === 'name' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-za-sort-descending-letters-fill"></use></svg></span><span>Name</span></button>
+          </span>
           <span class="loading loading-spinner loading-xs fishydex-panel-spinner" data-show="$_loading"></span>
         </span>
       </legend>

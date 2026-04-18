@@ -37,8 +37,24 @@ class MemoryStorage {
 
 class ElementStub {}
 class HTMLElementStub extends ElementStub {}
-class HTMLImageElementStub extends HTMLElementStub {}
-class HTMLButtonElementStub extends HTMLElementStub {}
+
+class StyleStub {
+  constructor() {
+    this.values = new Map();
+  }
+
+  setProperty(name, value) {
+    this.values.set(String(name), String(value));
+  }
+
+  removeProperty(name) {
+    this.values.delete(String(name));
+  }
+
+  getPropertyValue(name) {
+    return this.values.get(String(name)) || "";
+  }
+}
 
 class ClassListStub {
   constructor(element) {
@@ -90,6 +106,7 @@ class BasicHTMLElementStub extends HTMLElementStub {
     this.children = [];
     this.attributes = new Map();
     this.listeners = new Map();
+    this.style = new StyleStub();
     this.classList = new ClassListStub(this);
     this.className = "";
     this.classList.set(className);
@@ -122,20 +139,23 @@ class BasicHTMLElementStub extends HTMLElementStub {
   }
 
   replaceChildren(...children) {
-    this.children = children;
+    this.children = normalizeChildren(children);
   }
 
   appendChild(child) {
-    this.children.push(child);
+    this.children.push(...normalizeChildren([child]));
     return child;
   }
 
   append(...children) {
-    this.children.push(...children);
+    this.children.push(...normalizeChildren(children));
   }
 
   focus() {}
 }
+
+class HTMLImageElementStub extends BasicHTMLElementStub {}
+class HTMLButtonElementStub extends BasicHTMLElementStub {}
 
 class DocumentFragmentStub {
   constructor() {
@@ -146,6 +166,18 @@ class DocumentFragmentStub {
     this.children.push(child);
     return child;
   }
+}
+
+function normalizeChildren(children) {
+  const normalized = [];
+  for (const child of children) {
+    if (child instanceof DocumentFragmentStub) {
+      normalized.push(...child.children);
+      continue;
+    }
+    normalized.push(child);
+  }
+  return normalized;
 }
 
 function createDocumentStub(options = {}) {
@@ -295,6 +327,7 @@ function defaultSignals() {
     show_dried: false,
     sort_field: "price",
     sort_direction: "desc",
+    catalog_view: "grade",
     _shared_fish: {
       caughtIds: [],
       favouriteIds: [],
@@ -302,6 +335,7 @@ function defaultSignals() {
     _selected_fish_id: 0,
     _progress_panel_collapsed: false,
     _filter_panel_collapsed: false,
+    supports_guide_view: false,
     _loading: true,
     _fishydex_actions: {
       exportCaughtToken: 0,
@@ -312,6 +346,20 @@ function defaultSignals() {
     _api_error_message: "",
     _api_error_hint: "",
   };
+}
+
+function renderedGroupSummary(grid) {
+  return grid.children.map((section) => {
+    const body = section.children[1];
+    const cardGrid = body && body.children[1];
+    const fishNames = Array.isArray(cardGrid && cardGrid.children)
+      ? cardGrid.children.map((card) => card.children?.[1]?.children?.[1]?.children?.[1]?.textContent || "")
+      : [];
+    return {
+      title: section.children[0]?.textContent || "",
+      fishNames,
+    };
+  });
 }
 
 test("fishydex restore loads panel collapse state from fishydex ui storage", () => {
@@ -345,12 +393,14 @@ test("fishydex persists panel collapse state in fishydex ui storage", () => {
 
   env.window.Fishydex.restore(signals);
   Object.assign(signals, {
+    catalog_view: "guide",
     _progress_panel_collapsed: true,
     _filter_panel_collapsed: true,
   });
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
+      catalog_view: "guide",
       _progress_panel_collapsed: true,
       _filter_panel_collapsed: true,
     },
@@ -368,6 +418,7 @@ test("fishydex persists panel collapse state in fishydex ui storage", () => {
       show_dried: false,
       sort_field: "price",
       sort_direction: "desc",
+      catalog_view: "guide",
       _progress_panel_collapsed: true,
       _filter_panel_collapsed: true,
     }),
@@ -532,6 +583,118 @@ test("fishydex sync ignores reentrant derived signal patches", () => {
   assert.equal(signals.total_count, 1);
   assert.equal(signals.visible_count, 1);
   assert.equal(signals.red_total_count, 1);
+});
+
+test("fishydex guide view groups and orders entries using Fish Guide data", () => {
+  const grid = new BasicHTMLElementStub({ id: "fishydex-grid" });
+  const env = createContext(
+    {},
+    {
+      elementsById: {
+        "fishydex-grid": grid,
+      },
+    },
+  );
+  const signals = defaultSignals();
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    _loading: false,
+    revision: "rev-guide-1",
+    catalog_view: "guide",
+    sort_field: "name",
+    sort_direction: "asc",
+    fish: [
+      {
+        item_id: 10014,
+        encyclopedia_id: 14,
+        encyclopedia_key: 14,
+        name: "Alpha Harpoon",
+        grade: "General",
+        is_prize: false,
+        catch_method: "harpoon",
+      },
+      {
+        item_id: 10011,
+        encyclopedia_id: 11,
+        encyclopedia_key: 11,
+        name: "Zulu Harpoon",
+        grade: "General",
+        is_prize: false,
+        catch_method: "harpoon",
+      },
+      {
+        item_id: 10005,
+        encyclopedia_id: 5,
+        encyclopedia_key: 5,
+        name: "Freshwater One",
+        grade: "General",
+        is_prize: false,
+        catch_method: "rod",
+      },
+      {
+        item_id: 10002,
+        encyclopedia_id: 2,
+        encyclopedia_key: 2,
+        name: "Alpha Salt",
+        grade: "General",
+        is_prize: false,
+        catch_method: "rod",
+      },
+      {
+        item_id: 10001,
+        encyclopedia_id: 1,
+        encyclopedia_key: 1,
+        name: "Beta Salt",
+        grade: "General",
+        is_prize: false,
+        catch_method: "rod",
+      },
+      {
+        item_id: 10013,
+        encyclopedia_id: 13,
+        encyclopedia_key: 13,
+        name: "Crab",
+        grade: "General",
+        is_prize: false,
+        catch_method: "harpoon",
+      },
+    ],
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      fish: signals.fish,
+      revision: "rev-guide-1",
+      _loading: false,
+      catalog_view: "guide",
+      sort_field: "name",
+      sort_direction: "asc",
+    },
+  });
+
+  assert.equal(signals.supports_guide_view, true);
+  assert.equal(signals.catalog_view, "guide");
+  assert.equal(signals.visible_count, 6);
+  assert.deepEqual(renderedGroupSummary(grid), [
+    {
+      title: "Harpoon",
+      fishNames: ["Zulu Harpoon", "Alpha Harpoon"],
+    },
+    {
+      title: "Freshwater Fish",
+      fishNames: ["Freshwater One"],
+    },
+    {
+      title: "Saltwater Fish",
+      fishNames: ["Beta Salt", "Alpha Salt"],
+    },
+    {
+      title: "Crustacean",
+      fishNames: ["Crab"],
+    },
+  ]);
 });
 
 test("fishydex closes the details modal after a close action token is consumed", () => {
