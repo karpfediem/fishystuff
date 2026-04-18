@@ -44,6 +44,11 @@ Current contents:
   - resolves the current calculator item icon set from Dolt
   - extracts source `.dds` icon textures from PAZ via `pazifista`
   - converts them to `44x44` WebP under `data/cdn/public/images/items/`
+- `tools/scripts/build_minimap_tiles_from_source.mjs`
+  - rebuilds source-backed minimap `rader_*.png` tiles from PAZ via `pazifista`
+  - rebuilds the display pyramid under `data/cdn/public/images/tiles/minimap_visual/v1/`
+  - workflow is documented in
+    [`docs/minimap-source-workflow.md`](../docs/minimap-source-workflow.md)
 - `tools/scripts/xlsx-*`
 
 For local source-backed item icon generation, use:
@@ -56,4 +61,10 @@ To rebuild all current calculator item icons from PAZ source:
 
 ```bash
 devenv shell -- node tools/scripts/build_item_icons_from_source.mjs --force
+```
+
+For local source-backed minimap generation, use:
+
+```bash
+devenv shell -- node tools/scripts/build_minimap_tiles_from_source.mjs
 ```
