@@ -2197,7 +2197,7 @@ mod tests {
             "region_groups",
             LayerKind::VectorGeoJson,
             vector_source_fields(
-                Some("/region_groups/v1.geojson"),
+                Some("/vectors/region_groups.v1.geojson"),
                 Some("rg-v1"),
                 Some("screen_pixels"),
                 Some("feature_property_palette"),
@@ -2238,7 +2238,7 @@ mod tests {
             "region_groups",
             LayerKind::VectorGeoJson,
             vector_source_fields(
-                Some("/region_groups/{map_version}.geojson"),
+                Some("/vectors/region_groups.{map_version}.geojson"),
                 Some("rg-v1"),
                 Some("map_pixels"),
                 Some("feature_property_palette"),
@@ -2250,18 +2250,18 @@ mod tests {
         .expect("valid source")
         .expect("source");
 
-        assert_eq!(source.url, "/region_groups/v1.geojson");
+        assert_eq!(source.url, "/vectors/region_groups.v1.geojson");
     }
 
     #[test]
     fn layer_asset_url_resolution_handles_root_and_relative_paths() {
         assert_eq!(
-            resolve_layer_asset_url("/images/tiles/minimap/v1/tileset.json"),
-            "/images/tiles/minimap/v1/tileset.json"
+            resolve_layer_asset_url("/images/tiles/minimap_visual/v1/tileset.json"),
+            "/images/tiles/minimap_visual/v1/tileset.json"
         );
         assert_eq!(
-            resolve_layer_asset_url("images/tiles/minimap/v1/tileset.json"),
-            "images/tiles/minimap/v1/tileset.json"
+            resolve_layer_asset_url("images/tiles/minimap_visual/v1/tileset.json"),
+            "images/tiles/minimap_visual/v1/tileset.json"
         );
         assert_eq!(
             resolve_layer_asset_url("https://static.example.com/a.png"),

@@ -355,7 +355,7 @@ mod tests {
                 field_source: None,
                 field_metadata_source: None,
                 vector_source: Some(VectorSourceRef {
-                    url: "/region_groups/v1.geojson".to_string(),
+                    url: "/vectors/region_groups.v1.geojson".to_string(),
                     revision: "rg-v1".to_string(),
                     geometry_space: GeometrySpace::MapPixels,
                     style_mode: StyleMode::FeaturePropertyPalette,
@@ -382,7 +382,7 @@ mod tests {
         );
         assert_eq!(
             json["layers"][0]["vector_source"]["url"],
-            "/region_groups/v1.geojson"
+            "/vectors/region_groups.v1.geojson"
         );
     }
 

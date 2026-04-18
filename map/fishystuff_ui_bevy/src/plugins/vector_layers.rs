@@ -981,12 +981,12 @@ mod tests {
 
     fn test_vector_layer(id: LayerId, key: &str, with_field_source: bool) -> LayerSpec {
         let (source_url, source_revision, feature_id_property) = match key {
-            "region_groups" => ("/region_groups/v1.geojson", "rg-v1", Some("rg".to_string())),
-            "regions" => (
-                "/region_groups/regions.v1.geojson",
-                "r-v1",
-                Some("r".to_string()),
+            "region_groups" => (
+                "/vectors/region_groups.v1.geojson",
+                "rg-v1",
+                Some("rg".to_string()),
             ),
+            "regions" => ("/vectors/regions.v1.geojson", "r-v1", Some("r".to_string())),
             _ => ("/vector/v1.geojson", "vector-v1", Some("id".to_string())),
         };
         LayerSpec {
@@ -1078,7 +1078,7 @@ mod tests {
             LayerId::from_raw(2),
             VectorBuildState::Parsing {
                 source: VectorSourceSpec {
-                    url: "/region_groups/v1.geojson".to_string(),
+                    url: "/vectors/region_groups.v1.geojson".to_string(),
                     revision: "rg-v1".to_string(),
                     geometry_space: GeometrySpace::MapPixels,
                     style_mode: StyleMode::FeaturePropertyPalette,
@@ -1127,7 +1127,7 @@ mod tests {
     #[test]
     fn effective_revision_changes_when_clip_mask_revision_changes() {
         let source = VectorSourceSpec {
-            url: "/region_groups/v1.geojson".to_string(),
+            url: "/vectors/region_groups.v1.geojson".to_string(),
             revision: "rg-v1".to_string(),
             geometry_space: GeometrySpace::MapPixels,
             style_mode: StyleMode::FeaturePropertyPalette,

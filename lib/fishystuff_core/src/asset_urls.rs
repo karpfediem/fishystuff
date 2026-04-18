@@ -65,10 +65,14 @@ fn normalize_known_public_asset_path(raw: &str) -> Option<String> {
     if raw.starts_with("/images/")
         || raw.starts_with("/region_groups/")
         || raw.starts_with("/fields/")
+        || raw.starts_with("/waypoints/")
     {
         return Some(raw.to_string());
     }
-    if raw.starts_with("images/") || raw.starts_with("region_groups/") || raw.starts_with("fields/")
+    if raw.starts_with("images/")
+        || raw.starts_with("region_groups/")
+        || raw.starts_with("fields/")
+        || raw.starts_with("waypoints/")
     {
         return Some(format!("/{raw}"));
     }
@@ -172,12 +176,16 @@ mod tests {
     #[test]
     fn leaves_non_legacy_paths_unchanged() {
         assert_eq!(
-            normalize_site_asset_path("/images/tiles/minimap/v1/tileset.json"),
-            "/images/tiles/minimap/v1/tileset.json"
+            normalize_site_asset_path("/images/tiles/minimap_visual/v1/tileset.json"),
+            "/images/tiles/minimap_visual/v1/tileset.json"
         );
         assert_eq!(
             normalize_site_asset_path("/region_groups/v1.geojson"),
             "/region_groups/v1.geojson"
+        );
+        assert_eq!(
+            normalize_site_asset_path("/waypoints/region_nodes.v1.geojson"),
+            "/waypoints/region_nodes.v1.geojson"
         );
         assert_eq!(
             normalize_site_asset_path("https://cdn.example.com/images/terrain/v1/manifest.json"),
@@ -200,6 +208,12 @@ mod tests {
         assert_eq!(
             normalize_public_asset_reference("https://cdn.example.com/fields/regions.v1.bin"),
             "/fields/regions.v1.bin"
+        );
+        assert_eq!(
+            normalize_public_asset_reference(
+                "https://cdn.example.com/waypoints/region_nodes.v1.geojson"
+            ),
+            "/waypoints/region_nodes.v1.geojson"
         );
         assert_eq!(
             normalize_public_asset_reference(

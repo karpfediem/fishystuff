@@ -11,8 +11,8 @@
         "kind": "identity_map_space"
       },
       "tileset": {
-        "manifest_url": "images/tiles/minimap/v1/tileset.json",
-        "tile_url_template": "images/tiles/minimap/v1/{z}/{x}_{y}.png",
+        "manifest_url": "images/tiles/minimap_visual/v1/tileset.json",
+        "tile_url_template": "images/tiles/minimap_visual/v1/{z}/{x}_{y}.png",
         "version": "perf-v1"
       },
       "tile_px": 512,

@@ -227,8 +227,8 @@ mod tests {
             opacity_default: 1.0,
             z_base: 0.0,
             kind: LayerKind::TiledRaster,
-            tileset_url: "/images/tiles/zone_mask_visual/v1/tileset.json".to_string(),
-            tile_url_template: "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string(),
+            tileset_url: "/images/tiles/minimap_visual/v1/tileset.json".to_string(),
+            tile_url_template: "/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png".to_string(),
             tileset_version: "v1".to_string(),
             vector_source: None,
             waypoint_source: None,
@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn compose_filters_zone_mask_visuals_using_exact_lookup_rgb() {
+    fn compose_filters_for_exact_pick_raster_uses_exact_lookup_rgb() {
         let layer = zone_mask_layer();
         let mut exact_lookups = ExactLookupCache::default();
         exact_lookups.insert_ready(

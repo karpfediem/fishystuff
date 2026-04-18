@@ -336,7 +336,7 @@ mod tests {
             field_source: None,
             field_metadata_source: None,
             vector_source: with_source.then_some(VectorSourceRef {
-                url: "/region_groups/v1.geojson".to_string(),
+                url: "/vectors/region_groups.v1.geojson".to_string(),
                 revision: "rg-v1".to_string(),
                 geometry_space: GeometrySpace::MapPixels,
                 style_mode: StyleMode::FeaturePropertyPalette,
@@ -481,8 +481,8 @@ mod tests {
                     ty: 0.0,
                 },
                 tileset: TilesetRef {
-                    manifest_url: "/images/tiles/minimap/v1/tileset.json".to_string(),
-                    tile_url_template: "/images/tiles/minimap/v1/{level}/rader_{x}_{y}.png"
+                    manifest_url: "/images/tiles/minimap_visual/custom/tileset.json".to_string(),
+                    tile_url_template: "/images/tiles/minimap_visual/custom/{z}/{x}_{y}.png"
                         .to_string(),
                     version: "v1".to_string(),
                 },
