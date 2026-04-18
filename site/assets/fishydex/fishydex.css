@@ -147,8 +147,9 @@
   }
 
   .fishydex-filter-chip.filter-missing.is-active {
-    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 32%, transparent);
-    background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-strong) 90%);
+    border-color: color-mix(in oklab, var(--dex-grade-yellow) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-yellow-surface);
+    color: color-mix(in oklab, var(--dex-grade-yellow) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
   .fishydex-filter-chip.filter-favourite.is-active {
@@ -799,7 +800,7 @@
     max-width: 100%;
     color: var(--dex-text-muted);
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1;
   }
 
   .fishydex-card-price {
@@ -824,17 +825,20 @@
   .fishydex-price-icon {
     display: inline-flex;
     flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
   .fishydex-price-icon .fishy-icon {
     display: block;
     width: 1.1rem;
     height: 1.1rem;
-    transform: translateY(0.16em);
   }
 
   .fishydex-price-value {
     min-width: 0;
+    line-height: 1;
   }
 
   .fishydex-empty {
