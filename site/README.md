@@ -26,35 +26,22 @@ links, and the runtime config all resolve from the same public site base.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
-For local site and map development, the repo-root flow is now explicit:
+For local site and map development, the repo-root flow is:
 
-- `just dev-build`
 - `just up`
-
-Or, if you want `devenv` itself to own rebuild/restart behavior:
-
+  - services only
 - `just watch`
+  - services plus rebuild/restart watches
+- `just build`
+  - one-shot rebuild of the map runtime, staged CDN payload, and `site/.out`
+- `just build-map`
+  - one-shot rebuild of the map runtime plus CDN staging
+- `just build-site`
+  - one-shot rebuild of `site/.out`
 
-Then add only the rebuild watchers you actually need:
-
-- `just dev-watch-site`
-  - rebuild `site/.out` when site sources change
-- `just dev-watch-map`
-  - rebuild the wasm runtime and refresh the staged CDN payload
-- `just dev-watch-cdn`
-  - restage CDN-owned browser host assets from `site/assets/map`
-- `just dev-watch-builds`
-  - run the map/CDN/site rebuild watchers together while `just up` keeps serving the outputs
-- `just dev-watch-api`
-  - restart the API on backend changes; use it with `just dev-up-no-api`
-
-`just up` now serves the current outputs instead of owning the build graph.
-If `site/.out` or `data/cdn/public/` is stale or missing, that state is visible
-directly instead of being hidden behind nested watchers.
-
-`just watch` is the opt-in alternative where `devenv` runs the initial
-builds, watches source inputs, rebuilds outputs, and restarts the API on
-changes.
+`just up` and `just watch` both go through `devenv` and the same
+`process-compose` process view. The difference is only whether the `watch`
+profile is enabled.
 
 ## Browser smoke check
 

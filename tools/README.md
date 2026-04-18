@@ -24,8 +24,6 @@ Current contents:
     [`docs/dolt-schema-workflow.md`](../docs/dolt-schema-workflow.md)
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
-- `tools/scripts/dev_watch_builds.sh`
-  - runs the map, CDN, and site rebuild watchers together without touching `devenv up`
 - `tools/scripts/stage_cdn_assets.sh`
   - stages CDN-owned site and map assets under `data/cdn/public/`
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`

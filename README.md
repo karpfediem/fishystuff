@@ -24,12 +24,11 @@ will activate automatically on entry.
 To run the local development servers:
 
 ```bash
-just dev-build
 just up
 ```
 
-`just up` runs `devenv up` and supervises the
-long-lived local servers:
+`just up` runs `devenv up` with `process-compose` and starts the long-lived
+local services:
 
 - `db` must become ready before `api`
 - `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
@@ -37,23 +36,7 @@ long-lived local servers:
 - `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
-Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
-
-- `just dev-build`
-  - one-shot build of the map runtime, staged CDN payload, and site output
-- `just dev-watch-map`
-  - rebuild the wasm map runtime and restage CDN assets on map/lib changes
-- `just dev-watch-cdn`
-  - restage CDN-owned browser host assets on `site/assets/map` changes
-- `just dev-watch-site`
-  - rebuild `site/.out` on site source changes
-- `just dev-watch-builds`
-  - one command for the map/CDN/site rebuild watchers; use it with a running `just up`
-- `just dev-watch-api`
-  - restart the API on source changes; use it with `just dev-up-no-api`, which keeps `db`, `jaeger`, `otel-collector`, `prometheus`, and `caddy` running
-
-If you want `devenv` to own the local rebuild/restart loop too, use the opt-in
-watch profile instead of the default stack:
+If you want the same stack plus rebuild/restart watchers, use:
 
 ```bash
 just watch
@@ -65,6 +48,16 @@ just watch
 - map runtime rebuild plus CDN restaging on map/lib changes
 - CDN host asset restaging on `site/assets/map` changes
 - site output rebuilds on site source changes
+
+Use the manual build commands when you want a one-shot rebuild without starting
+the stack:
+
+- `just build`
+  - one-shot build of the map runtime, staged CDN payload, and site output
+- `just build-map`
+  - build the wasm runtime and refresh the staged CDN payload
+- `just build-site`
+  - rebuild `site/.out`
 
 The site build still emits `.out/runtime-config.js` from the current
 environment. That file is the single local-development source of truth for the
@@ -88,7 +81,6 @@ For browser request tracing in local development, the supported path is:
 
 ```bash
 devenv shell
-just dev-build-site
 just up
 ```
 

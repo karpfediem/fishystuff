@@ -35,7 +35,7 @@ let
 in {
   name = "default";
 
-  process.manager.implementation = "native";
+  process.manager.implementation = "process-compose";
 
   packages = with pkgs;
     [
@@ -327,81 +327,76 @@ in {
 
   profiles.watch.module = {
     processes = {
-      api = {
-        restart.on = "never";
-        watch = {
-          paths = [
-            ./api
-            ./lib
-            ./Cargo.toml
-            ./Cargo.lock
-            ./secretspec.toml
-            ./tools/scripts/run_api.sh
-          ];
-          ignore = [ "target" ];
-        };
-      };
+      api.exec = lib.mkForce ''
+        exec watchexec -r \
+          -w api \
+          -w lib \
+          -w Cargo.toml \
+          -w Cargo.lock \
+          -w secretspec.toml \
+          -w tools/scripts/run_api.sh \
+          --exts rs,toml \
+          -- ${config.devenv.root}/tools/scripts/run_api.sh
+      '';
+
+      api.process-compose.availability.restart = "no";
 
       map-build = {
         cwd = config.devenv.root;
-        exec = "exec env LOG_TS_LABEL=map-build ${logTimestampRunner} just dev-build-map";
-        restart.on = "never";
-        watch = {
-          paths = [
-            ./map/fishystuff_ui_bevy
-            ./lib/fishystuff_api
-            ./lib/fishystuff_client
-            ./lib/fishystuff_core
-            ./Cargo.toml
-            ./Cargo.lock
-            ./tools/scripts/build_map.sh
-          ];
-          ignore = [ "target" ];
-        };
+        exec = ''
+          exec watchexec -r --postpone \
+            -w map/fishystuff_ui_bevy \
+            -w lib/fishystuff_api \
+            -w lib/fishystuff_client \
+            -w lib/fishystuff_core \
+            -w Cargo.toml \
+            -w Cargo.lock \
+            -w tools/scripts/build_map.sh \
+            --exts rs,toml,css \
+            -- just build-map
+        '';
+        process-compose.availability.restart = "no";
       };
 
       cdn-stage = {
         cwd = config.devenv.root;
-        exec = "exec env LOG_TS_LABEL=cdn-stage ${logTimestampRunner} just cdn-stage";
-        restart.on = "never";
-        watch.paths = [
-          ./site/assets/map
-          ./tools/scripts/stage_cdn_assets.sh
-          ./tools/scripts/build_item_icons_from_source.mjs
-        ];
+        exec = ''
+          exec watchexec -r --postpone \
+            -w site/assets/map \
+            -w tools/scripts/stage_cdn_assets.sh \
+            -w tools/scripts/build_item_icons_from_source.mjs \
+            --exts js,mjs,css \
+            -- just cdn-stage
+        '';
+        process-compose.availability.restart = "no";
       };
 
       site-build = {
         cwd = config.devenv.root;
-        exec = "exec env LOG_TS_LABEL=site-build ${logTimestampRunner} just dev-build-site";
-        restart.on = "never";
-        watch = {
-          paths = [
-            ./site/content
-            ./site/layouts
-            ./site/assets
-            ./site/package.json
-            ./site/bun.lock
-            ./site/scripts
-            ./site/Justfile
-            ./site/tailwind.input.css
-            ./site/zine.ziggy
-          ];
-          ignore = [
-            "site/assets/js/datastar.js"
-            "site/assets/js/d3.js"
-            "site/assets/js/otel.js"
-            "site/assets/img/icons.svg"
-            "site/assets/img/guides/*-320.webp"
-            "site/assets/img/guides/*-640.webp"
-            "site/assets/img/favicon-16x16.png"
-            "site/assets/img/favicon-32x32.png"
-            "site/assets/img/logo-32.png"
-            "site/assets/img/logo-64.png"
-            "site/assets/css/fonts/**/*.site.woff2"
-            "site/assets/css/site.css"
-          ];
-        };
+        exec = ''
+          exec watchexec -r --postpone \
+            -w site/content \
+            -w site/layouts \
+            -w site/assets \
+            -w site/package.json \
+            -w site/bun.lock \
+            -w site/scripts \
+            -w site/Justfile \
+            -w site/tailwind.input.css \
+            -w site/zine.ziggy \
+            --ignore 'site/assets/js/datastar.js' \
+            --ignore 'site/assets/img/icons.svg' \
+            --ignore 'site/assets/img/guides/*-320.webp' \
+            --ignore 'site/assets/img/guides/*-640.webp' \
+            --ignore 'site/assets/img/favicon-16x16.png' \
+            --ignore 'site/assets/img/favicon-32x32.png' \
+            --ignore 'site/assets/img/logo-32.png' \
+            --ignore 'site/assets/img/logo-64.png' \
+            --ignore 'site/assets/css/fonts/**/*.site.woff2' \
+            --ignore 'site/assets/css/site.css' \
+            -- just build-site
+        '';
+        process-compose.availability.restart = "no";
       };
     };
   };

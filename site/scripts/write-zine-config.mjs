@@ -50,14 +50,14 @@ export function rewriteZineHostUrl(templateSource, siteBaseUrl) {
     throw new Error("site base URL is required");
   }
   const source = String(templateSource ?? "");
-  const next = source.replace(
-    /^(\s*\.host_url\s*=\s*)"[^"]*",?$/m,
-    `$1"${normalizedSiteBaseUrl}",`,
-  );
-  if (next === source) {
+  const hostUrlPattern = /^(\s*\.host_url\s*=\s*)"[^"]*",?$/m;
+  if (!hostUrlPattern.test(source)) {
     throw new Error("failed to find .host_url in zine config template");
   }
-  return next;
+  return source.replace(
+    hostUrlPattern,
+    `$1"${normalizedSiteBaseUrl}",`,
+  );
 }
 
 async function main() {

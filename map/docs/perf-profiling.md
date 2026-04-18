@@ -103,7 +103,7 @@ The single-threaded-web baseline and future threading constraints are recorded i
 - It launches headless Chromium against the local `/map` page, waits for
   `FishyMapBridge` to report `ready` with a usable fish catalog, and writes a
   JSON result to `target/smoke/map-browser.json`.
-- Use it after `just dev-build` and `devenv up` to catch browser startup stalls
+- Use it after `just build` and `devenv up` to catch browser startup stalls
   or renderer startup regressions before making performance claims from native
   harness results.
 
