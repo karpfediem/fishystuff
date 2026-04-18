@@ -19,7 +19,7 @@ use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
     CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
     CalculatorPetSignals, CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry,
-    CalculatorSignals, CalculatorZoneGroupRateEntry,
+    CalculatorSignals, CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
 };
 use fishystuff_api::models::zone_loot_summary::{
     ZoneLootSummaryGroupRow, ZoneLootSummaryRequest, ZoneLootSummaryResponse,
@@ -30,7 +30,9 @@ use fishystuff_api::models::zones::ZoneEntry;
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::state::{RequestId, SharedState};
-use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang};
+use crate::store::{
+    CalculatorZoneLootEntry, CalculatorZoneLootEvidence, CalculatorZoneLootOverlayMeta, FishLang,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
@@ -117,7 +119,54 @@ struct CalculatorDerivedSignals {
     target_fish_status_text: String,
     stat_breakdowns: CalculatorStatBreakdownSignals,
     fishing_timeline_chart: TimelineChartSignal,
+    overlay_editor: CalculatorOverlayEditorSignal,
     debug_json: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, Default)]
+struct CalculatorOverlayEditorSignal {
+    zone_rgb_key: String,
+    zone_name: String,
+    groups: Vec<CalculatorOverlayEditorGroupRow>,
+    items: Vec<CalculatorOverlayEditorItemRow>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct CalculatorOverlayEditorGroupRow {
+    slot_idx: u8,
+    label: String,
+    default_present: bool,
+    default_raw_rate_pct: f64,
+    default_raw_rate_text: String,
+    current_raw_rate_pct: f64,
+    current_raw_rate_text: String,
+    bonus_rate_pct: f64,
+    bonus_rate_text: String,
+    effective_raw_weight_pct: f64,
+    effective_raw_weight_text: String,
+    normalized_share_pct: f64,
+    normalized_share_text: String,
+    bonus_rate_breakdown: String,
+    normalized_share_breakdown: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct CalculatorOverlayEditorItemRow {
+    item_id: i32,
+    default_present: bool,
+    overlay_added: bool,
+    slot_idx: u8,
+    group_label: String,
+    label: String,
+    icon_url: Option<String>,
+    icon_grade_tone: String,
+    default_raw_rate_pct: f64,
+    default_raw_rate_text: String,
+    normalized_rate_pct: f64,
+    normalized_rate_text: String,
+    base_price_raw: f64,
+    base_price_text: String,
+    is_fish: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -222,8 +271,12 @@ struct FishGroupChartRow {
     stroke_color: &'static str,
     text_color: &'static str,
     connector_color: &'static str,
+    drop_rate_source_kind: String,
+    drop_rate_tooltip: String,
     bonus_text: String,
     base_share_pct: f64,
+    #[allow(dead_code)]
+    default_weight_pct: f64,
     weight_pct: f64,
     current_share_pct: f64,
     rate_inputs: Vec<ComputedStatBreakdownRow>,
@@ -390,7 +443,7 @@ struct CalculatorData {
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
-const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260330-1";
+const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260419-1";
 
 #[derive(Debug, Clone, Copy)]
 struct SelectOption<'a> {
@@ -863,6 +916,7 @@ fn parse_calculator_signals_value(
     coerce_object_f64(&mut object, "tradeDistanceBonus");
     coerce_object_f64(&mut object, "tradePriceCurve");
     coerce_object_price_override_map(&mut object, "priceOverrides");
+    coerce_object_calculator_overlay_map(&mut object, "overlay");
     coerce_object_f64(&mut object, "catchTimeActive");
     coerce_object_f64(&mut object, "catchTimeAfk");
     coerce_object_f64(&mut object, "timespanAmount");
@@ -958,6 +1012,35 @@ fn normalize_price_override_key(value: &str) -> Option<String> {
     (parsed > 0).then(|| parsed.to_string())
 }
 
+fn normalize_overlay_zone_key(value: &str) -> Option<String> {
+    let normalized = value.trim();
+    (!normalized.is_empty()).then(|| normalized.to_string())
+}
+
+fn normalize_group_overlay_key(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if let Ok(parsed) = trimmed.parse::<u8>() {
+        return (1..=5).contains(&parsed).then(|| parsed.to_string());
+    }
+    fish_group_slot_idx(trimmed).map(|slot_idx| slot_idx.to_string())
+}
+
+fn normalize_group_overlay_slot_idx(value: Option<&Value>) -> Option<u8> {
+    match value {
+        Some(Value::Number(number)) => number.as_u64().and_then(|value| u8::try_from(value).ok()),
+        Some(Value::String(string)) => {
+            let trimmed = string.trim();
+            if let Ok(parsed) = trimmed.parse::<u8>() {
+                Some(parsed)
+            } else {
+                fish_group_slot_idx(trimmed)
+            }
+        }
+        _ => None,
+    }
+    .filter(|slot_idx| (1..=5).contains(slot_idx))
+}
+
 fn coerce_object_price_override_map(object: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(Value::Object(map)) = object.get_mut(key) {
         let normalized = map
@@ -997,6 +1080,167 @@ fn coerce_object_price_override_map(object: &mut serde_json::Map<String, Value>,
             .collect::<serde_json::Map<_, _>>();
         *map = normalized;
     }
+}
+
+fn coerce_object_calculator_overlay_map(object: &mut serde_json::Map<String, Value>, key: &str) {
+    let Some(Value::Object(overlay)) = object.get_mut(key) else {
+        return;
+    };
+    let Some(Value::Object(zones)) = overlay.get_mut("zones") else {
+        *overlay = serde_json::Map::new();
+        return;
+    };
+    let normalized_zones = zones
+        .iter()
+        .filter_map(|(raw_zone_key, value)| {
+            let zone_key = normalize_overlay_zone_key(raw_zone_key)?;
+            let Value::Object(zone_entry) = value else {
+                return None;
+            };
+            let normalized_groups = zone_entry
+                .get("groups")
+                .and_then(Value::as_object)
+                .map(|groups| {
+                    groups
+                        .iter()
+                        .filter_map(|(raw_group_key, value)| {
+                            let group_key = normalize_group_overlay_key(raw_group_key)?;
+                            let Value::Object(group_entry) = value else {
+                                return None;
+                            };
+                            let present =
+                                group_entry.get("present").and_then(|value| match value {
+                                    Value::Bool(value) => Some(*value),
+                                    Value::String(string) => {
+                                        match string.trim().to_ascii_lowercase().as_str() {
+                                            "true" | "1" | "yes" | "on" => Some(true),
+                                            "false" | "0" | "no" | "off" => Some(false),
+                                            _ => None,
+                                        }
+                                    }
+                                    Value::Number(number) => {
+                                        number.as_i64().map(|value| value != 0)
+                                    }
+                                    _ => None,
+                                });
+                            let raw_rate_percent = group_entry
+                                .get("rawRatePercent")
+                                .and_then(|value| match value {
+                                    Value::Number(number) => number.as_f64(),
+                                    Value::String(string) => string.trim().parse::<f64>().ok(),
+                                    _ => None,
+                                })
+                                .map(|value| value.clamp(0.0, 100.0));
+                            if present.is_none() && raw_rate_percent.is_none() {
+                                return None;
+                            }
+                            Some((
+                                group_key,
+                                json!({
+                                    "present": present,
+                                    "rawRatePercent": raw_rate_percent,
+                                }),
+                            ))
+                        })
+                        .collect::<serde_json::Map<_, _>>()
+                })
+                .unwrap_or_default();
+            let normalized_items = zone_entry
+                .get("items")
+                .and_then(Value::as_object)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|(raw_item_key, value)| {
+                            let item_key = normalize_price_override_key(raw_item_key)?;
+                            let Value::Object(item_entry) = value else {
+                                return None;
+                            };
+                            let present = item_entry.get("present").and_then(|value| match value {
+                                Value::Bool(value) => Some(*value),
+                                Value::String(string) => {
+                                    match string.trim().to_ascii_lowercase().as_str() {
+                                        "true" | "1" | "yes" | "on" => Some(true),
+                                        "false" | "0" | "no" | "off" => Some(false),
+                                        _ => None,
+                                    }
+                                }
+                                Value::Number(number) => number.as_i64().map(|value| value != 0),
+                                _ => None,
+                            });
+                            let slot_idx =
+                                normalize_group_overlay_slot_idx(item_entry.get("slotIdx"));
+                            let raw_rate_percent = item_entry
+                                .get("rawRatePercent")
+                                .and_then(|value| match value {
+                                    Value::Number(number) => number.as_f64(),
+                                    Value::String(string) => string.trim().parse::<f64>().ok(),
+                                    _ => None,
+                                })
+                                .map(|value| value.clamp(0.0, 100.0));
+                            let name = item_entry
+                                .get("name")
+                                .and_then(Value::as_str)
+                                .map(str::trim)
+                                .filter(|value| !value.is_empty())
+                                .map(ToOwned::to_owned);
+                            let grade = item_entry
+                                .get("grade")
+                                .and_then(Value::as_str)
+                                .map(str::trim)
+                                .filter(|value| !value.is_empty())
+                                .map(ToOwned::to_owned);
+                            let is_fish = item_entry.get("isFish").and_then(|value| match value {
+                                Value::Bool(value) => Some(*value),
+                                Value::String(string) => {
+                                    match string.trim().to_ascii_lowercase().as_str() {
+                                        "true" | "1" | "yes" | "on" => Some(true),
+                                        "false" | "0" | "no" | "off" => Some(false),
+                                        _ => None,
+                                    }
+                                }
+                                Value::Number(number) => number.as_i64().map(|value| value != 0),
+                                _ => None,
+                            });
+                            if present.is_none()
+                                && slot_idx.is_none()
+                                && raw_rate_percent.is_none()
+                                && name.is_none()
+                                && grade.is_none()
+                                && is_fish.is_none()
+                            {
+                                return None;
+                            }
+                            Some((
+                                item_key,
+                                json!({
+                                    "present": present,
+                                    "slotIdx": slot_idx,
+                                    "rawRatePercent": raw_rate_percent,
+                                    "name": name,
+                                    "grade": grade,
+                                    "isFish": is_fish,
+                                }),
+                            ))
+                        })
+                        .collect::<serde_json::Map<_, _>>()
+                })
+                .unwrap_or_default();
+            if normalized_groups.is_empty() && normalized_items.is_empty() {
+                return None;
+            }
+            Some((
+                zone_key,
+                json!({
+                    "groups": normalized_groups,
+                    "items": normalized_items,
+                }),
+            ))
+        })
+        .collect::<serde_json::Map<_, _>>();
+    let mut normalized_overlay = serde_json::Map::new();
+    normalized_overlay.insert("zones".to_string(), Value::Object(normalized_zones));
+    *overlay = normalized_overlay;
 }
 
 fn coerce_object_string_array(object: &mut serde_json::Map<String, Value>, key: &str) {
@@ -1139,6 +1383,8 @@ async fn load_calculator_runtime_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
+    data.zone_loot_entries =
+        apply_zone_overlay_to_loot_entries(&signals, &signals.zone, &data.zone_loot_entries);
     normalize_zone_target_fish(&mut signals, &data);
     let derived = derive_signals(&signals, &data);
     Ok((data, signals, derived))
@@ -1169,6 +1415,7 @@ async fn load_zone_loot_summary_data(
     let mut signals = data.catalog.defaults.clone();
     signals.zone = zone.rgb_key.0.clone();
     signals.show_silver_amounts = false;
+    signals.overlay = request.overlay;
     normalize_signals(&mut signals, &data);
     data.zone_loot_entries = with_timeout(
         state.config.request_timeout_secs,
@@ -1178,6 +1425,8 @@ async fn load_zone_loot_summary_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
+    data.zone_loot_entries =
+        apply_zone_overlay_to_loot_entries(&signals, &signals.zone, &data.zone_loot_entries);
 
     Ok(derive_zone_loot_summary_response(&signals, &data, &zone))
 }
@@ -1391,6 +1640,588 @@ fn normalize_zone_target_fish(signals: &mut CalculatorSignals, data: &Calculator
     }
 }
 
+fn zone_overlay_for_signals<'a>(
+    signals: &'a CalculatorSignals,
+    zone_key: &str,
+) -> Option<&'a CalculatorZoneOverlaySignals> {
+    signals
+        .overlay
+        .zones
+        .get(zone_key)
+        .and_then(|zone_overlay| {
+            (!zone_overlay.groups.is_empty() || !zone_overlay.items.is_empty())
+                .then_some(zone_overlay)
+        })
+}
+
+fn zone_overlay_has_changes(zone_overlay: Option<&CalculatorZoneOverlaySignals>) -> bool {
+    zone_overlay.is_some_and(|zone_overlay| {
+        !zone_overlay.groups.is_empty() || !zone_overlay.items.is_empty()
+    })
+}
+
+fn overlay_editor_default_slot_idx(entry: &CalculatorZoneLootEntry) -> u8 {
+    if entry.overlay.added {
+        return 0;
+    }
+    entry
+        .evidence
+        .iter()
+        .find_map(|evidence| evidence.slot_idx)
+        .unwrap_or(entry.slot_idx)
+}
+
+fn overlay_editor_default_raw_rate_pct(entry: &CalculatorZoneLootEntry) -> f64 {
+    if entry.overlay.added {
+        return 0.0;
+    }
+    loot_species_rate_evidence(entry)
+        .and_then(|evidence| evidence.rate)
+        .map(|rate| (rate * 100.0).max(0.0))
+        .unwrap_or_else(|| (entry.within_group_rate * 100.0).max(0.0))
+}
+
+fn overlay_editor_percent_value_text(value_pct: f64) -> String {
+    let max_decimals = if value_pct.abs() < 0.0001 {
+        12
+    } else if value_pct.abs() < 0.01 {
+        10
+    } else if value_pct.abs() < 1.0 {
+        8
+    } else if value_pct.abs() < 100.0 {
+        4
+    } else {
+        2
+    };
+    let compact = trim_float_to(value_pct, max_decimals);
+    if compact == "0" && value_pct != 0.0 {
+        format!("{}%", trim_float_to(value_pct, 14))
+    } else {
+        format!("{compact}%")
+    }
+}
+
+fn overlay_editor_group_input_rows(row: &FishGroupChartRow) -> Vec<ComputedStatBreakdownRow> {
+    if row.rate_inputs.is_empty() {
+        vec![computed_stat_breakdown_row(
+            "Inputs",
+            "Unavailable",
+            "No direct inputs were recorded for this value.",
+        )]
+    } else {
+        row.rate_inputs.clone()
+    }
+}
+
+fn overlay_editor_group_bonus_breakdown(
+    row: &FishGroupChartRow,
+    current_present: bool,
+    current_raw_rate_pct: f64,
+    bonus_rate_pct: f64,
+    effective_raw_weight_pct: f64,
+    normalized_share_pct: f64,
+) -> String {
+    let summary_text = if current_present {
+        if bonus_rate_pct > 0.0 {
+            "Accrued bonus added to the current raw base rate before normalization."
+        } else {
+            "No accrued bonus is currently applied before normalization."
+        }
+    } else {
+        "This group is currently excluded from the zone mix, so no accrued bonus is applied."
+    };
+    stat_breakdown_json(
+        computed_stat_breakdown(
+            format!("{} accrued bonus", row.label),
+            overlay_editor_percent_value_text(bonus_rate_pct),
+            summary_text,
+            "Accrued bonus = Effective raw weight - Current raw base rate.",
+            vec![
+                computed_stat_breakdown_section("Inputs", overlay_editor_group_input_rows(row)),
+                computed_stat_breakdown_section(
+                    "Composition",
+                    vec![
+                        computed_stat_breakdown_row(
+                            "Current raw base rate",
+                            overlay_editor_percent_value_text(current_raw_rate_pct),
+                            "Editable raw base rate from the overlay proposal before accrued bonuses are applied.",
+                        ),
+                        computed_stat_breakdown_row(
+                            "Effective raw weight",
+                            overlay_editor_percent_value_text(effective_raw_weight_pct),
+                            if current_present {
+                                "Raw weight after accrued group bonuses are added."
+                            } else {
+                                "Excluded groups contribute no effective raw weight while they are removed from the zone mix."
+                            },
+                        ),
+                        computed_stat_breakdown_row(
+                            "Accrued bonus",
+                            overlay_editor_percent_value_text(bonus_rate_pct),
+                            if bonus_rate_pct > 0.0 {
+                                "Extra raw weight currently being added before normalization."
+                            } else {
+                                "No extra raw weight is currently being added before normalization."
+                            },
+                        ),
+                        computed_stat_breakdown_row(
+                            "Normalized share",
+                            overlay_editor_percent_value_text(normalized_share_pct),
+                            "Shown for reference after all effective raw weights are normalized.",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        .with_formula_terms(vec![
+            computed_stat_formula_term("Accrued bonus", overlay_editor_percent_value_text(bonus_rate_pct)),
+            computed_stat_formula_term(
+                "Effective raw weight",
+                overlay_editor_percent_value_text(effective_raw_weight_pct),
+            ),
+            computed_stat_formula_term(
+                "Current raw base rate",
+                overlay_editor_percent_value_text(current_raw_rate_pct),
+            ),
+        ]),
+    )
+}
+
+fn overlay_editor_group_normalized_breakdown(
+    row: &FishGroupChartRow,
+    current_present: bool,
+    current_raw_rate_pct: f64,
+    bonus_rate_pct: f64,
+    effective_raw_weight_pct: f64,
+    total_effective_raw_weight_pct: f64,
+    normalized_share_pct: f64,
+) -> String {
+    let summary_text = if current_present {
+        "Accrued group bonuses are added to the current raw base rate first, then all effective raw weights are normalized into the final group shares."
+    } else {
+        "This group is currently excluded from the zone mix, so it contributes 0% normalized share."
+    };
+    stat_breakdown_json(
+        computed_stat_breakdown(
+            format!("{} normalized share", row.label),
+            overlay_editor_percent_value_text(normalized_share_pct),
+            summary_text,
+            "Normalized share = Effective raw weight / All effective raw weights.",
+            vec![
+                computed_stat_breakdown_section("Inputs", overlay_editor_group_input_rows(row)),
+                computed_stat_breakdown_section(
+                    "Composition",
+                    vec![
+                        computed_stat_breakdown_row(
+                            "Current raw base rate",
+                            overlay_editor_percent_value_text(current_raw_rate_pct),
+                            "Editable raw base rate before accrued bonuses are applied.",
+                        ),
+                        computed_stat_breakdown_row(
+                            "Accrued bonus",
+                            overlay_editor_percent_value_text(bonus_rate_pct),
+                            "Added to the raw base rate before normalization.",
+                        ),
+                        computed_stat_breakdown_row(
+                            "Effective raw weight",
+                            overlay_editor_percent_value_text(effective_raw_weight_pct),
+                            if current_present {
+                                "Combined pre-normalization raw weight for this group."
+                            } else {
+                                "Excluded groups contribute no effective raw weight while removed from the zone mix."
+                            },
+                        ),
+                        computed_stat_breakdown_row(
+                            "All effective raw weights",
+                            overlay_editor_percent_value_text(total_effective_raw_weight_pct),
+                            "Denominator after all active group bonuses have been applied.",
+                        ),
+                        computed_stat_breakdown_row(
+                            "Normalized share",
+                            overlay_editor_percent_value_text(normalized_share_pct),
+                            "Final group share used by the calculator after normalization.",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        .with_formula_terms(vec![
+            computed_stat_formula_term(
+                "Normalized share",
+                overlay_editor_percent_value_text(normalized_share_pct),
+            ),
+            computed_stat_formula_term(
+                "Effective raw weight",
+                overlay_editor_percent_value_text(effective_raw_weight_pct),
+            ),
+            computed_stat_formula_term(
+                "All effective raw weights",
+                overlay_editor_percent_value_text(total_effective_raw_weight_pct),
+            ),
+        ]),
+    )
+}
+
+fn build_overlay_editor_signal(
+    signals: &CalculatorSignals,
+    data: &CalculatorData,
+    fish_group_chart: &FishGroupChart,
+) -> CalculatorOverlayEditorSignal {
+    let zone_overlay = signals.overlay.zones.get(&signals.zone);
+    let zone_supports_prize_group = data
+        .zone_group_rates
+        .get(&signals.zone)
+        .and_then(|zone_group_rate| zone_group_rate.prize_main_group_key)
+        .is_some();
+    let total_effective_raw_weight_pct = fish_group_chart
+        .rows
+        .iter()
+        .map(|row| row.weight_pct.max(0.0))
+        .sum::<f64>();
+    let group_rows = fish_group_chart
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let slot_idx = (index + 1) as u8;
+            let default_raw_rate_pct = row.base_share_pct.max(0.0);
+            let group_overlay = zone_overlay
+                .and_then(|zone_overlay| zone_overlay.groups.get(slot_idx.to_string().as_str()));
+            let default_present = default_raw_rate_pct > 0.0
+                || (slot_idx == 1 && zone_supports_prize_group)
+                || data.zone_loot_entries.iter().any(|entry| {
+                    !entry.overlay.added && overlay_editor_default_slot_idx(entry) == slot_idx
+                });
+            let current_present = group_overlay
+                .and_then(|group_overlay| group_overlay.present)
+                .unwrap_or(default_present);
+            let current_raw_rate_pct = group_overlay
+                .and_then(|group_overlay| group_overlay.raw_rate_percent)
+                .map(|value| value.max(0.0))
+                .unwrap_or(default_raw_rate_pct);
+            let effective_raw_weight_pct = if current_present {
+                row.weight_pct.max(0.0)
+            } else {
+                0.0
+            };
+            let normalized_share_pct = if current_present {
+                row.current_share_pct.max(0.0)
+            } else {
+                0.0
+            };
+            let bonus_rate_pct = if current_present {
+                (effective_raw_weight_pct - current_raw_rate_pct.max(0.0)).max(0.0)
+            } else {
+                0.0
+            };
+            CalculatorOverlayEditorGroupRow {
+                slot_idx,
+                label: row.label.to_string(),
+                default_present,
+                default_raw_rate_pct,
+                default_raw_rate_text: overlay_editor_percent_value_text(default_raw_rate_pct),
+                current_raw_rate_pct,
+                current_raw_rate_text: overlay_editor_percent_value_text(current_raw_rate_pct),
+                bonus_rate_pct,
+                bonus_rate_text: overlay_editor_percent_value_text(bonus_rate_pct),
+                effective_raw_weight_pct,
+                effective_raw_weight_text: overlay_editor_percent_value_text(
+                    effective_raw_weight_pct,
+                ),
+                normalized_share_pct,
+                normalized_share_text: overlay_editor_percent_value_text(normalized_share_pct),
+                bonus_rate_breakdown: overlay_editor_group_bonus_breakdown(
+                    row,
+                    current_present,
+                    current_raw_rate_pct,
+                    bonus_rate_pct,
+                    effective_raw_weight_pct,
+                    normalized_share_pct,
+                ),
+                normalized_share_breakdown: overlay_editor_group_normalized_breakdown(
+                    row,
+                    current_present,
+                    current_raw_rate_pct,
+                    bonus_rate_pct,
+                    effective_raw_weight_pct,
+                    total_effective_raw_weight_pct,
+                    normalized_share_pct,
+                ),
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut item_rows = data
+        .zone_loot_entries
+        .iter()
+        .map(|entry| {
+            let default_slot_idx = overlay_editor_default_slot_idx(entry);
+            let default_raw_rate_pct = overlay_editor_default_raw_rate_pct(entry);
+            CalculatorOverlayEditorItemRow {
+                item_id: entry.item_id,
+                default_present: !entry.overlay.added,
+                overlay_added: entry.overlay.added,
+                slot_idx: default_slot_idx,
+                group_label: fish_group_label(default_slot_idx)
+                    .unwrap_or("Unassigned")
+                    .to_string(),
+                label: entry.name.clone(),
+                icon_url: entry
+                    .icon
+                    .as_deref()
+                    .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
+                icon_grade_tone: item_grade_tone(entry.grade.as_deref()).to_string(),
+                default_raw_rate_pct,
+                default_raw_rate_text: overlay_editor_percent_value_text(default_raw_rate_pct),
+                normalized_rate_pct: (entry.within_group_rate * 100.0).max(0.0),
+                normalized_rate_text: overlay_editor_percent_value_text(
+                    (entry.within_group_rate * 100.0).max(0.0),
+                ),
+                base_price_raw: entry.vendor_price.unwrap_or_default() as f64,
+                base_price_text: fmt_silver(entry.vendor_price.unwrap_or_default() as f64),
+                is_fish: entry.is_fish,
+            }
+        })
+        .collect::<Vec<_>>();
+    item_rows.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| {
+                right
+                    .normalized_rate_pct
+                    .partial_cmp(&left.normalized_rate_pct)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+            .then_with(|| left.item_id.cmp(&right.item_id))
+    });
+
+    CalculatorOverlayEditorSignal {
+        zone_rgb_key: signals.zone.clone(),
+        zone_name: data
+            .zones
+            .iter()
+            .find(|zone| zone.rgb_key.to_string() == signals.zone)
+            .and_then(|zone| zone.name.clone())
+            .unwrap_or_else(|| signals.zone.clone()),
+        groups: group_rows,
+        items: item_rows,
+    }
+}
+
+fn normalize_raw_pct_values<K>(
+    base_pct_by_key: &HashMap<K, f64>,
+    explicit_pct_by_key: &HashMap<K, f64>,
+    active_keys: &HashSet<K>,
+) -> HashMap<K, f64>
+where
+    K: Copy + Eq + std::hash::Hash,
+{
+    let mut effective = HashMap::new();
+    if active_keys.is_empty() {
+        return effective;
+    }
+
+    let mut total_raw_pct = 0.0;
+    for key in active_keys {
+        let raw_pct = explicit_pct_by_key
+            .get(key)
+            .copied()
+            .or_else(|| base_pct_by_key.get(key).copied())
+            .unwrap_or_default()
+            .max(0.0);
+        total_raw_pct += raw_pct;
+        effective.insert(*key, raw_pct);
+    }
+
+    if total_raw_pct > 0.0 {
+        for value in effective.values_mut() {
+            *value = (*value / total_raw_pct) * 100.0;
+        }
+    } else {
+        for value in effective.values_mut() {
+            *value = 0.0;
+        }
+    }
+
+    effective
+}
+
+fn apply_zone_overlay_to_loot_entries(
+    signals: &CalculatorSignals,
+    zone_key: &str,
+    base_entries: &[CalculatorZoneLootEntry],
+) -> Vec<CalculatorZoneLootEntry> {
+    let Some(zone_overlay) = zone_overlay_for_signals(signals, zone_key) else {
+        return base_entries.to_vec();
+    };
+
+    let removed_group_slots = zone_overlay
+        .groups
+        .iter()
+        .filter_map(|(slot_key, group_overlay)| {
+            (group_overlay.present == Some(false))
+                .then(|| slot_key.parse::<u8>().ok())
+                .flatten()
+        })
+        .collect::<HashSet<_>>();
+    let mut slot_overlay_active = removed_group_slots.clone();
+    let mut matched_item_ids = HashSet::new();
+    let mut entries = Vec::with_capacity(base_entries.len() + zone_overlay.items.len());
+
+    for base_entry in base_entries {
+        let item_key = base_entry.item_id.to_string();
+        let overlay_item = zone_overlay.items.get(&item_key);
+        if overlay_item.is_some() {
+            matched_item_ids.insert(item_key.clone());
+        }
+        if overlay_item.and_then(|item| item.present) == Some(false) {
+            slot_overlay_active.insert(base_entry.slot_idx);
+            continue;
+        }
+
+        let mut entry = base_entry.clone();
+        if let Some(overlay_item) = overlay_item {
+            if let Some(slot_idx) = overlay_item
+                .slot_idx
+                .filter(|slot_idx| (1..=5).contains(slot_idx))
+            {
+                if slot_idx != entry.slot_idx {
+                    slot_overlay_active.insert(entry.slot_idx);
+                    slot_overlay_active.insert(slot_idx);
+                    entry.slot_idx = slot_idx;
+                }
+            }
+            if let Some(rate_percent) = overlay_item.raw_rate_percent {
+                slot_overlay_active.insert(entry.slot_idx);
+                entry.overlay.explicit_rate_percent = Some(rate_percent);
+            }
+            if let Some(name) = overlay_item
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                entry.name = name.to_string();
+            }
+            if let Some(grade) = overlay_item
+                .grade
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                entry.grade = Some(grade.to_string());
+            }
+            if let Some(is_fish) = overlay_item.is_fish {
+                entry.is_fish = is_fish;
+            }
+        }
+        entries.push(entry);
+    }
+
+    for (item_key, overlay_item) in &zone_overlay.items {
+        if matched_item_ids.contains(item_key) || overlay_item.present == Some(false) {
+            continue;
+        }
+        let item_id = match item_key.parse::<i32>() {
+            Ok(item_id) if item_id > 0 => item_id,
+            _ => continue,
+        };
+        let Some(slot_idx) = overlay_item
+            .slot_idx
+            .filter(|slot_idx| (1..=5).contains(slot_idx))
+        else {
+            continue;
+        };
+        let Some(rate_percent) = overlay_item.raw_rate_percent else {
+            continue;
+        };
+        slot_overlay_active.insert(slot_idx);
+        let name = overlay_item
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| item_id.to_string());
+        entries.push(CalculatorZoneLootEntry {
+            slot_idx,
+            item_id,
+            name,
+            icon: Some(format!("/images/items/{item_id:08}.webp")),
+            vendor_price: None,
+            grade: overlay_item
+                .grade
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned),
+            is_fish: overlay_item.is_fish.unwrap_or(true),
+            within_group_rate: 0.0,
+            evidence: Vec::new(),
+            overlay: CalculatorZoneLootOverlayMeta {
+                added: true,
+                slot_overlay_active: true,
+                explicit_rate_percent: Some(rate_percent),
+            },
+        });
+    }
+
+    entries.retain(|entry| !removed_group_slots.contains(&entry.slot_idx));
+
+    let mut effective_by_slot_and_item = HashMap::<(u8, i32), f64>::new();
+    let mut item_ids_by_slot = HashMap::<u8, Vec<i32>>::new();
+    let mut base_pct_by_slot_and_item = HashMap::<(u8, i32), f64>::new();
+    let mut explicit_pct_by_slot_and_item = HashMap::<(u8, i32), f64>::new();
+    for entry in &entries {
+        let key = (entry.slot_idx, entry.item_id);
+        item_ids_by_slot
+            .entry(entry.slot_idx)
+            .or_default()
+            .push(entry.item_id);
+        base_pct_by_slot_and_item.insert(key, overlay_editor_default_raw_rate_pct(entry));
+        if let Some(rate_percent) = entry.overlay.explicit_rate_percent {
+            explicit_pct_by_slot_and_item.insert(key, rate_percent.max(0.0));
+        }
+    }
+
+    for (slot_idx, item_ids) in item_ids_by_slot {
+        let active_keys = item_ids
+            .into_iter()
+            .map(|item_id| (slot_idx, item_id))
+            .collect::<HashSet<_>>();
+        let effective_pct = normalize_raw_pct_values(
+            &base_pct_by_slot_and_item,
+            &explicit_pct_by_slot_and_item,
+            &active_keys,
+        );
+        for (key, value) in effective_pct {
+            effective_by_slot_and_item.insert(key, value / 100.0);
+        }
+    }
+
+    for entry in &mut entries {
+        entry.within_group_rate = effective_by_slot_and_item
+            .get(&(entry.slot_idx, entry.item_id))
+            .copied()
+            .unwrap_or_default();
+        entry.overlay.slot_overlay_active = slot_overlay_active.contains(&entry.slot_idx);
+    }
+
+    entries.sort_by(|left, right| {
+        left.slot_idx
+            .cmp(&right.slot_idx)
+            .then_with(|| {
+                right
+                    .within_group_rate
+                    .partial_cmp(&left.within_group_rate)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+            .then_with(|| left.item_id.cmp(&right.item_id))
+    });
+    entries
+}
+
 fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> HashMap<String, String> {
     let mut aliases = HashMap::new();
     for option in catalog
@@ -1454,6 +2285,7 @@ fn default_reset_signals_patch_map(
         "_calculator_ui".to_string(),
         json!({
             "distribution_tab": "groups",
+            "overlay_panel_collapsed": true,
         }),
     );
     Ok(patch)
@@ -1909,6 +2741,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let chance_to_reduce_raw =
         brandstone_durability_factor * (1.0 - item_drr_raw) * (1.0 - lifeskill_level_drr_raw);
     let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
+    let overlay_editor = build_overlay_editor_signal(signals, data, &fish_group_chart);
     let fish_multiplier_raw = effective_fish_multiplier(signals, &items_by_key);
 
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
@@ -2121,6 +2954,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         target_fish_status_text: target_fish_summary.status_text,
         stat_breakdowns,
         fishing_timeline_chart,
+        overlay_editor,
         debug_json,
     }
 }
@@ -2688,12 +3522,54 @@ fn derive_fish_group_chart(
     let general_base = f64::from(zone_group_rate.general_rate_raw.max(0)) / 1_000_000.0;
     let trash_base = f64::from(zone_group_rate.trash_rate_raw.max(0)) / 1_000_000.0;
 
-    let available_slots = data
+    let zone_overlay = zone_overlay_for_signals(signals, &signals.zone);
+    let removed_group_slots = zone_overlay
+        .into_iter()
+        .flat_map(|zone_overlay| zone_overlay.groups.iter())
+        .filter_map(|(slot_key, group_overlay)| {
+            (group_overlay.present == Some(false))
+                .then(|| slot_key.parse::<u8>().ok())
+                .flatten()
+        })
+        .collect::<HashSet<_>>();
+    let explicit_group_raw_pct_by_slot = zone_overlay
+        .into_iter()
+        .flat_map(|zone_overlay| zone_overlay.groups.iter())
+        .filter_map(|(slot_key, group_overlay)| {
+            let slot_idx = slot_key.parse::<u8>().ok()?;
+            group_overlay
+                .raw_rate_percent
+                .map(|raw_rate_percent| (slot_idx, raw_rate_percent.max(0.0)))
+        })
+        .collect::<HashMap<_, _>>();
+    let group_overlay_active = zone_overlay_has_changes(zone_overlay);
+
+    let mut available_slots = data
         .zone_loot_entries
         .iter()
-        .filter(|entry| entry.within_group_rate > 0.0)
-        .map(|entry| entry.slot_idx)
+        .filter_map(|entry| (1..=5).contains(&entry.slot_idx).then_some(entry.slot_idx))
         .collect::<HashSet<_>>();
+    if zone_group_rate.prize_main_group_key.is_some() {
+        available_slots.insert(1);
+    }
+    if let Some(zone_overlay) = zone_overlay {
+        for (slot_key, group_overlay) in &zone_overlay.groups {
+            let Some(slot_idx) = slot_key
+                .parse::<u8>()
+                .ok()
+                .filter(|slot_idx| (1..=5).contains(slot_idx))
+            else {
+                continue;
+            };
+            if group_overlay.present == Some(false) {
+                available_slots.remove(&slot_idx);
+                continue;
+            }
+            if group_overlay.present == Some(true) || group_overlay.raw_rate_percent.is_some() {
+                available_slots.insert(slot_idx);
+            }
+        }
+    }
 
     let rare_weight = if available_slots.contains(&2) {
         rare_base + rare_bonus.max(0.0)
@@ -2730,6 +3606,112 @@ fn derive_fish_group_chart(
             (weight / total_weight) * 100.0
         }
     };
+    let base_rate_pct_by_slot = HashMap::from([
+        (1_u8, 0.0),
+        (2_u8, rare_base * 100.0),
+        (3_u8, high_quality_base * 100.0),
+        (4_u8, general_base * 100.0),
+        (5_u8, trash_base * 100.0),
+    ]);
+    let bonus_weight_pct_by_slot = HashMap::from([
+        (
+            1_u8,
+            if available_slots.contains(&1) {
+                mastery_prize_rate.max(0.0) * 100.0
+            } else {
+                0.0
+            },
+        ),
+        (
+            2_u8,
+            if available_slots.contains(&2) {
+                rare_bonus.max(0.0) * 100.0
+            } else {
+                0.0
+            },
+        ),
+        (
+            3_u8,
+            if available_slots.contains(&3) {
+                high_quality_bonus.max(0.0) * 100.0
+            } else {
+                0.0
+            },
+        ),
+        (4_u8, 0.0),
+        (5_u8, 0.0),
+    ]);
+    let active_group_slots = available_slots
+        .iter()
+        .copied()
+        .filter(|slot_idx| !removed_group_slots.contains(slot_idx))
+        .chain(explicit_group_raw_pct_by_slot.keys().copied())
+        .collect::<HashSet<_>>();
+    let effective_base_rate_pct_by_slot = active_group_slots
+        .iter()
+        .copied()
+        .map(|slot_idx| {
+            (
+                slot_idx,
+                explicit_group_raw_pct_by_slot
+                    .get(&slot_idx)
+                    .copied()
+                    .unwrap_or_else(|| {
+                        base_rate_pct_by_slot
+                            .get(&slot_idx)
+                            .copied()
+                            .unwrap_or_default()
+                            .max(0.0)
+                    }),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let effective_weight_pct_by_slot = active_group_slots
+        .iter()
+        .copied()
+        .map(|slot_idx| {
+            (
+                slot_idx,
+                effective_base_rate_pct_by_slot
+                    .get(&slot_idx)
+                    .copied()
+                    .unwrap_or_default()
+                    + bonus_weight_pct_by_slot
+                        .get(&slot_idx)
+                        .copied()
+                        .unwrap_or_default(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let effective_total_weight_pct = effective_weight_pct_by_slot
+        .values()
+        .copied()
+        .map(|value| value.max(0.0))
+        .sum::<f64>();
+    let effective_current_share_by_slot = if effective_total_weight_pct > 0.0 {
+        effective_weight_pct_by_slot
+            .iter()
+            .map(|(slot_idx, weight_pct)| {
+                (
+                    *slot_idx,
+                    (weight_pct.max(0.0) / effective_total_weight_pct) * 100.0,
+                )
+            })
+            .collect::<HashMap<_, _>>()
+    } else {
+        active_group_slots
+            .iter()
+            .copied()
+            .map(|slot_idx| (slot_idx, 0.0))
+            .collect::<HashMap<_, _>>()
+    };
+    let base_current_share_by_slot = HashMap::from([
+        (1_u8, current_share(prize_weight)),
+        (2_u8, current_share(rare_weight)),
+        (3_u8, current_share(high_quality_weight)),
+        (4_u8, current_share(general_weight)),
+        (5_u8, current_share(trash_weight)),
+    ]);
 
     let prize_inputs = vec![
         computed_stat_breakdown_row(
@@ -2769,84 +3751,222 @@ fn derive_fish_group_chart(
         "Base group rate from zone data",
     )];
 
+    let build_group_row =
+        |slot_idx: u8,
+         label: &'static str,
+         fill_color: &'static str,
+         stroke_color: &'static str,
+         text_color: &'static str,
+         connector_color: &'static str,
+         default_bonus_text: String,
+         default_base_share_pct: f64,
+         default_weight_pct: f64,
+         default_current_share_pct: f64,
+         default_rate_inputs: Vec<ComputedStatBreakdownRow>| {
+            let explicit_raw_pct = explicit_group_raw_pct_by_slot.get(&slot_idx).copied();
+            let bonus_weight_pct = bonus_weight_pct_by_slot
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default();
+            let effective_weight_pct = effective_weight_pct_by_slot
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default();
+            let effective_current_share_pct = effective_current_share_by_slot
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default();
+            let is_overlay_row = group_overlay_active
+                && (active_group_slots.contains(&slot_idx) || explicit_raw_pct.is_some());
+            let mut rate_inputs = default_rate_inputs;
+            if let Some(explicit_raw_pct) = explicit_raw_pct {
+                rate_inputs.insert(
+                    0,
+                    computed_stat_breakdown_row(
+                        "Personal overlay raw base rate",
+                        percent_value_text(explicit_raw_pct),
+                        "Explicit raw base group rate supplied by the current personal overlay proposal before any group bonuses are added.",
+                    ),
+                );
+            } else if is_overlay_row
+                && (effective_current_share_pct - default_current_share_pct).abs() > f64::EPSILON
+            {
+                rate_inputs.insert(
+                    0,
+                    computed_stat_breakdown_row(
+                        "Overlay-adjusted normalized share",
+                        percent_value_text(effective_current_share_pct),
+                        "Another raw-weight override changed how this group's normalized share resolves.",
+                    ),
+                );
+            }
+            FishGroupChartRow {
+                label,
+                fill_color,
+                stroke_color,
+                text_color,
+                connector_color,
+                drop_rate_source_kind: if is_overlay_row
+                    && (effective_current_share_pct > 0.0 || explicit_raw_pct.is_some())
+                {
+                    "overlay".to_string()
+                } else if default_current_share_pct > 0.0 {
+                    "database".to_string()
+                } else {
+                    String::new()
+                },
+                drop_rate_tooltip: if let Some(explicit_raw_pct) = explicit_raw_pct {
+                    if bonus_weight_pct > 0.0 {
+                        format!(
+                            "Personal overlay raw group base rate {} plus active group bonus {} resolves to {} total raw weight and {} normalized share.",
+                            percent_value_text(explicit_raw_pct),
+                            percent_value_text(bonus_weight_pct),
+                            percent_value_text(effective_weight_pct),
+                            percent_value_text(effective_current_share_pct)
+                        )
+                    } else {
+                        format!(
+                            "Personal overlay raw group base rate {}. Current normalized share {} after the active group weights are normalized.",
+                            percent_value_text(explicit_raw_pct),
+                            percent_value_text(effective_current_share_pct)
+                        )
+                    }
+                } else if is_overlay_row && effective_current_share_pct > 0.0 {
+                    format!(
+                        "Personal overlay changed the active raw group weights. {} currently resolves to {} normalized share.",
+                        label,
+                        percent_value_text(effective_current_share_pct)
+                    )
+                } else if default_current_share_pct > 0.0 {
+                    format!("Source-backed {} group share", label)
+                } else {
+                    String::new()
+                },
+                bonus_text: if let Some(explicit_raw_pct) = explicit_raw_pct {
+                    if bonus_weight_pct > 0.0 {
+                        format!(
+                            "Base {} + bonus {}",
+                            percent_value_text(explicit_raw_pct),
+                            percent_value_text(bonus_weight_pct)
+                        )
+                    } else {
+                        format!("Base {}", percent_value_text(explicit_raw_pct))
+                    }
+                } else if is_overlay_row {
+                    "Normalized from active raw weights".to_string()
+                } else {
+                    default_bonus_text
+                },
+                base_share_pct: default_base_share_pct,
+                default_weight_pct,
+                weight_pct: effective_weight_pct,
+                current_share_pct: effective_current_share_pct,
+                rate_inputs,
+            }
+        };
+
     FishGroupChart {
         available: true,
-        note: "Zone groups are renormalized to 100% after applying Rare and High-Quality bonuses plus prize weight from mastery.".to_string(),
+        note: if group_overlay_active {
+            "Personal raw base group-rate overrides are active. Edited base values have active group bonuses added first, then the resulting weights are normalized into the current group shares.".to_string()
+        } else {
+            "Zone groups are renormalized to 100% after applying Rare and High-Quality bonuses plus prize weight from mastery.".to_string()
+        },
         raw_prize_rate_text: format!("{}%", trim_float(prize_weight * 100.0)),
         mastery_text: trim_float(signals.mastery),
         rows: vec![
-            FishGroupChartRow {
-                label: "Prize",
-                fill_color: "#fda4af",
-                stroke_color: "#f87171",
-                text_color: "#450a0a",
-                connector_color: "rgb(248 113 113 / 0.48)",
-                bonus_text: format!(
+            build_group_row(
+                1,
+                "Prize",
+                "#fda4af",
+                "#f87171",
+                "#450a0a",
+                "rgb(248 113 113 / 0.48)",
+                format!(
                     "Mastery {} → {}% raw prize",
                     trim_float(signals.mastery),
                     trim_float(prize_weight * 100.0)
                 ),
-                base_share_pct: 0.0,
-                weight_pct: prize_weight * 100.0,
-                current_share_pct: current_share(prize_weight),
-                rate_inputs: prize_inputs,
-            },
-            FishGroupChartRow {
-                label: "Rare",
-                fill_color: "#fde68a",
-                stroke_color: "#facc15",
-                text_color: "#422006",
-                connector_color: "rgb(250 204 21 / 0.48)",
-                bonus_text: if rare_bonus > 0.0 {
+                0.0,
+                prize_weight * 100.0,
+                base_current_share_by_slot
+                    .get(&1)
+                    .copied()
+                    .unwrap_or_default(),
+                prize_inputs,
+            ),
+            build_group_row(
+                2,
+                "Rare",
+                "#fde68a",
+                "#facc15",
+                "#422006",
+                "rgb(250 204 21 / 0.48)",
+                if rare_bonus > 0.0 {
                     format!("+{}% Rare", trim_float(rare_bonus * 100.0))
                 } else {
                     "No bonus".to_string()
                 },
-                base_share_pct: rare_base * 100.0,
-                weight_pct: rare_weight * 100.0,
-                current_share_pct: current_share(rare_weight),
-                rate_inputs: rare_inputs,
-            },
-            FishGroupChartRow {
-                label: "High-Quality",
-                fill_color: "#93c5fd",
-                stroke_color: "#60a5fa",
-                text_color: "#172554",
-                connector_color: "rgb(96 165 250 / 0.48)",
-                bonus_text: if high_quality_bonus > 0.0 {
+                rare_base * 100.0,
+                rare_weight * 100.0,
+                base_current_share_by_slot
+                    .get(&2)
+                    .copied()
+                    .unwrap_or_default(),
+                rare_inputs,
+            ),
+            build_group_row(
+                3,
+                "High-Quality",
+                "#93c5fd",
+                "#60a5fa",
+                "#172554",
+                "rgb(96 165 250 / 0.48)",
+                if high_quality_bonus > 0.0 {
                     format!("+{}% HQ", trim_float(high_quality_bonus * 100.0))
                 } else {
                     "No bonus".to_string()
                 },
-                base_share_pct: high_quality_base * 100.0,
-                weight_pct: high_quality_weight * 100.0,
-                current_share_pct: current_share(high_quality_weight),
-                rate_inputs: high_quality_inputs,
-            },
-            FishGroupChartRow {
-                label: "General",
-                fill_color: "#86efac",
-                stroke_color: "#4ade80",
-                text_color: "#052e16",
-                connector_color: "rgb(74 222 128 / 0.48)",
-                bonus_text: "No bonus".to_string(),
-                base_share_pct: general_base * 100.0,
-                weight_pct: general_weight * 100.0,
-                current_share_pct: current_share(general_weight),
-                rate_inputs: general_inputs,
-            },
-            FishGroupChartRow {
-                label: "Trash",
-                fill_color: "var(--color-base-100)",
-                stroke_color: "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
-                text_color: "var(--color-base-content)",
-                connector_color: "color-mix(in srgb, var(--color-base-content) 24%, transparent)",
-                bonus_text: "No bonus".to_string(),
-                base_share_pct: trash_base * 100.0,
-                weight_pct: trash_weight * 100.0,
-                current_share_pct: current_share(trash_weight),
-                rate_inputs: trash_inputs,
-            },
+                high_quality_base * 100.0,
+                high_quality_weight * 100.0,
+                base_current_share_by_slot
+                    .get(&3)
+                    .copied()
+                    .unwrap_or_default(),
+                high_quality_inputs,
+            ),
+            build_group_row(
+                4,
+                "General",
+                "#86efac",
+                "#4ade80",
+                "#052e16",
+                "rgb(74 222 128 / 0.48)",
+                "No bonus".to_string(),
+                general_base * 100.0,
+                general_weight * 100.0,
+                base_current_share_by_slot
+                    .get(&4)
+                    .copied()
+                    .unwrap_or_default(),
+                general_inputs,
+            ),
+            build_group_row(
+                5,
+                "Trash",
+                "var(--color-base-100)",
+                "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
+                "var(--color-base-content)",
+                "color-mix(in srgb, var(--color-base-content) 24%, transparent)",
+                "No bonus".to_string(),
+                trash_base * 100.0,
+                trash_weight * 100.0,
+                base_current_share_by_slot
+                    .get(&5)
+                    .copied()
+                    .unwrap_or_default(),
+                trash_inputs,
+            ),
         ],
     }
 }
@@ -3103,32 +4223,11 @@ fn zone_loot_group_values(
 }
 
 fn fish_group_drop_rate_source_kind(row: &FishGroupChartRow) -> String {
-    if row.current_share_pct > 0.0 || row.weight_pct > 0.0 || row.base_share_pct > 0.0 {
-        "database".to_string()
-    } else {
-        String::new()
-    }
+    row.drop_rate_source_kind.clone()
 }
 
 fn fish_group_drop_rate_tooltip(row: &FishGroupChartRow) -> String {
-    if row.current_share_pct <= 0.0 && row.weight_pct <= 0.0 && row.base_share_pct <= 0.0 {
-        return String::new();
-    }
-    let mut parts = vec![format!("Source-backed {} group share", row.label)];
-    if row.base_share_pct > 0.0 {
-        parts.push(format!("base {}", percent_value_text(row.base_share_pct)));
-    }
-    if !row.bonus_text.trim().is_empty() {
-        parts.push(row.bonus_text.clone());
-    }
-    if row.weight_pct > 0.0 {
-        parts.push(format!("weighted {}", percent_value_text(row.weight_pct)));
-    }
-    parts.push(format!(
-        "current share {}",
-        percent_value_text(row.current_share_pct)
-    ));
-    parts.join(" · ")
+    row.drop_rate_tooltip.clone()
 }
 
 fn fish_group_distribution_breakdown(
@@ -3716,6 +4815,9 @@ fn loot_species_drop_rate_text(
 }
 
 fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'static str {
+    if entry.overlay.slot_overlay_active {
+        return "overlay";
+    }
     loot_species_rate_evidence(entry)
         .map(|evidence| match evidence.source_family.as_str() {
             "database" => "database",
@@ -3729,6 +4831,38 @@ fn loot_species_drop_rate_tooltip(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
 ) -> String {
+    if entry.overlay.slot_overlay_active {
+        let effective_rate_text = percent_value_text(entry.within_group_rate * 100.0);
+        let base_detail = if let Some(rate) = entry
+            .evidence
+            .iter()
+            .find(|evidence| {
+                evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
+            })
+            .and_then(|evidence| evidence.rate)
+        {
+            format!(" Base DB raw rate {}%.", format_evidence_percent(rate))
+        } else {
+            String::new()
+        };
+        if let Some(explicit_rate_percent) = entry.overlay.explicit_rate_percent {
+            return format!(
+                "Personal overlay raw in-group rate {}. Current normalized in-group rate {} after this group's raw rates are normalized.{}",
+                percent_value_text(explicit_rate_percent),
+                effective_rate_text,
+                base_detail
+            );
+        }
+        if entry.overlay.added {
+            return format!(
+                "Personal overlay added this row to the zone. It currently resolves to normalized in-group rate {effective_rate_text}.{base_detail}"
+            );
+        }
+        return format!(
+            "Personal overlay changed this group's raw rates. Current normalized in-group rate {effective_rate_text}.{base_detail}"
+        );
+    }
+
     let db_rate_text = entry
         .evidence
         .iter()
@@ -4066,6 +5200,8 @@ fn derive_zone_loot_summary_response(
         .enumerate()
         .map(|(index, row)| ((index + 1) as u8, row))
         .collect::<HashMap<_, _>>();
+    let zone_overlay = zone_overlay_for_signals(signals, &signals.zone);
+    let overlay_active = zone_overlay_has_changes(zone_overlay);
     let rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
     let visible_group_labels = rows.iter().map(|row| row.label).collect::<HashSet<_>>();
     let mut summary_groups = rows
@@ -4088,6 +5224,33 @@ fn derive_zone_loot_summary_response(
         .iter()
         .map(|row| row.slot_idx)
         .collect::<HashSet<_>>();
+    if overlay_active {
+        for (slot_idx, chart_row) in &group_row_by_slot {
+            let group_overlay = zone_overlay
+                .and_then(|zone_overlay| zone_overlay.groups.get(&slot_idx.to_string()));
+            let keep_visible = chart_row.current_share_pct > 0.0
+                || group_overlay.is_some_and(|group_overlay| group_overlay.present == Some(true))
+                || group_overlay
+                    .is_some_and(|group_overlay| group_overlay.raw_rate_percent.is_some());
+            if !keep_visible || !seen_group_slots.insert(*slot_idx) {
+                continue;
+            }
+            summary_groups.push(ZoneLootSummaryGroupRow {
+                slot_idx: *slot_idx,
+                label: chart_row.label.to_string(),
+                fill_color: chart_row.fill_color.to_string(),
+                stroke_color: chart_row.stroke_color.to_string(),
+                text_color: chart_row.text_color.to_string(),
+                drop_rate_text: if chart_row.current_share_pct > 0.0 {
+                    percent_value_text(chart_row.current_share_pct)
+                } else {
+                    String::new()
+                },
+                drop_rate_source_kind: fish_group_drop_rate_source_kind(chart_row),
+                drop_rate_tooltip: fish_group_drop_rate_tooltip(chart_row),
+            });
+        }
+    }
     let weighted_species_rows = loot_chart
         .species_rows
         .iter()
@@ -4173,7 +5336,13 @@ fn derive_zone_loot_summary_response(
         available,
         zone_name: zone.name.clone(),
         note: if available {
-            if has_presence_only_rows && !fish_group_chart.available {
+            if overlay_active && has_presence_only_rows && !fish_group_chart.available {
+                "Personal overlay proposal is active for this zone. Presence support is still available even though calculator group rates are unavailable, so unresolved rows stay listed with Unassigned when no slot is known.".to_string()
+            } else if overlay_active && has_presence_only_rows {
+                "Personal overlay proposal is active for this zone. Rows with unresolved group share or drop-rate support stay visible until their structure is filled in or the overlay entry is removed.".to_string()
+            } else if overlay_active {
+                "Personal overlay proposal is active for this zone. Edited raw group and item rates are normalized into the current zone composition shown here.".to_string()
+            } else if has_presence_only_rows && !fish_group_chart.available {
                 "Presence support is available for this zone, but calculator group rates are unavailable. Rows without a resolved group or drop rate stay listed, using Unassigned when no slot is known.".to_string()
             } else if has_presence_only_rows {
                 "Zone catch profile uses calculator default session settings. Rows with unresolved group share or drop-rate support stay visible in the list until their structure is filled in.".to_string()
@@ -4181,9 +5350,17 @@ fn derive_zone_loot_summary_response(
                 "Zone catch profile uses calculator default session settings. Groups follow the current calculator ordering, and rows show each fish or item's in-group droprate.".to_string()
             }
         } else {
-            "Expected zone loot data is unavailable for this zone.".to_string()
+            if overlay_active {
+                "Expected zone loot data is unavailable for this zone, even with the current personal overlay proposal.".to_string()
+            } else {
+                "Expected zone loot data is unavailable for this zone.".to_string()
+            }
         },
-        profile_label: "Calculator defaults".to_string(),
+        profile_label: if overlay_active {
+            "Personal overlay proposal".to_string()
+        } else {
+            "Calculator defaults".to_string()
+        },
         groups: summary_groups,
         species_rows,
     }
@@ -6081,17 +7258,17 @@ fn render_calculator_app(
                 <div class="flex flex-wrap gap-2">
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-link"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-link"></use></svg>
                         Copy URL
                     </button>
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-share-nodes"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-share-nodes"></use></svg>
                         Copy Share
                     </button>
                     <button class="btn btn-dash btn-error"
                             data-on:click="$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-x-circle"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-x-circle"></use></svg>
                         Clear
                     </button>
                 </div>
@@ -6253,6 +7430,7 @@ fn render_calculator_app(
                 </div>
             </div>
         </fieldset>
+
     </div>
 
     __FISH_GROUP_WINDOW__
@@ -6317,6 +7495,23 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
+
+    <fieldset class="card card-border bg-base-100">
+        <legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2">
+            <span class="fishy-calculator-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-edit-4-fill"></use></svg><span>Overlay Proposal</span></span>
+            <button type="button"
+                    class="fishy-calculator-panel-toggle btn btn-ghost btn-xs btn-circle"
+                    aria-controls="calculator-overlay-proposal-body"
+                    data-class:is-collapsed="$_calculator_ui.overlay_panel_collapsed"
+                    data-attr:aria-expanded="(!$_calculator_ui.overlay_panel_collapsed).toString()"
+                    data-attr:aria-label="$_calculator_ui.overlay_panel_collapsed ? 'Expand overlay proposal panel' : 'Collapse overlay proposal panel'"
+                    data-attr:title="$_calculator_ui.overlay_panel_collapsed ? 'Expand overlay proposal panel' : 'Collapse overlay proposal panel'"
+                    data-on:click="$_calculator_ui.overlay_panel_collapsed = !$_calculator_ui.overlay_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-caret-down"></use></svg></button>
+        </legend>
+        <div id="calculator-overlay-proposal-body" class="card-body pt-0" data-show="!$_calculator_ui.overlay_panel_collapsed">
+            <fishy-calculator-overlay-panel></fishy-calculator-overlay-panel>
+        </div>
+    </fieldset>
 </div>
 "####
     .to_string();
@@ -6324,6 +7519,10 @@ fn render_calculator_app(
     let replacements = [
         ("__ZONE_SEARCH_DROPDOWN__", zone_dropdown),
         ("__ZONE_VALUE__", escape_html(&signals.zone)),
+        (
+            "__CALCULATOR_ICON_SPRITE_URL__",
+            CALCULATOR_ICON_SPRITE_URL.to_string(),
+        ),
         (
             "__LEVEL_SELECT__",
             render_searchable_select_control(
@@ -7932,7 +9131,7 @@ fn render_searchable_multiselect_control(
     <div data-role="shell" class="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm">
         <div data-role="selection" class="flex flex-wrap gap-2"{selection_hidden_attr}>{selection_html}</div>
         <label class="flex min-w-[12rem] flex-1 items-center gap-2 text-sm">
-            <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-search-field"></use></svg>
+        <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-search-field"></use></svg>
             <input id="{search_input_id}"
                    data-role="search-input"
                    type="search"
@@ -8050,13 +9249,13 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
             aria-expanded="false"
             aria-controls="{panel_id}">
         <span data-role="selected-content" class="{selected_content_class}">{selected_content_html}</span>
-        <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-caret-down"></use></svg>
+        <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-caret-down"></use></svg>
     </button>
 
     <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
         <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
             <label class="{search_shell_class}">
-                <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-search-field"></use></svg>
+                <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-search-field"></use></svg>
                 <input id="{search_input_id}"
                        data-role="search-input"
                        type="search"
@@ -8633,6 +9832,7 @@ mod tests {
                     trade_distance_bonus: 134.15,
                     trade_price_curve: 120.0,
                     price_overrides: Default::default(),
+                    overlay: Default::default(),
                     catch_time_active: 17.5,
                     catch_time_afk: 6.5,
                     timespan_amount: 8.0,
@@ -9317,6 +10517,7 @@ mod tests {
             patch.get("_calculator_ui"),
             Some(&json!({
                 "distribution_tab": "groups",
+                "overlay_panel_collapsed": true,
             }))
         );
     }
@@ -9840,6 +11041,181 @@ mod tests {
     }
 
     #[test]
+    fn overlay_editor_signal_preserves_tiny_non_zero_percent_text() {
+        let signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "0%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "Prize",
+                fill_color: "pink",
+                stroke_color: "red",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 100.0,
+                default_weight_pct: 100.0,
+                weight_pct: 100.0,
+                current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
+                rate_inputs: Vec::new(),
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: vec![ZoneEntry {
+                rgb_key: fishystuff_api::ids::RgbKey("240,74,74".to_string()),
+                name: Some("Velia Beach".to_string()),
+                ..ZoneEntry::default()
+            }],
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 820001,
+                name: "Tiny Fish".to_string(),
+                within_group_rate: 0.0000005,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.0000005),
+                    normalized_rate: Some(0.0000005),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let editor = super::build_overlay_editor_signal(&signals, &data, &fish_group_chart);
+
+        assert_eq!(editor.zone_name, "Velia Beach");
+        assert_eq!(editor.items.len(), 1);
+        assert!((editor.items[0].default_raw_rate_pct - 0.00005).abs() < 1e-12);
+        assert_eq!(editor.items[0].default_raw_rate_text, "0.00005%");
+    }
+
+    #[test]
+    fn overlay_editor_signal_exposes_bonus_and_normalized_breakdowns() {
+        let mut signals = CalculatorSignals {
+            zone: "overlay_group_zone".to_string(),
+            ..CalculatorSignals::default()
+        };
+        signals.overlay.zones.insert(
+            "overlay_group_zone".to_string(),
+            fishystuff_api::models::calculator::CalculatorZoneOverlaySignals {
+                groups: std::collections::BTreeMap::from([(
+                    "2".to_string(),
+                    fishystuff_api::models::calculator::CalculatorZoneGroupOverlaySignals {
+                        present: Some(true),
+                        raw_rate_percent: Some(12.0),
+                    },
+                )]),
+                items: std::collections::BTreeMap::new(),
+            },
+        );
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "0%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![
+                FishGroupChartRow {
+                    label: "Prize",
+                    fill_color: "pink",
+                    stroke_color: "red",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 0.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
+                    rate_inputs: Vec::new(),
+                },
+                FishGroupChartRow {
+                    label: "Rare",
+                    fill_color: "yellow",
+                    stroke_color: "gold",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: "+3% Rare".to_string(),
+                    base_share_pct: 10.0,
+                    default_weight_pct: 13.0,
+                    weight_pct: 15.0,
+                    current_share_pct: 30.0,
+                    drop_rate_source_kind: "overlay".to_string(),
+                    drop_rate_tooltip: "Overlay-adjusted rare rate".to_string(),
+                    rate_inputs: vec![
+                        super::computed_stat_breakdown_row(
+                            "Personal overlay raw base rate",
+                            "12%",
+                            "Editable raw base group rate before bonuses.",
+                        ),
+                        super::computed_stat_breakdown_row(
+                            "Rare bonus sources",
+                            "3%",
+                            "Accrued bonus from active effects.",
+                        ),
+                    ],
+                },
+            ],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: vec![ZoneEntry {
+                rgb_key: fishystuff_api::ids::RgbKey("overlay_group_zone".to_string()),
+                name: Some("Overlay Bay".to_string()),
+                ..ZoneEntry::default()
+            }],
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: Vec::new(),
+        };
+
+        let editor = super::build_overlay_editor_signal(&signals, &data, &fish_group_chart);
+        let rare_row = &editor.groups[1];
+
+        assert_eq!(rare_row.current_raw_rate_pct, 12.0);
+        assert_eq!(rare_row.current_raw_rate_text, "12%");
+        assert_eq!(rare_row.bonus_rate_pct, 3.0);
+        assert_eq!(rare_row.bonus_rate_text, "3%");
+        assert_eq!(rare_row.effective_raw_weight_pct, 15.0);
+        assert_eq!(rare_row.effective_raw_weight_text, "15%");
+        assert_eq!(rare_row.normalized_share_pct, 30.0);
+        assert_eq!(rare_row.normalized_share_text, "30%");
+
+        let bonus_breakdown: Value =
+            serde_json::from_str(&rare_row.bonus_rate_breakdown).expect("bonus breakdown json");
+        assert_eq!(bonus_breakdown["title"], "Rare accrued bonus");
+        assert_eq!(bonus_breakdown["value_text"], "3%");
+        assert_eq!(
+            bonus_breakdown["formula_text"],
+            "Accrued bonus = Effective raw weight - Current raw base rate."
+        );
+
+        let normalized_breakdown: Value =
+            serde_json::from_str(&rare_row.normalized_share_breakdown)
+                .expect("normalized breakdown json");
+        assert_eq!(normalized_breakdown["title"], "Rare normalized share");
+        assert_eq!(normalized_breakdown["value_text"], "30%");
+        assert_eq!(
+            normalized_breakdown["formula_text"],
+            "Normalized share = Effective raw weight / All effective raw weights."
+        );
+    }
+
+    #[test]
     fn loot_flow_filter_excludes_groups_without_share_or_derived_species_rows() {
         let signals = CalculatorSignals::default();
         let fish_group_chart = FishGroupChart {
@@ -9856,8 +11232,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 10.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
@@ -9868,8 +11247,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 0.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
@@ -9880,8 +11262,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 90.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
             ],
@@ -9939,8 +11324,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 0.0,
+                default_weight_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             }],
         };
@@ -10099,8 +11487,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 0.0,
+                default_weight_pct: 0.0,
                 weight_pct: 6.25,
                 current_share_pct: 5.81,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             },
             FishGroupChartRow {
@@ -10111,8 +11502,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 6.25,
+                default_weight_pct: 6.25,
                 weight_pct: 6.25,
                 current_share_pct: 5.81,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             },
         ];
@@ -10329,8 +11723,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 100.0,
+                default_weight_pct: 100.0,
                 weight_pct: 100.0,
                 current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             }],
         };
@@ -10404,8 +11801,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 25.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
@@ -10416,8 +11816,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 0.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
@@ -10428,8 +11831,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 0.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
@@ -10440,8 +11846,11 @@ mod tests {
                     connector_color: "rgba(0,0,0,0.2)",
                     bonus_text: String::new(),
                     base_share_pct: 0.0,
+                    default_weight_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 75.0,
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
                     rate_inputs: Vec::new(),
                 },
             ],
@@ -10508,8 +11917,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 0.0,
+                default_weight_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             }],
         };
@@ -10563,8 +11975,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 0.0,
+                default_weight_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             }],
         };
@@ -10617,8 +12032,11 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 bonus_text: String::new(),
                 base_share_pct: 0.0,
+                default_weight_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
                 rate_inputs: Vec::new(),
             }],
         };
@@ -10658,7 +12076,7 @@ mod tests {
     }
 
     #[test]
-    fn derive_fish_group_chart_zeroes_groups_without_any_loot_rows() {
+    fn derive_fish_group_chart_preserves_prize_group_when_zone_supports_mastery_bonus() {
         let signals = CalculatorSignals {
             zone: "240,74,74".to_string(),
             mastery: 1000.0,
@@ -10707,13 +12125,15 @@ mod tests {
 
         assert_eq!(fish_group_chart.rows.len(), 5);
         assert_eq!(fish_group_chart.rows[0].label, "Prize");
-        assert_eq!(fish_group_chart.rows[0].current_share_pct, 0.0);
+        assert!((fish_group_chart.rows[0].base_share_pct - 0.0).abs() < 1e-9);
+        assert!((fish_group_chart.rows[0].weight_pct - 2.5).abs() < 1e-9);
+        assert!((fish_group_chart.rows[0].current_share_pct - 3.875968992248062).abs() < 1e-9);
         assert_eq!(fish_group_chart.rows[1].label, "Rare");
         assert_eq!(fish_group_chart.rows[1].current_share_pct, 0.0);
         assert_eq!(fish_group_chart.rows[2].label, "High-Quality");
         assert_eq!(fish_group_chart.rows[2].current_share_pct, 0.0);
         assert_eq!(fish_group_chart.rows[3].label, "General");
-        assert_eq!(fish_group_chart.rows[3].current_share_pct, 100.0);
+        assert!((fish_group_chart.rows[3].current_share_pct - 96.12403100775194).abs() < 1e-9);
         assert_eq!(fish_group_chart.rows[4].label, "Trash");
         assert_eq!(fish_group_chart.rows[4].current_share_pct, 0.0);
     }
@@ -10849,6 +12269,277 @@ mod tests {
         assert_eq!(fish_group_chart.rows[3].label, "General");
         assert!((fish_group_chart.rows[3].weight_pct - 70.0).abs() < tolerance);
         assert!((fish_group_chart.rows[3].current_share_pct - 57.85123966942149).abs() < tolerance);
+    }
+
+    #[test]
+    fn derive_fish_group_chart_normalizes_raw_overlay_weights() {
+        let mut signals = CalculatorSignals {
+            zone: "overlay_zone".to_string(),
+            ..CalculatorSignals::default()
+        };
+        signals.overlay.zones.insert(
+            "overlay_zone".to_string(),
+            fishystuff_api::models::calculator::CalculatorZoneOverlaySignals {
+                groups: std::collections::BTreeMap::from([(
+                    "2".to_string(),
+                    fishystuff_api::models::calculator::CalculatorZoneGroupOverlaySignals {
+                        present: None,
+                        raw_rate_percent: Some(40.0),
+                    },
+                )]),
+                items: std::collections::BTreeMap::new(),
+            },
+        );
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "overlay_zone".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "overlay_zone".to_string(),
+                    prize_main_group_key: None,
+                    rare_rate_raw: 100_000,
+                    high_quality_rate_raw: 200_000,
+                    general_rate_raw: 700_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![
+                CalculatorZoneLootEntry {
+                    slot_idx: 2,
+                    item_id: 820010,
+                    name: "Rare Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 3,
+                    item_id: 820020,
+                    name: "HQ Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 4,
+                    item_id: 820030,
+                    name: "General Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+            ],
+        };
+
+        let fish_group_chart = derive_fish_group_chart(&signals, &data, &HashMap::new());
+        let tolerance = 1e-9;
+
+        assert!((fish_group_chart.rows[1].default_weight_pct - 10.0).abs() < tolerance);
+        assert!((fish_group_chart.rows[1].weight_pct - 40.0).abs() < tolerance);
+        assert!((fish_group_chart.rows[1].current_share_pct - 30.76923076923077).abs() < tolerance);
+        assert_eq!(fish_group_chart.rows[1].drop_rate_source_kind, "overlay");
+        assert!(fish_group_chart.rows[1]
+            .drop_rate_tooltip
+            .contains("raw group base rate 40%"));
+    }
+
+    #[test]
+    fn derive_fish_group_chart_keeps_mastery_bonus_when_prize_base_override_is_zero() {
+        let mut signals = CalculatorSignals {
+            zone: "prize_overlay_zone".to_string(),
+            mastery: 1000.0,
+            ..CalculatorSignals::default()
+        };
+        signals.overlay.zones.insert(
+            "prize_overlay_zone".to_string(),
+            fishystuff_api::models::calculator::CalculatorZoneOverlaySignals {
+                groups: std::collections::BTreeMap::from([(
+                    "1".to_string(),
+                    fishystuff_api::models::calculator::CalculatorZoneGroupOverlaySignals {
+                        present: None,
+                        raw_rate_percent: Some(0.0),
+                    },
+                )]),
+                items: std::collections::BTreeMap::new(),
+            },
+        );
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                mastery_prize_curve: vec![
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 0,
+                        high_drop_rate_raw: 0,
+                        high_drop_rate: 0.0,
+                    },
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 1000,
+                        high_drop_rate_raw: 25_000,
+                        high_drop_rate: 0.025,
+                    },
+                ],
+                ..CalculatorCatalogResponse::default()
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "prize_overlay_zone".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "prize_overlay_zone".to_string(),
+                    prize_main_group_key: Some(11054),
+                    rare_rate_raw: 0,
+                    high_quality_rate_raw: 0,
+                    general_rate_raw: 1_000_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 820001,
+                name: "General Fish".to_string(),
+                within_group_rate: 1.0,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let fish_group_chart = derive_fish_group_chart(&signals, &data, &HashMap::new());
+
+        assert!((fish_group_chart.rows[0].base_share_pct - 0.0).abs() < 1e-9);
+        assert!((fish_group_chart.rows[0].weight_pct - 2.5).abs() < 1e-9);
+        assert!((fish_group_chart.rows[0].current_share_pct - 2.4390243902439024).abs() < 1e-9);
+        assert_eq!(fish_group_chart.rows[0].drop_rate_source_kind, "overlay");
+        assert!(fish_group_chart.rows[0]
+            .drop_rate_tooltip
+            .contains("base rate 0% plus active group bonus 2.5%"));
+        assert_eq!(fish_group_chart.rows[0].bonus_text, "Base 0% + bonus 2.5%");
+    }
+
+    #[test]
+    fn overlay_editor_prize_group_stays_present_with_zero_base_rate() {
+        let signals = CalculatorSignals {
+            zone: "prize_editor_zone".to_string(),
+            mastery: 0.0,
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: vec![ZoneEntry {
+                rgb_key: fishystuff_api::ids::RgbKey("prize_editor_zone".to_string()),
+                name: Some("Prize Coast".to_string()),
+                ..ZoneEntry::default()
+            }],
+            zone_group_rates: HashMap::from([(
+                "prize_editor_zone".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "prize_editor_zone".to_string(),
+                    prize_main_group_key: Some(11054),
+                    rare_rate_raw: 0,
+                    high_quality_rate_raw: 0,
+                    general_rate_raw: 1_000_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 820001,
+                name: "General Fish".to_string(),
+                within_group_rate: 1.0,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let fish_group_chart = derive_fish_group_chart(&signals, &data, &HashMap::new());
+        let editor = super::build_overlay_editor_signal(&signals, &data, &fish_group_chart);
+
+        assert_eq!(editor.zone_name, "Prize Coast");
+        assert!(editor.groups[0].default_present);
+        assert_eq!(editor.groups[0].default_raw_rate_pct, 0.0);
+        assert_eq!(editor.groups[0].default_raw_rate_text, "0%");
+    }
+
+    #[test]
+    fn apply_zone_overlay_to_loot_entries_normalizes_raw_item_overrides() {
+        let mut signals = CalculatorSignals {
+            zone: "overlay_zone".to_string(),
+            ..CalculatorSignals::default()
+        };
+        signals.overlay.zones.insert(
+            "overlay_zone".to_string(),
+            fishystuff_api::models::calculator::CalculatorZoneOverlaySignals {
+                groups: std::collections::BTreeMap::new(),
+                items: std::collections::BTreeMap::from([(
+                    "820002".to_string(),
+                    fishystuff_api::models::calculator::CalculatorZoneLootOverlaySignals {
+                        present: None,
+                        slot_idx: None,
+                        raw_rate_percent: Some(10.0),
+                        name: None,
+                        grade: None,
+                        is_fish: None,
+                    },
+                )]),
+            },
+        );
+        let base_entries = vec![
+            CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 820001,
+                name: "Fish A".to_string(),
+                within_group_rate: 0.5,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.30),
+                    normalized_rate: Some(0.5),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 820002,
+                name: "Fish B".to_string(),
+                within_group_rate: 0.3333333333333333,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.20),
+                    normalized_rate: Some(0.3333333333333333),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 820003,
+                name: "Fish C".to_string(),
+                within_group_rate: 0.16666666666666666,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.10),
+                    normalized_rate: Some(0.16666666666666666),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+        ];
+
+        let entries =
+            super::apply_zone_overlay_to_loot_entries(&signals, "overlay_zone", &base_entries);
+        let by_item_id = entries
+            .iter()
+            .map(|entry| (entry.item_id, entry.within_group_rate))
+            .collect::<HashMap<_, _>>();
+
+        assert!((by_item_id.get(&820001).copied().unwrap_or_default() - 0.6).abs() < 1e-9);
+        assert!((by_item_id.get(&820002).copied().unwrap_or_default() - 0.2).abs() < 1e-9);
+        assert!((by_item_id.get(&820003).copied().unwrap_or_default() - 0.2).abs() < 1e-9);
     }
 
     #[test]

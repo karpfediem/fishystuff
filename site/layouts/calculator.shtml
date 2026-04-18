@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="$site.asset('calculator/calculator.css').link()">
     <script src="$site.asset('js/lz-string.min.js').link()" defer></script>
     <script src="$site.asset('js/pages/calculator-page.js').link()" defer></script>
+    <script src="$site.asset('js/pages/calculator-overlay-panel.js').link()" defer></script>
     <script src="$site.asset('js/datastar.js').link()" defer></script>
   </head>
 

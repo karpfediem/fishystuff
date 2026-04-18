@@ -1,5 +1,5 @@
 (function () {
-  const ICON_SPRITE_URL = "/img/icons.svg?v=20260330-1";
+  const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-1";
   const CALCULATOR_STORAGE_KEY = "calculator";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
@@ -24,6 +24,13 @@
     window.__fishystuffDatastarState.createCounterTokenController(
       CALCULATOR_ACTION_DEFAULTS,
     );
+
+  function sharedUserOverlays() {
+    const helper = window.__fishystuffUserOverlays;
+    return helper && typeof helper.overlaySignals === "function" && typeof helper.priceOverrides === "function"
+      ? helper
+      : null;
+  }
 
   function datastarPersistHelper() {
     const helper = window.__fishystuffDatastarPersist;
@@ -130,6 +137,8 @@
   };
 
   const cloneCalculatorSignals = (value) => JSON.parse(JSON.stringify(value));
+  const normalizeBooleanFlag = (value, fallback = false) =>
+    value == null ? fallback : value === true || value === "true" || value === 1 || value === "1";
 
   const canonicalizeStoredSignals = (signals) => {
     const current = { ...(signals ?? {}) };
@@ -161,11 +170,16 @@
     const distributionTab = String(
       current._calculator_ui.distribution_tab || legacyDistributionTab || "groups",
     ).trim();
+    const overlayPanelCollapsed = normalizeBooleanFlag(
+      current._calculator_ui.overlay_panel_collapsed,
+      true,
+    );
     current._calculator_ui = {
       ...current._calculator_ui,
       distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
         ? distributionTab
         : "groups",
+      overlay_panel_collapsed: overlayPanelCollapsed,
     };
     if (!("discardGrade" in current)) {
       if (current.discardRareFish || current.discardPrizeFish) {
@@ -241,7 +255,9 @@
   const persistedCalculatorSignals = (signals) => {
     const current = canonicalizeStoredSignals(signals);
     const persisted = Object.fromEntries(
-      Object.entries(current).filter(([key]) => !key.startsWith("_")),
+      Object.entries(current).filter(
+        ([key]) => !key.startsWith("_") && key !== "overlay",
+      ),
     );
     persisted._calculator_ui = cloneCalculatorSignals(current._calculator_ui);
     return persisted;
@@ -250,7 +266,7 @@
   const sharedCalculatorSignals = (signals) =>
     Object.fromEntries(
       Object.entries(canonicalizeStoredSignals(signals)).filter(
-        ([key]) => !key.startsWith("_") && key !== "debug",
+        ([key]) => !key.startsWith("_") && key !== "debug" && key !== "overlay",
       ),
     );
 
@@ -573,10 +589,10 @@
   }
 
   function clearCalculator(signals) {
-    clearSignals();
     const current = signals && typeof signals === "object"
       ? signals
       : signalStore.signalObject();
+    clearSignals();
     const defaults = current && typeof current === "object"
       ? current._defaults
       : null;
@@ -584,6 +600,7 @@
       return;
     }
     Object.assign(current, cloneCalculatorSignals(defaults));
+    syncSignalsFromSharedUserOverlays(current);
   }
 
   function syncCalculatorActions(signals) {
@@ -614,6 +631,16 @@
     );
   }
 
+  function syncSignalsFromSharedUserOverlays(signals) {
+    const shared = sharedUserOverlays();
+    if (!shared || !signals || typeof signals !== "object") {
+      return;
+    }
+    shared.mergeLegacyPriceOverrides(signals.priceOverrides);
+    signals.overlay = shared.overlaySignals();
+    signals.priceOverrides = shared.priceOverrides();
+  }
+
   function restoreCalculator(signals) {
     signalStore.connect(signals);
     bindPersistListener();
@@ -622,10 +649,16 @@
     if (storedSignals && typeof storedSignals === "object") {
       Object.assign(signals, canonicalizeStoredSignals(storedSignals));
     }
+    syncSignalsFromSharedUserOverlays(signals);
     calculatorState.uiStateRestored = true;
   }
 
   function persistCalculator(signals) {
+    const shared = sharedUserOverlays();
+    if (shared) {
+      shared.setOverlaySignals(signals.overlay);
+      shared.setPriceOverrides(signals.priceOverrides);
+    }
     const payload = persistedCalculatorSignals(signals);
     localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
   }
@@ -1439,6 +1472,12 @@
     evalSignalPatchFilter: calculatorEvalSignalPatchFilter,
     signalObject() {
       return signalStore.signalObject();
+    },
+    patchSignals(patch) {
+      signalStore.patchSignals(patch);
+      document.dispatchEvent(new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+        detail: cloneCalculatorSignals(patch),
+      }));
     },
     restore: restoreCalculator,
     liveCalc: liveCalculator,

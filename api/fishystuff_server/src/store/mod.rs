@@ -36,6 +36,13 @@ pub struct CalculatorZoneLootEvidence {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct CalculatorZoneLootOverlayMeta {
+    pub added: bool,
+    pub slot_overlay_active: bool,
+    pub explicit_rate_percent: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct CalculatorZoneLootEntry {
     pub slot_idx: u8,
     pub item_id: i32,
@@ -46,6 +53,7 @@ pub struct CalculatorZoneLootEntry {
     pub is_fish: bool,
     pub within_group_rate: f64,
     pub evidence: Vec<CalculatorZoneLootEvidence>,
+    pub overlay: CalculatorZoneLootOverlayMeta,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -91,7 +91,7 @@ function buildZoneLootGroups(summary) {
         return (Number.parseInt(row?.slotIdx, 10) || 0) === (Number.parseInt(group?.slotIdx, 10) || index + 1);
       }),
     }))
-    .filter((group) => group.label && group.rows.length);
+    .filter((group) => group.label);
 }
 
 function buildZoneLootSection(summary, status) {

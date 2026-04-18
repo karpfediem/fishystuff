@@ -95,6 +95,44 @@ pub struct CalculatorPriceOverrideSignals {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CalculatorZoneGroupOverlaySignals {
+    pub present: Option<bool>,
+    #[serde(rename = "rawRatePercent")]
+    pub raw_rate_percent: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CalculatorZoneLootOverlaySignals {
+    pub present: Option<bool>,
+    #[serde(rename = "slotIdx")]
+    pub slot_idx: Option<u8>,
+    #[serde(rename = "rawRatePercent")]
+    pub raw_rate_percent: Option<f64>,
+    pub name: Option<String>,
+    pub grade: Option<String>,
+    #[serde(rename = "isFish")]
+    pub is_fish: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CalculatorZoneOverlaySignals {
+    #[serde(default)]
+    pub groups: BTreeMap<String, CalculatorZoneGroupOverlaySignals>,
+    #[serde(default)]
+    pub items: BTreeMap<String, CalculatorZoneLootOverlaySignals>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CalculatorUserOverlaySignals {
+    #[serde(default)]
+    pub zones: BTreeMap<String, CalculatorZoneOverlaySignals>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct CalculatorSignals {
     pub level: i32,
@@ -128,6 +166,8 @@ pub struct CalculatorSignals {
     pub trade_price_curve: f64,
     #[serde(rename = "priceOverrides")]
     pub price_overrides: BTreeMap<String, CalculatorPriceOverrideSignals>,
+    #[serde(default)]
+    pub overlay: CalculatorUserOverlaySignals,
     #[serde(rename = "catchTimeActive")]
     pub catch_time_active: f64,
     #[serde(rename = "catchTimeAfk")]

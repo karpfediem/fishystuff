@@ -11,6 +11,8 @@ const PROVENANCE_RATE_DATABASE_COLOR =
     "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
 const PROVENANCE_RATE_COMMUNITY_COLOR =
     "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
+const PROVENANCE_RATE_OVERLAY_COLOR =
+    "color-mix(in oklab, var(--color-secondary) 78%, var(--color-base-content) 22%)";
 const PROVENANCE_PRESENCE_FULL_COLOR =
     "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
 const PROVENANCE_PRESENCE_PARTIAL_COLOR =
@@ -30,6 +32,9 @@ function normalizeSourceKind(value) {
     if (normalized === "derived") {
         return "derived";
     }
+    if (normalized === "overlay") {
+        return "overlay";
+    }
     if (normalized === "mixed") {
         return "mixed";
     }
@@ -48,6 +53,9 @@ function sourceLabel(channel, sourceKind) {
     }
     if (sourceKind === "derived") {
         return "Derived";
+    }
+    if (sourceKind === "overlay") {
+        return "Personal overlay";
     }
     if (sourceKind === "mixed") {
         return channel === "presence" ? "Mixed support" : "Mixed provenance";
@@ -79,6 +87,13 @@ function defaultDetail(channel, sourceKind, valueText) {
                 ? `Derived rate. Current value: ${trimString(valueText)}.`
                 : "Derived rate."
             : "Derived presence support.";
+    }
+    if (sourceKind === "overlay") {
+        return channel === "rate"
+            ? trimString(valueText)
+                ? `Personal overlay proposal. Current value: ${trimString(valueText)}.`
+                : "Personal overlay proposal."
+            : "Personal overlay proposal.";
     }
     if (sourceKind === "mixed") {
         return channel === "presence"
@@ -148,6 +163,9 @@ export function provenanceIndicatorColor(
     }
     if (normalizedSourceKind === "community") {
         return PROVENANCE_RATE_COMMUNITY_COLOR;
+    }
+    if (normalizedSourceKind === "overlay") {
+        return PROVENANCE_RATE_OVERLAY_COLOR;
     }
     return PROVENANCE_NEUTRAL_COLOR;
 }

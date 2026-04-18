@@ -606,3 +606,69 @@
     line-height: 1.35;
     color: color-mix(in srgb, var(--color-base-content) 74%, transparent);
 }
+
+.fishy-calculator-panel-legend.fieldset-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.fishy-calculator-panel-legend .fishy-icon {
+    flex: none;
+}
+
+.fishy-calculator-panel-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.fishy-calculator-panel-toggle {
+    pointer-events: auto;
+    width: 1.85rem;
+    height: 1.85rem;
+    min-height: 1.85rem;
+    padding: 0;
+    color: color-mix(in srgb, var(--color-base-content) 52%, transparent);
+    transition: color 120ms ease, background 120ms ease;
+}
+
+.fishy-calculator-panel-toggle:hover,
+.fishy-calculator-panel-toggle:focus-visible {
+    color: var(--color-base-content, #1f2937);
+}
+
+.fishy-calculator-panel-toggle .fishy-icon {
+    transition: transform 120ms ease;
+}
+
+.fishy-calculator-panel-toggle.is-collapsed .fishy-icon {
+    transform: rotate(-90deg);
+}
+
+.fishy-overlay-panel .fishy-overlay-table th {
+    white-space: nowrap;
+}
+
+.fishy-overlay-panel .fishy-overlay-table td {
+    vertical-align: top;
+}
+
+.fishy-overlay-panel .fishy-overlay-item-table td:first-child {
+    min-width: 15rem;
+}
+
+.fishy-overlay-panel .fishy-overlay-item-table td:nth-child(2) {
+    min-width: 8rem;
+}
+
+.fishy-overlay-change {
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.fishy-overlay-change:hover {
+    border-color: color-mix(in srgb, var(--color-secondary) 28%, var(--color-base-300) 72%);
+    background: color-mix(in oklab, var(--color-base-100) 85%, var(--color-secondary) 4%);
+}

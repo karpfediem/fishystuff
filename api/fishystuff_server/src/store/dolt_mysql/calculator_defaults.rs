@@ -57,6 +57,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
         trade_distance_bonus: 134.15,
         trade_price_curve: 120.0,
         price_overrides: Default::default(),
+        overlay: Default::default(),
         catch_time_active: 17.5,
         catch_time_afk: 6.5,
         timespan_amount: 8.0,

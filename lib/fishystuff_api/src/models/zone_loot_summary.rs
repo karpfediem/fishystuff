@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::RgbKey;
+use crate::models::calculator::CalculatorUserOverlaySignals;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ZoneLootSummaryRequest {
     pub rgb: RgbKey,
+    #[serde(default)]
+    pub overlay: CalculatorUserOverlaySignals,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

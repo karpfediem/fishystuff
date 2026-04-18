@@ -11,6 +11,10 @@ const DATASTAR_PERSIST_SOURCE = fs.readFileSync(
   new URL("../datastar-persist.js", import.meta.url),
   "utf8",
 );
+const USER_OVERLAYS_SOURCE = fs.readFileSync(
+  new URL("../user-overlays.js", import.meta.url),
+  "utf8",
+);
 const CALCULATOR_PAGE_SOURCE = fs.readFileSync(
   new URL("./calculator-page.js", import.meta.url),
   "utf8",
@@ -36,7 +40,8 @@ class MemoryStorage {
 
 function createContext(localStorageInitial = {}, options = {}) {
   const localStorage = new MemoryStorage(localStorageInitial);
-  const listeners = new Map();
+  const documentListeners = new Map();
+  const windowListeners = new Map();
   const timers = new Map();
   let nextTimerId = 1;
   const location = {
@@ -49,24 +54,27 @@ function createContext(localStorageInitial = {}, options = {}) {
   };
   const toastCalls = [];
   const document = {
+    body: {
+      appendChild() {},
+    },
     documentElement: {
       lang: options.lang || "en-US",
     },
     addEventListener(type, listener) {
-      if (!listeners.has(type)) {
-        listeners.set(type, []);
+      if (!documentListeners.has(type)) {
+        documentListeners.set(type, []);
       }
-      listeners.get(type).push(listener);
+      documentListeners.get(type).push(listener);
     },
     removeEventListener(type, listener) {
-      const current = listeners.get(type) || [];
-      listeners.set(
+      const current = documentListeners.get(type) || [];
+      documentListeners.set(
         type,
         current.filter((candidate) => candidate !== listener),
       );
     },
     dispatchEvent(event) {
-      for (const listener of listeners.get(event.type) || []) {
+      for (const listener of documentListeners.get(event.type) || []) {
         listener(event);
       }
     },
@@ -74,6 +82,24 @@ function createContext(localStorageInitial = {}, options = {}) {
   const window = {
     location,
     localStorage,
+    addEventListener(type, listener) {
+      if (!windowListeners.has(type)) {
+        windowListeners.set(type, []);
+      }
+      windowListeners.get(type).push(listener);
+    },
+    removeEventListener(type, listener) {
+      const current = windowListeners.get(type) || [];
+      windowListeners.set(
+        type,
+        current.filter((candidate) => candidate !== listener),
+      );
+    },
+    dispatchEvent(event) {
+      for (const listener of windowListeners.get(event.type) || []) {
+        listener(event);
+      }
+    },
     __fishystuffResolveApiUrl(path) {
       return `https://api.fishystuff.fish${path}`;
     },
@@ -104,6 +130,12 @@ function createContext(localStorageInitial = {}, options = {}) {
     Set,
     Intl,
     console,
+    CustomEvent: class CustomEvent {
+      constructor(type, options = {}) {
+        this.type = type;
+        this.detail = options.detail;
+      }
+    },
     globalThis: null,
     setTimeout(callback) {
       const id = nextTimerId;
@@ -126,6 +158,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   context.globalThis = context;
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
+  vm.runInNewContext(USER_OVERLAYS_SOURCE, context, { filename: "user-overlays.js" });
   vm.runInNewContext(CALCULATOR_PAGE_SOURCE, context, { filename: "calculator-page.js" });
   return {
     window,
@@ -153,6 +186,7 @@ function defaultSignals() {
     outfit: [],
     discardGrade: "none",
     priceOverrides: {},
+    overlay: { zones: {} },
     pet1: { skills: [] },
     pet2: { skills: [] },
     pet3: { skills: [] },
@@ -160,6 +194,7 @@ function defaultSignals() {
     pet5: { skills: [] },
     _calculator_ui: {
       distribution_tab: "groups",
+      overlay_panel_collapsed: true,
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -176,12 +211,16 @@ function defaultSignals() {
       outfit: [],
       discardGrade: "none",
       priceOverrides: {},
+      overlay: { zones: {} },
       pet1: { skills: [] },
       pet2: { skills: [] },
       pet3: { skills: [] },
       pet4: { skills: [] },
       pet5: { skills: [] },
-      _calculator_ui: { distribution_tab: "groups" },
+      _calculator_ui: {
+        distribution_tab: "groups",
+        overlay_panel_collapsed: true,
+      },
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
@@ -201,6 +240,9 @@ test("calculator restore canonicalizes stored signals", () => {
     calculator: JSON.stringify({
       _active: true,
       _distribution_tab: "loot_flow",
+      _calculator_ui: {
+        overlay_panel_collapsed: "false",
+      },
       discardTrashFish: true,
       food: ["item:9359", "", "item:9359"],
       buff: ["item:1", "item:2", "item:1"],
@@ -228,7 +270,14 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.deepEqual(Array.from(signals.outfit), ["item:77"]);
   assert.deepEqual(Array.from(signals.pet1.skills), ["pet-skill:a"]);
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
+  assert.equal(signals._calculator_ui.overlay_panel_collapsed, false);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
+    "8473": {
+      tradePriceCurvePercent: 130,
+      basePrice: 8800000,
+    },
+  });
+  assert.deepEqual(env.window.__fishystuffUserOverlays.priceOverrides(), {
     "8473": {
       tradePriceCurvePercent: 130,
       basePrice: 8800000,
@@ -243,6 +292,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
     _loading: true,
     _calculator_ui: {
       distribution_tab: "groups",
+      overlay_panel_collapsed: true,
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -255,8 +305,13 @@ test("calculator restore leaves initial shell state intact when storage is empty
 
   assert.deepEqual(JSON.parse(JSON.stringify(signals)), {
     _loading: true,
+    overlay: {
+      zones: {},
+    },
+    priceOverrides: {},
     _calculator_ui: {
       distribution_tab: "groups",
+      overlay_panel_collapsed: true,
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -285,14 +340,93 @@ test("calculator persist stores canonical page state and excludes transient bran
 
   const persisted = JSON.parse(env.localStorage.getItem("calculator"));
   assert.deepEqual(persisted.food, ["item:9359"]);
-  assert.deepEqual(persisted._calculator_ui, { distribution_tab: "groups" });
+  assert.deepEqual(persisted._calculator_ui, {
+    distribution_tab: "groups",
+    overlay_panel_collapsed: true,
+  });
   assert.equal("_live" in persisted, false);
   assert.equal("_calc" in persisted, false);
   assert.equal("_defaults" in persisted, false);
+  assert.equal("overlay" in persisted, false);
 });
 
-test("calculator action listener handles copy and clear tokens once", () => {
-  const env = createContext();
+test("calculator restore prefers shared overlay storage for prices and zone overlays", () => {
+  const env = createContext({
+    calculator: JSON.stringify({
+      priceOverrides: {
+        "item:8473": {
+          basePrice: 8800000,
+        },
+      },
+    }),
+    "fishystuff.user-overlays.v2": JSON.stringify({
+      overlay: {
+        zones: {
+          "240,74,74": {
+            groups: {
+              4: {
+                rawRatePercent: 82,
+              },
+            },
+            items: {},
+          },
+        },
+      },
+      priceOverrides: {
+        "9359": {
+          basePrice: 12345,
+        },
+      },
+    }),
+  });
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
+    zones: {
+      "240,74,74": {
+        groups: {
+          4: {
+            rawRatePercent: 82,
+          },
+        },
+        items: {},
+      },
+    },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
+    "9359": {
+      basePrice: 12345,
+    },
+    "8473": {
+      basePrice: 8800000,
+    },
+  });
+});
+
+test("calculator action listener handles copy and clear tokens once without clearing shared overlays", () => {
+  const env = createContext({
+    "fishystuff.user-overlays.v2": JSON.stringify({
+      overlay: {
+        zones: {
+          "240,74,74": {
+            groups: {
+              4: {
+                rawRatePercent: 82,
+              },
+            },
+            items: {},
+          },
+        },
+      },
+      priceOverrides: {
+        "8473": {
+          basePrice: 8800000,
+        },
+      },
+    }),
+  });
   const signals = defaultSignals();
   Object.assign(signals, {
     active: true,
@@ -306,6 +440,23 @@ test("calculator action listener handles copy and clear tokens once", () => {
 
   env.localStorage.setItem("calculator", JSON.stringify({ food: ["item:9359"] }));
   env.window.__fishystuffCalculator.restore(signals);
+  signals.overlay = {
+    zones: {
+      stale: {
+        groups: {
+          2: {
+            rawRatePercent: 5,
+          },
+        },
+        items: {},
+      },
+    },
+  };
+  signals.priceOverrides = {
+    "9999": {
+      basePrice: 1,
+    },
+  };
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
@@ -334,7 +485,46 @@ test("calculator action listener handles copy and clear tokens once", () => {
   assert.match(env.toastCalls[1].text, /FishyStuff Calculator Preset/);
   assert.deepEqual(Array.from(signals.food), []);
   assert.equal(env.localStorage.getItem("calculator"), null);
-  assert.deepEqual(signals._calculator_ui, { distribution_tab: "groups" });
+  assert.deepEqual(signals._calculator_ui, {
+    distribution_tab: "groups",
+    overlay_panel_collapsed: true,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
+    zones: {
+      "240,74,74": {
+        groups: {
+          4: {
+            rawRatePercent: 82,
+          },
+        },
+        items: {},
+      },
+    },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
+    "8473": {
+      basePrice: 8800000,
+    },
+  });
+  assert.deepEqual(env.window.__fishystuffUserOverlays.snapshot(), {
+    overlay: {
+      zones: {
+        "240,74,74": {
+          groups: {
+            4: {
+              rawRatePercent: 82,
+            },
+          },
+          items: {},
+        },
+      },
+    },
+    priceOverrides: {
+      "8473": {
+        basePrice: 8800000,
+      },
+    },
+  });
 });
 
 test("calculator liveCalc keeps stat breakdown payloads aligned with local derived values", () => {

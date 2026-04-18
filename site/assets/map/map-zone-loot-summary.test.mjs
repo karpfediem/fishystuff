@@ -62,6 +62,16 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
 test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint", async () => {
   let request = null;
   const result = await loadZoneLootSummary(0x39e58d, {
+    overlaySignals: {
+      zones: {
+        "57,229,141": {
+          groups: {
+            4: { rawRatePercent: 82 },
+          },
+          items: {},
+        },
+      },
+    },
     locationLike: {
       origin: "http://127.0.0.1:1990",
       protocol: "http:",
@@ -84,7 +94,19 @@ test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint",
   });
 
   assert.equal(request.url, "http://127.0.0.1:8080/api/v1/zone_loot_summary");
-  assert.deepEqual(JSON.parse(request.init.body), { rgb: "57,229,141" });
+  assert.deepEqual(JSON.parse(request.init.body), {
+    rgb: "57,229,141",
+    overlay: {
+      zones: {
+        "57,229,141": {
+          groups: {
+            4: { rawRatePercent: 82 },
+          },
+          items: {},
+        },
+      },
+    },
+  });
   assert.equal(result.zoneName, "Valencia Sea - Depth 5");
 });
 

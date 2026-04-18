@@ -222,7 +222,11 @@ function zoneLootSectionMarkup(section) {
           <div class="fishymap-zone-loot-group rounded-box border border-base-300 bg-base-200/75 p-2">
             ${zoneLootGroupHeaderMarkup(group)}
             <div class="fishymap-zone-loot-group-rows">
-              ${group.rows.map((row) => zoneLootRowMarkup(row)).join("")}
+              ${
+                group.rows.length
+                  ? group.rows.map((row) => zoneLootRowMarkup(row)).join("")
+                  : '<div class="px-2 py-2 text-[11px] text-base-content/55">No rows are assigned to this group in the current overlay yet.</div>'
+              }
             </div>
           </div>
         `)
@@ -316,6 +320,9 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       this.scheduleRender();
       void this.refreshZoneLootSummary();
     };
+    this._handleUserOverlaysChanged = () => {
+      void this.refreshZoneLootSummary({ force: true });
+    };
     this._handleClick = (event) => {
       const button = event.target.closest("button[data-zone-info-tab]");
       if (!button) {
@@ -349,6 +356,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
+    globalThis.window?.addEventListener?.(
+      globalThis.window?.__fishystuffUserOverlays?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
+      this._handleUserOverlaysChanged,
+    );
     attachProvenanceTooltip(this._shell);
     this.render();
   }
@@ -358,6 +369,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
+    globalThis.window?.removeEventListener?.(
+      globalThis.window?.__fishystuffUserOverlays?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
+      this._handleUserOverlaysChanged,
+    );
     if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
       globalThis.cancelAnimationFrame(this._rafId);
     }
@@ -433,7 +448,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this.scheduleRender();
   }
 
-  async refreshZoneLootSummary() {
+  async refreshZoneLootSummary({ force = false } = {}) {
     const selection = this.signals()?._map_runtime?.selection || null;
     const zoneRgb = zoneRgbFromSelection(selection);
     if (!Number.isInteger(zoneRgb) || zoneRgb < 0) {
@@ -445,6 +460,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       return;
     }
     if (
+      !force &&
       this._state.zoneLootRgb === zoneRgb &&
       (this._state.zoneLootStatus === "loading" ||
         this._state.zoneLootStatus === "loaded" ||

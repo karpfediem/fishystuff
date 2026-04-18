@@ -20,6 +20,17 @@ function rgbTripletString(rgbU32) {
   return [(rgbU32 >> 16) & 0xff, (rgbU32 >> 8) & 0xff, rgbU32 & 0xff].join(",");
 }
 
+function currentUserOverlaySignals(explicitOverlaySignals) {
+  if (isPlainObject(explicitOverlaySignals)) {
+    return cloneJson(explicitOverlaySignals);
+  }
+  const helper = globalThis.window?.__fishystuffUserOverlays;
+  if (helper && typeof helper.overlaySignals === "function") {
+    return helper.overlaySignals();
+  }
+  return { zones: {} };
+}
+
 export function zoneRgbFromSelection(selection) {
   const zoneRgb = Number.parseInt(selection?.zoneStats?.zoneRgb, 10);
   if (Number.isInteger(zoneRgb) && zoneRgb >= 0) {
@@ -83,6 +94,7 @@ export async function loadZoneLootSummary(
   {
     fetchImpl = globalThis.fetch,
     locationLike = globalThis.window?.location,
+    overlaySignals = null,
   } = {},
 ) {
   const normalizedZoneRgb = Number.parseInt(zoneRgb, 10);
@@ -97,6 +109,7 @@ export async function loadZoneLootSummary(
     },
     body: JSON.stringify({
       rgb: rgbTripletString(normalizedZoneRgb),
+      overlay: currentUserOverlaySignals(overlaySignals),
     }),
   });
   if (!response.ok) {

@@ -13,6 +13,8 @@ const ACTIVE_BLUE_COLOR =
     "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
 const ACTIVE_GREEN_COLOR =
     "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
+const ACTIVE_PURPLE_COLOR =
+    "color-mix(in oklab, var(--color-secondary) 78%, var(--color-base-content) 22%)";
 const ACTIVE_YELLOW_COLOR =
     "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
 const INACTIVE_GREY_COLOR =
@@ -104,6 +106,18 @@ test("buildProvenanceSegments recognizes database and derived rate provenance la
     assert.equal(databaseRateSegment.color, ACTIVE_BLUE_COLOR);
     assert.equal(derivedRateSegment.sourceLabel, "Derived");
     assert.equal(derivedRateSegment.color, ACTIVE_GREY_COLOR);
+});
+
+test("buildProvenanceSegments recognizes personal overlay provenance", () => {
+    const [, overlayRateSegment] = buildProvenanceSegments({
+        rateSourceKind: "overlay",
+        rateDetail: "Personal overlay final share 82%.",
+        rateValueText: "82%",
+    });
+
+    assert.equal(overlayRateSegment.sourceLabel, "Personal overlay");
+    assert.equal(overlayRateSegment.color, ACTIVE_PURPLE_COLOR);
+    assert.match(provenanceAriaLabel(overlayRateSegment), /Personal overlay/);
 });
 
 test("buildProvenanceSegments returns presence before rate", () => {

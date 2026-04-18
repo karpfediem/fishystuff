@@ -8,7 +8,8 @@ use serde::Deserialize;
 
 use crate::error::{AppError, AppResult};
 use crate::store::{
-    queries, validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang,
+    queries, validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence,
+    CalculatorZoneLootOverlayMeta, FishLang,
 };
 
 use super::catalog::{item_grade_from_db, parse_positive_i64};
@@ -856,6 +857,7 @@ impl DoltMySqlStore {
                     is_fish,
                     within_group_rate,
                     evidence,
+                    overlay: CalculatorZoneLootOverlayMeta::default(),
                 })
             })
             .collect::<Vec<_>>();
@@ -924,6 +926,7 @@ impl DoltMySqlStore {
                 is_fish,
                 within_group_rate: 0.0,
                 evidence,
+                overlay: CalculatorZoneLootOverlayMeta::default(),
             });
         }
         entries.sort_by(|left, right| {
