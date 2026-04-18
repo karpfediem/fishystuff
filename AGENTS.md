@@ -33,13 +33,14 @@ Repository-level notes for working in this monorepo.
 - A `devenv` MCP server is available in this environment. Use the `devenv` MCP tools/resources first when inspecting `devenv` options, packages, processes, ports, and related configuration.
 - If the `devenv` MCP server does not expose the needed information, fall back to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
 - Use `devenv shell` for the interactive development environment.
-- Use `devenv up` from the repo root to start the local services:
+- Use `devenv up --no-tui` from the repo root to start the local services:
   - Dolt SQL
   - API server
   - CDN file server
   - local site server
-- Use `devenv up --profile watch` when you want the same stack plus rebuild/restart
-  watches for the API, map runtime, CDN staging, and site output.
+- Use `devenv up --profile watch --no-tui` when you want the same stack plus
+  rebuild/restart watches for the API, map runtime, CDN staging, and site
+  output.
 - Use `just build`, `just build-map`, and `just build-site` for one-shot local
   output builds without starting the stack.
 - The managed stack uses SecretSpec's `api` profile by default for the local API.

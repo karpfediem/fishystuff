@@ -1,11 +1,11 @@
 # Start the full local dev server stack
 [default]
 up:
-  devenv up
+  devenv up --no-tui
 
 # Start the local dev stack plus rebuild/restart watchers
 watch:
-  devenv up --profile watch
+  devenv up --profile watch --no-tui
 
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:

@@ -125,23 +125,24 @@ async fn main() -> Result<()> {
     let bind = config.bind.clone();
     let state = state::AppState::new(config)?;
     let startup_store = state.store.clone();
-    tokio::spawn(async move {
-        let mut last_err = None;
-        for attempt in 0..5 {
-            match startup_store.prime_startup_caches().await {
-                Ok(()) => return,
-                Err(err) => {
-                    last_err = Some(err);
-                    if attempt < 4 {
-                        tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
-                    }
+    let mut last_err = None;
+    for attempt in 0..5 {
+        match startup_store.prime_startup_caches().await {
+            Ok(()) => {
+                last_err = None;
+                break;
+            }
+            Err(err) => {
+                last_err = Some(err);
+                if attempt < 4 {
+                    tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
                 }
             }
         }
-        if let Some(err) = last_err {
-            warn!(error = ?err, "startup cache prewarm failed after retries");
-        }
-    });
+    }
+    if let Some(err) = last_err {
+        warn!(error = ?err, "startup cache prewarm failed after retries");
+    }
     let app = app::build_router(state);
 
     let addr = bind

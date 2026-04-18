@@ -27,8 +27,8 @@ To run the local development servers:
 just up
 ```
 
-`just up` runs `devenv up` with `process-compose` and starts the long-lived
-local services:
+`just up` runs `devenv up --no-tui` with `process-compose` and starts the
+long-lived local services:
 
 - `db` must become ready before `api`
 - `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
@@ -42,7 +42,7 @@ If you want the same stack plus rebuild/restart watchers, use:
 just watch
 ```
 
-`just watch` runs `devenv up --profile watch` and adds:
+`just watch` runs `devenv up --profile watch --no-tui` and adds:
 
 - API auto-restart on backend changes
 - map runtime rebuild plus CDN restaging on map/lib changes
