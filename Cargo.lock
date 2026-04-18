@@ -3088,6 +3088,7 @@ name = "fishystuff_client"
 version = "0.1.0"
 dependencies = [
  "fishystuff_api",
+ "fishystuff_core",
  "gloo-net",
  "js-sys",
  "serde",

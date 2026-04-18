@@ -1,9 +1,8 @@
 use fishystuff_api::models::fish::FishListResponse;
 use fishystuff_core::fish_icons::fish_item_icon_path;
+use fishystuff_core::public_endpoints::DEFAULT_PUBLIC_CDN_BASE_URL;
 
 use super::state::FishEntry;
-
-const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
 
 pub(crate) fn build_fish_catalog_entries(fish_response: FishListResponse) -> Vec<FishEntry> {
     let mut entries = fish_response
@@ -33,31 +32,19 @@ pub(crate) fn fish_item_icon_url(item_id: i32) -> Option<String> {
     if path.is_empty() {
         return None;
     }
-    let base_url = configured_cdn_base_url().unwrap_or_else(|| PROD_CDN_BASE_URL.to_string());
+    let base_url =
+        configured_cdn_base_url().unwrap_or_else(|| DEFAULT_PUBLIC_CDN_BASE_URL.to_string());
     Some(format!("{}{}", base_url.trim_end_matches('/'), path))
 }
 
 #[cfg(target_arch = "wasm32")]
 fn configured_cdn_base_url() -> Option<String> {
-    use wasm_bindgen::JsValue;
-
-    let window = web_sys::window()?;
-    let value = js_sys::Reflect::get(
-        window.as_ref(),
-        &JsValue::from_str("__fishystuffCdnBaseUrl"),
-    )
-    .ok()?;
-    let value = value.as_string()?;
-    let trimmed = value.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        return None;
-    }
-    Some(trimmed.to_string())
+    crate::public_assets::normalize_public_base_url(None)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn configured_cdn_base_url() -> Option<String> {
-    Some(PROD_CDN_BASE_URL.to_string())
+    Some(DEFAULT_PUBLIC_CDN_BASE_URL.to_string())
 }
 
 #[cfg(test)]

@@ -2,9 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CDN_BASE_URL="${FISHYSTUFF_CDN_CHECK_BASE_URL:-https://cdn.fishystuff.fish}"
-CDN_CHECK_REFERRER_URL="${FISHYSTUFF_CDN_CHECK_REFERRER_URL:-https://fishystuff.fish/map/}"
-CDN_CHECK_ORIGIN_URL="${FISHYSTUFF_CDN_CHECK_ORIGIN_URL:-https://fishystuff.fish}"
+# shellcheck source=tools/scripts/public-endpoints.sh
+source "$ROOT_DIR/tools/scripts/public-endpoints.sh"
+fishystuff_resolve_public_base_urls
+
+CDN_BASE_URL="${FISHYSTUFF_CDN_CHECK_BASE_URL:-$FISHYSTUFF_RESOLVED_PUBLIC_CDN_BASE_URL}"
+CDN_CHECK_REFERRER_URL="${FISHYSTUFF_CDN_CHECK_REFERRER_URL:-$FISHYSTUFF_RESOLVED_PUBLIC_SITE_BASE_URL/map/}"
+CDN_CHECK_ORIGIN_URL="${FISHYSTUFF_CDN_CHECK_ORIGIN_URL:-$FISHYSTUFF_RESOLVED_PUBLIC_SITE_BASE_URL}"
 MAP_CACHE_KEY="${FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY:-$("$ROOT_DIR/tools/scripts/resolve_map_runtime_cache_key.sh")}"
 CURL_CONNECT_TIMEOUT="${CDN_CHECK_CONNECT_TIMEOUT_SECONDS:-10}"
 CURL_MAX_TIME="${CDN_CHECK_MAX_TIME_SECONDS:-30}"

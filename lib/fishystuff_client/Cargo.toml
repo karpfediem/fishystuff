@@ -6,6 +6,7 @@ license = "MIT"
 
 [dependencies]
 fishystuff_api = { path = "../fishystuff_api" }
+fishystuff_core = { path = "../fishystuff_core" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 

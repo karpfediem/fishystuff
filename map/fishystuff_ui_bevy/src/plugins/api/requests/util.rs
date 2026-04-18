@@ -2,13 +2,14 @@ use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::ZoneStatsRequest;
 use fishystuff_api::Rgb;
+#[cfg(target_arch = "wasm32")]
+use fishystuff_core::public_endpoints::{
+    derive_sibling_public_base_url, DEFAULT_PUBLIC_API_BASE_URL,
+};
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
 #[cfg(target_arch = "wasm32")]
 use crate::public_assets::normalize_public_base_url;
-
-#[cfg(target_arch = "wasm32")]
-const PROD_API_BASE_URL: &str = "https://api.fishystuff.fish";
 
 pub(super) fn pick_map_version(meta: &MetaResponse) -> Option<String> {
     if let Some(default) = meta.defaults.map_version_id.as_ref() {
@@ -98,7 +99,8 @@ pub(super) fn resolve_api_request_url(path: &str) -> String {
     #[cfg(target_arch = "wasm32")]
     {
         let base = browser_global_base_url("__fishystuffApiBaseUrl")
-            .unwrap_or_else(|| PROD_API_BASE_URL.to_string());
+            .or_else(browser_location_api_base_url)
+            .unwrap_or_else(|| DEFAULT_PUBLIC_API_BASE_URL.to_string());
         if path.starts_with("http://") || path.starts_with("https://") {
             return path.to_string();
         }
@@ -124,6 +126,13 @@ fn browser_global_base_url(name: &str) -> Option<String> {
     let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(name)).ok()?;
     let value = value.as_string()?;
     normalize_public_base_url(Some(value.as_str()))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn browser_location_api_base_url() -> Option<String> {
+    let window = web_sys::window()?;
+    let origin = window.location().origin().ok()?;
+    derive_sibling_public_base_url(Some(origin.as_str()), "api")
 }
 
 #[cfg(test)]

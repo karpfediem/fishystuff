@@ -1,7 +1,9 @@
 use fishystuff_core::asset_urls::normalize_site_asset_path;
-
+use fishystuff_core::public_endpoints::normalize_public_base_url as normalize_core_public_base_url;
 #[cfg(target_arch = "wasm32")]
-const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
+use fishystuff_core::public_endpoints::{
+    derive_sibling_public_base_url, DEFAULT_PUBLIC_CDN_BASE_URL,
+};
 
 pub(crate) fn resolve_public_asset_url(
     value: Option<&str>,
@@ -33,10 +35,8 @@ pub(crate) fn resolve_public_asset_url(
 }
 
 pub(crate) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
-    if let Some(raw) = value.map(str::trim) {
-        if !raw.is_empty() {
-            return Some(raw.trim_end_matches('/').to_string());
-        }
+    if let Some(normalized) = normalize_core_public_base_url(value) {
+        return Some(normalized);
     }
     fallback_public_base_url()
 }
@@ -46,7 +46,12 @@ fn fallback_public_base_url() -> Option<String> {
     if let Some(configured) = browser_global_base_url("__fishystuffCdnBaseUrl") {
         return Some(configured);
     }
-    Some(PROD_CDN_BASE_URL.to_string())
+    if let Some(origin) = browser_location_origin() {
+        if let Some(derived) = derive_sibling_public_base_url(Some(origin.as_str()), "cdn") {
+            return Some(derived);
+        }
+    }
+    Some(DEFAULT_PUBLIC_CDN_BASE_URL.to_string())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -62,6 +67,13 @@ fn browser_global_base_url(name: &str) -> Option<String> {
     let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(name)).ok()?;
     let value = value.as_string()?;
     normalize_public_base_url(Some(value.as_str()))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn browser_location_origin() -> Option<String> {
+    let window = web_sys::window()?;
+    let origin = window.location().origin().ok()?;
+    normalize_core_public_base_url(Some(origin.as_str()))
 }
 
 #[cfg(test)]

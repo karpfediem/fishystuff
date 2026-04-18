@@ -224,6 +224,8 @@ in
             keys = [
               "FISHYSTUFF_DATABASE_URL"
               "FISHYSTUFF_CORS_ALLOWED_ORIGINS"
+              "FISHYSTUFF_PUBLIC_SITE_BASE_URL"
+              "FISHYSTUFF_PUBLIC_CDN_BASE_URL"
               "FISHYSTUFF_RUNTIME_CDN_BASE_URL"
             ];
             onChange = "restart";

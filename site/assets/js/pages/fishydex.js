@@ -640,12 +640,54 @@
     return `/images/items/IC_0${encyclopediaId}.webp`;
   }
 
+  function normalizeBaseUrl(value) {
+    return String(value || "").trim().replace(/\/+$/, "");
+  }
+
+  function isLoopbackHost(hostname) {
+    return hostname === "127.0.0.1" || hostname === "localhost";
+  }
+
+  function deriveSiblingBaseUrl(baseUrl, subdomain) {
+    const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+    const normalizedSubdomain = String(subdomain || "").trim().replace(/\.+$/, "");
+    if (!normalizedBaseUrl || !normalizedSubdomain) {
+      return "";
+    }
+    try {
+      const url = new URL(normalizedBaseUrl);
+      if (!url.hostname || isLoopbackHost(url.hostname)) {
+        return "";
+      }
+      url.hostname = `${normalizedSubdomain}.${url.hostname}`;
+      url.pathname = "";
+      url.search = "";
+      url.hash = "";
+      return normalizeBaseUrl(url.toString());
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function fallbackPublicBaseUrl(subdomain, productionBase, localPort) {
+    const location = window.location || null;
+    if (location && isLoopbackHost(location.hostname) && localPort) {
+      const protocol = location.protocol === "https:" ? "https:" : "http:";
+      return `${protocol}//${location.hostname}:${localPort}`;
+    }
+    return deriveSiblingBaseUrl(location && location.origin, subdomain) || productionBase;
+  }
+
   function cdnUrl(path) {
     if (typeof window.__fishystuffResolveCdnUrl === "function") {
       return window.__fishystuffResolveCdnUrl(path);
     }
     const runtimeConfig = window.__fishystuffRuntimeConfig || {};
-    const base = String(runtimeConfig.cdnBaseUrl || "https://cdn.fishystuff.fish").replace(/\/+$/, "");
+    const base = normalizeBaseUrl(
+      window.__fishystuffCdnBaseUrl
+      || runtimeConfig.cdnBaseUrl
+      || fallbackPublicBaseUrl("cdn", "https://cdn.fishystuff.fish", "4040"),
+    );
     const raw = String(path || "").trim();
     if (!raw) {
       return "";
@@ -1619,10 +1661,13 @@
   }
 
   function apiUrl(pathname) {
+    if (typeof window.__fishystuffResolveApiUrl === "function") {
+      return window.__fishystuffResolveApiUrl(pathname);
+    }
     const candidates = [
       window.__fishystuffApiBaseUrl,
       window.__fishystuffRuntimeConfig && window.__fishystuffRuntimeConfig.apiBaseUrl,
-      "https://api.fishystuff.fish",
+      fallbackPublicBaseUrl("api", "https://api.fishystuff.fish", "8080"),
     ];
     for (const value of candidates) {
       const explicitBase = String(value || "").trim();

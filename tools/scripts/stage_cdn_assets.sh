@@ -6,6 +6,10 @@ CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 SITE_MAP_ASSETS_DIR="$ROOT_DIR/site/assets/map"
 CDN_MAP_ASSETS_DIR="$CDN_ROOT/map"
 
+# shellcheck source=tools/scripts/public-endpoints.sh
+source "$ROOT_DIR/tools/scripts/public-endpoints.sh"
+fishystuff_resolve_public_base_urls
+
 node "$ROOT_DIR/tools/scripts/build_item_icons_from_source.mjs" --output-dir "$CDN_ROOT/images/items"
 
 require_path() {
@@ -56,7 +60,7 @@ rsync -a "$SITE_MAP_ASSETS_DIR/ui/fishystuff.css" "$CDN_ROOT/map/ui/"
 
 cat > "$CDN_ROOT/.cdn-metadata.json" <<EOF
 {
-  "base_url": "https://cdn.fishystuff.fish",
+  "base_url": "${FISHYSTUFF_RESOLVED_PUBLIC_CDN_BASE_URL}",
   "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "source_roots": [
     "data/cdn/public/images",

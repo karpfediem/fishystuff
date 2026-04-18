@@ -129,7 +129,7 @@ export function normalizeCacheKey(value) {
   return normalized || "";
 }
 
-export function buildRuntimeConfig(env = process.env) {
+export function resolvePublicBaseUrls(env = process.env) {
   const publicSiteBaseUrl =
     normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_SITE_BASE_URL) || "https://fishystuff.fish";
   const publicApiBaseUrl =
@@ -144,6 +144,25 @@ export function buildRuntimeConfig(env = process.env) {
     normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_OTEL_BASE_URL)
     || deriveSiblingBaseUrl(publicSiteBaseUrl, "otel")
     || "https://otel.fishystuff.fish";
+
+  return {
+    publicSiteBaseUrl,
+    publicApiBaseUrl,
+    publicCdnBaseUrl,
+    publicOtelBaseUrl,
+    publicOtelTracesEndpoint:
+      normalizeEndpointUrl(env.FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT)
+      || joinUrl(publicOtelBaseUrl, "/v1/traces"),
+  };
+}
+
+export function buildRuntimeConfig(env = process.env) {
+  const {
+    publicSiteBaseUrl,
+    publicApiBaseUrl,
+    publicCdnBaseUrl,
+    publicOtelTracesEndpoint,
+  } = resolvePublicBaseUrls(env);
 
   return {
     siteBaseUrl:
@@ -165,8 +184,7 @@ export function buildRuntimeConfig(env = process.env) {
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
       exporterEndpoint:
         normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
-        || normalizeEndpointUrl(env.FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT)
-        || joinUrl(publicOtelBaseUrl, "/v1/traces"),
+        || publicOtelTracesEndpoint,
       jaegerUiUrl: normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL),
       sampleRatio: normalizeFloat(env.FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO, 0.25),
     },

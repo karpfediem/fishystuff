@@ -13,10 +13,14 @@ Expected working layout:
 Production base URL:
 
 - `https://cdn.fishystuff.fish`
+- or the sibling CDN host derived from `FISHYSTUFF_PUBLIC_SITE_BASE_URL`, such
+  as `https://cdn.beta.fishystuff.fish`
 
 Runtime note:
 
-- Set the API/static asset base to `https://cdn.fishystuff.fish` for production so runtime tile, terrain, and map asset URLs resolve against the CDN instead of the site origin.
+- The repo tooling resolves the public CDN base from the shared
+  `FISHYSTUFF_PUBLIC_*` environment layer, so beta/static deploy checks can
+  follow the same sibling-host pattern as the site and API.
 
 Required Bunny Storage HTTP environment variables:
 

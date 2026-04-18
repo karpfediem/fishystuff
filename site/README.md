@@ -20,6 +20,9 @@ explicit per-service overrides available through
 `FISHYSTUFF_PUBLIC_API_BASE_URL`, `FISHYSTUFF_PUBLIC_CDN_BASE_URL`,
 `FISHYSTUFF_PUBLIC_OTEL_BASE_URL`, and
 `FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT`.
+The repo-managed release build also rewrites `zine.ziggy` through
+`site/scripts/run-zine-release.sh`, so canonical URLs, Open Graph URLs, RSS
+links, and the runtime config all resolve from the same public site base.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 

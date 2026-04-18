@@ -9,6 +9,7 @@ pub mod gaussian;
 pub mod loc;
 pub mod masks;
 pub mod prob;
+pub mod public_endpoints;
 pub mod snap;
 pub mod terrain;
 pub mod tile;

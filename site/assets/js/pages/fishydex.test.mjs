@@ -193,7 +193,15 @@ function createDocumentStub(options = {}) {
 
 function createContext(localStorageInitial = {}, options = {}) {
   const document = createDocumentStub(options);
-  const window = {};
+  const location = {
+    origin: options.origin || "https://fishystuff.fish",
+    protocol: options.protocol || "https:",
+    hostname: options.hostname || "fishystuff.fish",
+    href: options.href || `${options.origin || "https://fishystuff.fish"}/fishydex/`,
+  };
+  const window = {
+    location,
+  };
   const localStorage = new MemoryStorage(localStorageInitial);
   const timers = new Map();
   let nextTimerId = 1;
@@ -261,6 +269,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   return {
     window,
     document,
+    location,
     navigator: context.navigator,
     localStorage,
     flushTimers() {
@@ -461,6 +470,33 @@ test("fishydex clears transient feedback on filter signal patches", () => {
   assert.equal(signals._status_message, "");
   assert.equal(signals._api_error_message, "");
   assert.equal(signals._api_error_hint, "");
+});
+
+test("fishydex api URL prefers the shared page resolver when present", () => {
+  const env = createContext({}, {
+    origin: "https://beta.fishystuff.fish",
+    hostname: "beta.fishystuff.fish",
+    href: "https://beta.fishystuff.fish/fishydex/",
+  });
+  env.window.__fishystuffResolveApiUrl = (path) => `https://api.beta.fishystuff.fish${path}`;
+
+  assert.equal(
+    env.window.Fishydex.fishApiUrl(),
+    "https://api.beta.fishystuff.fish/api/v1/fish",
+  );
+});
+
+test("fishydex api URL derives the beta sibling host without runtime config", () => {
+  const env = createContext({}, {
+    origin: "https://beta.fishystuff.fish",
+    hostname: "beta.fishystuff.fish",
+    href: "https://beta.fishystuff.fish/fishydex/",
+  });
+
+  assert.equal(
+    env.window.Fishydex.fishApiUrl(),
+    "https://api.beta.fishystuff.fish/api/v1/fish",
+  );
 });
 
 test("fishydex sync ignores reentrant derived signal patches", () => {

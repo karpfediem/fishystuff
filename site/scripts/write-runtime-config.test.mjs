@@ -5,6 +5,7 @@ import {
   buildRuntimeConfig,
   deriveSiblingBaseUrl,
   joinUrl,
+  resolvePublicBaseUrls,
 } from "./write-runtime-config.mjs";
 
 test("runtime config defaults to the production sibling-host layout", () => {
@@ -30,6 +31,20 @@ test("runtime config derives beta sibling hosts from the public site base", () =
   );
 });
 
+test("public base URL resolution is reusable across site build helpers", () => {
+  const publicBaseUrls = resolvePublicBaseUrls({
+    FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
+  });
+
+  assert.deepEqual(publicBaseUrls, {
+    publicSiteBaseUrl: "https://beta.fishystuff.fish",
+    publicApiBaseUrl: "https://api.beta.fishystuff.fish",
+    publicCdnBaseUrl: "https://cdn.beta.fishystuff.fish",
+    publicOtelBaseUrl: "https://otel.beta.fishystuff.fish",
+    publicOtelTracesEndpoint: "https://otel.beta.fishystuff.fish/v1/traces",
+  });
+});
+
 test("runtime config prefers explicit public overrides over derived sibling hosts", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
@@ -47,7 +62,13 @@ test("runtime config prefers explicit public overrides over derived sibling host
 });
 
 test("sibling-host derivation skips loopback and preserves explicit paths when joined", () => {
-  assert.equal(deriveSiblingBaseUrl("https://beta.fishystuff.fish", "api"), "https://api.beta.fishystuff.fish");
+  assert.equal(
+    deriveSiblingBaseUrl("https://beta.fishystuff.fish", "api"),
+    "https://api.beta.fishystuff.fish",
+  );
   assert.equal(deriveSiblingBaseUrl("http://localhost:1990", "api"), "");
-  assert.equal(joinUrl("https://otel.beta.fishystuff.fish", "/v1/traces"), "https://otel.beta.fishystuff.fish/v1/traces");
+  assert.equal(
+    joinUrl("https://otel.beta.fishystuff.fish", "/v1/traces"),
+    "https://otel.beta.fishystuff.fish/v1/traces",
+  );
 });

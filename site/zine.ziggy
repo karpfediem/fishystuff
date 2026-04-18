@@ -1,4 +1,5 @@
 Multilingual {
+  // Repo-managed builds rewrite this from FISHYSTUFF_PUBLIC_SITE_BASE_URL.
   .host_url = "https://fishystuff.fish",
   .i18n_dir_path = "i18n",
   .layouts_dir_path = "layouts",

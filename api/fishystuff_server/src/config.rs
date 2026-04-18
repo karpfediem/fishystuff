@@ -5,6 +5,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::meta::MetaDefaults;
 use fishystuff_config::{load_api_database_url_from_secretspec, load_config, Config as FsConfig};
+use fishystuff_core::public_endpoints::{
+    derive_sibling_public_base_url, normalize_public_base_url, DEFAULT_PUBLIC_CDN_BASE_URL,
+    DEFAULT_PUBLIC_SITE_BASE_URL,
+};
 
 #[derive(Debug, Clone)]
 pub struct ZoneStatusConfig {
@@ -95,9 +99,9 @@ impl AppConfig {
         let runtime_cdn_base_url = std::env::var("FISHYSTUFF_RUNTIME_CDN_BASE_URL")
             .ok()
             .as_deref()
-            .and_then(normalize_origin)
+            .and_then(|value| normalize_public_base_url(Some(value)))
             .or_else(default_public_cdn_base_url)
-            .unwrap_or_else(|| "https://cdn.fishystuff.fish".to_string());
+            .unwrap_or_else(|| DEFAULT_PUBLIC_CDN_BASE_URL.to_string());
 
         let mut defaults = MetaDefaults {
             tile_px: fs_config.defaults.tile_px.unwrap_or(32),
@@ -270,9 +274,9 @@ impl AppConfig {
 fn parse_cors_allowed_origins(value: Option<&str>) -> Result<Vec<String>> {
     let mut origins = Vec::new();
     let default_origin =
-        default_public_site_origin().unwrap_or_else(|| "https://fishystuff.fish".to_string());
+        default_public_site_origin().unwrap_or_else(|| DEFAULT_PUBLIC_SITE_BASE_URL.to_string());
     for raw in value.unwrap_or(default_origin.as_str()).split(',') {
-        let Some(origin) = normalize_origin(raw) else {
+        let Some(origin) = normalize_public_base_url(Some(raw)) else {
             continue;
         };
         if !origins.iter().any(|existing| existing == &origin) {
@@ -285,51 +289,23 @@ fn parse_cors_allowed_origins(value: Option<&str>) -> Result<Vec<String>> {
     Ok(origins)
 }
 
-fn normalize_origin(value: &str) -> Option<String> {
-    let trimmed = value.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        return None;
-    }
-    let (scheme, rest) = trimmed.split_once("://")?;
-    if scheme != "http" && scheme != "https" {
-        return None;
-    }
-    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
-        return None;
-    }
-    Some(format!("{scheme}://{rest}"))
-}
-
 fn default_public_site_origin() -> Option<String> {
     std::env::var("FISHYSTUFF_PUBLIC_SITE_BASE_URL")
         .ok()
         .as_deref()
-        .and_then(normalize_origin)
-}
-
-fn derive_sibling_origin(base_origin: &str, subdomain: &str) -> Option<String> {
-    let normalized_subdomain = subdomain.trim().trim_end_matches('.');
-    if normalized_subdomain.is_empty() {
-        return None;
-    }
-    let normalized_base_origin = normalize_origin(base_origin)?;
-    let (scheme, host) = normalized_base_origin.split_once("://")?;
-    if host.is_empty() || host == "localhost" || host == "127.0.0.1" {
-        return None;
-    }
-    Some(format!("{scheme}://{normalized_subdomain}.{host}"))
+        .and_then(|value| normalize_public_base_url(Some(value)))
 }
 
 fn default_public_cdn_base_url() -> Option<String> {
     std::env::var("FISHYSTUFF_PUBLIC_CDN_BASE_URL")
         .ok()
         .as_deref()
-        .and_then(normalize_origin)
+        .and_then(|value| normalize_public_base_url(Some(value)))
         .or_else(|| {
             std::env::var("FISHYSTUFF_PUBLIC_SITE_BASE_URL")
                 .ok()
                 .as_deref()
-                .and_then(|value| derive_sibling_origin(value, "cdn"))
+                .and_then(|value| derive_sibling_public_base_url(Some(value), "cdn"))
         })
 }
 
@@ -353,7 +329,8 @@ fn parse_env_f64(name: &str, fallback: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_sibling_origin, parse_cors_allowed_origins};
+    use super::parse_cors_allowed_origins;
+    use fishystuff_core::public_endpoints::derive_sibling_public_base_url;
 
     #[test]
     fn parse_cors_allowed_origins_normalizes_and_deduplicates() {
@@ -378,11 +355,11 @@ mod tests {
     #[test]
     fn derive_sibling_origin_supports_beta_sibling_hosts() {
         assert_eq!(
-            derive_sibling_origin("https://beta.fishystuff.fish", "cdn").as_deref(),
+            derive_sibling_public_base_url(Some("https://beta.fishystuff.fish"), "cdn").as_deref(),
             Some("https://cdn.beta.fishystuff.fish")
         );
         assert_eq!(
-            derive_sibling_origin("https://beta.fishystuff.fish", "api").as_deref(),
+            derive_sibling_public_base_url(Some("https://beta.fishystuff.fish"), "api").as_deref(),
             Some("https://api.beta.fishystuff.fish")
         );
     }

@@ -23,7 +23,7 @@ trap cleanup EXIT
 cd "$SITE_DIR"
 
 bun run pre-build
-zine release --output "$BUILD_DIR"
+bash ./scripts/run-zine-release.sh --output "$BUILD_DIR"
 FISHYSTUFF_WEB_FONT_OUTPUT_ROOT="$BUILD_DIR/css/fonts" bash ./scripts/build-web-fonts.sh
 bun run ./scripts/write-runtime-config.mjs --out "$BUILD_DIR/runtime-config.js"
 bun run tailwind:scan

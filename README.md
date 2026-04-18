@@ -79,6 +79,9 @@ and `otel.<site-host>`, or override any of them explicitly with:
 
 Local development still uses the explicit `FISHYSTUFF_RUNTIME_*` overrides from
 `devenv.nix`, which take precedence over the public-origin layer.
+The same public-origin layer also drives the repo-managed static site build
+metadata and shell tooling defaults, so beta deploys can switch the site/API/
+CDN/OTEL family together without editing hard-coded URLs in scripts.
 
 For browser request tracing in local development, the supported path is:
 

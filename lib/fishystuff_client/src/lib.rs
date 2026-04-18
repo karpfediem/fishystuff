@@ -9,6 +9,10 @@ use fishystuff_api::models::region_groups::RegionGroupsResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZonesResponse;
 #[cfg(target_arch = "wasm32")]
+use fishystuff_core::public_endpoints::{
+    derive_sibling_public_base_url, normalize_public_base_url, DEFAULT_PUBLIC_API_BASE_URL,
+};
+#[cfg(target_arch = "wasm32")]
 use web_sys::{RequestCache, RequestMode};
 
 #[derive(Debug, Clone)]
@@ -179,7 +183,8 @@ impl FishyClient {
 #[cfg(target_arch = "wasm32")]
 fn default_browser_base_url() -> String {
     browser_global_base_url("__fishystuffApiBaseUrl")
-        .unwrap_or_else(|| "https://api.fishystuff.fish".to_string())
+        .or_else(browser_location_api_base_url)
+        .unwrap_or_else(|| DEFAULT_PUBLIC_API_BASE_URL.to_string())
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -189,11 +194,14 @@ fn browser_global_base_url(name: &str) -> Option<String> {
     let window = web_sys::window()?;
     let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(name)).ok()?;
     let value = value.as_string()?;
-    let trimmed = value.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        return None;
-    }
-    Some(trimmed.to_string())
+    normalize_public_base_url(Some(value.as_str()))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn browser_location_api_base_url() -> Option<String> {
+    let window = web_sys::window()?;
+    let origin = window.location().origin().ok()?;
+    derive_sibling_public_base_url(Some(origin.as_str()), "api")
 }
 
 #[cfg(target_arch = "wasm32")]
