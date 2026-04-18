@@ -3,6 +3,10 @@ function normalizeString(value) {
   return normalized || "";
 }
 
+function defaultPagePath(globalRef) {
+  return normalizeString(globalRef?.location?.pathname) || "/map/";
+}
+
 function numericOrZero(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
@@ -241,6 +245,54 @@ export function createMapOtelMetricsReporter({
     enabled: true,
     shutdown() {
       meter.removeBatchObservableCallback?.(callback, observables);
+    },
+  });
+}
+
+export function createMapLifecycleMetrics({
+  globalRef = globalThis,
+  instrumentationName = "fishystuff.map",
+} = {}) {
+  const meter = globalRef?.__fishystuffOtel?.getMeter?.(instrumentationName);
+  if (!meter) {
+    return Object.freeze({
+      enabled: false,
+      recordRuntimeReady() {
+        return false;
+      },
+    });
+  }
+
+  const runtimeReadyDuration = meter.createHistogram("fishystuff.map.runtime.ready_duration", {
+    description: "Browser-observed startup duration until the map bridge reports ready.",
+    unit: "ms",
+  });
+  let runtimeReadyRecorded = false;
+
+  return Object.freeze({
+    enabled: true,
+    recordRuntimeReady(durationMs, attributes = {}) {
+      if (runtimeReadyRecorded) {
+        return false;
+      }
+      const numericDurationMs = Number(durationMs);
+      if (!Number.isFinite(numericDurationMs) || numericDurationMs < 0) {
+        return false;
+      }
+      runtimeReadyDuration.record(numericDurationMs, {
+        page_path: defaultPagePath(globalRef),
+        ...Object.fromEntries(
+          Object.entries(attributes || {}).filter(([, value]) => {
+            return (
+              (typeof value === "string" && normalizeString(value))
+              || (typeof value === "number" && Number.isFinite(value))
+              || typeof value === "boolean"
+            );
+          }),
+        ),
+      });
+      runtimeReadyRecorded = true;
+      return true;
     },
   });
 }

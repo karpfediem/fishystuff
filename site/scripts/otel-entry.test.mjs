@@ -6,8 +6,10 @@ import {
   buildIgnorePatterns,
   buildPropagationTargets,
   classifyFetchTarget,
+  createBrowserOperatorMetrics,
   createHttpError,
   createOtlpHttpLogExporter,
+  currentPageReadyDurationMs,
   extractFishystuffResponseContext,
   resolveRuntimeConfig,
 } from "./otel-entry.mjs";
@@ -37,17 +39,17 @@ test("buildPropagationTargets uses prefix patterns so cross-origin API paths sti
 
 test("buildIgnorePatterns keeps ignoring the exporter endpoint and CDN prefix", () => {
   const patterns = buildIgnorePatterns({
-    exporterEndpoint: "http://localhost:1990/telemetry/v1/traces",
-    metricsExporterEndpoint: "http://localhost:1990/telemetry/v1/metrics",
-    logsExporterEndpoint: "http://localhost:1990/telemetry/v1/logs",
+    exporterEndpoint: "https://telemetry.beta.fishystuff.fish/v1/traces",
+    metricsExporterEndpoint: "https://telemetry.beta.fishystuff.fish/v1/metrics",
+    logsExporterEndpoint: "https://telemetry.beta.fishystuff.fish/v1/logs",
     cdnBaseUrl: "http://localhost:4040",
   });
 
   expect(patterns).toHaveLength(4);
-  expect(patterns[0].test("http://localhost:1990/telemetry/v1/traces")).toBe(true);
-  expect(patterns[0].test("http://localhost:1990/telemetry/v1/traces?x=1")).toBe(true);
-  expect(patterns[1].test("http://localhost:1990/telemetry/v1/metrics")).toBe(true);
-  expect(patterns[2].test("http://localhost:1990/telemetry/v1/logs")).toBe(true);
+  expect(patterns[0].test("https://telemetry.beta.fishystuff.fish/v1/traces")).toBe(true);
+  expect(patterns[0].test("https://telemetry.beta.fishystuff.fish/v1/traces?x=1")).toBe(true);
+  expect(patterns[1].test("https://telemetry.beta.fishystuff.fish/v1/metrics")).toBe(true);
+  expect(patterns[2].test("https://telemetry.beta.fishystuff.fish/v1/logs")).toBe(true);
   expect(patterns[3].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
   expect(patterns[3].test("http://localhost:8080/api/v1/meta")).toBe(false);
 });
@@ -133,7 +135,7 @@ test("resolveRuntimeConfig keeps browser metrics and logs separate from trace ex
     siteBaseUrl: "http://127.0.0.1:1990",
     tracing: {
       enabled: true,
-      exporterEndpoint: "http://127.0.0.1:4818/v1/traces",
+      exporterEndpoint: "http://telemetry.localhost:4822/v1/traces",
       serviceName: "fishystuff-site-local",
       deploymentEnvironment: "local",
       serviceVersion: "dev",
@@ -141,25 +143,112 @@ test("resolveRuntimeConfig keeps browser metrics and logs separate from trace ex
     },
     metrics: {
       enabled: true,
-      exporterEndpoint: "http://127.0.0.1:4818/v1/metrics",
+      exporterEndpoint: "http://telemetry.localhost:4822/v1/metrics",
       exportIntervalMs: 3000,
     },
     logs: {
       enabled: true,
-      exporterEndpoint: "http://127.0.0.1:4818/v1/logs",
+      exporterEndpoint: "http://telemetry.localhost:4822/v1/logs",
     },
   };
 
   const config = resolveRuntimeConfig();
 
-  expect(config.exporterEndpoint).toBe("http://127.0.0.1:4818/v1/traces");
-  expect(config.metricsExporterEndpoint).toBe("http://127.0.0.1:4818/v1/metrics");
+  expect(config.exporterEndpoint).toBe("http://telemetry.localhost:4822/v1/traces");
+  expect(config.metricsExporterEndpoint).toBe("http://telemetry.localhost:4822/v1/metrics");
   expect(config.metricsExportIntervalMs).toBe(3000);
-  expect(config.logsExporterEndpoint).toBe("http://127.0.0.1:4818/v1/logs");
+  expect(config.logsExporterEndpoint).toBe("http://telemetry.localhost:4822/v1/logs");
   expect(config.logsEnabled).toBe(true);
 
   delete globalThis.__fishystuffRuntimeConfig;
   delete globalThis.location;
+});
+
+test("currentPageReadyDurationMs prefers completed navigation timing data", () => {
+  globalThis.performance = {
+    getEntriesByType(type) {
+      if (type !== "navigation") {
+        return [];
+      }
+      return [
+        {
+          loadEventEnd: 912.4,
+          domComplete: 801.2,
+        },
+      ];
+    },
+    now() {
+      return 999.9;
+    },
+  };
+
+  expect(currentPageReadyDurationMs()).toBe(912.4);
+
+  delete globalThis.performance;
+});
+
+test("createBrowserOperatorMetrics records session, readiness, and frontend error counters once", () => {
+  const counters = [];
+  const histograms = [];
+  const meter = {
+    createCounter(name) {
+      return {
+        add(value, attributes) {
+          counters.push({ name, value, attributes });
+        },
+      };
+    },
+    createHistogram(name) {
+      return {
+        record(value, attributes) {
+          histograms.push({ name, value, attributes });
+        },
+      };
+    },
+  };
+
+  const metrics = createBrowserOperatorMetrics({
+    meter,
+    globalRef: {
+      location: {
+        pathname: "/map/",
+      },
+    },
+  });
+
+  expect(metrics.enabled).toBe(true);
+  expect(metrics.recordSessionStarted()).toBe(true);
+  expect(metrics.recordSessionStarted()).toBe(false);
+  expect(metrics.recordPageReady(432.1)).toBe(true);
+  expect(metrics.recordPageReady(123.4)).toBe(false);
+  expect(metrics.recordFrontendError({ source: "window.error" })).toBe(true);
+
+  expect(counters).toEqual([
+    {
+      name: "fishystuff.site.session_started",
+      value: 1,
+      attributes: {
+        page_path: "/map/",
+      },
+    },
+    {
+      name: "fishystuff.site.frontend_error",
+      value: 1,
+      attributes: {
+        page_path: "/map/",
+        source: "window.error",
+      },
+    },
+  ]);
+  expect(histograms).toEqual([
+    {
+      name: "fishystuff.site.page_ready",
+      value: 432.1,
+      attributes: {
+        page_path: "/map/",
+      },
+    },
+  ]);
 });
 
 test("createOtlpHttpLogExporter sends OTLP protobuf with the expected content type", async () => {

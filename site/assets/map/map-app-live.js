@@ -2,7 +2,7 @@ import { createMapApp } from "./map-app.js";
 import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
 import { createMapPageDerivedController } from "./map-page-derived.js";
 import { createMapPageLive } from "./map-page-live.js";
-import { createMapOtelMetricsReporter } from "./map-otel-metrics.js";
+import { createMapLifecycleMetrics, createMapOtelMetricsReporter } from "./map-otel-metrics.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
@@ -216,6 +216,15 @@ export async function start() {
   const app = createMapApp();
   const bridge = FishyMapBridge;
   const otelMetricsReporter = createMapOtelMetricsReporter({ bridge });
+  const lifecycleMetrics = createMapLifecycleMetrics();
+  const nowMs = () => {
+    const performanceNow = globalThis.performance?.now?.();
+    if (Number.isFinite(performanceNow)) {
+      return performanceNow;
+    }
+    return Date.now();
+  };
+  const runtimeStartedAtMs = nowMs();
   let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;
   let mounted = false;
@@ -232,6 +241,9 @@ export async function start() {
       },
       { frames: 2 },
     );
+  };
+  const recordRuntimeReady = () => {
+    lifecycleMetrics.recordRuntimeReady(Math.max(0, nowMs() - runtimeStartedAtMs));
   };
 
   function signals() {
@@ -288,6 +300,9 @@ export async function start() {
   function handleBridgeStateEvent(event) {
     const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
     patchSignalsFromBridge(snapshot);
+    if (event?.type === "fishymap:ready" || snapshot?.ready === true) {
+      recordRuntimeReady();
+    }
   }
 
   shell.addEventListener("fishymap:ready", handleBridgeStateEvent);
@@ -365,6 +380,9 @@ export async function start() {
   actionState = app.consumeSignals(signals());
   lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());
+  if (currentBridgeState()?.ready === true) {
+    recordRuntimeReady();
+  }
   patchBridgeFromSignals();
   void loadZoneCatalog().then((loadedZoneCatalog) => {
     dispatchShellZoneCatalogReadyEvent(

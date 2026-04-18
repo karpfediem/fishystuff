@@ -10,6 +10,7 @@ let
   vectorOtlpGrpcPort = 4817;
   vectorOtlpHttpPort = 4820;
   vectorOtlpPassthroughHttpPort = 4821;
+  telemetryEdgePort = 4822;
   lokiHttpPort = 3100;
   lokiGrpcPort = 9096;
   otelCollectorHttpPort = 4818;
@@ -27,9 +28,107 @@ let
   cdnPort = 4040;
   siteHost = "127.0.0.1";
   sitePort = 1990;
+  telemetryPublicHost = "telemetry.localhost";
   toString = builtins.toString;
   logTimestampRunner =
     "${pkgs.bash}/bin/bash ${config.devenv.root}/tools/scripts/with_log_timestamps.sh";
+  telemetryEdgeNginxConf = pkgs.writeText "fishystuff-telemetry-edge.nginx.conf" ''
+    worker_processes 1;
+    error_log stderr notice;
+    pid ${config.devenv.root}/data/nginx/telemetry-edge.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      access_log off;
+      client_max_body_size 16m;
+
+      server {
+        listen 127.0.0.1:${toString telemetryEdgePort};
+        server_name ${telemetryPublicHost};
+
+        set $cors_allow_origin "";
+        if ($http_origin ~* '^https?://([a-z0-9-]+\.)*fishystuff\.fish(:[0-9]+)?$') {
+          set $cors_allow_origin $http_origin;
+        }
+        if ($http_origin ~* '^https?://([a-z0-9-]+\.)?localhost(:[0-9]+)?$') {
+          set $cors_allow_origin $http_origin;
+        }
+        if ($http_origin ~* '^https?://127\.0\.0\.1(:[0-9]+)?$') {
+          set $cors_allow_origin $http_origin;
+        }
+
+        location = /v1/traces {
+          if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "content-type, traceparent, tracestate, baggage" always;
+            add_header Access-Control-Max-Age 86400 always;
+            add_header Vary "Origin" always;
+            return 204;
+          }
+
+          add_header Access-Control-Allow-Origin $cors_allow_origin always;
+          add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+          add_header Access-Control-Allow-Headers "content-type, traceparent, tracestate, baggage" always;
+          add_header Vary "Origin" always;
+
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header Connection "";
+          proxy_pass http://127.0.0.1:${toString vectorOtlpPassthroughHttpPort};
+        }
+
+        location = /v1/metrics {
+          if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "content-type, traceparent, tracestate, baggage" always;
+            add_header Access-Control-Max-Age 86400 always;
+            add_header Vary "Origin" always;
+            return 204;
+          }
+
+          add_header Access-Control-Allow-Origin $cors_allow_origin always;
+          add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+          add_header Access-Control-Allow-Headers "content-type, traceparent, tracestate, baggage" always;
+          add_header Vary "Origin" always;
+
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header Connection "";
+          proxy_pass http://127.0.0.1:${toString vectorOtlpPassthroughHttpPort};
+        }
+
+        location = /v1/logs {
+          if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "content-type, traceparent, tracestate, baggage" always;
+            add_header Access-Control-Max-Age 86400 always;
+            add_header Vary "Origin" always;
+            return 204;
+          }
+
+          add_header Access-Control-Allow-Origin $cors_allow_origin always;
+          add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+          add_header Access-Control-Allow-Headers "content-type, traceparent, tracestate, baggage" always;
+          add_header Vary "Origin" always;
+
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header Connection "";
+          proxy_pass http://127.0.0.1:${toString vectorOtlpHttpPort};
+        }
+
+        location / {
+          return 404;
+        }
+      }
+    }
+  '';
   rustHookToolchain = pkgs.symlinkJoin {
     name = "fishystuff-rust-hook-toolchain";
     paths = [
@@ -52,6 +151,7 @@ in {
       dolt
       flyctl
       gawk
+      nginx
       hyperfine
       jq
       libX11
@@ -146,6 +246,7 @@ in {
     FISHYSTUFF_DEV_VECTOR_OTLP_GRPC_PORT = toString vectorOtlpGrpcPort;
     FISHYSTUFF_DEV_VECTOR_OTLP_HTTP_PORT = toString vectorOtlpHttpPort;
     FISHYSTUFF_DEV_VECTOR_OTLP_PASSTHROUGH_HTTP_PORT = toString vectorOtlpPassthroughHttpPort;
+    FISHYSTUFF_DEV_TELEMETRY_PORT = toString telemetryEdgePort;
     FISHYSTUFF_DEV_LOKI_HTTP_PORT = toString lokiHttpPort;
     FISHYSTUFF_DEV_LOKI_GRPC_PORT = toString lokiGrpcPort;
     FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT = toString otelCollectorHttpPort;
@@ -168,12 +269,15 @@ in {
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME = "fishystuff-site-local";
     FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT = "local";
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION = "dev";
-    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT = "/telemetry/v1/traces";
+    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT =
+      "http://${telemetryPublicHost}:${toString telemetryEdgePort}/v1/traces";
     FISHYSTUFF_RUNTIME_OTEL_METRICS_ENABLED = "true";
-    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT = "/telemetry/v1/metrics";
+    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT =
+      "http://${telemetryPublicHost}:${toString telemetryEdgePort}/v1/metrics";
     FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS = "5000";
     FISHYSTUFF_RUNTIME_OTEL_LOGS_ENABLED = "true";
-    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT = "/telemetry/v1/logs";
+    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT =
+      "http://${telemetryPublicHost}:${toString telemetryEdgePort}/v1/logs";
     FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL = "http://${siteHost}:${toString jaegerUiPort}";
     FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO = "0.25";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
@@ -198,16 +302,6 @@ in {
         root * ${config.devenv.root}/site/.out
         header Cache-Control "no-store"
 
-        handle /telemetry/v1/logs* {
-          uri strip_prefix /telemetry
-          reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
-        }
-
-        handle /telemetry/* {
-          uri strip_prefix /telemetry
-          reverse_proxy 127.0.0.1:${toString vectorOtlpPassthroughHttpPort}
-        }
-
         try_files {path} {path}.html {path}/index.html =404
         file_server
       }
@@ -216,16 +310,6 @@ in {
       route {
         root * ${config.devenv.root}/site/.out
         header Cache-Control "no-store"
-
-        handle /telemetry/v1/logs* {
-          uri strip_prefix /telemetry
-          reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
-        }
-
-        handle /telemetry/* {
-          uri strip_prefix /telemetry
-          reverse_proxy 127.0.0.1:${toString vectorOtlpPassthroughHttpPort}
-        }
 
         try_files {path} {path}.html {path}/index.html =404
         file_server
@@ -350,6 +434,16 @@ in {
     ];
   };
 
+  processes.telemetry-edge = {
+    cwd = config.devenv.root;
+    exec = ''
+      mkdir -p ${config.devenv.root}/data/nginx
+      exec env LOG_TS_LABEL=telemetry-edge LOG_TS_FILE=${config.devenv.root}/data/vector/process/telemetry-edge.log ${logTimestampRunner} \
+        ${pkgs.nginx}/bin/nginx -c ${telemetryEdgeNginxConf} -g 'daemon off;'
+    '';
+    after = [ "devenv:processes:vector@started" ];
+  };
+
   processes.prometheus = {
     cwd = config.devenv.root;
     exec = ''
@@ -375,9 +469,11 @@ in {
           GF_SERVER_HTTP_PORT=${toString grafanaPort} \
           GF_PATHS_DATA=${config.devenv.root}/data/grafana \
           GF_PATHS_PROVISIONING=${config.devenv.root}/tools/telemetry/grafana/provisioning \
+          GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=${config.devenv.root}/tools/telemetry/grafana/dashboards/fishystuff-operator-overview.json \
           GF_AUTH_ANONYMOUS_ENABLED=true \
           GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
           GF_AUTH_DISABLE_LOGIN_FORM=true \
+          FISHYSTUFF_GRAFANA_DASHBOARDS_PATH=${config.devenv.root}/tools/telemetry/grafana/dashboards \
           ${logTimestampRunner} \
           ${pkgs.grafana}/bin/grafana-server \
           --homepath ${pkgs.grafana}/share/grafana \
@@ -389,9 +485,11 @@ in {
         GF_SERVER_HTTP_PORT=${toString grafanaPort} \
         GF_PATHS_DATA=${config.devenv.root}/data/grafana \
         GF_PATHS_PROVISIONING=${config.devenv.root}/tools/telemetry/grafana/provisioning \
+        GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=${config.devenv.root}/tools/telemetry/grafana/dashboards/fishystuff-operator-overview.json \
         GF_AUTH_ANONYMOUS_ENABLED=true \
         GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
         GF_AUTH_DISABLE_LOGIN_FORM=true \
+        FISHYSTUFF_GRAFANA_DASHBOARDS_PATH=${config.devenv.root}/tools/telemetry/grafana/dashboards \
         ${logTimestampRunner} \
         ${pkgs.grafana}/bin/grafana \
         server \

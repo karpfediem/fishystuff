@@ -27,7 +27,9 @@ Repository notes for working in this monorepo.
   - `devenv up -d --no-tui` for background `process-compose`
   - `devenv up --profile watch --no-tui` for the stack plus rebuild/restart watchers
 - The local observability frontend is Grafana on `127.0.0.1:3000`.
+- The first provisioned dashboard is `Fishystuff Local Observability` at `/d/fishystuff-local-observability/fishystuff-local-observability`.
 - Use `just open grafana` or `just open loki` for logs-first Explore, `just open jaeger` for Jaeger's native trace/SPM UI, and `just open loki-status` only when you need Loki's raw module status page.
+- Use `just open dashboard` when you want the provisioned local overview dashboard instead of Explore.
 - Use one-shot local build commands without starting the stack:
   - `just build-map` rebuilds the map runtime plus map-serving CDN assets such as fields, waypoints, and `minimap_visual`
   - `just cdn-stage-icons` rebuilds only the source-backed item icon payload

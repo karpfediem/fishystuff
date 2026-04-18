@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   collectMapTelemetrySample,
+  createMapLifecycleMetrics,
   createMapOtelMetricsReporter,
 } from "./map-otel-metrics.js";
 
@@ -111,4 +112,41 @@ test("createMapOtelMetricsReporter registers a batch callback when OTEL metrics 
   reporter.shutdown();
   assert.equal(registered.length, 2);
   assert.equal(registered[1].removed, true);
+});
+
+test("createMapLifecycleMetrics records startup duration once", () => {
+  const histograms = [];
+  const lifecycleMetrics = createMapLifecycleMetrics({
+    globalRef: {
+      location: {
+        pathname: "/map/",
+      },
+      __fishystuffOtel: {
+        getMeter() {
+          return {
+            createHistogram(name) {
+              return {
+                record(value, attributes) {
+                  histograms.push({ name, value, attributes });
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+  });
+
+  assert.equal(lifecycleMetrics.enabled, true);
+  assert.equal(lifecycleMetrics.recordRuntimeReady(215.6), true);
+  assert.equal(lifecycleMetrics.recordRuntimeReady(300), false);
+  assert.deepEqual(histograms, [
+    {
+      name: "fishystuff.map.runtime.ready_duration",
+      value: 215.6,
+      attributes: {
+        page_path: "/map/",
+      },
+    },
+  ]);
 });

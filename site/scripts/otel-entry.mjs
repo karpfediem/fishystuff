@@ -353,6 +353,136 @@ function browserLocationAttributes() {
   });
 }
 
+function currentPagePath(globalRef = globalThis) {
+  return normalizeString(globalRef?.location?.pathname) || "/";
+}
+
+function safePerformanceNow(globalRef = globalThis) {
+  const performanceRef = globalRef?.performance;
+  if (!performanceRef || typeof performanceRef.now !== "function") {
+    return null;
+  }
+  const value = performanceRef.now();
+  return Number.isFinite(value) ? value : null;
+}
+
+function readNavigationTiming(globalRef = globalThis) {
+  const performanceRef = globalRef?.performance;
+  if (!performanceRef || typeof performanceRef.getEntriesByType !== "function") {
+    return null;
+  }
+  const [entry] = performanceRef.getEntriesByType("navigation");
+  return entry && typeof entry === "object" ? entry : null;
+}
+
+function currentPageReadyDurationMs(globalRef = globalThis) {
+  const navigationTiming = readNavigationTiming(globalRef);
+  const navigationCandidates = [
+    navigationTiming?.loadEventEnd,
+    navigationTiming?.domComplete,
+    navigationTiming?.loadEventStart,
+    navigationTiming?.domInteractive,
+    navigationTiming?.duration,
+  ];
+  for (const candidate of navigationCandidates) {
+    if (Number.isFinite(candidate) && candidate >= 0) {
+      return candidate;
+    }
+  }
+  return safePerformanceNow(globalRef) ?? 0;
+}
+
+function createBrowserOperatorMetrics({ meter, globalRef = globalThis } = {}) {
+  if (!meter) {
+    return Object.freeze({
+      enabled: false,
+      recordFrontendError() {
+        return false;
+      },
+      recordPageReady() {
+        return false;
+      },
+      recordSessionStarted() {
+        return false;
+      },
+    });
+  }
+
+  const sessionStarted = meter.createCounter("fishystuff.site.session_started", {
+    description: "Browser sessions observed by the current site runtime.",
+  });
+  const pageReady = meter.createHistogram("fishystuff.site.page_ready", {
+    description: "Navigation-to-page-ready duration observed in the browser runtime.",
+    unit: "ms",
+  });
+  const frontendError = meter.createCounter("fishystuff.site.frontend_error", {
+    description: "Frontend error signals observed by the browser telemetry hooks.",
+  });
+  let sessionStartedRecorded = false;
+  let pageReadyRecorded = false;
+
+  function defaultAttributes() {
+    return normalizeAttributes({
+      page_path: currentPagePath(globalRef),
+    });
+  }
+
+  return Object.freeze({
+    enabled: true,
+    recordSessionStarted(attributes = {}) {
+      if (sessionStartedRecorded) {
+        return false;
+      }
+      sessionStarted.add(1, {
+        ...defaultAttributes(),
+        ...normalizeAttributes(attributes),
+      });
+      sessionStartedRecorded = true;
+      return true;
+    },
+    recordPageReady(durationMs = currentPageReadyDurationMs(globalRef), attributes = {}) {
+      if (pageReadyRecorded) {
+        return false;
+      }
+      const numericDurationMs = Number(durationMs);
+      if (!Number.isFinite(numericDurationMs) || numericDurationMs < 0) {
+        return false;
+      }
+      pageReady.record(numericDurationMs, {
+        ...defaultAttributes(),
+        ...normalizeAttributes(attributes),
+      });
+      pageReadyRecorded = true;
+      return true;
+    },
+    recordFrontendError(attributes = {}) {
+      frontendError.add(1, {
+        ...defaultAttributes(),
+        ...normalizeAttributes(attributes),
+      });
+      return true;
+    },
+  });
+}
+
+function installPageReadyMetric(browserMetrics, globalRef = globalThis) {
+  if (!browserMetrics?.enabled) {
+    return;
+  }
+
+  const documentRef = globalRef?.document;
+  const record = () => {
+    browserMetrics.recordPageReady(currentPageReadyDurationMs(globalRef));
+  };
+
+  if (documentRef?.readyState === "complete") {
+    record();
+    return;
+  }
+
+  globalRef?.addEventListener?.("load", record, { once: true });
+}
+
 function extractErrorLogAttributes(error) {
   const attributes = {
     "error.type": errorName(error),
@@ -641,7 +771,7 @@ function createOtlpHttpLogExporter({
   });
 }
 
-function installBrowserLogHooks(loggerProvider, config) {
+function installBrowserLogHooks(loggerProvider, config, browserMetrics) {
   if (!loggerProvider || globalThis[OTEL_LOG_HOOK_KEY]) {
     return;
   }
@@ -662,6 +792,9 @@ function installBrowserLogHooks(loggerProvider, config) {
     const body = normalizeString(event?.message) || "Unhandled browser error";
     const error =
       event?.error instanceof Error ? event.error : new Error(body);
+    browserMetrics?.recordFrontendError({
+      source: "window.error",
+    });
     emitBrowserLog(loggerProvider, config, {
       loggerName: runtimeLoggerName,
       source: "window.error",
@@ -680,6 +813,9 @@ function installBrowserLogHooks(loggerProvider, config) {
 
   globalThis.addEventListener?.("unhandledrejection", (event) => {
     const reason = event?.reason;
+    browserMetrics?.recordFrontendError({
+      source: "window.unhandledrejection",
+    });
     emitBrowserLog(loggerProvider, config, {
       loggerName: runtimeLoggerName,
       source: "window.unhandledrejection",
@@ -715,6 +851,9 @@ function installBrowserLogHooks(loggerProvider, config) {
     }
     if (originalError) {
       consoleRef.error = (...args) => {
+        browserMetrics?.recordFrontendError({
+          source: "console.error",
+        });
         emitBrowserLog(loggerProvider, config, {
           loggerName: consoleLoggerName,
           source: "console.error",
@@ -735,7 +874,13 @@ function installBrowserLogHooks(loggerProvider, config) {
   globalThis[OTEL_LOG_HOOK_KEY] = true;
 }
 
-function createTelemetryBridge(config, tracerProvider, meterProvider, loggerProvider) {
+function createTelemetryBridge(
+  config,
+  tracerProvider,
+  meterProvider,
+  loggerProvider,
+  browserMetrics = null,
+) {
   const tracer = tracerProvider ? tracerProvider.getTracer(config.serviceName) : null;
 
   return Object.freeze({
@@ -780,6 +925,9 @@ function createTelemetryBridge(config, tracerProvider, meterProvider, loggerProv
       });
     },
     emitError(error, attributes = {}, options = {}) {
+      browserMetrics?.recordFrontendError({
+        source: "bridge.emitError",
+      });
       return emitBrowserLog(loggerProvider, config, {
         loggerName: `${config.serviceName}.browser.app`,
         source: "bridge.emitError",
@@ -940,10 +1088,10 @@ function installBrowserTelemetry(config) {
       ],
     });
     otelLogs.setGlobalLoggerProvider(loggerProvider);
-    installBrowserLogHooks(loggerProvider, config);
   }
 
   let meterProvider = null;
+  let browserMetrics = null;
   if (metricsEnabled) {
     meterProvider = new MeterProvider({
       resource,
@@ -959,6 +1107,15 @@ function installBrowserTelemetry(config) {
       ],
     });
     otelMetrics.setGlobalMeterProvider(meterProvider);
+    browserMetrics = createBrowserOperatorMetrics({
+      meter: meterProvider.getMeter(`${config.serviceName}.browser`),
+    });
+    browserMetrics.recordSessionStarted();
+    installPageReadyMetric(browserMetrics);
+  }
+
+  if (logsEnabled) {
+    installBrowserLogHooks(loggerProvider, config, browserMetrics);
   }
 
   if (traceEnabled) {
@@ -988,6 +1145,7 @@ function installBrowserTelemetry(config) {
     tracerProvider,
     meterProvider,
     loggerProvider,
+    browserMetrics,
   );
 }
 
@@ -1002,8 +1160,10 @@ export {
   buildIgnorePatterns,
   buildPropagationTargets,
   classifyFetchTarget,
+  createBrowserOperatorMetrics,
   createHttpError,
   createOtlpHttpLogExporter,
+  currentPageReadyDurationMs,
   extractFishystuffResponseContext,
   resolveAbsoluteUrl,
   resolveBaseUrl,
