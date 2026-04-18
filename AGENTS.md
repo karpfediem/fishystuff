@@ -26,10 +26,22 @@ Repository notes for working in this monorepo.
   - `devenv up --no-tui` for foreground
   - `devenv up -d --no-tui` for background `process-compose`
   - `devenv up --profile watch --no-tui` for the stack plus rebuild/restart watchers
+- The local observability frontend is Grafana on `127.0.0.1:3000`.
+- Use `just open grafana` or `just open loki` for logs-first Explore, `just open jaeger` for Jaeger's native trace/SPM UI, and `just open loki-status` only when you need Loki's raw module status page.
 - Use `just build`, `just build-map`, and `just build-site` for one-shot local builds without starting the stack.
 - Use the same `devenv` environment for both JS host checks and Rust/WASM map builds.
 - The managed local API uses SecretSpec profile `api`.
 - Local API CORS is set explicitly through `FISHYSTUFF_CORS_ALLOWED_ORIGINS`. Do not reintroduce inferred site-origin CORS logic.
+- Avoid `--impure` Nix inspection on this repo unless there is no practical alternative.
+- In particular, do not run commands like `nix eval --impure --expr '(builtins.getFlake "/home/carp/code/fishystuff")...'`.
+- This repo often carries large ignored local state under `data/`, `data/cdn/public/`, and `.devenv`; `--impure` local-path flake evaluation can create very large transient `/nix/store/tmp-*` copies and cause disk spikes.
+- Prefer these safer alternatives when you only need package or tool information:
+  - `devenv shell -- bash -lc 'command -v <tool>'`
+  - `devenv shell -- bash -lc '<tool> --version'`
+  - `devenv shell -- bash -lc 'grafana server -v'`
+  - `devenv shell -- bash -lc 'vector --version'`
+- If Nix-level inspection is still necessary, prefer Git-filtered CLI flake refs such as `nix flake metadata . --json` or `nix eval .#...` over `builtins.getFlake` on an absolute local path, and do not run multiple local-flake evals in parallel.
+- If disk is already tight, clean generated local state such as stale `result*`, `.devenv`, and staged CDN payloads before any heavy Nix work.
 
 ## Browser Telemetry
 - Browser OTLP goes through the local site at `/telemetry/v1/logs`, `/telemetry/v1/metrics`, and `/telemetry/v1/traces`.
@@ -40,6 +52,7 @@ Repository notes for working in this monorepo.
   - `raw-metrics`
   - `raw-traces`
 - Downstream checks:
+  - Grafana: `http://127.0.0.1:3000/explore`
   - Prometheus: `http://127.0.0.1:9090/api/v1/query?...`
   - Jaeger: `http://127.0.0.1:16686/api/services` and `http://127.0.0.1:16686/api/traces?...`
   - Browser log archive: `data/vector/archive/otel-logs/YYYY-MM-DD.ndjson`
