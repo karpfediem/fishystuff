@@ -1,0 +1,72 @@
+{
+  "entries": {
+    "1": {
+      "detailSections": [
+        {
+          "id": "group-1",
+          "kind": "facts",
+          "title": "Region Group",
+          "facts": [
+            {
+              "key": "resource_group",
+              "label": "Group",
+              "value": "North Bank",
+              "icon": "hover-resource-group"
+            }
+          ]
+        }
+      ]
+    },
+    "2": {
+      "detailSections": [
+        {
+          "id": "group-2",
+          "kind": "facts",
+          "title": "Region Group",
+          "facts": [
+            {
+              "key": "resource_group",
+              "label": "Group",
+              "value": "South Bank",
+              "icon": "hover-resource-group"
+            }
+          ]
+        }
+      ]
+    },
+    "3": {
+      "detailSections": [
+        {
+          "id": "group-3",
+          "kind": "facts",
+          "title": "Region Group",
+          "facts": [
+            {
+              "key": "resource_group",
+              "label": "Group",
+              "value": "Eastern Shelf",
+              "icon": "hover-resource-group"
+            }
+          ]
+        }
+      ]
+    },
+    "4": {
+      "detailSections": [
+        {
+          "id": "group-4",
+          "kind": "facts",
+          "title": "Region Group",
+          "facts": [
+            {
+              "key": "resource_group",
+              "label": "Group",
+              "value": "Western Shelf",
+              "icon": "hover-resource-group"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

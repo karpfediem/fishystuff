@@ -37,6 +37,10 @@ pub fn normalize_public_asset_reference(value: &str) -> String {
 }
 
 fn normalize_prefixed_site_asset_path(path: &str, absolute: bool) -> Option<String> {
+    if let Some(rest) = path.strip_prefix("images/exact_lookup/") {
+        let prefix = if absolute { "/" } else { "" };
+        return Some(format!("{prefix}fields/{rest}"));
+    }
     let is_legacy_static_path = path.starts_with("tiles/")
         || path.starts_with("terrain/")
         || path.starts_with("terrain_drape/");
@@ -154,6 +158,10 @@ mod tests {
         assert_eq!(
             normalize_site_asset_path("/terrain_drape/minimap/v1/manifest.json"),
             "/images/terrain_drape/minimap/v1/manifest.json"
+        );
+        assert_eq!(
+            normalize_site_asset_path("/images/exact_lookup/zone_mask.v1.bin"),
+            "/fields/zone_mask.v1.bin"
         );
         assert_eq!(
             normalize_site_asset_path("/map/terrain/v1/manifest.json"),

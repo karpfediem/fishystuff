@@ -156,7 +156,7 @@ fn sample_zone_filter_rgb_at_layer_point(
     layer_point: LayerPoint,
     source_rgb: u32,
 ) -> Option<u32> {
-    if !layer.is_zone_mask_visual_layer() {
+    if !layer.is_zone_mask_exact_layer() {
         return Some(source_rgb);
     }
     let Some(field) = loaded_field_layer(layer, exact_lookups) else {

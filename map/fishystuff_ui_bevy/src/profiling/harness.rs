@@ -157,6 +157,8 @@ fn sample_counters(world: &World) {
 
     let mut raster_visible = 0_u64;
     let mut raster_desired = 0_u64;
+    let mut field_visible = 0_u64;
+    let mut field_desired = 0_u64;
     let mut vector_features = 0_u64;
     let mut vector_triangles = 0_u64;
     for (layer_id, state) in layer_runtime.iter() {
@@ -181,6 +183,24 @@ fn sample_counters(world: &World) {
                 format!("raster.resident_tiles.layer.{}", spec.key),
                 state.resident_tile_count
             );
+        } else if spec.is_field() {
+            let desired_tiles = state.visible_tile_count as u64
+                + state.pending_count as u64
+                + state.inflight_count as u64;
+            field_visible = field_visible.saturating_add(state.visible_tile_count as u64);
+            field_desired = field_desired.saturating_add(desired_tiles);
+            crate::perf_gauge!(
+                format!("field.visible_tiles.layer.{}", spec.key),
+                state.visible_tile_count
+            );
+            crate::perf_gauge!(
+                format!("field.desired_tiles.layer.{}", spec.key),
+                desired_tiles
+            );
+            crate::perf_gauge!(
+                format!("field.resident_tiles.layer.{}", spec.key),
+                state.resident_tile_count
+            );
         } else if spec.is_vector() {
             vector_features = vector_features.saturating_add(state.vector_feature_count as u64);
             vector_triangles = vector_triangles.saturating_add(state.vector_triangle_count as u64);
@@ -201,6 +221,8 @@ fn sample_counters(world: &World) {
 
     crate::perf_gauge!("raster.visible_tiles", raster_visible);
     crate::perf_gauge!("raster.desired_tiles", raster_desired);
+    crate::perf_gauge!("field.visible_tiles", field_visible);
+    crate::perf_gauge!("field.desired_tiles", field_desired);
     crate::perf_gauge!("raster.cache_entries", tile_cache.len());
     crate::perf_gauge!("raster.blank_visible_tiles", tile_stats.blank_visible_tiles);
     crate::perf_gauge!(

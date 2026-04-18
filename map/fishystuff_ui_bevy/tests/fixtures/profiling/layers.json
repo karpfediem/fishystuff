@@ -48,18 +48,27 @@
       "layer_id": "zone_mask",
       "name": "Zone Mask",
       "enabled": true,
-      "kind": "tiled_raster",
+      "kind": "field",
       "transform": {
         "kind": "identity_map_space"
       },
       "tileset": {
-        "manifest_url": "images/tiles/mask/v1/tileset.json",
-        "tile_url_template": "images/tiles/mask/v1/{z}/{x}_{y}.png",
-        "version": "perf-v1"
+        "manifest_url": "",
+        "tile_url_template": "",
+        "version": ""
       },
       "tile_px": 512,
-      "max_level": 1,
+      "max_level": 0,
       "y_flip": false,
+      "field_source": {
+        "url": "fields/zone_mask.perf-v1.bin",
+        "revision": "zone-field-perf-v1",
+        "color_mode": "rgb_u24"
+      },
+      "field_metadata_source": {
+        "url": "fields/zone_mask.perf-v1.meta.json",
+        "revision": "zone-meta-perf-v1"
+      },
       "lod_policy": {
         "target_tiles": 18,
         "hysteresis_hi": 22.0,
@@ -90,7 +99,7 @@
       "layer_id": "region_groups",
       "name": "Region Groups",
       "enabled": true,
-      "kind": "vector_geojson",
+      "kind": "field",
       "transform": {
         "kind": "identity_map_space"
       },
@@ -102,13 +111,14 @@
       "tile_px": 512,
       "max_level": 0,
       "y_flip": false,
-      "vector_source": {
-        "url": "region_groups/v1.geojson",
-        "revision": "rg-v1",
-        "geometry_space": "map_pixels",
-        "style_mode": "feature_property_palette",
-        "feature_id_property": "id",
-        "color_property": "c"
+      "field_source": {
+        "url": "fields/region_groups.perf-v1.bin",
+        "revision": "rg-field-perf-v1",
+        "color_mode": "debug_hash"
+      },
+      "field_metadata_source": {
+        "url": "fields/region_groups.perf-v1.meta.json",
+        "revision": "rg-meta-perf-v1"
       },
       "lod_policy": {
         "target_tiles": 0,

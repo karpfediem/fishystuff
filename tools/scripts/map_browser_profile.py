@@ -178,7 +178,7 @@ const waitForRasterIdle = async () => {
       : bridge.getCurrentState();
     const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
     const busyLayers = layers.filter((layer) =>
-      layer?.kind === "tiled-raster" &&
+      (layer?.kind === "tiled-raster" || layer?.kind === "field") &&
       ((Number(layer?.pendingCount) || 0) > 0 || (Number(layer?.inflightCount) || 0) > 0),
     );
     const busyLayerIds = busyLayers.map((layer) => String(layer?.layerId || ""));
@@ -196,7 +196,7 @@ const waitForRasterIdle = async () => {
     : bridge.getCurrentState();
   const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
   const busyLayers = layers.filter((layer) =>
-    layer?.kind === "tiled-raster" &&
+    (layer?.kind === "tiled-raster" || layer?.kind === "field") &&
     ((Number(layer?.pendingCount) || 0) > 0 || (Number(layer?.inflightCount) || 0) > 0),
   );
   const busyLayerIds = busyLayers.map((layer) => String(layer?.layerId || ""));
@@ -240,21 +240,14 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   const settle = await waitForRasterIdle();
   const state = settle.state || bridge.getCurrentState();
   const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
-  const targetLayer =
-    layers.find((layer) => layer?.layerId === "region_groups") ||
-    layers.find((layer) => layer?.kind === "vector-geojson" && layer?.visible !== true) ||
-    layers.find((layer) => layer?.kind === "vector-geojson") ||
-    null;
+  const targetLayer = layers.find((layer) => layer?.layerId === "region_groups") || null;
   if (!targetLayer?.layerId) {{
-    throw new Error("No vector layer is available for profiling");
+    throw new Error("No region_groups layer is available for profiling");
   }}
   const visibleLayerIds = (Array.isArray(state?.filters?.layerIdsVisible)
     ? state.filters.layerIdsVisible.slice()
     : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId))
-    .filter((layerId) => {{
-      const layer = layers.find((candidate) => candidate?.layerId === layerId);
-      return layer?.kind !== "vector-geojson";
-    }});
+    .filter((layerId) => layerId !== targetLayer.layerId);
   visibleLayerIds.push(targetLayer.layerId);
   bridge.resetPerformanceSnapshot({{
     scenario: "vector_region_groups_enable",
@@ -285,21 +278,19 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     visible_layer_ids: Array.isArray(finalState?.filters?.layerIdsVisible)
       ? finalState.filters.layerIdsVisible.slice()
       : [],
-        vector_layers: finalLayers
-      .filter((layer) => layer?.kind === "vector-geojson")
+    target_layers: finalLayers
+      .filter((layer) => layer?.layerId === targetLayer.layerId)
       .map((layer) => ({{
         layer_id: layer.layerId,
+        kind: layer.kind,
         visible: layer.visible,
+        manifest_status: layer.manifestStatus,
+        visible_tile_count: layer.visibleTileCount,
+        resident_tile_count: layer.residentTileCount,
+        pending_count: layer.pendingCount,
+        inflight_count: layer.inflightCount,
         vector_status: layer.vectorStatus,
         vector_progress: layer.vectorProgress,
-        vector_feature_count: layer.vectorFeatureCount,
-        vector_vertex_count: layer.vectorVertexCount,
-        vector_triangle_count: layer.vectorTriangleCount,
-        vector_mesh_count: layer.vectorMeshCount,
-        vector_chunked_bucket_count: layer.vectorChunkedBucketCount,
-        vector_build_ms: layer.vectorBuildMs,
-        vector_last_frame_build_ms: layer.vectorLastFrameBuildMs,
-        vector_cache_entries: layer.vectorCacheEntries,
       }})),
   }};
   return report;
@@ -316,21 +307,14 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   const settle = await waitForRasterIdle();
   const state = settle.state || bridge.getCurrentState();
   const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
-  const targetLayer =
-    layers.find((layer) => layer?.layerId === "regions") ||
-    layers.find((layer) => layer?.kind === "vector-geojson" && layer?.layerId !== "region_groups") ||
-    layers.find((layer) => layer?.kind === "vector-geojson") ||
-    null;
+  const targetLayer = layers.find((layer) => layer?.layerId === "regions") || null;
   if (!targetLayer?.layerId) {{
-    throw new Error("No vector layer is available for profiling");
+    throw new Error("No regions layer is available for profiling");
   }}
   const visibleLayerIds = (Array.isArray(state?.filters?.layerIdsVisible)
     ? state.filters.layerIdsVisible.slice()
     : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId))
-    .filter((layerId) => {{
-      const layer = layers.find((candidate) => candidate?.layerId === layerId);
-      return layer?.kind !== "vector-geojson";
-    }});
+    .filter((layerId) => layerId !== targetLayer.layerId);
   visibleLayerIds.push(targetLayer.layerId);
   bridge.resetPerformanceSnapshot({{
     scenario: "vector_regions_enable",
@@ -361,21 +345,19 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     visible_layer_ids: Array.isArray(finalState?.filters?.layerIdsVisible)
       ? finalState.filters.layerIdsVisible.slice()
       : [],
-    vector_layers: finalLayers
-      .filter((layer) => layer?.kind === "vector-geojson")
+    target_layers: finalLayers
+      .filter((layer) => layer?.layerId === targetLayer.layerId)
       .map((layer) => ({{
         layer_id: layer.layerId,
+        kind: layer.kind,
         visible: layer.visible,
+        manifest_status: layer.manifestStatus,
+        visible_tile_count: layer.visibleTileCount,
+        resident_tile_count: layer.residentTileCount,
+        pending_count: layer.pendingCount,
+        inflight_count: layer.inflightCount,
         vector_status: layer.vectorStatus,
         vector_progress: layer.vectorProgress,
-        vector_feature_count: layer.vectorFeatureCount,
-        vector_vertex_count: layer.vectorVertexCount,
-        vector_triangle_count: layer.vectorTriangleCount,
-        vector_mesh_count: layer.vectorMeshCount,
-        vector_chunked_bucket_count: layer.vectorChunkedBucketCount,
-        vector_build_ms: layer.vectorBuildMs,
-        vector_last_frame_build_ms: layer.vectorLastFrameBuildMs,
-        vector_cache_entries: layer.vectorCacheEntries,
       }})),
   }};
   return report;
@@ -543,10 +525,7 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   const visibleLayerIds = (Array.isArray(state?.filters?.layerIdsVisible)
     ? state.filters.layerIdsVisible.slice()
     : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId))
-    .filter((layerId) => {{
-      const layer = layers.find((candidate) => candidate?.layerId === layerId);
-      return layer?.kind !== "vector-geojson";
-    }});
+    .filter((layerId) => layerId !== "region_groups");
   bridge.setState({{
     filters: {{
       layerIdsVisible: visibleLayerIds,
@@ -580,21 +559,19 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     visible_layer_ids: Array.isArray(finalState?.filters?.layerIdsVisible)
       ? finalState.filters.layerIdsVisible.slice()
       : [],
-    vector_layers: finalLayers
-      .filter((layer) => layer?.kind === "vector-geojson")
+    target_layers: finalLayers
+      .filter((layer) => layer?.layerId === "region_groups")
       .map((layer) => ({{
         layer_id: layer.layerId,
+        kind: layer.kind,
         visible: layer.visible,
+        manifest_status: layer.manifestStatus,
+        visible_tile_count: layer.visibleTileCount,
+        resident_tile_count: layer.residentTileCount,
+        pending_count: layer.pendingCount,
+        inflight_count: layer.inflightCount,
         vector_status: layer.vectorStatus,
         vector_progress: layer.vectorProgress,
-        vector_feature_count: layer.vectorFeatureCount,
-        vector_vertex_count: layer.vectorVertexCount,
-        vector_triangle_count: layer.vectorTriangleCount,
-        vector_mesh_count: layer.vectorMeshCount,
-        vector_chunked_bucket_count: layer.vectorChunkedBucketCount,
-        vector_build_ms: layer.vectorBuildMs,
-        vector_last_frame_build_ms: layer.vectorLastFrameBuildMs,
-        vector_cache_entries: layer.vectorCacheEntries,
       }})),
   }};
   return report;

@@ -3,10 +3,10 @@ use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 use super::{
     default_layer_filter_bindings_for_runtime_layer, FieldColorMode, FieldMetadataSourceSpec,
     FieldSourceSpec, GeometrySpace, LayerKind, LayerSpec, LayerTransform, LodPolicy, PickMode,
-    VectorSourceSpec, WaypointSourceSpec, FISH_EVIDENCE_LAYER_KEY,
+    WaypointSourceSpec, FISH_EVIDENCE_LAYER_KEY,
 };
 
-const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v2";
+const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v4";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AvailableLayerTemplate {
@@ -238,26 +238,20 @@ fn build_local_layer_spec(
             visible_default: entry.visible_default,
             opacity_default: entry.opacity_default,
             z_base: entry.z_base,
-            kind: LayerKind::TiledRaster,
-            tileset_url: resolve_public(
-                "/images/tiles/zone_mask_visual/v1/tileset.json",
-                public_base_url,
-            ),
-            tile_url_template: resolve_public(
-                "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png",
-                public_base_url,
-            ),
-            tileset_version: version_or_default(map_version_id),
+            kind: LayerKind::Field,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: String::new(),
             vector_source: None,
             waypoint_source: None,
             transform: LayerTransform::IdentityMapSpace,
-            tile_px: 2048,
+            tile_px: 512,
             max_level: 0,
             y_flip: false,
             field_source: Some(FieldSourceSpec {
                 url: cache_busted_public(
                     &format!(
-                        "/images/exact_lookup/zone_mask.{}.bin",
+                        "/fields/zone_mask.{}.bin",
                         version_or_default(map_version_id)
                     ),
                     "zone-lookup-v1",
@@ -279,26 +273,10 @@ fn build_local_layer_spec(
             }),
             filter_bindings: default_layer_filter_bindings_for_runtime_layer(
                 &entry.layer_id,
-                LayerKind::TiledRaster,
+                LayerKind::Field,
                 true,
             ),
-            lod_policy: LodPolicy {
-                target_tiles: 220,
-                hysteresis_hi: 280.0,
-                hysteresis_lo: 160.0,
-                margin_tiles: 1,
-                enable_refine: false,
-                refine_debounce_ms: 0,
-                max_detail_tiles: 0,
-                max_resident_tiles: 4096,
-                pinned_coarse_levels: 2,
-                coarse_pin_min_level: None,
-                warm_margin_tiles: 3,
-                protected_margin_tiles: 1,
-                detail_eviction_weight: 4.0,
-                max_detail_requests_while_camera_moving: 2,
-                motion_suppresses_refine: true,
-            },
+            lod_policy: default_lod_policy(),
             request_weight: 1.0,
             pick_mode: PickMode::ExactTilePixel,
             display_order: entry.display_order,
@@ -332,7 +310,7 @@ fn build_local_layer_spec(
             pick_mode: PickMode::None,
             display_order: entry.display_order,
         },
-        AvailableLayerTemplate::RegionGroups => build_vector_field_layer(
+        AvailableLayerTemplate::RegionGroups => build_field_layer(
             raw_id,
             entry,
             map_version_id,
@@ -341,12 +319,8 @@ fn build_local_layer_spec(
             "rg-field-v1",
             "/fields/region_groups.{version}.meta.json",
             "rg-meta-v1",
-            "/region_groups/{version}.geojson",
-            "rg-v1",
-            Some("rg"),
-            Some("c"),
         ),
-        AvailableLayerTemplate::Regions => build_vector_field_layer(
+        AvailableLayerTemplate::Regions => build_field_layer(
             raw_id,
             entry,
             map_version_id,
@@ -355,10 +329,6 @@ fn build_local_layer_spec(
             "r-field-v1",
             "/fields/regions.{version}.meta.json",
             "r-meta-v1",
-            "/region_groups/regions.{version}.geojson",
-            "r-v1",
-            Some("r"),
-            Some("c"),
         ),
         AvailableLayerTemplate::RegionNodes => LayerSpec {
             id: super::LayerId::from_raw(raw_id),
@@ -410,7 +380,7 @@ fn build_local_layer_spec(
     }
 }
 
-fn build_vector_field_layer(
+fn build_field_layer(
     raw_id: u16,
     entry: &AvailableLayerDefinition,
     map_version_id: Option<&str>,
@@ -419,10 +389,6 @@ fn build_vector_field_layer(
     field_revision: &str,
     metadata_path_template: &str,
     metadata_revision: &str,
-    vector_path_template: &str,
-    vector_revision: &str,
-    feature_id_property: Option<&str>,
-    color_property: Option<&str>,
 ) -> LayerSpec {
     let version = version_or_default(map_version_id);
     LayerSpec {
@@ -432,22 +398,11 @@ fn build_vector_field_layer(
         visible_default: entry.visible_default,
         opacity_default: entry.opacity_default,
         z_base: entry.z_base,
-        kind: LayerKind::VectorGeoJson,
+        kind: LayerKind::Field,
         tileset_url: String::new(),
         tile_url_template: String::new(),
         tileset_version: String::new(),
-        vector_source: Some(VectorSourceSpec {
-            url: cache_busted_public(
-                &vector_path_template.replace("{version}", &version),
-                vector_revision,
-                public_base_url,
-            ),
-            revision: vector_revision.to_string(),
-            geometry_space: GeometrySpace::MapPixels,
-            style_mode: super::StyleMode::FeaturePropertyPalette,
-            feature_id_property: feature_id_property.map(ToOwned::to_owned),
-            color_property: color_property.map(ToOwned::to_owned),
-        }),
+        vector_source: None,
         waypoint_source: None,
         transform: LayerTransform::IdentityMapSpace,
         tile_px: 512,
@@ -472,7 +427,7 @@ fn build_vector_field_layer(
         }),
         filter_bindings: default_layer_filter_bindings_for_runtime_layer(
             &entry.layer_id,
-            LayerKind::VectorGeoJson,
+            LayerKind::Field,
             true,
         ),
         lod_policy: default_lod_policy(),
@@ -560,12 +515,8 @@ mod tests {
 
         let (_, layers) = build_local_layer_specs(&entries, Some("v1"));
         assert_eq!(layers.len(), 2);
-        assert_eq!(layers[0].kind, LayerKind::TiledRaster);
-        assert_eq!(layers[1].kind, LayerKind::TiledRaster);
-        assert_eq!(
-            layers[0].tileset_url, layers[1].tileset_url,
-            "zone-mask visual asset path should come from the template, not the layer id"
-        );
+        assert_eq!(layers[0].kind, LayerKind::Field);
+        assert_eq!(layers[1].kind, LayerKind::Field);
         assert_eq!(
             layers[0]
                 .field_source
@@ -600,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn region_group_vector_layer_filters_by_region_group_id() {
+    fn region_group_field_layer_uses_field_assets() {
         let (_, layers) = build_local_layer_specs(
             &[AvailableLayerDefinition {
                 layer_id: "region_groups".to_string(),
@@ -615,12 +566,17 @@ mod tests {
         );
 
         assert_eq!(layers.len(), 1);
-        assert_eq!(
-            layers[0]
-                .vector_source
-                .as_ref()
-                .and_then(|source| source.feature_id_property.as_deref()),
-            Some("rg")
-        );
+        assert_eq!(layers[0].kind, LayerKind::Field);
+        assert!(layers[0].vector_source.is_none());
+        assert!(layers[0]
+            .field_source
+            .as_ref()
+            .is_some_and(|source| source.url.starts_with("/fields/region_groups.v1.bin")));
+        assert!(layers[0]
+            .field_metadata_source
+            .as_ref()
+            .is_some_and(|source| {
+                source.url.starts_with("/fields/region_groups.v1.meta.json")
+            }));
     }
 }

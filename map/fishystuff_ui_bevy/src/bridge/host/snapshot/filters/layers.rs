@@ -57,6 +57,7 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                 } else {
                     match layer.kind {
                         LayerKind::TiledRaster => "tiled-raster".to_string(),
+                        LayerKind::Field => "field".to_string(),
                         LayerKind::VectorGeoJson => "vector-geojson".to_string(),
                         LayerKind::Waypoints => "waypoints".to_string(),
                     }

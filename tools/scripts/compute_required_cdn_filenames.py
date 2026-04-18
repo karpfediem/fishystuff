@@ -314,17 +314,11 @@ def main() -> None:
         cdn_root,
         f"images/tiles/minimap_visual/{map_version}/tileset.json",
     )
-    add_tileset_tree(
-        report,
-        "zone_mask_visual",
-        cdn_root,
-        f"images/tiles/zone_mask_visual/{map_version}/tileset.json",
-    )
 
     report.add_many(
         "zone_mask_semantics",
         [
-            f"images/exact_lookup/zone_mask.{map_version}.bin",
+            f"fields/zone_mask.{map_version}.bin",
             f"fields/zone_mask.{map_version}.meta.json",
         ],
     )
@@ -333,7 +327,6 @@ def main() -> None:
         [
             f"fields/region_groups.{map_version}.bin",
             f"fields/region_groups.{map_version}.meta.json",
-            f"region_groups/{map_version}.geojson",
         ],
     )
     report.add_many(
@@ -341,7 +334,6 @@ def main() -> None:
         [
             f"fields/regions.{map_version}.bin",
             f"fields/regions.{map_version}.meta.json",
-            f"region_groups/regions.{map_version}.geojson",
         ],
     )
     report.add("region_nodes_layer", f"waypoints/region_nodes.{map_version}.geojson")

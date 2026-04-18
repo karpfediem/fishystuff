@@ -71,6 +71,7 @@ pub enum LayerRenderKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerKind {
     TiledRaster,
+    Field,
     VectorGeoJson,
     Waypoints,
 }
@@ -192,6 +193,10 @@ impl LayerSpec {
         self.kind == LayerKind::TiledRaster
     }
 
+    pub fn is_field(&self) -> bool {
+        self.kind == LayerKind::Field
+    }
+
     pub fn is_vector(&self) -> bool {
         self.kind == LayerKind::VectorGeoJson
     }
@@ -200,8 +205,12 @@ impl LayerSpec {
         self.kind == LayerKind::Waypoints
     }
 
-    pub fn is_zone_mask_visual_layer(&self) -> bool {
-        self.is_raster() && self.pick_mode == PickMode::ExactTilePixel && self.key == "zone_mask"
+    pub fn is_zone_mask_layer(&self) -> bool {
+        self.pick_mode == PickMode::ExactTilePixel && self.key == "zone_mask"
+    }
+
+    pub fn is_zone_mask_exact_layer(&self) -> bool {
+        self.is_zone_mask_layer()
     }
 
     pub fn field_url(&self) -> Option<String> {
@@ -261,10 +270,7 @@ impl LayerSpec {
         let version = self.tileset_version.trim();
         let version = if version.is_empty() { "v1" } else { version };
         resolve_public_asset_url(
-            Some(&format!(
-                "/images/exact_lookup/{}.{}.bin",
-                self.key, version
-            )),
+            Some(&format!("/fields/{}.{}.bin", self.key, version)),
             normalize_public_base_url(None).as_deref(),
         )
     }
@@ -278,7 +284,7 @@ pub fn default_layer_filter_bindings_for_runtime_layer(
     let mut bindings = Vec::new();
     if matches!(
         kind,
-        LayerKind::TiledRaster | LayerKind::VectorGeoJson | LayerKind::Waypoints
+        LayerKind::TiledRaster | LayerKind::Field | LayerKind::VectorGeoJson | LayerKind::Waypoints
     ) {
         bindings.push(LayerFilterBindingSpec {
             binding_id: LAYER_FILTER_BINDING_FISH_SELECTION.to_string(),
@@ -420,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_static_asset_paths_are_normalized_when_layers_load() {
+    fn zone_mask_layers_use_canonical_field_assets_when_layers_load() {
         let mut registry = LayerRegistry::default();
         registry.apply_layers_response(LayersResponse {
             revision: "rev".to_string(),
@@ -429,13 +435,9 @@ mod tests {
                 layer_id: "zone_mask".to_string(),
                 name: "Zone Mask".to_string(),
                 enabled: true,
-                kind: LayerKindDto::TiledRaster,
+                kind: LayerKindDto::Field,
                 transform: LayerTransformDto::IdentityMapSpace,
-                tileset: TilesetRef {
-                    manifest_url: "/images/tiles/mask/v1/tileset.json".to_string(),
-                    tile_url_template: "/tiles/mask/v1/{level}/{x}_{y}.png".to_string(),
-                    version: "v1".to_string(),
-                },
+                tileset: TilesetRef::default(),
                 tile_px: 512,
                 max_level: 0,
                 y_flip: false,
@@ -451,19 +453,10 @@ mod tests {
         });
 
         let layer = registry.ordered().first().expect("zone mask layer");
-        assert_eq!(
-            layer.tileset_url,
-            "/images/tiles/zone_mask_visual/v1/tileset.json"
-        );
-        assert_eq!(
-            layer.tile_url_template,
-            "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png"
-        );
-        assert_eq!(layer.tile_px, 2048);
-        assert_eq!(layer.max_level, 0);
+        assert_eq!(layer.kind, LayerKind::Field);
         assert_eq!(
             layer.exact_lookup_url().as_deref(),
-            Some("/images/exact_lookup/zone_mask.v1.bin")
+            Some("/fields/zone_mask.v1.bin")
         );
         assert_eq!(layer.field_color_mode(), Some(FieldColorMode::RgbU24));
     }
@@ -570,7 +563,7 @@ mod tests {
         assert_eq!(layer.field_color_mode(), Some(FieldColorMode::DebugHash));
         assert_eq!(
             layer.exact_lookup_url().as_deref(),
-            Some("/images/exact_lookup/zone_mask.v1.bin")
+            Some("/fields/zone_mask.v1.bin")
         );
     }
 }

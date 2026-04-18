@@ -139,10 +139,9 @@ required_urls=(
   "$(join_url "$CDN_BASE_URL" "/fields/regions.v1.meta.json")"
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.meta.json")"
-  "$(join_url "$CDN_BASE_URL" "/images/exact_lookup/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
-  "$(join_url "$CDN_BASE_URL" "/images/tiles/zone_mask_visual/v1/tileset.json")"
 )
 
 cors_required_urls=(
@@ -154,10 +153,9 @@ cors_required_urls=(
   "$(join_url "$CDN_BASE_URL" "/fields/regions.v1.meta.json")"
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.meta.json")"
-  "$(join_url "$CDN_BASE_URL" "/images/exact_lookup/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
-  "$(join_url "$CDN_BASE_URL" "/images/tiles/zone_mask_visual/v1/tileset.json")"
 )
 
 for url in "${required_urls[@]}"; do

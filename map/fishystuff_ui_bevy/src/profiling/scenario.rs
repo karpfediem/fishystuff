@@ -164,7 +164,7 @@ impl ScenarioName {
     }
 }
 
-fn configure_common_layers(world: &mut World, show_points: bool, allow_vector: bool) {
+fn configure_common_layers(world: &mut World, show_points: bool, show_region_layers: bool) {
     let needs_display_update = {
         let display = world.resource::<MapDisplayState>();
         display.show_points != show_points
@@ -181,7 +181,7 @@ fn configure_common_layers(world: &mut World, show_points: bool, allow_vector: b
     }
     set_layer_visibility(world, "minimap", true);
     set_layer_visibility(world, "zone_mask", true);
-    if !allow_vector {
+    if !show_region_layers {
         set_layer_visibility(world, "region_groups", false);
     }
 }

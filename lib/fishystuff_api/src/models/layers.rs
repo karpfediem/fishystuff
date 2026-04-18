@@ -73,6 +73,8 @@ pub enum LayerKind {
     /// Static or dynamic tile pyramid rendered by the raster tile streamer.
     #[default]
     TiledRaster,
+    /// Compact discrete field rendered via the field tile runtime.
+    Field,
     /// Static GeoJSON overlay rendered via incremental triangulation.
     #[serde(rename = "vector_geojson")]
     VectorGeoJson,
@@ -393,7 +395,7 @@ mod tests {
                 layer_id: "regions".to_string(),
                 name: "Regions".to_string(),
                 enabled: true,
-                kind: LayerKind::TiledRaster,
+                kind: LayerKind::Field,
                 transform: LayerTransformDto::IdentityMapSpace,
                 tileset: TilesetRef::default(),
                 tile_px: 512,
@@ -430,5 +432,6 @@ mod tests {
             json["layers"][0]["field_metadata_source"]["url"],
             "/fields/regions.v1.meta.json"
         );
+        assert_eq!(json["layers"][0]["kind"], "field");
     }
 }

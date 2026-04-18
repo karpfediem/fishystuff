@@ -95,5 +95,5 @@ fn layer_surface_offset(config: &Terrain3dConfig, display_order: i32) -> f32 {
 }
 
 fn layer_supports_terrain_drape(layer: &LayerSpec) -> bool {
-    layer.is_raster() && matches!(layer.key.as_str(), "minimap" | "zone_mask")
+    layer.is_raster() && layer.key == "minimap"
 }

@@ -20,7 +20,6 @@ use super::{
     VectorSourceSpec,
 };
 
-const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
 const MINIMAP_VISUAL_TILE_PX: u32 = 512;
 const MINIMAP_VISUAL_MAX_LEVEL: u8 = 2;
 const MINIMAP_TARGET_TILES: usize = 16;
@@ -227,24 +226,6 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
             .max(1),
         motion_suppresses_refine: lod_policy.motion_suppresses_refine,
     };
-    if kind == LayerKind::TiledRaster
-        && pick_mode == PickMode::ExactTilePixel
-        && layer_id == "zone_mask"
-    {
-        let public_base = normalize_public_base_url(None);
-        tileset_url = resolve_public_asset_url(
-            Some("/images/tiles/zone_mask_visual/v1/tileset.json"),
-            public_base.as_deref(),
-        )
-        .unwrap_or_else(|| "/images/tiles/zone_mask_visual/v1/tileset.json".to_string());
-        tile_url_template = resolve_public_asset_url(
-            Some("/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png"),
-            public_base.as_deref(),
-        )
-        .unwrap_or_else(|| "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string());
-        tile_px = ZONE_MASK_VISUAL_TILE_PX;
-        max_level = 0;
-    }
     if kind == LayerKind::TiledRaster && layer_id == "minimap" {
         let public_base = normalize_public_base_url(None);
         tileset_url = resolve_public_asset_url(
@@ -313,6 +294,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
 fn layer_kind_from_dto(kind: LayerKindDto) -> LayerKind {
     match kind {
         LayerKindDto::TiledRaster => LayerKind::TiledRaster,
+        LayerKindDto::Field => LayerKind::Field,
         LayerKindDto::VectorGeoJson => LayerKind::VectorGeoJson,
     }
 }

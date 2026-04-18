@@ -485,21 +485,20 @@ fn effective_build_budget_ms(max_build_ms_per_frame: f64, global_remaining_ms: f
 }
 
 fn should_activate_vector_layer(
-    _layer: &crate::map::layers::LayerSpec,
+    layer: &crate::map::layers::LayerSpec,
     layer_visible: bool,
     required_for_clip_mask: bool,
     view_mode: ViewMode,
 ) -> bool {
-    if !matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D) {
-        return false;
+    match view_mode {
+        ViewMode::Map2D => {
+            if layer.field_url().is_some() {
+                return false;
+            }
+            required_for_clip_mask || layer_visible
+        }
+        ViewMode::Terrain3D => required_for_clip_mask || layer_visible,
     }
-    if required_for_clip_mask {
-        return true;
-    }
-    if !layer_visible {
-        return false;
-    }
-    true
 }
 
 fn should_render_vector_layer(
@@ -507,8 +506,10 @@ fn should_render_vector_layer(
     layer_visible: bool,
     view_mode: ViewMode,
 ) -> bool {
-    let _ = layer;
-    layer_visible && matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D)
+    match view_mode {
+        ViewMode::Map2D => layer_visible && layer.field_url().is_none(),
+        ViewMode::Terrain3D => layer_visible,
+    }
 }
 
 fn maybe_clip_built_geometry(
@@ -976,15 +977,79 @@ mod tests {
     use crate::map::camera::mode::ViewMode;
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::layers::{
-        build_local_layer_specs, AvailableLayerCatalog, AvailableLayerDefinition,
-        AvailableLayerTemplate, GeometrySpace, LayerId, LayerRegistry, LayerRuntime, StyleMode,
-        VectorSourceSpec,
+        FieldColorMode, FieldSourceSpec, GeometrySpace, LayerId, LayerKind, LayerRegistry,
+        LayerRuntime, LayerSpec, LodPolicy, PickMode, StyleMode, VectorSourceSpec,
     };
     use crate::map::raster::RasterTileCache;
+    use crate::map::spaces::layer_transform::LayerTransform;
     use crate::map::vector::cache::{BuiltVectorChunk, VectorMeshBundleSet};
     use crate::plugins::api::ZoneMembershipFilter;
     use bevy::platform::time::Instant;
     use std::collections::HashMap;
+
+    fn test_vector_layer(id: LayerId, key: &str, with_field_source: bool) -> LayerSpec {
+        let (source_url, source_revision, feature_id_property) = match key {
+            "region_groups" => ("/region_groups/v1.geojson", "rg-v1", Some("rg".to_string())),
+            "regions" => (
+                "/region_groups/regions.v1.geojson",
+                "r-v1",
+                Some("r".to_string()),
+            ),
+            _ => ("/vector/v1.geojson", "vector-v1", Some("id".to_string())),
+        };
+        LayerSpec {
+            id,
+            key: key.to_string(),
+            name: key.to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 30.0,
+            kind: LayerKind::VectorGeoJson,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: "v1".to_string(),
+            vector_source: Some(VectorSourceSpec {
+                url: source_url.to_string(),
+                revision: source_revision.to_string(),
+                geometry_space: GeometrySpace::MapPixels,
+                style_mode: StyleMode::FeaturePropertyPalette,
+                feature_id_property,
+                color_property: Some("c".to_string()),
+            }),
+            waypoint_source: None,
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 512,
+            max_level: 0,
+            y_flip: false,
+            field_source: with_field_source.then(|| FieldSourceSpec {
+                url: format!("/fields/{key}.v1.bin"),
+                revision: format!("{key}-field-v1"),
+                color_mode: FieldColorMode::DebugHash,
+            }),
+            field_metadata_source: None,
+            filter_bindings: Vec::new(),
+            lod_policy: LodPolicy {
+                target_tiles: 1,
+                hysteresis_hi: 1.0,
+                hysteresis_lo: 0.0,
+                margin_tiles: 0,
+                enable_refine: false,
+                refine_debounce_ms: 0,
+                max_detail_tiles: 0,
+                max_resident_tiles: 128,
+                pinned_coarse_levels: 0,
+                coarse_pin_min_level: None,
+                warm_margin_tiles: 0,
+                protected_margin_tiles: 0,
+                detail_eviction_weight: 1.0,
+                max_detail_requests_while_camera_moving: 1,
+                motion_suppresses_refine: true,
+            },
+            request_weight: 1.0,
+            pick_mode: PickMode::None,
+            display_order: 30,
+        }
+    }
 
     #[test]
     fn ready_vector_state_does_not_force_frame_updates() {
@@ -1037,25 +1102,43 @@ mod tests {
     }
 
     fn field_backed_vector_layer() -> crate::map::layers::LayerSpec {
-        let catalog = AvailableLayerCatalog::default();
-        let (_, layers) = build_local_layer_specs(catalog.entries(), None);
-        layers
-            .into_iter()
-            .find(|layer| layer.key == "regions")
-            .expect("regions layer")
+        test_vector_layer(LayerId::from_raw(7), "regions", true)
     }
 
     #[test]
-    fn field_backed_vector_layers_still_render_in_2d() {
+    fn field_backed_vector_layers_skip_vector_runtime_in_2d() {
+        let layer = field_backed_vector_layer();
+
+        assert!(!should_activate_vector_layer(
+            &layer,
+            true,
+            false,
+            ViewMode::Map2D,
+        ));
+        assert!(!should_activate_vector_layer(
+            &layer,
+            false,
+            true,
+            ViewMode::Map2D,
+        ));
+        assert!(!should_render_vector_layer(&layer, true, ViewMode::Map2D));
+    }
+
+    #[test]
+    fn field_backed_vector_layers_still_activate_in_terrain_3d() {
         let layer = field_backed_vector_layer();
 
         assert!(should_activate_vector_layer(
             &layer,
             true,
             false,
-            ViewMode::Map2D,
+            ViewMode::Terrain3D,
         ));
-        assert!(should_render_vector_layer(&layer, true, ViewMode::Map2D));
+        assert!(should_render_vector_layer(
+            &layer,
+            true,
+            ViewMode::Terrain3D,
+        ));
     }
 
     #[test]
@@ -1089,19 +1172,13 @@ mod tests {
 
     #[test]
     fn clip_vector_chunk_against_vector_mask_drops_outside_triangles() {
-        let definition = AvailableLayerDefinition {
-            layer_id: "region_groups".to_string(),
-            name: "Region Groups".to_string(),
-            template: AvailableLayerTemplate::RegionGroups,
-            visible_default: true,
-            opacity_default: 0.5,
-            z_base: 30.0,
-            display_order: 30,
-        };
-        let (revision, layers) = build_local_layer_specs(&[definition], Some("v1"));
-        let mask_layer = layers[0].clone();
+        let mask_layer = test_vector_layer(LayerId::from_raw(1), "region_groups", false);
         let mut registry = LayerRegistry::default();
-        registry.apply_layer_specs(revision, Some("v1".to_string()), layers);
+        registry.apply_layer_specs(
+            "vector-test-rev",
+            Some("v1".to_string()),
+            vec![mask_layer.clone()],
+        );
 
         let mask_chunk = BuiltVectorChunk {
             color_rgba: [255, 0, 0, 255],
@@ -1168,19 +1245,13 @@ mod tests {
 
     #[test]
     fn clip_vector_chunk_against_vector_mask_keeps_overlap_when_centroid_is_outside() {
-        let definition = AvailableLayerDefinition {
-            layer_id: "region_groups".to_string(),
-            name: "Region Groups".to_string(),
-            template: AvailableLayerTemplate::RegionGroups,
-            visible_default: true,
-            opacity_default: 0.5,
-            z_base: 30.0,
-            display_order: 30,
-        };
-        let (revision, layers) = build_local_layer_specs(&[definition], Some("v1"));
-        let mask_layer = layers[0].clone();
+        let mask_layer = test_vector_layer(LayerId::from_raw(1), "region_groups", false);
         let mut registry = LayerRegistry::default();
-        registry.apply_layer_specs(revision, Some("v1".to_string()), layers);
+        registry.apply_layer_specs(
+            "vector-test-rev",
+            Some("v1".to_string()),
+            vec![mask_layer.clone()],
+        );
 
         let mask_chunk = BuiltVectorChunk {
             color_rgba: [255, 0, 0, 255],

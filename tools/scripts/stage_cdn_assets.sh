@@ -31,7 +31,6 @@ has_matching_file() {
 require_path "$SITE_MAP_ASSETS_DIR/map-host.js"
 require_path "$SITE_MAP_ASSETS_DIR/ui/fishystuff.css"
 require_path "$CDN_ROOT/images"
-require_path "$CDN_ROOT/region_groups"
 require_path "$CDN_MAP_ASSETS_DIR/runtime-manifest.json"
 
 if ! has_matching_file "$CDN_MAP_ASSETS_DIR" 'runtime-manifest.*.json'; then
@@ -64,14 +63,12 @@ cat > "$CDN_ROOT/.cdn-metadata.json" <<EOF
   "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "source_roots": [
     "data/cdn/public/images",
-    "data/cdn/public/region_groups",
     "data/cdn/public/map",
     "site/assets/map"
   ],
   "paths": [
     "images/",
-    "map/",
-    "region_groups/"
+    "map/"
   ]
 }
 EOF

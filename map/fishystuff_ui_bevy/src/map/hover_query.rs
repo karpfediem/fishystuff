@@ -204,7 +204,7 @@ mod tests {
             layer_id: layer_id.to_string(),
             name: layer_id.to_string(),
             enabled: true,
-            kind: LayerKindDto::TiledRaster,
+            kind: LayerKindDto::Field,
             transform: LayerTransformDto::IdentityMapSpace,
             tileset: TilesetRef::default(),
             tile_px: 512,

@@ -249,7 +249,7 @@ mod tests {
             layer_id: layer_id.to_string(),
             name: layer_id.to_string(),
             enabled: true,
-            kind: fishystuff_api::models::layers::LayerKind::TiledRaster,
+            kind: fishystuff_api::models::layers::LayerKind::Field,
             transform,
             tileset: fishystuff_api::models::layers::TilesetRef::default(),
             tile_px: 512,

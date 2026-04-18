@@ -100,19 +100,11 @@ mod tests {
     fn resolve_public_asset_url_uses_public_base_for_zone_assets() {
         assert_eq!(
             resolve_public_asset_url(
-                Some("/images/exact_lookup/zone_mask.v1.bin"),
+                Some("/fields/zone_mask.v1.bin"),
                 Some("https://cdn.example.com"),
             )
             .as_deref(),
-            Some("https://cdn.example.com/images/exact_lookup/zone_mask.v1.bin")
-        );
-        assert_eq!(
-            resolve_public_asset_url(
-                Some("/images/zones_mask_v1.png"),
-                Some("https://cdn.example.com"),
-            )
-            .as_deref(),
-            Some("https://cdn.example.com/images/zones_mask_v1.png")
+            Some("https://cdn.example.com/fields/zone_mask.v1.bin")
         );
     }
 }

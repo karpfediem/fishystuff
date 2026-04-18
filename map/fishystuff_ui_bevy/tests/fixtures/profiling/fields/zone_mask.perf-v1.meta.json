@@ -1,0 +1,172 @@
+{
+  "entries": {
+    "1193046": {
+      "targets": [
+        {
+          "key": "zone",
+          "label": "Zone 1",
+          "worldX": 256.0,
+          "worldZ": 1024.0
+        }
+      ],
+      "detailPane": {
+        "id": "zone_mask",
+        "label": "Zone",
+        "icon": "map",
+        "order": 0
+      },
+      "detailSections": [
+        {
+          "id": "zone-1",
+          "kind": "facts",
+          "title": "Zone",
+          "facts": [
+            {
+              "key": "zone",
+              "label": "Zone",
+              "value": "Fixture Zone 1",
+              "icon": "map",
+              "statusIcon": null,
+              "statusIconTone": null
+            },
+            {
+              "key": "region",
+              "label": "RGB",
+              "value": "#123456",
+              "icon": "swatch",
+              "statusIcon": null,
+              "statusIconTone": null
+            }
+          ],
+          "targets": []
+        }
+      ]
+    },
+    "2311527": {
+      "targets": [
+        {
+          "key": "zone",
+          "label": "Zone 2",
+          "worldX": 768.0,
+          "worldZ": 1024.0
+        }
+      ],
+      "detailPane": {
+        "id": "zone_mask",
+        "label": "Zone",
+        "icon": "map",
+        "order": 0
+      },
+      "detailSections": [
+        {
+          "id": "zone-2",
+          "kind": "facts",
+          "title": "Zone",
+          "facts": [
+            {
+              "key": "zone",
+              "label": "Zone",
+              "value": "Fixture Zone 2",
+              "icon": "map",
+              "statusIcon": null,
+              "statusIconTone": null
+            },
+            {
+              "key": "region",
+              "label": "RGB",
+              "value": "#234567",
+              "icon": "swatch",
+              "statusIcon": null,
+              "statusIconTone": null
+            }
+          ],
+          "targets": []
+        }
+      ]
+    },
+    "3430008": {
+      "targets": [
+        {
+          "key": "zone",
+          "label": "Zone 3",
+          "worldX": 1280.0,
+          "worldZ": 1024.0
+        }
+      ],
+      "detailPane": {
+        "id": "zone_mask",
+        "label": "Zone",
+        "icon": "map",
+        "order": 0
+      },
+      "detailSections": [
+        {
+          "id": "zone-3",
+          "kind": "facts",
+          "title": "Zone",
+          "facts": [
+            {
+              "key": "zone",
+              "label": "Zone",
+              "value": "Fixture Zone 3",
+              "icon": "map",
+              "statusIcon": null,
+              "statusIconTone": null
+            },
+            {
+              "key": "region",
+              "label": "RGB",
+              "value": "#345678",
+              "icon": "swatch",
+              "statusIcon": null,
+              "statusIconTone": null
+            }
+          ],
+          "targets": []
+        }
+      ]
+    },
+    "4548489": {
+      "targets": [
+        {
+          "key": "zone",
+          "label": "Zone 4",
+          "worldX": 1792.0,
+          "worldZ": 1024.0
+        }
+      ],
+      "detailPane": {
+        "id": "zone_mask",
+        "label": "Zone",
+        "icon": "map",
+        "order": 0
+      },
+      "detailSections": [
+        {
+          "id": "zone-4",
+          "kind": "facts",
+          "title": "Zone",
+          "facts": [
+            {
+              "key": "zone",
+              "label": "Zone",
+              "value": "Fixture Zone 4",
+              "icon": "map",
+              "statusIcon": null,
+              "statusIconTone": null
+            },
+            {
+              "key": "region",
+              "label": "RGB",
+              "value": "#456789",
+              "icon": "swatch",
+              "statusIcon": null,
+              "statusIconTone": null
+            }
+          ],
+          "targets": []
+        }
+      ]
+    }
+  }
+}

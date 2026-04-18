@@ -724,7 +724,7 @@ fn render_field_tile_image(
         output_width,
         output_height,
     ) = tile_render_dims(field, layer, key)?;
-    let chunk = if layer.is_zone_mask_visual_layer() && visual_context.clip_mask_layer.is_none() {
+    let chunk = if layer.is_zone_mask_exact_layer() && visual_context.clip_mask_layer.is_none() {
         field.render_rgba_chunk_with(
             source_origin_x,
             source_origin_y,
@@ -779,7 +779,7 @@ fn field_tile_visual_revision(
     clip_mask_layer: Option<LayerId>,
     clip_mask_revision: u64,
 ) -> u64 {
-    if !layer.is_zone_mask_visual_layer() {
+    if !layer.is_zone_mask_exact_layer() {
         return 0;
     }
     let mut revision = clip_mask_revision
@@ -803,7 +803,7 @@ fn apply_field_tile_visual_filters(
     source_height: u32,
     visual_context: &FieldTileVisualContext<'_>,
 ) {
-    if !layer.is_zone_mask_visual_layer() {
+    if !layer.is_zone_mask_exact_layer() {
         return;
     }
     if visual_context.clip_mask_layer.is_none() {
@@ -1271,6 +1271,10 @@ mod tests {
             true
         )));
         assert!(should_render_field_layer_visual(&layer(
+            LayerKind::Field,
+            true
+        )));
+        assert!(should_render_field_layer_visual(&layer(
             LayerKind::VectorGeoJson,
             true
         )));
@@ -1285,7 +1289,7 @@ mod tests {
         let field_rows =
             DiscreteFieldRows::from_u32_grid(2, 1, &[0x123456, 0x654321]).expect("field");
         let field = LoadedFieldLayer::from_parts(&field_rows, FieldColorMode::RgbU24);
-        let mut layer = layer(LayerKind::TiledRaster, true);
+        let mut layer = layer(LayerKind::Field, true);
         layer.key = "zone_mask".to_string();
         layer.pick_mode = PickMode::ExactTilePixel;
         layer.tile_px = 2;

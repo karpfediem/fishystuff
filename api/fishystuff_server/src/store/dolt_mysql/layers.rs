@@ -32,6 +32,8 @@ pub(super) fn parse_layer_kind(layer_id: &str, value: &str) -> AppResult<LayerKi
     let normalized = value.trim();
     if normalized.eq_ignore_ascii_case("vector_geojson") {
         Ok(LayerKind::VectorGeoJson)
+    } else if normalized.eq_ignore_ascii_case("field") {
+        Ok(LayerKind::Field)
     } else if normalized.eq_ignore_ascii_case("tiled_raster") || normalized.is_empty() {
         Ok(LayerKind::TiledRaster)
     } else {

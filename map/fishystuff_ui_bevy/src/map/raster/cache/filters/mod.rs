@@ -28,7 +28,6 @@ pub(crate) struct VisualFilterContext<'a> {
 
 fn texture_pick_filter_enabled(spec: &crate::map::layers::LayerSpec, view_mode: ViewMode) -> bool {
     spec.pick_mode == PickMode::ExactTilePixel && matches!(view_mode, ViewMode::Map2D)
-        || (view_mode == ViewMode::Terrain3D && spec.is_zone_mask_visual_layer())
 }
 
 fn entity_pick_filter_enabled(spec: &crate::map::layers::LayerSpec, view_mode: ViewMode) -> bool {
@@ -62,7 +61,7 @@ impl RasterTileCache {
             let Some(spec) = layer_registry.get(key.layer) else {
                 continue;
             };
-            if !spec.is_zone_mask_visual_layer() {
+            if !spec.is_zone_mask_exact_layer() {
                 continue;
             }
             let Some(read_entry) = self.entries.get(&key) else {
@@ -98,7 +97,7 @@ impl RasterTileCache {
                 0
             };
             let force_exact_zone_mask_filter =
-                next_filter_active && spec.is_zone_mask_visual_layer();
+                next_filter_active && spec.is_zone_mask_exact_layer();
             let has_intersection = if force_exact_zone_mask_filter {
                 true
             } else if next_filter_active {
@@ -115,7 +114,7 @@ impl RasterTileCache {
                     .iter()
                     .all(|zone_rgb| filter.zone_rgbs.contains(zone_rgb));
             let target_hover_zone = if apply_texture_pick_filter {
-                if spec.is_zone_mask_visual_layer() {
+                if spec.is_zone_mask_exact_layer() {
                     hover_zone_rgb
                 } else {
                     hover_zone_rgb
@@ -277,7 +276,7 @@ impl RasterTileCache {
             // The zone mask visual should always recompose from exact zone membership when
             // a zone filter is active, even if the raster tile's cached color list is stale.
             let force_exact_zone_mask_filter =
-                next_filter_active && spec.is_zone_mask_visual_layer();
+                next_filter_active && spec.is_zone_mask_exact_layer();
             let has_intersection = if force_exact_zone_mask_filter {
                 true
             } else if next_filter_active {
@@ -294,7 +293,7 @@ impl RasterTileCache {
                     .iter()
                     .all(|zone_rgb| filter.zone_rgbs.contains(zone_rgb));
             let target_hover_zone = if apply_texture_pick_filter {
-                if spec.is_zone_mask_visual_layer() {
+                if spec.is_zone_mask_exact_layer() {
                     hover_zone_rgb
                 } else {
                     hover_zone_rgb
@@ -470,10 +469,13 @@ mod tests {
     }
 
     #[test]
-    fn terrain_3d_zone_mask_keeps_texture_filtering_without_2d_entity_filtering() {
+    fn exact_layers_do_not_use_raster_texture_filtering_in_terrain_3d() {
         let zone_mask = layer("zone_mask", PickMode::ExactTilePixel);
 
-        assert!(texture_pick_filter_enabled(&zone_mask, ViewMode::Terrain3D));
+        assert!(!texture_pick_filter_enabled(
+            &zone_mask,
+            ViewMode::Terrain3D
+        ));
         assert!(!entity_pick_filter_enabled(&zone_mask, ViewMode::Terrain3D));
     }
 
