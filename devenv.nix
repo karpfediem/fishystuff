@@ -9,6 +9,8 @@ let
   vectorApiPort = 8686;
   vectorOtlpGrpcPort = 4817;
   vectorOtlpHttpPort = 4820;
+  lokiHttpPort = 3100;
+  lokiGrpcPort = 9096;
   otelCollectorHttpPort = 4818;
   otelCollectorHealthPort = 13133;
   otelCollectorSpanmetricsPort = 8889;
@@ -61,6 +63,7 @@ in {
       libxkbfile
       lsof
       mesa
+      grafana-loki
       opentelemetry-collector-contrib
       vector
       rsync
@@ -139,6 +142,8 @@ in {
     FISHYSTUFF_DEV_VECTOR_API_PORT = toString vectorApiPort;
     FISHYSTUFF_DEV_VECTOR_OTLP_GRPC_PORT = toString vectorOtlpGrpcPort;
     FISHYSTUFF_DEV_VECTOR_OTLP_HTTP_PORT = toString vectorOtlpHttpPort;
+    FISHYSTUFF_DEV_LOKI_HTTP_PORT = toString lokiHttpPort;
+    FISHYSTUFF_DEV_LOKI_GRPC_PORT = toString lokiGrpcPort;
     FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT = toString otelCollectorHttpPort;
     FISHYSTUFF_DEV_OTEL_COLLECTOR_HEALTH_PORT = toString otelCollectorHealthPort;
     FISHYSTUFF_DEV_OTEL_SPANMETRICS_PORT = toString otelCollectorSpanmetricsPort;
@@ -152,6 +157,7 @@ in {
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
+    FISHYSTUFF_LOKI_DATA_DIR = "${config.devenv.root}/data/loki";
     FISHYSTUFF_VECTOR_DATA_DIR = "${config.devenv.root}/data/vector";
     FISHYSTUFF_RUNTIME_OTEL_ENABLED = "true";
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME = "fishystuff-site-local";
@@ -272,6 +278,16 @@ in {
     '';
   };
 
+  processes.loki = {
+    cwd = config.devenv.root;
+    exec = ''
+      mkdir -p ${config.devenv.root}/data/loki
+      exec env LOG_TS_LABEL=loki LOG_TS_FILE=${config.devenv.root}/data/vector/process/loki.log ${logTimestampRunner} \
+        ${pkgs.grafana-loki}/bin/loki \
+        -config.file=${config.devenv.root}/tools/telemetry/loki.local.yaml
+    '';
+  };
+
   processes.otel-collector = {
     cwd = config.devenv.root;
     exec = ''
@@ -294,7 +310,10 @@ in {
         ${pkgs.vector}/bin/vector \
         --config-yaml ${config.devenv.root}/tools/telemetry/vector.local.yaml
     '';
-    after = [ "devenv:processes:otel-collector@started" ];
+    after = [
+      "devenv:processes:loki@started"
+      "devenv:processes:otel-collector@started"
+    ];
   };
 
   processes.prometheus = {

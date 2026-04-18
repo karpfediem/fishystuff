@@ -9,3 +9,6 @@ CDN staging and publish payloads should live under `data/cdn/`, not under `site/
 Local observability working state also lives here under `data/vector/`. That
 directory is runtime-generated local state for Vector process captures, archive
 files, and checkpoints, and should remain gitignored.
+
+Local Loki state lives under `data/loki/`. That directory is filesystem-backed
+local log index/chunk state for development and should remain gitignored.

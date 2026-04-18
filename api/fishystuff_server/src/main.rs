@@ -24,6 +24,7 @@ mod telemetry {
     };
     use opentelemetry_sdk::Resource;
     use tracing::Level;
+    use tracing_appender::non_blocking::WorkerGuard;
     use tracing_subscriber::filter::Targets;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -33,6 +34,7 @@ mod telemetry {
 
     pub struct TelemetryHandle {
         tracer_provider: Option<SdkTracerProvider>,
+        _log_guard: WorkerGuard,
     }
 
     impl TelemetryHandle {
@@ -49,11 +51,15 @@ mod telemetry {
             Box::new(BaggagePropagator::new()),
         ]));
 
+        let (log_writer, log_guard) = tracing_appender::non_blocking(std::io::stdout());
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .json()
+            .flatten_event(true)
+            .with_current_span(true)
+            .with_writer(log_writer)
             .with_target(false)
             .with_ansi(false)
-            .without_time()
-            .compact();
+            .without_time();
         let targets = Targets::new()
             .with_target("fishystuff_server", Level::TRACE)
             .with_default(Level::WARN);
@@ -76,7 +82,10 @@ mod telemetry {
             .try_init()
             .context("initialize tracing subscriber")?;
 
-        Ok(TelemetryHandle { tracer_provider })
+        Ok(TelemetryHandle {
+            tracer_provider,
+            _log_guard: log_guard,
+        })
     }
 
     fn build_tracer_provider(config: &TelemetryConfig) -> Result<SdkTracerProvider> {

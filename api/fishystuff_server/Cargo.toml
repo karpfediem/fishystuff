@@ -27,8 +27,9 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tower-http = { version = "0.4", features = ["compression-br", "compression-gzip", "cors"] }
 tracing = "0.1"
+tracing-appender = "0.2"
 tracing-opentelemetry = "0.32"
-tracing-subscriber = { version = "0.3", features = ["fmt", "registry"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "json", "registry"] }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]

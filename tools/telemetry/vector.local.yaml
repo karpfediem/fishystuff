@@ -1,4 +1,4 @@
-data_dir: "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector/state}"
+data_dir: "./data/vector/state"
 
 api:
   enabled: true
@@ -8,7 +8,7 @@ sources:
   devenv_process_logs:
     type: file
     include:
-      - "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector}/process/*.log"
+      - "./data/vector/process/*.log"
     read_from: beginning
   telemetry_ingress:
     type: opentelemetry
@@ -18,19 +18,142 @@ sources:
       address: "127.0.0.1:4820"
       headers: []
 
+transforms:
+  normalized_process_logs:
+    type: remap
+    inputs:
+      - devenv_process_logs
+    source: |
+      .app = "fishystuff"
+      .deployment_environment = "local"
+      .observability_kind = "log"
+      .log_schema = "fishystuff.local.v1"
+      .raw_line = string!(.message)
+      .process = "unknown"
+      .level = "info"
+      .correlation = {}
+      .http = {}
+
+      wrapped = parse_regex(.raw_line, r'^\[(?P<wrapped_timestamp>[^\]]+)\] \[(?P<process>[^\]]+)\] (?P<body>.*)$') ?? null
+      if wrapped != null {
+        .wrapped_timestamp = wrapped.wrapped_timestamp
+        .process = wrapped.process
+        .message = wrapped.body
+
+        parsed_timestamp = parse_timestamp(wrapped.wrapped_timestamp, format: "%Y-%m-%dT%H:%M:%S%z") ?? null
+        if parsed_timestamp != null {
+          .timestamp = parsed_timestamp
+        }
+      } else {
+        .message = .raw_line
+      }
+
+      .service = "fishystuff-" + .process
+      if .process == "api" {
+        .service = "fishystuff-api"
+      }
+
+      decoded = parse_json(.message) ?? null
+      if is_object(decoded) {
+        .parsed = decoded
+
+        parsed_level = get(.parsed, ["level"]) ?? null
+        if parsed_level != null {
+          .level = downcase(string!(parsed_level))
+        }
+
+        parsed_message = get(.parsed, ["message"]) ?? null
+        if parsed_message != null {
+          .message = string!(parsed_message)
+        }
+
+        request_id = get(.parsed, ["request.id"]) ?? null
+        if request_id != null && string!(request_id) != "" {
+          .correlation.request_id = string!(request_id)
+        }
+        trace_id = get(.parsed, ["trace.id"]) ?? null
+        if trace_id != null && string!(trace_id) != "" {
+          .correlation.trace_id = string!(trace_id)
+        }
+        span_id = get(.parsed, ["span.id"]) ?? null
+        if span_id != null && string!(span_id) != "" {
+          .correlation.span_id = string!(span_id)
+        }
+
+        http_method = get(.parsed, ["http.request.method"]) ?? null
+        if http_method != null && string!(http_method) != "" {
+          .http.method = string!(http_method)
+        }
+        http_route = get(.parsed, ["http.route"]) ?? null
+        if http_route != null && string!(http_route) != "" {
+          .http.route = string!(http_route)
+        }
+        http_status_code = get(.parsed, ["http.response.status_code"]) ?? null
+        if http_status_code != null {
+          .http.status_code = http_status_code
+        }
+      }
+
+      if !exists(.message) || is_null(.message) {
+        .message = .raw_line
+      } else {
+        .message = string!(.message)
+      }
+
+      if exists(.correlation.request_id) {
+        .request_id = .correlation.request_id
+      }
+      if exists(.correlation.trace_id) {
+        .trace_id = .correlation.trace_id
+      }
+      if exists(.correlation.span_id) {
+        .span_id = .correlation.span_id
+      }
+
 sinks:
   logs_archive:
     type: file
     inputs:
-      - devenv_process_logs
-    path: "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector}/archive/logs/%Y-%m-%d.ndjson"
+      - normalized_process_logs
+    path: "./data/vector/archive/logs/%Y-%m-%d.ndjson"
     encoding:
       codec: json
+
+  logs_loki:
+    type: loki
+    inputs:
+      - normalized_process_logs
+    endpoint: "http://127.0.0.1:3100"
+    encoding:
+      codec: json
+    labels:
+      app: "{{ app }}"
+      env: "{{ deployment_environment }}"
+      process: "{{ process }}"
+      service: "{{ service }}"
+      level: "{{ level }}"
+    structured_metadata:
+      log_schema: "{{ log_schema }}"
+      '"correlation_*"': "{{ correlation }}"
+      '"http_*"': "{{ http }}"
 
   traces_archive:
     type: file
     inputs:
       - telemetry_ingress.traces
-    path: "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector}/archive/traces/%Y-%m-%d.ndjson"
+    path: "./data/vector/archive/traces/%Y-%m-%d.ndjson"
     encoding:
       codec: json
+
+  telemetry_ingress_logs_archive:
+    type: file
+    inputs:
+      - telemetry_ingress.logs
+    path: "./data/vector/archive/otel-logs/%Y-%m-%d.ndjson"
+    encoding:
+      codec: json
+
+  telemetry_ingress_metrics_drop:
+    type: blackhole
+    inputs:
+      - telemetry_ingress.metrics

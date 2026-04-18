@@ -2,9 +2,11 @@ use anyhow::Error as AnyError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use opentelemetry::trace::TraceContextExt;
 use std::future::Future;
 use std::time::Duration;
 use tracing::Span;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use fishystuff_api::error::{ApiError, ApiErrorCode, ApiErrorEnvelope};
 
@@ -69,6 +71,16 @@ impl IntoResponse for AppError {
             .map(|value| value.to_string())
             .unwrap_or_default();
         let span = Span::current();
+        let span_context = span.context().span().span_context().clone();
+        let (trace_id, span_id) = if span_context.is_valid() {
+            let trace_id = span_context.trace_id().to_string();
+            let span_id = span_context.span_id().to_string();
+            span.record("trace.id", tracing::field::display(&trace_id));
+            span.record("span.id", tracing::field::display(&span_id));
+            (trace_id, span_id)
+        } else {
+            (String::new(), String::new())
+        };
         span.record(
             "http.response.status_code",
             tracing::field::display(status.as_u16()),
@@ -91,6 +103,8 @@ impl IntoResponse for AppError {
             error.message = %api_error.message,
             error.details = %details,
             request.id = api_error.request_id.as_deref().unwrap_or(""),
+            trace.id = %trace_id,
+            span.id = %span_id,
             "request failed"
         );
 

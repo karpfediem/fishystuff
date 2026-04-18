@@ -7,6 +7,7 @@ use axum::Router;
 use opentelemetry::global;
 use opentelemetry::propagation::Extractor;
 use opentelemetry::trace::TraceContextExt;
+use std::time::Instant;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::Instrument;
@@ -447,14 +448,20 @@ async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Resp
         http.request.method = %method,
         http.route = %route,
         request.id = tracing::field::Empty,
+        trace.id = tracing::field::Empty,
+        span.id = tracing::field::Empty,
         http.response.status_code = tracing::field::Empty,
+        duration.ms = tracing::field::Empty,
         error.code = tracing::field::Empty,
         error.message = tracing::field::Empty,
         error.details = tracing::field::Empty,
     );
     let _ = span.set_parent(parent_context);
+    sync_span_context_fields(&span);
 
+    let started_at = Instant::now();
     let mut response = next.run(request).instrument(span.clone()).await;
+    let elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0;
     if let Some(request_id) = response
         .headers()
         .get("x-request-id")
@@ -467,28 +474,48 @@ async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Resp
         "http.response.status_code",
         tracing::field::display(response.status().as_u16()),
     );
+    span.record("duration.ms", tracing::field::display(elapsed_ms));
+    let (trace_id, span_id) = sync_span_context_fields(&span);
+    let request_id = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    let status_code = response.status().as_u16();
+
     if response.status().is_client_error() || response.status().is_server_error() {
         tracing::warn!(
             http.request.method = %method,
             http.route = %route,
-            http.response.status_code = response.status().as_u16(),
-            request.id = response
-                .headers()
-                .get("x-request-id")
-                .and_then(|value| value.to_str().ok())
-                .unwrap_or(""),
-            "request returned error status"
+            http.response.status_code = status_code,
+            request.id = request_id,
+            trace.id = trace_id.as_str(),
+            span.id = span_id.as_str(),
+            duration.ms = elapsed_ms,
+            "request completed"
+        );
+    } else {
+        tracing::info!(
+            http.request.method = %method,
+            http.route = %route,
+            http.response.status_code = status_code,
+            request.id = request_id,
+            trace.id = trace_id.as_str(),
+            span.id = span_id.as_str(),
+            duration.ms = elapsed_ms,
+            "request completed"
         );
     }
 
-    let span_context = span.context().span().span_context().clone();
-    if span_context.is_valid() {
-        if let Ok(trace_id) = HeaderValue::from_str(&span_context.trace_id().to_string()) {
+    if !trace_id.is_empty() {
+        if let Ok(trace_id) = HeaderValue::from_str(&trace_id) {
             response
                 .headers_mut()
                 .insert(HeaderName::from_static("x-trace-id"), trace_id);
         }
-        if let Ok(span_id) = HeaderValue::from_str(&span_context.span_id().to_string()) {
+    }
+    if !span_id.is_empty() {
+        if let Ok(span_id) = HeaderValue::from_str(&span_id) {
             response
                 .headers_mut()
                 .insert(HeaderName::from_static("x-span-id"), span_id);
@@ -496,4 +523,17 @@ async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Resp
     }
 
     response
+}
+
+fn sync_span_context_fields(span: &tracing::Span) -> (String, String) {
+    let span_context = span.context().span().span_context().clone();
+    if !span_context.is_valid() {
+        return (String::new(), String::new());
+    }
+
+    let trace_id = span_context.trace_id().to_string();
+    let span_id = span_context.span_id().to_string();
+    span.record("trace.id", tracing::field::display(&trace_id));
+    span.record("span.id", tracing::field::display(&span_id));
+    (trace_id, span_id)
 }
