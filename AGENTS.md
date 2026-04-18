@@ -58,6 +58,36 @@ Repository-level notes for working in this monorepo.
   - JS host checks/tests
   - Rust/wasm checks and bundle rebuilds
 
+## Browser telemetry workflow
+- Start page investigations in DevTools MCP first: reload the page, inspect
+  `list_console_messages`, inspect `list_network_requests`, and evaluate
+  `window.__fishystuffOtel` to confirm browser OTEL is initialized and which
+  `/telemetry/v1/*` endpoints the page is using.
+- Confirm the Vector API is healthy before deeper telemetry debugging with
+  `curl -fsS http://127.0.0.1:8686/health`. If this fails, restore Vector first
+  instead of assuming the browser is silent.
+- Use `devenv shell -- tools/scripts/vector-tap.sh browser-logs`,
+  `raw-traces`, and `raw-metrics` as the first backend inspection step. These
+  taps prove whether the browser emitted OTLP into the local pipeline at all.
+- Use `devenv shell -- tools/scripts/vector-tap.sh to-collector-traces` and
+  `to-collector-metrics` to inspect the collector boundary separately from raw
+  ingress.
+- Query downstream stores only after ingress is confirmed:
+  - Prometheus with `http://127.0.0.1:9090/api/v1/query?...`
+  - Jaeger with `http://127.0.0.1:16686/api/services` and
+    `http://127.0.0.1:16686/api/traces?...`
+- If DevTools shows successful `POST /telemetry/v1/logs`,
+  `/telemetry/v1/metrics`, or `/telemetry/v1/traces` requests and the Vector
+  raw taps show the corresponding events, but Prometheus queries and Jaeger
+  trace lookups are empty, treat the failure as Vector to collector or storage
+  integration rather than page instrumentation.
+- For ad hoc synthetic probes from DevTools, use
+  `window.__fishystuffOtel.emitError(...)` for logs and
+  `window.__fishystuffOtel.withSpanAsync(...)` for traces. On the map page, use
+  `raw-metrics` to inspect live `fishystuff.map.*` values such as
+  `fishystuff.map.bevy.fps`, `fishystuff.map.runtime.visible_layers`, and the
+  layer tile gauges.
+
 ## Performance workflow
 - Do not make performance claims without running the native profiling harness or the relevant benchmark target.
 - Prefer measured improvements over speculative optimization.
