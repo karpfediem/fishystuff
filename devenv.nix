@@ -149,7 +149,7 @@ in {
       pkgs.libxkbfile
     ];
     FISHYSTUFF_CORS_ALLOWED_ORIGINS =
-      "https://fishystuff.fish,https://www.fishystuff.fish,http://${siteHost}:${toString sitePort},http://localhost:${toString sitePort}";
+      "https://fishystuff.fish,http://${siteHost}:${toString sitePort},http://localhost:${toString sitePort}";
   };
 
   services.caddy = {

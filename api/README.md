@@ -25,6 +25,16 @@ asset base URLs itself.
 Its CORS policy is an explicit origin allowlist, configured via
 `[server].cors_allowed_origins` or `FISHYSTUFF_CORS_ALLOWED_ORIGINS`, so dev and
 production use the same strict model instead of inferred site origins.
+For deploys that should follow a sibling-host pattern like
+`beta.fishystuff.fish` -> `api.beta.fishystuff.fish` / `cdn.beta.fishystuff.fish`,
+the API also reads the public-origin layer:
+
+- `FISHYSTUFF_PUBLIC_SITE_BASE_URL`
+- `FISHYSTUFF_PUBLIC_CDN_BASE_URL`
+
+If explicit runtime values are not provided, the API uses the public site origin
+as the default CORS origin and derives the CDN base URL from the sibling `cdn.`
+hostname.
 The runtime resolves its local development database URL from the SecretSpec
 `api` profile declared in `/home/carp/code/fishystuff/secretspec.toml`, so the
 server no longer depends on a `secretspec run` wrapper just to reach Dolt.

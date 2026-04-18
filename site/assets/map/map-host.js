@@ -2054,6 +2054,38 @@ function harmonizeLoopbackBaseUrl(value, locationLike = globalThis.location) {
   }
 }
 
+function locationBaseUrl(locationLike = globalThis.location) {
+  if (locationLike?.origin) {
+    return normalizeBaseUrl(locationLike.origin);
+  }
+  if (!locationLike?.hostname) {
+    return "";
+  }
+  const protocol = locationLike?.protocol === "http:" ? "http:" : "https:";
+  return normalizeBaseUrl(`${protocol}//${locationLike.hostname}`);
+}
+
+function deriveSiblingBaseUrl(baseUrl, subdomain) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const normalizedSubdomain = String(subdomain ?? "").trim().replace(/\.+$/, "");
+  if (!normalizedBaseUrl || !normalizedSubdomain) {
+    return "";
+  }
+  try {
+    const url = new URL(normalizedBaseUrl);
+    if (!url.hostname || isLoopbackHost(url.hostname)) {
+      return "";
+    }
+    url.hostname = `${normalizedSubdomain}.${url.hostname}`;
+    url.pathname = "";
+    url.search = "";
+    url.hash = "";
+    return normalizeBaseUrl(url.toString());
+  } catch (_) {
+    return "";
+  }
+}
+
 export function resolveApiBaseUrl(locationLike = globalThis.location) {
   const explicit = harmonizeLoopbackBaseUrl(globalThis.window?.__fishystuffApiBaseUrl, locationLike);
   if (explicit) {
@@ -2067,7 +2099,7 @@ export function resolveApiBaseUrl(locationLike = globalThis.location) {
     const protocol = locationLike?.protocol === "https:" ? "https:" : "http:";
     return `${protocol}//${locationLike.hostname}:8080`;
   }
-  return "https://api.fishystuff.fish";
+  return deriveSiblingBaseUrl(locationBaseUrl(locationLike), "api") || "https://api.fishystuff.fish";
 }
 
 function normalizeBaseUrl(value) {
@@ -2094,7 +2126,7 @@ export function resolveCdnBaseUrl(
     const protocol = locationLike?.protocol === "https:" ? "https:" : "http:";
     return `${protocol}//${locationLike.hostname}:4040`;
   }
-  return "https://cdn.fishystuff.fish";
+  return deriveSiblingBaseUrl(locationBaseUrl(locationLike), "cdn") || "https://cdn.fishystuff.fish";
 }
 
 export function resolveMapRuntimeBaseUrl(

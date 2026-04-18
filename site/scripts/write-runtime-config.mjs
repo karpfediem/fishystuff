@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 function parseArgs(argv) {
   const args = {
@@ -34,7 +35,7 @@ Options:
 `);
 }
 
-function normalizeBaseUrl(value) {
+export function normalizeBaseUrl(value) {
   const normalized = String(value ?? "").trim();
   if (!normalized) {
     return "";
@@ -42,7 +43,60 @@ function normalizeBaseUrl(value) {
   return normalized.replace(/\/+$/, "");
 }
 
-function normalizeFlag(value, fallback = false) {
+export function normalizeEndpointUrl(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  try {
+    return new URL(normalized).toString();
+  } catch {
+    return normalized;
+  }
+}
+
+export function isLoopbackHost(hostname) {
+  return hostname === "127.0.0.1" || hostname === "localhost";
+}
+
+export function deriveSiblingBaseUrl(baseUrl, subdomain) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const normalizedSubdomain = String(subdomain ?? "").trim().replace(/\.+$/, "");
+  if (!normalizedBaseUrl || !normalizedSubdomain) {
+    return "";
+  }
+  try {
+    const url = new URL(normalizedBaseUrl);
+    if (!url.hostname || isLoopbackHost(url.hostname)) {
+      return "";
+    }
+    url.hostname = `${normalizedSubdomain}.${url.hostname}`;
+    url.pathname = "";
+    url.search = "";
+    url.hash = "";
+    return normalizeBaseUrl(url.toString());
+  } catch {
+    return "";
+  }
+}
+
+export function joinUrl(baseUrl, pathname) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const normalizedPath = String(pathname ?? "").trim();
+  if (!normalizedBaseUrl || !normalizedPath) {
+    return "";
+  }
+  try {
+    return new URL(
+      normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`,
+      `${normalizedBaseUrl}/`,
+    ).toString();
+  } catch {
+    return `${normalizedBaseUrl}${normalizedPath.startsWith("/") ? "" : "/"}${normalizedPath}`;
+  }
+}
+
+export function normalizeFlag(value, fallback = false) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!normalized) {
     return fallback;
@@ -56,7 +110,7 @@ function normalizeFlag(value, fallback = false) {
   return fallback;
 }
 
-function normalizeFloat(value, fallback) {
+export function normalizeFloat(value, fallback) {
   const numeric = Number.parseFloat(String(value ?? "").trim());
   if (!Number.isFinite(numeric)) {
     return fallback;
@@ -70,9 +124,53 @@ function normalizeFloat(value, fallback) {
   return numeric;
 }
 
-function normalizeCacheKey(value) {
+export function normalizeCacheKey(value) {
   const normalized = String(value ?? "").trim();
   return normalized || "";
+}
+
+export function buildRuntimeConfig(env = process.env) {
+  const publicSiteBaseUrl =
+    normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_SITE_BASE_URL) || "https://fishystuff.fish";
+  const publicApiBaseUrl =
+    normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_API_BASE_URL)
+    || deriveSiblingBaseUrl(publicSiteBaseUrl, "api")
+    || "https://api.fishystuff.fish";
+  const publicCdnBaseUrl =
+    normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_CDN_BASE_URL)
+    || deriveSiblingBaseUrl(publicSiteBaseUrl, "cdn")
+    || "https://cdn.fishystuff.fish";
+  const publicOtelBaseUrl =
+    normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_OTEL_BASE_URL)
+    || deriveSiblingBaseUrl(publicSiteBaseUrl, "otel")
+    || "https://otel.fishystuff.fish";
+
+  return {
+    siteBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_SITE_BASE_URL) || publicSiteBaseUrl,
+    apiBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_API_BASE_URL) || publicApiBaseUrl,
+    cdnBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_CDN_BASE_URL) || publicCdnBaseUrl,
+    mapAssetCacheKey: normalizeCacheKey(env.FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY),
+    tracing: {
+      enabled: normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false),
+      debug: normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_DEBUG, false),
+      serviceName:
+        String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME ?? "").trim() || "fishystuff-site",
+      deploymentEnvironment:
+        String(env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT ?? "").trim()
+        || "production",
+      serviceVersion:
+        String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
+      exporterEndpoint:
+        normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
+        || normalizeEndpointUrl(env.FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT)
+        || joinUrl(publicOtelBaseUrl, "/v1/traces"),
+      jaegerUiUrl: normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL),
+      sampleRatio: normalizeFloat(env.FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO, 0.25),
+    },
+  };
 }
 
 async function main() {
@@ -82,30 +180,7 @@ async function main() {
     return;
   }
 
-  const runtimeConfig = {
-    siteBaseUrl:
-      normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_SITE_BASE_URL) || "https://fishystuff.fish",
-    apiBaseUrl:
-      normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_API_BASE_URL) || "https://api.fishystuff.fish",
-    cdnBaseUrl:
-      normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_CDN_BASE_URL) || "https://cdn.fishystuff.fish",
-    mapAssetCacheKey: normalizeCacheKey(process.env.FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY),
-    tracing: {
-      enabled: normalizeFlag(process.env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false),
-      debug: normalizeFlag(process.env.FISHYSTUFF_RUNTIME_OTEL_DEBUG, false),
-      serviceName:
-        String(process.env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME ?? "").trim() || "fishystuff-site",
-      deploymentEnvironment:
-        String(process.env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT ?? "").trim()
-        || "production",
-      serviceVersion:
-        String(process.env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
-      exporterEndpoint:
-        String(process.env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT ?? "").trim(),
-      jaegerUiUrl: normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL),
-      sampleRatio: normalizeFloat(process.env.FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO, 0.25),
-    },
-  };
+  const runtimeConfig = buildRuntimeConfig();
 
   const outPath = path.resolve(process.cwd(), args.out);
   await fs.mkdir(path.dirname(outPath), { recursive: true });
@@ -116,7 +191,12 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+const isMainModule =
+  process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isMainModule) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

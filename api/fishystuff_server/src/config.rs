@@ -94,11 +94,10 @@ impl AppConfig {
         )?;
         let runtime_cdn_base_url = std::env::var("FISHYSTUFF_RUNTIME_CDN_BASE_URL")
             .ok()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "https://cdn.fishystuff.fish".to_string())
-            .trim()
-            .trim_end_matches('/')
-            .to_string();
+            .as_deref()
+            .and_then(normalize_origin)
+            .or_else(default_public_cdn_base_url)
+            .unwrap_or_else(|| "https://cdn.fishystuff.fish".to_string());
 
         let mut defaults = MetaDefaults {
             tile_px: fs_config.defaults.tile_px.unwrap_or(32),
@@ -270,10 +269,9 @@ impl AppConfig {
 
 fn parse_cors_allowed_origins(value: Option<&str>) -> Result<Vec<String>> {
     let mut origins = Vec::new();
-    for raw in value
-        .unwrap_or("https://fishystuff.fish,https://www.fishystuff.fish")
-        .split(',')
-    {
+    let default_origin =
+        default_public_site_origin().unwrap_or_else(|| "https://fishystuff.fish".to_string());
+    for raw in value.unwrap_or(default_origin.as_str()).split(',') {
         let Some(origin) = normalize_origin(raw) else {
             continue;
         };
@@ -302,6 +300,39 @@ fn normalize_origin(value: &str) -> Option<String> {
     Some(format!("{scheme}://{rest}"))
 }
 
+fn default_public_site_origin() -> Option<String> {
+    std::env::var("FISHYSTUFF_PUBLIC_SITE_BASE_URL")
+        .ok()
+        .as_deref()
+        .and_then(normalize_origin)
+}
+
+fn derive_sibling_origin(base_origin: &str, subdomain: &str) -> Option<String> {
+    let normalized_subdomain = subdomain.trim().trim_end_matches('.');
+    if normalized_subdomain.is_empty() {
+        return None;
+    }
+    let normalized_base_origin = normalize_origin(base_origin)?;
+    let (scheme, host) = normalized_base_origin.split_once("://")?;
+    if host.is_empty() || host == "localhost" || host == "127.0.0.1" {
+        return None;
+    }
+    Some(format!("{scheme}://{normalized_subdomain}.{host}"))
+}
+
+fn default_public_cdn_base_url() -> Option<String> {
+    std::env::var("FISHYSTUFF_PUBLIC_CDN_BASE_URL")
+        .ok()
+        .as_deref()
+        .and_then(normalize_origin)
+        .or_else(|| {
+            std::env::var("FISHYSTUFF_PUBLIC_SITE_BASE_URL")
+                .ok()
+                .as_deref()
+                .and_then(|value| derive_sibling_origin(value, "cdn"))
+        })
+}
+
 fn parse_env_flag(name: &str, fallback: bool) -> bool {
     let Some(value) = std::env::var(name).ok() else {
         return fallback;
@@ -322,7 +353,7 @@ fn parse_env_f64(name: &str, fallback: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_cors_allowed_origins;
+    use super::{derive_sibling_origin, parse_cors_allowed_origins};
 
     #[test]
     fn parse_cors_allowed_origins_normalizes_and_deduplicates() {
@@ -342,5 +373,17 @@ mod tests {
     #[test]
     fn parse_cors_allowed_origins_rejects_paths() {
         assert!(parse_cors_allowed_origins(Some("https://fishystuff.fish/map")).is_err());
+    }
+
+    #[test]
+    fn derive_sibling_origin_supports_beta_sibling_hosts() {
+        assert_eq!(
+            derive_sibling_origin("https://beta.fishystuff.fish", "cdn").as_deref(),
+            Some("https://cdn.beta.fishystuff.fish")
+        );
+        assert_eq!(
+            derive_sibling_origin("https://beta.fishystuff.fish", "api").as_deref(),
+            Some("https://api.beta.fishystuff.fish")
+        );
     }
 }

@@ -101,10 +101,51 @@
         }
       }
 
-      function loopbackAwareFallback(locationLike, port, productionBase) {
+      function deriveSiblingBaseUrl(baseUrl, subdomain) {
+        var normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+        var normalizedSubdomain = String(subdomain || '').trim().replace(/\.+$/, '');
+        if (!normalizedBaseUrl || !normalizedSubdomain) {
+          return '';
+        }
+        try {
+          var url = new URL(normalizedBaseUrl);
+          if (!url.hostname || isLoopbackHost(url.hostname)) {
+            return '';
+          }
+          url.hostname = normalizedSubdomain + '.' + url.hostname;
+          url.pathname = '';
+          url.search = '';
+          url.hash = '';
+          return normalizeBaseUrl(url.toString());
+        } catch (_) {
+          return '';
+        }
+      }
+
+      function locationBaseUrl(locationLike) {
+        if (!locationLike) {
+          return '';
+        }
+        if (locationLike.origin) {
+          return normalizeBaseUrl(locationLike.origin);
+        }
+        if (!locationLike.hostname) {
+          return '';
+        }
+        var protocol = locationLike.protocol === 'http:' ? 'http:' : 'https:';
+        return normalizeBaseUrl(protocol + '//' + locationLike.hostname);
+      }
+
+      function loopbackAwareFallback(locationLike, port, productionBase, siblingSubdomain) {
         if (locationLike && isLoopbackHost(locationLike.hostname)) {
           var protocol = locationLike.protocol === 'https:' ? 'https:' : 'http:';
           return normalizeBaseUrl(protocol + '//' + locationLike.hostname + ':' + port);
+        }
+        if (siblingSubdomain) {
+          return (
+            deriveSiblingBaseUrl(locationBaseUrl(locationLike), siblingSubdomain)
+            || normalizeBaseUrl(productionBase)
+          );
         }
         return normalizeBaseUrl(productionBase);
       }
@@ -174,14 +215,14 @@
         runtimeConfig,
         'api_base',
         'apiBaseUrl',
-        loopbackAwareFallback(window.location, '8080', 'https://api.fishystuff.fish'),
+        loopbackAwareFallback(window.location, '8080', 'https://api.fishystuff.fish', 'api'),
       );
       window.__fishystuffCdnBaseUrl = pickBaseUrl(
         params,
         runtimeConfig,
         'cdn_base',
         'cdnBaseUrl',
-        loopbackAwareFallback(window.location, '4040', 'https://cdn.fishystuff.fish'),
+        loopbackAwareFallback(window.location, '4040', 'https://cdn.fishystuff.fish', 'cdn'),
       );
       window.__fishystuffResolveSiteUrl = function (path) {
         return joinBaseUrl(window.__fishystuffSiteBaseUrl, path);

@@ -68,6 +68,17 @@ just watch
 The site build still emits `.out/runtime-config.js` from the current
 environment. That file is the single local-development source of truth for the
 site/API/CDN base URLs consumed by the browser host and Bevy runtime.
+Public/static deployments can set `FISHYSTUFF_PUBLIC_SITE_BASE_URL` and let the
+site build derive sibling defaults like `api.<site-host>`, `cdn.<site-host>`,
+and `otel.<site-host>`, or override any of them explicitly with:
+
+- `FISHYSTUFF_PUBLIC_API_BASE_URL`
+- `FISHYSTUFF_PUBLIC_CDN_BASE_URL`
+- `FISHYSTUFF_PUBLIC_OTEL_BASE_URL`
+- `FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT`
+
+Local development still uses the explicit `FISHYSTUFF_RUNTIME_*` overrides from
+`devenv.nix`, which take precedence over the public-origin layer.
 
 For browser request tracing in local development, the supported path is:
 

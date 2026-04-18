@@ -2463,6 +2463,15 @@ test("API base falls back to local loopback in dev and production otherwise", ()
     "http://localhost:8080",
   );
   assert.equal(resolveApiBaseUrl({ hostname: "fishystuff.fish" }), "https://api.fishystuff.fish");
+  assert.equal(
+    resolveApiBaseUrl({
+      hostname: "beta.fishystuff.fish",
+      protocol: "https:",
+      origin: "https://beta.fishystuff.fish",
+      href: "https://beta.fishystuff.fish/map/",
+    }),
+    "https://api.beta.fishystuff.fish",
+  );
 });
 
 test("API base prefers an explicit window override", () => {
@@ -2510,6 +2519,15 @@ test("CDN base resolves to production or an explicit override", () => {
     "https://cdn.fishystuff.fish",
   );
   assert.equal(
+    resolveCdnBaseUrl({
+      hostname: "beta.fishystuff.fish",
+      protocol: "https:",
+      origin: "https://beta.fishystuff.fish",
+      href: "https://beta.fishystuff.fish/map/",
+    }),
+    "https://cdn.beta.fishystuff.fish",
+  );
+  assert.equal(
     resolveCdnBaseUrl({ hostname: "fishystuff.fish" }, "https://override.example.com/"),
     "https://override.example.com",
   );
@@ -2535,6 +2553,15 @@ test("runtime manifest URL is cache-busted against the CDN base", () => {
   assert.equal(
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, ""),
     "https://cdn.fishystuff.fish/map/runtime-manifest.json",
+  );
+  assert.equal(
+    resolveMapRuntimeManifestUrl({
+      hostname: "beta.fishystuff.fish",
+      protocol: "https:",
+      origin: "https://beta.fishystuff.fish",
+      href: "https://beta.fishystuff.fish/map/",
+    }, ""),
+    "https://cdn.beta.fishystuff.fish/map/runtime-manifest.json",
   );
 });
 

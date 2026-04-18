@@ -13,6 +13,13 @@ Hand-edited browser-host source stays under `site/assets/map/`. The generated wa
 Each site build also emits `.out/runtime-config.js`, which is the single browser
 runtime source of truth for the resolved site/API/CDN base URLs in local
 development.
+For static deploys, the same generator can derive the public API/CDN/OTEL
+origins from one site base like `https://fishystuff.fish` or
+`https://beta.fishystuff.fish` via `FISHYSTUFF_PUBLIC_SITE_BASE_URL`, with
+explicit per-service overrides available through
+`FISHYSTUFF_PUBLIC_API_BASE_URL`, `FISHYSTUFF_PUBLIC_CDN_BASE_URL`,
+`FISHYSTUFF_PUBLIC_OTEL_BASE_URL`, and
+`FISHYSTUFF_PUBLIC_OTEL_TRACES_ENDPOINT`.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
