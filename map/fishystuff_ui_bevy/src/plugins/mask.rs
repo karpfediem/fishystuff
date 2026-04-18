@@ -3,6 +3,7 @@ use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
+use crate::map::camera::map2d::map2d_cursor_to_world;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
@@ -190,7 +191,7 @@ fn hover_world_point(context: &HoverUpdateContext<'_, '_>) -> Option<WorldPoint>
 fn interaction_world_point(
     view_mode: ViewMode,
     windows: &Query<&Window, With<PrimaryWindow>>,
-    camera_q: &Query<(&Camera, &Transform), With<Map2dCamera>>,
+    camera_q: &Query<(&Projection, &Transform), With<Map2dCamera>>,
     touches: &Touches,
     terrain_view: &TerrainViewEstimate,
 ) -> Option<WorldPoint> {
@@ -199,15 +200,13 @@ fn interaction_world_point(
             let Ok(window) = windows.single() else {
                 return None;
             };
-            let Ok((camera, camera_transform)) = camera_q.single() else {
+            let Ok((projection, camera_transform)) = camera_q.single() else {
                 return None;
             };
             let cursor = window
                 .cursor_position()
                 .or_else(|| touch_hover_position(touches))?;
-            let world = camera
-                .viewport_to_world_2d(&GlobalTransform::from(*camera_transform), cursor)
-                .ok()?;
+            let world = map2d_cursor_to_world(window, projection, camera_transform, cursor)?;
             Some(WorldPoint::new(world.x as f64, world.y as f64))
         }
         ViewMode::Terrain3D => terrain_view.cursor_world,
@@ -237,7 +236,7 @@ struct HoverUpdateContext<'w, 's> {
     key_buttons: Res<'w, ButtonInput<KeyCode>>,
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
-    camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+    camera_q: Query<'w, 's, (&'static Projection, &'static Transform), With<Map2dCamera>>,
     exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
     tile_cache: Res<'w, RasterTileCache>,
@@ -259,7 +258,7 @@ struct MaskClickContext<'w, 's> {
     key_buttons: Res<'w, ButtonInput<KeyCode>>,
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
-    camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+    camera_q: Query<'w, 's, (&'static Projection, &'static Transform), With<Map2dCamera>>,
     exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
     tile_cache: Res<'w, RasterTileCache>,

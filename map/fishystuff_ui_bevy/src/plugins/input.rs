@@ -1,4 +1,3 @@
-use bevy::camera::ScalingMode;
 use bevy::ecs::system::SystemParam;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
@@ -7,7 +6,9 @@ use bevy::input::ButtonInput;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 use bevy::window::{CursorMoved, PrimaryWindow};
 
-use crate::map::camera::map2d::{apply_map2d_camera_state, reset_map2d_view, Map2dViewState};
+use crate::map::camera::map2d::{
+    apply_map2d_camera_state, map2d_cursor_to_world_with_scale, reset_map2d_view, Map2dViewState,
+};
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::terrain::mode::CameraControlMutationFlags;
 use crate::plugins::camera::{CameraZoomBounds, Map2dCamera};
@@ -478,61 +479,7 @@ fn screen_to_world_with_scale(
     cursor: Vec2,
     scale: f32,
 ) -> Option<Vec2> {
-    let (proj_w, proj_h) = match projection.scaling_mode {
-        ScalingMode::WindowSize => (window.width(), window.height()),
-        ScalingMode::AutoMin {
-            min_width,
-            min_height,
-        } => {
-            if window.width() * min_height > min_width * window.height() {
-                (window.width() * min_height / window.height(), min_height)
-            } else {
-                (min_width, window.height() * min_width / window.width())
-            }
-        }
-        ScalingMode::AutoMax {
-            max_width,
-            max_height,
-        } => {
-            if window.width() * max_height < max_width * window.height() {
-                (window.width() * max_height / window.height(), max_height)
-            } else {
-                (max_width, window.height() * max_width / window.width())
-            }
-        }
-        ScalingMode::FixedVertical { viewport_height } => (
-            window.width() * viewport_height / window.height(),
-            viewport_height,
-        ),
-        ScalingMode::FixedHorizontal { viewport_width } => (
-            viewport_width,
-            window.height() * viewport_width / window.width(),
-        ),
-        ScalingMode::Fixed { width, height } => (width, height),
-    };
-
-    if window.width() <= 0.0 || window.height() <= 0.0 {
-        return None;
-    }
-
-    let origin_x = proj_w * projection.viewport_origin.x;
-    let origin_y = proj_h * projection.viewport_origin.y;
-    let min_x = scale * -origin_x;
-    let max_x = scale * (proj_w - origin_x);
-    let min_y = scale * -origin_y;
-    let max_y = scale * (proj_h - origin_y);
-
-    let mut vp = cursor;
-    vp.y = window.height() - vp.y;
-
-    let nx = (vp.x / window.width()).clamp(0.0, 1.0);
-    let ny = (vp.y / window.height()).clamp(0.0, 1.0);
-    let local_x = min_x + nx * (max_x - min_x);
-    let local_y = min_y + ny * (max_y - min_y);
-    let world = transform
-        .to_matrix()
-        .transform_point3(Vec3::new(local_x, local_y, 0.0));
-    Some(Vec2::new(world.x, world.y))
+    map2d_cursor_to_world_with_scale(window, projection, transform, cursor, scale)
 }
 
 #[cfg(test)]
