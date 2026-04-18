@@ -6,9 +6,11 @@ license = "MIT"
 
 [dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true, features = ["clock"] }
 clap = { workspace = true, features = ["derive"] }
 image = { workspace = true, features = ["webp"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 fishystuff_core = { path = "../../lib/fishystuff_core" }
+pazifista = { path = "../pazifista" }

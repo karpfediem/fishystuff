@@ -6,10 +6,10 @@ mod ice;
 mod pabr;
 mod wildcard;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use archive::{ArchiveIndex, ExtractOptions};
+use archive::ExtractOptions;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand};
 use fishing_workbooks::build_fishing_workbook_plan;
 use gcdata::{
@@ -21,6 +21,9 @@ use pabr::{load_region_group_mapping, PabrMap, DEFAULT_ROW_SHIFT};
 
 const VERSION_HEADER: &str =
     "pazifista - tool for extracting Black Desert Online archives and decoding PABR region maps.";
+pub const MINIMAP_TILE_ARCHIVE_FILTER: &str =
+    "ui_texture/new_ui_common_forlua/widget/rader/minimap_data_pack/rader_*.dds";
+pub use archive::{ArchiveIndex, FileEntry};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -443,6 +446,14 @@ pub fn run() -> Result<()> {
         Some(Command::Gcdata(gcdata_cli)) => run_gcdata(gcdata_cli),
         None => run_extract(cli.extract),
     }
+}
+
+pub fn canonical_archive_input_path(path: &Path) -> Result<PathBuf> {
+    canonical_archive_input(&path.to_path_buf())
+}
+
+pub fn open_archive_index_path(input_path: &Path, quiet: bool) -> Result<ArchiveIndex> {
+    open_archive_index(&input_path.to_path_buf(), quiet)
 }
 
 fn run_extract(cli: ExtractCli) -> Result<()> {

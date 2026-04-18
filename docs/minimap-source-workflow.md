@@ -8,8 +8,7 @@ inputs and display pyramid from original Black Desert Online archive data.
 The maintained path is:
 
 - original PAZ archive data
-- `pazifista` extraction of `rader_*.dds`
-- PNG conversion into raw `rader_*.png` tiles
+- `fishystuff_tilegen` raw baseline generation for `rader_*.png`
 - offline remap into the map-space display pyramid under
   `images/tiles/minimap_visual/v1`
 
@@ -48,13 +47,17 @@ This workflow depends on:
 - `pazifista`
 - ImageMagick `magick`
 
-## One Command
+## Two Layers
 
-The workflow is driven by:
+The raw baseline generation is owned by:
+
+- `cargo run -p fishystuff_tilegen --bin minimap_source_tiles -- ...`
+
+The repo convenience wrapper is:
 
 - `tools/scripts/build_minimap_tiles_from_source.mjs`
 
-Default rebuild:
+Default end-to-end rebuild:
 
 ```bash
 devenv shell -- node tools/scripts/build_minimap_tiles_from_source.mjs
@@ -79,22 +82,31 @@ devenv shell -- node tools/scripts/build_minimap_tiles_from_source.mjs \
   --source-archive /path/to/Paz
 ```
 
-## What The Script Does
+Raw baseline generation only:
 
-The script:
+```bash
+devenv shell -- cargo run -q -p fishystuff_tilegen --bin minimap_source_tiles -- \
+  --source-archive data/scratch/paz \
+  --out-dir data/cdn/public/images/tiles/minimap
+```
+
+## What Owns What
+
+`minimap_source_tiles` owns:
 
 1. lists archive matches for
    `ui_texture/new_ui_common_forlua/widget/rader/minimap_data_pack/rader_*.dds`
-2. extracts the required `.dds` files with `pazifista`
+2. extracts the required source payloads through `pazifista` archive handling
 3. converts them to raw `rader_*.png` tiles under
    `data/cdn/public/images/tiles/minimap/`
 4. prunes stale raw PNG tiles that no longer exist in the source archive set
 5. writes `data/cdn/public/images/tiles/minimap/source-manifest.json`
-6. rebuilds the map-space display pyramid under
-   `data/cdn/public/images/tiles/minimap_visual/v1/`
 
-The raw tile directory remains the source input for
-`tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`.
+The wrapper script owns:
+
+1. invoking `minimap_source_tiles`
+2. deciding whether `minimap_visual/v1` needs rebuilding
+3. invoking `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
 
 ## Outputs
 
@@ -114,6 +126,7 @@ Display pyramid:
   state. Do not commit unrelated generated payloads.
 - The display pyramid is the runtime visual surface. The raw `rader_*.png`
   tiles are intermediate source-backed inputs used to rebuild that surface.
-- The script is incremental by default. It only rebuilds raw PNG tiles whose
-  outputs are missing or older than the script, and it only rebuilds the visual
-  pyramid when its inputs or configuration changed.
+- The raw baseline command is incremental by default. It only rebuilds raw PNG
+  tiles that are missing unless you pass `--force`.
+- The wrapper only rebuilds the visual pyramid when the raw source manifest or
+  visual configuration changed, or when you pass `--force` / `--force-visual`.

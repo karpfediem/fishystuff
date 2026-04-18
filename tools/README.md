@@ -14,6 +14,7 @@ Current contents:
 
 - `tools/fishystuff_ingest`
 - `tools/fishystuff_tilegen`
+  - owns the raw minimap baseline generator `minimap_source_tiles`
 - `tools/fishystuff_dolt_import`
   - imports raw fishing workbooks and temporary calculator effect workbooks into Dolt
   - community zone fish presence/rate guess workflow is documented in
@@ -45,7 +46,7 @@ Current contents:
   - extracts source `.dds` icon textures from PAZ via `pazifista`
   - converts them to `44x44` WebP under `data/cdn/public/images/items/`
 - `tools/scripts/build_minimap_tiles_from_source.mjs`
-  - rebuilds source-backed minimap `rader_*.png` tiles from PAZ via `pazifista`
+  - wraps `minimap_source_tiles` plus `minimap_display_tiles`
   - rebuilds the display pyramid under `data/cdn/public/images/tiles/minimap_visual/v1/`
   - workflow is documented in
     [`docs/minimap-source-workflow.md`](../docs/minimap-source-workflow.md)
