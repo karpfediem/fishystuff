@@ -37,10 +37,6 @@ pub fn normalize_public_asset_reference(value: &str) -> String {
 }
 
 fn normalize_prefixed_site_asset_path(path: &str, absolute: bool) -> Option<String> {
-    if let Some(rest) = path.strip_prefix("images/exact_lookup/") {
-        let prefix = if absolute { "/" } else { "" };
-        return Some(format!("{prefix}fields/{rest}"));
-    }
     let is_legacy_static_path = path.starts_with("tiles/")
         || path.starts_with("terrain/")
         || path.starts_with("terrain_drape/");
@@ -62,18 +58,11 @@ fn normalize_known_public_asset_path(raw: &str) -> Option<String> {
         return Some(normalized);
     }
 
-    if raw.starts_with("/images/")
-        || raw.starts_with("/region_groups/")
-        || raw.starts_with("/fields/")
-        || raw.starts_with("/waypoints/")
+    if raw.starts_with("/images/") || raw.starts_with("/fields/") || raw.starts_with("/waypoints/")
     {
         return Some(raw.to_string());
     }
-    if raw.starts_with("images/")
-        || raw.starts_with("region_groups/")
-        || raw.starts_with("fields/")
-        || raw.starts_with("waypoints/")
-    {
+    if raw.starts_with("images/") || raw.starts_with("fields/") || raw.starts_with("waypoints/") {
         return Some(format!("/{raw}"));
     }
 
@@ -164,10 +153,6 @@ mod tests {
             "/images/terrain_drape/minimap/v1/manifest.json"
         );
         assert_eq!(
-            normalize_site_asset_path("/images/exact_lookup/zone_mask.v1.bin"),
-            "/fields/zone_mask.v1.bin"
-        );
-        assert_eq!(
             normalize_site_asset_path("/map/terrain/v1/manifest.json"),
             "/images/terrain/v1/manifest.json"
         );
@@ -175,6 +160,10 @@ mod tests {
 
     #[test]
     fn leaves_non_legacy_paths_unchanged() {
+        assert_eq!(
+            normalize_site_asset_path("/images/exact_lookup/zone_mask.v1.bin"),
+            "/images/exact_lookup/zone_mask.v1.bin"
+        );
         assert_eq!(
             normalize_site_asset_path("/images/tiles/minimap_visual/v1/tileset.json"),
             "/images/tiles/minimap_visual/v1/tileset.json"
@@ -202,10 +191,6 @@ mod tests {
             "/images/terrain/v1/manifest.json"
         );
         assert_eq!(
-            normalize_public_asset_reference("https://cdn.example.com/region_groups/v1.geojson"),
-            "/region_groups/v1.geojson"
-        );
-        assert_eq!(
             normalize_public_asset_reference("https://cdn.example.com/fields/regions.v1.bin"),
             "/fields/regions.v1.bin"
         );
@@ -224,6 +209,10 @@ mod tests {
         assert_eq!(
             normalize_public_asset_reference("00820994.png"),
             "/images/items/00820994.webp"
+        );
+        assert_eq!(
+            normalize_public_asset_reference("https://cdn.example.com/region_groups/v1.geojson"),
+            "https://cdn.example.com/region_groups/v1.geojson"
         );
     }
 }
