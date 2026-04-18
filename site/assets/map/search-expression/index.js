@@ -43,7 +43,6 @@ export {
   removeSelectedSearchTerm,
   resolveSearchExpression,
   resolveSelectedSearchTerms,
-  selectedSearchTermsFromLegacyFilters,
 } from "./selection.js";
 export {
   layerSupportsAttachmentClipMode,

@@ -159,7 +159,6 @@ function storedUiSignals(signals) {
   );
   const selectedTerms = resolveSelectedSearchTerms(
     search?.selectedTerms,
-    null,
     searchExpression,
   );
   const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
@@ -249,7 +248,6 @@ function uiStorageSnapshot(stored) {
   );
   const selectedTerms = resolveSelectedSearchTerms(
     stored?._map_ui?.search?.selectedTerms,
-    null,
     searchExpression,
   );
   return {
@@ -342,7 +340,7 @@ function restoreUiPatch(parsed) {
     ? resolveSearchExpression(search.expression, search.selectedTerms)
     : null;
   const selectedTerms = searchExpression
-    ? resolveSelectedSearchTerms(search.selectedTerms, null, searchExpression)
+    ? resolveSelectedSearchTerms(search.selectedTerms, searchExpression)
     : [];
 
   if (Object.keys(search).length || searchExpression) {

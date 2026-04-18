@@ -54,7 +54,7 @@ export function buildPatchPickerStateBundle(signals) {
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
   const searchExpression = resolveSearchExpression(search.expression, search.selectedTerms);
   const searchProjection = projectSelectedSearchTermsToBridgedFilters(
-    resolveSelectedSearchTerms(search.selectedTerms, null, searchExpression),
+    resolveSelectedSearchTerms(search.selectedTerms, searchExpression),
   );
   return {
     state: {

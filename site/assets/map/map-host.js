@@ -1728,11 +1728,7 @@ export function applyStatePatch(inputState, patch) {
       current.filters?.semanticFieldIdsByLayer,
     ),
     fishFilterTerms: normalizeFishFilterTerms(current.filters?.fishFilterTerms),
-    searchExpression: resolveSearchExpression(
-      current.filters?.searchExpression,
-      undefined,
-      current.filters,
-    ),
+    searchExpression: resolveSearchExpression(current.filters?.searchExpression),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
     toPatchId: current.filters?.toPatchId ?? null,
@@ -1860,12 +1856,6 @@ export function applyStatePatch(inputState, patch) {
         normalized.filters.layerPointIconScales,
       );
     }
-    const searchFilterKeysChanged =
-      hasOwn(normalized.filters, "fishIds") ||
-      hasOwn(normalized.filters, "zoneRgbs") ||
-      hasOwn(normalized.filters, "semanticFieldIdsByLayer") ||
-      hasOwn(normalized.filters, "fishFilterTerms") ||
-      hasOwn(normalized.filters, "searchExpression");
     if (hasOwn(normalized.filters, "searchExpression")) {
       const nextSearchExpression = resolveSearchExpression(normalized.filters.searchExpression);
       const projectedFilters = projectSelectedSearchTermsToBridgedFilters(
@@ -1886,8 +1876,6 @@ export function applyStatePatch(inputState, patch) {
         next.filters.fishFilterTerms = normalizeFishFilterTerms(projectedFilters.fishFilterTerms);
       }
       next.filters.searchExpression = nextSearchExpression;
-    } else if (searchFilterKeysChanged) {
-      next.filters.searchExpression = resolveSearchExpression(undefined, undefined, next.filters);
     }
     if (
       hasOwn(normalized.filters, "patchId") ||

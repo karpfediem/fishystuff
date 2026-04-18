@@ -83,7 +83,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.equal(patch.filters.fromPatchId, null);
   assert.equal(patch.filters.toPatchId, null);
   assert.equal(patch.filters.searchExpression.type, "group");
-  assert.equal(patch.filters.searchExpression.children.length, 5);
+  assert.equal(patch.filters.searchExpression.children.length, 0);
   assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
   assert.deepEqual(patch.filters.layerClipMasks, {
@@ -319,7 +319,7 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
   });
 });
 
-test("buildBridgeInputPatchFromSignals does not derive zone filters from the current selection", () => {
+test("buildBridgeInputPatchFromSignals does not derive search expression from bridged filters or selection", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
       _map_bridged: {
@@ -356,7 +356,7 @@ test("buildBridgeInputPatchFromSignals does not derive zone filters from the cur
   assert.deepEqual(patch.filters.searchExpression, {
     type: "group",
     operator: "or",
-    children: [{ type: "term", term: { kind: "fish-filter", term: "missing" } }],
+    children: [],
   });
   assert.deepEqual(patch.filters.layerFilterBindingIdsDisabledByLayer, {});
 });

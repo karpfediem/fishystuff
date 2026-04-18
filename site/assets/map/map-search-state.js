@@ -211,7 +211,6 @@ export function buildSearchPanelStateBundle(signals) {
   const expression = resolveSearchExpression(search.expression, search.selectedTerms);
   const selectedTerms = resolveSelectedSearchTerms(
     search.selectedTerms,
-    null,
     expression,
   );
   const projectedFilters = resolveSearchProjection({
@@ -261,7 +260,6 @@ export function resolveSelectedSearchTermsFromBundle(stateBundle) {
   );
   return resolveSelectedSearchTerms(
     stateBundle?.inputState?.search?.selectedTerms,
-    null,
     expression,
   );
 }

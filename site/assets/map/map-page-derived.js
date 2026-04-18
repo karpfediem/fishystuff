@@ -145,7 +145,6 @@ export function buildQueryFishSelectionSignalPatch(signals) {
   const currentExpression = resolveSearchExpression(
     signals?._map_ui?.search?.expression,
     signals?._map_ui?.search?.selectedTerms,
-    signals?._map_bridged?.filters,
   );
   const resolvedFishIds = resolvePendingQueryFishIds(pendingQueryFishSelectors, catalogFish);
   let nextExpression = currentExpression;
@@ -154,10 +153,10 @@ export function buildQueryFishSelectionSignalPatch(signals) {
   }
 
   const currentTermsJson = JSON.stringify(
-    resolveSelectedSearchTerms(undefined, null, currentExpression),
+    resolveSelectedSearchTerms(undefined, currentExpression),
   );
   const nextTermsJson = JSON.stringify(
-    resolveSelectedSearchTerms(undefined, null, nextExpression),
+    resolveSelectedSearchTerms(undefined, nextExpression),
   );
   if (currentTermsJson === nextTermsJson) {
     return {

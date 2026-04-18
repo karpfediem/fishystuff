@@ -1,70 +1,21 @@
-import { buildSearchExpressionFromSelectedTerms, coerceSearchExpression, normalizeSearchExpression, selectedSearchTermsFromExpression } from "./core.js";
-import { isPlainObject, normalizeIntegerList } from "./shared.js";
+import { buildSearchExpressionFromSelectedTerms, coerceSearchExpression, selectedSearchTermsFromExpression } from "./core.js";
+import { isPlainObject } from "./shared.js";
 import {
-  normalizeFishFilterTerms,
   normalizePatchId,
-  normalizeSearchTerm,
   normalizeSelectedSearchTerms,
+  normalizeSearchTerm,
   searchTermKey,
 } from "./terms.js";
-
-export function selectedSearchTermsFromLegacyFilters(filters) {
-  const source = isPlainObject(filters) ? filters : {};
-  const searchExpression = normalizeSearchExpression(source.searchExpression);
-  if (searchExpression) {
-    return selectedSearchTermsFromExpression(searchExpression);
-  }
-  const terms = [];
-  const exactPatchId = normalizePatchId(source.patchId);
-  const fromPatchId = normalizePatchId(source.fromPatchId) || exactPatchId;
-  const toPatchId = normalizePatchId(source.toPatchId) || exactPatchId;
-  if (fromPatchId) {
-    terms.push({ kind: "patch-bound", bound: "from", patchId: fromPatchId });
-  }
-  if (toPatchId) {
-    terms.push({ kind: "patch-bound", bound: "to", patchId: toPatchId });
-  }
-  for (const term of normalizeFishFilterTerms(source.fishFilterTerms)) {
-    terms.push({ kind: "fish-filter", term });
-  }
-  for (const fishId of normalizeIntegerList(source.fishIds)) {
-    terms.push({ kind: "fish", fishId });
-  }
-  for (const zoneRgb of normalizeIntegerList(source.zoneRgbs)) {
-    terms.push({ kind: "zone", zoneRgb });
-  }
-  const byLayer = isPlainObject(source.semanticFieldIdsByLayer)
-    ? source.semanticFieldIdsByLayer
-    : {};
-  for (const zoneRgb of normalizeIntegerList(byLayer.zone_mask)) {
-    terms.push({ kind: "zone", zoneRgb });
-  }
-  for (const [layerIdRaw, fieldIdsRaw] of Object.entries(byLayer)) {
-    const layerId = String(layerIdRaw ?? "").trim();
-    if (!layerId || layerId === "zone_mask") {
-      continue;
-    }
-    for (const fieldId of normalizeIntegerList(fieldIdsRaw)) {
-      terms.push({ kind: "semantic", layerId, fieldId });
-    }
-  }
-  return normalizeSelectedSearchTerms(terms);
-}
-
-export function resolveSearchExpression(expression, selectedTerms = undefined, legacyFilters = null) {
+export function resolveSearchExpression(expression, selectedTerms = undefined) {
   if (expression !== undefined) {
     return coerceSearchExpression(expression);
   }
-  const legacyExpression = normalizeSearchExpression(legacyFilters?.searchExpression);
-  if (legacyExpression) {
-    return legacyExpression;
-  }
   return buildSearchExpressionFromSelectedTerms(
-    resolveSelectedSearchTerms(selectedTerms, legacyFilters),
+    resolveSelectedSearchTerms(selectedTerms),
   );
 }
 
-export function resolveSelectedSearchTerms(value, legacyFilters = null, expression = undefined) {
+export function resolveSelectedSearchTerms(value, expression = undefined) {
   if (expression !== undefined) {
     return selectedSearchTermsFromExpression(resolveSearchExpression(expression));
   }
@@ -72,7 +23,7 @@ export function resolveSelectedSearchTerms(value, legacyFilters = null, expressi
   if (selectedTerms.length || Array.isArray(value)) {
     return selectedTerms;
   }
-  return selectedSearchTermsFromLegacyFilters(legacyFilters);
+  return [];
 }
 
 export function projectSelectedSearchTermsToBridgedFilters(terms) {

@@ -362,11 +362,7 @@ export function normalizeMapUiSignalState(raw) {
       open: current?.search?.open === true,
       query: String(current?.search?.query || ""),
       expression: searchExpression,
-      selectedTerms: resolveSelectedSearchTerms(
-        current?.search?.selectedTerms,
-        null,
-        searchExpression,
-      ),
+      selectedTerms: resolveSelectedSearchTerms(current?.search?.selectedTerms, searchExpression),
     },
     bookmarks: {
       placing: normalizedBookmarks.placing === true,
@@ -420,8 +416,6 @@ export function normalizeMapBridgedSignalState(raw) {
         rawFilters && hasOwnKey(rawFilters, "searchExpression")
           ? rawFilters.searchExpression
           : undefined,
-        undefined,
-        current.filters,
       ),
       patchId: fromPatchId || toPatchId ? null : normalizeNullableString(current.filters?.patchId),
       fromPatchId,

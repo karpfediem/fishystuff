@@ -116,11 +116,7 @@ function normalizeBridgedFilters(signals) {
   const bridged = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
   const searchProjection = resolveSearchProjection(signals);
-  const searchExpression = resolveSearchExpression(
-    search.expression,
-    search.selectedTerms,
-    bridged,
-  );
+  const searchExpression = resolveSearchExpression(search.expression, search.selectedTerms);
   return {
     fishIds: cloneJson(searchProjection.fishIds),
     zoneRgbs: cloneJson(searchProjection.zoneRgbs),

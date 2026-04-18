@@ -47,26 +47,10 @@ test("normalizeSelectedSearchTerms canonicalizes aliases and deduplicates term k
   );
 });
 
-test("resolveSelectedSearchTerms falls back to legacy bridged filters", () => {
+test("resolveSelectedSearchTerms returns empty when no selected terms or expression exist", () => {
   assert.deepEqual(
-    resolveSelectedSearchTerms(undefined, {
-      fromPatchId: "2026-02-26",
-      toPatchId: "2026-03-12",
-      fishIds: [912],
-      zoneRgbs: [123],
-      fishFilterTerms: ["missing"],
-      semanticFieldIdsByLayer: {
-        regions: [22],
-      },
-    }),
-    [
-      { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
-      { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
-      { kind: "fish-filter", term: "missing" },
-      { kind: "fish", fishId: 912 },
-      { kind: "zone", zoneRgb: 123 },
-      { kind: "semantic", layerId: "regions", fieldId: 22 },
-    ],
+    resolveSelectedSearchTerms(undefined),
+    [],
   );
 });
 
