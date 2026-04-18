@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
@@ -16,6 +16,9 @@ const defaultCalculatorApiUrl = process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim(
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
+const buildStateVersion = 1;
+const targetCacheVersion = 2;
+const sourceResolutionCacheVersion = 2;
 const defaultConvertConcurrency = Math.max(
   2,
   Math.min(
@@ -44,6 +47,12 @@ const sourceIconPathOverrides = new Map([
     "ui_texture/icon/new_icon/09_cash/00830349_3.dds",
   ],
 ]);
+const currentRenderSignature = JSON.stringify({
+  version: buildStateVersion,
+  iconSize,
+  webpQuality,
+  sourceIconPathOverrides: [...sourceIconPathOverrides.entries()].sort((left, right) => left[0] - right[0]),
+});
 
 function fail(message) {
   throw new Error(message);
@@ -145,10 +154,31 @@ function runCommandAsync(command, args) {
   });
 }
 
+function readJsonFile(filePath) {
+  if (!existsSync(filePath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeJsonFile(filePath, payload) {
+  writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
 function doltQueryJson(sql) {
   const output = runCommand("dolt", ["sql", "-r", "json", "-q", sql]);
   const parsed = JSON.parse(output);
   return parsed.rows ?? [];
+}
+
+function queryDoltWorkingHash() {
+  const rows = doltQueryJson("SELECT DOLT_HASHOF_DB() AS db_hash");
+  const row = rows[0] ?? {};
+  return String(row.db_hash ?? row["dolt_hashof_db()"] ?? "");
 }
 
 function padIconId(iconId) {
@@ -169,6 +199,24 @@ function outputPathForTarget(outputDir, target) {
     : outputPathForIcon(outputDir, target.iconId);
 }
 
+function outputBasenameForTarget(target) {
+  return target.assetStem
+    ? `${String(target.assetStem)}.webp`
+    : `${padIconId(target.iconId)}.webp`;
+}
+
+function buildStatePath(outputDir) {
+  return path.join(outputDir, ".build-state.json");
+}
+
+function targetCachePath(outputDir) {
+  return path.join(outputDir, ".target-cache.json");
+}
+
+function sourceResolutionCachePath(outputDir) {
+  return path.join(outputDir, ".source-resolution-cache.json");
+}
+
 function targetStem(target) {
   if (target?.assetStem) {
     return String(target.assetStem);
@@ -179,11 +227,74 @@ function targetStem(target) {
   return "";
 }
 
+function shouldReplaceDisplayName(currentName, nextName) {
+  if (!nextName) {
+    return false;
+  }
+  if (!currentName) {
+    return true;
+  }
+  return currentName.startsWith("icon:") && !nextName.startsWith("icon:");
+}
+
+function dedupeTargetsByOutput(targets) {
+  const dedupedTargets = [];
+  const targetsByOutput = new Map();
+  let duplicateCount = 0;
+
+  for (const target of targets) {
+    const outputKey = outputBasenameForTarget(target).toLowerCase();
+    const existing = targetsByOutput.get(outputKey);
+    if (!existing) {
+      const normalizedTarget = { ...target };
+      dedupedTargets.push(normalizedTarget);
+      targetsByOutput.set(outputKey, normalizedTarget);
+      continue;
+    }
+
+    duplicateCount += 1;
+    if (!existing.sourcePath && target.sourcePath) {
+      existing.sourcePath = target.sourcePath;
+    }
+    if (shouldReplaceDisplayName(existing.displayName, target.displayName)) {
+      existing.displayName = target.displayName;
+    }
+    if (!existing.kind && target.kind) {
+      existing.kind = target.kind;
+    }
+  }
+
+  return {
+    duplicateCount,
+    targets: dedupedTargets,
+  };
+}
+
 function shouldBuild(outputPath, force) {
   if (force || !existsSync(outputPath)) {
     return true;
   }
-  return statSync(outputPath).mtimeMs < scriptMtimeMs;
+  return false;
+}
+
+function loadBuildState(outputDir) {
+  const cached = readJsonFile(buildStatePath(outputDir));
+  if (!cached || cached.version !== buildStateVersion) {
+    return null;
+  }
+  if (cached.renderSignature !== currentRenderSignature) {
+    return { stale: true };
+  }
+  return cached;
+}
+
+function writeBuildState(outputDir, targetCount) {
+  writeJsonFile(buildStatePath(outputDir), {
+    version: buildStateVersion,
+    renderSignature: currentRenderSignature,
+    targetCount,
+    generatedAtUtc: new Date().toISOString(),
+  });
 }
 
 function normalizeArchivePath(rawPath) {
@@ -246,6 +357,29 @@ function parseAssetStemFromPath(rawPath) {
   const basename = file.split("/").pop() ?? file;
   const stem = basename.replace(/\.[^.]+$/, "");
   return stem || null;
+}
+
+function targetCacheKey(target) {
+  return target.assetStem ? `stem:${String(target.assetStem).toLowerCase()}` : `id:${target.iconId}`;
+}
+
+function archiveSignature(sourceArchive) {
+  const resolvedPath = realpathSync(sourceArchive);
+  let signaturePath = resolvedPath;
+  let signatureStats = statSync(resolvedPath);
+  if (signatureStats.isDirectory()) {
+    const metaCandidate = path.join(resolvedPath, "pad00000.meta");
+    if (existsSync(metaCandidate)) {
+      signaturePath = metaCandidate;
+      signatureStats = statSync(signaturePath);
+    }
+  }
+  return {
+    resolvedPath,
+    signaturePath,
+    mtimeMs: signatureStats.mtimeMs,
+    size: signatureStats.size,
+  };
 }
 
 function parseArchiveMatches(listingText) {
@@ -542,8 +676,92 @@ function queryCalculatorIconTargets(calculatorApiUrl) {
   return [...targets.values()];
 }
 
-function resolveMissingSourcePaths(targets, sourceArchive) {
-  const explicitTargets = targets.filter((target) => target.sourcePath);
+function loadCachedTargets(outputDir, doltWorkingHash, calculatorApiUrl) {
+  if (calculatorApiUrl) {
+    return null;
+  }
+  const cached = readJsonFile(targetCachePath(outputDir));
+  if (!cached || cached.version !== targetCacheVersion) {
+    return null;
+  }
+  if (cached.scriptMtimeMs !== scriptMtimeMs || cached.doltWorkingHash !== doltWorkingHash) {
+    return null;
+  }
+  return Array.isArray(cached.targets) ? cached.targets : null;
+}
+
+function writeCachedTargets(outputDir, doltWorkingHash, targets) {
+  writeJsonFile(targetCachePath(outputDir), {
+    version: targetCacheVersion,
+    scriptMtimeMs,
+    doltWorkingHash,
+    generatedAtUtc: new Date().toISOString(),
+    targets,
+  });
+}
+
+function loadSourceResolutionCache(outputDir, signature) {
+  const cached = readJsonFile(sourceResolutionCachePath(outputDir));
+  if (!cached || cached.version !== sourceResolutionCacheVersion) {
+    return {
+      entries: new Map(),
+      dirty: false,
+      signature,
+    };
+  }
+  if (
+    cached.scriptMtimeMs !== scriptMtimeMs ||
+    cached.signaturePath !== signature.signaturePath ||
+    cached.signatureMtimeMs !== signature.mtimeMs ||
+    cached.signatureSize !== signature.size
+  ) {
+    return {
+      entries: new Map(),
+      dirty: false,
+      signature,
+    };
+  }
+  return {
+    entries: new Map(Object.entries(cached.entries ?? {})),
+    dirty: false,
+    signature,
+  };
+}
+
+function writeSourceResolutionCache(outputDir, cache) {
+  writeJsonFile(sourceResolutionCachePath(outputDir), {
+    version: sourceResolutionCacheVersion,
+    scriptMtimeMs,
+    signaturePath: cache.signature.signaturePath,
+    signatureMtimeMs: cache.signature.mtimeMs,
+    signatureSize: cache.signature.size,
+    generatedAtUtc: new Date().toISOString(),
+    entries: Object.fromEntries(cache.entries),
+  });
+}
+
+function resolveMissingSourcePaths(targets, sourceArchive, resolutionCache) {
+  const requestedSourcePaths = new Map();
+  const targetsToResolve = [];
+  for (const target of targets) {
+    const requestedSourcePath = target.sourcePath ? target.sourcePath.toLowerCase() : null;
+    requestedSourcePaths.set(targetCacheKey(target), requestedSourcePath);
+    const cached = resolutionCache.entries.get(targetCacheKey(target));
+    if (cached && cached.requestedSourcePath === requestedSourcePath) {
+      if (cached.resolvedSourcePath) {
+        target.sourcePath = cached.resolvedSourcePath;
+      } else {
+        target.sourcePath = null;
+      }
+      if (cached.unresolved) {
+        target.unresolved = true;
+      }
+      continue;
+    }
+    targetsToResolve.push(target);
+  }
+
+  const explicitTargets = targetsToResolve.filter((target) => target.sourcePath);
   const verifiedExactPaths = new Set();
   if (explicitTargets.length > 0) {
     const exactMatches = listArchiveMatches(
@@ -556,7 +774,7 @@ function resolveMissingSourcePaths(targets, sourceArchive) {
   }
 
   const unresolved = [];
-  for (const target of targets) {
+  for (const target of targetsToResolve) {
     if (!target.sourcePath) {
       unresolved.push(target);
       continue;
@@ -568,6 +786,14 @@ function resolveMissingSourcePaths(targets, sourceArchive) {
   }
 
   if (unresolved.length === 0) {
+    for (const target of targetsToResolve) {
+      resolutionCache.entries.set(targetCacheKey(target), {
+        requestedSourcePath: requestedSourcePaths.get(targetCacheKey(target)) ?? null,
+        resolvedSourcePath: target.sourcePath ?? null,
+        unresolved: false,
+      });
+    }
+    resolutionCache.dirty = targetsToResolve.length > 0;
     return;
   }
 
@@ -595,6 +821,15 @@ function resolveMissingSourcePaths(targets, sourceArchive) {
     }
     target.sourcePath = bestMatch.path;
   }
+
+  for (const target of targetsToResolve) {
+    resolutionCache.entries.set(targetCacheKey(target), {
+      requestedSourcePath: requestedSourcePaths.get(targetCacheKey(target)) ?? null,
+      resolvedSourcePath: target.unresolved ? null : target.sourcePath ?? null,
+      unresolved: Boolean(target.unresolved),
+    });
+  }
+  resolutionCache.dirty = targetsToResolve.length > 0;
 }
 
 function pruneStaleOutputs(outputDir, targets, quiet) {
@@ -692,10 +927,30 @@ async function main() {
     console.log(`resolving source-backed item icon targets into ${path.relative(repoRoot, options.outputDir)}`);
   }
 
-  const targets = queryCalculatorIconTargets(options.calculatorApiUrl);
+  const doltWorkingHash = options.calculatorApiUrl ? "" : queryDoltWorkingHash();
+  let targets = loadCachedTargets(options.outputDir, doltWorkingHash, options.calculatorApiUrl);
+  if (!targets) {
+    targets = queryCalculatorIconTargets(options.calculatorApiUrl);
+  } else if (!options.quiet) {
+    console.log(`using cached source-backed item icon targets (${targets.length} targets)`);
+  }
+
+  const dedupedTargets = dedupeTargetsByOutput(targets);
+  targets = dedupedTargets.targets;
+  if (dedupedTargets.duplicateCount > 0 && !options.quiet) {
+    console.log(
+      `collapsed ${dedupedTargets.duplicateCount} duplicate source-backed icon targets into ${targets.length} output files`,
+    );
+  }
+  if (!options.calculatorApiUrl) {
+    writeCachedTargets(options.outputDir, doltWorkingHash, targets);
+  }
+
+  const buildState = loadBuildState(options.outputDir);
   pruneStaleOutputs(options.outputDir, targets, options.quiet);
   const pendingTargets = targets.filter((target) =>
-    shouldBuild(outputPathForTarget(options.outputDir, target), options.force),
+    shouldBuild(outputPathForTarget(options.outputDir, target), options.force) ||
+    Boolean(buildState?.stale),
   );
 
   if (!options.quiet) {
@@ -708,6 +963,7 @@ async function main() {
     if (!options.quiet) {
       console.log(`source-backed fishing icons are current under ${path.relative(repoRoot, options.outputDir)}`);
     }
+    writeBuildState(options.outputDir, targets.length);
     return;
   }
 
@@ -721,7 +977,11 @@ async function main() {
   if (!options.quiet) {
     console.log(`verifying source icon paths from ${options.sourceArchive}`);
   }
-  resolveMissingSourcePaths(pendingTargets, options.sourceArchive);
+  const resolutionCache = loadSourceResolutionCache(
+    options.outputDir,
+    archiveSignature(options.sourceArchive),
+  );
+  resolveMissingSourcePaths(pendingTargets, options.sourceArchive, resolutionCache);
   const unresolvedTargets = pendingTargets.filter((target) => target.unresolved);
   for (const target of unresolvedTargets) {
     console.warn(
@@ -733,6 +993,10 @@ async function main() {
     console.log(
       `preparing ${readyTargets.length} source-backed item icons (${unresolvedTargets.length} unresolved)`,
     );
+  }
+
+  if (resolutionCache.dirty) {
+    writeSourceResolutionCache(options.outputDir, resolutionCache);
   }
 
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "fishystuff-item-icons-"));
@@ -752,6 +1016,8 @@ async function main() {
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+
+  writeBuildState(options.outputDir, targets.length);
 }
 
 main().catch((error) => {
