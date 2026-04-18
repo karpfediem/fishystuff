@@ -7,12 +7,26 @@ if [ "$#" -eq 0 ]; then
 fi
 
 label="${LOG_TS_LABEL:-process}"
+log_file="${LOG_TS_FILE:-}"
+
+if [ -n "$log_file" ]; then
+  mkdir -p "$(dirname "$log_file")"
+fi
+
+emit_line() {
+  local line="$1"
+
+  printf '%s\n' "$line"
+  if [ -n "$log_file" ]; then
+    printf '%s\n' "$line" >> "$log_file"
+  fi
+}
 
 timestamp() {
   date +"%Y-%m-%dT%H:%M:%S%z"
 }
 
-printf '[%s] [%s] starting: %s\n' "$(timestamp)" "$label" "$*"
+emit_line "[$(timestamp)] [$label] starting: $*"
 
 set +e
 "$@" 2>&1 | gawk -v label="$label" '
@@ -20,14 +34,18 @@ set +e
     printf("[%s] [%s] %s\n", strftime("%Y-%m-%dT%H:%M:%S%z"), label, $0);
     fflush();
   }
-'
+' | if [ -n "$log_file" ]; then
+  tee -a "$log_file"
+else
+  cat
+fi
 status=${PIPESTATUS[0]}
 set -e
 
 if [ "$status" -eq 0 ]; then
-  printf '[%s] [%s] exited successfully\n' "$(timestamp)" "$label"
+  emit_line "[$(timestamp)] [$label] exited successfully"
 else
-  printf '[%s] [%s] exited with status %d\n' "$(timestamp)" "$label" "$status"
+  emit_line "[$(timestamp)] [$label] exited with status $status"
 fi
 
 exit "$status"

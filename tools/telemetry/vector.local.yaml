@@ -1,0 +1,36 @@
+data_dir: "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector/state}"
+
+api:
+  enabled: true
+  address: "127.0.0.1:8686"
+
+sources:
+  devenv_process_logs:
+    type: file
+    include:
+      - "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector}/process/*.log"
+    read_from: beginning
+  telemetry_ingress:
+    type: opentelemetry
+    grpc:
+      address: "127.0.0.1:4817"
+    http:
+      address: "127.0.0.1:4820"
+      headers: []
+
+sinks:
+  logs_archive:
+    type: file
+    inputs:
+      - devenv_process_logs
+    path: "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector}/archive/logs/%Y-%m-%d.ndjson"
+    encoding:
+      codec: json
+
+  traces_archive:
+    type: file
+    inputs:
+      - telemetry_ingress.traces
+    path: "${env:FISHYSTUFF_VECTOR_DATA_DIR:-./data/vector}/archive/traces/%Y-%m-%d.ndjson"
+    encoding:
+      codec: json

@@ -24,6 +24,8 @@ exporters:
     endpoint: "127.0.0.1:${env:FISHYSTUFF_DEV_JAEGER_OTLP_GRPC_PORT:-4317}"
     tls:
       insecure: true
+  otlphttp/vector:
+    endpoint: "http://127.0.0.1:${env:FISHYSTUFF_DEV_VECTOR_OTLP_HTTP_PORT:-4820}"
   prometheus:
     endpoint: "127.0.0.1:${env:FISHYSTUFF_DEV_OTEL_SPANMETRICS_PORT:-8889}"
 
@@ -37,7 +39,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/jaeger, spanmetrics]
+      exporters: [otlp/jaeger, otlphttp/vector, spanmetrics]
     metrics/spanmetrics:
       receivers: [spanmetrics]
       exporters: [prometheus]

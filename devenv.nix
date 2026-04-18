@@ -6,6 +6,9 @@ let
   dbName = "fishystuff";
   apiHost = "127.0.0.1";
   apiPort = 8080;
+  vectorApiPort = 8686;
+  vectorOtlpGrpcPort = 4817;
+  vectorOtlpHttpPort = 4820;
   otelCollectorHttpPort = 4818;
   otelCollectorHealthPort = 13133;
   otelCollectorSpanmetricsPort = 8889;
@@ -59,6 +62,7 @@ in {
       lsof
       mesa
       opentelemetry-collector-contrib
+      vector
       rsync
       skopeo
       xlsx2csv
@@ -132,6 +136,9 @@ in {
     FISHYSTUFF_DEV_API_PORT = toString apiPort;
     FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
     FISHYSTUFF_DEV_SITE_PORT = toString sitePort;
+    FISHYSTUFF_DEV_VECTOR_API_PORT = toString vectorApiPort;
+    FISHYSTUFF_DEV_VECTOR_OTLP_GRPC_PORT = toString vectorOtlpGrpcPort;
+    FISHYSTUFF_DEV_VECTOR_OTLP_HTTP_PORT = toString vectorOtlpHttpPort;
     FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT = toString otelCollectorHttpPort;
     FISHYSTUFF_DEV_OTEL_COLLECTOR_HEALTH_PORT = toString otelCollectorHealthPort;
     FISHYSTUFF_DEV_OTEL_SPANMETRICS_PORT = toString otelCollectorSpanmetricsPort;
@@ -145,6 +152,7 @@ in {
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
+    FISHYSTUFF_VECTOR_DATA_DIR = "${config.devenv.root}/data/vector";
     FISHYSTUFF_RUNTIME_OTEL_ENABLED = "true";
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME = "fishystuff-site-local";
     FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT = "local";
@@ -236,7 +244,7 @@ in {
   processes.db = {
     cwd = config.devenv.root;
     exec = ''
-      exec env LOG_TS_LABEL=db ${logTimestampRunner} \
+      exec env LOG_TS_LABEL=db LOG_TS_FILE=${config.devenv.root}/data/vector/process/db.log ${logTimestampRunner} \
         dolt sql-server --host ${dbHost} --port ${toString dbPort}
     '';
   };
@@ -245,10 +253,12 @@ in {
     cwd = config.devenv.root;
     exec = ''
       exec env API_BIND_HOST=${apiHost} API_PORT=${toString apiPort} \
+        LOG_TS_FILE=${config.devenv.root}/data/vector/process/api.log \
         ${config.devenv.root}/tools/scripts/run_api.sh
     '';
     after = [
       "devenv:processes:db@started"
+      "devenv:processes:vector@started"
       "devenv:processes:otel-collector@started"
     ];
   };
@@ -256,7 +266,7 @@ in {
   processes.jaeger = {
     cwd = config.devenv.root;
     exec = ''
-      exec env LOG_TS_LABEL=jaeger ${logTimestampRunner} \
+      exec env LOG_TS_LABEL=jaeger LOG_TS_FILE=${config.devenv.root}/data/vector/process/jaeger.log ${logTimestampRunner} \
         ${jaegerLocal}/bin/jaeger \
         --config ${config.devenv.root}/tools/telemetry/jaeger.local.yaml
     '';
@@ -265,18 +275,33 @@ in {
   processes.otel-collector = {
     cwd = config.devenv.root;
     exec = ''
-      exec env LOG_TS_LABEL=otelcol ${logTimestampRunner} \
+      exec env LOG_TS_LABEL=otelcol LOG_TS_FILE=${config.devenv.root}/data/vector/process/otel-collector.log ${logTimestampRunner} \
         ${pkgs.opentelemetry-collector-contrib}/bin/otelcol-contrib \
         --config ${config.devenv.root}/tools/telemetry/otel-collector.local.yaml
     '';
     after = [ "devenv:processes:jaeger@started" ];
   };
 
+  processes.vector = {
+    cwd = config.devenv.root;
+    exec = ''
+      mkdir -p \
+        ${config.devenv.root}/data/vector/process \
+        ${config.devenv.root}/data/vector/archive/logs \
+        ${config.devenv.root}/data/vector/archive/traces \
+        ${config.devenv.root}/data/vector/state
+      exec env LOG_TS_LABEL=vector ${logTimestampRunner} \
+        ${pkgs.vector}/bin/vector \
+        --config-yaml ${config.devenv.root}/tools/telemetry/vector.local.yaml
+    '';
+    after = [ "devenv:processes:otel-collector@started" ];
+  };
+
   processes.prometheus = {
     cwd = config.devenv.root;
     exec = ''
       mkdir -p ${config.devenv.root}/data/prometheus
-      exec env LOG_TS_LABEL=prometheus ${logTimestampRunner} \
+      exec env LOG_TS_LABEL=prometheus LOG_TS_FILE=${config.devenv.root}/data/vector/process/prometheus.log ${logTimestampRunner} \
         ${prometheusLocal}/bin/prometheus \
         --config.file ${config.devenv.root}/tools/telemetry/prometheus.local.yaml \
         --storage.tsdb.path ${config.devenv.root}/data/prometheus \
@@ -289,7 +314,7 @@ in {
   profiles.watch.module = {
     processes = {
       api.exec = lib.mkForce ''
-        exec watchexec -r \
+        exec env LOG_TS_FILE=${config.devenv.root}/data/vector/process/api.log watchexec -r \
           -w api \
           -w lib \
           -w Cargo.toml \
@@ -305,7 +330,7 @@ in {
       map-build = {
         cwd = config.devenv.root;
         exec = ''
-          exec watchexec -r --postpone \
+          exec env LOG_TS_LABEL=map-build LOG_TS_FILE=${config.devenv.root}/data/vector/process/map-build.log ${logTimestampRunner} watchexec -r --postpone \
             -w map/fishystuff_ui_bevy \
             -w lib/fishystuff_api \
             -w lib/fishystuff_client \
@@ -322,7 +347,7 @@ in {
       cdn-stage = {
         cwd = config.devenv.root;
         exec = ''
-          exec watchexec -r --postpone \
+          exec env LOG_TS_LABEL=cdn-stage LOG_TS_FILE=${config.devenv.root}/data/vector/process/cdn-stage.log ${logTimestampRunner} watchexec -r --postpone \
             -w site/assets/map \
             -w tools/scripts/stage_cdn_assets.sh \
             -w tools/scripts/build_item_icons_from_source.mjs \
@@ -335,7 +360,7 @@ in {
       site-build = {
         cwd = config.devenv.root;
         exec = ''
-          exec watchexec -r --postpone \
+          exec env LOG_TS_LABEL=site-build LOG_TS_FILE=${config.devenv.root}/data/vector/process/site-build.log ${logTimestampRunner} watchexec -r --postpone \
             -w site/content \
             -w site/layouts \
             -w site/assets \

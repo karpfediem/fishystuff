@@ -33,6 +33,7 @@ long-lived local services:
 - `db` must become ready before `api`
 - `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
 - `otel-collector` accepts browser OTLP/HTTP on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
+- `vector` tails repo-local process logs under `data/vector/process/*.log`, receives a trace copy from the local collector on `127.0.0.1:4820`, and writes newline-delimited JSON archives under `data/vector/archive/`
 - `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
@@ -96,6 +97,25 @@ Jaeger Service Performance Monitoring now uses Prometheus-backed RED metrics
 derived from the collector's `spanmetrics` connector. Expect the Monitor tab to
 remain empty until spans have been emitted and Prometheus has completed at least
 one scrape cycle.
+
+Vector now runs alongside that path as the repo-owned collection layer for local
+developer logs and trace copies. It is intentionally not the browser OTLP
+ingress because the current local collector config explicitly handles browser
+CORS for `http://127.0.0.1:1990` and `http://localhost:1990`, while Vector’s
+OpenTelemetry source is being used here as a local backend receiver. The current
+local archive paths are:
+
+- `data/vector/process/*.log`
+  - per-process timestamped stdout/stderr captures from the local supervised stack
+- `data/vector/archive/logs/*.ndjson`
+  - Vector-serialized log events collected from those process log files
+- `data/vector/archive/traces/*.ndjson`
+  - Vector-serialized trace events copied from the local OTLP collector
+
+If you want to add downstream routing later, extend
+`tools/telemetry/vector.local.yaml` with new sinks and connect them to
+`devenv_process_logs` for process log events or `telemetry_ingress.traces` for
+OTLP trace copies.
 
 This tracing path is intentionally request-scoped. It does not stream
 high-frequency Bevy/WASM spans over the browser bridge. Continuous runtime
