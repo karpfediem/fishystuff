@@ -37,17 +37,17 @@ test("buildPropagationTargets uses prefix patterns so cross-origin API paths sti
 
 test("buildIgnorePatterns keeps ignoring the exporter endpoint and CDN prefix", () => {
   const patterns = buildIgnorePatterns({
-    exporterEndpoint: "http://localhost:1990/otel/v1/traces",
-    metricsExporterEndpoint: "http://localhost:1990/otel/v1/metrics",
-    logsExporterEndpoint: "http://localhost:1990/otel/v1/logs",
+    exporterEndpoint: "http://localhost:1990/telemetry/v1/traces",
+    metricsExporterEndpoint: "http://localhost:1990/telemetry/v1/metrics",
+    logsExporterEndpoint: "http://localhost:1990/telemetry/v1/logs",
     cdnBaseUrl: "http://localhost:4040",
   });
 
   expect(patterns).toHaveLength(4);
-  expect(patterns[0].test("http://localhost:1990/otel/v1/traces")).toBe(true);
-  expect(patterns[0].test("http://localhost:1990/otel/v1/traces?x=1")).toBe(true);
-  expect(patterns[1].test("http://localhost:1990/otel/v1/metrics")).toBe(true);
-  expect(patterns[2].test("http://localhost:1990/otel/v1/logs")).toBe(true);
+  expect(patterns[0].test("http://localhost:1990/telemetry/v1/traces")).toBe(true);
+  expect(patterns[0].test("http://localhost:1990/telemetry/v1/traces?x=1")).toBe(true);
+  expect(patterns[1].test("http://localhost:1990/telemetry/v1/metrics")).toBe(true);
+  expect(patterns[2].test("http://localhost:1990/telemetry/v1/logs")).toBe(true);
   expect(patterns[3].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
   expect(patterns[3].test("http://localhost:8080/api/v1/meta")).toBe(false);
 });

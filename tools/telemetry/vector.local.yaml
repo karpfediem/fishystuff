@@ -10,13 +10,21 @@ sources:
     include:
       - "./data/vector/process/*.log"
     read_from: beginning
-  telemetry_ingress:
+  telemetry_logs_ingress:
+    type: opentelemetry
+    grpc:
+      address: "127.0.0.1:4819"
+    http:
+      address: "127.0.0.1:4820"
+      headers: []
+  telemetry_otlp_ingress:
     type: opentelemetry
     grpc:
       address: "127.0.0.1:4817"
     http:
-      address: "127.0.0.1:4820"
+      address: "127.0.0.1:${FISHYSTUFF_DEV_VECTOR_OTLP_PASSTHROUGH_HTTP_PORT:-4821}"
       headers: []
+    use_otlp_decoding: true
 
 transforms:
   normalized_process_logs:
@@ -114,7 +122,7 @@ transforms:
   normalized_telemetry_logs:
     type: remap
     inputs:
-      - telemetry_ingress.logs
+      - telemetry_logs_ingress.logs
     source: |
       .app = "fishystuff"
       .deployment_environment = "local"
@@ -257,7 +265,7 @@ sinks:
   traces_archive:
     type: file
     inputs:
-      - telemetry_ingress.traces
+      - telemetry_otlp_ingress.traces
     path: "./data/vector/archive/traces/%Y-%m-%d.ndjson"
     encoding:
       codec: json
@@ -265,31 +273,31 @@ sinks:
   telemetry_ingress_traces_to_collector:
     type: opentelemetry
     inputs:
-      - telemetry_ingress.traces
+      - telemetry_otlp_ingress.traces
     protocol:
       type: http
       uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/traces"
       encoding:
-        codec: json
+        codec: otlp
     healthcheck:
       enabled: false
 
   telemetry_ingress_metrics_to_collector:
     type: opentelemetry
     inputs:
-      - telemetry_ingress.metrics
+      - telemetry_otlp_ingress.metrics
     protocol:
       type: http
       uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/metrics"
       encoding:
-        codec: json
+        codec: otlp
     healthcheck:
       enabled: false
 
   telemetry_ingress_logs_archive:
     type: file
     inputs:
-      - telemetry_ingress.logs
+      - telemetry_logs_ingress.logs
     path: "./data/vector/archive/otel-logs/%Y-%m-%d.ndjson"
     encoding:
       codec: json

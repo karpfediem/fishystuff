@@ -56,9 +56,9 @@ all                  outputs-of *
 process-logs         outputs-of normalized_process_logs
 raw-process-logs     outputs-of devenv_process_logs
 browser-logs         outputs-of normalized_telemetry_logs
-raw-browser-logs     outputs-of telemetry_ingress.logs
-raw-traces           outputs-of telemetry_ingress.traces
-raw-metrics          outputs-of telemetry_ingress.metrics
+raw-browser-logs     outputs-of telemetry_logs_ingress.logs
+raw-traces           outputs-of telemetry_otlp_ingress.traces
+raw-metrics          outputs-of telemetry_otlp_ingress.metrics
 to-loki              inputs-of logs_loki
 to-collector-traces  inputs-of telemetry_ingress_traces_to_collector
 to-collector-metrics inputs-of telemetry_ingress_metrics_to_collector
@@ -169,13 +169,13 @@ case "$preset" in
     tap_scope=(--outputs-of "normalized_telemetry_logs")
     ;;
   raw-browser-logs)
-    tap_scope=(--outputs-of "telemetry_ingress.logs")
+    tap_scope=(--outputs-of "telemetry_logs_ingress.logs")
     ;;
   raw-traces)
-    tap_scope=(--outputs-of "telemetry_ingress.traces")
+    tap_scope=(--outputs-of "telemetry_otlp_ingress.traces")
     ;;
   raw-metrics)
-    tap_scope=(--outputs-of "telemetry_ingress.metrics")
+    tap_scope=(--outputs-of "telemetry_otlp_ingress.metrics")
     ;;
   to-loki)
     tap_scope=(--inputs-of "logs_loki")

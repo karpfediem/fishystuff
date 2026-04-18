@@ -9,6 +9,7 @@ let
   vectorApiPort = 8686;
   vectorOtlpGrpcPort = 4817;
   vectorOtlpHttpPort = 4820;
+  vectorOtlpPassthroughHttpPort = 4821;
   lokiHttpPort = 3100;
   lokiGrpcPort = 9096;
   otelCollectorHttpPort = 4818;
@@ -142,6 +143,7 @@ in {
     FISHYSTUFF_DEV_VECTOR_API_PORT = toString vectorApiPort;
     FISHYSTUFF_DEV_VECTOR_OTLP_GRPC_PORT = toString vectorOtlpGrpcPort;
     FISHYSTUFF_DEV_VECTOR_OTLP_HTTP_PORT = toString vectorOtlpHttpPort;
+    FISHYSTUFF_DEV_VECTOR_OTLP_PASSTHROUGH_HTTP_PORT = toString vectorOtlpPassthroughHttpPort;
     FISHYSTUFF_DEV_LOKI_HTTP_PORT = toString lokiHttpPort;
     FISHYSTUFF_DEV_LOKI_GRPC_PORT = toString lokiGrpcPort;
     FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT = toString otelCollectorHttpPort;
@@ -193,8 +195,14 @@ in {
         root * ${config.devenv.root}/site/.out
         header Cache-Control "no-store"
 
-        handle_path /telemetry/* {
+        handle /telemetry/v1/logs* {
+          uri strip_prefix /telemetry
           reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+        }
+
+        handle /telemetry/* {
+          uri strip_prefix /telemetry
+          reverse_proxy 127.0.0.1:${toString vectorOtlpPassthroughHttpPort}
         }
 
         try_files {path} {path}.html {path}/index.html =404
@@ -206,8 +214,14 @@ in {
         root * ${config.devenv.root}/site/.out
         header Cache-Control "no-store"
 
-        handle_path /telemetry/* {
+        handle /telemetry/v1/logs* {
+          uri strip_prefix /telemetry
           reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+        }
+
+        handle /telemetry/* {
+          uri strip_prefix /telemetry
+          reverse_proxy 127.0.0.1:${toString vectorOtlpPassthroughHttpPort}
         }
 
         try_files {path} {path}.html {path}/index.html =404

@@ -38,6 +38,8 @@ Repository-level notes for working in this monorepo.
   - API server
   - CDN file server
   - local site server
+- Use `devenv up -d --no-tui` when you want the same stack in the background
+  under `process-compose`.
 - Use `devenv up --profile watch --no-tui` when you want the same stack plus
   rebuild/restart watches for the API, map runtime, CDN staging, and site
   output.
@@ -59,34 +61,30 @@ Repository-level notes for working in this monorepo.
   - Rust/wasm checks and bundle rebuilds
 
 ## Browser telemetry workflow
-- Start page investigations in DevTools MCP first: reload the page, inspect
-  `list_console_messages`, inspect `list_network_requests`, and evaluate
-  `window.__fishystuffOtel` to confirm browser OTEL is initialized and which
-  `/telemetry/v1/*` endpoints the page is using.
-- Confirm the Vector API is healthy before deeper telemetry debugging with
-  `curl -fsS http://127.0.0.1:8686/health`. If this fails, restore Vector first
-  instead of assuming the browser is silent.
+- The browser exports OTLP logs, metrics, and traces through the local site at
+  `/telemetry/v1/logs`, `/telemetry/v1/metrics`, and `/telemetry/v1/traces`.
+- Start in DevTools MCP: reload the page, inspect `list_network_requests`, and
+  evaluate `window.__fishystuffOtel` to confirm the bridge is initialized and
+  the page is posting to the `/telemetry/v1/*` endpoints.
+- Healthy browser telemetry should show HTTP `200` `POST` requests for logs,
+  metrics, and traces. Confirm the local pipeline is up with
+  `curl -fsS http://127.0.0.1:8686/health`.
 - Use `devenv shell -- tools/scripts/vector-tap.sh browser-logs`,
-  `raw-traces`, and `raw-metrics` as the first backend inspection step. These
-  taps prove whether the browser emitted OTLP into the local pipeline at all.
-- Use `devenv shell -- tools/scripts/vector-tap.sh to-collector-traces` and
-  `to-collector-metrics` to inspect the collector boundary separately from raw
-  ingress.
-- Query downstream stores only after ingress is confirmed:
-  - Prometheus with `http://127.0.0.1:9090/api/v1/query?...`
-  - Jaeger with `http://127.0.0.1:16686/api/services` and
-    `http://127.0.0.1:16686/api/traces?...`
-- If DevTools shows successful `POST /telemetry/v1/logs`,
-  `/telemetry/v1/metrics`, or `/telemetry/v1/traces` requests and the Vector
-  raw taps show the corresponding events, but Prometheus queries and Jaeger
-  trace lookups are empty, treat the failure as Vector to collector or storage
-  integration rather than page instrumentation.
-- For ad hoc synthetic probes from DevTools, use
-  `window.__fishystuffOtel.emitError(...)` for logs and
-  `window.__fishystuffOtel.withSpanAsync(...)` for traces. On the map page, use
-  `raw-metrics` to inspect live `fishystuff.map.*` values such as
-  `fishystuff.map.bevy.fps`, `fishystuff.map.runtime.visible_layers`, and the
-  layer tile gauges.
+  `raw-metrics`, and `raw-traces` as the first live inspection step. This is
+  the central local entrypoint for browser telemetry.
+- Query Prometheus with `http://127.0.0.1:9090/api/v1/query?...` for RED and
+  browser metrics. The map page continuously exports values such as
+  `fishystuff_map_bevy_fps` and `fishystuff_map_runtime_visible_layers`.
+- Query Jaeger with `http://127.0.0.1:16686/api/services` and
+  `http://127.0.0.1:16686/api/traces?...`. Browser spans land under service
+  `fishystuff-site-local`.
+- Browser logs flow to Loki, and raw OTLP browser log payloads are archived at
+  `data/vector/archive/otel-logs/YYYY-MM-DD.ndjson` for grep-friendly
+  inspection.
+- For ad hoc probes from DevTools, use
+  `window.__fishystuffOtel.emitError(...)`,
+  `window.__fishystuffOtel.withSpanAsync(...)`, and
+  `window.__fishystuffOtel.getMeter(...).createCounter(...).add(...)`.
 
 ## Performance workflow
 - Do not make performance claims without running the native profiling harness or the relevant benchmark target.
