@@ -116,6 +116,14 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function buildBaseUrlPrefixPattern(baseUrl) {
+  const normalized = normalizeUrl(baseUrl);
+  if (!normalized) {
+    return null;
+  }
+  return new RegExp(`^${escapeRegExp(normalized)}(?:$|[/?#])`);
+}
+
 function buildIgnorePatterns(config) {
   const patterns = [];
   if (config.exporterEndpoint) {
@@ -129,8 +137,9 @@ function buildIgnorePatterns(config) {
 
 function buildPropagationTargets(config) {
   const targets = [];
-  if (config.apiBaseUrl) {
-    targets.push(config.apiBaseUrl);
+  const apiBasePattern = buildBaseUrlPrefixPattern(config.apiBaseUrl);
+  if (apiBasePattern) {
+    targets.push(apiBasePattern);
   }
   return targets;
 }
@@ -209,4 +218,15 @@ function installBrowserTelemetry(config) {
   });
 }
 
-installBrowserTelemetry(resolveRuntimeConfig());
+if (typeof document !== "undefined") {
+  installBrowserTelemetry(resolveRuntimeConfig());
+}
+
+export {
+  buildBaseUrlPrefixPattern,
+  buildIgnorePatterns,
+  buildPropagationTargets,
+  resolveAbsoluteUrl,
+  resolveBaseUrl,
+  resolveRuntimeConfig,
+};
