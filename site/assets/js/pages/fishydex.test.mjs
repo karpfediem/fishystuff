@@ -609,7 +609,7 @@ test("fishydex guide view groups and orders entries using Fish Guide data", () =
         item_id: 10014,
         encyclopedia_id: 14,
         encyclopedia_key: 14,
-        name: "Alpha Harpoon",
+        name: "Alpha Other",
         grade: "General",
         is_prize: false,
         catch_method: "harpoon",
@@ -618,7 +618,7 @@ test("fishydex guide view groups and orders entries using Fish Guide data", () =
         item_id: 10011,
         encyclopedia_id: 11,
         encyclopedia_key: 11,
-        name: "Zulu Harpoon",
+        name: "Zulu Other",
         grade: "General",
         is_prize: false,
         catch_method: "harpoon",
@@ -679,10 +679,6 @@ test("fishydex guide view groups and orders entries using Fish Guide data", () =
   assert.equal(signals.visible_count, 6);
   assert.deepEqual(renderedGroupSummary(grid), [
     {
-      title: "Harpoon",
-      fishNames: ["Zulu Harpoon", "Alpha Harpoon"],
-    },
-    {
       title: "Freshwater Fish",
       fishNames: ["Freshwater One"],
     },
@@ -693,6 +689,10 @@ test("fishydex guide view groups and orders entries using Fish Guide data", () =
     {
       title: "Crustacean",
       fishNames: ["Crab"],
+    },
+    {
+      title: "Other",
+      fishNames: ["Zulu Other", "Alpha Other"],
     },
   ]);
 });

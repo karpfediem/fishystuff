@@ -18,17 +18,17 @@
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
   const CATALOG_VIEW_ORDER = ["grade", "guide"];
   const FISH_GUIDE_CATEGORY_ORDER = [
-    "harpoon",
     "freshwater",
     "saltwater",
     "crustacean",
+    "other",
     "unknown",
   ];
   const FISH_GUIDE_CATEGORY_LABELS = {
-    harpoon: "Harpoon",
     freshwater: "Freshwater Fish",
     saltwater: "Saltwater Fish",
     crustacean: "Crustacean",
+    other: "Other",
     unknown: "Unmapped",
   };
   // Derived from data/data/excel/Encyclopedia_Table.xlsx Category by encyclopedia Key.
@@ -529,7 +529,7 @@
   function fishGuideCategoryForEntry(entry) {
     switch (fishGuideCategoryCharForKey(fishGuideOrderForEntry(entry))) {
       case "h":
-        return "harpoon";
+        return "other";
       case "f":
         return "freshwater";
       case "s":
