@@ -5,12 +5,28 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 SITE_MAP_ASSETS_DIR="$ROOT_DIR/site/assets/map"
 CDN_MAP_ASSETS_DIR="$CDN_ROOT/map"
+BUILD_ITEM_ICONS=1
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --map-only)
+      BUILD_ITEM_ICONS=0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 
 # shellcheck source=tools/scripts/public-endpoints.sh
 source "$ROOT_DIR/tools/scripts/public-endpoints.sh"
 fishystuff_resolve_public_base_urls
 
-node "$ROOT_DIR/tools/scripts/build_item_icons_from_source.mjs" --output-dir "$CDN_ROOT/images/items"
+if [ "$BUILD_ITEM_ICONS" = "1" ]; then
+  node "$ROOT_DIR/tools/scripts/build_item_icons_from_source.mjs" --output-dir "$CDN_ROOT/images/items"
+fi
 
 require_path() {
   local path="$1"

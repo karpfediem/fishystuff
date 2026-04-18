@@ -157,6 +157,7 @@ prune_legacy_map_assets() {
     "$CDN_ROOT/images/tiles/minimap" \
     "$CDN_ROOT/images/tiles/region_groups" \
     "$CDN_ROOT/images/tiles/zone_mask_visual" \
+    "$CDN_ROOT/images/zones_mask_v1.png" \
     "$CDN_ROOT/region_groups"
 }
 
@@ -259,12 +260,24 @@ fi
 
 MINIMAP_DISPLAY_TILE_PX=512
 MINIMAP_DISPLAY_MAX_LEVEL=2
+minimap_source_archive="${MINIMAP_SOURCE_ARCHIVE:-$ROOT_DIR/data/scratch/paz}"
 minimap_display_source_dir="$MINIMAP_SOURCE_TILE_DIR"
 minimap_display_root="$CDN_IMAGE_ASSET_DIR/tiles/minimap_visual/v1"
 minimap_display_manifest="$minimap_display_root/tileset.json"
 minimap_display_manifest_tile_px=""
 minimap_display_manifest_max_level=""
-if [ -f "$minimap_display_manifest" ]; then
+if [ -e "$minimap_source_archive" ]; then
+  minimap_build_args=(
+    "$ROOT_DIR/tools/scripts/build_minimap_tiles_from_source.mjs"
+    --source-archive "$minimap_source_archive"
+    --raw-output-dir "$minimap_display_source_dir"
+    --visual-output-dir "$minimap_display_root"
+  )
+  if [ "${REBUILD_MINIMAP_DISPLAY_TILES:-0}" = "1" ]; then
+    minimap_build_args+=(--force-visual)
+  fi
+  node "${minimap_build_args[@]}"
+elif [ -f "$minimap_display_manifest" ]; then
   minimap_display_manifest_tile_px="$(
     read_json_u32_field "$minimap_display_manifest" "tile_size_px" || true
   )"
@@ -282,7 +295,7 @@ else:
 PY
   )"
 fi
-if [ -d "$minimap_display_source_dir" ] && {
+if [ ! -e "$minimap_source_archive" ] && [ -d "$minimap_display_source_dir" ] && {
   [ "${REBUILD_MINIMAP_DISPLAY_TILES:-0}" = "1" ] ||
   [ ! -f "$minimap_display_manifest" ] ||
   [ "$minimap_display_manifest_tile_px" != "$MINIMAP_DISPLAY_TILE_PX" ] ||
@@ -302,6 +315,8 @@ if [ -d "$minimap_display_source_dir" ] && {
     --root-url /images/tiles/minimap_visual/v1
   rm -rf "$minimap_display_root"
   mv "$minimap_display_tmp_root" "$minimap_display_root"
+elif [ ! -e "$minimap_source_archive" ] && [ ! -f "$minimap_display_manifest" ]; then
+  echo "warning: minimap source archive not found; skipping minimap_visual/v1 build" >&2
 fi
 
 zone_mask_source_image="${ZONE_MASK_SOURCE_IMAGE:-$(first_existing_path \

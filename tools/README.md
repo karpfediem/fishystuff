@@ -30,7 +30,8 @@ Current contents:
     semantic fields, region-node waypoints, and the minimap display pyramid
 - `tools/scripts/stage_cdn_assets.sh`
   - stages CDN-owned site and map assets under `data/cdn/public/`
-  - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
+  - rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
+  - accepts `--map-only` to stage only the map-serving CDN payload without the item icon pass
 - `tools/scripts/push_bunnycdn.sh`
 - `tools/scripts/run_api.sh`
 - `tools/scripts/vector-tap.sh`
@@ -70,4 +71,16 @@ For local source-backed minimap generation, use:
 
 ```bash
 devenv shell -- node tools/scripts/build_minimap_tiles_from_source.mjs
+```
+
+For a map-only local rebuild that also stages the map-serving CDN payload, use:
+
+```bash
+just build-map
+```
+
+To refresh the broader staged CDN payload, including item icons, use:
+
+```bash
+just cdn-stage
 ```
