@@ -2,6 +2,7 @@ import { createMapApp } from "./map-app.js";
 import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
 import { createMapPageDerivedController } from "./map-page-derived.js";
 import { createMapPageLive } from "./map-page-live.js";
+import { createMapOtelMetricsReporter } from "./map-otel-metrics.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
@@ -214,6 +215,7 @@ export async function start() {
 
   const app = createMapApp();
   const bridge = FishyMapBridge;
+  const otelMetricsReporter = createMapOtelMetricsReporter({ bridge });
   let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;
   let mounted = false;
@@ -359,6 +361,7 @@ export async function start() {
     },
   });
   mounted = true;
+  void otelMetricsReporter;
   actionState = app.consumeSignals(signals());
   lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());

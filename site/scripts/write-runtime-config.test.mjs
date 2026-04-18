@@ -6,6 +6,7 @@ import {
   deriveSiblingBaseUrl,
   joinUrl,
   resolvePublicBaseUrls,
+  siblingEndpointUrl,
 } from "./write-runtime-config.mjs";
 
 test("runtime config defaults to the production sibling-host layout", () => {
@@ -15,6 +16,8 @@ test("runtime config defaults to the production sibling-host layout", () => {
   assert.equal(runtimeConfig.apiBaseUrl, "https://api.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.fishystuff.fish");
   assert.equal(runtimeConfig.tracing.exporterEndpoint, "https://otel.fishystuff.fish/v1/traces");
+  assert.equal(runtimeConfig.metrics.exporterEndpoint, "https://otel.fishystuff.fish/v1/metrics");
+  assert.equal(runtimeConfig.metrics.exportIntervalMs, 5000);
 });
 
 test("runtime config derives beta sibling hosts from the public site base", () => {
@@ -28,6 +31,10 @@ test("runtime config derives beta sibling hosts from the public site base", () =
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
     "https://otel.beta.fishystuff.fish/v1/traces",
+  );
+  assert.equal(
+    runtimeConfig.metrics.exporterEndpoint,
+    "https://otel.beta.fishystuff.fish/v1/metrics",
   );
 });
 
@@ -61,6 +68,28 @@ test("runtime config prefers explicit public overrides over derived sibling host
   );
 });
 
+test("runtime config allows explicit local browser metrics overrides", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
+    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT: "http://127.0.0.1:4818/v1/metrics",
+    FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS: "3000",
+  });
+
+  assert.equal(runtimeConfig.metrics.enabled, true);
+  assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://127.0.0.1:4818/v1/metrics");
+  assert.equal(runtimeConfig.metrics.exportIntervalMs, 3000);
+});
+
+test("runtime config derives the local metrics endpoint from the resolved trace endpoint", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
+    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT: "http://127.0.0.1:4818/v1/traces",
+  });
+
+  assert.equal(runtimeConfig.tracing.exporterEndpoint, "http://127.0.0.1:4818/v1/traces");
+  assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://127.0.0.1:4818/v1/metrics");
+});
+
 test("sibling-host derivation skips loopback and preserves explicit paths when joined", () => {
   assert.equal(
     deriveSiblingBaseUrl("https://beta.fishystuff.fish", "api"),
@@ -70,5 +99,9 @@ test("sibling-host derivation skips loopback and preserves explicit paths when j
   assert.equal(
     joinUrl("https://otel.beta.fishystuff.fish", "/v1/traces"),
     "https://otel.beta.fishystuff.fish/v1/traces",
+  );
+  assert.equal(
+    siblingEndpointUrl("http://127.0.0.1:4818/v1/traces", "/v1/metrics"),
+    "http://127.0.0.1:4818/v1/metrics",
   );
 });

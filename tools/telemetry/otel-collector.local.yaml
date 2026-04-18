@@ -40,8 +40,9 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [otlp/jaeger, otlphttp/vector, spanmetrics]
-    metrics/spanmetrics:
-      receivers: [spanmetrics]
+    metrics:
+      receivers: [otlp, spanmetrics]
+      processors: [batch]
       exporters: [prometheus]
   telemetry:
     metrics:

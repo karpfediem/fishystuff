@@ -75,6 +75,11 @@ fn update_diagnostics_text(
     let fps = state.frame_count as f64 / state.accum_time.max(0.001);
     state.accum_time = 0.0;
     state.frame_count = 0;
+    crate::perf_last!("bevy.diagnostics.fps", fps);
+    crate::perf_last!(
+        "bevy.diagnostics.frame_time_ms",
+        if fps > 0.0 { 1000.0 / fps } else { 0.0 }
+    );
 
     if let Ok(mut text_comp) = query.single_mut() {
         text_comp.0 = format!("fps: {:>5.1}", fps);

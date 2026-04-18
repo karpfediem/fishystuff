@@ -81,3 +81,9 @@ top level, so the existing helpers also work:
 For browser scenarios that fail to advance the requested number of frames in
 time, inspect `browser_action.frame_wait_timed_out` in the report. That is a
 signal that the integrated page became too slow or stalled during the scenario.
+
+For continuous local visibility between deep profiling runs, the browser map
+runtime also exports a small OTLP metrics surface through the repo's local OTEL
+collector. Those live gauges land on the same Prometheus target as the Jaeger
+spanmetrics and are intended for always-on map runtime dashboards, while the
+JSON report harnesses remain the deeper investigation path.

@@ -2,12 +2,19 @@ import {
   diag,
   DiagConsoleLogger,
   DiagLogLevel,
+  metrics as otelMetrics,
   SpanStatusCode,
 } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
+import { JsonMetricsSerializer } from "@opentelemetry/otlp-transformer";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import {
+  AggregationTemporality,
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
 import { ParentBasedSampler, TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base";
 import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
@@ -19,6 +26,7 @@ const TRACE_SAMPLE_QUERY_KEY = "trace_sample";
 const REQUEST_ID_HEADER = "x-request-id";
 const TRACE_ID_HEADER = "x-trace-id";
 const SPAN_ID_HEADER = "x-span-id";
+const DEFAULT_METRIC_EXPORT_TIMEOUT_MS = 4000;
 
 function parseBoolean(value, fallback = false) {
   if (typeof value === "boolean") {
@@ -47,6 +55,14 @@ function clampSampleRatio(value, fallback = 0.25) {
   }
   if (numeric >= 1) {
     return 1;
+  }
+  return numeric;
+}
+
+function parsePositiveInteger(value, fallback) {
+  const numeric = Number.parseInt(String(value ?? "").trim(), 10);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
   }
   return numeric;
 }
@@ -93,6 +109,7 @@ function readQueryOverrides() {
 function resolveRuntimeConfig() {
   const runtimeConfig = globalThis.__fishystuffRuntimeConfig || {};
   const tracingConfig = runtimeConfig.tracing || {};
+  const metricsConfig = runtimeConfig.metrics || {};
   const query = readQueryOverrides();
   const siteBaseUrl =
     resolveBaseUrl(runtimeConfig.siteBaseUrl, globalThis.location?.href)
@@ -117,6 +134,9 @@ function resolveRuntimeConfig() {
     apiBaseUrl: resolveBaseUrl(runtimeConfig.apiBaseUrl, siteBaseUrl),
     cdnBaseUrl: resolveBaseUrl(runtimeConfig.cdnBaseUrl, siteBaseUrl),
     jaegerUiUrl: resolveBaseUrl(tracingConfig.jaegerUiUrl, siteBaseUrl),
+    metricsEnabled: parseBoolean(metricsConfig.enabled, enabled),
+    metricsExporterEndpoint: resolveAbsoluteUrl(metricsConfig.exporterEndpoint, siteBaseUrl),
+    metricsExportIntervalMs: parsePositiveInteger(metricsConfig.exportIntervalMs, 5000),
     sampleRatio,
   };
 }
@@ -137,6 +157,9 @@ function buildIgnorePatterns(config) {
   const patterns = [];
   if (config.exporterEndpoint) {
     patterns.push(new RegExp(`^${escapeRegExp(config.exporterEndpoint)}(?:$|[?#])`));
+  }
+  if (config.metricsExporterEndpoint) {
+    patterns.push(new RegExp(`^${escapeRegExp(config.metricsExporterEndpoint)}(?:$|[?#])`));
   }
   if (config.cdnBaseUrl) {
     patterns.push(new RegExp(`^${escapeRegExp(config.cdnBaseUrl)}/`));
@@ -327,13 +350,16 @@ function normalizeSpanInvocation(options, callback) {
   return [options || {}, callback];
 }
 
-function installFlushHooks(provider) {
-  if (!provider || globalThis[OTEL_FLUSH_HOOK_KEY]) {
+function installFlushHooks(providers) {
+  const flushables = (Array.isArray(providers) ? providers : [providers]).filter(Boolean);
+  if (!flushables.length || globalThis[OTEL_FLUSH_HOOK_KEY]) {
     return;
   }
 
   const flush = () => {
-    Promise.resolve(provider.forceFlush?.()).catch(() => {});
+    for (const provider of flushables) {
+      Promise.resolve(provider.forceFlush?.()).catch(() => {});
+    }
   };
   globalThis.addEventListener?.("pagehide", flush);
   globalThis.document?.addEventListener?.("visibilitychange", () => {
@@ -344,18 +370,112 @@ function installFlushHooks(provider) {
   globalThis[OTEL_FLUSH_HOOK_KEY] = true;
 }
 
-function createTelemetryBridge(config, provider) {
-  const tracer = provider ? provider.getTracer(config.serviceName) : null;
+function createOtlpHttpMetricExporter({
+  url,
+  concurrencyLimit = 1,
+  timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+} = {}) {
+  let shutdown = false;
+  const inFlight = new Set();
+
+  function finish(resultCallback, result) {
+    queueMicrotask(() => resultCallback(result));
+  }
+
+  return {
+    export(metrics, resultCallback) {
+      if (shutdown || !url || typeof globalThis.fetch !== "function") {
+        finish(resultCallback, {
+          code: 1,
+          error: new Error("OTLP metric exporter is unavailable"),
+        });
+        return;
+      }
+      if (inFlight.size >= Math.max(1, concurrencyLimit)) {
+        finish(resultCallback, {
+          code: 1,
+          error: new Error("OTLP metric exporter is busy"),
+        });
+        return;
+      }
+
+      const controller =
+        typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId =
+        controller && timeoutMillis > 0
+          ? globalThis.setTimeout(() => controller.abort(), timeoutMillis)
+          : 0;
+      const body = JsonMetricsSerializer.serializeRequest(metrics);
+      const request = Promise.resolve(
+        globalThis.fetch(url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body,
+          keepalive: true,
+          signal: controller?.signal,
+        }),
+      )
+        .then((response) => {
+          if (!response?.ok) {
+            throw new Error(`OTLP metrics export failed with HTTP ${response?.status ?? "unknown"}`);
+          }
+          finish(resultCallback, { code: 0 });
+        })
+        .catch((error) => {
+          finish(resultCallback, {
+            code: 1,
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+        })
+        .finally(() => {
+          if (timeoutId) {
+            globalThis.clearTimeout(timeoutId);
+          }
+          inFlight.delete(request);
+        });
+
+      inFlight.add(request);
+    },
+    forceFlush() {
+      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+    },
+    selectAggregationTemporality() {
+      return AggregationTemporality.CUMULATIVE;
+    },
+    shutdown() {
+      shutdown = true;
+      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+    },
+  };
+}
+
+function createTelemetryBridge(config, tracerProvider, meterProvider) {
+  const tracer = tracerProvider ? tracerProvider.getTracer(config.serviceName) : null;
 
   return Object.freeze({
-    initialized: Boolean(provider),
-    enabled: Boolean(provider),
+    initialized: Boolean(tracerProvider || meterProvider),
+    enabled: Boolean(tracerProvider || meterProvider),
+    tracingEnabled: Boolean(tracerProvider),
+    metricsEnabled: Boolean(meterProvider),
     serviceName: config.serviceName,
     deploymentEnvironment: config.deploymentEnvironment,
     serviceVersion: config.serviceVersion,
     sampleRatio: config.sampleRatio,
     exporterEndpoint: config.exporterEndpoint,
+    metricsExporterEndpoint: config.metricsExporterEndpoint,
     jaegerUiUrl: config.jaegerUiUrl,
+    getMeter(name, version, options) {
+      if (!meterProvider) {
+        return null;
+      }
+      return meterProvider.getMeter(
+        normalizeString(name) || config.serviceName,
+        normalizeString(version) || undefined,
+        options,
+      );
+    },
     responseContext(result) {
       return extractFishystuffResponseContext(result);
     },
@@ -422,11 +542,17 @@ function createTelemetryBridge(config, provider) {
 }
 
 function installBrowserTelemetry(config) {
-  const disabledBridge = createTelemetryBridge(config, null);
-  if (!config.enabled || !config.exporterEndpoint) {
+  const traceEnabled = config.enabled && Boolean(config.exporterEndpoint);
+  const metricsEnabled =
+    config.metricsEnabled && Boolean(config.metricsExporterEndpoint);
+  const disabledBridge = createTelemetryBridge(config, null, null);
+  if (!traceEnabled && !metricsEnabled) {
     globalThis[OTEL_GLOBAL_KEY] = Object.freeze({
       ...disabledBridge,
-      reason: config.exporterEndpoint ? "disabled" : "missing-exporter-endpoint",
+      reason:
+        config.enabled || config.metricsEnabled
+          ? "missing-exporter-endpoint"
+          : "disabled",
     });
     return;
   }
@@ -439,57 +565,85 @@ function installBrowserTelemetry(config) {
     diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
   }
 
-  const exporter = new OTLPTraceExporter({
-    url: config.exporterEndpoint,
-    concurrencyLimit: 4,
-    timeoutMillis: 4000,
+  const resource = resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: config.serviceName,
+    "deployment.environment": config.deploymentEnvironment,
+    ...(config.serviceVersion ? { [ATTR_SERVICE_VERSION]: config.serviceVersion } : {}),
   });
 
-  const provider = new WebTracerProvider({
-    resource: resourceFromAttributes({
-      [ATTR_SERVICE_NAME]: config.serviceName,
-      "deployment.environment": config.deploymentEnvironment,
-      ...(config.serviceVersion ? { [ATTR_SERVICE_VERSION]: config.serviceVersion } : {}),
-    }),
-    sampler: new ParentBasedSampler({
-      root: new TraceIdRatioBasedSampler(config.sampleRatio),
-    }),
-    spanProcessors: [
-      new BatchSpanProcessor(exporter, {
-        maxQueueSize: 128,
-        maxExportBatchSize: 16,
-        scheduledDelayMillis: 500,
-        exportTimeoutMillis: 4000,
+  let tracerProvider = null;
+  if (traceEnabled) {
+    const traceExporter = new OTLPTraceExporter({
+      url: config.exporterEndpoint,
+      concurrencyLimit: 4,
+      timeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+    });
+
+    tracerProvider = new WebTracerProvider({
+      resource,
+      sampler: new ParentBasedSampler({
+        root: new TraceIdRatioBasedSampler(config.sampleRatio),
       }),
-    ],
-    spanLimits: {
-      attributeCountLimit: 16,
-      attributeValueLengthLimit: 256,
-      eventCountLimit: 8,
-      linkCountLimit: 4,
-    },
-  });
-  provider.register();
-  installFlushHooks(provider);
+      spanProcessors: [
+        new BatchSpanProcessor(traceExporter, {
+          maxQueueSize: 128,
+          maxExportBatchSize: 16,
+          scheduledDelayMillis: 500,
+          exportTimeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+        }),
+      ],
+      spanLimits: {
+        attributeCountLimit: 16,
+        attributeValueLengthLimit: 256,
+        eventCountLimit: 8,
+        linkCountLimit: 4,
+      },
+    });
+    tracerProvider.register();
 
-  registerInstrumentations({
-    instrumentations: [
-      new FetchInstrumentation({
-        clearTimingResources: true,
-        ignoreUrls: buildIgnorePatterns(config),
-        propagateTraceHeaderCorsUrls: buildPropagationTargets(config),
-        requestHook(span, request) {
-          applyFishystuffRequestAttributes(span, request, config);
-        },
-        applyCustomAttributesOnSpan(span, request, result) {
-          applyFishystuffRequestAttributes(span, request, config);
-          applyFishystuffResponseAttributes(span, result);
-        },
-      }),
-    ],
-  });
+    registerInstrumentations({
+      instrumentations: [
+        new FetchInstrumentation({
+          clearTimingResources: true,
+          ignoreUrls: buildIgnorePatterns(config),
+          propagateTraceHeaderCorsUrls: buildPropagationTargets(config),
+          requestHook(span, request) {
+            applyFishystuffRequestAttributes(span, request, config);
+          },
+          applyCustomAttributesOnSpan(span, request, result) {
+            applyFishystuffRequestAttributes(span, request, config);
+            applyFishystuffResponseAttributes(span, result);
+          },
+        }),
+      ],
+    });
+  }
 
-  globalThis[OTEL_GLOBAL_KEY] = createTelemetryBridge(config, provider);
+  let meterProvider = null;
+  if (metricsEnabled) {
+    meterProvider = new MeterProvider({
+      resource,
+      readers: [
+        new PeriodicExportingMetricReader({
+          exporter: createOtlpHttpMetricExporter({
+            url: config.metricsExporterEndpoint,
+            timeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+          }),
+          exportIntervalMillis: config.metricsExportIntervalMs,
+          exportTimeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+        }),
+      ],
+    });
+    otelMetrics.setGlobalMeterProvider(meterProvider);
+  }
+
+  installFlushHooks([tracerProvider, meterProvider]);
+
+  globalThis[OTEL_GLOBAL_KEY] = createTelemetryBridge(
+    config,
+    tracerProvider,
+    meterProvider,
+  );
 }
 
 if (typeof document !== "undefined") {

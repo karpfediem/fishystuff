@@ -32,8 +32,9 @@ long-lived local services:
 
 - `db` must become ready before `api`
 - `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
+- `loki` serves local log ingestion and queries on `127.0.0.1:3100`
 - `otel-collector` accepts browser OTLP/HTTP on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
-- `vector` tails repo-local process logs under `data/vector/process/*.log`, receives a trace copy from the local collector on `127.0.0.1:4820`, and writes newline-delimited JSON archives under `data/vector/archive/`
+- `vector` tails repo-local process logs under `data/vector/process/*.log`, receives a trace copy from the local collector on `127.0.0.1:4820`, writes newline-delimited JSON archives under `data/vector/archive/`, and ships normalized logs to Loki
 - `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
@@ -99,28 +100,57 @@ remain empty until spans have been emitted and Prometheus has completed at least
 one scrape cycle.
 
 Vector now runs alongside that path as the repo-owned collection layer for local
-developer logs and trace copies. It is intentionally not the browser OTLP
-ingress because the current local collector config explicitly handles browser
-CORS for `http://127.0.0.1:1990` and `http://localhost:1990`, while Vector’s
-OpenTelemetry source is being used here as a local backend receiver. The current
-local archive paths are:
+developer logs and trace copies, and Loki is the local query surface for those
+normalized logs. Vector is intentionally not the browser OTLP ingress because
+the current local collector config explicitly handles browser CORS for
+`http://127.0.0.1:1990` and `http://localhost:1990`, while Vector’s
+OpenTelemetry source is being used here as a local backend receiver. The
+correlation flow is:
+
+- frontend fetch spans record `fishystuff.response.request_id`, `fishystuff.response.trace_id`, and `fishystuff.response.span_id`
+- the API now emits structured request-completion/error logs with matching `request.id`, `trace.id`, and `span.id` fields
+- Vector normalizes those into `request_id`, `trace_id`, and `span_id` for Loki structured metadata and for the local NDJSON archives
+
+The current local archive/query paths are:
 
 - `data/vector/process/*.log`
   - per-process timestamped stdout/stderr captures from the local supervised stack
 - `data/vector/archive/logs/*.ndjson`
-  - Vector-serialized log events collected from those process log files
+  - Vector-normalized log events with process/service/correlation fields
 - `data/vector/archive/traces/*.ndjson`
   - Vector-serialized trace events copied from the local OTLP collector
 
-If you want to add downstream routing later, extend
-`tools/telemetry/vector.local.yaml` with new sinks and connect them to
-`devenv_process_logs` for process log events or `telemetry_ingress.traces` for
-OTLP trace copies.
+For LLM- or shell-driven inspection you can use either Loki or the NDJSON
+archives. Loki is useful when you already know a stable low-cardinality stream
+selector, while `data/vector/archive/*.ndjson` is easier when you want direct
+`rg`/`jq` access to the raw normalized events.
 
-This tracing path is intentionally request-scoped. It does not stream
-high-frequency Bevy/WASM spans over the browser bridge. Continuous runtime
-profiling should continue to use the existing browser/native profiling harnesses
-under `tools/scripts/`.
+Example Loki query flow:
+
+```bash
+curl -G -s http://127.0.0.1:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={app="fishystuff",process="api"} | json | trace_id="YOUR_TRACE_ID"' \
+  | jq
+```
+
+Example archive flow:
+
+```bash
+rg '"trace_id":"YOUR_TRACE_ID"' data/vector/archive/logs
+rg '"fishystuff.response.trace_id":"YOUR_TRACE_ID"' data/vector/archive/traces
+```
+
+If you want to add downstream routing later, extend
+`tools/telemetry/vector.local.yaml` with new sinks from
+`normalized_process_logs` for logs or `telemetry_ingress.traces` for OTLP trace
+copies.
+
+This tracing path remains request-scoped. The local browser runtime now also
+exports a small Prometheus-facing OTLP metrics surface through the same
+collector, covering live Bevy FPS/frame-time gauges plus selected map/terrain
+runtime state. Use Prometheus for continuous local runtime dashboards, and keep
+using the existing browser/native profiling harnesses under `tools/scripts/`
+when you need scenario reports, traces, or deeper hotspot analysis.
 
 The API uses a strict explicit CORS allowlist. Production origins are declared
 in [api/config.toml](/home/carp/code/fishystuff/api/config.toml), and `devenv`

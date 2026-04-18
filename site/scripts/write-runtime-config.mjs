@@ -96,6 +96,22 @@ export function joinUrl(baseUrl, pathname) {
   }
 }
 
+export function siblingEndpointUrl(endpointUrl, pathname) {
+  const normalizedEndpointUrl = normalizeEndpointUrl(endpointUrl);
+  const normalizedPath = String(pathname ?? "").trim();
+  if (!normalizedEndpointUrl || !normalizedPath) {
+    return "";
+  }
+  try {
+    return new URL(
+      normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`,
+      normalizedEndpointUrl,
+    ).toString();
+  } catch {
+    return "";
+  }
+}
+
 export function normalizeFlag(value, fallback = false) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!normalized) {
@@ -161,8 +177,12 @@ export function buildRuntimeConfig(env = process.env) {
     publicSiteBaseUrl,
     publicApiBaseUrl,
     publicCdnBaseUrl,
+    publicOtelBaseUrl,
     publicOtelTracesEndpoint,
   } = resolvePublicBaseUrls(env);
+  const traceExporterEndpoint =
+    normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
+    || publicOtelTracesEndpoint;
 
   return {
     siteBaseUrl:
@@ -182,11 +202,24 @@ export function buildRuntimeConfig(env = process.env) {
         || "production",
       serviceVersion:
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
-      exporterEndpoint:
-        normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
-        || publicOtelTracesEndpoint,
+      exporterEndpoint: traceExporterEndpoint,
       jaegerUiUrl: normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL),
       sampleRatio: normalizeFloat(env.FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO, 0.25),
+    },
+    metrics: {
+      enabled: normalizeFlag(
+        env.FISHYSTUFF_RUNTIME_OTEL_METRICS_ENABLED,
+        normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false),
+      ),
+      exporterEndpoint:
+        normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT)
+        || siblingEndpointUrl(traceExporterEndpoint, "/v1/metrics")
+        || joinUrl(publicOtelBaseUrl, "/v1/metrics"),
+      exportIntervalMs: Math.max(
+        1000,
+        Number.parseInt(String(env.FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS ?? "5000"), 10)
+          || 5000,
+      ),
     },
   };
 }

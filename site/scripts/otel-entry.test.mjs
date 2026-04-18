@@ -8,6 +8,7 @@ import {
   classifyFetchTarget,
   createHttpError,
   extractFishystuffResponseContext,
+  resolveRuntimeConfig,
 } from "./otel-entry.mjs";
 
 test("buildBaseUrlPrefixPattern matches URLs rooted under the configured base", () => {
@@ -36,14 +37,16 @@ test("buildPropagationTargets uses prefix patterns so cross-origin API paths sti
 test("buildIgnorePatterns keeps ignoring the exporter endpoint and CDN prefix", () => {
   const patterns = buildIgnorePatterns({
     exporterEndpoint: "http://localhost:1990/otel/v1/traces",
+    metricsExporterEndpoint: "http://localhost:1990/otel/v1/metrics",
     cdnBaseUrl: "http://localhost:4040",
   });
 
-  expect(patterns).toHaveLength(2);
+  expect(patterns).toHaveLength(3);
   expect(patterns[0].test("http://localhost:1990/otel/v1/traces")).toBe(true);
   expect(patterns[0].test("http://localhost:1990/otel/v1/traces?x=1")).toBe(true);
-  expect(patterns[1].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
-  expect(patterns[1].test("http://localhost:8080/api/v1/meta")).toBe(false);
+  expect(patterns[1].test("http://localhost:1990/otel/v1/metrics")).toBe(true);
+  expect(patterns[2].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
+  expect(patterns[2].test("http://localhost:8080/api/v1/meta")).toBe(false);
 });
 
 test("classifyFetchTarget consistently labels API, site, and CDN requests", () => {
@@ -119,4 +122,33 @@ test("createHttpError carries status and trace context into the thrown message",
   expect(error.requestId).toBe("req-123");
   expect(error.traceId).toBe("trace-abc");
   expect(error.spanId).toBe("");
+});
+
+test("resolveRuntimeConfig keeps browser metrics separate from trace export config", () => {
+  globalThis.location = new URL("http://127.0.0.1:1990/map/");
+  globalThis.__fishystuffRuntimeConfig = {
+    siteBaseUrl: "http://127.0.0.1:1990",
+    tracing: {
+      enabled: true,
+      exporterEndpoint: "http://127.0.0.1:4818/v1/traces",
+      serviceName: "fishystuff-site-local",
+      deploymentEnvironment: "local",
+      serviceVersion: "dev",
+      sampleRatio: 0.25,
+    },
+    metrics: {
+      enabled: true,
+      exporterEndpoint: "http://127.0.0.1:4818/v1/metrics",
+      exportIntervalMs: 3000,
+    },
+  };
+
+  const config = resolveRuntimeConfig();
+
+  expect(config.exporterEndpoint).toBe("http://127.0.0.1:4818/v1/traces");
+  expect(config.metricsExporterEndpoint).toBe("http://127.0.0.1:4818/v1/metrics");
+  expect(config.metricsExportIntervalMs).toBe(3000);
+
+  delete globalThis.__fishystuffRuntimeConfig;
+  delete globalThis.location;
 });

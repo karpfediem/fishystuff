@@ -56,4 +56,13 @@ pub(super) fn sync_terrain_diagnostics(
     diagnostics.cache_misses = runtime.cache_misses;
     diagnostics.cache_evictions = runtime.cache_evictions;
     diagnostics.fallback_chunks = runtime.fallback_chunks;
+    crate::perf_last!(
+        "terrain.runtime.ready",
+        if diagnostics.terrain_ready { 1.0 } else { 0.0 }
+    );
+    crate::perf_last!("terrain.runtime.chunks_requested", requested as f64);
+    crate::perf_last!("terrain.runtime.chunks_ready", ready as f64);
+    crate::perf_last!("terrain.runtime.cache_hits", runtime.cache_hits as f64);
+    crate::perf_last!("terrain.runtime.cache_misses", runtime.cache_misses as f64);
+    crate::perf_last!("terrain.runtime.avg_build_ms", runtime.avg_build_ms as f64);
 }

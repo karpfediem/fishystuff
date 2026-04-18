@@ -165,6 +165,10 @@ in {
     FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION = "dev";
     FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT =
       "http://127.0.0.1:${toString otelCollectorHttpPort}/v1/traces";
+    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENABLED = "true";
+    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT =
+      "http://127.0.0.1:${toString otelCollectorHttpPort}/v1/metrics";
+    FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS = "5000";
     FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL = "http://${siteHost}:${toString jaegerUiPort}";
     FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO = "0.25";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
