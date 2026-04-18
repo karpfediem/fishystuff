@@ -4,9 +4,14 @@ use bevy::tasks::IoTaskPool;
 use fishystuff_api::models::events::{
     EventPointCompact, EventsSnapshotMetaResponse, EventsSnapshotResponse,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use fishystuff_client::{ClientError, FishyClient};
 
 use super::index::{LocalEventQuery, SpatialIndex, ViewSelection, SPATIAL_BUCKET_PX};
+#[cfg(target_arch = "wasm32")]
+use crate::plugins::api::resolve_api_request_url;
+#[cfg(target_arch = "wasm32")]
+use crate::runtime_io;
 
 pub const META_RECHECK_INTERVAL_SECS: f64 = 20.0;
 pub const RETRY_BACKOFF_SECS: f64 = 2.0;
@@ -238,33 +243,66 @@ impl EventsSnapshotState {
 }
 
 fn spawn_events_snapshot_meta_request() -> Receiver<Result<EventsSnapshotMetaResponse, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let client = FishyClient::new("");
-            let result = client.events_snapshot_meta().await;
-            let result = result.map_err(client_error_to_string);
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = resolve_api_request_url("/api/v1/events_snapshot_meta");
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let result = runtime_io::load_json_async::<EventsSnapshotMetaResponse>(&url).await;
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        return receiver;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let client = FishyClient::new("");
+                let result = client.events_snapshot_meta().await;
+                let result = result.map_err(client_error_to_string);
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        receiver
+    }
 }
 
 fn spawn_events_snapshot_request(
     revision: String,
 ) -> Receiver<Result<EventsSnapshotResponse, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let client = FishyClient::new("");
-            let result = client.events_snapshot(revision.as_str()).await;
-            let result = result.map_err(client_error_to_string);
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = resolve_api_request_url(&format!("/api/v1/events_snapshot?revision={revision}"));
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let result = runtime_io::load_json_async::<EventsSnapshotResponse>(&url).await;
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        return receiver;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let client = FishyClient::new("");
+                let result = client.events_snapshot(revision.as_str()).await;
+                let result = result.map_err(client_error_to_string);
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        receiver
+    }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn client_error_to_string(error: ClientError) -> String {
     match error {
         ClientError::Transport(message) => message,

@@ -72,6 +72,11 @@ pub fn now_utc_seconds() -> i64 {
     util::now_utc_seconds()
 }
 
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn resolve_api_request_url(path: &str) -> String {
+    util::resolve_api_request_url(path)
+}
+
 pub fn build_zone_stats_request(
     bootstrap: &ApiBootstrapState,
     patch_filter: &PatchFilterState,

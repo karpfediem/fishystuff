@@ -11,6 +11,8 @@ pub(crate) use fish::fish_item_icon_url;
 pub(crate) use remote_images::{
     remote_image_handle, RemoteImageCache, RemoteImageEpoch, RemoteImageStatus,
 };
+#[cfg(target_arch = "wasm32")]
+pub(crate) use requests::resolve_api_request_url;
 pub use requests::{
     build_zone_stats_request, default_from_patch_id, default_from_ts, now_utc_seconds,
     pick_map_version, spawn_zone_stats_request,

@@ -448,6 +448,9 @@ async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Resp
         http.route = %route,
         request.id = tracing::field::Empty,
         http.response.status_code = tracing::field::Empty,
+        error.code = tracing::field::Empty,
+        error.message = tracing::field::Empty,
+        error.details = tracing::field::Empty,
     );
     let _ = span.set_parent(parent_context);
 
@@ -464,6 +467,19 @@ async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Resp
         "http.response.status_code",
         tracing::field::display(response.status().as_u16()),
     );
+    if response.status().is_client_error() || response.status().is_server_error() {
+        tracing::warn!(
+            http.request.method = %method,
+            http.route = %route,
+            http.response.status_code = response.status().as_u16(),
+            request.id = response
+                .headers()
+                .get("x-request-id")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or(""),
+            "request returned error status"
+        );
+    }
 
     let span_context = span.context().span().span_context().clone();
     if span_context.is_valid() {

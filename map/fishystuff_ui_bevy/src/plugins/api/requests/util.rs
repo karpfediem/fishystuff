@@ -73,7 +73,7 @@ pub(super) fn build_zone_stats_request(
     }
 
     Some(ZoneStatsRequest {
-        layer_revision_id: Some(map_version.clone()),
+        layer_revision_id: None,
         layer_id: None,
         patch_id: None,
         at_ts_utc: None,
@@ -128,10 +128,12 @@ fn browser_global_base_url(name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_from_patch_id, default_from_ts};
+    use super::{build_zone_stats_request, default_from_patch_id, default_from_ts};
+    use crate::plugins::api::{ApiBootstrapState, PatchFilterState};
     use crate::public_assets::resolve_public_asset_url;
-    use fishystuff_api::ids::PatchId;
-    use fishystuff_api::models::meta::{MetaResponse, PatchInfo};
+    use fishystuff_api::ids::{MapVersionId, PatchId};
+    use fishystuff_api::models::meta::{MetaDefaults, MetaResponse, PatchInfo};
+    use fishystuff_api::Rgb;
 
     fn patch(id: &str, start_ts_utc: i64) -> PatchInfo {
         PatchInfo {
@@ -171,5 +173,47 @@ mod tests {
             .as_deref(),
             Some("https://cdn.example.com/images/terrain_drape/minimap/v1/manifest.json")
         );
+    }
+
+    #[test]
+    fn build_zone_stats_request_uses_map_version_id_without_forcing_layer_revision_id() {
+        let bootstrap = ApiBootstrapState {
+            defaults: Some(MetaDefaults {
+                map_version_id: Some(MapVersionId("bdo-v2".to_string())),
+                tile_px: 32,
+                sigma_tiles: 3.5,
+                alpha0: 1.25,
+                top_k: 15,
+                half_life_days: Some(21.0),
+                ..MetaDefaults::default()
+            }),
+            map_version: Some("bdo-v2".to_string()),
+            meta: Some(MetaResponse::default()),
+            ..ApiBootstrapState::default()
+        };
+        let patch_filter = PatchFilterState {
+            from_ts: Some(100),
+            to_ts: Some(200),
+            ..PatchFilterState::default()
+        };
+
+        let request = build_zone_stats_request(&bootstrap, &patch_filter, Rgb::new(1, 2, 3))
+            .expect("zone stats request");
+
+        assert_eq!(request.layer_revision_id, None);
+        assert_eq!(
+            request
+                .map_version_id
+                .as_ref()
+                .map(|value| value.0.as_str()),
+            Some("bdo-v2")
+        );
+        assert_eq!(request.from_ts_utc, 100);
+        assert_eq!(request.to_ts_utc, 200);
+        assert_eq!(request.tile_px, 32);
+        assert_eq!(request.sigma_tiles, 3.5);
+        assert_eq!(request.alpha0, 1.25);
+        assert_eq!(request.top_k, 15);
+        assert_eq!(request.half_life_days, Some(21.0));
     }
 }

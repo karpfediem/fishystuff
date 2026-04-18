@@ -7,6 +7,7 @@ use fishystuff_api::models::fish::{CommunityFishZoneSupportResponse, FishListRes
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZonesResponse;
+#[cfg(not(target_arch = "wasm32"))]
 use fishystuff_client::{ClientError, FishyClient};
 
 use super::super::state::FishCatalogPayload;
@@ -18,42 +19,93 @@ use crate::runtime_io;
 pub(super) fn spawn_zone_stats_request(
     request: ZoneStatsRequest,
 ) -> Receiver<Result<ZoneStatsResponse, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let client = FishyClient::new("");
-            let result = client
-                .zone_stats(&request)
-                .await
-                .map_err(client_error_to_string);
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = resolve_api_request_url("/api/v1/zone_stats");
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let result = runtime_io::post_json_async::<ZoneStatsRequest, ZoneStatsResponse>(
+                    &url, &request,
+                )
+                .await;
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        return receiver;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let client = FishyClient::new("");
+                let result = client
+                    .zone_stats(&request)
+                    .await
+                    .map_err(client_error_to_string);
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        receiver
+    }
 }
 
 pub(super) fn spawn_meta_request() -> Receiver<Result<MetaResponse, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let client = FishyClient::new("");
-            let result = client.meta().await.map_err(client_error_to_string);
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = resolve_api_request_url("/api/v1/meta");
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let result = runtime_io::load_json_async::<MetaResponse>(&url).await;
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        return receiver;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let client = FishyClient::new("");
+                let result = client.meta().await.map_err(client_error_to_string);
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        receiver
+    }
 }
 
 pub(super) fn spawn_zones_request() -> Receiver<Result<ZonesResponse, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let client = FishyClient::new("");
-            let result = client.zones().await.map_err(client_error_to_string);
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = resolve_api_request_url("/api/v1/zones");
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let result = runtime_io::load_json_async::<ZonesResponse>(&url).await;
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        return receiver;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = async_channel::bounded(1);
+        IoTaskPool::get()
+            .spawn_local(async move {
+                let client = FishyClient::new("");
+                let result = client.zones().await.map_err(client_error_to_string);
+                let _ = sender.send(result).await;
+            })
+            .detach();
+        receiver
+    }
 }
 
 pub(super) fn spawn_fish_catalog_request() -> Receiver<Result<FishCatalogPayload, String>> {
@@ -123,6 +175,7 @@ pub(super) fn spawn_community_fish_zone_support_request(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn client_error_to_string(error: ClientError) -> String {
     match error {
         ClientError::Transport(message) => message,

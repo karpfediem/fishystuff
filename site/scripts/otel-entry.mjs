@@ -55,6 +55,22 @@ function normalizeUrl(value) {
   return normalized.replace(/\/+$/, "");
 }
 
+function resolveAbsoluteUrl(value, baseUrl) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    return new URL(normalized, baseUrl || globalThis.location?.href || "http://localhost/").toString();
+  } catch {
+    return normalized;
+  }
+}
+
+function resolveBaseUrl(value, baseUrl) {
+  return normalizeUrl(resolveAbsoluteUrl(value, baseUrl));
+}
+
 function readQueryOverrides() {
   const params = new URLSearchParams(globalThis.location?.search || "");
   const enabledOverride = params.get(TRACE_QUERY_KEY);
@@ -69,6 +85,9 @@ function resolveRuntimeConfig() {
   const runtimeConfig = globalThis.__fishystuffRuntimeConfig || {};
   const tracingConfig = runtimeConfig.tracing || {};
   const query = readQueryOverrides();
+  const siteBaseUrl =
+    resolveBaseUrl(runtimeConfig.siteBaseUrl, globalThis.location?.href)
+    || normalizeUrl(globalThis.location?.origin);
   const enabled = parseBoolean(
     query.enabledOverride,
     parseBoolean(tracingConfig.enabled, false),
@@ -84,10 +103,11 @@ function resolveRuntimeConfig() {
     deploymentEnvironment:
       normalizeString(tracingConfig.deploymentEnvironment) || "unknown",
     serviceVersion: normalizeString(tracingConfig.serviceVersion),
-    exporterEndpoint: normalizeString(tracingConfig.exporterEndpoint),
-    apiBaseUrl: normalizeUrl(runtimeConfig.apiBaseUrl),
-    cdnBaseUrl: normalizeUrl(runtimeConfig.cdnBaseUrl),
-    jaegerUiUrl: normalizeUrl(tracingConfig.jaegerUiUrl),
+    siteBaseUrl,
+    exporterEndpoint: resolveAbsoluteUrl(tracingConfig.exporterEndpoint, siteBaseUrl),
+    apiBaseUrl: resolveBaseUrl(runtimeConfig.apiBaseUrl, siteBaseUrl),
+    cdnBaseUrl: resolveBaseUrl(runtimeConfig.cdnBaseUrl, siteBaseUrl),
+    jaegerUiUrl: resolveBaseUrl(tracingConfig.jaegerUiUrl, siteBaseUrl),
     sampleRatio,
   };
 }

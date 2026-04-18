@@ -4,6 +4,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use std::future::Future;
 use std::time::Duration;
+use tracing::Span;
 
 use fishystuff_api::error::{ApiError, ApiErrorCode, ApiErrorEnvelope};
 
@@ -49,7 +50,8 @@ impl From<AnyError> for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let status = match self.0.code {
+        let api_error = self.0;
+        let status = match api_error.code {
             ApiErrorCode::InvalidArgument => StatusCode::BAD_REQUEST,
             ApiErrorCode::NotFound => StatusCode::NOT_FOUND,
             ApiErrorCode::Conflict => StatusCode::CONFLICT,
@@ -60,7 +62,52 @@ impl IntoResponse for AppError {
             ApiErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (status, Json(ApiErrorEnvelope { error: self.0 })).into_response()
+        let error_code = api_error_code_name(api_error.code);
+        let details = api_error
+            .details
+            .as_ref()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
+        let span = Span::current();
+        span.record(
+            "http.response.status_code",
+            tracing::field::display(status.as_u16()),
+        );
+        span.record("error.code", tracing::field::display(error_code));
+        span.record("error.message", tracing::field::display(&api_error.message));
+        if !details.is_empty() {
+            span.record("error.details", tracing::field::display(&details));
+        }
+        if let Some(request_id) = api_error
+            .request_id
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            span.record("request.id", tracing::field::display(request_id));
+        }
+        tracing::warn!(
+            http.response.status_code = status.as_u16(),
+            error.code = error_code,
+            error.message = %api_error.message,
+            error.details = %details,
+            request.id = api_error.request_id.as_deref().unwrap_or(""),
+            "request failed"
+        );
+
+        (status, Json(ApiErrorEnvelope { error: api_error })).into_response()
+    }
+}
+
+fn api_error_code_name(code: ApiErrorCode) -> &'static str {
+    match code {
+        ApiErrorCode::InvalidArgument => "INVALID_ARGUMENT",
+        ApiErrorCode::NotFound => "NOT_FOUND",
+        ApiErrorCode::Internal => "INTERNAL",
+        ApiErrorCode::Unavailable => "UNAVAILABLE",
+        ApiErrorCode::Timeout => "TIMEOUT",
+        ApiErrorCode::Conflict => "CONFLICT",
+        ApiErrorCode::Unauthorized => "UNAUTHORIZED",
+        ApiErrorCode::Forbidden => "FORBIDDEN",
     }
 }
 
