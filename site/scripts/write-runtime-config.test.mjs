@@ -23,6 +23,10 @@ test("runtime config defaults to the production sibling-host layout", () => {
     runtimeConfig.metrics.exporterEndpoint,
     "https://telemetry.fishystuff.fish/v1/metrics",
   );
+  assert.equal(
+    runtimeConfig.logs.exporterEndpoint,
+    "https://telemetry.fishystuff.fish/v1/logs",
+  );
   assert.equal(runtimeConfig.metrics.exportIntervalMs, 5000);
 });
 
@@ -41,6 +45,10 @@ test("runtime config derives beta sibling hosts from the public site base", () =
   assert.equal(
     runtimeConfig.metrics.exporterEndpoint,
     "https://telemetry.beta.fishystuff.fish/v1/metrics",
+  );
+  assert.equal(
+    runtimeConfig.logs.exporterEndpoint,
+    "https://telemetry.beta.fishystuff.fish/v1/logs",
   );
 });
 
@@ -93,14 +101,16 @@ test("runtime config allows explicit local browser metrics overrides", () => {
     FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
     FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT: "http://127.0.0.1:4818/v1/metrics",
     FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS: "3000",
+    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT: "http://127.0.0.1:4818/v1/logs",
   });
 
   assert.equal(runtimeConfig.metrics.enabled, true);
   assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://127.0.0.1:4818/v1/metrics");
   assert.equal(runtimeConfig.metrics.exportIntervalMs, 3000);
+  assert.equal(runtimeConfig.logs.exporterEndpoint, "http://127.0.0.1:4818/v1/logs");
 });
 
-test("runtime config derives the local metrics endpoint from the resolved trace endpoint", () => {
+test("runtime config derives the local metrics and logs endpoints from the resolved trace endpoint", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
     FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT: "http://127.0.0.1:4818/v1/traces",
@@ -108,6 +118,7 @@ test("runtime config derives the local metrics endpoint from the resolved trace 
 
   assert.equal(runtimeConfig.tracing.exporterEndpoint, "http://127.0.0.1:4818/v1/traces");
   assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://127.0.0.1:4818/v1/metrics");
+  assert.equal(runtimeConfig.logs.exporterEndpoint, "http://127.0.0.1:4818/v1/logs");
 });
 
 test("sibling-host derivation skips loopback and preserves explicit paths when joined", () => {

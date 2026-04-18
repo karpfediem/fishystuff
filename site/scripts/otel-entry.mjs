@@ -1,15 +1,21 @@
 import {
+  context as otelContext,
   diag,
   DiagConsoleLogger,
   DiagLogLevel,
   metrics as otelMetrics,
   SpanStatusCode,
 } from "@opentelemetry/api";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { logs as otelLogs, SeverityNumber } from "@opentelemetry/api-logs";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
-import { JsonMetricsSerializer } from "@opentelemetry/otlp-transformer";
+import {
+  JsonLogsSerializer,
+  JsonMetricsSerializer,
+  JsonTraceSerializer,
+} from "@opentelemetry/otlp-transformer";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs";
 import {
   AggregationTemporality,
   MeterProvider,
@@ -21,12 +27,16 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic
 
 const OTEL_GLOBAL_KEY = "__fishystuffOtel";
 const OTEL_FLUSH_HOOK_KEY = "__fishystuffOtelFlushHooksInstalled";
+const OTEL_LOG_HOOK_KEY = "__fishystuffOtelLogHooksInstalled";
 const TRACE_QUERY_KEY = "trace";
 const TRACE_SAMPLE_QUERY_KEY = "trace_sample";
 const REQUEST_ID_HEADER = "x-request-id";
 const TRACE_ID_HEADER = "x-trace-id";
 const SPAN_ID_HEADER = "x-span-id";
 const DEFAULT_METRIC_EXPORT_TIMEOUT_MS = 4000;
+const DEFAULT_LOG_EXPORT_DELAY_MS = 1000;
+const DEFAULT_LOG_EXPORT_QUEUE_SIZE = 128;
+const DEFAULT_LOG_EXPORT_BATCH_SIZE = 16;
 
 function parseBoolean(value, fallback = false) {
   if (typeof value === "boolean") {
@@ -110,6 +120,7 @@ function resolveRuntimeConfig() {
   const runtimeConfig = globalThis.__fishystuffRuntimeConfig || {};
   const tracingConfig = runtimeConfig.tracing || {};
   const metricsConfig = runtimeConfig.metrics || {};
+  const logsConfig = runtimeConfig.logs || {};
   const query = readQueryOverrides();
   const siteBaseUrl =
     resolveBaseUrl(runtimeConfig.siteBaseUrl, globalThis.location?.href)
@@ -137,6 +148,8 @@ function resolveRuntimeConfig() {
     metricsEnabled: parseBoolean(metricsConfig.enabled, enabled),
     metricsExporterEndpoint: resolveAbsoluteUrl(metricsConfig.exporterEndpoint, siteBaseUrl),
     metricsExportIntervalMs: parsePositiveInteger(metricsConfig.exportIntervalMs, 5000),
+    logsEnabled: parseBoolean(logsConfig.enabled, enabled),
+    logsExporterEndpoint: resolveAbsoluteUrl(logsConfig.exporterEndpoint, siteBaseUrl),
     sampleRatio,
   };
 }
@@ -160,6 +173,9 @@ function buildIgnorePatterns(config) {
   }
   if (config.metricsExporterEndpoint) {
     patterns.push(new RegExp(`^${escapeRegExp(config.metricsExporterEndpoint)}(?:$|[?#])`));
+  }
+  if (config.logsExporterEndpoint) {
+    patterns.push(new RegExp(`^${escapeRegExp(config.logsExporterEndpoint)}(?:$|[?#])`));
   }
   if (config.cdnBaseUrl) {
     patterns.push(new RegExp(`^${escapeRegExp(config.cdnBaseUrl)}/`));
@@ -200,6 +216,37 @@ function normalizeAttributes(attributes) {
     }
   }
   return normalized;
+}
+
+function truncateString(value, maxLength = 2048) {
+  const normalized = normalizeString(value);
+  if (!normalized || normalized.length <= maxLength) {
+    return normalized;
+  }
+  if (maxLength <= 3) {
+    return normalized.slice(0, maxLength);
+  }
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function normalizeLogBody(value, fallback = "") {
+  if (value instanceof Error) {
+    return truncateString(`${errorName(value)}: ${errorMessage(value)}`, 1024);
+  }
+  if (typeof value === "string") {
+    return truncateString(value, 1024);
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value == null) {
+    return normalizeString(fallback);
+  }
+  try {
+    return truncateString(JSON.stringify(value), 1024);
+  } catch {
+    return truncateString(String(value), 1024);
+  }
 }
 
 function requestUrlFromFetchRequest(request) {
@@ -295,6 +342,91 @@ function errorName(error) {
 
 function errorMessage(error) {
   return normalizeString(error?.message) || normalizeString(error) || "operation failed";
+}
+
+function browserLocationAttributes() {
+  return normalizeAttributes({
+    "url.full": normalizeString(globalThis.location?.href),
+    "url.path": normalizeString(globalThis.location?.pathname),
+    "url.query": normalizeString(globalThis.location?.search),
+  });
+}
+
+function extractErrorLogAttributes(error) {
+  const attributes = {
+    "error.type": errorName(error),
+    "error.message": errorMessage(error),
+    "error.stack": truncateString(error?.stack, 4096),
+    "request.id": normalizeString(error?.requestId),
+    "trace.id": normalizeString(error?.traceId),
+    "span.id": normalizeString(error?.spanId),
+  };
+  const numericStatusCode = Number.parseInt(String(error?.statusCode ?? ""), 10);
+  if (Number.isFinite(numericStatusCode)) {
+    attributes["http.response.status_code"] = numericStatusCode;
+  }
+  return normalizeAttributes(attributes);
+}
+
+function firstErrorArgument(values) {
+  if (!Array.isArray(values)) {
+    return null;
+  }
+  for (const value of values) {
+    if (value instanceof Error) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function consoleArgsMessage(values, fallback) {
+  const parts = (Array.isArray(values) ? values : [])
+    .map((value) => normalizeLogBody(value))
+    .filter(Boolean);
+  return parts.join(" ").trim() || normalizeString(fallback) || "console message";
+}
+
+function emitLogRecord(logger, logRecord) {
+  if (!logger || typeof logger.emit !== "function") {
+    return false;
+  }
+  try {
+    logger.emit(logRecord);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function emitBrowserLog(loggerProvider, config, options = {}) {
+  if (!loggerProvider || typeof loggerProvider.getLogger !== "function") {
+    return false;
+  }
+  const loggerName =
+    normalizeString(options.loggerName) || `${config.serviceName}.browser`;
+  const logger = loggerProvider.getLogger(loggerName);
+  const error = options.error instanceof Error ? options.error : null;
+  const attributes = {
+    "fishystuff.log.kind": "browser",
+    "fishystuff.log.source": normalizeString(options.source) || "browser",
+    ...browserLocationAttributes(),
+    ...normalizeAttributes(options.attributes),
+    ...(error ? extractErrorLogAttributes(error) : {}),
+  };
+  const body =
+    normalizeLogBody(
+      options.body,
+      error ? errorMessage(error) : "browser log",
+    ) || "browser log";
+  return emitLogRecord(logger, {
+    eventName: normalizeString(options.eventName) || undefined,
+    severityNumber: options.severityNumber ?? SeverityNumber.INFO,
+    severityText: normalizeString(options.severityText) || undefined,
+    body,
+    attributes,
+    context: options.context || otelContext.active(),
+  });
 }
 
 function recordSpanError(span, error, attributes = {}) {
@@ -409,9 +541,6 @@ function createOtlpHttpMetricExporter({
       const request = Promise.resolve(
         globalThis.fetch(url, {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
           body,
           keepalive: true,
           signal: controller?.signal,
@@ -451,20 +580,266 @@ function createOtlpHttpMetricExporter({
   };
 }
 
-function createTelemetryBridge(config, tracerProvider, meterProvider) {
+function createOtlpHttpTraceExporter({
+  url,
+  concurrencyLimit = 1,
+  timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+} = {}) {
+  let shutdown = false;
+  const inFlight = new Set();
+
+  function finish(resultCallback, result) {
+    queueMicrotask(() => resultCallback(result));
+  }
+
+  return {
+    export(spans, resultCallback) {
+      if (shutdown || !url || typeof globalThis.fetch !== "function") {
+        finish(resultCallback, {
+          code: 1,
+          error: new Error("OTLP trace exporter is unavailable"),
+        });
+        return;
+      }
+      if (inFlight.size >= Math.max(1, concurrencyLimit)) {
+        finish(resultCallback, {
+          code: 1,
+          error: new Error("OTLP trace exporter is busy"),
+        });
+        return;
+      }
+
+      const controller =
+        typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId =
+        controller && timeoutMillis > 0
+          ? globalThis.setTimeout(() => controller.abort(), timeoutMillis)
+          : 0;
+      const body = JsonTraceSerializer.serializeRequest(spans);
+      const request = Promise.resolve(
+        globalThis.fetch(url, {
+          method: "POST",
+          body,
+          keepalive: true,
+          signal: controller?.signal,
+        }),
+      )
+        .then((response) => {
+          if (!response?.ok) {
+            throw new Error(`OTLP traces export failed with HTTP ${response?.status ?? "unknown"}`);
+          }
+          finish(resultCallback, { code: 0 });
+        })
+        .catch((error) => {
+          finish(resultCallback, {
+            code: 1,
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+        })
+        .finally(() => {
+          if (timeoutId) {
+            globalThis.clearTimeout(timeoutId);
+          }
+          inFlight.delete(request);
+        });
+
+      inFlight.add(request);
+    },
+    forceFlush() {
+      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+    },
+    shutdown() {
+      shutdown = true;
+      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+    },
+  };
+}
+
+function createOtlpHttpLogExporter({
+  url,
+  concurrencyLimit = 1,
+  timeoutMillis = DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+} = {}) {
+  let shutdown = false;
+  const inFlight = new Set();
+
+  function finish(resultCallback, result) {
+    queueMicrotask(() => resultCallback(result));
+  }
+
+  return {
+    export(logs, resultCallback) {
+      if (shutdown || !url || typeof globalThis.fetch !== "function") {
+        finish(resultCallback, {
+          code: 1,
+          error: new Error("OTLP log exporter is unavailable"),
+        });
+        return;
+      }
+      if (inFlight.size >= Math.max(1, concurrencyLimit)) {
+        finish(resultCallback, {
+          code: 1,
+          error: new Error("OTLP log exporter is busy"),
+        });
+        return;
+      }
+
+      const controller =
+        typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId =
+        controller && timeoutMillis > 0
+          ? globalThis.setTimeout(() => controller.abort(), timeoutMillis)
+          : 0;
+      const body = JsonLogsSerializer.serializeRequest(logs);
+      const request = Promise.resolve(
+        globalThis.fetch(url, {
+          method: "POST",
+          body,
+          keepalive: true,
+          signal: controller?.signal,
+        }),
+      )
+        .then((response) => {
+          if (!response?.ok) {
+            throw new Error(`OTLP logs export failed with HTTP ${response?.status ?? "unknown"}`);
+          }
+          finish(resultCallback, { code: 0 });
+        })
+        .catch((error) => {
+          finish(resultCallback, {
+            code: 1,
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+        })
+        .finally(() => {
+          if (timeoutId) {
+            globalThis.clearTimeout(timeoutId);
+          }
+          inFlight.delete(request);
+        });
+
+      inFlight.add(request);
+    },
+    forceFlush() {
+      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+    },
+    shutdown() {
+      shutdown = true;
+      return Promise.allSettled(Array.from(inFlight)).then(() => {});
+    },
+  };
+}
+
+function installBrowserLogHooks(loggerProvider, config) {
+  if (!loggerProvider || globalThis[OTEL_LOG_HOOK_KEY]) {
+    return;
+  }
+
+  const runtimeLoggerName = `${config.serviceName}.browser.runtime`;
+  const consoleLoggerName = `${config.serviceName}.browser.console`;
+  const consoleRef = globalThis.console;
+  const originalWarn =
+    consoleRef && typeof consoleRef.warn === "function"
+      ? consoleRef.warn.bind(consoleRef)
+      : null;
+  const originalError =
+    consoleRef && typeof consoleRef.error === "function"
+      ? consoleRef.error.bind(consoleRef)
+      : null;
+
+  globalThis.addEventListener?.("error", (event) => {
+    const body = normalizeString(event?.message) || "Unhandled browser error";
+    const error =
+      event?.error instanceof Error ? event.error : new Error(body);
+    emitBrowserLog(loggerProvider, config, {
+      loggerName: runtimeLoggerName,
+      source: "window.error",
+      eventName: "window.error",
+      severityNumber: SeverityNumber.ERROR,
+      severityText: "ERROR",
+      body,
+      error,
+      attributes: {
+        "code.filepath": normalizeString(event?.filename),
+        "code.lineno": Number.isFinite(event?.lineno) ? event.lineno : undefined,
+        "code.colno": Number.isFinite(event?.colno) ? event.colno : undefined,
+      },
+    });
+  });
+
+  globalThis.addEventListener?.("unhandledrejection", (event) => {
+    const reason = event?.reason;
+    emitBrowserLog(loggerProvider, config, {
+      loggerName: runtimeLoggerName,
+      source: "window.unhandledrejection",
+      eventName: "window.unhandledrejection",
+      severityNumber: SeverityNumber.ERROR,
+      severityText: "ERROR",
+      body: normalizeLogBody(reason, "Unhandled promise rejection"),
+      error: reason instanceof Error ? reason : null,
+      attributes: {
+        "fishystuff.rejection.kind":
+          reason instanceof Error ? "error" : typeof reason,
+      },
+    });
+  });
+
+  if (consoleRef) {
+    if (originalWarn) {
+      consoleRef.warn = (...args) => {
+        emitBrowserLog(loggerProvider, config, {
+          loggerName: consoleLoggerName,
+          source: "console.warn",
+          eventName: "console.warn",
+          severityNumber: SeverityNumber.WARN,
+          severityText: "WARN",
+          body: consoleArgsMessage(args, "console warn"),
+          error: firstErrorArgument(args),
+          attributes: {
+            "fishystuff.console.arg_count": args.length,
+          },
+        });
+        return originalWarn(...args);
+      };
+    }
+    if (originalError) {
+      consoleRef.error = (...args) => {
+        emitBrowserLog(loggerProvider, config, {
+          loggerName: consoleLoggerName,
+          source: "console.error",
+          eventName: "console.error",
+          severityNumber: SeverityNumber.ERROR,
+          severityText: "ERROR",
+          body: consoleArgsMessage(args, "console error"),
+          error: firstErrorArgument(args),
+          attributes: {
+            "fishystuff.console.arg_count": args.length,
+          },
+        });
+        return originalError(...args);
+      };
+    }
+  }
+
+  globalThis[OTEL_LOG_HOOK_KEY] = true;
+}
+
+function createTelemetryBridge(config, tracerProvider, meterProvider, loggerProvider) {
   const tracer = tracerProvider ? tracerProvider.getTracer(config.serviceName) : null;
 
   return Object.freeze({
-    initialized: Boolean(tracerProvider || meterProvider),
-    enabled: Boolean(tracerProvider || meterProvider),
+    initialized: Boolean(tracerProvider || meterProvider || loggerProvider),
+    enabled: Boolean(tracerProvider || meterProvider || loggerProvider),
     tracingEnabled: Boolean(tracerProvider),
     metricsEnabled: Boolean(meterProvider),
+    loggingEnabled: Boolean(loggerProvider),
     serviceName: config.serviceName,
     deploymentEnvironment: config.deploymentEnvironment,
     serviceVersion: config.serviceVersion,
     sampleRatio: config.sampleRatio,
     exporterEndpoint: config.exporterEndpoint,
     metricsExporterEndpoint: config.metricsExporterEndpoint,
+    logsExporterEndpoint: config.logsExporterEndpoint,
     jaegerUiUrl: config.jaegerUiUrl,
     getMeter(name, version, options) {
       if (!meterProvider) {
@@ -475,6 +850,36 @@ function createTelemetryBridge(config, tracerProvider, meterProvider) {
         normalizeString(version) || undefined,
         options,
       );
+    },
+    getLogger(name, version, options) {
+      if (!loggerProvider) {
+        return null;
+      }
+      return loggerProvider.getLogger(
+        normalizeString(name) || `${config.serviceName}.browser`,
+        normalizeString(version) || undefined,
+        options,
+      );
+    },
+    emitLog(options) {
+      return emitBrowserLog(loggerProvider, config, {
+        loggerName: `${config.serviceName}.browser.app`,
+        source: "bridge.emitLog",
+        ...(options && typeof options === "object" ? options : {}),
+      });
+    },
+    emitError(error, attributes = {}, options = {}) {
+      return emitBrowserLog(loggerProvider, config, {
+        loggerName: `${config.serviceName}.browser.app`,
+        source: "bridge.emitError",
+        eventName: "bridge.emitError",
+        severityNumber: SeverityNumber.ERROR,
+        severityText: "ERROR",
+        body: errorMessage(error),
+        error: error instanceof Error ? error : new Error(errorMessage(error)),
+        attributes,
+        ...(options && typeof options === "object" ? options : {}),
+      });
     },
     responseContext(result) {
       return extractFishystuffResponseContext(result);
@@ -545,12 +950,14 @@ function installBrowserTelemetry(config) {
   const traceEnabled = config.enabled && Boolean(config.exporterEndpoint);
   const metricsEnabled =
     config.metricsEnabled && Boolean(config.metricsExporterEndpoint);
-  const disabledBridge = createTelemetryBridge(config, null, null);
-  if (!traceEnabled && !metricsEnabled) {
+  const logsEnabled =
+    config.logsEnabled && Boolean(config.logsExporterEndpoint);
+  const disabledBridge = createTelemetryBridge(config, null, null, null);
+  if (!traceEnabled && !metricsEnabled && !logsEnabled) {
     globalThis[OTEL_GLOBAL_KEY] = Object.freeze({
       ...disabledBridge,
       reason:
-        config.enabled || config.metricsEnabled
+        config.enabled || config.metricsEnabled || config.logsEnabled
           ? "missing-exporter-endpoint"
           : "disabled",
     });
@@ -572,8 +979,9 @@ function installBrowserTelemetry(config) {
   });
 
   let tracerProvider = null;
+  let loggerProvider = null;
   if (traceEnabled) {
-    const traceExporter = new OTLPTraceExporter({
+    const traceExporter = createOtlpHttpTraceExporter({
       url: config.exporterEndpoint,
       concurrencyLimit: 4,
       timeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
@@ -600,23 +1008,28 @@ function installBrowserTelemetry(config) {
       },
     });
     tracerProvider.register();
+  }
 
-    registerInstrumentations({
-      instrumentations: [
-        new FetchInstrumentation({
-          clearTimingResources: true,
-          ignoreUrls: buildIgnorePatterns(config),
-          propagateTraceHeaderCorsUrls: buildPropagationTargets(config),
-          requestHook(span, request) {
-            applyFishystuffRequestAttributes(span, request, config);
+  if (logsEnabled) {
+    loggerProvider = new LoggerProvider({
+      resource,
+      processors: [
+        new BatchLogRecordProcessor(
+          createOtlpHttpLogExporter({
+            url: config.logsExporterEndpoint,
+            timeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+          }),
+          {
+            maxQueueSize: DEFAULT_LOG_EXPORT_QUEUE_SIZE,
+            maxExportBatchSize: DEFAULT_LOG_EXPORT_BATCH_SIZE,
+            scheduledDelayMillis: DEFAULT_LOG_EXPORT_DELAY_MS,
+            exportTimeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
           },
-          applyCustomAttributesOnSpan(span, request, result) {
-            applyFishystuffRequestAttributes(span, request, config);
-            applyFishystuffResponseAttributes(span, result);
-          },
-        }),
+        ),
       ],
     });
+    otelLogs.setGlobalLoggerProvider(loggerProvider);
+    installBrowserLogHooks(loggerProvider, config);
   }
 
   let meterProvider = null;
@@ -637,12 +1050,33 @@ function installBrowserTelemetry(config) {
     otelMetrics.setGlobalMeterProvider(meterProvider);
   }
 
-  installFlushHooks([tracerProvider, meterProvider]);
+  if (traceEnabled) {
+    registerInstrumentations({
+      loggerProvider,
+      instrumentations: [
+        new FetchInstrumentation({
+          clearTimingResources: true,
+          ignoreUrls: buildIgnorePatterns(config),
+          propagateTraceHeaderCorsUrls: buildPropagationTargets(config),
+          requestHook(span, request) {
+            applyFishystuffRequestAttributes(span, request, config);
+          },
+          applyCustomAttributesOnSpan(span, request, result) {
+            applyFishystuffRequestAttributes(span, request, config);
+            applyFishystuffResponseAttributes(span, result);
+          },
+        }),
+      ],
+    });
+  }
+
+  installFlushHooks([tracerProvider, meterProvider, loggerProvider]);
 
   globalThis[OTEL_GLOBAL_KEY] = createTelemetryBridge(
     config,
     tracerProvider,
     meterProvider,
+    loggerProvider,
   );
 }
 

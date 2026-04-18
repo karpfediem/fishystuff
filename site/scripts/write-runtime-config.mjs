@@ -226,6 +226,16 @@ export function buildRuntimeConfig(env = process.env) {
           || 5000,
       ),
     },
+    logs: {
+      enabled: normalizeFlag(
+        env.FISHYSTUFF_RUNTIME_OTEL_LOGS_ENABLED,
+        normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false),
+      ),
+      exporterEndpoint:
+        normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT)
+        || siblingEndpointUrl(traceExporterEndpoint, "/v1/logs")
+        || joinUrl(publicTelemetryBaseUrl, "/v1/logs"),
+    },
   };
 }
 

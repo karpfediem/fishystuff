@@ -38,15 +38,17 @@ test("buildIgnorePatterns keeps ignoring the exporter endpoint and CDN prefix", 
   const patterns = buildIgnorePatterns({
     exporterEndpoint: "http://localhost:1990/otel/v1/traces",
     metricsExporterEndpoint: "http://localhost:1990/otel/v1/metrics",
+    logsExporterEndpoint: "http://localhost:1990/otel/v1/logs",
     cdnBaseUrl: "http://localhost:4040",
   });
 
-  expect(patterns).toHaveLength(3);
+  expect(patterns).toHaveLength(4);
   expect(patterns[0].test("http://localhost:1990/otel/v1/traces")).toBe(true);
   expect(patterns[0].test("http://localhost:1990/otel/v1/traces?x=1")).toBe(true);
   expect(patterns[1].test("http://localhost:1990/otel/v1/metrics")).toBe(true);
-  expect(patterns[2].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
-  expect(patterns[2].test("http://localhost:8080/api/v1/meta")).toBe(false);
+  expect(patterns[2].test("http://localhost:1990/otel/v1/logs")).toBe(true);
+  expect(patterns[3].test("http://localhost:4040/map/runtime-manifest.json")).toBe(true);
+  expect(patterns[3].test("http://localhost:8080/api/v1/meta")).toBe(false);
 });
 
 test("classifyFetchTarget consistently labels API, site, and CDN requests", () => {
@@ -124,7 +126,7 @@ test("createHttpError carries status and trace context into the thrown message",
   expect(error.spanId).toBe("");
 });
 
-test("resolveRuntimeConfig keeps browser metrics separate from trace export config", () => {
+test("resolveRuntimeConfig keeps browser metrics and logs separate from trace export config", () => {
   globalThis.location = new URL("http://127.0.0.1:1990/map/");
   globalThis.__fishystuffRuntimeConfig = {
     siteBaseUrl: "http://127.0.0.1:1990",
@@ -141,6 +143,10 @@ test("resolveRuntimeConfig keeps browser metrics separate from trace export conf
       exporterEndpoint: "http://127.0.0.1:4818/v1/metrics",
       exportIntervalMs: 3000,
     },
+    logs: {
+      enabled: true,
+      exporterEndpoint: "http://127.0.0.1:4818/v1/logs",
+    },
   };
 
   const config = resolveRuntimeConfig();
@@ -148,6 +154,8 @@ test("resolveRuntimeConfig keeps browser metrics separate from trace export conf
   expect(config.exporterEndpoint).toBe("http://127.0.0.1:4818/v1/traces");
   expect(config.metricsExporterEndpoint).toBe("http://127.0.0.1:4818/v1/metrics");
   expect(config.metricsExportIntervalMs).toBe(3000);
+  expect(config.logsExporterEndpoint).toBe("http://127.0.0.1:4818/v1/logs");
+  expect(config.logsEnabled).toBe(true);
 
   delete globalThis.__fishystuffRuntimeConfig;
   delete globalThis.location;

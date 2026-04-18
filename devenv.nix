@@ -167,6 +167,8 @@ in {
     FISHYSTUFF_RUNTIME_OTEL_METRICS_ENABLED = "true";
     FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT = "/telemetry/v1/metrics";
     FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS = "5000";
+    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENABLED = "true";
+    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT = "/telemetry/v1/logs";
     FISHYSTUFF_RUNTIME_OTEL_JAEGER_UI_URL = "http://${siteHost}:${toString jaegerUiPort}";
     FISHYSTUFF_RUNTIME_OTEL_SAMPLE_RATIO = "0.25";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
@@ -187,26 +189,30 @@ in {
   services.caddy = {
     enable = true;
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
-      root * ${config.devenv.root}/site/.out
-      header Cache-Control "no-store"
+      route {
+        root * ${config.devenv.root}/site/.out
+        header Cache-Control "no-store"
 
-      handle_path /telemetry/* {
-        reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+        handle_path /telemetry/* {
+          reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+        }
+
+        try_files {path} {path}.html {path}/index.html =404
+        file_server
       }
-
-      try_files {path} {path}.html {path}/index.html =404
-      file_server
     '';
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
-      root * ${config.devenv.root}/site/.out
-      header Cache-Control "no-store"
+      route {
+        root * ${config.devenv.root}/site/.out
+        header Cache-Control "no-store"
 
-      handle_path /telemetry/* {
-        reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+        handle_path /telemetry/* {
+          reverse_proxy 127.0.0.1:${toString vectorOtlpHttpPort}
+        }
+
+        try_files {path} {path}.html {path}/index.html =404
+        file_server
       }
-
-      try_files {path} {path}.html {path}/index.html =404
-      file_server
     '';
     virtualHosts."http://${cdnHost}:${toString cdnPort}".extraConfig = ''
       root * ${config.devenv.root}/data/cdn/public
