@@ -126,7 +126,7 @@ in {
     FISHYSTUFF_DEV_API_PORT = toString apiPort;
     FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
     FISHYSTUFF_DEV_SITE_PORT = toString sitePort;
-    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${siteHost}:${toString sitePort}";
+    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
     FISHYSTUFF_RUNTIME_OTEL_ENABLED = "true";
