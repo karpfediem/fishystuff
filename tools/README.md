@@ -44,8 +44,8 @@ Current contents:
 - `tools/scripts/extract_fishing_workbooks_from_paz.sh`
 - `tools/scripts/build_item_icons_from_source.mjs`
   - resolves the current calculator item icon set from Dolt
-  - does not depend on a running local calculator API by default
-  - accepts `--calculator-api-url <url>` when you explicitly want to compare against a live catalog response
+  - supplements Dolt-derived targets with the local calculator API when it is available
+  - accepts `--calculator-api-url <url>` when you want to override the default live catalog probe
   - extracts source `.dds` icon textures from PAZ via `pazifista`
   - converts them to `44x44` WebP under `data/cdn/public/images/items/`
 - `tools/scripts/build_minimap_tiles_from_source.mjs`

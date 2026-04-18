@@ -12,7 +12,8 @@ const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
 const defaultOutputDir = path.join(repoRoot, "data/cdn/public/images/items");
-const defaultCalculatorApiUrl = process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "";
+const defaultCalculatorApiUrl =
+  process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "http://127.0.0.1:8080/api/v1/calculator";
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
@@ -523,6 +524,29 @@ function queryItemMetadataRowsByIds(itemIds) {
   `);
 }
 
+function collectNumericItemIconIds(value, itemIds = new Set()) {
+  if (typeof value === "string") {
+    const match = value.match(/\/images\/items\/(\d{1,8})\.webp(?:[?#].*)?$/i);
+    if (match) {
+      itemIds.add(Number(match[1]));
+    }
+    return itemIds;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectNumericItemIconIds(entry, itemIds);
+    }
+    return itemIds;
+  }
+  if (!value || typeof value !== "object") {
+    return itemIds;
+  }
+  for (const entry of Object.values(value)) {
+    collectNumericItemIconIds(entry, itemIds);
+  }
+  return itemIds;
+}
+
 function queryCalculatorApiIconRows(calculatorApiUrl) {
   if (!calculatorApiUrl) {
     return [];
@@ -535,15 +559,18 @@ function queryCalculatorApiIconRows(calculatorApiUrl) {
   }
 
   const apiItems = Array.isArray(parsed?.items) ? parsed.items : [];
+  const referencedItemIds = [...collectNumericItemIconIds(parsed)];
+  const requestedMetadataIds = [
+    ...apiItems
+      .map((item) => Number(item?.item_id))
+      .filter((itemId) => Number.isFinite(itemId) && itemId > 0),
+    ...referencedItemIds,
+  ];
   const metadataByItemId = new Map(
-    queryItemMetadataRowsByIds(
-      apiItems
-        .map((item) => Number(item?.item_id))
-        .filter((itemId) => Number.isFinite(itemId) && itemId > 0),
-    ).map((row) => [Number(row.item_id), row]),
+    queryItemMetadataRowsByIds(requestedMetadataIds).map((row) => [Number(row.item_id), row]),
   );
 
-  return apiItems
+  const apiRows = apiItems
     .map((item) => {
       const itemId = Number(item?.item_id);
       const metadata = Number.isFinite(itemId) ? metadataByItemId.get(itemId) : null;
@@ -555,6 +582,26 @@ function queryCalculatorApiIconRows(calculatorApiUrl) {
       };
     })
     .filter((row) => row.icon_id != null || row.item_icon_file || row.item_id != null);
+
+  const referencedRows = referencedItemIds.map((itemId) => {
+    const metadata = metadataByItemId.get(itemId);
+    if (metadata) {
+      return {
+        icon_id: null,
+        item_id: itemId,
+        display_name: metadata.display_name ?? null,
+        item_icon_file: metadata.item_icon_file ?? null,
+      };
+    }
+    return {
+      icon_id: itemId,
+      item_id: null,
+      display_name: null,
+      item_icon_file: null,
+    };
+  });
+
+  return [...apiRows, ...referencedRows];
 }
 
 function queryConsumableIconRows() {
@@ -608,6 +655,38 @@ function queryFishingDomainItemIconRows() {
   `);
 }
 
+function queryFishCatalogIconRows() {
+  return doltQueryJson(`
+    SELECT DISTINCT
+      CAST(source.item_id AS SIGNED) AS item_id,
+      NULLIF(TRIM(source.display_name), '') AS display_name,
+      NULLIF(TRIM(source.item_icon_file), '') AS item_icon_file
+    FROM (
+      SELECT
+        CAST(f.fish_id AS SIGNED) AS item_id,
+        it.ItemName AS display_name,
+        it.IconImageFile AS item_icon_file
+      FROM fish_names_ko f
+      JOIN item_table it
+        ON CAST(it.Index AS SIGNED) = CAST(f.fish_id AS SIGNED)
+      UNION ALL
+      SELECT
+        CAST(ft.item_key AS SIGNED) AS item_id,
+        it.ItemName AS display_name,
+        it.IconImageFile AS item_icon_file
+      FROM fish_table ft
+      LEFT JOIN item_table it
+        ON CAST(it.Index AS SIGNED) = CAST(ft.item_key AS SIGNED)
+      LEFT JOIN fish_names_ko f
+        ON CAST(f.fish_id AS SIGNED) = CAST(ft.item_key AS SIGNED)
+      WHERE f.fish_id IS NULL
+    ) source
+    WHERE source.item_id IS NOT NULL
+      AND NULLIF(TRIM(source.item_icon_file), '') IS NOT NULL
+    ORDER BY CAST(source.item_id AS SIGNED)
+  `);
+}
+
 function queryFishTableIconRows() {
   return doltQueryJson(`
     SELECT DISTINCT
@@ -642,6 +721,9 @@ function queryCalculatorIconTargets(calculatorApiUrl) {
     addIconTarget(targets, row);
   }
   for (const row of queryFishingDomainItemIconRows()) {
+    addIconTarget(targets, row);
+  }
+  for (const row of queryFishCatalogIconRows()) {
     addIconTarget(targets, row);
   }
   for (const row of queryFishTableIconRows()) {
