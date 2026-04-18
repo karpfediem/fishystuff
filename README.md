@@ -49,7 +49,7 @@ Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
 - `just dev-watch-builds`
   - one command for the map/CDN/site rebuild watchers; use it with a running `just up`
 - `just dev-watch-api`
-  - restart the API on source changes; use it with `just dev-up-no-api`
+  - restart the API on source changes; use it with `just dev-up-no-api`, which keeps `db`, `jaeger`, `otel-collector`, and `caddy` running
 
 If you want `devenv` to own the local rebuild/restart loop too, use the opt-in
 watch profile instead of the default stack:
