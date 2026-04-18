@@ -132,7 +132,10 @@ dev-watch-site:
     -w site/content \
     -w site/layouts \
     -w site/assets \
+    -w site/package.json \
+    -w site/bun.lock \
     -w site/scripts \
+    -w site/Justfile \
     -w site/tailwind.input.css \
     -w site/zine.ziggy \
     --ignore site/assets/js/datastar.js \

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,16 @@ const targetPaths = [
   path.join(siteDir, "assets", "js", "otel.js"),
   path.join(siteDir, "public", "js", "otel.js"),
 ];
+const liveOutPath = path.join(siteDir, ".out", "js", "otel.js");
+
+async function pathExists(targetPath) {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const result = await Bun.build({
   entrypoints: [entryPath],
@@ -29,9 +39,18 @@ if (!result.success || result.outputs.length !== 1) {
 
 const bundledSource = await result.outputs[0].text();
 
+if (await pathExists(path.join(siteDir, ".out"))) {
+  targetPaths.push(liveOutPath);
+}
+
 for (const targetPath of targetPaths) {
   await mkdir(path.dirname(targetPath), { recursive: true });
   await writeFile(targetPath, bundledSource, "utf8");
 }
 
-console.log("Wrote assets/js/otel.js and public/js/otel.js from OpenTelemetry browser bootstrap");
+const wroteLiveOut = targetPaths.includes(liveOutPath);
+console.log(
+  `Wrote assets/js/otel.js and public/js/otel.js${
+    wroteLiveOut ? " and .out/js/otel.js" : ""
+  } from OpenTelemetry browser bootstrap`,
+);

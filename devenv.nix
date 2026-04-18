@@ -344,7 +344,10 @@ in {
             ./site/content
             ./site/layouts
             ./site/assets
+            ./site/package.json
+            ./site/bun.lock
             ./site/scripts
+            ./site/Justfile
             ./site/tailwind.input.css
             ./site/zine.ziggy
           ];
