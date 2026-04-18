@@ -1125,54 +1125,6 @@ export function resolveEffectiveZoneRgbsForWasm(inputState, zoneCatalog = []) {
   return normalizeZoneRgbs(matchingZoneRgbs);
 }
 
-function buildEffectiveOutboundStatePatch(
-  patch,
-  inputState,
-  currentState,
-  storage = globalThis.localStorage,
-) {
-  const normalized = normalizeStatePatch(patch);
-  if (!patchHasStateFields(normalized)) {
-    return normalized;
-  }
-  const normalizedFilters = normalized.filters || null;
-  const outboundFilters = normalizedFilters
-    ? Object.fromEntries(
-        Object.entries(normalizedFilters).filter(([key]) => key !== "searchExpression"),
-      )
-    : null;
-  const activeFishFilterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
-  const activeSearchExpression = resolveSearchExpression(
-    inputState?.filters?.searchExpression,
-    undefined,
-    inputState?.filters,
-  );
-  const hasActiveSearchExpression = Array.isArray(activeSearchExpression.children)
-    && activeSearchExpression.children.length > 0;
-  const shouldOverrideFishIds =
-    activeFishFilterTerms.length > 0 ||
-    hasActiveSearchExpression ||
-    Boolean(
-      normalizedFilters &&
-        (hasOwn(normalizedFilters, "fishIds") || hasOwn(normalizedFilters, "searchExpression")),
-    );
-  if (!shouldOverrideFishIds) {
-    return outboundFilters ? { ...normalized, filters: outboundFilters } : normalized;
-  }
-  return {
-    ...normalized,
-    filters: {
-      ...(outboundFilters || {}),
-      fishIds: normalizeFishIds(
-        resolveEffectiveFishIdsForWasm(inputState, currentState),
-        {
-          allowNoMatchSentinel: true,
-        },
-      ),
-    },
-  };
-}
-
 function normalizeZoneRgbs(values) {
   if (!Array.isArray(values)) {
     return [];
@@ -2960,11 +2912,7 @@ class FishyMapBridgeImpl {
       if (!patchHasStateFields(this.pendingStatePatch)) {
         return;
       }
-      const patch = buildEffectiveOutboundStatePatch(
-        this.pendingStatePatch,
-        this.inputState,
-        this.currentState,
-      );
+      const patch = this.pendingStatePatch;
       this.pendingStatePatch = normalizeStatePatch({});
       this.addPerformanceCounter("host.patches.flushed");
       this.wasmModule.fishymap_apply_state_patch_json(JSON.stringify(patch));
@@ -3015,25 +2963,6 @@ class FishyMapBridgeImpl {
 
       if (becameReady || fishFinishedLoading) {
         this.refreshCurrentStateFromWasm();
-        const searchExpression = resolveSearchExpression(
-          this.inputState.filters?.searchExpression,
-          undefined,
-          this.inputState.filters,
-        );
-        if (
-          normalizeFishFilterTerms(this.inputState.filters?.fishFilterTerms).length ||
-          (Array.isArray(searchExpression.children) && searchExpression.children.length > 0)
-        ) {
-          this.pendingStatePatch = mergeStatePatch(this.pendingStatePatch, {
-            version: FISHYMAP_CONTRACT_VERSION,
-            filters: {
-              fishIds: this.inputState.filters?.fishIds,
-              fishFilterTerms: this.inputState.filters?.fishFilterTerms,
-              searchExpression,
-            },
-          });
-          this.schedulePatchFlush();
-        }
       }
 
       if (bootstrapStateSignature(this.currentState) !== previousSignature) {

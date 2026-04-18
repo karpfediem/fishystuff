@@ -471,7 +471,7 @@ test("shared fish state input patches are normalized in host input state", () =>
   });
 });
 
-test("fish filter terms derive outbound fishIds for the wasm point filter", async () => {
+test("fish filter terms are forwarded without deriving outbound fishIds in the host", async () => {
   const env = installDomGlobals();
   let bridge;
   try {
@@ -528,7 +528,8 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, []);
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["missing"]);
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77]);
+    assert.equal("fishIds" in wasm.calls.applied[0].filters, false);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["missing"]);
 
     wasm.calls.applied.length = 0;
     bridge.setState({
@@ -551,6 +552,7 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["favourite"]);
     assert.equal(wasm.calls.applied.length, 1);
     assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77, 912]);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["favourite"]);
 
     wasm.calls.applied.length = 0;
     bridge.setState({
@@ -574,7 +576,8 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
       favouriteIds: [912],
     });
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912]);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, []);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["missing"]);
 
     wasm.calls.applied.length = 0;
     bridge.setState({
@@ -596,7 +599,8 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, [77]);
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["missing"]);
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77, 912]);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77]);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["missing"]);
   } finally {
     bridge?.destroy();
     env.restore();
@@ -650,7 +654,7 @@ test("shared fish filters match catalog fish through item ids", () => {
   );
 });
 
-test("outbound fish filter no-match sentinel survives host normalization", async () => {
+test("host does not synthesize a no-match sentinel for outbound fish filter patches", async () => {
   const env = installDomGlobals();
   let bridge;
   try {
@@ -705,14 +709,15 @@ test("outbound fish filter no-match sentinel survives host normalization", async
 
     assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, []);
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [-1]);
+    assert.equal("fishIds" in wasm.calls.applied[0].filters, false);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["missing"]);
   } finally {
     bridge?.destroy();
     env.restore();
   }
 });
 
-test("grade fish filter terms derive outbound fishIds with OR semantics", async () => {
+test("grade fish filter terms are forwarded without expanding to outbound fishIds", async () => {
   const env = installDomGlobals();
   let bridge;
   try {
@@ -763,7 +768,8 @@ test("grade fish filter terms derive outbound fishIds with OR semantics", async 
 
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["yellow", "green"]);
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912, 77]);
+    assert.equal("fishIds" in wasm.calls.applied[0].filters, false);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["yellow", "green"]);
 
     wasm.calls.applied.length = 0;
     bridge.setState({
@@ -777,7 +783,8 @@ test("grade fish filter terms derive outbound fishIds with OR semantics", async 
 
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["red"]);
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [61]);
+    assert.equal("fishIds" in wasm.calls.applied[0].filters, false);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishFilterTerms, ["red"]);
   } finally {
     bridge?.destroy();
     env.restore();
