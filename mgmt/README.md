@@ -100,11 +100,11 @@ Default topology inputs:
 That bootstrap path intentionally uses mgmt's `--converged-timeout` option and
 `--no-watch` to support a one-shot local bootstrap flow.
 
-Current roadblock:
+Convergence note:
 
-- on the current mgmt branch, poll-driven Hetzner resources still keep the
-  local bootstrap process resident past the requested `--converged-timeout`
-  during absent-state apply
-- the topology itself parses and unifies cleanly, but the one-shot bootstrap
-  exit behavior still needs engine-side work before it matches the intended
-  contract
+- poll-driven resources mark themselves dirty on each poll wakeup before
+  `CheckApply`
+- for a one-shot run to exit on `--converged-timeout`, the converged timeout
+  must therefore stay lower than the poll interval
+- with the current defaults (`poll=60s`, `converged_timeout=45s`), the absent
+  bootstrap validation exits cleanly before the next Hetzner poll cycle
