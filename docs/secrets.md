@@ -18,6 +18,10 @@ Supported local profiles:
   - `BUNNY_FTP_PORT`
   - `BUNNY_FTP_USER`
   - `BUNNY_FTP_PASSWORD`
+- `beta-deploy`
+  - `HETZNER_API_TOKEN`
+  - `HETZNER_SSH_KEY_NAME`
+  - `HETZNER_SSH_PUBLIC_KEY`
 - `bot`
   - `DISCORD_TOKEN`
   - `MOD_INFO_CHANNEL_ID`
@@ -41,10 +45,12 @@ The API path uses repo-owned defaults:
   developer's global SecretSpec config under `$HOME`
 - the `api` profile defaults `FISHYSTUFF_DATABASE_URL` to the local Dolt DSN
 
-If you are working on the `cdn` or `bot` profiles, validate those separately:
+If you are working on the `cdn`, `beta-deploy`, or `bot` profiles, validate
+those separately:
 
 ```bash
 just secrets-check cdn
+just secrets-check beta-deploy
 just secrets-check bot
 ```
 
@@ -54,9 +60,19 @@ Typical runtime usage:
 cargo run -p fishystuff_server -- --config api/config.toml
 cargo run -p fishystuff_ingest -- --help
 secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
+just mgmt-beta-bootstrap state=running converged_timeout=45
 secretspec run --profile bot -- cargo run --manifest-path bot/Cargo.toml
 ```
 
 The API server and `fishystuff_ingest` now resolve `FISHYSTUFF_DATABASE_URL`
 through the SecretSpec Rust SDK against the repo's `api` profile, so they do
 not need a `secretspec run` shell wrapper for the local Dolt connection.
+
+The `beta-deploy` profile is for Hetzner provisioning/deploy tooling, including
+the project SSH key injected at VM create time and the local `mgmt` graph that
+owns beta VPS lifecycle. `HETZNER_SSH_KEY_NAME` defaults to
+`fishystuff-beta-deploy`; `HETZNER_SSH_PUBLIC_KEY` is only required when the
+desired Hetzner topology is present instead of absent. The local bootstrap
+helper runs mgmt in one-shot mode with `--converged-timeout` and `--no-watch`,
+so it exits after the Hetzner topology has stabilized instead of remaining
+attached as a long-running polling process.

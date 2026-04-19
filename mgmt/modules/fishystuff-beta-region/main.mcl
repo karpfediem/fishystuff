@@ -1,5 +1,6 @@
 import "fmt"
 import "../lib/hetzner-location/" as hetzner_location
+import "../lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "../providers/hetzner-network/"
 import "../providers/hetzner-vm/"
 import "../providers/hetzner-vm-network/"
@@ -12,11 +13,15 @@ class region($st) {
 	$cluster str = $st->cluster || "beta"
 	$region_name str = $st->region_name || ""
 	$api_token str = $st->api_token || ""
+	$ssh_key_name str = $st->ssh_key_name || ""
 	$state str = $st->state || "absent"
 	$infra_state str = if $state == "absent" { "absent" } else { "exists" }
 	$allow_rebuild str = $st->allow_rebuild || ""
 	$location str = $st->location || $locations.beta_default_location
 	include locations.lookup($location) as location_defaults
+	include fishystuff_beta_access.catalog(struct {
+		cluster => $cluster,
+	}) as access
 	$name_prefix str = $st->name_prefix || if $region_name != "" { fmt.printf("%s-%s", $cluster, $region_name) } else { fmt.printf("%s-%s", $cluster, $location) }
 	$image str = $st->image || "debian-13"
 	$private_network_enabled bool = $st->private_network_enabled || false
@@ -45,6 +50,7 @@ class region($st) {
 	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
 	$server_rescue_mode str = $st->server_rescue_mode || ""
 	$server_rescue_keys []str = $st->server_rescue_keys || []
+	$server_ssh_keys = if $ssh_key_name != "" { [$ssh_key_name,] } else { [] }
 
 	panic($api_token == "", "missing Hetzner API token; run with SecretSpec profile beta-deploy or set HETZNER_API_TOKEN")
 	panic($private_network_enabled and ($private_network_ip_range == ""), fmt.printf("missing private network ip range for region %s", $name_prefix))
@@ -86,6 +92,8 @@ class region($st) {
 	}
 
 	if $api_db_enabled {
+		include access.host("api-db", $region_name) as api_db_host
+
 		include hetzner_vm.server(struct {
 			name => $api_db_name,
 			role => "api-db",
@@ -96,6 +104,8 @@ class region($st) {
 			datacenter => $location_defaults.datacenter,
 			image => $image,
 			userdata => "",
+			sshkeys => $server_ssh_keys,
+			labels => $api_db_host.labels,
 			serverrescuemode => $server_rescue_mode,
 			serverrescuekeys => $server_rescue_keys,
 			waitinterval => $wait_interval_seconds,
@@ -132,6 +142,8 @@ class region($st) {
 	}
 
 	if $cdn_enabled {
+		include access.host("cdn", $region_name) as cdn_host
+
 		include hetzner_vm.server(struct {
 			name => $cdn_name,
 			role => "cdn",
@@ -142,6 +154,8 @@ class region($st) {
 			datacenter => $location_defaults.datacenter,
 			image => $image,
 			userdata => "",
+			sshkeys => $server_ssh_keys,
+			labels => $cdn_host.labels,
 			serverrescuemode => $server_rescue_mode,
 			serverrescuekeys => $server_rescue_keys,
 			waitinterval => $wait_interval_seconds,
@@ -165,6 +179,8 @@ class region($st) {
 	}
 
 	if $telemetry_enabled {
+		include access.host("telemetry", $region_name) as telemetry_host
+
 		include hetzner_vm.server(struct {
 			name => $telemetry_name,
 			role => "telemetry",
@@ -175,6 +191,8 @@ class region($st) {
 			datacenter => $location_defaults.datacenter,
 			image => $image,
 			userdata => "",
+			sshkeys => $server_ssh_keys,
+			labels => $telemetry_host.labels,
 			serverrescuemode => $server_rescue_mode,
 			serverrescuekeys => $server_rescue_keys,
 			waitinterval => $wait_interval_seconds,

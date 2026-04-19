@@ -1,0 +1,27 @@
+import "fmt"
+
+class firewall($st) {
+	$name str = $st->name
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "absent"
+	$rules = $st->rules
+	$applyto = $st->applyto
+	$labels = $st->labels
+	$waitinterval int = $st->waitinterval || 2
+	$waittimeout int = $st->waittimeout || 600
+	$poll int = $st->poll || 30
+
+	panic($name == "", "hetzner-firewall provider requires name")
+	panic($apitoken == "", fmt.printf("missing Hetzner API token for firewall %s", $name))
+
+	hetzner:firewall $name {
+		apitoken => $apitoken,
+		state => $state,
+		rules => $rules,
+		applyto => $applyto,
+		labels => $labels,
+		waitinterval => $waitinterval,
+		waittimeout => $waittimeout,
+		Meta:poll => $poll,
+	}
+}

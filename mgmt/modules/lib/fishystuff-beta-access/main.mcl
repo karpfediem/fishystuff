@@ -1,0 +1,93 @@
+import "fmt"
+
+class catalog($st) {
+	$cluster str = $st->cluster || "beta"
+
+	$managed_by_label_key = "managed-by"
+	$managed_by_label_value = "mgmt"
+	$project_label_key = "project"
+	$project_label_value = "fishystuff"
+	$cluster_label_key = "cluster"
+	$region_label_key = "region"
+	$role_label_key = "role"
+
+	$ssh_access_label_key = "fishystuff-ssh"
+	$ssh_access_label_value = $cluster
+	$public_http_access_label_key = "fishystuff-public-http"
+	$public_http_access_label_value = $cluster
+	$empty_ips []str = []
+}
+
+class catalog:host($role_name, $region_name) {
+	$labels = {
+		$managed_by_label_key => $managed_by_label_value,
+		$project_label_key => $project_label_value,
+		$cluster_label_key => $cluster,
+		$region_label_key => $region_name,
+		$role_label_key => $role_name,
+		$ssh_access_label_key => $ssh_access_label_value,
+		$public_http_access_label_key => $public_http_access_label_value,
+	}
+}
+
+class catalog:ssh {
+	$name = fmt.printf("fishystuff-%s-ssh", $cluster)
+	$labels = {
+		$managed_by_label_key => $managed_by_label_value,
+		$project_label_key => $project_label_value,
+		$cluster_label_key => $cluster,
+		"purpose" => "ssh",
+	}
+	$rules = [
+		struct {
+			direction => "in",
+			sourceips => ["0.0.0.0/0", "::/0",],
+			destinationips => $empty_ips,
+			protocol => "tcp",
+			port => "22",
+			description => "Allow SSH bootstrap and mgmt access",
+		},
+	]
+	$applyto = [
+		struct {
+			type => "label_selector",
+			server => "",
+			labelselector => fmt.printf("%s=%s", $ssh_access_label_key, $ssh_access_label_value),
+		},
+	]
+}
+
+class catalog:public_http {
+	$name = fmt.printf("fishystuff-%s-public-http", $cluster)
+	$labels = {
+		$managed_by_label_key => $managed_by_label_value,
+		$project_label_key => $project_label_value,
+		$cluster_label_key => $cluster,
+		"purpose" => "public-http",
+	}
+	$rules = [
+		struct {
+			direction => "in",
+			sourceips => ["0.0.0.0/0", "::/0",],
+			destinationips => $empty_ips,
+			protocol => "tcp",
+			port => "80",
+			description => "Allow public HTTP",
+		},
+		struct {
+			direction => "in",
+			sourceips => ["0.0.0.0/0", "::/0",],
+			destinationips => $empty_ips,
+			protocol => "tcp",
+			port => "443",
+			description => "Allow public HTTPS",
+		},
+	]
+	$applyto = [
+		struct {
+			type => "label_selector",
+			server => "",
+			labelselector => fmt.printf("%s=%s", $public_http_access_label_key, $public_http_access_label_value),
+		},
+	]
+}

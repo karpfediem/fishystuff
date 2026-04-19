@@ -10,6 +10,8 @@ class server($st) {
 	$datacenter str = $st->datacenter
 	$image str = $st->image
 	$userdata str = $st->userdata || ""
+	$sshkeys = $st->sshkeys
+	$labels = $st->labels
 	$serverrescuemode str = $st->serverrescuemode || ""
 	$serverrescuekeys []str = $st->serverrescuekeys || []
 	$waitinterval int = $st->waitinterval || 2
@@ -30,6 +32,8 @@ class server($st) {
 		datacenter => $datacenter,
 		image => $image,
 		userdata => $userdata,
+		sshkeys => $sshkeys,
+		labels => $labels,
 		serverrescuemode => $serverrescuemode,
 		serverrescuekeys => $serverrescuekeys,
 		waitinterval => $waitinterval,

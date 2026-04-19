@@ -2,6 +2,8 @@ import "sys"
 import "modules/fishystuff-beta/"
 
 $api_token = sys.getenv("HETZNER_API_TOKEN")
+$ssh_key_name = sys.defaultenv("HETZNER_SSH_KEY_NAME", "fishystuff-beta-deploy")
+$ssh_public_key = sys.defaultenv("HETZNER_SSH_PUBLIC_KEY", "")
 $cluster = sys.defaultenv("FISHYSTUFF_HETZNER_CLUSTER", "beta")
 $state = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "absent")
 $allow_rebuild = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
@@ -10,6 +12,8 @@ $image = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "debian-13")
 include fishystuff_beta.topology(struct {
 	cluster => $cluster,
 	api_token => $api_token,
+	ssh_key_name => $ssh_key_name,
+	ssh_public_key => $ssh_public_key,
 	state => $state,
 	allow_rebuild => $allow_rebuild,
 	image => $image,

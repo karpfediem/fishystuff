@@ -1,0 +1,24 @@
+import "fmt"
+
+class ssh_key($st) {
+	$name str = $st->name
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "absent"
+	$publickey str = $st->publickey || ""
+	$labels = $st->labels
+	$waitinterval int = $st->waitinterval || 2
+	$poll int = $st->poll || 30
+
+	panic($name == "", "hetzner-ssh-key provider requires name")
+	panic($apitoken == "", fmt.printf("missing Hetzner API token for SSH key %s", $name))
+	panic($state == "exists" and $publickey == "", fmt.printf("missing public key for SSH key %s", $name))
+
+	hetzner:ssh_key $name {
+		apitoken => $apitoken,
+		state => $state,
+		publickey => $publickey,
+		labels => $labels,
+		waitinterval => $waitinterval,
+		Meta:poll => $poll,
+	}
+}

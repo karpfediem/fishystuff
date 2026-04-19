@@ -19,7 +19,9 @@ mgmt/
       fishystuff-beta-layout/
       hetzner-location/
     providers/
+      hetzner-firewall/
       hetzner-network/
+      hetzner-ssh-key/
       hetzner-vm/
       hetzner-vm-network/
       hetzner-volume/
@@ -40,13 +42,20 @@ Shared helper module:
   - exports `catalog`
   - exports nested regional layout classes `catalog:nbg1`, `catalog:ash`, and
     `catalog:sin`
+- `modules/lib/fishystuff-beta-access/`
+  - exports `catalog`
+  - exports nested firewall policy classes `catalog:ssh` and
+    `catalog:public_http`
+  - exports nested host label class `catalog:host(<role>, <region>)`
 - `modules/lib/hetzner-location/`
   - exports `catalog`
   - exports nested `catalog:lookup(<location>)`
 
 Internal provider wrapper:
 
+- `modules/providers/hetzner-firewall/`
 - `modules/providers/hetzner-network/`
+- `modules/providers/hetzner-ssh-key/`
 - `modules/providers/hetzner-vm/`
 - `modules/providers/hetzner-vm-network/`
 - `modules/providers/hetzner-volume/`
@@ -55,9 +64,13 @@ Internal provider wrapper:
 Current scope:
 
 - manage the named beta VPS inventory in Hetzner across three regions
+- manage the project SSH key used for bootstrap access on new hosts
+- manage cluster-scoped Hetzner firewalls for SSH and public HTTP/HTTPS access
 - manage the `nbg1` private core network in Hetzner
 - manage the Dolt data volume on `beta-nbg1-api-db`
 - attach the `nbg1` core hosts to the private network
+- label each managed server with cluster, region, role, and firewall selector
+  labels
 - bootstrap a resident `mgmt` service on a host over SSH after the VM exists
 - support future host-local `mgmt deploy` updates over SSH without exposing etcd
 - keep the desired first stable beta topology explicit:
@@ -71,18 +84,19 @@ Current scope:
 
 Current engine limitation:
 
-- the current `hetzner:vm` resource still does not expose firewalls, floating
-  IPs, labels, or richer server bootstrap lifecycle as first-class mgmt
-  resources
+- the current graph still does not model host bootstrap as an intrinsic
+  lifecycle phase of `hetzner:vm`
+- floating IPs and richer post-create provisioning are still not modeled in
+  this repo's inventory graph
 - the current inventory graph can create VMs, networks, and volumes, but it
   still cannot trigger the resident host bootstrap as part of VM creation
 - that means new hosts currently require a separate SSH kickstart step after
   they appear in Hetzner
 
 As a result, this module now owns the beta Hetzner inventory up through
-private network and volume attachment, and it now provides a resident host
-bootstrap path, but it does not yet model a first-class post-create lifecycle
-or the full edge-hardening story.
+project SSH key, firewall policy, private network, and volume attachment, and
+it now provides a resident host bootstrap path, but it does not yet model a
+first-class post-create lifecycle or the full edge-hardening story.
 
 Safety defaults:
 
@@ -95,6 +109,12 @@ Typical local validation:
 ```bash
 just mgmt-beta-unify
 ```
+
+At the moment, validation and apply runs for this topology require an `mgmt`
+binary that includes the local `hetzner:ssh_key` and `hetzner:firewall`
+resource work. Until that lands in your default `mgmt` checkout, point
+`mgmt-beta-unify` and `mgmt-beta-bootstrap` at a binary built from
+`/home/carp/code/playground/mgmt-missing-features`.
 
 Typical local bootstrap run:
 
