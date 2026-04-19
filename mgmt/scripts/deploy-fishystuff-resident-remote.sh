@@ -44,8 +44,8 @@ trap 'rm -rf "$remote_tmp"; rm -f "$remote_tar"' EXIT
 
 tar -C "$remote_tmp" -xf "$remote_tar"
 if [[ "${#remote_env[@]}" -gt 0 ]]; then
-	sudo env "${remote_env[@]}" timeout "${timeout_secs}s" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang "$remote_tmp/"
+	sudo env "${remote_env[@]}" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 --converged-timeout="${timeout_secs}" lang "$remote_tmp/"
 else
-	sudo timeout "${timeout_secs}s" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang "$remote_tmp/"
+	sudo "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 --converged-timeout="${timeout_secs}" lang "$remote_tmp/"
 fi
 EOF
