@@ -11,94 +11,118 @@ class zone($st) {
 	$site_contents []str = $st->site_contents || []
 	$site_type str = $st->site_type || "A"
 	$site_proxied bool = $st->site_proxied || false
+	$site_state str = if $state == "absent" {
+		"absent"
+	} else {
+		if len($site_contents) > 0 {
+			"exists"
+		} else {
+			"absent"
+		}
+	}
 
 	$api_contents []str = $st->api_contents || []
 	$api_type str = $st->api_type || "A"
 	$api_proxied bool = $st->api_proxied || false
+	$api_state str = if $state == "absent" {
+		"absent"
+	} else {
+		if len($api_contents) > 0 {
+			"exists"
+		} else {
+			"absent"
+		}
+	}
 
 	$cdn_contents []str = $st->cdn_contents || []
 	$cdn_type str = $st->cdn_type || "A"
 	$cdn_proxied bool = $st->cdn_proxied || false
+	$cdn_state str = if $state == "absent" {
+		"absent"
+	} else {
+		if len($cdn_contents) > 0 {
+			"exists"
+		} else {
+			"absent"
+		}
+	}
 
 	$telemetry_contents []str = $st->telemetry_contents || []
 	$telemetry_type str = $st->telemetry_type || "A"
 	$telemetry_proxied bool = $st->telemetry_proxied || false
+	$telemetry_state str = if $state == "absent" {
+		"absent"
+	} else {
+		if len($telemetry_contents) > 0 {
+			"exists"
+		} else {
+			"absent"
+		}
+	}
 
 	if $apitoken != "" {
-		if ($state == "absent") or (len($site_contents) > 0) {
-			include cloudflare_dns_record.dns_record(struct {
-				name => "${cluster}-site",
-				apitoken => $apitoken,
-				state => $state,
-				zoneid => "",
-				zonename => $zonename,
-				type => $site_type,
-				record_name => "${cluster}",
-				content => "",
-				contents => $site_contents,
-				ttl => $ttl,
-				proxied => $site_proxied,
-				comment => "Managed by mgmt for fishystuff beta site DNS",
-				tags => ["managed-by:mgmt", "project:fishystuff", "cluster:${cluster}", "service:site",],
-				poll => $poll,
-			})
-		}
+		include cloudflare_dns_record.dns_record(struct {
+			name => "${cluster}-site",
+			apitoken => $apitoken,
+			state => $site_state,
+			zoneid => "",
+			zonename => $zonename,
+			type => $site_type,
+			record_name => "${cluster}",
+			content => "",
+			contents => $site_contents,
+			ttl => $ttl,
+			proxied => $site_proxied,
+			comment => "Managed by mgmt for fishystuff beta site DNS",
+			poll => $poll,
+		})
 
-		if ($state == "absent") or (len($api_contents) > 0) {
-			include cloudflare_dns_record.dns_record(struct {
-				name => "${cluster}-api",
-				apitoken => $apitoken,
-				state => $state,
-				zoneid => "",
-				zonename => $zonename,
-				type => $api_type,
-				record_name => "api.${cluster}",
-				content => "",
-				contents => $api_contents,
-				ttl => $ttl,
-				proxied => $api_proxied,
-				comment => "Managed by mgmt for fishystuff beta API DNS",
-				tags => ["managed-by:mgmt", "project:fishystuff", "cluster:${cluster}", "service:api",],
-				poll => $poll,
-			})
-		}
+		include cloudflare_dns_record.dns_record(struct {
+			name => "${cluster}-api",
+			apitoken => $apitoken,
+			state => $api_state,
+			zoneid => "",
+			zonename => $zonename,
+			type => $api_type,
+			record_name => "api.${cluster}",
+			content => "",
+			contents => $api_contents,
+			ttl => $ttl,
+			proxied => $api_proxied,
+			comment => "Managed by mgmt for fishystuff beta API DNS",
+			poll => $poll,
+		})
 
-		if ($state == "absent") or (len($cdn_contents) > 0) {
-			include cloudflare_dns_record.dns_record(struct {
-				name => "${cluster}-cdn",
-				apitoken => $apitoken,
-				state => $state,
-				zoneid => "",
-				zonename => $zonename,
-				type => $cdn_type,
-				record_name => "cdn.${cluster}",
-				content => "",
-				contents => $cdn_contents,
-				ttl => $ttl,
-				proxied => $cdn_proxied,
-				comment => "Managed by mgmt for fishystuff beta CDN DNS",
-				tags => ["managed-by:mgmt", "project:fishystuff", "cluster:${cluster}", "service:cdn",],
-				poll => $poll,
-			})
-		}
+		include cloudflare_dns_record.dns_record(struct {
+			name => "${cluster}-cdn",
+			apitoken => $apitoken,
+			state => $cdn_state,
+			zoneid => "",
+			zonename => $zonename,
+			type => $cdn_type,
+			record_name => "cdn.${cluster}",
+			content => "",
+			contents => $cdn_contents,
+			ttl => $ttl,
+			proxied => $cdn_proxied,
+			comment => "Managed by mgmt for fishystuff beta CDN DNS",
+			poll => $poll,
+		})
 
-		if ($state == "absent") or (len($telemetry_contents) > 0) {
-			include cloudflare_dns_record.dns_record(struct {
-				name => "${cluster}-telemetry",
-				apitoken => $apitoken,
-				state => $state,
-				zoneid => "",
-				zonename => $zonename,
-				type => $telemetry_type,
-				record_name => "telemetry.${cluster}",
-				content => "",
-				contents => $telemetry_contents,
-				ttl => $ttl,
-				proxied => $telemetry_proxied,
-				comment => "Managed by mgmt for fishystuff beta telemetry DNS",
-				tags => ["managed-by:mgmt", "project:fishystuff", "cluster:${cluster}", "service:telemetry",],
-				poll => $poll,
-			})
-		}
+		include cloudflare_dns_record.dns_record(struct {
+			name => "${cluster}-telemetry",
+			apitoken => $apitoken,
+			state => $telemetry_state,
+			zoneid => "",
+			zonename => $zonename,
+			type => $telemetry_type,
+			record_name => "telemetry.${cluster}",
+			content => "",
+			contents => $telemetry_contents,
+			ttl => $ttl,
+			proxied => $telemetry_proxied,
+			comment => "Managed by mgmt for fishystuff beta telemetry DNS",
+			poll => $poll,
+		})
 	}
 }

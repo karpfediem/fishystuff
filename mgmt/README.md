@@ -18,6 +18,7 @@ mgmt/
     fishystuff-beta-region/
     lib/
       fishystuff-beta-layout/
+      hetzner-vm-observed/
       hetzner-location/
     providers/
       cloudflare-dns-record/
@@ -50,6 +51,8 @@ Shared helper module:
   - exports nested firewall policy classes `catalog:ssh` and
     `catalog:public_http`
   - exports nested host label class `catalog:host(<role>, <region>)`
+- `modules/lib/hetzner-vm-observed/`
+  - exports `public_ipv4(<server>)`
 - `modules/lib/hetzner-location/`
   - exports `catalog`
   - exports nested `catalog:lookup(<location>)`
@@ -97,9 +100,6 @@ Current engine limitation:
   still cannot trigger the resident host bootstrap as part of VM creation
 - the current `hetzner:vm` resource always creates servers with public IPv4 and
   IPv6, so private-only internal hosts are not yet expressible in this graph
-- the current topology still takes Cloudflare DNS record targets as explicit
-  inputs because `hetzner:vm` does not yet surface public IPs into MCL for
-  direct record wiring
 - that means new hosts currently require a separate SSH kickstart step after
   they appear in Hetzner
 
@@ -202,12 +202,15 @@ Default topology inputs:
 - poll interval: `60s`
 - wait interval: `5s`
 - wait timeout: `600s`
-- optional Cloudflare DNS inputs:
+- optional Cloudflare DNS input:
   - `CLOUDFLARE_API_TOKEN`
-  - `FISHYSTUFF_BETA_DNS_TARGETS_JSON`
-    - expected shape: `{"site":["..."],"api":["..."],"cdn":["..."],"telemetry":["..."]}`
-    - each key is optional
-    - `cdn` can contain multiple targets for a record set
+- beta DNS targets are now derived inside the MCL graph from observed
+  `hetzner:vm.publicipv4` metadata:
+  - `beta` follows `beta-nbg1-api-db`
+  - `api.beta` follows `beta-nbg1-api-db`
+  - `telemetry.beta` follows `beta-nbg1-api-db` unless a dedicated telemetry
+    host is enabled later
+  - `cdn.beta` is a multi-value record set assembled from the enabled CDN hosts
 - `nbg1` core region:
   - private network: `beta-nbg1-private`
   - private network range: `10.42.0.0/16`

@@ -1,0 +1,27 @@
+import "fmt"
+import "value"
+
+class public_ipv4($st) {
+	$server str = $st->server || ""
+	$enabled bool = $st->enabled || false
+	$value_name str = $st->value_name || if $server != "" {
+		fmt.printf("%s-observed-publicipv4", $server)
+	} else {
+		""
+	}
+
+	panic($server == "", "hetzner-vm-observed public_ipv4 requires server")
+	panic($value_name == "", fmt.printf("missing observed value name for server %s", $server))
+
+	value $value_name {
+		any => "",
+	}
+
+	if $enabled {
+		Hetzner:Vm[$server].publicipv4 -> Value[$value_name].any
+	}
+
+	$state = value.get_str($value_name)
+	$ready = $state->ready
+	$ip = $state->value
+}

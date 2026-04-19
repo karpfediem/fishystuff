@@ -1,6 +1,8 @@
 import "fmt"
+import "list"
 import "../lib/fishystuff-beta-layout/" as fishystuff_beta_layout
 import "../lib/fishystuff-beta-access/" as fishystuff_beta_access
+import "../lib/hetzner-vm-observed/" as hetzner_vm_observed
 import "../providers/hetzner-ssh-key/"
 import "../providers/hetzner-firewall/"
 import "../fishystuff-beta-dns/"
@@ -16,10 +18,6 @@ class topology($st) {
 	$infra_state str = if $state == "absent" { "absent" } else { "exists" }
 	$allow_rebuild str = $st->allow_rebuild || ""
 	$image str = $st->image || "debian-13"
-	$site_dns_targets []str = $st->site_dns_targets || []
-	$api_dns_targets []str = $st->api_dns_targets || []
-	$cdn_dns_targets []str = $st->cdn_dns_targets || []
-	$telemetry_dns_targets []str = $st->telemetry_dns_targets || []
 	$poll_seconds int = $st->poll_seconds || 60
 	$wait_interval_seconds int = $st->wait_interval_seconds || 5
 	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
@@ -41,6 +39,78 @@ class topology($st) {
 	include layout.nbg1 as nbg1
 	include layout.ash as ash
 	include layout.sin as sin
+	$nbg1_api_db_name str = fmt.printf("%s-api-db", $nbg1.name_prefix)
+	$nbg1_cdn_name str = fmt.printf("%s-cdn", $nbg1.name_prefix)
+	$nbg1_telemetry_name str = fmt.printf("%s-telemetry", $nbg1.name_prefix)
+	$ash_cdn_name str = fmt.printf("%s-cdn", $ash.name_prefix)
+	$sin_cdn_name str = fmt.printf("%s-cdn", $sin.name_prefix)
+
+	include hetzner_vm_observed.public_ipv4(struct {
+		server => $nbg1_api_db_name,
+		enabled => $nbg1.api_db_enabled,
+		value_name => fmt.printf("%s-dns-publicipv4", $nbg1_api_db_name),
+	}) as nbg1_api_db_public_ipv4
+
+	include hetzner_vm_observed.public_ipv4(struct {
+		server => $nbg1_cdn_name,
+		enabled => $nbg1.cdn_enabled,
+		value_name => fmt.printf("%s-dns-publicipv4", $nbg1_cdn_name),
+	}) as nbg1_cdn_public_ipv4
+
+	include hetzner_vm_observed.public_ipv4(struct {
+		server => $nbg1_telemetry_name,
+		enabled => $nbg1.telemetry_enabled,
+		value_name => fmt.printf("%s-dns-publicipv4", $nbg1_telemetry_name),
+	}) as nbg1_telemetry_public_ipv4
+
+	include hetzner_vm_observed.public_ipv4(struct {
+		server => $ash_cdn_name,
+		enabled => $ash.cdn_enabled,
+		value_name => fmt.printf("%s-dns-publicipv4", $ash_cdn_name),
+	}) as ash_cdn_public_ipv4
+
+	include hetzner_vm_observed.public_ipv4(struct {
+		server => $sin_cdn_name,
+		enabled => $sin.cdn_enabled,
+		value_name => fmt.printf("%s-dns-publicipv4", $sin_cdn_name),
+	}) as sin_cdn_public_ipv4
+
+	$core_public_ipv4 str = $nbg1_api_db_public_ipv4.ip
+	$site_dns_targets []str = if $core_public_ipv4 != "" {
+		[$core_public_ipv4,]
+	} else {
+		[]
+	}
+	$api_dns_targets []str = if $core_public_ipv4 != "" {
+		[$core_public_ipv4,]
+	} else {
+		[]
+	}
+	$nbg1_cdn_dns_targets []str = if $nbg1_cdn_public_ipv4.ip != "" {
+		[$nbg1_cdn_public_ipv4.ip,]
+	} else {
+		[]
+	}
+	$ash_cdn_dns_targets []str = if $ash_cdn_public_ipv4.ip != "" {
+		[$ash_cdn_public_ipv4.ip,]
+	} else {
+		[]
+	}
+	$sin_cdn_dns_targets []str = if $sin_cdn_public_ipv4.ip != "" {
+		[$sin_cdn_public_ipv4.ip,]
+	} else {
+		[]
+	}
+	$cdn_dns_targets []str = list.concat($nbg1_cdn_dns_targets, $ash_cdn_dns_targets, $sin_cdn_dns_targets)
+	$telemetry_dns_targets []str = if $nbg1_telemetry_public_ipv4.ip != "" {
+		[$nbg1_telemetry_public_ipv4.ip,]
+	} else {
+		if $core_public_ipv4 != "" {
+			[$core_public_ipv4,]
+		} else {
+			[]
+		}
+	}
 
 	include fishystuff_beta_dns.zone(struct {
 		cluster => $cluster,

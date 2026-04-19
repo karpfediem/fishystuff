@@ -1,4 +1,3 @@
-import "encoding"
 import "sys"
 import "modules/fishystuff-beta/"
 
@@ -6,8 +5,6 @@ $api_token = sys.getenv("HETZNER_API_TOKEN")
 $ssh_key_name = sys.defaultenv("HETZNER_SSH_KEY_NAME", "fishystuff-beta-deploy")
 $ssh_public_key = sys.defaultenv("HETZNER_SSH_PUBLIC_KEY", "")
 $cloudflare_api_token = sys.defaultenv("CLOUDFLARE_API_TOKEN", "")
-$dns_targets_json = sys.defaultenv("FISHYSTUFF_BETA_DNS_TARGETS_JSON", "{}")
-$dns_targets struct{site []str; api []str; cdn []str; telemetry []str} = encoding.decode_json_flexible($dns_targets_json, "struct{site []str; api []str; cdn []str; telemetry []str}")
 $cluster = sys.defaultenv("FISHYSTUFF_HETZNER_CLUSTER", "beta")
 $state = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "absent")
 $allow_rebuild = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
@@ -22,10 +19,6 @@ include fishystuff_beta.topology(struct {
 	state => $state,
 	allow_rebuild => $allow_rebuild,
 	image => $image,
-	site_dns_targets => $dns_targets->site,
-	api_dns_targets => $dns_targets->api,
-	cdn_dns_targets => $dns_targets->cdn,
-	telemetry_dns_targets => $dns_targets->telemetry,
 	poll_seconds => 60,
 	wait_interval_seconds => 5,
 	wait_timeout_seconds => 600,
