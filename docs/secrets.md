@@ -22,6 +22,7 @@ Supported local profiles:
   - `HETZNER_API_TOKEN`
   - `HETZNER_SSH_KEY_NAME`
   - `HETZNER_SSH_PUBLIC_KEY`
+  - `HETZNER_SSH_PRIVATE_KEY`
 - `bot`
   - `DISCORD_TOKEN`
   - `MOD_INFO_CHANNEL_ID`
@@ -71,8 +72,24 @@ not need a `secretspec run` shell wrapper for the local Dolt connection.
 The `beta-deploy` profile is for Hetzner provisioning/deploy tooling, including
 the project SSH key injected at VM create time and the local `mgmt` graph that
 owns beta VPS lifecycle. `HETZNER_SSH_KEY_NAME` defaults to
-`fishystuff-beta-deploy`; `HETZNER_SSH_PUBLIC_KEY` is only required when the
-desired Hetzner topology is present instead of absent. The local bootstrap
-helper runs mgmt in one-shot mode with `--converged-timeout` and `--no-watch`,
-so it exits after the Hetzner topology has stabilized instead of remaining
-attached as a long-running polling process.
+`fishystuff-beta-deploy`. `HETZNER_SSH_PUBLIC_KEY` is required for Hetzner VM
+creation, and `HETZNER_SSH_PRIVATE_KEY` is required for the later resident
+`mgmt` bootstrap and deploy steps over SSH. The helper recipes keep that
+material inside the `beta-deploy` SecretSpec profile and only materialize the
+private key into a temporary file for the lifetime of the `ssh` / `nix copy`
+process that needs it. The local bootstrap helper runs mgmt in one-shot mode
+with `--converged-timeout` and `--no-watch`, binds its embedded etcd only on
+explicit loopback URLs, and exits after the Hetzner topology has stabilized
+instead of remaining attached as a long-running polling process.
+
+For local debugging, the bootstrap helper also supports optional Prometheus and
+pprof output without enabling them by default:
+
+```bash
+just mgmt-beta-bootstrap \
+  state=running \
+  converged_timeout=45 \
+  prometheus=true \
+  prometheus_listen=127.0.0.1:39233 \
+  pprof_path=/tmp/fishystuff-beta-bootstrap.pprof
+```
