@@ -253,15 +253,15 @@ test("resolveRuntimeConfig allows query-based telemetry suppression without bypa
     },
     tracing: {
       enabled: true,
-      exporterEndpoint: "http://127.0.0.1:4821/v1/traces",
+      exporterEndpoint: "http://telemetry.localhost:1990/v1/traces",
     },
     metrics: {
       enabled: true,
-      exporterEndpoint: "http://127.0.0.1:4821/v1/metrics",
+      exporterEndpoint: "http://telemetry.localhost:1990/v1/metrics",
     },
     logs: {
       enabled: true,
-      exporterEndpoint: "http://127.0.0.1:4820/v1/logs",
+      exporterEndpoint: "http://telemetry.localhost:1990/v1/logs",
     },
   };
 
