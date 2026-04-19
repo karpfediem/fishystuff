@@ -1,0 +1,16 @@
+[Unit]
+Description=Fishystuff resident mgmt service on {{ .hostname }}
+Documentation=https://mgmtconfig.com/docs/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ .state_root }}
+ExecStart={{ .mgmt_exec_start }}
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

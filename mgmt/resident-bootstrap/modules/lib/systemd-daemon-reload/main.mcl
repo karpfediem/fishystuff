@@ -1,0 +1,25 @@
+import "local"
+
+class reload($name) {
+	$vardir = local.vardir("systemd-daemon-reload/")
+	$mtime_file = "${vardir}daemon-reload"
+
+	exec "${name}" {
+		cmd => "/usr/bin/systemctl",
+		args => [
+			"daemon-reload",
+		],
+
+		donecmd => "/usr/bin/date --utc > ${mtime_file}",
+		doneshell => "/usr/bin/bash",
+
+		watchfiles => [
+			"/lib/systemd/system/",
+			"/etc/systemd/system/",
+			"${mtime_file}",
+		],
+
+		ifcmd => "/usr/bin/test ! -e '${mtime_file}' || /usr/bin/find /lib/systemd/system/ /etc/systemd/system/ -type f -name '*.service' -newer '${mtime_file}' | /usr/bin/grep -q .",
+		ifshell => "/usr/bin/bash",
+	}
+}

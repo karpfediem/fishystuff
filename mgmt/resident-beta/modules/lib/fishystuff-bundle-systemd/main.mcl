@@ -2,8 +2,8 @@ import "encoding"
 import "fmt"
 import "golang/strings" as golang_strings
 import "os"
-import "git://github.com/purpleidea/mgmt/modules/misc/" as misc
 import "../fishystuff-systemd/" as fishystuff_systemd
+import "../../../../modules/lib/systemd-daemon-reload/" as systemd_daemon_reload
 
 class unit($st) {
 	$bundle_path str = $st->bundle_path || ""
@@ -49,7 +49,7 @@ class unit($st) {
 		Notify => Svc["${service_name}"],
 	}
 
-	include misc.systemd_daemon_reload($reload_name)
+	include systemd_daemon_reload.reload($reload_name)
 
 	include fishystuff_systemd.service(struct {
 		name => $service_name,

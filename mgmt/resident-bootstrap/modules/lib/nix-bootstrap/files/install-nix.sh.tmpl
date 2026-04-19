@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+{{ .curl_exec }} --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+  {{ .sh_exec }} -s -- install linux --init systemd --no-confirm --no-modify-profile

@@ -1,13 +1,8 @@
+import "deploy"
 import "fmt"
-
-class daemon_reload($st) {
-	$name str = $st->name
-	$systemctl_exec str = $st->systemctl_exec || "/usr/bin/systemctl"
-
-	exec "${name}" {
-		cmd => fmt.printf("%s daemon-reload", $systemctl_exec),
-	}
-}
+import "golang"
+import "../lib/nix-bootstrap/" as nix_bootstrap
+import "../lib/systemd-daemon-reload/" as systemd_daemon_reload
 
 class resident($st) {
 	$hostname str = $st->hostname
@@ -15,7 +10,6 @@ class resident($st) {
 	$service_name str = $st->service_name || "fishystuff-mgmt"
 	$state_root str = $st->state_root || "/var/lib/fishystuff/mgmt"
 	$unit_dir str = $st->unit_dir || "/etc/systemd/system"
-	$systemctl_exec str = $st->systemctl_exec || "/usr/bin/systemctl"
 	$client_urls str = $st->client_urls || "http://127.0.0.1:2379"
 	$server_urls str = $st->server_urls || "http://127.0.0.1:2380"
 	$advertise_client_urls str = $st->advertise_client_urls || $client_urls
@@ -30,10 +24,21 @@ class resident($st) {
 	$service_path = fmt.printf("%s/%s.service", $unit_dir, $service_name)
 	$reload_name = fmt.printf("systemd-daemon-reload-%s", $service_name)
 	$mgmt_exec_start = fmt.printf("%s run --prefix=%s --hostname=%s --client-urls=%s --server-urls=%s --advertise-client-urls=%s --advertise-server-urls=%s --converged-timeout=-1 --max-runtime=0 --no-pgp empty", $mgmt_exec, $state_root, $hostname, $client_urls, $server_urls, $advertise_client_urls, $advertise_server_urls)
-	$service_content = fmt.printf("[Unit]\nDescription=Fishystuff resident mgmt service on %s\nDocumentation=https://mgmtconfig.com/docs/\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nWorkingDirectory=%s\nExecStart=%s\nRestart=always\nRestartSec=5s\nLimitNOFILE=65536\n\n[Install]\nWantedBy=multi-user.target\n", $hostname, $state_root, $mgmt_exec_start)
+	$service_content = golang.template(deploy.readfile("/files/fishystuff-mgmt.service.tmpl"), struct {
+		hostname => $hostname,
+		state_root => $state_root,
+		mgmt_exec_start => $mgmt_exec_start,
+	})
 
 	panic($hostname == "", "resident bootstrap requires hostname")
 	panic(($startup_mode != "enabled") and ($startup_mode != "disabled") and ($startup_mode != "none"), fmt.printf("unknown startup_mode %s", $startup_mode))
+
+	include nix_bootstrap.install(struct {
+		state_parent => $state_parent,
+		install_exec_name => "install-nix-bootstrap",
+		ready_exec_name => "nix-bootstrap-ready",
+	}) as nix
+	$nix_ready_exec_name str = $nix.ready_exec_name
 
 	file "${state_root_path}" {
 		state => "exists",
@@ -55,16 +60,15 @@ class resident($st) {
 		mode => "u=rw,go=r",
 		owner => "root",
 		group => "root",
+		Notify => Svc["${service_name}"],
 	}
 
-	include daemon_reload(struct {
-		name => $reload_name,
-		systemctl_exec => $systemctl_exec,
-	})
+	include systemd_daemon_reload.reload($reload_name)
 
 	if $startup_mode == "none" {
 		svc "${service_name}" {
 			state => $desired_state,
+			Listen => Exec["${reload_name}"],
 		}
 	}
 
@@ -72,18 +76,14 @@ class resident($st) {
 		svc "${service_name}" {
 			state => $desired_state,
 			startup => $startup_mode,
+			Listen => Exec["${reload_name}"],
 		}
-	}
-
-	file "${state_parent_path}" {
-		state => "exists",
-		mode => "u=rwx,go=rx",
-		owner => "root",
-		group => "root",
 	}
 
 	File["${state_parent_path}"] -> File["${state_root_path}"]
 	File["${state_root_path}"] -> Svc["${service_name}"]
 	File["${unit_dir_path}"] -> File["${service_path}"]
-	File["${service_path}"] -> Exec["${reload_name}"] -> Svc["${service_name}"]
+	File["${service_path}"] -> Exec["${reload_name}"]
+	Exec["${reload_name}"] -> Svc["${service_name}"]
+	Exec["${nix_ready_exec_name}"] -> Svc["${service_name}"]
 }

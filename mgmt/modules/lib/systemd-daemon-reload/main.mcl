@@ -1,0 +1,27 @@
+import "local"
+
+# Copied from mgmt's misc.systemd_daemon_reload helper until mgmt can
+# reliably consume monorepo subdirectory git-module imports during download.
+class reload($name) {
+	$vardir = local.vardir("systemd-daemon-reload/")
+	$mtime_file = "${vardir}daemon-reload"
+
+	exec "${name}" {
+		cmd => "/usr/bin/systemctl",
+		args => [
+			"daemon-reload",
+		],
+
+		donecmd => "/usr/bin/date --utc > ${mtime_file}",
+		doneshell => "/usr/bin/bash",
+
+		watchfiles => [
+			"/lib/systemd/system/",
+			"/etc/systemd/system/",
+			"${mtime_file}",
+		],
+
+		ifcmd => "/usr/bin/test ! -e '${mtime_file}' || /usr/bin/find /lib/systemd/system/ /etc/systemd/system/ -type f -name '*.service' -newer '${mtime_file}' | /usr/bin/grep -q .",
+		ifshell => "/usr/bin/bash",
+	}
+}

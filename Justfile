@@ -135,8 +135,10 @@ mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
   set -euo pipefail
   mgmt_bin='{{mgmt_bin}}'
   mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  module_path="/tmp/fishystuff-mgmt-modules/"
+  mkdir -p "$module_path"
   cd mgmt/resident-bootstrap
-  "$mgmt_bin" run lang --only-unify main.mcl
+  "$mgmt_bin" run lang --module-path "$module_path" --download --only-unify main.mcl
 
 # Copy a locally built mgmt closure to a remote host and install the resident service there.
 mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/mgmt":
@@ -159,7 +161,7 @@ mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120"
       umask 077
       printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
       chmod 600 "$tmp_key"
-      nix copy --to "ssh-ng://$1?ssh-key=$tmp_key" "$4"
+      nix copy --no-check-sigs --to "ssh-ng://$1?ssh-key=$tmp_key" "$4"
       SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
         bash mgmt/scripts/kickstart-fishystuff-resident-remote.sh \
           mgmt/resident-bootstrap \

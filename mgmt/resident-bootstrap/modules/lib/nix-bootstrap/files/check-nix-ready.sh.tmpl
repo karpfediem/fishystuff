@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{ .nix_exec }} --version >/dev/null
+{{ .nix_store_exec }} --version >/dev/null
+{{ .systemctl_exec }} is-enabled {{ .daemon_socket_unit }} >/dev/null
+{{ .systemctl_exec }} is-active {{ .daemon_socket_unit }} >/dev/null
+test -S {{ .daemon_socket_path }}

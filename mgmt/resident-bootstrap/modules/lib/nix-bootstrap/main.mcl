@@ -1,0 +1,82 @@
+import "deploy"
+import "fmt"
+import "golang"
+
+class install($st) {
+	$state_parent str = $st->state_parent || "/var/lib/fishystuff"
+	$state_root str = $st->state_root || fmt.printf("%s/bootstrap", $state_parent)
+	$installer_script_path str = $st->installer_script_path || fmt.printf("%s/install-nix.sh", $state_root)
+	$check_script_path str = $st->check_script_path || fmt.printf("%s/check-nix-ready.sh", $state_root)
+	$ready_stamp_path str = $st->ready_stamp_path || fmt.printf("%s/nix-ready.stamp", $state_root)
+	$nix_exec str = $st->nix_exec || "/nix/var/nix/profiles/default/bin/nix"
+	$nix_store_exec str = $st->nix_store_exec || "/nix/var/nix/profiles/default/bin/nix-store"
+	$curl_exec str = $st->curl_exec || "/usr/bin/curl"
+	$sh_exec str = $st->sh_exec || "/bin/sh"
+	$bash_exec str = $st->bash_exec || "/usr/bin/bash"
+	$systemctl_exec str = $st->systemctl_exec || "/usr/bin/systemctl"
+	$daemon_socket_unit str = $st->daemon_socket_unit || "nix-daemon.socket"
+	$daemon_socket_path str = $st->daemon_socket_path || "/nix/var/nix/daemon-socket/socket"
+	$install_exec_name str = $st->install_exec_name || "install-nix"
+	$ready_exec_name str = $st->ready_exec_name || "nix-bootstrap-ready"
+
+	$install_script = golang.template(deploy.readfile("/files/install-nix.sh.tmpl"), struct {
+		curl_exec => $curl_exec,
+		sh_exec => $sh_exec,
+	})
+	$check_script = golang.template(deploy.readfile("/files/check-nix-ready.sh.tmpl"), struct {
+		nix_exec => $nix_exec,
+		nix_store_exec => $nix_store_exec,
+		systemctl_exec => $systemctl_exec,
+		daemon_socket_unit => $daemon_socket_unit,
+		daemon_socket_path => $daemon_socket_path,
+	})
+
+	file "${state_parent}/" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "${state_root}/" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "${installer_script_path}" {
+		state => "exists",
+		content => $install_script,
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "${check_script_path}" {
+		state => "exists",
+		content => $check_script,
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	exec "${install_exec_name}" {
+		cmd => $installer_script_path,
+		nifcmd => fmt.printf("/usr/bin/test -x '%s' && /usr/bin/test -x '%s'", $nix_exec, $nix_store_exec),
+		nifshell => $bash_exec,
+	}
+
+	exec "${ready_exec_name}" {
+		cmd => $check_script_path,
+		donecmd => fmt.printf("/usr/bin/touch '%s'", $ready_stamp_path),
+		doneshell => $bash_exec,
+	}
+
+	File["${state_parent}/"] -> File["${state_root}/"]
+	File["${state_root}/"] -> File["${installer_script_path}"]
+	File["${state_root}/"] -> File["${check_script_path}"]
+	File["${installer_script_path}"] -> Exec["${install_exec_name}"]
+	File["${check_script_path}"] -> Exec["${ready_exec_name}"]
+	Exec["${install_exec_name}"] -> Exec["${ready_exec_name}"]
+}

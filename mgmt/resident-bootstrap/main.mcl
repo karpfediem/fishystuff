@@ -6,7 +6,6 @@ $mgmt_exec = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_MGMT_EXEC", "/usr/local/b
 $service_name = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_SERVICE_NAME", "fishystuff-mgmt")
 $state_root = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_STATE_ROOT", "/var/lib/fishystuff/mgmt")
 $unit_dir = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_UNIT_DIR", "/etc/systemd/system")
-$systemctl_exec = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_SYSTEMCTL_EXEC", "/usr/bin/systemctl")
 $client_urls = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_CLIENT_URLS", "http://127.0.0.1:2379")
 $server_urls = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_SERVER_URLS", "http://127.0.0.1:2380")
 $advertise_client_urls = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_ADVERTISE_CLIENT_URLS", $client_urls)
@@ -21,7 +20,6 @@ include fishystuff_resident_bootstrap.resident(struct {
 	service_name => $service_name,
 	state_root => $state_root,
 	unit_dir => $unit_dir,
-	systemctl_exec => $systemctl_exec,
 	client_urls => $client_urls,
 	server_urls => $server_urls,
 	advertise_client_urls => $advertise_client_urls,

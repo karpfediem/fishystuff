@@ -33,10 +33,12 @@ remote_tar="${4:?missing remote tar path}"
 remote_tmp="$(mktemp -d /tmp/fishystuff-mgmt-bootstrap.XXXXXX)"
 bootstrap_client_url="http://127.0.0.1:32379"
 bootstrap_server_url="http://127.0.0.1:32380"
+bootstrap_module_path="/var/lib/fishystuff/modules/"
 trap 'rm -rf "$remote_tmp"; rm -f "$remote_tar"' EXIT
 
 tar -C "$remote_tmp" -xf "$remote_tar"
 sudo install -d -m 0755 /usr/local/bin
+sudo install -d -m 0755 "$bootstrap_module_path"
 sudo ln -sfn "$remote_mgmt_bin" /usr/local/bin/mgmt
 run_status=0
 sudo env \
@@ -52,7 +54,7 @@ sudo env \
 		--advertise-server-urls="$bootstrap_server_url" \
 		--no-pgp \
 		--converged-timeout 15 \
-		lang "$remote_tmp/" || run_status=$?
+		lang --module-path "$bootstrap_module_path" --download "$remote_tmp/" || run_status=$?
 if [[ "$run_status" != "0" && "$run_status" != "3" ]]; then
 	exit "$run_status"
 fi
