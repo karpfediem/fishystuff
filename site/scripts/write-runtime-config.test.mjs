@@ -118,26 +118,27 @@ test("runtime config still accepts legacy public OTEL overrides", () => {
 test("runtime config allows explicit local browser metrics overrides", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
-    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT: "http://telemetry.localhost:4822/v1/metrics",
+    FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT: "http://telemetry.localhost:1990/v1/metrics",
     FISHYSTUFF_RUNTIME_OTEL_METRIC_EXPORT_INTERVAL_MS: "3000",
-    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT: "http://telemetry.localhost:4822/v1/logs",
+    FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT: "http://telemetry.localhost:1990/v1/logs",
   });
 
   assert.equal(runtimeConfig.metrics.enabled, true);
-  assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://telemetry.localhost:4822/v1/metrics");
+  assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://telemetry.localhost:1990/v1/metrics");
   assert.equal(runtimeConfig.metrics.exportIntervalMs, 3000);
-  assert.equal(runtimeConfig.logs.exporterEndpoint, "http://telemetry.localhost:4822/v1/logs");
+  assert.equal(runtimeConfig.logs.exporterEndpoint, "http://telemetry.localhost:1990/v1/logs");
 });
 
-test("runtime config derives the local metrics and logs endpoints from the resolved trace endpoint", () => {
+test("runtime config derives sibling metrics and logs endpoints from the resolved trace endpoint", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
-    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT: "http://telemetry.localhost:4822/v1/traces",
+    FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT:
+      "https://telemetry.beta.fishystuff.fish/v1/traces",
   });
 
-  assert.equal(runtimeConfig.tracing.exporterEndpoint, "http://telemetry.localhost:4822/v1/traces");
-  assert.equal(runtimeConfig.metrics.exporterEndpoint, "http://telemetry.localhost:4822/v1/metrics");
-  assert.equal(runtimeConfig.logs.exporterEndpoint, "http://telemetry.localhost:4822/v1/logs");
+  assert.equal(runtimeConfig.tracing.exporterEndpoint, "https://telemetry.beta.fishystuff.fish/v1/traces");
+  assert.equal(runtimeConfig.metrics.exporterEndpoint, "https://telemetry.beta.fishystuff.fish/v1/metrics");
+  assert.equal(runtimeConfig.logs.exporterEndpoint, "https://telemetry.beta.fishystuff.fish/v1/logs");
 });
 
 test("sibling-host derivation skips loopback and preserves explicit paths when joined", () => {
@@ -151,7 +152,7 @@ test("sibling-host derivation skips loopback and preserves explicit paths when j
     "https://telemetry.beta.fishystuff.fish/v1/traces",
   );
   assert.equal(
-    siblingEndpointUrl("http://127.0.0.1:4821/v1/traces", "/v1/metrics"),
-    "http://127.0.0.1:4821/v1/metrics",
+    siblingEndpointUrl("http://telemetry.localhost:1990/v1/traces", "/v1/metrics"),
+    "http://telemetry.localhost:1990/v1/metrics",
   );
 });

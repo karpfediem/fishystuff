@@ -140,7 +140,7 @@ test("resolveRuntimeConfig keeps browser metrics and logs separate from trace ex
     siteBaseUrl: "http://127.0.0.1:1990",
     tracing: {
       enabled: true,
-      exporterEndpoint: "http://telemetry.localhost:4822/v1/traces",
+      exporterEndpoint: "http://telemetry.localhost:1990/v1/traces",
       serviceName: "fishystuff-site-local",
       deploymentEnvironment: "local",
       serviceVersion: "dev",
@@ -148,21 +148,21 @@ test("resolveRuntimeConfig keeps browser metrics and logs separate from trace ex
     },
     metrics: {
       enabled: true,
-      exporterEndpoint: "http://telemetry.localhost:4822/v1/metrics",
+      exporterEndpoint: "http://telemetry.localhost:1990/v1/metrics",
       exportIntervalMs: 3000,
     },
     logs: {
       enabled: true,
-      exporterEndpoint: "http://telemetry.localhost:4822/v1/logs",
+      exporterEndpoint: "http://telemetry.localhost:1990/v1/logs",
     },
   };
 
   const config = resolveRuntimeConfig();
 
-  expect(config.exporterEndpoint).toBe("http://telemetry.localhost:4822/v1/traces");
-  expect(config.metricsExporterEndpoint).toBe("http://telemetry.localhost:4822/v1/metrics");
+  expect(config.exporterEndpoint).toBe("http://telemetry.localhost:1990/v1/traces");
+  expect(config.metricsExporterEndpoint).toBe("http://telemetry.localhost:1990/v1/metrics");
   expect(config.metricsExportIntervalMs).toBe(3000);
-  expect(config.logsExporterEndpoint).toBe("http://telemetry.localhost:4822/v1/logs");
+  expect(config.logsExporterEndpoint).toBe("http://telemetry.localhost:1990/v1/logs");
   expect(config.logsEnabled).toBe(true);
   expect(config.telemetryDefaultMode).toBe("enabled");
   expect(config.telemetryEffectiveEnabled).toBe(true);
@@ -253,15 +253,15 @@ test("resolveRuntimeConfig allows query-based telemetry suppression without bypa
     },
     tracing: {
       enabled: true,
-      exporterEndpoint: "http://telemetry.localhost:4822/v1/traces",
+      exporterEndpoint: "http://127.0.0.1:4821/v1/traces",
     },
     metrics: {
       enabled: true,
-      exporterEndpoint: "http://telemetry.localhost:4822/v1/metrics",
+      exporterEndpoint: "http://127.0.0.1:4821/v1/metrics",
     },
     logs: {
       enabled: true,
-      exporterEndpoint: "http://telemetry.localhost:4822/v1/logs",
+      exporterEndpoint: "http://127.0.0.1:4820/v1/logs",
     },
   };
 
@@ -390,7 +390,7 @@ test("createBrowserOperatorMetrics records session, readiness, and frontend erro
   ]);
 });
 
-test("createOtlpHttpLogExporter sends OTLP protobuf with the expected content type", async () => {
+test("createOtlpHttpLogExporter sends standard OTLP protobuf requests", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init) => {
@@ -400,7 +400,7 @@ test("createOtlpHttpLogExporter sends OTLP protobuf with the expected content ty
 
   try {
     const exporter = createOtlpHttpLogExporter({
-      url: "http://127.0.0.1:4820/v1/logs",
+      url: "http://telemetry.localhost:1990/v1/logs",
     });
 
     await new Promise((resolve, reject) => {
@@ -414,7 +414,8 @@ test("createOtlpHttpLogExporter sends OTLP protobuf with the expected content ty
     });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe("http://127.0.0.1:4820/v1/logs");
+    expect(calls[0].url).toBe("http://telemetry.localhost:1990/v1/logs");
+    expect(calls[0].init.mode).toBeUndefined();
     expect(calls[0].init.headers["content-type"]).toBe("application/x-protobuf");
     expect(calls[0].init.body).toBeInstanceOf(Uint8Array);
   } finally {

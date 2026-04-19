@@ -51,9 +51,10 @@ Repository notes for working in this monorepo.
 - If disk is already tight, clean generated local state such as stale `result*`, `.devenv`, and staged CDN payloads before any heavy Nix work.
 
 ## Browser Telemetry
-- Browser OTLP goes through the local site at `/telemetry/v1/logs`, `/telemetry/v1/metrics`, and `/telemetry/v1/traces`.
+- Browser OTLP goes through the local Caddy telemetry ingress at `http://telemetry.localhost:1990/v1/{traces,metrics,logs}`.
+- This is intentional: raw Vector OTLP ingest is not the local browser contract because it does not own the deploy-time public CORS behavior for `telemetry.*`; the edge does.
 - Start in DevTools MCP: reload the page, inspect `list_network_requests`, and evaluate `window.__fishystuffOtel`.
-- A healthy local pipeline should show HTTP `200` `POST` requests for logs, metrics, and traces, and `curl -fsS http://127.0.0.1:8686/health` should succeed.
+- A healthy local pipeline should show CORS preflight success plus HTTP `200` `POST` requests for logs, metrics, and traces via `telemetry.localhost`, and `curl -fsS http://127.0.0.1:8686/health` should succeed.
 - Use `tools/scripts/vector-tap.sh` as the first live observability entrypoint:
   - `browser-logs`
   - `raw-metrics`

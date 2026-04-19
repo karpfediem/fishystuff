@@ -11,22 +11,48 @@ sources:
       - "./data/vector/process/*.log"
     read_from: beginning
   telemetry_logs_ingress:
-    type: opentelemetry
-    grpc:
-      address: "127.0.0.1:4819"
-    http:
-      address: "127.0.0.1:4820"
-      headers: []
+    type: http_server
+    address: "127.0.0.1:4820"
+    method: POST
+    path: "/v1/logs"
+    strict_path: true
+    response_code: 200
+    decoding:
+      codec: otlp
+      signal_types:
+        - logs
   telemetry_otlp_ingress:
-    type: opentelemetry
-    grpc:
-      address: "127.0.0.1:4817"
-    http:
-      address: "127.0.0.1:${FISHYSTUFF_DEV_VECTOR_OTLP_PASSTHROUGH_HTTP_PORT:-4821}"
-      headers: []
-    use_otlp_decoding: true
+    type: http_server
+    address: "127.0.0.1:${FISHYSTUFF_DEV_VECTOR_OTLP_PASSTHROUGH_HTTP_PORT:-4821}"
+    method: POST
+    path: "/v1"
+    strict_path: false
+    response_code: 200
+    decoding:
+      codec: otlp
+      signal_types:
+        - metrics
+        - traces
 
 transforms:
+  telemetry_logs_only:
+    type: filter
+    inputs:
+      - telemetry_logs_ingress
+    condition:
+      type: is_log
+  telemetry_metrics_only:
+    type: filter
+    inputs:
+      - telemetry_otlp_ingress
+    condition:
+      type: is_metric
+  telemetry_traces_only:
+    type: filter
+    inputs:
+      - telemetry_otlp_ingress
+    condition:
+      type: is_trace
   normalized_process_logs:
     type: remap
     inputs:
@@ -122,7 +148,7 @@ transforms:
   normalized_telemetry_logs:
     type: remap
     inputs:
-      - telemetry_logs_ingress.logs
+      - telemetry_logs_only
     source: |
       .app = "fishystuff"
       .deployment_environment = "local"
@@ -132,6 +158,9 @@ transforms:
       .correlation = {}
       .http = {}
       .browser = {}
+      first_resource_log = get(., ["resourceLogs", 0]) ?? {}
+      first_scope_log = get(first_resource_log, ["scopeLogs", 0]) ?? {}
+      first_log_record = get(first_scope_log, ["logRecords", 0]) ?? {}
 
       event_timestamp = null
       if exists(.timestamp) && !is_null(.timestamp) {
@@ -144,7 +173,11 @@ transforms:
         .timestamp = event_timestamp
       }
 
-      .service = string!(get(.resources, ["service.name"]) ?? "fishystuff-site-local")
+      .service = "fishystuff-site-local"
+      service_name = get(.resources, ["service.name"]) ?? null
+      if service_name != null && string!(service_name) != "" {
+        .service = string!(service_name)
+      }
 
       deployment_environment = get(.resources, ["deployment.environment"]) ?? null
       if deployment_environment != null && string!(deployment_environment) != "" {
@@ -152,6 +185,9 @@ transforms:
       }
 
       severity_text = get(., ["severity_text"]) ?? null
+      if severity_text == null {
+        severity_text = get(first_log_record, ["severityText"]) ?? null
+      }
       if severity_text != null && string!(severity_text) != "" {
         .level = downcase(string!(severity_text))
       } else {
@@ -159,14 +195,21 @@ transforms:
       }
 
       logger_name = get(.scope, ["name"]) ?? null
+      if logger_name == null {
+        logger_name = get(first_scope_log, ["scope", "name"]) ?? null
+      }
       if logger_name != null && string!(logger_name) != "" {
         .logger = string!(logger_name)
       }
 
-      if !exists(.message) || is_null(.message) || string!(.message) == "" {
+      message_value = get(., ["message"]) ?? null
+      if message_value == null {
+        message_value = get(first_log_record, ["body", "stringValue"]) ?? null
+      }
+      if message_value == null || string!(message_value) == "" {
         .message = "browser log"
       } else {
-        .message = string!(.message)
+        .message = string!(message_value)
       }
 
       request_id = get(.attributes, ["request.id"]) ?? null
@@ -265,7 +308,7 @@ sinks:
   traces_archive:
     type: file
     inputs:
-      - telemetry_otlp_ingress.traces
+      - telemetry_traces_only
     path: "./data/vector/archive/traces/%Y-%m-%d.ndjson"
     encoding:
       codec: json
@@ -273,7 +316,7 @@ sinks:
   telemetry_ingress_traces_to_collector:
     type: opentelemetry
     inputs:
-      - telemetry_otlp_ingress.traces
+      - telemetry_traces_only
     protocol:
       type: http
       uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/traces"
@@ -285,7 +328,7 @@ sinks:
   telemetry_ingress_metrics_to_collector:
     type: opentelemetry
     inputs:
-      - telemetry_otlp_ingress.metrics
+      - telemetry_metrics_only
     protocol:
       type: http
       uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/metrics"
@@ -297,7 +340,7 @@ sinks:
   telemetry_ingress_logs_archive:
     type: file
     inputs:
-      - telemetry_logs_ingress.logs
+      - telemetry_logs_only
     path: "./data/vector/archive/otel-logs/%Y-%m-%d.ndjson"
     encoding:
       codec: json

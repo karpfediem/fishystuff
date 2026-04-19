@@ -96,21 +96,26 @@ Then open `http://127.0.0.1:1990/`, `http://127.0.0.1:3000/explore`, and
 metrics, and trace correlation, and keep Jaeger open when you want the native
 Jaeger trace UI or the Monitor tab. The site
 runtime emits browser fetch spans through the JS OpenTelemetry Web SDK and the
-API emits server/store spans directly from Rust. The browser uses same-origin
-`/telemetry/v1/*` endpoints from `site/.out/runtime-config.js`; Caddy proxies
-those requests to Vector, and Vector forwards traces and metrics downstream to
-the collector. Local API CORS still has to allow the site origin, but browser
-OTLP CORS no longer depends on the collector.
+API emits server/store spans directly from Rust. The browser uses the local
+Caddy telemetry ingress from `site/.out/runtime-config.js`:
+`http://telemetry.localhost:1990/v1/{traces,metrics,logs}`. This is
+intentional. Raw Vector OTLP ingest is enough for transport, but it does not
+own the public browser CORS contract for `telemetry.*`. Beta and production are
+meant to terminate browser OTLP at a telemetry edge, so local development uses
+the same edge-owned CORS path before forwarding into Vector. Vector then
+forwards traces and metrics downstream to the collector while handling the
+browser log/archive path itself.
 
 Jaeger Service Performance Monitoring now uses Prometheus-backed RED metrics
 derived from the collector's `spanmetrics` connector. Expect the Monitor tab to
 remain empty until spans have been emitted and Prometheus has completed at least
 one scrape cycle.
 
-Vector now owns the local OTLP ingress as well as the log/archive layer, and
-Loki is the local query surface for normalized logs. The local flow is:
+Vector now owns the local OTLP ingest behind the edge as well as the
+log/archive layer, and Loki is the local query surface for normalized logs. The
+local flow is:
 
-- browser telemetry -> Caddy `/telemetry/v1/*` -> Vector
+- browser telemetry -> Caddy telemetry ingress -> Vector OTLP HTTP
 - API traces -> Vector OTLP HTTP
 - Vector traces/metrics -> collector -> Jaeger + Prometheus
 - Vector logs -> Loki + local NDJSON archives

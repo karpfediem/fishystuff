@@ -86,9 +86,12 @@ signal that the integrated page became too slow or stalled during the scenario.
 
 For continuous local visibility between deep profiling runs, the browser map
 runtime also exports a small OTLP metrics surface through the repo's local
-Vector ingress and downstream collector path. Those live gauges land on the
-same Prometheus target as the Jaeger spanmetrics and are intended for always-on
-map runtime dashboards, while the JSON report harnesses remain the deeper
-investigation path. For live event inspection of the browser and Vector
-pipeline itself, use `tools/scripts/vector-tap.sh browser-logs`,
+Caddy telemetry ingress and downstream Vector/collector path. This is
+intentional: the local browser path exercises the same edge-owned CORS contract
+that public `telemetry.*` deployments are expected to expose, instead of
+talking to raw Vector directly. Those live gauges land on the same Prometheus
+target as the Jaeger spanmetrics and are intended for always-on map runtime
+dashboards, while the JSON report harnesses remain the deeper investigation
+path. For live event inspection of the browser and Vector pipeline itself, use
+`tools/scripts/vector-tap.sh browser-logs`,
 `tools/scripts/vector-tap.sh raw-traces`, or another repo preset.
