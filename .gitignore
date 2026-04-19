@@ -16,6 +16,7 @@ devenv.local.nix
 
 # direnv
 .direnv
+.codex
 
 # nix
 result*
