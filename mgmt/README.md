@@ -14,11 +14,13 @@ mgmt/
   scripts/
   modules/
     fishystuff-beta/
+    fishystuff-beta-dns/
     fishystuff-beta-region/
     lib/
       fishystuff-beta-layout/
       hetzner-location/
     providers/
+      cloudflare-dns-record/
       hetzner-firewall/
       hetzner-network/
       hetzner-ssh-key/
@@ -35,6 +37,7 @@ Public module:
 Reusable composition module:
 
 - `modules/fishystuff-beta-region/`
+- `modules/fishystuff-beta-dns/`
 
 Shared helper module:
 
@@ -53,6 +56,7 @@ Shared helper module:
 
 Internal provider wrapper:
 
+- `modules/providers/cloudflare-dns-record/`
 - `modules/providers/hetzner-firewall/`
 - `modules/providers/hetzner-network/`
 - `modules/providers/hetzner-ssh-key/`
@@ -69,6 +73,8 @@ Current scope:
 - manage the `nbg1` private core network in Hetzner
 - manage the Dolt data volume on `beta-nbg1-api-db`
 - attach the `nbg1` core hosts to the private network
+- optionally manage beta Cloudflare DNS records for `beta`, `api.beta`,
+  `cdn.beta`, and `telemetry.beta`
 - label each managed server with cluster, region, role, and firewall selector
   labels
 - bootstrap a resident `mgmt` service on a host over SSH after the VM exists
@@ -91,6 +97,9 @@ Current engine limitation:
   still cannot trigger the resident host bootstrap as part of VM creation
 - the current `hetzner:vm` resource always creates servers with public IPv4 and
   IPv6, so private-only internal hosts are not yet expressible in this graph
+- the current topology still takes Cloudflare DNS record targets as explicit
+  inputs because `hetzner:vm` does not yet surface public IPs into MCL for
+  direct record wiring
 - that means new hosts currently require a separate SSH kickstart step after
   they appear in Hetzner
 
@@ -193,6 +202,12 @@ Default topology inputs:
 - poll interval: `60s`
 - wait interval: `5s`
 - wait timeout: `600s`
+- optional Cloudflare DNS inputs:
+  - `CLOUDFLARE_API_TOKEN`
+  - `FISHYSTUFF_BETA_DNS_TARGETS_JSON`
+    - expected shape: `{"site":["..."],"api":["..."],"cdn":["..."],"telemetry":["..."]}`
+    - each key is optional
+    - `cdn` can contain multiple targets for a record set
 - `nbg1` core region:
   - private network: `beta-nbg1-private`
   - private network range: `10.42.0.0/16`

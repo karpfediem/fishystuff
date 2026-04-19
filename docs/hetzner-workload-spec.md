@@ -99,6 +99,17 @@ The first-class public workload hostnames are:
 
 This spec is intentionally centered on those services.
 
+Cloudflare DNS for those names should be managed declaratively by `mgmt`.
+Until the `hetzner:vm` inventory resource exposes public IPs into the MCL
+graph, the DNS layer should take explicit target IPs or hostnames as topology
+inputs instead of trying to infer them implicitly. On the fishystuff side,
+those explicit targets should be passed in one structured topology input rather
+than as a separate environment variable per hostname.
+
+For `cdn.beta.fishystuff.fish`, the DNS layer should be able to manage a
+multi-value record set so multiple regional CDN nodes can sit behind one
+hostname without dropping back to manual DNS edits.
+
 If the root site later moves onto Hetzner too, that should be added as a
 separate `site` role instead of being hidden inside the CDN or API role.
 

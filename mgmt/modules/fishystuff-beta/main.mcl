@@ -3,6 +3,7 @@ import "../lib/fishystuff-beta-layout/" as fishystuff_beta_layout
 import "../lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "../providers/hetzner-ssh-key/"
 import "../providers/hetzner-firewall/"
+import "../fishystuff-beta-dns/"
 import "../fishystuff-beta-region/"
 
 class topology($st) {
@@ -10,10 +11,15 @@ class topology($st) {
 	$api_token str = $st->api_token || ""
 	$ssh_key_name str = $st->ssh_key_name || fmt.printf("fishystuff-%s-deploy", $cluster)
 	$ssh_public_key str = $st->ssh_public_key || ""
+	$cloudflare_api_token str = $st->cloudflare_api_token || ""
 	$state str = $st->state || "absent"
 	$infra_state str = if $state == "absent" { "absent" } else { "exists" }
 	$allow_rebuild str = $st->allow_rebuild || ""
 	$image str = $st->image || "debian-13"
+	$site_dns_targets []str = $st->site_dns_targets || []
+	$api_dns_targets []str = $st->api_dns_targets || []
+	$cdn_dns_targets []str = $st->cdn_dns_targets || []
+	$telemetry_dns_targets []str = $st->telemetry_dns_targets || []
 	$poll_seconds int = $st->poll_seconds || 60
 	$wait_interval_seconds int = $st->wait_interval_seconds || 5
 	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
@@ -35,6 +41,18 @@ class topology($st) {
 	include layout.nbg1 as nbg1
 	include layout.ash as ash
 	include layout.sin as sin
+
+	include fishystuff_beta_dns.zone(struct {
+		cluster => $cluster,
+		apitoken => $cloudflare_api_token,
+		state => $state,
+		site_contents => $site_dns_targets,
+		api_contents => $api_dns_targets,
+		cdn_contents => $cdn_dns_targets,
+		telemetry_contents => $telemetry_dns_targets,
+		ttl => 300,
+		poll => $poll_seconds,
+	})
 
 	include hetzner_ssh_key.ssh_key(struct {
 		name => $ssh_key_name,
