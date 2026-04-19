@@ -36,6 +36,7 @@ long-lived local services:
 - `otel-collector` receives traces and metrics from Vector on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
 - `vector` tails repo-local process logs under `data/vector/process/*.log`, accepts local OTLP on `127.0.0.1:4820`, writes newline-delimited JSON archives under `data/vector/archive/`, ships normalized logs to Loki, and forwards traces plus metrics downstream to the collector
 - `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
+- `grafana` is the local human-facing observability UI on `127.0.0.1:3000`, with repo-provisioned Loki, Prometheus, and Jaeger datasources
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
 If you want the same stack plus rebuild/restart watchers, use:
@@ -90,8 +91,10 @@ devenv shell
 just up
 ```
 
-Then open `http://127.0.0.1:1990/`, `http://127.0.0.1:16686/`, and optionally
-`http://127.0.0.1:9090/`. The site
+Then open `http://127.0.0.1:1990/`, `http://127.0.0.1:3000/explore`, and
+`http://127.0.0.1:16686/`. Use Grafana as the primary frontend for local logs,
+metrics, and trace correlation, and keep Jaeger open when you want the native
+Jaeger trace UI or the Monitor tab. The site
 runtime emits browser fetch spans through the JS OpenTelemetry Web SDK and the
 API emits server/store spans directly from Rust. The browser uses same-origin
 `/telemetry/v1/*` endpoints from `site/.out/runtime-config.js`; Caddy proxies
@@ -117,6 +120,13 @@ The correlation flow is:
 - frontend fetch spans record `fishystuff.response.request_id`, `fishystuff.response.trace_id`, and `fishystuff.response.span_id`
 - the API now emits structured request-completion/error logs with matching `request.id`, `trace.id`, and `span.id` fields
 - Vector normalizes those into `request_id`, `trace_id`, and `span_id` for Loki structured metadata and for the local NDJSON archives
+
+Grafana is provisioned from repo files and comes up with:
+
+- `Loki` as the default Explore datasource
+- `Prometheus` for spanmetrics and runtime metrics
+- `Jaeger` for trace search and trace-detail views
+- a log-derived `trace_id` link from Loki log lines back into Jaeger traces
 
 The current local archive/query paths are:
 
@@ -158,6 +168,23 @@ Use Loki or the NDJSON archives when you need historical queries or raw files
 instead of a live stream. Loki is useful when you already know a stable
 low-cardinality stream selector, while `data/vector/archive/*.ndjson` is easier
 when you want direct `rg`/`jq` access to the raw normalized events.
+
+For browser use, the convenience entrypoints are:
+
+```bash
+just open dashboard
+just open grafana
+just open loki
+just open jaeger
+just open prometheus
+just open loki-status
+```
+
+The first provisioned dashboard is `Fishystuff Local Observability` at:
+
+```text
+http://127.0.0.1:3000/d/fishystuff-local-observability/fishystuff-local-observability
+```
 
 Example Loki query flow:
 
