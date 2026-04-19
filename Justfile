@@ -276,6 +276,150 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
     ' \
     -- "$target" "$host" "$api_gcroot" "$api_bundle" "$dolt_gcroot" "$dolt_bundle" "$deploy_dir" "$timeout" "$remote_mgmt_bin"
 
+# Build the current pure service bundles for the single-host beta stack, push
+# them to a remote host, root them at stable GC-root paths, and deploy the
+# resident graph with API, Dolt, edge, and observability daemons.
+mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  target='{{target}}'
+  target="${target#target=}"
+  host='{{host}}'
+  host="${host#host=}"
+  timeout='{{timeout}}'
+  timeout="${timeout#timeout=}"
+  remote_mgmt_bin='{{remote_mgmt_bin}}'
+  remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
+  api_gcroot='{{api_gcroot}}'
+  api_gcroot="${api_gcroot#api_gcroot=}"
+  dolt_gcroot='{{dolt_gcroot}}'
+  dolt_gcroot="${dolt_gcroot#dolt_gcroot=}"
+  edge_gcroot='{{edge_gcroot}}'
+  edge_gcroot="${edge_gcroot#edge_gcroot=}"
+  loki_gcroot='{{loki_gcroot}}'
+  loki_gcroot="${loki_gcroot#loki_gcroot=}"
+  otel_collector_gcroot='{{otel_collector_gcroot}}'
+  otel_collector_gcroot="${otel_collector_gcroot#otel_collector_gcroot=}"
+  vector_gcroot='{{vector_gcroot}}'
+  vector_gcroot="${vector_gcroot#vector_gcroot=}"
+  prometheus_gcroot='{{prometheus_gcroot}}'
+  prometheus_gcroot="${prometheus_gcroot#prometheus_gcroot=}"
+  jaeger_gcroot='{{jaeger_gcroot}}'
+  jaeger_gcroot="${jaeger_gcroot#jaeger_gcroot=}"
+  grafana_gcroot='{{grafana_gcroot}}'
+  grafana_gcroot="${grafana_gcroot#grafana_gcroot=}"
+  mgmt_modules_dir='{{mgmt_modules_dir}}'
+  mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
+  deploy_dir="$(mktemp -d /tmp/fishystuff-resident-full-stack.XXXXXX)"
+  trap 'rm -rf "$deploy_dir"' EXIT
+  cp -a mgmt/resident-beta/. "$deploy_dir/"
+  mkdir -p "$deploy_dir/modules/github.com/purpleidea/mgmt/modules"
+  cp -a "$mgmt_modules_dir/misc" "$deploy_dir/modules/github.com/purpleidea/mgmt/modules/"
+  printf '%s\n' \
+    'import "modules/fishystuff-beta-resident/"' \
+    '' \
+    'include fishystuff_beta_resident.host(struct {' \
+    '	cluster => "beta",' \
+    "	hostname => \"${host}\"," \
+    "	api_bundle_path => \"${api_gcroot}\"," \
+    "	dolt_bundle_path => \"${dolt_gcroot}\"," \
+    "	edge_bundle_path => \"${edge_gcroot}\"," \
+    "	loki_bundle_path => \"${loki_gcroot}\"," \
+    "	otel_collector_bundle_path => \"${otel_collector_gcroot}\"," \
+    "	vector_bundle_path => \"${vector_gcroot}\"," \
+    "	prometheus_bundle_path => \"${prometheus_gcroot}\"," \
+    "	jaeger_bundle_path => \"${jaeger_gcroot}\"," \
+    "	grafana_bundle_path => \"${grafana_gcroot}\"," \
+    '	site_base_url => "https://beta.fishystuff.fish",' \
+    '	api_base_url => "https://api.beta.fishystuff.fish",' \
+    '	cdn_base_url => "https://cdn.beta.fishystuff.fish",' \
+    '	telemetry_base_url => "https://telemetry.beta.fishystuff.fish",' \
+    '	deployment_environment => "beta",' \
+    '	startup_mode => "enabled",' \
+    '	dolt_data_dir => "/var/lib/fishystuff/dolt",' \
+    '	dolt_cfg_dir => "/var/lib/fishystuff/dolt/.doltcfg",' \
+    '	dolt_database_name => "fishystuff",' \
+    '	dolt_remote_url => "fishystuff/fishystuff",' \
+    '	dolt_remote_branch => "main",' \
+    '	dolt_clone_depth => "1",' \
+    '	dolt_volume_device => "",' \
+    '	dolt_volume_fs_type => "ext4",' \
+    '	dolt_port => "3306",' \
+    '	site_root_dir => "/srv/fishystuff/site",' \
+    '	cdn_root_dir => "/srv/fishystuff/cdn",' \
+    '})' \
+    > "$deploy_dir/main.mcl"
+  api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
+  dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
+  edge_bundle="$(nix build .#edge-service-bundle --no-link --print-out-paths)"
+  loki_bundle="$(nix build .#loki-service-bundle --no-link --print-out-paths)"
+  otel_collector_bundle="$(nix build .#otel-collector-service-bundle --no-link --print-out-paths)"
+  vector_bundle="$(nix build .#vector-service-bundle --no-link --print-out-paths)"
+  prometheus_bundle="$(nix build .#prometheus-service-bundle --no-link --print-out-paths)"
+  jaeger_bundle="$(nix build .#jaeger-service-bundle --no-link --print-out-paths)"
+  grafana_bundle="$(nix build .#grafana-service-bundle --no-link --print-out-paths)"
+  secretspec run --profile beta-deploy -- \
+    bash -lc '
+      set -euo pipefail
+      tmp_key="$(mktemp /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      NIX_SSH_KEY_PATH="$tmp_key" \
+      bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
+          "$1" \
+          "${11}" \
+          "$3" \
+          "${12}" \
+          "$4" \
+          "${13}" \
+          "$5" \
+          "${14}" \
+          "$6" \
+          "${15}" \
+          "$7" \
+          "${16}" \
+          "$8" \
+          "${17}" \
+          "$9" \
+          "${18}" \
+          "${10}" \
+          "${19}" \
+          "${20}"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+          "${21}" \
+          "$1" \
+          "${22}" \
+          "${23}"
+    ' \
+    -- \
+    "$target" \
+    "$host" \
+    "$api_gcroot" \
+    "$dolt_gcroot" \
+    "$edge_gcroot" \
+    "$loki_gcroot" \
+    "$otel_collector_gcroot" \
+    "$vector_gcroot" \
+    "$prometheus_gcroot" \
+    "$jaeger_gcroot" \
+    "$api_bundle" \
+    "$dolt_bundle" \
+    "$edge_bundle" \
+    "$loki_bundle" \
+    "$otel_collector_bundle" \
+    "$vector_bundle" \
+    "$prometheus_bundle" \
+    "$jaeger_bundle" \
+    "$grafana_bundle" \
+    "$grafana_gcroot" \
+    "$deploy_dir" \
+    "$timeout" \
+    "$remote_mgmt_bin"
+
 # Build a temporary resident graph that installs a bundle-backed systemd unit
 # from a local Nix bundle root, validate it, and deploy it to a resident mgmt
 # instance over SSH.

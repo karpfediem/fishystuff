@@ -16,6 +16,13 @@ class host($st) {
 			hostname => $hostname,
 			api_bundle_path => $st->api_bundle_path || "",
 			dolt_bundle_path => $st->dolt_bundle_path || "",
+			edge_bundle_path => $st->edge_bundle_path || "",
+			loki_bundle_path => $st->loki_bundle_path || "",
+			otel_collector_bundle_path => $st->otel_collector_bundle_path || "",
+			vector_bundle_path => $st->vector_bundle_path || "",
+			prometheus_bundle_path => $st->prometheus_bundle_path || "",
+			jaeger_bundle_path => $st->jaeger_bundle_path || "",
+			grafana_bundle_path => $st->grafana_bundle_path || "",
 			site_base_url => $st->site_base_url || $host_layout.site_base_url,
 			api_base_url => $st->api_base_url || $host_layout.api_base_url,
 			cdn_base_url => $st->cdn_base_url || $host_layout.cdn_base_url,
@@ -28,9 +35,11 @@ class host($st) {
 			dolt_remote_url => $st->dolt_remote_url || "fishystuff/fishystuff",
 			dolt_remote_branch => $st->dolt_remote_branch || "main",
 			dolt_clone_depth => $st->dolt_clone_depth || "1",
-			dolt_volume_device => if ($st->dolt_volume_device || "") != "" { $st->dolt_volume_device } else { $host_layout.dolt_volume_device },
+			dolt_volume_device => if ($st->dolt_volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $st->dolt_volume_device || "" },
 			dolt_volume_fs_type => $st->dolt_volume_fs_type || "ext4",
 			dolt_port => $st->dolt_port || "3306",
+			site_root_dir => $st->site_root_dir || "/srv/fishystuff/site",
+			cdn_root_dir => $st->cdn_root_dir || "/srv/fishystuff/cdn",
 		})
 	}
 

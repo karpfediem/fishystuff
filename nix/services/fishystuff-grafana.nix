@@ -1,0 +1,250 @@
+{ pkgs }:
+{
+  config,
+  lib,
+  ...
+}:
+let
+  helpers = import ./helpers.nix { inherit lib; };
+  systemdBackend = import ./systemd-backend.nix { inherit lib pkgs; };
+  inherit (lib) mkOption optional types;
+  cfg = config.fishystuff.grafana;
+  grafanaExe = lib.getExe' cfg.package "grafana-server";
+  grafanaHome = "${cfg.package}/share/grafana";
+  serviceArgv = [
+    grafanaExe
+    "--homepath"
+    grafanaHome
+    "--config"
+    cfg.iniSource
+  ];
+  staticEnvironment = {
+    GF_SERVER_HTTP_ADDR = cfg.listenAddress;
+    GF_SERVER_HTTP_PORT = toString cfg.port;
+    GF_PATHS_DATA = cfg.dataDir;
+    GF_PATHS_PROVISIONING = toString cfg.provisioningSource;
+    GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH =
+      "${toString cfg.dashboardsSource}/fishystuff-operator-overview.json";
+    GF_AUTH_ANONYMOUS_ENABLED = "true";
+    GF_AUTH_ANONYMOUS_ORG_ROLE = "Viewer";
+    GF_AUTH_DISABLE_LOGIN_FORM = "true";
+    FISHYSTUFF_GRAFANA_DASHBOARDS_PATH = toString cfg.dashboardsSource;
+    FISHYSTUFF_DEV_LOKI_HTTP_PORT = toString cfg.lokiPort;
+    FISHYSTUFF_DEV_PROMETHEUS_PORT = toString cfg.prometheusPort;
+    FISHYSTUFF_DEV_JAEGER_UI_PORT = toString cfg.jaegerPort;
+  };
+  systemdUnit = systemdBackend.mkSystemdUnit {
+    unitName = "fishystuff-grafana.service";
+    description = "Fishystuff Grafana service";
+    argv = serviceArgv;
+    environment = staticEnvironment;
+    environmentFiles = [ ];
+    dynamicUser = cfg.dynamicUser;
+    supplementaryGroups = cfg.supplementaryGroups;
+    workingDirectory = cfg.dataDir;
+    after = [
+      "network-online.target"
+      "fishystuff-jaeger.service"
+      "fishystuff-loki.service"
+      "fishystuff-prometheus.service"
+      "fishystuff-vector.service"
+    ];
+    wants = [
+      "network-online.target"
+      "fishystuff-jaeger.service"
+      "fishystuff-loki.service"
+      "fishystuff-prometheus.service"
+      "fishystuff-vector.service"
+    ];
+    restartPolicy = "on-failure";
+    restartDelaySeconds = 5;
+    serviceLines = [
+      "StateDirectory=${cfg.stateDirectoryName}"
+      "StateDirectoryMode=0750"
+      "PrivateTmp=true"
+      "PrivateDevices=true"
+      "ProtectSystem=strict"
+      "ProtectHome=true"
+      "ProtectKernelTunables=true"
+      "ProtectKernelModules=true"
+      "ProtectControlGroups=true"
+      "LockPersonality=true"
+      "NoNewPrivileges=true"
+      "RestrictRealtime=true"
+      "RestrictSUIDSGID=true"
+      "SystemCallArchitectures=native"
+      "UMask=0077"
+    ];
+  };
+in
+{
+  _class = "service";
+  imports = [ ./bundle-module.nix ];
+
+  options.fishystuff.grafana = {
+    package = mkOption {
+      type = types.package;
+      default = pkgs.grafana;
+      defaultText = lib.literalExpression "pkgs.grafana";
+      description = "Package containing the `grafana-server` executable.";
+    };
+
+    iniSource = mkOption {
+      type = types.path;
+      default = ../../tools/telemetry/grafana.local.ini;
+      description = "Grafana ini configuration file.";
+    };
+
+    provisioningSource = mkOption {
+      type = types.path;
+      default = ../../tools/telemetry/grafana/provisioning;
+      description = "Grafana provisioning tree.";
+    };
+
+    dashboardsSource = mkOption {
+      type = types.path;
+      default = ../../tools/telemetry/grafana/dashboards;
+      description = "Grafana dashboards tree.";
+    };
+
+    stateDirectoryName = mkOption {
+      type = types.str;
+      default = "fishystuff/grafana";
+      description = "systemd StateDirectory name used for Grafana state.";
+    };
+
+    dataDir = mkOption {
+      type = types.str;
+      default = "/var/lib/${cfg.stateDirectoryName}";
+      description = "Persistent Grafana data directory.";
+    };
+
+    listenAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      description = "Address for the Grafana UI.";
+    };
+
+    port = mkOption {
+      type = types.port;
+      default = 3000;
+      description = "TCP port for the Grafana UI.";
+    };
+
+    lokiPort = mkOption {
+      type = types.port;
+      default = 3100;
+      description = "Loki HTTP port used in Grafana provisioning.";
+    };
+
+    prometheusPort = mkOption {
+      type = types.port;
+      default = 9090;
+      description = "Prometheus HTTP port used in Grafana provisioning.";
+    };
+
+    jaegerPort = mkOption {
+      type = types.port;
+      default = 16686;
+      description = "Jaeger UI port used in Grafana provisioning.";
+    };
+
+    dynamicUser = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether a backend may allocate an ephemeral user.";
+    };
+
+    supplementaryGroups = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Supplementary runtime groups.";
+    };
+  };
+
+  config = {
+    process.argv = serviceArgv;
+
+    bundle = {
+      id = "fishystuff-grafana";
+
+      roots.store = [
+        cfg.package
+        cfg.iniSource
+        cfg.provisioningSource
+        cfg.dashboardsSource
+        systemdUnit.file
+      ];
+
+      artifacts = {
+        "exe/main" = helpers.mkArtifact {
+          kind = "binary";
+          storePath = grafanaExe;
+          executable = true;
+        };
+
+        "config/base" = helpers.mkArtifact {
+          kind = "config";
+          storePath = cfg.iniSource;
+          destination = "grafana.ini";
+        };
+
+        "config/provisioning" = helpers.mkArtifact {
+          kind = "config";
+          storePath = cfg.provisioningSource;
+          destination = "provisioning";
+        };
+
+        "config/dashboards" = helpers.mkArtifact {
+          kind = "config";
+          storePath = cfg.dashboardsSource;
+          destination = "dashboards";
+        };
+
+        "systemd/unit" = systemdUnit.artifact;
+      };
+
+      activation = {
+        directories = [ ];
+        users = [ ];
+        groups = [ ];
+        writablePaths = [ cfg.dataDir ];
+        requiredPaths = [ ];
+      };
+
+      supervision = {
+        environment = staticEnvironment;
+        environmentFiles = [ ];
+        workingDirectory = cfg.dataDir;
+        identity = {
+          user = null;
+          group = null;
+          dynamicUser = cfg.dynamicUser;
+          supplementaryGroups = cfg.supplementaryGroups;
+        };
+        restart = {
+          policy = "on-failure";
+          delaySeconds = 5;
+        };
+        reload = {
+          mode = "restart";
+          signal = null;
+          argv = [ ];
+        };
+        stop = {
+          mode = "signal";
+          signal = "TERM";
+          argv = [ ];
+          timeoutSeconds = 30;
+        };
+        readiness = {
+          mode = "simple";
+        };
+      };
+
+      runtimeOverlays = [ ];
+      requiredCapabilities = optional cfg.dynamicUser "dynamic-user";
+      backends.systemd = systemdUnit.backend;
+    };
+  };
+}

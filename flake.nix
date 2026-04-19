@@ -85,6 +85,34 @@
             name = "fishystuff-dolt";
             serviceModule = serviceModules.dolt;
           };
+          edgeServiceBundle = mkServiceBundle {
+            name = "fishystuff-edge";
+            serviceModule = serviceModules.edge;
+          };
+          lokiServiceBundle = mkServiceBundle {
+            name = "fishystuff-loki";
+            serviceModule = serviceModules.loki;
+          };
+          otelCollectorServiceBundle = mkServiceBundle {
+            name = "fishystuff-otel-collector";
+            serviceModule = serviceModules."otel-collector";
+          };
+          vectorServiceBundle = mkServiceBundle {
+            name = "fishystuff-vector";
+            serviceModule = serviceModules.vector;
+          };
+          prometheusServiceBundle = mkServiceBundle {
+            name = "fishystuff-prometheus";
+            serviceModule = serviceModules.prometheus;
+          };
+          jaegerServiceBundle = mkServiceBundle {
+            name = "fishystuff-jaeger";
+            serviceModule = serviceModules.jaeger;
+          };
+          grafanaServiceBundle = mkServiceBundle {
+            name = "fishystuff-grafana";
+            serviceModule = serviceModules.grafana;
+          };
           serviceBundleChecks = import ./nix/tests/service-bundle-checks.nix {
             inherit
               apiServiceBundle
@@ -121,6 +149,13 @@
             api-service-base-config = apiServiceBaseConfig;
             api-service-bundle = apiServiceBundle;
             dolt-service-bundle = doltServiceBundle;
+            edge-service-bundle = edgeServiceBundle;
+            grafana-service-bundle = grafanaServiceBundle;
+            jaeger-service-bundle = jaegerServiceBundle;
+            loki-service-bundle = lokiServiceBundle;
+            otel-collector-service-bundle = otelCollectorServiceBundle;
+            prometheus-service-bundle = prometheusServiceBundle;
+            vector-service-bundle = vectorServiceBundle;
           };
           checks =
             serviceBundleChecks

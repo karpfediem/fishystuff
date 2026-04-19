@@ -4,6 +4,13 @@ import "modules/fishystuff-beta-resident/"
 $hostname = sys.defaultenv("FISHYSTUFF_BETA_HOSTNAME", "")
 $api_bundle_path = sys.defaultenv("FISHYSTUFF_API_BUNDLE_PATH", "")
 $dolt_bundle_path = sys.defaultenv("FISHYSTUFF_DOLT_BUNDLE_PATH", "")
+$edge_bundle_path = sys.defaultenv("FISHYSTUFF_EDGE_BUNDLE_PATH", "")
+$loki_bundle_path = sys.defaultenv("FISHYSTUFF_LOKI_BUNDLE_PATH", "")
+$otel_collector_bundle_path = sys.defaultenv("FISHYSTUFF_OTEL_COLLECTOR_BUNDLE_PATH", "")
+$vector_bundle_path = sys.defaultenv("FISHYSTUFF_VECTOR_BUNDLE_PATH", "")
+$prometheus_bundle_path = sys.defaultenv("FISHYSTUFF_PROMETHEUS_BUNDLE_PATH", "")
+$jaeger_bundle_path = sys.defaultenv("FISHYSTUFF_JAEGER_BUNDLE_PATH", "")
+$grafana_bundle_path = sys.defaultenv("FISHYSTUFF_GRAFANA_BUNDLE_PATH", "")
 $site_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_SITE_BASE_URL", "https://beta.fishystuff.fish")
 $api_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_API_BASE_URL", "https://api.beta.fishystuff.fish")
 $cdn_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_CDN_BASE_URL", "https://cdn.beta.fishystuff.fish")
@@ -16,9 +23,11 @@ $dolt_database_name = sys.defaultenv("FISHYSTUFF_DOLT_DATABASE_NAME", "fishystuf
 $dolt_remote_url = sys.defaultenv("FISHYSTUFF_DOLT_REMOTE_URL", "fishystuff/fishystuff")
 $dolt_remote_branch = sys.defaultenv("FISHYSTUFF_DOLT_REMOTE_BRANCH", "main")
 $dolt_clone_depth = sys.defaultenv("FISHYSTUFF_DOLT_CLONE_DEPTH", "1")
-$dolt_volume_device = sys.defaultenv("FISHYSTUFF_DOLT_VOLUME_DEVICE", "")
+$dolt_volume_device = sys.defaultenv("FISHYSTUFF_DOLT_VOLUME_DEVICE", "__auto__")
 $dolt_volume_fs_type = sys.defaultenv("FISHYSTUFF_DOLT_VOLUME_FS_TYPE", "ext4")
 $dolt_port = sys.defaultenv("FISHYSTUFF_DOLT_PORT", "3306")
+$site_root_dir = sys.defaultenv("FISHYSTUFF_SITE_ROOT_DIR", "/srv/fishystuff/site")
+$cdn_root_dir = sys.defaultenv("FISHYSTUFF_CDN_ROOT_DIR", "/srv/fishystuff/cdn")
 
 panic($hostname == "", "missing resident beta hostname; set FISHYSTUFF_BETA_HOSTNAME")
 
@@ -26,6 +35,13 @@ include fishystuff_beta_resident.host(struct {
 	hostname => $hostname,
 	api_bundle_path => $api_bundle_path,
 	dolt_bundle_path => $dolt_bundle_path,
+	edge_bundle_path => $edge_bundle_path,
+	loki_bundle_path => $loki_bundle_path,
+	otel_collector_bundle_path => $otel_collector_bundle_path,
+	vector_bundle_path => $vector_bundle_path,
+	prometheus_bundle_path => $prometheus_bundle_path,
+	jaeger_bundle_path => $jaeger_bundle_path,
+	grafana_bundle_path => $grafana_bundle_path,
 	site_base_url => $site_base_url,
 	api_base_url => $api_base_url,
 	cdn_base_url => $cdn_base_url,
@@ -41,4 +57,6 @@ include fishystuff_beta_resident.host(struct {
 	dolt_volume_device => $dolt_volume_device,
 	dolt_volume_fs_type => $dolt_volume_fs_type,
 	dolt_port => $dolt_port,
+	site_root_dir => $site_root_dir,
+	cdn_root_dir => $cdn_root_dir,
 })
