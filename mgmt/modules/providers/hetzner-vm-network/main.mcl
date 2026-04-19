@@ -1,0 +1,35 @@
+import "fmt"
+
+class attachment($st) {
+	$name str = $st->name || ""
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "absent"
+	$server str = $st->server || ""
+	$network str = $st->network || ""
+	$ip str = $st->ip || ""
+	$aliasips []str = $st->aliasips || []
+	$waitinterval int = $st->waitinterval || 2
+	$waittimeout int = $st->waittimeout || 10 * 60
+	$poll int = $st->poll || 30
+	$title str = if $name != "" { $name } else { fmt.printf("%s-%s", $server, $network) }
+
+	panic($title == "", "hetzner-vm-network provider requires a resource name")
+	panic($apitoken == "", fmt.printf("missing Hetzner API token for vm-network attachment %s", $title))
+	panic($server == "", fmt.printf("missing server for vm-network attachment %s", $title))
+	panic($network == "", fmt.printf("missing network for vm-network attachment %s", $title))
+
+	hetzner:vm_network $title {
+		apitoken => $apitoken,
+		state => $state,
+		server => $server,
+		network => $network,
+		ip => $ip,
+		aliasips => $aliasips,
+		waitinterval => $waitinterval,
+		waittimeout => $waittimeout,
+		Meta:poll => $poll,
+
+		Depend => Hetzner:Vm["${server}"],
+		Depend => Hetzner:Network["${network}"],
+	}
+}

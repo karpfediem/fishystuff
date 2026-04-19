@@ -1,0 +1,38 @@
+import "fmt"
+import "sys"
+import "modules/fishystuff-beta/"
+
+$api_token = sys.getenv("HETZNER_API_TOKEN")
+$cluster = sys.defaultenv("FISHYSTUFF_HETZNER_CLUSTER", "beta")
+$state = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "absent")
+$allow_rebuild = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
+$datacenter = sys.defaultenv("FISHYSTUFF_HETZNER_DATACENTER", "fsn1-dc14")
+$location = sys.defaultenv("FISHYSTUFF_HETZNER_LOCATION", "fsn1")
+$image = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "debian-13")
+$private_network_name = sys.defaultenv("FISHYSTUFF_HETZNER_PRIVATE_NETWORK_NAME", fmt.printf("%s-private", $cluster))
+$private_network_ip_range = sys.defaultenv("FISHYSTUFF_HETZNER_PRIVATE_NETWORK_IP_RANGE", "10.42.0.0/16")
+$private_subnet_ip_range = sys.defaultenv("FISHYSTUFF_HETZNER_PRIVATE_SUBNET_IP_RANGE", "10.42.0.0/24")
+$private_network_zone = sys.defaultenv("FISHYSTUFF_HETZNER_PRIVATE_NETWORK_ZONE", "eu-central")
+$api_db_private_ip = sys.defaultenv("FISHYSTUFF_HETZNER_API_DB_PRIVATE_IP", "10.42.0.10")
+$cdn_private_ip = sys.defaultenv("FISHYSTUFF_HETZNER_CDN_PRIVATE_IP", "10.42.0.20")
+$telemetry_private_ip = sys.defaultenv("FISHYSTUFF_HETZNER_TELEMETRY_PRIVATE_IP", "10.42.0.30")
+
+include fishystuff_beta.topology(struct {
+	cluster => $cluster,
+	api_token => $api_token,
+	state => $state,
+	allow_rebuild => $allow_rebuild,
+	datacenter => $datacenter,
+	location => $location,
+	image => $image,
+	private_network_name => $private_network_name,
+	private_network_ip_range => $private_network_ip_range,
+	private_subnet_ip_range => $private_subnet_ip_range,
+	private_network_zone => $private_network_zone,
+	api_db_private_ip => $api_db_private_ip,
+	cdn_private_ip => $cdn_private_ip,
+	telemetry_private_ip => $telemetry_private_ip,
+	poll => 60,
+	wait_interval => 5,
+	wait_timeout => 10 * 60,
+})

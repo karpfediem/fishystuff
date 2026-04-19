@@ -1,0 +1,29 @@
+import "fmt"
+
+class volume($st) {
+	$name str = $st->name
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "absent"
+	$location str = $st->location || ""
+	$size int = $st->size || 0
+	$format str = $st->format || ""
+	$waitinterval int = $st->waitinterval || 2
+	$waittimeout int = $st->waittimeout || 10 * 60
+	$poll int = $st->poll || 30
+
+	panic($name == "", "hetzner-volume provider requires name")
+	panic($apitoken == "", fmt.printf("missing Hetzner API token for volume %s", $name))
+	panic($state == "exists" and $location == "", fmt.printf("missing location for volume %s", $name))
+	panic($state == "exists" and $size <= 0, fmt.printf("invalid size for volume %s", $name))
+
+	hetzner:volume $name {
+		apitoken => $apitoken,
+		state => $state,
+		location => $location,
+		size => $size,
+		format => $format,
+		waitinterval => $waitinterval,
+		waittimeout => $waittimeout,
+		Meta:poll => $poll,
+	}
+}

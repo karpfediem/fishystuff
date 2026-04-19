@@ -1,0 +1,39 @@
+import "fmt"
+
+class server($st) {
+	$name str = $st->name
+	$role str = $st->role || "generic"
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "absent"
+	$allowrebuild str = $st->allowrebuild || ""
+	$servertype str = $st->servertype
+	$datacenter str = $st->datacenter
+	$image str = $st->image
+	$userdata str = $st->userdata || ""
+	$serverrescuemode str = $st->serverrescuemode || ""
+	$serverrescuekeys []str = $st->serverrescuekeys || []
+	$waitinterval int = $st->waitinterval || 2
+	$waittimeout int = $st->waittimeout || 10 * 60
+	$poll int = $st->poll || 30
+
+	panic($name == "", "hetzner-vm provider requires name")
+	panic($apitoken == "", fmt.printf("missing Hetzner API token for host %s", $name))
+	panic($servertype == "", fmt.printf("missing servertype for host %s", $name))
+	panic($datacenter == "", fmt.printf("missing datacenter for host %s", $name))
+	panic($image == "", fmt.printf("missing image for host %s", $name))
+
+	hetzner:vm $name {
+		apitoken => $apitoken,
+		state => $state,
+		allowrebuild => $allowrebuild,
+		servertype => $servertype,
+		datacenter => $datacenter,
+		image => $image,
+		userdata => $userdata,
+		serverrescuemode => $serverrescuemode,
+		serverrescuekeys => $serverrescuekeys,
+		waitinterval => $waitinterval,
+		waittimeout => $waittimeout,
+		Meta:poll => $poll,
+	}
+}

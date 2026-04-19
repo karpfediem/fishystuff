@@ -1,0 +1,31 @@
+import "fmt"
+
+class attachment($st) {
+	$name str = $st->name || ""
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "absent"
+	$server str = $st->server || ""
+	$volume str = $st->volume || ""
+	$waitinterval int = $st->waitinterval || 2
+	$waittimeout int = $st->waittimeout || 10 * 60
+	$poll int = $st->poll || 30
+	$title str = if $name != "" { $name } else { fmt.printf("%s-%s", $server, $volume) }
+
+	panic($title == "", "hetzner-vm-volume provider requires a resource name")
+	panic($apitoken == "", fmt.printf("missing Hetzner API token for vm-volume attachment %s", $title))
+	panic($server == "", fmt.printf("missing server for vm-volume attachment %s", $title))
+	panic($volume == "", fmt.printf("missing volume for vm-volume attachment %s", $title))
+
+	hetzner:vm_volume $title {
+		apitoken => $apitoken,
+		state => $state,
+		server => $server,
+		volume => $volume,
+		waitinterval => $waitinterval,
+		waittimeout => $waittimeout,
+		Meta:poll => $poll,
+
+		Depend => Hetzner:Vm["${server}"],
+		Depend => Hetzner:Volume["${volume}"],
+	}
+}
