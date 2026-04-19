@@ -55,6 +55,7 @@ Multilingual {
     "js/shared-fish-state.js",
     "js/toast.js",
     "js/ui-settings.js",
+    "js/client-session.js",
 
     "map/map-app.js",
     "map/map-app-live.js",

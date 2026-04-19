@@ -132,6 +132,11 @@ test("createHttpError carries status and trace context into the thrown message",
 test("resolveRuntimeConfig keeps browser metrics and logs separate from trace export config", () => {
   globalThis.location = new URL("http://127.0.0.1:1990/map/");
   globalThis.__fishystuffRuntimeConfig = {
+    client: {
+      telemetry: {
+        defaultMode: "enabled",
+      },
+    },
     siteBaseUrl: "http://127.0.0.1:1990",
     tracing: {
       enabled: true,
@@ -159,6 +164,114 @@ test("resolveRuntimeConfig keeps browser metrics and logs separate from trace ex
   expect(config.metricsExportIntervalMs).toBe(3000);
   expect(config.logsExporterEndpoint).toBe("http://telemetry.localhost:4822/v1/logs");
   expect(config.logsEnabled).toBe(true);
+  expect(config.telemetryDefaultMode).toBe("enabled");
+  expect(config.telemetryEffectiveEnabled).toBe(true);
+
+  delete globalThis.__fishystuffRuntimeConfig;
+  delete globalThis.location;
+});
+
+test("resolveRuntimeConfig requires explicit opt-in when the runtime defaults to opt-in", () => {
+  globalThis.location = new URL("https://fishystuff.fish/map/");
+  globalThis.__fishystuffRuntimeConfig = {
+    client: {
+      telemetry: {
+        defaultMode: "opt-in",
+      },
+    },
+    tracing: {
+      enabled: true,
+      exporterEndpoint: "https://telemetry.fishystuff.fish/v1/traces",
+    },
+    metrics: {
+      enabled: true,
+      exporterEndpoint: "https://telemetry.fishystuff.fish/v1/metrics",
+    },
+    logs: {
+      enabled: true,
+      exporterEndpoint: "https://telemetry.fishystuff.fish/v1/logs",
+    },
+  };
+
+  const config = resolveRuntimeConfig();
+
+  expect(config.telemetryEffectiveEnabled).toBe(false);
+  expect(config.telemetryReason).toBe("opt-in-required");
+  expect(config.enabled).toBe(false);
+  expect(config.metricsEnabled).toBe(false);
+  expect(config.logsEnabled).toBe(false);
+
+  delete globalThis.__fishystuffRuntimeConfig;
+  delete globalThis.location;
+});
+
+test("resolveRuntimeConfig honors client-session consent and ignores opt-in bypass query attempts", () => {
+  globalThis.location = new URL("https://fishystuff.fish/map/?trace=true");
+  globalThis.__fishystuffRuntimeConfig = {
+    client: {
+      telemetry: {
+        defaultMode: "opt-in",
+      },
+    },
+    tracing: {
+      enabled: true,
+      exporterEndpoint: "https://telemetry.fishystuff.fish/v1/traces",
+    },
+  };
+  globalThis.__fishystuffClientSession = {
+    telemetryState() {
+      return {
+        continuous: {
+          defaultMode: "opt-in",
+          choice: "disabled",
+          effectiveEnabled: false,
+          source: "user",
+          reason: "disabled-by-user",
+        },
+      };
+    },
+  };
+
+  const config = resolveRuntimeConfig();
+
+  expect(config.telemetryEffectiveEnabled).toBe(false);
+  expect(config.telemetryReason).toBe("disabled-by-user");
+  expect(config.enabled).toBe(false);
+
+  delete globalThis.__fishystuffClientSession;
+  delete globalThis.__fishystuffRuntimeConfig;
+  delete globalThis.location;
+});
+
+test("resolveRuntimeConfig allows query-based telemetry suppression without bypassing consent", () => {
+  globalThis.location = new URL("http://127.0.0.1:1990/map/?trace=0");
+  globalThis.__fishystuffRuntimeConfig = {
+    client: {
+      telemetry: {
+        defaultMode: "enabled",
+      },
+    },
+    tracing: {
+      enabled: true,
+      exporterEndpoint: "http://telemetry.localhost:4822/v1/traces",
+    },
+    metrics: {
+      enabled: true,
+      exporterEndpoint: "http://telemetry.localhost:4822/v1/metrics",
+    },
+    logs: {
+      enabled: true,
+      exporterEndpoint: "http://telemetry.localhost:4822/v1/logs",
+    },
+  };
+
+  const config = resolveRuntimeConfig();
+
+  expect(config.telemetryEffectiveEnabled).toBe(false);
+  expect(config.telemetryReason).toBe("disabled-by-query");
+  expect(config.enabled).toBe(false);
+  expect(config.metricsEnabled).toBe(false);
+  expect(config.logsEnabled).toBe(false);
 
   delete globalThis.__fishystuffRuntimeConfig;
   delete globalThis.location;

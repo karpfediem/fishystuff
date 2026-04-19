@@ -250,6 +250,7 @@
       }));
     })();
   </script>
+  <script src="$site.asset('js/client-session.js').link()"></script>
   <!-- Keep OTEL parser-inserted so fetch instrumentation can patch before page modules boot. -->
   <script type="module" src="$site.asset('js/otel.js').link()"></script>
 

@@ -56,6 +56,28 @@ function parseBoolean(value, fallback = false) {
   return fallback;
 }
 
+function parseOptionalBoolean(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+  return null;
+}
+
+function normalizeTelemetryDefaultMode(value, fallback = "opt-in") {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "enabled" || normalized === "opt-in" || normalized === "disabled") {
+    return normalized;
+  }
+  return fallback;
+}
+
 function clampSampleRatio(value, fallback = 0.25) {
   const numeric = Number.parseFloat(value);
   if (!Number.isFinite(numeric)) {
@@ -117,24 +139,105 @@ function readQueryOverrides() {
   };
 }
 
+function fallbackTelemetryState(defaultMode) {
+  const normalizedDefaultMode = normalizeTelemetryDefaultMode(defaultMode, "opt-in");
+  if (normalizedDefaultMode === "disabled") {
+    return {
+      defaultMode: normalizedDefaultMode,
+      choice: "unset",
+      effectiveEnabled: false,
+      source: "runtime-policy",
+      reason: "disabled-by-runtime-policy",
+    };
+  }
+  if (normalizedDefaultMode === "enabled") {
+    return {
+      defaultMode: normalizedDefaultMode,
+      choice: "unset",
+      effectiveEnabled: true,
+      source: "runtime-default",
+      reason: "enabled-by-runtime-default",
+    };
+  }
+  return {
+    defaultMode: normalizedDefaultMode,
+    choice: "unset",
+    effectiveEnabled: false,
+    source: "runtime-default",
+    reason: "opt-in-required",
+  };
+}
+
+function readClientSessionTelemetryState(defaultMode) {
+  const fallback = fallbackTelemetryState(defaultMode);
+  const helper = globalThis.__fishystuffClientSession;
+  if (!helper || typeof helper.telemetryState !== "function") {
+    return fallback;
+  }
+  try {
+    const telemetry = helper.telemetryState();
+    const continuous = telemetry && typeof telemetry === "object" ? telemetry.continuous : null;
+    if (!continuous || typeof continuous !== "object") {
+      return fallback;
+    }
+    return {
+      defaultMode: normalizeTelemetryDefaultMode(continuous.defaultMode, fallback.defaultMode),
+      choice: normalizeString(continuous.choice) || fallback.choice,
+      effectiveEnabled: parseBoolean(continuous.effectiveEnabled, fallback.effectiveEnabled),
+      source: normalizeString(continuous.source) || fallback.source,
+      reason: normalizeString(continuous.reason) || fallback.reason,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 function resolveRuntimeConfig() {
   const runtimeConfig = globalThis.__fishystuffRuntimeConfig || {};
   const tracingConfig = runtimeConfig.tracing || {};
   const metricsConfig = runtimeConfig.metrics || {};
   const logsConfig = runtimeConfig.logs || {};
+  const clientConfig = runtimeConfig.client || {};
   const query = readQueryOverrides();
   const siteBaseUrl =
     resolveBaseUrl(runtimeConfig.siteBaseUrl, globalThis.location?.href)
     || normalizeUrl(globalThis.location?.origin);
-  const enabled = parseBoolean(
-    query.enabledOverride,
-    parseBoolean(tracingConfig.enabled, false),
+  const tracingConfiguredEnabled = parseBoolean(tracingConfig.enabled, false);
+  const metricsConfiguredEnabled = parseBoolean(metricsConfig.enabled, tracingConfiguredEnabled);
+  const logsConfiguredEnabled = parseBoolean(logsConfig.enabled, tracingConfiguredEnabled);
+  const telemetryDefaultMode = normalizeTelemetryDefaultMode(
+    clientConfig?.telemetry?.defaultMode,
+    tracingConfiguredEnabled ? "enabled" : "opt-in",
   );
+  const sessionTelemetryState = readClientSessionTelemetryState(telemetryDefaultMode);
+  const enabledOverride = parseOptionalBoolean(query.enabledOverride);
+  let telemetryEffectiveEnabled = parseBoolean(
+    sessionTelemetryState.effectiveEnabled,
+    false,
+  );
+  let telemetryReason =
+    normalizeString(sessionTelemetryState.reason)
+    || (telemetryEffectiveEnabled ? "enabled" : "disabled");
+  if (enabledOverride === false && telemetryEffectiveEnabled) {
+    telemetryEffectiveEnabled = false;
+    telemetryReason = "disabled-by-query";
+  }
+  const enabled = telemetryEffectiveEnabled && tracingConfiguredEnabled;
+  const metricsEnabled = telemetryEffectiveEnabled && metricsConfiguredEnabled;
+  const logsEnabled = telemetryEffectiveEnabled && logsConfiguredEnabled;
   const sampleRatio = clampSampleRatio(
     query.sampleOverride,
     clampSampleRatio(tracingConfig.sampleRatio, 0.25),
   );
   return {
+    telemetryDefaultMode,
+    telemetryPreference: normalizeString(sessionTelemetryState.choice) || "unset",
+    telemetryEffectiveEnabled,
+    telemetryReason,
+    telemetrySource: normalizeString(sessionTelemetryState.source) || "runtime-default",
+    tracingConfiguredEnabled,
+    metricsConfiguredEnabled,
+    logsConfiguredEnabled,
     enabled,
     debug: parseBoolean(tracingConfig.debug, false),
     serviceName: normalizeString(tracingConfig.serviceName) || "fishystuff-site",
@@ -146,10 +249,10 @@ function resolveRuntimeConfig() {
     apiBaseUrl: resolveBaseUrl(runtimeConfig.apiBaseUrl, siteBaseUrl),
     cdnBaseUrl: resolveBaseUrl(runtimeConfig.cdnBaseUrl, siteBaseUrl),
     jaegerUiUrl: resolveBaseUrl(tracingConfig.jaegerUiUrl, siteBaseUrl),
-    metricsEnabled: parseBoolean(metricsConfig.enabled, enabled),
+    metricsEnabled,
     metricsExporterEndpoint: resolveAbsoluteUrl(metricsConfig.exporterEndpoint, siteBaseUrl),
     metricsExportIntervalMs: parsePositiveInteger(metricsConfig.exportIntervalMs, 5000),
-    logsEnabled: parseBoolean(logsConfig.enabled, enabled),
+    logsEnabled,
     logsExporterEndpoint: resolveAbsoluteUrl(logsConfig.exporterEndpoint, siteBaseUrl),
     sampleRatio,
   };
@@ -897,6 +1000,11 @@ function createTelemetryBridge(
     tracingEnabled: Boolean(tracerProvider),
     metricsEnabled: Boolean(meterProvider),
     loggingEnabled: Boolean(loggerProvider),
+    telemetryDefaultMode: config.telemetryDefaultMode,
+    telemetryPreference: config.telemetryPreference,
+    telemetryEffectiveEnabled: config.telemetryEffectiveEnabled,
+    telemetryReason: config.telemetryReason,
+    telemetrySource: config.telemetrySource,
     serviceName: config.serviceName,
     deploymentEnvironment: config.deploymentEnvironment,
     serviceVersion: config.serviceVersion,
@@ -1014,19 +1122,26 @@ function createTelemetryBridge(
 }
 
 function installBrowserTelemetry(config) {
-  const traceEnabled = config.enabled && Boolean(config.exporterEndpoint);
+  const traceRequested = config.telemetryEffectiveEnabled && config.tracingConfiguredEnabled;
+  const metricsRequested =
+    config.telemetryEffectiveEnabled && config.metricsConfiguredEnabled;
+  const logsRequested = config.telemetryEffectiveEnabled && config.logsConfiguredEnabled;
+  const traceEnabled = traceRequested && Boolean(config.exporterEndpoint);
   const metricsEnabled =
-    config.metricsEnabled && Boolean(config.metricsExporterEndpoint);
+    metricsRequested && Boolean(config.metricsExporterEndpoint);
   const logsEnabled =
-    config.logsEnabled && Boolean(config.logsExporterEndpoint);
+    logsRequested && Boolean(config.logsExporterEndpoint);
   const disabledBridge = createTelemetryBridge(config, null, null, null);
   if (!traceEnabled && !metricsEnabled && !logsEnabled) {
+    const missingExporterEndpoint =
+      (traceRequested && !config.exporterEndpoint)
+      || (metricsRequested && !config.metricsExporterEndpoint)
+      || (logsRequested && !config.logsExporterEndpoint);
     globalThis[OTEL_GLOBAL_KEY] = Object.freeze({
       ...disabledBridge,
-      reason:
-        config.enabled || config.metricsEnabled || config.logsEnabled
-          ? "missing-exporter-endpoint"
-          : "disabled",
+      reason: missingExporterEndpoint
+        ? "missing-exporter-endpoint"
+        : config.telemetryReason || "disabled",
     });
     return;
   }

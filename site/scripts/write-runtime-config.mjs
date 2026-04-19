@@ -145,6 +145,14 @@ export function normalizeCacheKey(value) {
   return normalized || "";
 }
 
+export function normalizeTelemetryDefaultMode(value, fallback = "opt-in") {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "enabled" || normalized === "opt-in" || normalized === "disabled") {
+    return normalized;
+  }
+  return fallback;
+}
+
 export function resolvePublicBaseUrls(env = process.env) {
   const publicSiteBaseUrl =
     normalizeBaseUrl(env.FISHYSTUFF_PUBLIC_SITE_BASE_URL) || "https://fishystuff.fish";
@@ -185,6 +193,11 @@ export function buildRuntimeConfig(env = process.env) {
     publicTelemetryBaseUrl,
     publicTelemetryTracesEndpoint,
   } = resolvePublicBaseUrls(env);
+  const runtimeTelemetryEnabledDefault = normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false);
+  const telemetryDefaultMode = normalizeTelemetryDefaultMode(
+    env.FISHYSTUFF_RUNTIME_TELEMETRY_DEFAULT_MODE,
+    runtimeTelemetryEnabledDefault ? "enabled" : "opt-in",
+  );
   const traceExporterEndpoint =
     normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
     || publicTelemetryTracesEndpoint;
@@ -197,8 +210,13 @@ export function buildRuntimeConfig(env = process.env) {
     cdnBaseUrl:
       normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_CDN_BASE_URL) || publicCdnBaseUrl,
     mapAssetCacheKey: normalizeCacheKey(env.FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY),
+    client: {
+      telemetry: {
+        defaultMode: telemetryDefaultMode,
+      },
+    },
     tracing: {
-      enabled: normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false),
+      enabled: runtimeTelemetryEnabledDefault,
       debug: normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_DEBUG, false),
       serviceName:
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME ?? "").trim() || "fishystuff-site",

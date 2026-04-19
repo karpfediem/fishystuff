@@ -15,6 +15,7 @@ test("runtime config defaults to the production sibling-host layout", () => {
   assert.equal(runtimeConfig.siteBaseUrl, "https://fishystuff.fish");
   assert.equal(runtimeConfig.apiBaseUrl, "https://api.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.fishystuff.fish");
+  assert.equal(runtimeConfig.client.telemetry.defaultMode, "opt-in");
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
     "https://telemetry.fishystuff.fish/v1/traces",
@@ -28,6 +29,24 @@ test("runtime config defaults to the production sibling-host layout", () => {
     "https://telemetry.fishystuff.fish/v1/logs",
   );
   assert.equal(runtimeConfig.metrics.exportIntervalMs, 5000);
+});
+
+test("runtime config derives telemetry default mode from explicit and legacy env toggles", () => {
+  const legacyEnabled = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
+  });
+  assert.equal(legacyEnabled.client.telemetry.defaultMode, "enabled");
+
+  const explicitOptIn = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
+    FISHYSTUFF_RUNTIME_TELEMETRY_DEFAULT_MODE: "opt-in",
+  });
+  assert.equal(explicitOptIn.client.telemetry.defaultMode, "opt-in");
+
+  const explicitDisabled = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_TELEMETRY_DEFAULT_MODE: "disabled",
+  });
+  assert.equal(explicitDisabled.client.telemetry.defaultMode, "disabled");
 });
 
 test("runtime config derives beta sibling hosts from the public site base", () => {
