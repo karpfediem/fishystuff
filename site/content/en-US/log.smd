@@ -1,0 +1,12 @@
+---
+.title = "Log",
+.description = "Track your fishing hauls and sessions. This page is still a work in progress.",
+.date = @date("2026-04-19T00:00:00"),
+.author = "Karpfen",
+.layout = "index.shtml",
+.draft = false,
+---
+
+This page is still a work in progress.
+
+Use it to log fishing sessions, catches, and haul notes.
