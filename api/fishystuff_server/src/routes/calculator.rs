@@ -11468,8 +11468,8 @@ mod tests {
         assert_eq!(summary.groups.len(), 1);
         assert_eq!(summary.groups[0].slot_idx, 4);
         assert_eq!(summary.groups[0].label, "General");
-        assert_eq!(summary.groups[0].drop_rate_text, "");
-        assert_eq!(summary.groups[0].drop_rate_source_kind, "");
+        assert_eq!(summary.groups[0].drop_rate_text, "100%");
+        assert_eq!(summary.groups[0].drop_rate_source_kind, "database");
         assert_eq!(summary.species_rows.len(), 1);
         assert_eq!(summary.species_rows[0].group_label, "General");
         assert_eq!(summary.species_rows[0].drop_rate_text, "");
