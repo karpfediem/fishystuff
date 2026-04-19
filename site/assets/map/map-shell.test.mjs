@@ -52,6 +52,8 @@ test("map shell toolbar and status affordances derive from Datastar signals", ()
   assert.match(shellHtml, /data-window-toggle="settings"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.settings\.open"/);
   assert.match(shellHtml, /data-window-toggle="zone-info"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.zoneInfo\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="zone-info"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.zoneInfo\.open"/);
+  assert.match(shellHtml, /data-window-toggle="zone-info"[\s\S]*#fishy-inspect-fill/);
+  assert.match(shellHtml, /id="fishymap-zone-info-title-icon"[\s\S]*#fishy-inspect-fill/);
   assert.match(shellHtml, /data-window-toggle="layers"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.layers\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="layers"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.layers\.open"/);
   assert.match(shellHtml, /id="fishymap-ready-pill"[\s\S]*data-class:badge-success="\$_map_runtime\.ready"/);

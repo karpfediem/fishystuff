@@ -35,7 +35,8 @@ function normalizeSelectionLayerSamples(selection) {
 }
 
 const INFO_WINDOW_TITLE = "Details";
-const INFO_WINDOW_ICON = "information-circle";
+const INFO_WINDOW_TITLE_ICON = "inspect-fill";
+const INFO_WINDOW_STATUS_ICON = "information-circle";
 
 function pointKindStatusText(pointKind, pointLabel) {
   const normalizedLabel = trimString(pointLabel);
@@ -223,8 +224,8 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
   return {
     descriptor: {
       title: titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers),
-      titleIcon: INFO_WINDOW_ICON,
-      statusIcon: INFO_WINDOW_ICON,
+      titleIcon: INFO_WINDOW_TITLE_ICON,
+      statusIcon: INFO_WINDOW_STATUS_ICON,
       statusText: pointKindStatusText(pointKind, selection?.pointLabel),
       pointKind,
       overviewRows,

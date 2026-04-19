@@ -97,7 +97,7 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   );
 
   assert.equal(viewModel.descriptor.title, "Valencia Sea - Depth 5");
-  assert.equal(viewModel.descriptor.titleIcon, "information-circle");
+  assert.equal(viewModel.descriptor.titleIcon, "inspect-fill");
   assert.equal(viewModel.descriptor.statusIcon, "information-circle");
   assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["zone", "territory", "trade"]);
   assert.equal(viewModel.activePaneId, "territory");
@@ -181,6 +181,6 @@ test("buildInfoViewModel falls back to Details when no layer label is available"
   });
 
   assert.equal(viewModel.descriptor.title, "Details");
-  assert.equal(viewModel.descriptor.titleIcon, "information-circle");
+  assert.equal(viewModel.descriptor.titleIcon, "inspect-fill");
   assert.equal(viewModel.descriptor.statusIcon, "information-circle");
 });
