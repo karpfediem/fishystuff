@@ -1,0 +1,10 @@
+---
+.title = "Report Bugs",
+.description = "Bug reporting for Fishy Stuff is being prepared.",
+.date = @date("2026-04-19T00:00:00"),
+.author = "Karpfen",
+.layout = "index.shtml",
+.draft = false,
+---
+
+This page is being prepared.

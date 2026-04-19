@@ -98,8 +98,6 @@
                                 <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/map/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-map-pin"></use></svg>Map</a></li>
                                 <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/dex/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-dex"></use></svg>Dex</a></li>
                                 <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/calculator/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-calculator"></use></svg>Calculator</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/community/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-community"></use></svg>Community</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-log"></use></svg>Log</a></li>
                             </ul>
                         </div>
 
@@ -123,8 +121,6 @@
                             <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/map/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-map-pin"></use></svg>Map</a>
                             <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/dex/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-dex"></use></svg>Dex</a>
                             <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/calculator/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-calculator"></use></svg>Calculator</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/community/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-community"></use></svg>Community</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-log"></use></svg>Log</a>
                         </div>
                     </div>
 
@@ -375,6 +371,41 @@
          class="site-content-card site-content-clip mx-auto max-w-[130ch] px-4 py-4 md:px-6 md:py-6">
         <super>
     </div>
+
+    <footer id="site-footer"
+            class="not-prose mx-auto mb-6 mt-8 max-w-[130ch] px-4 md:px-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">About</span>
+                <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
+                   href="/community/">
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-community"></use></svg>
+                    Community
+                </a>
+                <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
+                   href="/devlog/">
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-log"></use></svg>
+                    Devlog
+                </a>
+                <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
+                   href="$site.page('report').link()"
+                   :title="$site.page('report').title">
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-nav-bug-report"></use></svg>
+                    <span :text="$site.page('report').title"></span>
+                </a>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Legal</span>
+                <a class="text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
+                   href="$site.page('privacy').link()"
+                   :text="$site.page('privacy').title"></a>
+                <a class="text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
+                   href="$site.page('terms-of-service').link()"
+                   :text="$site.page('terms-of-service').title"></a>
+            </div>
+        </div>
+    </footer>
 
     <!-- JS -->
     <script src="$site.asset('js/script.js').link()"></script>

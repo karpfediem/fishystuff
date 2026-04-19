@@ -6,7 +6,7 @@
 .alternatives = [{
   .name = "rss",
   .layout = "log.xml",
-  .output = "log/index.xml",
+  .output = "index.xml",
 }],
 .custom = { .updated = @date("2026-03-15T00:00:00") },
 .draft = false,
