@@ -46,7 +46,7 @@
                         <div class="flex min-w-0 items-end gap-4">
                             <span class="avatar avatar-placeholder -mt-8 shrink-0">
                                 <span class="bg-primary text-primary-content inline-flex size-20 items-center justify-center rounded-[1.75rem] ring-4 ring-base-100 shadow-lg">
-                                    <svg class="fishy-icon size-10 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-user-4"></use></svg>
+                                    <svg class="fishy-icon size-10 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-user-4"></use></svg>
                                 </span>
                             </span>
                             <div class="min-w-0 pb-1">
@@ -118,7 +118,7 @@
                         <div class="card-body gap-4">
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div class="inline-flex items-center gap-2 text-lg font-semibold text-base-content">
-                                    <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-theme-palette"></use></svg>
+                                    <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-theme-palette"></use></svg>
                                     <span>Appearance</span>
                                 </div>
                                 <span class="badge badge-outline badge-sm" data-theme-current-label>fishy</span>
@@ -167,8 +167,8 @@
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <div class="inline-flex items-center gap-2 text-lg font-semibold text-base-content">
-                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true" data-show="&#36;_client_session.telemetry.continuous.effectiveEnabled" style="display: none"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-eye"></use></svg>
-                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true" data-show="!&#36;_client_session.telemetry.continuous.effectiveEnabled" style="display: none"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-eye-slash"></use></svg>
+                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true" data-show="&#36;_client_session.telemetry.continuous.effectiveEnabled" style="display: none"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-eye"></use></svg>
+                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true" data-show="!&#36;_client_session.telemetry.continuous.effectiveEnabled" style="display: none"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-eye-slash"></use></svg>
                                         <span>Privacy &amp; data</span>
                                     </div>
                                     <p class="mt-2 text-sm leading-6 text-base-content/75"
@@ -218,6 +218,189 @@
                             </div>
                         </div>
                     </section>
+
+                    <section id="local-data" class="card card-border bg-base-100 shadow-sm">
+                        <div class="card-body gap-5">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="inline-flex items-center gap-2 text-lg font-semibold text-base-content">
+                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-broom-fill"></use></svg>
+                                        <span>Reset local state</span>
+                                    </div>
+                                    <p class="mt-2 text-sm leading-6 text-base-content/75">
+                                        Clear saved browser data or interface state per area, or wipe everything and start over with a fresh local profile.
+                                    </p>
+                                </div>
+                                <span class="badge badge-outline badge-sm">Local only</span>
+                            </div>
+
+                            <div class="grid gap-3 lg:grid-cols-2">
+                                <div class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4">
+                                    <div class="flex flex-col gap-4">
+                                        <div>
+                                            <div class="text-sm font-semibold text-base-content">Profile</div>
+                                            <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                                Local identity, telemetry preference, report history, and saved theme.
+                                            </p>
+                                        </div>
+                                        <div class="card-actions flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="profile-data"
+                                                    data-reset-confirm="Clear saved profile data on this browser?"
+                                                    data-reset-progress="Clearing profile data..."
+                                                    data-reset-success="Profile data cleared.">Clear data</button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="profile-ui"
+                                                    data-reset-confirm="Reset the saved profile appearance on this browser?"
+                                                    data-reset-progress="Resetting profile appearance..."
+                                                    data-reset-success="Profile appearance reset.">Clear UI</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4">
+                                    <div class="flex flex-col gap-4">
+                                        <div>
+                                            <div class="text-sm font-semibold text-base-content">Browser</div>
+                                            <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                                Current session identity and shared site interface preferences for this device.
+                                            </p>
+                                        </div>
+                                        <div class="card-actions flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="browser-data"
+                                                    data-reset-confirm="Reset the current browser session on this device?"
+                                                    data-reset-progress="Resetting browser session..."
+                                                    data-reset-success="Browser session reset.">Clear data</button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="browser-ui"
+                                                    data-reset-confirm="Clear shared site UI settings on this browser?"
+                                                    data-reset-progress="Clearing browser UI settings..."
+                                                    data-reset-success="Browser UI settings cleared.">Clear UI</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4">
+                                    <div class="flex flex-col gap-4">
+                                        <div>
+                                            <div class="text-sm font-semibold text-base-content">Map</div>
+                                            <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                                Saved bookmarks, map layout, and last viewed map session.
+                                            </p>
+                                        </div>
+                                        <div class="card-actions flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="map-data"
+                                                    data-reset-confirm="Clear saved map data on this browser?"
+                                                    data-reset-progress="Clearing map data..."
+                                                    data-reset-success="Map data cleared.">Clear data</button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="map-ui"
+                                                    data-reset-confirm="Clear saved map interface state on this browser?"
+                                                    data-reset-progress="Clearing map UI state..."
+                                                    data-reset-success="Map UI state cleared.">Clear UI</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4">
+                                    <div class="flex flex-col gap-4">
+                                        <div>
+                                            <div class="text-sm font-semibold text-base-content">Dex</div>
+                                            <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                                Fish progress, favourites, and saved Dex filters.
+                                            </p>
+                                        </div>
+                                        <div class="card-actions flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="dex-data"
+                                                    data-reset-confirm="Clear saved Dex data on this browser?"
+                                                    data-reset-progress="Clearing Dex data..."
+                                                    data-reset-success="Dex data cleared.">Clear data</button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="dex-ui"
+                                                    data-reset-confirm="Clear saved Dex interface state on this browser?"
+                                                    data-reset-progress="Clearing Dex UI state..."
+                                                    data-reset-success="Dex UI state cleared.">Clear UI</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4">
+                                    <div class="flex flex-col gap-4">
+                                        <div>
+                                            <div class="text-sm font-semibold text-base-content">Calculator</div>
+                                            <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                                Saved calculator inputs, panel state, and active distribution view.
+                                            </p>
+                                        </div>
+                                        <div class="card-actions flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="calculator-data"
+                                                    data-reset-confirm="Clear saved calculator data on this browser?"
+                                                    data-reset-progress="Clearing calculator data..."
+                                                    data-reset-success="Calculator data cleared.">Clear data</button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="calculator-ui"
+                                                    data-reset-confirm="Clear saved calculator interface state on this browser?"
+                                                    data-reset-progress="Clearing calculator UI state..."
+                                                    data-reset-success="Calculator UI state cleared.">Clear UI</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4">
+                                    <div class="flex flex-col gap-4">
+                                        <div>
+                                            <div class="text-sm font-semibold text-base-content">Overrides</div>
+                                            <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                                Local zone overlays and custom item price overrides.
+                                            </p>
+                                        </div>
+                                        <div class="card-actions flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="overrides-data"
+                                                    data-reset-confirm="Clear local overlay and price overrides on this browser?"
+                                                    data-reset-progress="Clearing local overrides..."
+                                                    data-reset-success="Local overrides cleared.">Clear data</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-box border border-error/25 bg-error/5 px-4 py-4">
+                                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div class="min-w-0">
+                                        <div class="text-sm font-semibold text-base-content">Delete all local state</div>
+                                        <p class="mt-1 text-sm leading-6 text-base-content/65">
+                                            Removes saved profile, session, app data, interface state, and overrides from this browser, then creates a fresh local profile.
+                                        </p>
+                                    </div>
+                                    <button type="button"
+                                            class="btn btn-sm btn-error shrink-0"
+                                            data-reset-scope="all"
+                                            data-reset-confirm="Delete all local state on this browser and start over?"
+                                            data-reset-progress="Deleting local state..."
+                                            data-reset-success="Local state deleted."
+                                            data-reset-reload="true">Delete local data</button>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-soft alert-info text-sm" data-reset-feedback hidden></div>
+                        </div>
+                    </section>
                 </div>
             </section>
 
@@ -233,9 +416,26 @@
         <script>
             (function () {
                 var toggle = document.querySelector('[data-telemetry-toggle]');
+                var resetFeedback = document.querySelector('[data-reset-feedback]');
+                var resetButtons = document.querySelectorAll('[data-reset-scope]');
                 var sessionApi = window.__fishystuffClientSession;
                 if (!toggle || !sessionApi || typeof sessionApi.current !== 'function') {
                     return;
+                }
+
+                function setResetFeedback(message, tone) {
+                    if (!resetFeedback) {
+                        return;
+                    }
+                    if (!message) {
+                        resetFeedback.hidden = true;
+                        resetFeedback.textContent = '';
+                        return;
+                    }
+                    resetFeedback.hidden = false;
+                    resetFeedback.textContent = message;
+                    resetFeedback.classList.remove('alert-info', 'alert-success', 'alert-warning', 'alert-error');
+                    resetFeedback.classList.add(tone || 'alert-info');
                 }
 
                 function sync(snapshot) {
@@ -269,6 +469,41 @@
 
                 window.addEventListener('fishystuff:client-session-change', function (event) {
                     sync(event && event.detail && event.detail.snapshot);
+                });
+
+                resetButtons.forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        var scope = button.getAttribute('data-reset-scope');
+                        if (!scope || typeof sessionApi.clearLocalDataScope !== 'function') {
+                            return;
+                        }
+
+                        var confirmText = button.getAttribute('data-reset-confirm')
+                            || 'Clear local data on this browser?';
+                        var progressText = button.getAttribute('data-reset-progress')
+                            || 'Clearing local data...';
+                        var successText = button.getAttribute('data-reset-success')
+                            || 'Local data cleared.';
+                        var shouldReload = button.getAttribute('data-reset-reload') === 'true';
+                        var confirmed = window.confirm(confirmText);
+                        if (!confirmed) {
+                            return;
+                        }
+
+                        button.disabled = true;
+                        setResetFeedback(progressText, 'alert-info');
+
+                        try {
+                            sessionApi.clearLocalDataScope(scope, { reload: shouldReload });
+                            if (!shouldReload) {
+                                setResetFeedback(successText, 'alert-success');
+                            }
+                        } catch (_error) {
+                            setResetFeedback('Reset is unavailable right now.', 'alert-error');
+                        } finally {
+                            button.disabled = false;
+                        }
+                    });
                 });
 
                 sync(sessionApi.current());

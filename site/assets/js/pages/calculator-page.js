@@ -1,6 +1,7 @@
 (function () {
   const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-1";
-  const CALCULATOR_STORAGE_KEY = "calculator";
+  const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
+  const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN =
@@ -105,8 +106,8 @@
   const urlParams = new URLSearchParams(window.location.search);
   const presetQueryParam = urlParams.get("preset");
 
-  const loadStoredSignals = () => {
-    const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
+  const loadStoredJson = (storageKey, label) => {
+    const raw = localStorage.getItem(storageKey);
     if (!raw) {
       return null;
     }
@@ -114,9 +115,22 @@
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object" ? parsed : null;
     } catch (error) {
-      console.error("Error parsing stored calculator state:", error);
+      console.error(`Error parsing stored ${label}:`, error);
       return null;
     }
+  };
+
+  const loadStoredSignals = () => {
+    const storedData = loadStoredJson(CALCULATOR_DATA_STORAGE_KEY, "calculator data");
+    const storedUi = loadStoredJson(CALCULATOR_UI_STORAGE_KEY, "calculator UI state");
+    if (!storedData && !storedUi) {
+      return null;
+    }
+    const combined = storedData && typeof storedData === "object" ? { ...storedData } : {};
+    if (storedUi && typeof storedUi === "object") {
+      combined._calculator_ui = storedUi;
+    }
+    return combined;
   };
 
   const compactStringArray = (value) => {
@@ -254,13 +268,16 @@
 
   const persistedCalculatorSignals = (signals) => {
     const current = canonicalizeStoredSignals(signals);
-    const persisted = Object.fromEntries(
+    return Object.fromEntries(
       Object.entries(current).filter(
         ([key]) => !key.startsWith("_") && key !== "overlay",
       ),
     );
-    persisted._calculator_ui = cloneCalculatorSignals(current._calculator_ui);
-    return persisted;
+  };
+
+  const persistedCalculatorUiSignals = (signals) => {
+    const current = canonicalizeStoredSignals(signals);
+    return cloneCalculatorSignals(current._calculator_ui);
   };
 
   const sharedCalculatorSignals = (signals) =>
@@ -281,14 +298,15 @@
   };
 
   const clearSignals = () => {
-    localStorage.removeItem(CALCULATOR_STORAGE_KEY);
+    localStorage.removeItem(CALCULATOR_DATA_STORAGE_KEY);
+    localStorage.removeItem(CALCULATOR_UI_STORAGE_KEY);
   };
 
   if (presetQueryParam) {
     try {
       const jsonString = LZString.decompressFromEncodedURIComponent(presetQueryParam);
       JSON.parse(jsonString);
-      localStorage.setItem(CALCULATOR_STORAGE_KEY, jsonString);
+      localStorage.setItem(CALCULATOR_DATA_STORAGE_KEY, jsonString);
 
       urlParams.delete("preset");
       const newQueryString = urlParams.toString();
@@ -659,8 +677,10 @@
       shared.setOverlaySignals(signals.overlay);
       shared.setPriceOverrides(signals.priceOverrides);
     }
-    const payload = persistedCalculatorSignals(signals);
-    localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
+    const persistedData = persistedCalculatorSignals(signals);
+    const persistedUi = persistedCalculatorUiSignals(signals);
+    localStorage.setItem(CALCULATOR_DATA_STORAGE_KEY, JSON.stringify(persistedData));
+    localStorage.setItem(CALCULATOR_UI_STORAGE_KEY, JSON.stringify(persistedUi));
   }
 
   function liveCalculator(

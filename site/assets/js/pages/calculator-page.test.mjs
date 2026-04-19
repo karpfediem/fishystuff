@@ -237,12 +237,8 @@ function defaultSignals() {
 
 test("calculator restore canonicalizes stored signals", () => {
   const env = createContext({
-    calculator: JSON.stringify({
+    "fishystuff.calculator.data.v1": JSON.stringify({
       _active: true,
-      _distribution_tab: "loot_flow",
-      _calculator_ui: {
-        overlay_panel_collapsed: "false",
-      },
       discardTrashFish: true,
       food: ["item:9359", "", "item:9359"],
       buff: ["item:1", "item:2", "item:1"],
@@ -257,6 +253,10 @@ test("calculator restore canonicalizes stored signals", () => {
         },
         invalid: null,
       },
+    }),
+    "fishystuff.calculator.ui.v1": JSON.stringify({
+      distribution_tab: "loot_flow",
+      overlay_panel_collapsed: "false",
     }),
   });
   const signals = defaultSignals();
@@ -338,21 +338,23 @@ test("calculator persist stores canonical page state and excludes transient bran
   });
   env.flushTimers();
 
-  const persisted = JSON.parse(env.localStorage.getItem("calculator"));
-  assert.deepEqual(persisted.food, ["item:9359"]);
-  assert.deepEqual(persisted._calculator_ui, {
+  const persistedData = JSON.parse(env.localStorage.getItem("fishystuff.calculator.data.v1"));
+  const persistedUi = JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1"));
+  assert.deepEqual(persistedData.food, ["item:9359"]);
+  assert.deepEqual(persistedUi, {
     distribution_tab: "groups",
     overlay_panel_collapsed: true,
   });
-  assert.equal("_live" in persisted, false);
-  assert.equal("_calc" in persisted, false);
-  assert.equal("_defaults" in persisted, false);
-  assert.equal("overlay" in persisted, false);
+  assert.equal("_live" in persistedData, false);
+  assert.equal("_calc" in persistedData, false);
+  assert.equal("_defaults" in persistedData, false);
+  assert.equal("overlay" in persistedData, false);
+  assert.equal("_calculator_ui" in persistedData, false);
 });
 
 test("calculator restore prefers shared overlay storage for prices and zone overlays", () => {
   const env = createContext({
-    calculator: JSON.stringify({
+    "fishystuff.calculator.data.v1": JSON.stringify({
       priceOverrides: {
         "item:8473": {
           basePrice: 8800000,
@@ -438,7 +440,17 @@ test("calculator action listener handles copy and clear tokens once without clea
     },
   });
 
-  env.localStorage.setItem("calculator", JSON.stringify({ food: ["item:9359"] }));
+  env.localStorage.setItem(
+    "fishystuff.calculator.data.v1",
+    JSON.stringify({ food: ["item:9359"] }),
+  );
+  env.localStorage.setItem(
+    "fishystuff.calculator.ui.v1",
+    JSON.stringify({
+      distribution_tab: "groups",
+      overlay_panel_collapsed: true,
+    }),
+  );
   env.window.__fishystuffCalculator.restore(signals);
   signals.overlay = {
     zones: {
@@ -484,7 +496,8 @@ test("calculator action listener handles copy and clear tokens once without clea
   assert.equal(env.toastCalls[1].type, "copyText");
   assert.match(env.toastCalls[1].text, /FishyStuff Calculator Preset/);
   assert.deepEqual(Array.from(signals.food), []);
-  assert.equal(env.localStorage.getItem("calculator"), null);
+  assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
+  assert.equal(env.localStorage.getItem("fishystuff.calculator.ui.v1"), null);
   assert.deepEqual(signals._calculator_ui, {
     distribution_tab: "groups",
     overlay_panel_collapsed: true,

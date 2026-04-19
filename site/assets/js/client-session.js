@@ -1,8 +1,36 @@
 (function () {
   const STORAGE_KEY = "fishystuff.client.v1";
   const SESSION_STORAGE_KEY = "fishystuff.client.session.v1";
+  const UI_SETTINGS_KEY = "fishystuff.ui.settings.v1";
+  const UI_SETTINGS_THEME_PATH = Object.freeze(["app", "theme"]);
+  const LEGACY_THEME_STORAGE_KEY = "theme";
+  const UI_SETTINGS_EVENT = "fishystuff:uisettingschange";
+  const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
+  const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
+  const MAP_LEGACY_PREFS_STORAGE_KEY = "fishystuff.map.prefs.v1";
+  const MAP_SESSION_STORAGE_KEY = "fishystuff.map.session.v1";
+  const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
+  const DEX_CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
+  const DEX_FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
+  const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
+  const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
+  const USER_OVERLAYS_STORAGE_KEY = "fishystuff.user-overlays.v2";
   const CHANGE_EVENT = "fishystuff:client-session-change";
   const VERSION = 1;
+  const LOCAL_DATA_SCOPES = Object.freeze([
+    { id: "profile-data", label: "Profile data" },
+    { id: "profile-ui", label: "Profile UI" },
+    { id: "browser-data", label: "Browser data" },
+    { id: "browser-ui", label: "Browser UI" },
+    { id: "map-data", label: "Map data" },
+    { id: "map-ui", label: "Map UI" },
+    { id: "dex-data", label: "Dex data" },
+    { id: "dex-ui", label: "Dex UI" },
+    { id: "calculator-data", label: "Calculator data" },
+    { id: "calculator-ui", label: "Calculator UI" },
+    { id: "overrides-data", label: "Overrides data" },
+    { id: "all", label: "All local data" },
+  ]);
 
   function isPlainObject(value) {
     return Boolean(value) && Object.prototype.toString.call(value) === "[object Object]";
@@ -15,6 +43,25 @@
   function trimString(value) {
     const normalized = String(value ?? "").trim();
     return normalized || "";
+  }
+
+  function normalizePath(path) {
+    if (Array.isArray(path)) {
+      return path
+        .map((part) => trimString(part))
+        .filter(Boolean);
+    }
+    return trimString(path)
+      .split(".")
+      .map((part) => trimString(part))
+      .filter(Boolean);
+  }
+
+  function pathStartsWith(pathParts, prefixParts) {
+    if (!Array.isArray(pathParts) || !Array.isArray(prefixParts) || prefixParts.length > pathParts.length) {
+      return false;
+    }
+    return prefixParts.every((part, index) => pathParts[index] === part);
   }
 
   function nowIso() {
@@ -170,6 +217,77 @@
       storage?.setItem?.(key, JSON.stringify(value));
     } catch (_error) {
     }
+  }
+
+  function removeStorageKey(storage, key) {
+    try {
+      storage?.removeItem?.(key);
+    } catch (_error) {
+    }
+  }
+
+  function removeAtPath(root, pathParts) {
+    const current = isPlainObject(root) ? root : {};
+    if (!pathParts.length) {
+      return {};
+    }
+    if (!(pathParts[0] in current)) {
+      return current;
+    }
+    const next = { ...current };
+    if (pathParts.length === 1) {
+      delete next[pathParts[0]];
+      return next;
+    }
+    const child = removeAtPath(next[pathParts[0]], pathParts.slice(1));
+    if (isPlainObject(child) && Object.keys(child).length) {
+      next[pathParts[0]] = child;
+    } else {
+      delete next[pathParts[0]];
+    }
+    return next;
+  }
+
+  function getAtPath(root, pathParts, fallback) {
+    let current = isPlainObject(root) ? root : {};
+    for (const part of pathParts) {
+      if (!isPlainObject(current) || !(part in current)) {
+        return fallback;
+      }
+      current = current[part];
+    }
+    return current === undefined ? fallback : current;
+  }
+
+  function setAtPath(root, pathParts, value) {
+    if (!pathParts.length) {
+      return isPlainObject(value) ? value : {};
+    }
+
+    const nextRoot = isPlainObject(root) ? { ...root } : {};
+    let cursor = nextRoot;
+    for (let index = 0; index < pathParts.length - 1; index += 1) {
+      const part = pathParts[index];
+      const existing = isPlainObject(cursor[part]) ? cursor[part] : {};
+      cursor[part] = { ...existing };
+      cursor = cursor[part];
+    }
+    cursor[pathParts[pathParts.length - 1]] = value;
+    return nextRoot;
+  }
+
+  function cloneJsonOrValue(value) {
+    return isPlainObject(value) || Array.isArray(value)
+      ? cloneJson(value)
+      : value;
+  }
+
+  function normalizeThemeSettingsBranch(value) {
+    if (isPlainObject(value)) {
+      return cloneJson(value);
+    }
+    const selected = trimString(value);
+    return selected ? { selected } : null;
   }
 
   function runtimeTelemetryDefaultMode() {
@@ -386,6 +504,114 @@
     globalThis.location?.reload?.();
   }
 
+  function dispatchUiSettingsChange(settings, source, path) {
+    globalThis.window?.dispatchEvent?.(
+      new CustomEvent(UI_SETTINGS_EVENT, {
+        detail: {
+          key: UI_SETTINGS_KEY,
+          path: trimString(path) || null,
+          settings,
+          source: trimString(source) || "local",
+        },
+      }),
+    );
+  }
+
+  function persistUiSettingsSnapshot(nextSettings, source, path) {
+    const normalized = isPlainObject(nextSettings) ? nextSettings : {};
+    if (Object.keys(normalized).length) {
+      try {
+        globalThis.localStorage?.setItem?.(UI_SETTINGS_KEY, JSON.stringify(normalized));
+      } catch (_error) {
+      }
+    } else {
+      removeStorageKey(globalThis.localStorage, UI_SETTINGS_KEY);
+    }
+    dispatchUiSettingsChange(normalized, source, path);
+    return normalized;
+  }
+
+  function syncThemeAfterUiSettingsChange() {
+    const theme = globalThis.window?.__theme;
+    if (theme && typeof theme.get === "function" && typeof theme.apply === "function") {
+      theme.apply(theme.get());
+    }
+  }
+
+  function clearSharedUiSettings(source) {
+    const normalizedSource = trimString(source) || "local";
+    const uiSettingsStore = globalThis.window?.__fishystuffUiSettings;
+    if (uiSettingsStore && typeof uiSettingsStore.clear === "function") {
+      uiSettingsStore.clear(normalizedSource);
+    } else {
+      persistUiSettingsSnapshot({}, normalizedSource, null);
+    }
+
+    removeStorageKey(globalThis.localStorage, LEGACY_THEME_STORAGE_KEY);
+    syncThemeAfterUiSettingsChange();
+  }
+
+  function clearSharedUiSettingsExceptTheme(source) {
+    const normalizedSource = trimString(source) || "local";
+    const uiSettingsStore = globalThis.window?.__fishystuffUiSettings;
+
+    if (
+      uiSettingsStore
+      && typeof uiSettingsStore.get === "function"
+      && typeof uiSettingsStore.clear === "function"
+      && typeof uiSettingsStore.set === "function"
+    ) {
+      const themeValue = normalizeThemeSettingsBranch(
+        cloneJsonOrValue(uiSettingsStore.get(UI_SETTINGS_THEME_PATH, null)),
+      );
+      uiSettingsStore.clear(normalizedSource);
+      if (themeValue) {
+        uiSettingsStore.set(UI_SETTINGS_THEME_PATH, themeValue);
+      }
+    } else {
+      const currentSettings = readJson(globalThis.localStorage, UI_SETTINGS_KEY, {});
+      const themeValue = normalizeThemeSettingsBranch(
+        getAtPath(currentSettings, UI_SETTINGS_THEME_PATH, null),
+      );
+      const nextSettings = themeValue
+        ? setAtPath({}, UI_SETTINGS_THEME_PATH, themeValue)
+        : {};
+      persistUiSettingsSnapshot(nextSettings, normalizedSource, null);
+    }
+
+    removeStorageKey(globalThis.localStorage, LEGACY_THEME_STORAGE_KEY);
+    syncThemeAfterUiSettingsChange();
+  }
+
+  function clearSharedUiSettingsPath(path, source) {
+    const normalizedSource = trimString(source) || "local";
+    const pathParts = normalizePath(path);
+    if (!pathParts.length) {
+      clearSharedUiSettings(normalizedSource);
+      return {};
+    }
+
+    const uiSettingsStore = globalThis.window?.__fishystuffUiSettings;
+    let nextSettings;
+    if (uiSettingsStore && typeof uiSettingsStore.remove === "function") {
+      nextSettings = uiSettingsStore.remove(pathParts, normalizedSource);
+    } else {
+      const currentSettings = readJson(globalThis.localStorage, UI_SETTINGS_KEY, {});
+      nextSettings = persistUiSettingsSnapshot(
+        removeAtPath(currentSettings, pathParts),
+        normalizedSource,
+        pathParts.join("."),
+      );
+    }
+
+    if (pathStartsWith(pathParts, UI_SETTINGS_THEME_PATH)) {
+      removeStorageKey(globalThis.localStorage, LEGACY_THEME_STORAGE_KEY);
+      syncThemeAfterUiSettingsChange();
+    }
+
+    return nextSettings;
+  }
+
   function setContinuousTelemetryChoice(choice, options = {}) {
     const normalizedChoice = normalizeTelemetryChoice(choice);
     const nextChoice = normalizedChoice === "unset" ? "unset" : normalizedChoice;
@@ -396,6 +622,135 @@
     }, "telemetry-preference");
     maybeReload(options);
     return snapshot;
+  }
+
+  function resetLocalProfileState(options = {}) {
+    const snapshot = updateLocalSnapshot((draft) => {
+      draft.actor = normalizeActor({});
+      draft.preferences.telemetry.continuous = normalizeContinuousTelemetryPreference({});
+      draft.preferences.telemetry.diagnosticReports = normalizeDiagnosticReportsPreference({});
+    }, "profile-reset");
+    maybeReload(options);
+    return snapshot;
+  }
+
+  function resetLocalSessionState(options = {}) {
+    removeStorageKey(globalThis.sessionStorage, SESSION_STORAGE_KEY);
+    sessionSnapshot = normalizeSession({});
+    writeJson(globalThis.sessionStorage, SESSION_STORAGE_KEY, sessionSnapshot);
+    const snapshot = patchBoundSignals();
+    emitChange(snapshot, "session-reset");
+    maybeReload(options);
+    return snapshot;
+  }
+
+  function clearMapDataLocalState() {
+    removeStorageKey(globalThis.localStorage, MAP_BOOKMARKS_STORAGE_KEY);
+  }
+
+  function clearMapUiLocalState() {
+    removeStorageKey(globalThis.localStorage, MAP_UI_STORAGE_KEY);
+    removeStorageKey(globalThis.localStorage, MAP_LEGACY_PREFS_STORAGE_KEY);
+    removeStorageKey(globalThis.sessionStorage, MAP_SESSION_STORAGE_KEY);
+  }
+
+  function clearDexDataLocalState() {
+    removeStorageKey(globalThis.localStorage, DEX_CAUGHT_STORAGE_KEY);
+    removeStorageKey(globalThis.localStorage, DEX_FAVOURITES_STORAGE_KEY);
+  }
+
+  function clearDexUiLocalState() {
+    removeStorageKey(globalThis.localStorage, DEX_UI_STORAGE_KEY);
+  }
+
+  function clearCalculatorDataLocalState() {
+    removeStorageKey(globalThis.localStorage, CALCULATOR_DATA_STORAGE_KEY);
+  }
+
+  function clearCalculatorUiLocalState() {
+    removeStorageKey(globalThis.localStorage, CALCULATOR_UI_STORAGE_KEY);
+  }
+
+  function clearUserOverridesLocalState() {
+    removeStorageKey(globalThis.localStorage, USER_OVERLAYS_STORAGE_KEY);
+  }
+
+  function clearAllLocalState(options = {}) {
+    clearMapDataLocalState();
+    clearMapUiLocalState();
+    clearDexDataLocalState();
+    clearDexUiLocalState();
+    clearCalculatorDataLocalState();
+    clearCalculatorUiLocalState();
+    clearUserOverridesLocalState();
+    clearSharedUiSettings("local-user-reset");
+
+    removeStorageKey(globalThis.localStorage, STORAGE_KEY);
+    removeStorageKey(globalThis.sessionStorage, SESSION_STORAGE_KEY);
+
+    localSnapshot = normalizeSnapshot({});
+    sessionSnapshot = normalizeSession({});
+    writeJson(globalThis.localStorage, STORAGE_KEY, localSnapshot);
+    writeJson(globalThis.sessionStorage, SESSION_STORAGE_KEY, sessionSnapshot);
+
+    const snapshot = patchBoundSignals();
+    emitChange(snapshot, "local-user-reset");
+    maybeReload(options);
+    return snapshot;
+  }
+
+  function localDataScopes() {
+    return cloneJson(LOCAL_DATA_SCOPES);
+  }
+
+  function clearLocalDataScope(scopeId, options = {}) {
+    const normalizedScopeId = trimString(scopeId).toLowerCase();
+    switch (normalizedScopeId) {
+      case "profile-data":
+        return resetLocalProfileState(options);
+      case "profile-ui":
+        clearSharedUiSettingsPath(UI_SETTINGS_THEME_PATH, "local-profile-ui-reset");
+        maybeReload(options);
+        return current();
+      case "browser-data":
+        return resetLocalSessionState(options);
+      case "browser-ui":
+        clearSharedUiSettingsExceptTheme("local-browser-ui-reset");
+        maybeReload(options);
+        return current();
+      case "map-data":
+        clearMapDataLocalState();
+        maybeReload(options);
+        return current();
+      case "map-ui":
+        clearMapUiLocalState();
+        maybeReload(options);
+        return current();
+      case "dex-data":
+        clearDexDataLocalState();
+        maybeReload(options);
+        return current();
+      case "dex-ui":
+        clearDexUiLocalState();
+        maybeReload(options);
+        return current();
+      case "calculator-data":
+        clearCalculatorDataLocalState();
+        maybeReload(options);
+        return current();
+      case "calculator-ui":
+        clearCalculatorUiLocalState();
+        maybeReload(options);
+        return current();
+      case "overrides-data":
+        clearUserOverridesLocalState();
+        maybeReload(options);
+        return current();
+      case "all":
+        return clearAllLocalState(options);
+      default:
+        throw new Error(`Unknown local data scope: ${scopeId}`);
+    }
   }
 
   function setActor(actor) {
@@ -476,6 +831,8 @@
     bindDatastar,
     createDiagnosticReportDraft,
     current,
+    clearAllLocalState,
+    clearLocalDataScope,
     clearActor() {
       return setActor({
         kind: "guest",
@@ -493,6 +850,9 @@
     clearTelemetryPreference(options) {
       return setContinuousTelemetryChoice("unset", options);
     },
+    localDataScopes,
+    resetLocalProfileState,
+    resetLocalSessionState,
     markDiagnosticReportPrepared() {
       return markDiagnosticReport("lastPreparedAt");
     },

@@ -3,11 +3,7 @@
     var EVENT = "fishystuff:uisettingschange";
 
     function isPlainObject(value) {
-        if (!value || typeof value !== "object") {
-            return false;
-        }
-        var prototype = Object.getPrototypeOf(value);
-        return prototype === Object.prototype || prototype === null;
+        return Boolean(value) && Object.prototype.toString.call(value) === "[object Object]";
     }
 
     function normalizeSettings(value) {
@@ -63,6 +59,30 @@
         return nextRoot;
     }
 
+    function removeAtPath(root, pathParts) {
+        var nextRoot = normalizeSettings(root);
+        if (!pathParts.length) {
+            return {};
+        }
+        if (!isPlainObject(nextRoot) || !(pathParts[0] in nextRoot)) {
+            return nextRoot;
+        }
+
+        nextRoot = Object.assign({}, nextRoot);
+        if (pathParts.length === 1) {
+            delete nextRoot[pathParts[0]];
+            return nextRoot;
+        }
+
+        var child = removeAtPath(nextRoot[pathParts[0]], pathParts.slice(1));
+        if (isPlainObject(child) && Object.keys(child).length) {
+            nextRoot[pathParts[0]] = child;
+        } else {
+            delete nextRoot[pathParts[0]];
+        }
+        return nextRoot;
+    }
+
     function dispatchChange(detail) {
         window.dispatchEvent(new CustomEvent(EVENT, { detail: detail }));
     }
@@ -72,7 +92,11 @@
     function persist(nextSettings, source, changedPath) {
         cache = normalizeSettings(nextSettings);
         try {
-            localStorage.setItem(KEY, JSON.stringify(cache));
+            if (Object.keys(cache).length) {
+                localStorage.setItem(KEY, JSON.stringify(cache));
+            } else {
+                localStorage.removeItem(KEY);
+            }
         } catch (_error) {
         }
         dispatchChange({
@@ -102,6 +126,29 @@
         var current = getAtPath(cache, parts, undefined);
         var nextValue = typeof updater === "function" ? updater(current) : updater;
         return persist(setAtPath(cache, parts, nextValue), "local", parts.join("."));
+    }
+
+    function remove(path, source) {
+        var parts = normalizePath(path);
+        if (!parts.length) {
+            return clear(source);
+        }
+        return persist(removeAtPath(cache, parts), source || "local", parts.join("."));
+    }
+
+    function clear(source) {
+        cache = {};
+        try {
+            localStorage.removeItem(KEY);
+        } catch (_error) {
+        }
+        dispatchChange({
+            key: KEY,
+            path: null,
+            settings: cache,
+            source: source || "local",
+        });
+        return cache;
     }
 
     function subscribe(listener) {
@@ -142,6 +189,8 @@
         get: get,
         set: set,
         update: update,
+        remove: remove,
+        clear: clear,
         subscribe: subscribe,
         snapshot: function () { return cache; },
     });
