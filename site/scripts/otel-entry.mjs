@@ -385,7 +385,7 @@ function currentPageReadyDurationMs(globalRef = globalThis) {
     navigationTiming?.duration,
   ];
   for (const candidate of navigationCandidates) {
-    if (Number.isFinite(candidate) && candidate >= 0) {
+    if (Number.isFinite(candidate) && candidate > 0) {
       return candidate;
     }
   }
@@ -474,13 +474,21 @@ function installPageReadyMetric(browserMetrics, globalRef = globalThis) {
   const record = () => {
     browserMetrics.recordPageReady(currentPageReadyDurationMs(globalRef));
   };
+  const scheduleRecord = () => {
+    const setTimeoutRef = globalRef?.setTimeout;
+    if (typeof setTimeoutRef === "function") {
+      setTimeoutRef(record, 0);
+      return;
+    }
+    record();
+  };
 
   if (documentRef?.readyState === "complete") {
-    record();
+    scheduleRecord();
     return;
   }
 
-  globalRef?.addEventListener?.("load", record, { once: true });
+  globalRef?.addEventListener?.("load", scheduleRecord, { once: true });
 }
 
 function extractErrorLogAttributes(error) {

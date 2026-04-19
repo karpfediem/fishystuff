@@ -187,6 +187,32 @@ test("currentPageReadyDurationMs prefers completed navigation timing data", () =
   delete globalThis.performance;
 });
 
+test("currentPageReadyDurationMs skips zero-valued navigation timing fields", () => {
+  globalThis.performance = {
+    getEntriesByType(type) {
+      if (type !== "navigation") {
+        return [];
+      }
+      return [
+        {
+          loadEventEnd: 0,
+          domComplete: 0,
+          loadEventStart: 0,
+          domInteractive: 412.8,
+          duration: 500.1,
+        },
+      ];
+    },
+    now() {
+      return 999.9;
+    },
+  };
+
+  expect(currentPageReadyDurationMs()).toBe(412.8);
+
+  delete globalThis.performance;
+});
+
 test("createBrowserOperatorMetrics records session, readiness, and frontend error counters once", () => {
   const counters = [];
   const histograms = [];
