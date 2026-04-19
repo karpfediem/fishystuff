@@ -34,7 +34,7 @@ long-lived local services:
 - `jaeger` serves the local Jaeger v2 trace UI, including the Monitor tab, on `127.0.0.1:16686`
 - `loki` serves local log ingestion and queries on `127.0.0.1:3100`
 - `otel-collector` receives traces and metrics from Vector on `127.0.0.1:4818`, forwards traces to Jaeger, and exports spanmetrics on `127.0.0.1:8889`
-- `vector` tails repo-local process logs under `data/vector/process/*.log`, accepts local OTLP on `127.0.0.1:4820`, writes newline-delimited JSON archives under `data/vector/archive/`, ships normalized logs to Loki, and forwards traces plus metrics downstream to the collector
+- `vector` tails repo-local process logs under `data/vector/process/*.log`, accepts browser/local OTLP logs on `127.0.0.1:4820` plus traces and metrics on `127.0.0.1:4821`, writes newline-delimited JSON archives under `data/vector/archive/`, ships normalized logs to Loki, and forwards traces plus metrics downstream to the collector
 - `prometheus` scrapes the collector spanmetrics endpoint and serves the local Prometheus UI on `127.0.0.1:9090`
 - `grafana` is the local human-facing observability UI on `127.0.0.1:3000`, with repo-provisioned Loki, Prometheus, and Jaeger datasources
 - `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
@@ -152,6 +152,11 @@ That wrapper follows the official Vector `tap` flow, targets the repo's local
 Vector API, emits bounded JSON samples by default, and exposes stable presets
 for the current pipeline graph. Use `tools/scripts/vector-tap.sh --list-presets`
 to see the current tap surface.
+Treat it as the first live transport/pipeline probe, not as the authoritative
+historical query layer: it is best for confirming what Vector is ingesting,
+normalizing, and forwarding right now, while Jaeger, Loki, Prometheus, and the
+NDJSON archives remain the downstream sources for trace semantics, indexed log
+queries, metric history, and post-ingest correlation.
 
 Example live flows:
 

@@ -59,6 +59,7 @@ Repository notes for working in this monorepo.
   - `browser-logs`
   - `raw-metrics`
   - `raw-traces`
+- Treat Vector tap as a live pipeline probe. Use Jaeger for trace structure/tag search, Loki or the NDJSON archives for historical log queries and correlation fields, and Prometheus for metric history.
 - Downstream checks:
   - Grafana: `http://127.0.0.1:3000/explore`
   - Prometheus: `http://127.0.0.1:9090/api/v1/query?...`
