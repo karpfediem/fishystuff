@@ -44,6 +44,36 @@
     return trimString(value).slice(0, Math.max(4, Math.trunc(length || 8)));
   }
 
+  function compactIdToken(value, fallback = "local", length = 6) {
+    const normalized = trimString(value);
+    if (!normalized) {
+      return fallback;
+    }
+    const parts = normalized.split(/[-_]+/).filter(Boolean);
+    const candidate = parts[parts.length - 1] || normalized;
+    return candidate.slice(0, Math.max(4, Math.trunc(length || 6))) || fallback;
+  }
+
+  function slugToken(value) {
+    return trimString(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function initials(value) {
+    const parts = trimString(value)
+      .split(/[\s_-]+/)
+      .filter(Boolean);
+    if (!parts.length) {
+      return "FS";
+    }
+    return parts
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || "")
+      .join("") || "FS";
+  }
+
   function normalizeTelemetryChoice(value) {
     const normalized = trimString(value).toLowerCase();
     if (normalized === "enabled" || normalized === "disabled" || normalized === "unset") {
@@ -168,7 +198,7 @@
             : choice === "disabled"
               ? "Stored off"
               : "Unavailable",
-        detail: "Automatic telemetry is disabled by runtime policy for this site.",
+        detail: "Telemetry is unavailable.",
         canEnable: false,
         canDisable: false,
         resetAvailable: choice !== "unset",
@@ -183,7 +213,7 @@
         reason: "enabled-by-user",
         statusLabel: "On",
         preferenceLabel: "Always on",
-        detail: "Automatic telemetry is enabled because you explicitly opted in on this browser.",
+        detail: "Telemetry is enabled.",
         canEnable: false,
         canDisable: true,
         resetAvailable: true,
@@ -198,7 +228,7 @@
         reason: "disabled-by-user",
         statusLabel: "Off",
         preferenceLabel: "Always off",
-        detail: "Automatic telemetry is disabled because you explicitly turned it off on this browser.",
+        detail: "Telemetry is disabled.",
         canEnable: true,
         canDisable: false,
         resetAvailable: true,
@@ -213,7 +243,7 @@
         reason: "enabled-by-runtime-default",
         statusLabel: "On",
         preferenceLabel: "Using default",
-        detail: "Automatic telemetry is enabled by the local development default.",
+        detail: "Telemetry is enabled.",
         canEnable: false,
         canDisable: true,
         resetAvailable: false,
@@ -227,7 +257,7 @@
       reason: "opt-in-required",
       statusLabel: "Off",
       preferenceLabel: "Using default",
-      detail: "Automatic telemetry is off until you enable it on this browser.",
+      detail: "Telemetry is off.",
       canEnable: true,
       canDisable: false,
       resetAvailable: false,
@@ -239,8 +269,7 @@
     return {
       mode: "manual",
       statusLabel: "Manual",
-      detail:
-        "Future incident reports can attach a one-off trace bundle and short report without enabling background telemetry.",
+      detail: "Reports are shared manually.",
       lastPreparedAt: diagnosticReports.lastPreparedAt,
       lastSubmittedAt: diagnosticReports.lastSubmittedAt,
     };
@@ -249,16 +278,36 @@
   function buildSnapshot(snapshot, session) {
     const actor = snapshot.actor;
     const continuous = deriveContinuousTelemetryState(snapshot);
-    const localProfileShortId = shortId(snapshot.localProfile.id);
-    const sessionShortId = shortId(session.id);
+    const localProfileShortId = compactIdToken(snapshot.localProfile.id, "local");
+    const sessionShortId = compactIdToken(session.id, "session");
+    const fallbackProfileName =
+      actor.kind === "guest" && actor.displayName === "Guest"
+        ? `Angler ${localProfileShortId.toUpperCase()}`
+        : actor.displayName;
+    const displayLabel = fallbackProfileName || actor.displayName;
+    const handleSeed =
+      actor.accountId
+      || actor.displayName
+      || `local-${localProfileShortId.toLowerCase()}`;
+    const profileHandle =
+      `@${slugToken(handleSeed) || `local-${localProfileShortId.toLowerCase()}`}`;
+    const roleLabel = actor.kind === "guest" ? "Profile" : "Member";
+    const summary =
+      actor.kind === "guest"
+        ? ""
+        : `${actor.provider || "Account"} profile`;
     return {
       actor: {
         ...actor,
         isGuest: actor.kind === "guest",
-        displayLabel: actor.displayName,
+        displayLabel,
+        handle: profileHandle,
+        roleLabel,
+        avatarLabel: initials(displayLabel),
+        summary,
         detail:
           actor.kind === "guest"
-            ? "Local guest profile in this browser"
+            ? ""
             : `${actor.provider || "Account"} user`,
       },
       localProfile: {

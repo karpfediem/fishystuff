@@ -63,6 +63,7 @@ const iconSources = {
   "eye-slash": { type: "mingcute", name: "eye-close-fill" },
   "drag-handle": { type: "mingcute", name: "move-fill" },
   "settings-1": { type: "mingcute", name: "settings-1-fill" },
+  "user-4": { type: "mingcute", name: "user-4-fill" },
   stopwatch: { type: "mingcute", name: "stopwatch-2-fill" },
   "check-badge-outline": { type: "custom", name: "check-badge-outline" },
   "check-badge-solid": { type: "custom", name: "check-badge-solid" },

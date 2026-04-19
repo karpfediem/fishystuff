@@ -1,0 +1,277 @@
+<extend template="with-nav.shtml">
+
+    <title id="title" :text="$page.title"></title>
+    <head id="head"></head>
+
+    <div id="content">
+        <div id="profile-settings-page"
+             class="grid gap-5 not-prose"
+             data-signals="{
+               _client_session: {
+                 actor: {
+                   displayLabel: 'Angler 000000',
+                   handle: '@local-profile',
+                   roleLabel: 'Profile',
+                   summary: '',
+                   detail: ''
+                 },
+                 localProfile: {
+                   shortId: 'local'
+                 },
+                 session: {
+                   shortId: 'session'
+                 },
+                 telemetry: {
+                   continuous: {
+                     effectiveEnabled: false,
+                     statusLabel: 'Off',
+                     detail: 'Telemetry is off.',
+                     canEnable: true,
+                     canDisable: false,
+                     resetAvailable: false
+                   },
+                   diagnosticReports: {
+                     statusLabel: 'Manual',
+                     detail: 'Reports are shared manually.'
+                   }
+                 }
+               }
+             }">
+            <div hidden data-init="window.__fishystuffClientSession.bindDatastar(&#36;)"></div>
+
+            <header class="card card-border bg-base-100 shadow-sm overflow-hidden">
+                <div class="h-24 bg-[radial-gradient(circle_at_top_left,oklch(var(--p)/0.22),transparent_40%),linear-gradient(135deg,oklch(var(--b2)),oklch(var(--b1)),oklch(var(--s)/0.12))]"></div>
+                <div class="card-body gap-5 pt-0">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                        <div class="flex min-w-0 items-end gap-4">
+                            <span class="avatar avatar-placeholder -mt-8 shrink-0">
+                                <span class="bg-primary text-primary-content inline-flex size-20 items-center justify-center rounded-[1.75rem] ring-4 ring-base-100 shadow-lg">
+                                    <svg class="fishy-icon size-10 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-user-4"></use></svg>
+                                </span>
+                            </span>
+                            <div class="min-w-0 pb-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="badge badge-soft badge-primary" data-text="&#36;_client_session.actor.roleLabel || 'Profile'">Profile</span>
+                                    <span class="badge badge-outline" data-theme-current-label>fishy</span>
+                                </div>
+                                <h1 class="mt-3 truncate text-3xl font-semibold text-base-content" data-text="&#36;_client_session.actor.displayLabel || 'Angler 000000'">Angler 000000</h1>
+                                <p class="mt-1 truncate text-sm text-base-content/55" data-text="&#36;_client_session.actor.handle || '@local-profile'">@local-profile</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 sm:justify-end">
+                            <a href="#appearance" class="btn btn-sm btn-primary">Appearance</a>
+                            <a href="#privacy" class="btn btn-sm btn-outline">Privacy</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <section class="grid gap-5 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+                <aside class="grid gap-5">
+                    <section class="card card-border bg-base-100 shadow-sm">
+                        <div class="card-body gap-4">
+                            <div class="text-lg font-semibold text-base-content">Identity</div>
+
+                            <div class="grid gap-2">
+                                <div class="rounded-box border border-base-300 bg-base-200/60 px-3 py-3">
+                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Display name</div>
+                                    <div class="mt-1 text-sm font-semibold text-base-content" data-text="&#36;_client_session.actor.displayLabel || 'Angler 000000'">Angler 000000</div>
+                                </div>
+                                <div class="rounded-box border border-base-300 bg-base-200/60 px-3 py-3">
+                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Handle</div>
+                                    <div class="mt-1 text-sm font-semibold text-base-content" data-text="&#36;_client_session.actor.handle || '@local-profile'">@local-profile</div>
+                                </div>
+                                <div class="rounded-box border border-base-300 bg-base-200/60 px-3 py-3">
+                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Role</div>
+                                    <div class="mt-1 text-sm font-semibold text-base-content" data-text="&#36;_client_session.actor.roleLabel || 'Profile'">Profile</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card card-border bg-base-100 shadow-sm">
+                        <div class="card-body gap-4">
+                            <div class="text-lg font-semibold text-base-content">Preferences</div>
+
+                            <div class="grid gap-2">
+                                <div class="rounded-box border border-base-300 bg-base-200/60 px-3 py-3">
+                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Theme</div>
+                                    <div class="mt-1 text-sm font-semibold text-base-content" data-theme-current-label>fishy</div>
+                                </div>
+                                <div class="rounded-box border border-base-300 bg-base-200/60 px-3 py-3">
+                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Telemetry</div>
+                                    <div class="mt-1 text-sm font-semibold text-base-content"
+                                         data-text="&#36;_client_session.telemetry.continuous.statusLabel || 'Off'">Off</div>
+                                </div>
+                                <div class="rounded-box border border-base-300 bg-base-200/60 px-3 py-3">
+                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Reports</div>
+                                    <div class="mt-1 text-sm font-semibold text-base-content"
+                                         data-text="&#36;_client_session.telemetry.diagnosticReports.statusLabel || 'Manual'">Manual</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </aside>
+
+                <div class="grid gap-5">
+                    <section id="appearance" class="card card-border bg-base-100 shadow-sm">
+                        <div class="card-body gap-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div class="inline-flex items-center gap-2 text-lg font-semibold text-base-content">
+                                    <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-theme-palette"></use></svg>
+                                    <span>Appearance</span>
+                                </div>
+                                <span class="badge badge-outline badge-sm" data-theme-current-label>fishy</span>
+                            </div>
+
+                            <div id="profile-theme-settings" data-theme-panel>
+                            <ul class="menu menu-sm w-full gap-2 rounded-box bg-base-200/40 p-2">
+                                <ctx :loop="$site.asset('config.ziggy').ziggy().get('themes')">
+                                <li>
+                                    <button type="button"
+                                            role="menuitemradio"
+                                            aria-checked="false"
+                                            class="theme-item overflow-hidden rounded-box border border-base-content/15 bg-base-100 p-0 text-left transition-colors hover:border-base-content/35 hover:bg-base-100"
+                                            data-theme-name="$loop.it"
+                                            data-theme="$loop.it">
+                                        <div class="w-full font-sans">
+                                            <div class="grid grid-cols-[3.5rem_1fr_auto] items-stretch">
+                                                <div class="grid grid-rows-3 overflow-hidden border-r border-base-content/10">
+                                                    <div class="bg-base-300 row-span-2"></div>
+                                                    <div class="bg-base-200"></div>
+                                                </div>
+                                                <div class="flex min-w-0 flex-col gap-2 px-3 py-3">
+                                                    <span class="truncate text-sm font-semibold text-base-content" :text="$loop.it"></span>
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <span class="bg-primary text-primary-content inline-flex h-5 w-5 items-center justify-center rounded text-[0.6rem] font-bold">A</span>
+                                                        <span class="bg-secondary text-secondary-content inline-flex h-5 w-5 items-center justify-center rounded text-[0.6rem] font-bold">A</span>
+                                                        <span class="bg-accent text-accent-content inline-flex h-5 w-5 items-center justify-center rounded text-[0.6rem] font-bold">A</span>
+                                                        <span class="bg-neutral text-neutral-content inline-flex h-5 w-5 items-center justify-center rounded text-[0.6rem] font-bold">A</span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center pr-3">
+                                                    <span class="badge badge-sm badge-ghost theme-item-state">Saved</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </li>
+                                </ctx>
+                            </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="privacy" class="card card-border bg-base-100 shadow-sm">
+                        <div class="card-body gap-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="inline-flex items-center gap-2 text-lg font-semibold text-base-content">
+                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true" data-show="&#36;_client_session.telemetry.continuous.effectiveEnabled" style="display: none"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-eye"></use></svg>
+                                        <svg class="fishy-icon size-5 shrink-0 opacity-75" viewBox="0 0 24 24" aria-hidden="true" data-show="!&#36;_client_session.telemetry.continuous.effectiveEnabled" style="display: none"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-6#fishy-eye-slash"></use></svg>
+                                        <span>Privacy &amp; data</span>
+                                    </div>
+                                    <p class="mt-2 text-sm leading-6 text-base-content/75"
+                                       data-text="&#36;_client_session.telemetry.continuous.detail || 'Telemetry is off.'">Telemetry is off.</p>
+                                </div>
+                                <span class="badge badge-sm"
+                                      data-class:badge-success="&#36;_client_session.telemetry.continuous.effectiveEnabled"
+                                      data-class:badge-neutral="!&#36;_client_session.telemetry.continuous.effectiveEnabled"
+                                      data-text="&#36;_client_session.telemetry.continuous.statusLabel || 'Off'">Off</span>
+                            </div>
+
+                            <label class="rounded-box border border-base-300 bg-base-200/40 px-4 py-4" for="profile-telemetry-toggle">
+                                <span class="flex items-center justify-between gap-4">
+                                    <span class="min-w-0">
+                                        <span class="block text-sm font-semibold text-base-content">Automatic telemetry</span>
+                                        <span class="mt-1 block text-xs text-base-content/55"
+                                              data-text="&#36;_client_session.telemetry.continuous.preferenceLabel || 'Using default'">Using default</span>
+                                    </span>
+                                    <input id="profile-telemetry-toggle"
+                                           type="checkbox"
+                                           class="toggle toggle-primary shrink-0"
+                                           data-telemetry-toggle
+                                           aria-label="Toggle automatic telemetry">
+                                </span>
+                            </label>
+
+                            <div class="card-actions flex flex-wrap gap-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-ghost"
+                                        data-show="&#36;_client_session.telemetry.continuous.resetAvailable"
+                                        style="display: none"
+                                        data-on:click="window.__fishystuffClientSession.clearTelemetryPreference({ reload: true })">Use default</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="diagnostics" class="card card-border bg-base-100 shadow-sm">
+                        <div class="card-body gap-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="text-lg font-semibold text-base-content">Diagnostic reports</div>
+                                    <p class="mt-2 text-sm leading-6 text-base-content/75"
+                                       data-text="&#36;_client_session.telemetry.diagnosticReports.detail || 'Reports are shared manually.'">Reports are shared manually.</p>
+                                </div>
+                                <span class="badge badge-outline badge-sm"
+                                      data-text="&#36;_client_session.telemetry.diagnosticReports.statusLabel || 'Manual'">Manual</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <ctx :loop="$page.contentSections()">
+                <section class="card card-border bg-base-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="doc-body" :html="$loop.it.html()"></div>
+                    </div>
+                </section>
+            </ctx>
+        </div>
+
+        <script>
+            (function () {
+                var toggle = document.querySelector('[data-telemetry-toggle]');
+                var sessionApi = window.__fishystuffClientSession;
+                if (!toggle || !sessionApi || typeof sessionApi.current !== 'function') {
+                    return;
+                }
+
+                function sync(snapshot) {
+                    var telemetry = snapshot && snapshot.telemetry && snapshot.telemetry.continuous;
+                    if (!telemetry) return;
+                    toggle.checked = telemetry.effectiveEnabled === true;
+                    toggle.disabled = !(telemetry.canEnable || telemetry.canDisable);
+                    toggle.setAttribute('aria-checked', String(toggle.checked));
+                }
+
+                toggle.addEventListener('change', function () {
+                    var snapshot = sessionApi.current();
+                    var telemetry = snapshot && snapshot.telemetry && snapshot.telemetry.continuous;
+                    if (!telemetry) return;
+
+                    if (toggle.checked) {
+                        if (!telemetry.canEnable && !telemetry.effectiveEnabled) {
+                            sync(snapshot);
+                            return;
+                        }
+                        sessionApi.enableTelemetry({ reload: true });
+                        return;
+                    }
+
+                    if (!telemetry.canDisable && telemetry.effectiveEnabled) {
+                        sync(snapshot);
+                        return;
+                    }
+                    sessionApi.disableTelemetry({ reload: true });
+                });
+
+                window.addEventListener('fishystuff:client-session-change', function (event) {
+                    sync(event && event.detail && event.detail.snapshot);
+                });
+
+                sync(sessionApi.current());
+            })();
+        </script>
+    </div>

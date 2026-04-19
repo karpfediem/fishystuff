@@ -124,7 +124,9 @@ test("client session defaults automatic telemetry to opt-in for production-like 
 
   const snapshot = env.helper.current();
 
-  assert.equal(snapshot.actor.displayLabel, "Guest");
+  assert.equal(snapshot.actor.displayLabel, "Angler 000000");
+  assert.equal(snapshot.actor.handle, "@guest");
+  assert.equal(snapshot.actor.roleLabel, "Profile");
   assert.equal(snapshot.telemetry.continuous.defaultMode, "opt-in");
   assert.equal(snapshot.telemetry.continuous.effectiveEnabled, false);
   assert.equal(snapshot.telemetry.continuous.reason, "opt-in-required");
@@ -197,8 +199,9 @@ test("client session persists actor state so future auth can reuse the same mode
 
   assert.equal(env.helper.current().actor.kind, "user");
   assert.equal(env.helper.current().actor.displayLabel, "Carp");
+  assert.equal(env.helper.current().actor.handle, "@user-123");
 
   env.helper.clearActor();
   assert.equal(env.helper.current().actor.kind, "guest");
-  assert.equal(env.helper.current().actor.displayLabel, "Guest");
+  assert.equal(env.helper.current().actor.displayLabel, "Angler 000000");
 });
