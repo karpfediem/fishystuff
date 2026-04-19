@@ -30,11 +30,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runtime-config", default="")
     parser.add_argument("--expected-map-cache-key", default="")
     parser.add_argument("--legacy-icons-json", required=True)
-    parser.add_argument("--calculator-source-metadata-icons-json", required=True)
     parser.add_argument("--consumable-icons-json", required=True)
     parser.add_argument("--enchant-icons-json", required=True)
     parser.add_argument("--lightstone-icons-json", required=True)
     parser.add_argument("--fishing-domain-icons-json", required=True)
+    parser.add_argument("--fish-catalog-icons-json", required=True)
     parser.add_argument("--fish-table-icons-json", required=True)
     parser.add_argument("--out", default="-")
     return parser.parse_args()
@@ -346,11 +346,6 @@ def main() -> None:
     )
     add_icon_rows(
         report,
-        load_rows(Path(args.calculator_source_metadata_icons_json)),
-        raw_key="item_icon_file",
-    )
-    add_icon_rows(
-        report,
         load_rows(Path(args.consumable_icons_json)),
         raw_key="item_icon_file",
     )
@@ -363,6 +358,11 @@ def main() -> None:
     add_icon_rows(
         report,
         load_rows(Path(args.fishing_domain_icons_json)),
+        raw_key="item_icon_file",
+    )
+    add_icon_rows(
+        report,
+        load_rows(Path(args.fish_catalog_icons_json)),
         raw_key="item_icon_file",
     )
     add_fish_table_icons(report, load_rows(Path(args.fish_table_icons_json)))

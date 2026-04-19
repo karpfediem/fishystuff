@@ -43,7 +43,7 @@ Current contents:
 - `tools/scripts/rebuild_water_overlay.sh`
 - `tools/scripts/extract_fishing_workbooks_from_paz.sh`
 - `tools/scripts/build_item_icons_from_source.mjs`
-  - resolves the current calculator item icon set from explicit Dolt/source-table inputs
+  - resolves the current route-backed item icon set from explicit Dolt/source-table inputs
   - uses the source `IconImageFile` / skill icon filenames as the staged output names when available
   - accepts `--calculator-api-url <url>` when you want an explicit live catalog cross-check
   - extracts source `.dds` icon textures from PAZ via `pazifista`

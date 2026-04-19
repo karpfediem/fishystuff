@@ -17,7 +17,7 @@ const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
 const buildStateVersion = 1;
-const targetCacheVersion = 3;
+const targetCacheVersion = 4;
 const sourceResolutionCacheVersion = 2;
 const defaultConvertConcurrency = Math.max(
   2,
@@ -129,6 +129,16 @@ function runCommand(command, args, { capture = true } = {}) {
   return capture ? result.stdout : "";
 }
 
+function formatElapsedMs(durationMs) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) {
+    return `${minutes}m${String(seconds).padStart(2, "0")}s`;
+  }
+  return `${seconds}s`;
+}
+
 function runCommandAsync(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -151,6 +161,67 @@ function runCommandAsync(command, args) {
           `${command} ${args.join(" ")} failed with exit code ${code}${stderr.trim() ? `\n${stderr.trim()}` : ""}`,
         ),
       );
+    });
+  });
+}
+
+function runCommandWithHeartbeat(
+  command,
+  args,
+  {
+    capture = true,
+    heartbeatLabel = "",
+    heartbeatIntervalMs = 15000,
+    quiet = false,
+  } = {},
+) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      stdio: ["ignore", capture ? "pipe" : "inherit", "pipe"],
+    });
+
+    const startedAt = Date.now();
+    let stdout = "";
+    let stderr = "";
+    const heartbeatTimer =
+      !quiet && heartbeatLabel
+        ? setInterval(() => {
+            console.log(`${heartbeatLabel} still running after ${formatElapsedMs(Date.now() - startedAt)}`);
+          }, heartbeatIntervalMs)
+        : null;
+
+    if (capture && child.stdout) {
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+    }
+    if (child.stderr) {
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+    }
+
+    const finish = (callback) => {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+      }
+      callback();
+    };
+
+    child.on("error", (error) => finish(() => reject(error)));
+    child.on("close", (code) => {
+      finish(() => {
+        if (code === 0) {
+          resolve(capture ? stdout : "");
+          return;
+        }
+        reject(
+          new Error(
+            `${command} ${args.join(" ")} failed with exit code ${code}${stderr.trim() ? `\n${stderr.trim()}` : ""}`,
+          ),
+        );
+      });
     });
   });
 }
@@ -398,7 +469,7 @@ function parseArchiveMatches(listingText) {
   return matches;
 }
 
-function listArchiveMatches(sourceArchive, filters) {
+async function listArchiveMatches(sourceArchive, filters, options = {}) {
   if (filters.length === 0) {
     return [];
   }
@@ -406,7 +477,12 @@ function listArchiveMatches(sourceArchive, filters) {
   for (const filter of filters) {
     args.push("-f", filter);
   }
-  return parseArchiveMatches(runCommand("cargo", args));
+  const listing = await runCommandWithHeartbeat("cargo", args, {
+    capture: true,
+    heartbeatLabel: options.heartbeatLabel,
+    quiet: options.quiet,
+  });
+  return parseArchiveMatches(listing);
 }
 
 function scoreArchivePath(match) {
@@ -526,19 +602,6 @@ function queryLegacyIconRows() {
       ON CAST(it.Index AS SIGNED) = CAST(i.id AS SIGNED)
     WHERE i.icon_id IS NOT NULL
     ORDER BY CAST(i.icon_id AS SIGNED)
-  `);
-}
-
-function queryCalculatorSourceMetadataIconRows() {
-  return doltQueryJson(`
-    SELECT DISTINCT
-      CAST(item_id AS SIGNED) AS item_id,
-      COALESCE(NULLIF(TRIM(item_name_ko), ''), NULLIF(TRIM(item_name_en), '')) AS display_name,
-      NULLIF(TRIM(item_icon_file), '') AS item_icon_file
-    FROM calculator_item_source_metadata
-    WHERE item_id IS NOT NULL
-      AND NULLIF(TRIM(item_icon_file), '') IS NOT NULL
-    ORDER BY CAST(item_id AS SIGNED)
   `);
 }
 
@@ -764,9 +827,6 @@ function queryFishTableIconRows() {
 
 function queryCalculatorIconTargets(calculatorApiUrl) {
   const targets = new Map();
-  for (const row of queryCalculatorSourceMetadataIconRows()) {
-    addIconTarget(targets, row);
-  }
   const apiRows = queryCalculatorApiIconRows(calculatorApiUrl);
   for (const row of apiRows) {
     addIconTarget(targets, row);
@@ -885,7 +945,7 @@ function writeSourceResolutionCache(outputDir, cache) {
   });
 }
 
-function resolveMissingSourcePaths(targets, sourceArchive, resolutionCache) {
+async function resolveMissingSourcePaths(targets, sourceArchive, resolutionCache, options = {}) {
   const requestedSourcePaths = new Map();
   const targetsToResolve = [];
   for (const target of targets) {
@@ -909,9 +969,16 @@ function resolveMissingSourcePaths(targets, sourceArchive, resolutionCache) {
   const explicitTargets = targetsToResolve.filter((target) => target.sourcePath);
   const verifiedExactPaths = new Set();
   if (explicitTargets.length > 0) {
-    const exactMatches = listArchiveMatches(
+    if (!options.quiet) {
+      console.log(`checking ${explicitTargets.length} explicit source icon paths in the archive`);
+    }
+    const exactMatches = await listArchiveMatches(
       sourceArchive,
       explicitTargets.map((target) => target.sourcePath),
+      {
+        heartbeatLabel: `archive verification for ${explicitTargets.length} explicit source icon paths`,
+        quiet: options.quiet,
+      },
     );
     for (const match of exactMatches) {
       verifiedExactPaths.add(match.path.toLowerCase());
@@ -942,9 +1009,19 @@ function resolveMissingSourcePaths(targets, sourceArchive, resolutionCache) {
     return;
   }
 
-  const wildcardMatches = listArchiveMatches(
+  if (!options.quiet) {
+    console.log(`resolving ${unresolved.length} archive source icon paths by source-backed stem`);
+  }
+  const wildcardMatches = await listArchiveMatches(
     sourceArchive,
-    unresolved.flatMap((target) => [`*${target.assetStem || padIconId(target.iconId)}.dds`, `*${target.assetStem || padIconId(target.iconId)}.png`]),
+    unresolved.flatMap((target) => [
+      `*${target.assetStem || padIconId(target.iconId)}.dds`,
+      `*${target.assetStem || padIconId(target.iconId)}.png`,
+    ]),
+    {
+      heartbeatLabel: `archive wildcard scan for ${unresolved.length} unresolved source icon targets`,
+      quiet: options.quiet,
+    },
   );
   const matchesByStem = new Map();
   for (const match of wildcardMatches) {
@@ -1003,7 +1080,7 @@ function pruneStaleOutputs(outputDir, targets, quiet) {
   return pruned;
 }
 
-function extractSelectedSources(sourceArchive, sourcePaths, tempDir) {
+async function extractSelectedSources(sourceArchive, sourcePaths, tempDir, options = {}) {
   if (sourcePaths.length === 0) {
     return;
   }
@@ -1012,7 +1089,11 @@ function extractSelectedSources(sourceArchive, sourcePaths, tempDir) {
     args.push("-f", sourcePath);
   }
   args.push("-o", tempDir, "-y", "-q");
-  runCommand("cargo", args, { capture: false });
+  await runCommandWithHeartbeat("cargo", args, {
+    capture: false,
+    heartbeatLabel: `archive extraction for ${sourcePaths.length} source icon files`,
+    quiet: options.quiet,
+  });
 }
 
 async function convertToWebp(sourcePath, outputPath, target) {
@@ -1126,7 +1207,9 @@ async function main() {
     options.outputDir,
     archiveSignature(options.sourceArchive),
   );
-  resolveMissingSourcePaths(pendingTargets, options.sourceArchive, resolutionCache);
+  await resolveMissingSourcePaths(pendingTargets, options.sourceArchive, resolutionCache, {
+    quiet: options.quiet,
+  });
   const unresolvedTargets = pendingTargets.filter((target) => target.unresolved);
   for (const target of unresolvedTargets) {
     console.warn(
@@ -1149,10 +1232,11 @@ async function main() {
     if (!options.quiet) {
       console.log(`extracting ${new Set(readyTargets.map((target) => target.sourcePath)).size} source icon files`);
     }
-    extractSelectedSources(
+    await extractSelectedSources(
       options.sourceArchive,
       [...new Set(readyTargets.map((target) => target.sourcePath))],
       tempDir,
+      { quiet: options.quiet },
     );
     if (!options.quiet) {
       console.log(`building ${readyTargets.length} source-backed item icons`);

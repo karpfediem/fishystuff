@@ -61,17 +61,6 @@ WHERE i.icon_id IS NOT NULL
 ORDER BY CAST(i.icon_id AS SIGNED)
 "
 
-run_query "calculator-source-metadata-icons" "
-SELECT DISTINCT
-  CAST(item_id AS SIGNED) AS item_id,
-  COALESCE(NULLIF(TRIM(item_name_ko), ''), NULLIF(TRIM(item_name_en), '')) AS display_name,
-  NULLIF(TRIM(item_icon_file), '') AS item_icon_file
-FROM calculator_item_source_metadata
-WHERE item_id IS NOT NULL
-  AND NULLIF(TRIM(item_icon_file), '') IS NOT NULL
-ORDER BY CAST(item_id AS SIGNED)
-"
-
 run_query "consumable-icons" "
 SELECT DISTINCT
   CAST(item_id AS SIGNED) AS item_id,
@@ -115,6 +104,36 @@ WHERE v.item_key IS NOT NULL
 ORDER BY CAST(v.item_key AS SIGNED)
 "
 
+run_query "fish-catalog-icons" "
+SELECT DISTINCT
+  CAST(source.item_id AS SIGNED) AS item_id,
+  NULLIF(TRIM(source.display_name), '') AS display_name,
+  NULLIF(TRIM(source.item_icon_file), '') AS item_icon_file
+FROM (
+  SELECT
+    CAST(f.fish_id AS SIGNED) AS item_id,
+    it.ItemName AS display_name,
+    it.IconImageFile AS item_icon_file
+  FROM fish_names_ko f
+  JOIN item_table it
+    ON CAST(it.Index AS SIGNED) = CAST(f.fish_id AS SIGNED)
+  UNION ALL
+  SELECT
+    CAST(ft.item_key AS SIGNED) AS item_id,
+    it.ItemName AS display_name,
+    it.IconImageFile AS item_icon_file
+  FROM fish_table ft
+  LEFT JOIN item_table it
+    ON CAST(it.Index AS SIGNED) = CAST(ft.item_key AS SIGNED)
+  LEFT JOIN fish_names_ko f
+    ON CAST(f.fish_id AS SIGNED) = CAST(ft.item_key AS SIGNED)
+  WHERE f.fish_id IS NULL
+) source
+WHERE source.item_id IS NOT NULL
+  AND NULLIF(TRIM(source.item_icon_file), '') IS NOT NULL
+ORDER BY CAST(source.item_id AS SIGNED)
+"
+
 run_query "fish-table-icons" "
 SELECT DISTINCT
   CAST(ft.item_key AS SIGNED) AS item_id,
@@ -134,10 +153,10 @@ python3 "$ROOT_DIR/tools/scripts/compute_required_cdn_filenames.py" \
   --runtime-config "$SITE_RUNTIME_CONFIG" \
   --expected-map-cache-key "$EXPECTED_MAP_CACHE_KEY" \
   --legacy-icons-json "$tmpdir/legacy-icons.json" \
-  --calculator-source-metadata-icons-json "$tmpdir/calculator-source-metadata-icons.json" \
   --consumable-icons-json "$tmpdir/consumable-icons.json" \
   --enchant-icons-json "$tmpdir/enchant-icons.json" \
   --lightstone-icons-json "$tmpdir/lightstone-icons.json" \
   --fishing-domain-icons-json "$tmpdir/fishing-domain-icons.json" \
+  --fish-catalog-icons-json "$tmpdir/fish-catalog-icons.json" \
   --fish-table-icons-json "$tmpdir/fish-table-icons.json" \
   --out "$OUT_PATH"
