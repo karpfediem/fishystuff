@@ -26,11 +26,11 @@ class catalog:nbg1 {
 	$dolt_volume_size = 20
 	$dolt_volume_format = "ext4"
 
-	$cdn_enabled = true
+	$cdn_enabled = false
 	$cdn_servertype = "cx23"
 	$cdn_private_ip = ""
 
-	$telemetry_enabled = true
+	$telemetry_enabled = false
 	$telemetry_private_ip = "10.42.0.30"
 	$telemetry_servertype = "cx33"
 }
