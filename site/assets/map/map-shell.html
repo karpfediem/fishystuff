@@ -295,18 +295,6 @@
           <fishymap-layer-panel id="fishymap-layer-panel" class="not-prose"></fishymap-layer-panel>
         </div>
       </aside>
-      <button
-        id="fishymap-view-toggle"
-        class="btn btn-primary"
-        type="button"
-        data-on:click="$_map_bridged.ui.viewMode = (($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d'"
-        data-attr:aria-label="(($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? 'View mode: 3D. Click to switch to 2D.' : 'View mode: 2D. Click to switch to 3D.'"
-        data-attr:title="(($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? 'View mode: 3D. Click to switch to 2D.' : 'View mode: 2D. Click to switch to 3D.'"
-      >
-        <span id="fishymap-view-toggle-icon" aria-hidden="true">
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-map-view"></use></svg>
-        </span>
-      </button>
       <aside
         id="fishymap-panel"
         class="fishymap-window card card-border bg-base-100 not-prose"

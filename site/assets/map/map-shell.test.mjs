@@ -60,4 +60,5 @@ test("map shell toolbar and status affordances derive from Datastar signals", ()
   assert.match(shellHtml, /id="fishymap-diagnostics"[\s\S]*data-attr:open="\$_map_bridged\.ui\.diagnosticsOpen"/);
   assert.match(shellHtml, /id="fishymap-reset-view"[\s\S]*data-on:click="\$_map_actions\.resetViewToken = \(\$_map_actions\.resetViewToken \|\| 0\) \+ 1"/);
   assert.match(shellHtml, /id="fishymap-reset-ui"[\s\S]*data-on:click="\$_map_actions\.resetUiToken = \(\$_map_actions\.resetUiToken \|\| 0\) \+ 1"/);
+  assert.doesNotMatch(shellHtml, /id="fishymap-view-toggle"/);
 });
