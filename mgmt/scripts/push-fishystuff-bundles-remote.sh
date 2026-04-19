@@ -19,6 +19,13 @@ nix_copy_target="ssh-ng://${ssh_target}"
 if [[ -n "${NIX_SSH_KEY_PATH:-}" ]]; then
 	nix_copy_target="${nix_copy_target}?ssh-key=${NIX_SSH_KEY_PATH}"
 fi
+if [[ -n "${NIX_REMOTE_PROGRAM_PATH:-}" ]]; then
+	if [[ "$nix_copy_target" == *\?* ]]; then
+		nix_copy_target="${nix_copy_target}&remote-program=${NIX_REMOTE_PROGRAM_PATH}"
+	else
+		nix_copy_target="${nix_copy_target}?remote-program=${NIX_REMOTE_PROGRAM_PATH}"
+	fi
+fi
 
 bundle_paths=()
 remote_args=()

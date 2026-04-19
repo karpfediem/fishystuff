@@ -161,16 +161,72 @@ mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120"
       umask 077
       printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
       chmod 600 "$tmp_key"
-      nix copy --no-check-sigs --to "ssh-ng://$1?ssh-key=$tmp_key" "$4"
+      ssh_opts=(-i "$tmp_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new)
+      detect_remote_nix() {
+        ssh "${ssh_opts[@]}" "$1" '\''\
+          nix_path=""
+          nix_daemon_path=""
+          if test -x /nix/var/nix/profiles/default/bin/nix; then
+            nix_path=/nix/var/nix/profiles/default/bin/nix
+          elif command -v nix >/dev/null 2>&1; then
+            nix_path="$(command -v nix)"
+          fi
+          if test -x /nix/var/nix/profiles/default/bin/nix-daemon; then
+            nix_daemon_path=/nix/var/nix/profiles/default/bin/nix-daemon
+          elif command -v nix-daemon >/dev/null 2>&1; then
+            nix_daemon_path="$(command -v nix-daemon)"
+          fi
+          printf "%s\t%s\n" "$nix_path" "$nix_daemon_path"
+        '\'' 2>/dev/null || true
+      }
+      build_nix_copy_target() {
+        local target="ssh-ng://$1?ssh-key=$tmp_key"
+        if [[ -n "$2" ]]; then
+          target="${target}&remote-program=$2"
+        fi
+        printf "%s" "$target"
+      }
+      remote_nix_probe="$(detect_remote_nix "$1")"
+      remote_nix_path=""
+      remote_nix_daemon_path=""
+      if [[ -n "$remote_nix_probe" ]]; then
+        IFS=$'\''\t'\'' read -r remote_nix_path remote_nix_daemon_path <<<"$remote_nix_probe"
+      fi
+      nix_copy_target="$(build_nix_copy_target "$1" "$remote_nix_daemon_path")"
+      remote_mgmt_bin="$4/bin/mgmt"
+      if [[ -n "$remote_nix_path" ]]; then
+        nix copy --no-check-sigs --to "$nix_copy_target" "$4"
+      else
+        (
+          cd "$5"
+          devenv shell -- bash -lc '\''MGMT_NOCGO=true MGMT_NOGOLANGRACE=true GOTAGS="noaugeas novirt nodocker" make -B build/mgmt-linux-amd64'\''
+        )
+        cat "$5/build/mgmt-linux-amd64" | ssh "${ssh_opts[@]}" "$1" "sudo install -d -m 0755 /usr/local/bin && sudo tee /usr/local/bin/fishystuff-mgmt-bootstrap >/dev/null && sudo chmod 0755 /usr/local/bin/fishystuff-mgmt-bootstrap"
+        remote_mgmt_bin="/usr/local/bin/fishystuff-mgmt-bootstrap"
+      fi
       SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
         bash mgmt/scripts/kickstart-fishystuff-resident-remote.sh \
           mgmt/resident-bootstrap \
           "$1" \
           "$2" \
           "$3" \
-          "$4/bin/mgmt"
+          "$remote_mgmt_bin"
+      if [[ "$remote_mgmt_bin" != "$4/bin/mgmt" ]]; then
+        remote_nix_probe="$(detect_remote_nix "$1")"
+        remote_nix_daemon_path=""
+        if [[ -n "$remote_nix_probe" ]]; then
+          IFS=$'\''\t'\'' read -r _remote_nix_path remote_nix_daemon_path <<<"$remote_nix_probe"
+        fi
+        if [[ -z "$remote_nix_daemon_path" ]]; then
+          echo "could not detect remote nix-daemon path on $1 after bootstrap" >&2
+          exit 1
+        fi
+        nix_copy_target="$(build_nix_copy_target "$1" "$remote_nix_daemon_path")"
+        nix copy --no-check-sigs --to "$nix_copy_target" "$4"
+        ssh "${ssh_opts[@]}" "$1" "sudo ln -sfn '\''$4/bin/mgmt'\'' /usr/local/bin/mgmt && sudo systemctl daemon-reload && sudo systemctl restart fishystuff-mgmt.service && sudo systemctl is-enabled fishystuff-mgmt.service >/dev/null && sudo systemctl is-active fishystuff-mgmt.service >/dev/null"
+      fi
     ' \
-    -- "$target" "$host" "$timeout" "$mgmt_store"
+    -- "$target" "$host" "$timeout" "$mgmt_store" "$mgmt_flake"
 
 # Push a self-contained graph directory into the resident mgmt instance on a remote host.
 mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt":
@@ -261,15 +317,21 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
       umask 077
       printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
       chmod 600 "$tmp_key"
-      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      remote_nix_daemon_path="$(ssh -i "$tmp_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "$1" '\''if test -x /nix/var/nix/profiles/default/bin/nix-daemon; then printf "%s" /nix/var/nix/profiles/default/bin/nix-daemon; elif command -v nix-daemon >/dev/null 2>&1; then command -v nix-daemon; fi'\'')"
+      if [[ -z "$remote_nix_daemon_path" ]]; then
+        echo "could not detect remote nix-daemon path on $1" >&2
+        exit 1
+      fi
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
       NIX_SSH_KEY_PATH="$tmp_key" \
+      NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
       bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
           "$1" \
           "$4" \
           "$3" \
           "$6" \
           "$5"
-      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
       bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
           "$7" \
           "$1" \
@@ -368,8 +430,14 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
       umask 077
       printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
       chmod 600 "$tmp_key"
-      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      remote_nix_daemon_path="$(ssh -i "$tmp_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "$1" '\''if test -x /nix/var/nix/profiles/default/bin/nix-daemon; then printf "%s" /nix/var/nix/profiles/default/bin/nix-daemon; elif command -v nix-daemon >/dev/null 2>&1; then command -v nix-daemon; fi'\'')"
+      if [[ -z "$remote_nix_daemon_path" ]]; then
+        echo "could not detect remote nix-daemon path on $1" >&2
+        exit 1
+      fi
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
       NIX_SSH_KEY_PATH="$tmp_key" \
+      NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
       bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
           "$1" \
           "${11}" \
@@ -497,8 +565,14 @@ mgmt-dolt-target-smoke target="mgmt-root" gcroot="/nix/var/nix/gcroots/mgmt/fish
       umask 077
       printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
       chmod 600 "$tmp_key"
-      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      remote_nix_daemon_path="$(ssh -i "$tmp_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "$2" '\''if test -x /nix/var/nix/profiles/default/bin/nix-daemon; then printf "%s" /nix/var/nix/profiles/default/bin/nix-daemon; elif command -v nix-daemon >/dev/null 2>&1; then command -v nix-daemon; fi'\'')"
+      if [[ -z "$remote_nix_daemon_path" ]]; then
+        echo "could not detect remote nix-daemon path on $2" >&2
+        exit 1
+      fi
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
       NIX_SSH_KEY_PATH="$tmp_key" \
+      NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
       bash mgmt/scripts/smoke-fishystuff-dolt-target.sh \
         "$1" \
         "$2" \
