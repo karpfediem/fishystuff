@@ -9,6 +9,9 @@ Repository shape:
 mgmt/
   metadata.yaml
   main.mcl
+  resident-bootstrap/
+  resident-probe/
+  scripts/
   modules/
     fishystuff-beta/
     fishystuff-beta-region/
@@ -55,6 +58,8 @@ Current scope:
 - manage the `nbg1` private core network in Hetzner
 - manage the Dolt data volume on `beta-nbg1-api-db`
 - attach the `nbg1` core hosts to the private network
+- bootstrap a resident `mgmt` service on a host over SSH after the VM exists
+- support future host-local `mgmt deploy` updates over SSH without exposing etcd
 - keep the desired first stable beta topology explicit:
   - `beta-nbg1-api-db`
   - `beta-nbg1-cdn`
@@ -69,12 +74,15 @@ Current engine limitation:
 - the current `hetzner:vm` resource still does not expose firewalls, floating
   IPs, labels, or richer server bootstrap lifecycle as first-class mgmt
   resources
-- host bootstrap and long-lived per-host mgmt convergence are still follow-up
-  work after inventory creation
+- the current inventory graph can create VMs, networks, and volumes, but it
+  still cannot trigger the resident host bootstrap as part of VM creation
+- that means new hosts currently require a separate SSH kickstart step after
+  they appear in Hetzner
 
 As a result, this module now owns the beta Hetzner inventory up through
-private network and volume attachment, but it does not yet model the full host
-bootstrap or edge-hardening story.
+private network and volume attachment, and it now provides a resident host
+bootstrap path, but it does not yet model a first-class post-create lifecycle
+or the full edge-hardening story.
 
 Safety defaults:
 
@@ -98,6 +106,24 @@ To request actual server creation, override the target state explicitly:
 
 ```bash
 just mgmt-beta-bootstrap state=running converged_timeout=45
+```
+
+Resident host bootstrap validation:
+
+```bash
+just mgmt-resident-bootstrap-unify
+```
+
+Resident host kickstart over SSH:
+
+```bash
+just mgmt-resident-kickstart-remote target=mgmt-root host=beta-nbg1-api-db
+```
+
+Resident graph deploy over SSH:
+
+```bash
+just mgmt-resident-deploy-remote target=mgmt-root dir=mgmt/resident-deploy-probe
 ```
 
 Default topology inputs:
@@ -150,6 +176,38 @@ Topology constraint:
 
 That bootstrap path intentionally uses mgmt's `--converged-timeout` option and
 `--no-watch` to support a one-shot local bootstrap flow.
+
+Resident mgmt operation:
+
+- each host runs one loopback-only resident `mgmt` service under systemd
+- the service starts embedded etcd on `127.0.0.1:2379` and `127.0.0.1:2380`
+- later updates are pushed by SSHing to the host and running `mgmt deploy`
+  against `--seeds=http://127.0.0.1:2379`
+- this keeps the control surface SSH-only for now and avoids exposing etcd on
+  the public internet
+- the current resident bootstrap assumes a systemd-based Linux host because
+  mgmt's `svc` resource is systemd-specific
+
+Bootstrap flow:
+
+1. run the inventory graph locally to create or reconcile the Hetzner objects
+2. build `mgmt` locally with Nix and copy the closure to the target host with
+   `nix copy`
+3. run `mgmt/resident-bootstrap/` once over SSH to install and start the
+   `fishystuff-mgmt.service` systemd unit
+4. push future host graphs with `mgmt deploy` over the same SSH jump path
+
+Current resident bootstrap artifacts:
+
+- `resident-bootstrap/`
+  - self-contained graph that installs the long-lived `fishystuff-mgmt`
+    systemd service
+- `resident-probe/`
+  - tiny deployable graph used to validate that the resident service accepts
+    one-shot `mgmt run` execution on a host
+- `resident-deploy-probe/`
+  - tiny deployable graph used to validate that the long-lived resident
+    service accepts later `mgmt deploy` updates
 
 Convergence note:
 

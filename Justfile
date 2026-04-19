@@ -74,6 +74,79 @@ cdn-sync-map:
 secrets-check profile="api":
   p='{{profile}}'; p="${p#profile=}"; secretspec check --profile "$p"
 
+# Type-check the local mgmt Hetzner beta topology module
+mgmt-beta-unify mgmt_bin="../result/bin/mgmt":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  mgmt_bin='{{mgmt_bin}}'
+  mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  cd mgmt
+  "$mgmt_bin" run lang --only-unify main.mcl
+
+# Run the local mgmt Hetzner beta topology bootstrap as a one-shot converging apply.
+# Default state is absent for safety; use state=running to request server creation.
+mgmt-beta-bootstrap state="absent" converged_timeout="30" mgmt_bin="../result/bin/mgmt":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state='{{state}}'
+  state="${state#state=}"
+  converged_timeout='{{converged_timeout}}'
+  converged_timeout="${converged_timeout#converged_timeout=}"
+  mgmt_bin='{{mgmt_bin}}'
+  mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  FISHYSTUFF_HETZNER_STATE="$state" \
+    secretspec run --profile beta-deploy -- \
+    bash -lc 'cd mgmt && "$1" run lang --tmp-prefix --no-network --no-watch --converged-timeout "$2" main.mcl' \
+    -- "$mgmt_bin" "$converged_timeout"
+
+# Type-check the resident bootstrap graph used to install a host-local mgmt service.
+mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  mgmt_bin='{{mgmt_bin}}'
+  mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  cd mgmt/resident-bootstrap
+  "$mgmt_bin" run lang --only-unify main.mcl
+
+# Copy a locally built mgmt closure to a remote host and install the resident service there.
+mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/mgmt":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  target='{{target}}'
+  target="${target#target=}"
+  host='{{host}}'
+  host="${host#host=}"
+  timeout='{{timeout}}'
+  timeout="${timeout#timeout=}"
+  mgmt_flake='{{mgmt_flake}}'
+  mgmt_flake="${mgmt_flake#mgmt_flake=}"
+  mgmt_store="$(nix build "$mgmt_flake" --no-link --print-out-paths)"
+  nix copy --to "ssh-ng://$target" "$mgmt_store"
+  bash mgmt/scripts/kickstart-fishystuff-resident-remote.sh \
+    mgmt/resident-bootstrap \
+    "$target" \
+    "$host" \
+    "$timeout" \
+    "$mgmt_store/bin/mgmt"
+
+# Push a self-contained graph directory into the resident mgmt instance on a remote host.
+mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  target='{{target}}'
+  target="${target#target=}"
+  dir='{{dir}}'
+  dir="${dir#dir=}"
+  timeout='{{timeout}}'
+  timeout="${timeout#timeout=}"
+  remote_mgmt_bin='{{remote_mgmt_bin}}'
+  remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
+  bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+    "$dir" \
+    "$target" \
+    "$timeout" \
+    "$remote_mgmt_bin"
+
 # Build the current map runtime and map-serving CDN payload once
 build-map:
   ./tools/scripts/build_map.sh

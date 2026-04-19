@@ -1,0 +1,24 @@
+import "fmt"
+import "sys"
+
+$hostname = sys.defaultenv("HOSTNAME", "unknown")
+$probe_dir = "/etc/fishystuff/"
+$probe_file = "/etc/fishystuff/resident-probe.txt"
+$probe_content = fmt.printf("fishystuff resident mgmt deploy ok on %s\n", $hostname)
+
+file "${probe_dir}" {
+	state => "exists",
+	mode => "u=rwx,go=rx",
+	owner => "root",
+	group => "root",
+}
+
+file "${probe_file}" {
+	state => "exists",
+	content => $probe_content,
+	mode => "u=rw,go=r",
+	owner => "root",
+	group => "root",
+}
+
+File["${probe_dir}"] -> File["${probe_file}"]

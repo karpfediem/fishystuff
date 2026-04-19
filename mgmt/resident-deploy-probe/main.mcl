@@ -1,0 +1,16 @@
+file "/etc/fishystuff/" {
+	state => "exists",
+	mode => "u=rwx,go=rx",
+	owner => "root",
+	group => "root",
+}
+
+file "/etc/fishystuff/resident-deploy-probe.txt" {
+	state => "exists",
+	content => "fishystuff resident mgmt deploy via resident service ok\n",
+	mode => "u=rw,go=r",
+	owner => "root",
+	group => "root",
+}
+
+File["/etc/fishystuff/"] -> File["/etc/fishystuff/resident-deploy-probe.txt"]
