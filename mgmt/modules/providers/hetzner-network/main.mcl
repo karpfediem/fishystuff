@@ -8,7 +8,7 @@ class network($st) {
 	$subnets = $st->subnets || []
 	$routes = $st->routes || []
 	$waitinterval int = $st->waitinterval || 2
-	$waittimeout int = $st->waittimeout || 10 * 60
+	$waittimeout int = $st->waittimeout || 600
 	$poll int = $st->poll || 30
 
 	panic($name == "", "hetzner-network provider requires name")

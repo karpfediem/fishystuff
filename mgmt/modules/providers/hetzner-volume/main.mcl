@@ -8,7 +8,7 @@ class volume($st) {
 	$size int = $st->size || 0
 	$format str = $st->format || ""
 	$waitinterval int = $st->waitinterval || 2
-	$waittimeout int = $st->waittimeout || 10 * 60
+	$waittimeout int = $st->waittimeout || 600
 	$poll int = $st->poll || 30
 
 	panic($name == "", "hetzner-volume provider requires name")

@@ -1,0 +1,199 @@
+import "fmt"
+import "../lib/hetzner-location/" as hetzner_location
+import "../providers/hetzner-network/"
+import "../providers/hetzner-vm/"
+import "../providers/hetzner-vm-network/"
+import "../providers/hetzner-volume/"
+import "../providers/hetzner-vm-volume/"
+
+class region($st) {
+	include hetzner_location.catalog as locations
+
+	$cluster str = $st->cluster || "beta"
+	$region_name str = $st->region_name || ""
+	$api_token str = $st->api_token || ""
+	$state str = $st->state || "absent"
+	$infra_state str = if $state == "absent" { "absent" } else { "exists" }
+	$allow_rebuild str = $st->allow_rebuild || ""
+	$location str = $st->location || $locations.beta_default_location
+	include locations.lookup($location) as location_defaults
+	$name_prefix str = $st->name_prefix || if $region_name != "" { fmt.printf("%s-%s", $cluster, $region_name) } else { fmt.printf("%s-%s", $cluster, $location) }
+	$image str = $st->image || "debian-13"
+	$private_network_enabled bool = $st->private_network_enabled || false
+	$private_network_name str = $st->private_network_name || fmt.printf("%s-private", $name_prefix)
+	$private_network_ip_range str = $st->private_network_ip_range || ""
+	$private_subnet_ip_range str = $st->private_subnet_ip_range || ""
+	$private_network_zone str = $st->private_network_zone || $location_defaults.network_zone
+	$api_db_enabled bool = $st->api_db_enabled || false
+	$api_db_name str = $st->api_db_name || fmt.printf("%s-api-db", $name_prefix)
+	$api_db_servertype str = $st->api_db_servertype || $location_defaults.default_api_db_servertype
+	$api_db_private_ip str = $st->api_db_private_ip || ""
+	$dolt_volume_enabled bool = $st->dolt_volume_enabled || false
+	$dolt_volume_name str = $st->dolt_volume_name || fmt.printf("%s-dolt-data", $name_prefix)
+	$dolt_volume_size int = $st->dolt_volume_size || 20
+	$dolt_volume_format str = $st->dolt_volume_format || "ext4"
+	$cdn_enabled bool = $st->cdn_enabled || false
+	$cdn_name str = $st->cdn_name || fmt.printf("%s-cdn", $name_prefix)
+	$cdn_servertype str = $st->cdn_servertype || $location_defaults.default_cdn_servertype
+	$cdn_private_ip str = $st->cdn_private_ip || ""
+	$telemetry_enabled bool = $st->telemetry_enabled || false
+	$telemetry_name str = $st->telemetry_name || fmt.printf("%s-telemetry", $name_prefix)
+	$telemetry_servertype str = $st->telemetry_servertype || $location_defaults.default_telemetry_servertype
+	$telemetry_private_ip str = $st->telemetry_private_ip || ""
+	$poll_seconds int = $st->poll_seconds || 60
+	$wait_interval_seconds int = $st->wait_interval_seconds || 5
+	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
+	$server_rescue_mode str = $st->server_rescue_mode || ""
+	$server_rescue_keys []str = $st->server_rescue_keys || []
+
+	panic($api_token == "", "missing Hetzner API token; run with SecretSpec profile beta-deploy or set HETZNER_API_TOKEN")
+	panic($private_network_enabled and ($private_network_ip_range == ""), fmt.printf("missing private network ip range for region %s", $name_prefix))
+	panic($private_network_enabled and ($private_subnet_ip_range == ""), fmt.printf("missing private subnet ip range for region %s", $name_prefix))
+	panic($dolt_volume_enabled and not $api_db_enabled, fmt.printf("dolt volume requires api-db host in region %s", $name_prefix))
+
+	if $private_network_enabled {
+		include hetzner_network.network(struct {
+			name => $private_network_name,
+			apitoken => $api_token,
+			state => $infra_state,
+			iprange => $private_network_ip_range,
+			subnets => [
+				struct {
+					type => "cloud",
+					iprange => $private_subnet_ip_range,
+					networkzone => $private_network_zone,
+					vswitchid => 0,
+				},
+			],
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+	}
+
+	if $dolt_volume_enabled {
+		include hetzner_volume.volume(struct {
+			name => $dolt_volume_name,
+			apitoken => $api_token,
+			state => $infra_state,
+			location => $location,
+			size => $dolt_volume_size,
+			format => $dolt_volume_format,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+	}
+
+	if $api_db_enabled {
+		include hetzner_vm.server(struct {
+			name => $api_db_name,
+			role => "api-db",
+			apitoken => $api_token,
+			state => $state,
+			allowrebuild => $allow_rebuild,
+			servertype => $api_db_servertype,
+			datacenter => $location_defaults.datacenter,
+			image => $image,
+			userdata => "",
+			serverrescuemode => $server_rescue_mode,
+			serverrescuekeys => $server_rescue_keys,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+
+		if $private_network_enabled and ($api_db_private_ip != "") {
+			include hetzner_vm_network.attachment(struct {
+				name => fmt.printf("%s-private", $api_db_name),
+				apitoken => $api_token,
+				state => $infra_state,
+				server => $api_db_name,
+				network => $private_network_name,
+				ip => $api_db_private_ip,
+				waitinterval => $wait_interval_seconds,
+				waittimeout => $wait_timeout_seconds,
+				poll => $poll_seconds,
+			})
+		}
+
+		if $dolt_volume_enabled {
+			include hetzner_vm_volume.attachment(struct {
+				name => fmt.printf("%s-dolt-data", $api_db_name),
+				apitoken => $api_token,
+				state => $infra_state,
+				server => $api_db_name,
+				volume => $dolt_volume_name,
+				waitinterval => $wait_interval_seconds,
+				waittimeout => $wait_timeout_seconds,
+				poll => $poll_seconds,
+			})
+		}
+	}
+
+	if $cdn_enabled {
+		include hetzner_vm.server(struct {
+			name => $cdn_name,
+			role => "cdn",
+			apitoken => $api_token,
+			state => $state,
+			allowrebuild => $allow_rebuild,
+			servertype => $cdn_servertype,
+			datacenter => $location_defaults.datacenter,
+			image => $image,
+			userdata => "",
+			serverrescuemode => $server_rescue_mode,
+			serverrescuekeys => $server_rescue_keys,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+
+		if $private_network_enabled and ($cdn_private_ip != "") {
+			include hetzner_vm_network.attachment(struct {
+				name => fmt.printf("%s-private", $cdn_name),
+				apitoken => $api_token,
+				state => $infra_state,
+				server => $cdn_name,
+				network => $private_network_name,
+				ip => $cdn_private_ip,
+				waitinterval => $wait_interval_seconds,
+				waittimeout => $wait_timeout_seconds,
+				poll => $poll_seconds,
+			})
+		}
+	}
+
+	if $telemetry_enabled {
+		include hetzner_vm.server(struct {
+			name => $telemetry_name,
+			role => "telemetry",
+			apitoken => $api_token,
+			state => $state,
+			allowrebuild => $allow_rebuild,
+			servertype => $telemetry_servertype,
+			datacenter => $location_defaults.datacenter,
+			image => $image,
+			userdata => "",
+			serverrescuemode => $server_rescue_mode,
+			serverrescuekeys => $server_rescue_keys,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+
+		if $private_network_enabled and ($telemetry_private_ip != "") {
+			include hetzner_vm_network.attachment(struct {
+				name => fmt.printf("%s-private", $telemetry_name),
+				apitoken => $api_token,
+				state => $infra_state,
+				server => $telemetry_name,
+				network => $private_network_name,
+				ip => $telemetry_private_ip,
+				waitinterval => $wait_interval_seconds,
+				waittimeout => $wait_timeout_seconds,
+				poll => $poll_seconds,
+			})
+		}
+	}
+}

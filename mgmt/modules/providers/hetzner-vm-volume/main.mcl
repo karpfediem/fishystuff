@@ -7,7 +7,7 @@ class attachment($st) {
 	$server str = $st->server || ""
 	$volume str = $st->volume || ""
 	$waitinterval int = $st->waitinterval || 2
-	$waittimeout int = $st->waittimeout || 10 * 60
+	$waittimeout int = $st->waittimeout || 600
 	$poll int = $st->poll || 30
 	$title str = if $name != "" { $name } else { fmt.printf("%s-%s", $server, $volume) }
 

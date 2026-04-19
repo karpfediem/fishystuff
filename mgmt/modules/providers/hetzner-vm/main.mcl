@@ -13,7 +13,7 @@ class server($st) {
 	$serverrescuemode str = $st->serverrescuemode || ""
 	$serverrescuekeys []str = $st->serverrescuekeys || []
 	$waitinterval int = $st->waitinterval || 2
-	$waittimeout int = $st->waittimeout || 10 * 60
+	$waittimeout int = $st->waittimeout || 600
 	$poll int = $st->poll || 30
 
 	panic($name == "", "hetzner-vm provider requires name")

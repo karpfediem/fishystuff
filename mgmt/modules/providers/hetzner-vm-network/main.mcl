@@ -9,7 +9,7 @@ class attachment($st) {
 	$ip str = $st->ip || ""
 	$aliasips []str = $st->aliasips || []
 	$waitinterval int = $st->waitinterval || 2
-	$waittimeout int = $st->waittimeout || 10 * 60
+	$waittimeout int = $st->waittimeout || 600
 	$poll int = $st->poll || 30
 	$title str = if $name != "" { $name } else { fmt.printf("%s-%s", $server, $network) }
 

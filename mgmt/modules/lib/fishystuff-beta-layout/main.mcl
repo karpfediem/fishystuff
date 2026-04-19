@@ -1,0 +1,92 @@
+import "fmt"
+
+class catalog($st) {
+	$cluster str = $st->cluster || "beta"
+	$poll_seconds int = $st->poll_seconds || 60
+	$wait_interval_seconds int = $st->wait_interval_seconds || 5
+	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
+}
+
+class catalog:nbg1 {
+	$region_name = "nbg1"
+	$location = "nbg1"
+	$name_prefix = fmt.printf("%s-%s", $cluster, $region_name)
+
+	$private_network_enabled = true
+	$private_network_name = fmt.printf("%s-private", $name_prefix)
+	$private_network_ip_range = "10.42.0.0/16"
+	$private_subnet_ip_range = "10.42.0.0/24"
+
+	$api_db_enabled = true
+	$api_db_private_ip = "10.42.0.10"
+	$api_db_servertype = "cx33"
+
+	$dolt_volume_enabled = true
+	$dolt_volume_name = fmt.printf("%s-dolt-data", $name_prefix)
+	$dolt_volume_size = 20
+	$dolt_volume_format = "ext4"
+
+	$cdn_enabled = true
+	$cdn_servertype = "cx23"
+	$cdn_private_ip = ""
+
+	$telemetry_enabled = true
+	$telemetry_private_ip = "10.42.0.30"
+	$telemetry_servertype = "cx33"
+}
+
+class catalog:ash {
+	$region_name = "ash"
+	$location = "ash"
+	$name_prefix = fmt.printf("%s-%s", $cluster, $region_name)
+
+	$private_network_enabled = false
+	$private_network_name = ""
+	$private_network_ip_range = ""
+	$private_subnet_ip_range = ""
+
+	$api_db_enabled = false
+	$api_db_private_ip = ""
+	$api_db_servertype = ""
+
+	$dolt_volume_enabled = false
+	$dolt_volume_name = ""
+	$dolt_volume_size = 0
+	$dolt_volume_format = ""
+
+	$cdn_enabled = true
+	$cdn_servertype = "cpx11"
+	$cdn_private_ip = ""
+
+	$telemetry_enabled = false
+	$telemetry_private_ip = ""
+	$telemetry_servertype = ""
+}
+
+class catalog:sin {
+	$region_name = "sin"
+	$location = "sin"
+	$name_prefix = fmt.printf("%s-%s", $cluster, $region_name)
+
+	$private_network_enabled = false
+	$private_network_name = ""
+	$private_network_ip_range = ""
+	$private_subnet_ip_range = ""
+
+	$api_db_enabled = false
+	$api_db_private_ip = ""
+	$api_db_servertype = ""
+
+	$dolt_volume_enabled = false
+	$dolt_volume_name = ""
+	$dolt_volume_size = 0
+	$dolt_volume_format = ""
+
+	$cdn_enabled = true
+	$cdn_servertype = "cpx12"
+	$cdn_private_ip = ""
+
+	$telemetry_enabled = false
+	$telemetry_private_ip = ""
+	$telemetry_servertype = ""
+}

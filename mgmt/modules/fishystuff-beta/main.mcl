@@ -1,168 +1,118 @@
-import "fmt"
-import "../providers/hetzner-network/"
-import "../providers/hetzner-vm/"
-import "../providers/hetzner-vm-network/"
-import "../providers/hetzner-volume/"
-import "../providers/hetzner-vm-volume/"
+import "../lib/fishystuff-beta-layout/" as fishystuff_beta_layout
+import "../fishystuff-beta-region/"
 
 class topology($st) {
 	$cluster str = $st->cluster || "beta"
 	$api_token str = $st->api_token || ""
 	$state str = $st->state || "absent"
-	$infra_state str = if $state == "absent" { "absent" } else { "exists" }
 	$allow_rebuild str = $st->allow_rebuild || ""
-	$datacenter str = $st->datacenter || "fsn1-dc14"
-	$location str = $st->location || "fsn1"
 	$image str = $st->image || "debian-13"
-	$api_db_servertype str = $st->api_db_servertype || "cx33"
-	$cdn_servertype str = $st->cdn_servertype || "cx23"
-	$telemetry_servertype str = $st->telemetry_servertype || "cx33"
-	$private_network_name str = $st->private_network_name || fmt.printf("%s-private", $cluster)
-	$private_network_ip_range str = $st->private_network_ip_range || "10.42.0.0/16"
-	$private_subnet_ip_range str = $st->private_subnet_ip_range || "10.42.0.0/24"
-	$private_network_zone str = $st->private_network_zone || "eu-central"
-	$api_db_private_ip str = $st->api_db_private_ip || "10.42.0.10"
-	$cdn_private_ip str = $st->cdn_private_ip || "10.42.0.20"
-	$telemetry_private_ip str = $st->telemetry_private_ip || "10.42.0.30"
-	$dolt_volume_name str = $st->dolt_volume_name || fmt.printf("%s-dolt-data", $cluster)
-	$dolt_volume_size int = $st->dolt_volume_size || 20
-	$dolt_volume_format str = $st->dolt_volume_format || "ext4"
-	$poll int = $st->poll || 30
-	$wait_interval int = $st->wait_interval || 2
-	$wait_timeout int = $st->wait_timeout || 10 * 60
-	$server_rescue_mode str = $st->server_rescue_mode || ""
-	$server_rescue_keys []str = $st->server_rescue_keys || []
-	$api_db_name = fmt.printf("%s-api-db", $cluster)
-	$cdn_name = fmt.printf("%s-cdn", $cluster)
-	$telemetry_name = fmt.printf("%s-telemetry", $cluster)
+	$poll_seconds int = $st->poll_seconds || 60
+	$wait_interval_seconds int = $st->wait_interval_seconds || 5
+	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
 
 	panic($api_token == "", "missing Hetzner API token; run with SecretSpec profile beta-deploy or set HETZNER_API_TOKEN")
 
-	include hetzner_network.network(struct {
-		name => $private_network_name,
-		apitoken => $api_token,
-		state => $infra_state,
-		iprange => $private_network_ip_range,
-		subnets => [
-			struct {
-				type => "cloud",
-				iprange => $private_subnet_ip_range,
-				networkzone => $private_network_zone,
-				vswitchid => 0,
-			},
-		],
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
-	})
+	include fishystuff_beta_layout.catalog(struct {
+		cluster => $cluster,
+		poll_seconds => $poll_seconds,
+		wait_interval_seconds => $wait_interval_seconds,
+		wait_timeout_seconds => $wait_timeout_seconds,
+	}) as layout
+	include layout.nbg1 as nbg1
+	include layout.ash as ash
+	include layout.sin as sin
 
-	include hetzner_volume.volume(struct {
-		name => $dolt_volume_name,
-		apitoken => $api_token,
-		state => $infra_state,
-		location => $location,
-		size => $dolt_volume_size,
-		format => $dolt_volume_format,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
-	})
-
-	include hetzner_vm.server(struct {
-		name => $api_db_name,
-		role => "api-db",
-		apitoken => $api_token,
+	include fishystuff_beta_region.region(struct {
+		cluster => $cluster,
+		region_name => $nbg1.region_name,
+		api_token => $api_token,
 		state => $state,
-		allowrebuild => $allow_rebuild,
-		servertype => $api_db_servertype,
-		datacenter => $datacenter,
+		allow_rebuild => $allow_rebuild,
+		location => $nbg1.location,
+		name_prefix => $nbg1.name_prefix,
 		image => $image,
-		userdata => "",
-		serverrescuemode => $server_rescue_mode,
-		serverrescuekeys => $server_rescue_keys,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
+		private_network_enabled => $nbg1.private_network_enabled,
+		private_network_name => $nbg1.private_network_name,
+		private_network_ip_range => $nbg1.private_network_ip_range,
+		private_subnet_ip_range => $nbg1.private_subnet_ip_range,
+		api_db_enabled => $nbg1.api_db_enabled,
+		api_db_private_ip => $nbg1.api_db_private_ip,
+		api_db_servertype => $nbg1.api_db_servertype,
+		dolt_volume_enabled => $nbg1.dolt_volume_enabled,
+		dolt_volume_name => $nbg1.dolt_volume_name,
+		dolt_volume_size => $nbg1.dolt_volume_size,
+		dolt_volume_format => $nbg1.dolt_volume_format,
+		cdn_enabled => $nbg1.cdn_enabled,
+		cdn_servertype => $nbg1.cdn_servertype,
+		cdn_private_ip => $nbg1.cdn_private_ip,
+		telemetry_enabled => $nbg1.telemetry_enabled,
+		telemetry_private_ip => $nbg1.telemetry_private_ip,
+		telemetry_servertype => $nbg1.telemetry_servertype,
+		poll_seconds => $layout.poll_seconds,
+		wait_interval_seconds => $layout.wait_interval_seconds,
+		wait_timeout_seconds => $layout.wait_timeout_seconds,
 	})
 
-	include hetzner_vm_network.attachment(struct {
-		name => fmt.printf("%s-private", $api_db_name),
-		apitoken => $api_token,
-		state => $infra_state,
-		server => $api_db_name,
-		network => $private_network_name,
-		ip => $api_db_private_ip,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
-	})
-
-	include hetzner_vm_volume.attachment(struct {
-		name => fmt.printf("%s-dolt-data", $api_db_name),
-		apitoken => $api_token,
-		state => $infra_state,
-		server => $api_db_name,
-		volume => $dolt_volume_name,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
-	})
-
-	include hetzner_vm.server(struct {
-		name => $cdn_name,
-		role => "cdn",
-		apitoken => $api_token,
+	include fishystuff_beta_region.region(struct {
+		cluster => $cluster,
+		region_name => $ash.region_name,
+		api_token => $api_token,
 		state => $state,
-		allowrebuild => $allow_rebuild,
-		servertype => $cdn_servertype,
-		datacenter => $datacenter,
+		allow_rebuild => $allow_rebuild,
+		location => $ash.location,
+		name_prefix => $ash.name_prefix,
 		image => $image,
-		userdata => "",
-		serverrescuemode => $server_rescue_mode,
-		serverrescuekeys => $server_rescue_keys,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
+		private_network_enabled => $ash.private_network_enabled,
+		private_network_name => $ash.private_network_name,
+		private_network_ip_range => $ash.private_network_ip_range,
+		private_subnet_ip_range => $ash.private_subnet_ip_range,
+		api_db_enabled => $ash.api_db_enabled,
+		api_db_private_ip => $ash.api_db_private_ip,
+		api_db_servertype => $ash.api_db_servertype,
+		dolt_volume_enabled => $ash.dolt_volume_enabled,
+		dolt_volume_name => $ash.dolt_volume_name,
+		dolt_volume_size => $ash.dolt_volume_size,
+		dolt_volume_format => $ash.dolt_volume_format,
+		cdn_enabled => $ash.cdn_enabled,
+		cdn_servertype => $ash.cdn_servertype,
+		cdn_private_ip => $ash.cdn_private_ip,
+		telemetry_enabled => $ash.telemetry_enabled,
+		telemetry_private_ip => $ash.telemetry_private_ip,
+		telemetry_servertype => $ash.telemetry_servertype,
+		poll_seconds => $layout.poll_seconds,
+		wait_interval_seconds => $layout.wait_interval_seconds,
+		wait_timeout_seconds => $layout.wait_timeout_seconds,
 	})
 
-	include hetzner_vm_network.attachment(struct {
-		name => fmt.printf("%s-private", $cdn_name),
-		apitoken => $api_token,
-		state => $infra_state,
-		server => $cdn_name,
-		network => $private_network_name,
-		ip => $cdn_private_ip,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
-	})
-
-	include hetzner_vm.server(struct {
-		name => $telemetry_name,
-		role => "telemetry",
-		apitoken => $api_token,
+	include fishystuff_beta_region.region(struct {
+		cluster => $cluster,
+		region_name => $sin.region_name,
+		api_token => $api_token,
 		state => $state,
-		allowrebuild => $allow_rebuild,
-		servertype => $telemetry_servertype,
-		datacenter => $datacenter,
+		allow_rebuild => $allow_rebuild,
+		location => $sin.location,
+		name_prefix => $sin.name_prefix,
 		image => $image,
-		userdata => "",
-		serverrescuemode => $server_rescue_mode,
-		serverrescuekeys => $server_rescue_keys,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
-	})
-
-	include hetzner_vm_network.attachment(struct {
-		name => fmt.printf("%s-private", $telemetry_name),
-		apitoken => $api_token,
-		state => $infra_state,
-		server => $telemetry_name,
-		network => $private_network_name,
-		ip => $telemetry_private_ip,
-		waitinterval => $wait_interval,
-		waittimeout => $wait_timeout,
-		poll => $poll,
+		private_network_enabled => $sin.private_network_enabled,
+		private_network_name => $sin.private_network_name,
+		private_network_ip_range => $sin.private_network_ip_range,
+		private_subnet_ip_range => $sin.private_subnet_ip_range,
+		api_db_enabled => $sin.api_db_enabled,
+		api_db_private_ip => $sin.api_db_private_ip,
+		api_db_servertype => $sin.api_db_servertype,
+		dolt_volume_enabled => $sin.dolt_volume_enabled,
+		dolt_volume_name => $sin.dolt_volume_name,
+		dolt_volume_size => $sin.dolt_volume_size,
+		dolt_volume_format => $sin.dolt_volume_format,
+		cdn_enabled => $sin.cdn_enabled,
+		cdn_servertype => $sin.cdn_servertype,
+		cdn_private_ip => $sin.cdn_private_ip,
+		telemetry_enabled => $sin.telemetry_enabled,
+		telemetry_private_ip => $sin.telemetry_private_ip,
+		telemetry_servertype => $sin.telemetry_servertype,
+		poll_seconds => $layout.poll_seconds,
+		wait_interval_seconds => $layout.wait_interval_seconds,
+		wait_timeout_seconds => $layout.wait_timeout_seconds,
 	})
 }

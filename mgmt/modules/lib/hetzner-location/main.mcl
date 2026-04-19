@@ -1,0 +1,132 @@
+import "fmt"
+
+class catalog {
+	$beta_default_location = "nbg1"
+	$preferred_deploy_locations = ["nbg1", "ash", "sin",]
+	$avoid_initial_locations = ["fsn1", "hel1", "hil",]
+}
+
+class catalog:lookup($location_name) {
+	$location = $location_name
+	$location_family = if $location == "fsn1" {
+		"eu"
+	} else {
+		if $location == "nbg1" {
+			"eu"
+		} else {
+			if $location == "hel1" {
+				"eu"
+			} else {
+				if $location == "ash" {
+					"us"
+				} else {
+					if $location == "hil" {
+						"us"
+					} else {
+						if $location == "sin" {
+							"sin"
+						} else {
+							""
+						}
+					}
+				}
+			}
+		}
+	}
+	$datacenter = if $location == "fsn1" {
+		"fsn1-dc14"
+	} else {
+		if $location == "nbg1" {
+			"nbg1-dc3"
+		} else {
+			if $location == "hel1" {
+				"hel1-dc2"
+			} else {
+				if $location == "ash" {
+					"ash-dc1"
+				} else {
+					if $location == "hil" {
+						"hil-dc1"
+					} else {
+						if $location == "sin" {
+							"sin-dc1"
+						} else {
+							""
+						}
+					}
+				}
+			}
+		}
+	}
+	$network_zone = if $location == "fsn1" {
+		"eu-central"
+	} else {
+		if $location == "nbg1" {
+			"eu-central"
+		} else {
+			if $location == "hel1" {
+				"eu-central"
+			} else {
+				if $location == "ash" {
+					"us-east"
+				} else {
+					if $location == "hil" {
+						"us-west"
+					} else {
+						if $location == "sin" {
+							"ap-southeast"
+						} else {
+							""
+						}
+					}
+				}
+			}
+		}
+	}
+	$default_api_db_servertype = if $location_family == "eu" {
+		"cx33"
+	} else {
+		if $location_family == "us" {
+			"cpx21"
+		} else {
+			if $location_family == "sin" {
+				"cpx22"
+			} else {
+				""
+			}
+		}
+	}
+	$default_cdn_servertype = if $location_family == "eu" {
+		"cx23"
+	} else {
+		if $location_family == "us" {
+			"cpx11"
+		} else {
+			if $location_family == "sin" {
+				"cpx12"
+			} else {
+				""
+			}
+		}
+	}
+	$default_telemetry_servertype = if $location_family == "eu" {
+		"cx33"
+	} else {
+		if $location_family == "us" {
+			"cpx11"
+		} else {
+			if $location_family == "sin" {
+				"cpx12"
+			} else {
+				""
+			}
+		}
+	}
+
+	panic($location_family == "", fmt.printf("unsupported Hetzner location family lookup: %s", $location))
+	panic($datacenter == "", fmt.printf("unsupported Hetzner location for datacenter lookup: %s", $location))
+	panic($network_zone == "", fmt.printf("unsupported Hetzner location for network zone lookup: %s", $location))
+	panic($default_api_db_servertype == "", fmt.printf("missing default api-db server type for location: %s", $location))
+	panic($default_cdn_servertype == "", fmt.printf("missing default cdn server type for location: %s", $location))
+	panic($default_telemetry_servertype == "", fmt.printf("missing default telemetry server type for location: %s", $location))
+}
