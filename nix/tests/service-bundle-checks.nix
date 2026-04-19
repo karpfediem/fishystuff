@@ -11,11 +11,14 @@ let
       bundle,
       serviceId,
       configDestination,
-      runtimeEnvTarget,
+      runtimeEnvTarget ? null,
       unitName,
       requireSecretSpecPath ? false,
       workingDirectory ? null,
+      minArgvLength ? 1,
       requiredEnvironment ? { },
+      requiredUnitLines ? [ ],
+      forbiddenUnitLines ? [ ],
     }:
     pkgs.runCommand name
       {
@@ -38,10 +41,9 @@ let
         jq -e '.bundle_files.store_paths == "store-paths"' "$bundle_json" >/dev/null
         jq -e '.closure.registration_file == "registration"' "$bundle_json" >/dev/null
         jq -e '.closure.store_paths_file == "store-paths"' "$bundle_json" >/dev/null
-        jq -e '.supervision.argv | length >= 3' "$bundle_json" >/dev/null
+        jq -e '.supervision.argv | length >= ${toString minArgvLength}' "$bundle_json" >/dev/null
         jq -e '.supervision.restart.policy == "on-failure"' "$bundle_json" >/dev/null
         jq -e '.supervision.reload.mode == "restart"' "$bundle_json" >/dev/null
-        jq -e '.runtimeOverlays[] | select(.secret == true and .targetPath == "${runtimeEnvTarget}" and .onChange == "restart")' "$bundle_json" >/dev/null
         jq -e '.backends.systemd.service_manager == "systemd"' "$bundle_json" >/dev/null
         jq -e '.backends.systemd.daemon_reload == true' "$bundle_json" >/dev/null
         jq -e '.backends.systemd.units | length == 1' "$bundle_json" >/dev/null
@@ -63,6 +65,18 @@ let
         grep -F "ExecStart=" "$unit_path" >/dev/null
         grep -F "Restart=on-failure" "$unit_path" >/dev/null
         grep -F "WantedBy=multi-user.target" "$unit_path" >/dev/null
+        ${lib.concatStringsSep "\n" (map (line: "grep -Fx ${lib.escapeShellArg line} \"$unit_path\" >/dev/null") requiredUnitLines)}
+        ${lib.concatStringsSep "\n" (
+          map (
+            line:
+            ''
+              if grep -Fx ${lib.escapeShellArg line} "$unit_path" >/dev/null; then
+                echo "unexpected unit line present: ${line}" >&2
+                exit 1
+              fi
+            ''
+          ) forbiddenUnitLines
+        )}
         ${lib.concatStringsSep "\n" (
           lib.mapAttrsToList (
             name: value:
@@ -73,15 +87,29 @@ let
           ) requiredEnvironment
         )}
 
-        if jq -e '.runtimeOverlays[] | select(.secret == true) | .targetPath | startswith("/nix/store/")' "$bundle_json" >/dev/null; then
+        if jq -e '.runtimeOverlays[]? | select(.secret == true) | .targetPath | startswith("/nix/store/")' "$bundle_json" >/dev/null; then
           echo "secret overlay target unexpectedly points into the Nix store" >&2
           exit 1
         fi
 
-        if grep -Fx "${runtimeEnvTarget}" "$store_paths" >/dev/null; then
-          echo "secret overlay target leaked into the closure" >&2
-          exit 1
-        fi
+        ${if runtimeEnvTarget == null then
+          ''
+            jq -e '.runtimeOverlays | length == 0' "$bundle_json" >/dev/null
+
+            if grep -F "EnvironmentFile=" "$unit_path" >/dev/null; then
+              echo "unexpected environment file in unit" >&2
+              exit 1
+            fi
+          ''
+        else
+          ''
+            jq -e '.runtimeOverlays[] | select(.secret == true and .targetPath == "${runtimeEnvTarget}" and .onChange == "restart")' "$bundle_json" >/dev/null
+
+            if grep -Fx "${runtimeEnvTarget}" "$store_paths" >/dev/null; then
+              echo "secret overlay target leaked into the closure" >&2
+              exit 1
+            fi
+          ''}
 
         ${if workingDirectory == null then
           ''
@@ -112,6 +140,7 @@ in
     configDestination = "config.toml";
     runtimeEnvTarget = "/run/fishystuff/api/env";
     unitName = "fishystuff-api.service";
+    minArgvLength = 3;
     requireSecretSpecPath = true;
   };
 
@@ -120,11 +149,18 @@ in
     bundle = doltServiceBundle;
     serviceId = "fishystuff-dolt";
     configDestination = "sql-server.yaml";
-    runtimeEnvTarget = "/run/fishystuff/dolt/env";
     unitName = "fishystuff-dolt.service";
     workingDirectory = "/var/lib/fishystuff/dolt";
     requiredEnvironment = {
       HOME = "/var/lib/fishystuff/dolt";
     };
+    requiredUnitLines = [
+      "DynamicUser=true"
+      "StateDirectory=fishystuff/dolt"
+      "StateDirectoryMode=0750"
+    ];
+    forbiddenUnitLines = [
+      "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
+    ];
   };
 }

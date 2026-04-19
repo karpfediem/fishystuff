@@ -2,6 +2,7 @@ import "encoding"
 import "deploy"
 import "fmt"
 import "golang"
+import "golang/strings" as golang_strings
 import "os"
 import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
 
@@ -15,30 +16,23 @@ class api_db_host($st) {
 	$deployment_environment str = $st->deployment_environment || "beta"
 	$startup_mode str = $st->startup_mode || "enabled"
 	$dolt_data_dir str = $st->dolt_data_dir || "/var/lib/fishystuff/dolt"
-	$dolt_cfg_dir str = $st->dolt_cfg_dir || "${dolt_data_dir}/.doltcfg"
 	$dolt_database_name str = $st->dolt_database_name || "fishystuff"
-	$dolt_remote_url str = $st->dolt_remote_url || "fishystuff/fishystuff"
-	$dolt_remote_branch str = $st->dolt_remote_branch || "main"
-	$dolt_clone_depth str = $st->dolt_clone_depth || "1"
 	$dolt_volume_device str = $st->dolt_volume_device || ""
 	$dolt_volume_fs_type str = $st->dolt_volume_fs_type || "ext4"
 	$dolt_port str = $st->dolt_port || "3306"
-	$api_bundle struct{id str; supervision struct{identity struct{user str; group str}}; runtime_overlays []struct{target_path str}; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $api_bundle_path)))
-	$dolt_bundle struct{id str; supervision struct{argv []str; identity struct{user str; group str}}; runtime_overlays []struct{target_path str}; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $dolt_bundle_path)))
-	$api_identity struct{user str; group str} = $api_bundle->supervision->identity
-	$dolt_identity struct{user str; group str} = $dolt_bundle->supervision->identity
-	$api_runtime_overlay struct{target_path str} = $api_bundle->runtime_overlays[0]
-	$dolt_runtime_overlay struct{target_path str} = $dolt_bundle->runtime_overlays[0]
-	$api_service_name str = $api_bundle->backends->systemd->units[0]->name
-	$dolt_service_name str = $dolt_bundle->backends->systemd->units[0]->name
-	$api_user str = $api_identity->user
-	$api_group str = $api_identity->group
-	$dolt_user str = $dolt_identity->user
-	$dolt_group str = $dolt_identity->group
-	$api_service_path str = $api_bundle->backends->systemd->units[0]->install_path
-	$dolt_service_path str = $dolt_bundle->backends->systemd->units[0]->install_path
+	$api_bundle struct{id str; runtime_overlays []struct{target_path str}; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $api_bundle_path)))
+	$dolt_bundle struct{id str; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $dolt_bundle_path)))
+	$api_runtime_overlays []struct{target_path str} = $api_bundle->runtime_overlays
+	$api_backends struct{systemd struct{units []struct{name str; install_path str}}} = $api_bundle->backends
+	$dolt_backends struct{systemd struct{units []struct{name str; install_path str}}} = $dolt_bundle->backends
+	$api_systemd struct{units []struct{name str; install_path str}} = $api_backends->systemd
+	$dolt_systemd struct{units []struct{name str; install_path str}} = $dolt_backends->systemd
+	$api_unit struct{name str; install_path str} = $api_systemd->units[0]
+	$dolt_unit struct{name str; install_path str} = $dolt_systemd->units[0]
+	$api_runtime_overlay struct{target_path str} = $api_runtime_overlays[0]
+	$api_service_name str = golang_strings.trim_suffix($api_unit->name, ".service")
+	$dolt_service_name str = golang_strings.trim_suffix($dolt_unit->name, ".service")
 	$api_env_file = $api_runtime_overlay->target_path
-	$dolt_env_file = $dolt_runtime_overlay->target_path
 	$api_runtime_env = golang.template(deploy.readfile("/files/api-runtime.env.tmpl"), struct {
 		dolt_port => $dolt_port,
 		dolt_database_name => $dolt_database_name,
@@ -46,53 +40,12 @@ class api_db_host($st) {
 		cdn_base_url => $cdn_base_url,
 		deployment_environment => $deployment_environment,
 	})
-	$dolt_runtime_env = golang.template(deploy.readfile("/files/dolt-runtime.env.tmpl"), struct {
-		hostname => $hostname,
-	})
-	$dolt_repo_dir = fmt.printf("%s/%s", $dolt_data_dir, $dolt_database_name)
-	$dolt_clone_args = if $dolt_clone_depth != "" {
-		[
-			"clone",
-			"--branch",
-			$dolt_remote_branch,
-			"--single-branch",
-			"--depth",
-			$dolt_clone_depth,
-			$dolt_remote_url,
-			$dolt_repo_dir,
-		]
-	} else {
-		[
-			"clone",
-			"--branch",
-			$dolt_remote_branch,
-			"--single-branch",
-			$dolt_remote_url,
-			$dolt_repo_dir,
-		]
-	}
-	$root_login_shell = "/usr/sbin/nologin"
-	$empty_home = "/var/empty/"
 
 	panic($hostname == "", "resident core host requires hostname")
 	panic($api_bundle_path == "", fmt.printf("host %s requires FISHYSTUFF_API_BUNDLE_PATH", $hostname))
 	panic($dolt_bundle_path == "", fmt.printf("host %s requires FISHYSTUFF_DOLT_BUNDLE_PATH", $hostname))
 
-	file "/var/empty/" {
-		state => "exists",
-		mode => "u=rwx,go=rx",
-		owner => "root",
-		group => "root",
-	}
-
 	file "/var/lib/fishystuff/" {
-		state => "exists",
-		mode => "u=rwx,go=rx",
-		owner => "root",
-		group => "root",
-	}
-
-	file "/var/lib/fishystuff/dolt/" {
 		state => "exists",
 		mode => "u=rwx,go=rx",
 		owner => "root",
@@ -113,48 +66,19 @@ class api_db_host($st) {
 		group => "root",
 	}
 
-	file "/run/fishystuff/dolt/" {
-		state => "exists",
-		mode => "u=rwx,go=rx",
-		owner => "root",
-		group => "root",
-	}
-
-	group "${dolt_group}" {
-		state => "exists",
-	}
-
-	user "${dolt_user}" {
-		state => "exists",
-		group => $dolt_group,
-		homedir => $empty_home,
-		shell => $root_login_shell,
-	}
-
-	group "${api_group}" {
-		state => "exists",
-	}
-
-	user "${api_user}" {
-		state => "exists",
-		group => $api_group,
-		homedir => $empty_home,
-		shell => $root_login_shell,
-	}
-
 	if $dolt_volume_device != "" {
+		file "${dolt_data_dir}/" {
+			state => "exists",
+			mode => "u=rwx,go=rx",
+			owner => "root",
+			group => "root",
+		}
+
 		mount "${dolt_data_dir}" {
 			state => "exists",
 			device => $dolt_volume_device,
 			type => $dolt_volume_fs_type,
 		}
-	}
-
-	file "${dolt_cfg_dir}/" {
-		state => "exists",
-		mode => "u=rwx,g=rx,o=",
-		owner => $dolt_user,
-		group => $dolt_group,
 	}
 
 	file "${api_env_file}" {
@@ -163,44 +87,6 @@ class api_db_host($st) {
 		mode => "u=rw,go=",
 		owner => "root",
 		group => "root",
-	}
-
-	file "${dolt_env_file}" {
-		state => "exists",
-		content => $dolt_runtime_env,
-		mode => "u=rw,go=",
-		owner => "root",
-		group => "root",
-	}
-
-	exec "fishystuff-dolt-data-dir-owner" {
-		cmd => "/usr/bin/chown",
-		args => [
-			fmt.printf("%s:%s", $dolt_user, $dolt_group),
-			$dolt_data_dir,
-		],
-		ifcmd => fmt.printf("[[ \"$(stat -c '%%U:%%G' %s)\" != '%s:%s' ]]", $dolt_data_dir, $dolt_user, $dolt_group),
-		ifshell => "/bin/bash",
-	}
-
-	exec "fishystuff-dolt-data-dir-mode" {
-		cmd => "/usr/bin/chmod",
-		args => [
-			"0750",
-			$dolt_data_dir,
-		],
-		ifcmd => fmt.printf("[[ \"$(stat -c '%%a' %s)\" != '750' ]]", $dolt_data_dir),
-		ifshell => "/bin/bash",
-	}
-
-	exec "fishystuff-dolt-clone" {
-		cmd => $dolt_bundle->supervision->argv[0],
-		args => $dolt_clone_args,
-		user => $dolt_user,
-		env => {
-			"HOME" => $dolt_data_dir,
-		},
-		creates => fmt.printf("%s/.dolt", $dolt_repo_dir),
 	}
 
 	include fishystuff_bundle_systemd.unit(struct {
@@ -213,26 +99,12 @@ class api_db_host($st) {
 		startup_mode => $startup_mode,
 	})
 
-	Group["${dolt_group}"] -> User["${dolt_user}"]
-	Group["${api_group}"] -> User["${api_user}"]
-	File["/var/empty/"] -> User["${dolt_user}"]
-	File["/var/empty/"] -> User["${api_user}"]
-	File["/var/lib/fishystuff/"] -> File["${dolt_data_dir}/"]
-	File["${dolt_data_dir}/"] -> File["${dolt_cfg_dir}/"]
 	File["/run/fishystuff/"] -> File["/run/fishystuff/api/"]
-	File["/run/fishystuff/"] -> File["/run/fishystuff/dolt/"]
 	File["/run/fishystuff/api/"] -> File["${api_env_file}"]
-	File["/run/fishystuff/dolt/"] -> File["${dolt_env_file}"]
-	User["${dolt_user}"] -> Exec["fishystuff-dolt-data-dir-owner"]
-	User["${dolt_user}"] -> File["${dolt_cfg_dir}/"]
-	User["${api_user}"] -> File["${api_env_file}"]
-	User["${dolt_user}"] -> File["${dolt_env_file}"]
-	Exec["fishystuff-dolt-data-dir-owner"] -> Exec["fishystuff-dolt-data-dir-mode"] -> Exec["fishystuff-dolt-clone"]
-	User["${dolt_user}"] -> Svc["${dolt_service_name}"]
-	User["${api_user}"] -> Svc["${api_service_name}"]
-	File["${dolt_cfg_dir}/"] -> Svc["${dolt_service_name}"]
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
-	File["${dolt_env_file}"] -> Svc["${dolt_service_name}"]
-	Exec["fishystuff-dolt-clone"] -> Svc["${dolt_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
+
+	if $dolt_volume_device != "" {
+		File["/var/lib/fishystuff/"] -> File["${dolt_data_dir}/"] -> Mount["${dolt_data_dir}"] -> Svc["${dolt_service_name}"]
+	}
 }

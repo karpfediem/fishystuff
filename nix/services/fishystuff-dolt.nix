@@ -32,37 +32,85 @@ let
     privilege_file = cfg.privilegeFile;
     branch_control_file = cfg.branchControlFile;
   };
+  startScript = pkgs.writeShellApplication {
+    name = "fishystuff-dolt-start";
+    runtimeInputs = [
+      cfg.package
+      pkgs.coreutils
+    ];
+    text = ''
+      set -euo pipefail
+
+      data_dir=${lib.escapeShellArg cfg.dataDir}
+      cfg_dir=${lib.escapeShellArg cfg.cfgDir}
+      repo_name=${lib.escapeShellArg cfg.databaseName}
+      repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
+      remote_url=${lib.escapeShellArg cfg.remoteUrl}
+      remote_branch=${lib.escapeShellArg cfg.remoteBranch}
+      privilege_file=${lib.escapeShellArg cfg.privilegeFile}
+      branch_control_file=${lib.escapeShellArg cfg.branchControlFile}
+      repo_user_name=${lib.escapeShellArg cfg.repoUserName}
+      repo_user_email=${lib.escapeShellArg cfg.repoUserEmail}
+
+      export HOME="$data_dir"
+
+      mkdir -p "$data_dir" "$cfg_dir"
+
+      if [ ! -d "$repo_dir/.dolt" ]; then
+        clone_cmd=(dolt clone --branch "$remote_branch" --single-branch)
+        ${lib.optionalString (cfg.cloneDepth != null) "clone_cmd+=(--depth ${lib.escapeShellArg (toString cfg.cloneDepth)})"}
+        clone_cmd+=("$remote_url" "$repo_name")
+
+        (
+          cd "$data_dir"
+          "''${clone_cmd[@]}"
+        )
+      fi
+
+      (
+        cd "$repo_dir"
+
+        if ! dolt config --local --get user.name >/dev/null 2>&1; then
+          dolt config --local --add user.name "$repo_user_name"
+        fi
+
+        if ! dolt config --local --get user.email >/dev/null 2>&1; then
+          dolt config --local --add user.email "$repo_user_email"
+        fi
+      )
+
+      # Keep SQL auth state deterministic across restarts for the initial
+      # read-only beta topology.
+      rm -f "$privilege_file" "$branch_control_file"
+
+      exec dolt sql-server --config ${lib.escapeShellArg sqlServerConfig} ${lib.escapeShellArgs cfg.extraArgs}
+    '';
+  };
   runtimeEnvFiles =
     optional (cfg.runtimeEnvFile != null) (toString cfg.runtimeEnvFile)
     ++ map toString cfg.environmentFiles;
   systemdEnvironmentFiles =
     optional (cfg.runtimeEnvFile != null) "-${toString cfg.runtimeEnvFile}"
     ++ map toString cfg.environmentFiles;
-  serviceArgv = [
-    (lib.getExe cfg.package)
-    "sql-server"
-    "--config"
-    sqlServerConfig
-  ] ++ cfg.extraArgs;
+  serviceArgv = [ (lib.getExe startScript) ];
   systemdUnit = systemdBackend.mkSystemdUnit {
     unitName = "fishystuff-dolt.service";
     description = "Fishystuff Dolt SQL service";
     argv = serviceArgv;
     environment = staticEnvironment;
     environmentFiles = systemdEnvironmentFiles;
-    user = cfg.user;
-    group = cfg.group;
+    user = lib.optionalString (!cfg.dynamicUser) cfg.user;
+    group = lib.optionalString (!cfg.dynamicUser) cfg.group;
+    dynamicUser = cfg.dynamicUser;
     supplementaryGroups = cfg.supplementaryGroups;
     workingDirectory = cfg.dataDir;
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     restartPolicy = "on-failure";
     restartDelaySeconds = 5;
-    readWritePaths = [
-      cfg.dataDir
-      cfg.cfgDir
-    ];
     serviceLines = [
+      "StateDirectory=${cfg.stateDirectoryName}"
+      "StateDirectoryMode=0750"
       "PrivateTmp=true"
       "PrivateDevices=true"
       "ProtectSystem=strict"
@@ -97,9 +145,15 @@ in
       description = "Bundle-relative name for the immutable Dolt SQL config.";
     };
 
+    stateDirectoryName = mkOption {
+      type = types.str;
+      default = "fishystuff/dolt";
+      description = "systemd StateDirectory name used for persistent Dolt state.";
+    };
+
     dataDir = mkOption {
       type = types.str;
-      default = "/var/lib/fishystuff/dolt";
+      default = "/var/lib/${cfg.stateDirectoryName}";
       description = "Persistent Dolt data directory.";
     };
 
@@ -119,6 +173,42 @@ in
       type = types.str;
       default = "${cfg.cfgDir}/branch_control.db";
       description = "Branch control database path.";
+    };
+
+    databaseName = mkOption {
+      type = types.str;
+      default = "fishystuff";
+      description = "Database directory name cloned below the Dolt data root.";
+    };
+
+    remoteUrl = mkOption {
+      type = types.str;
+      default = "fishystuff/fishystuff";
+      description = "Upstream Dolt remote to clone when bootstrapping local state.";
+    };
+
+    remoteBranch = mkOption {
+      type = types.str;
+      default = "main";
+      description = "Upstream Dolt branch to clone.";
+    };
+
+    cloneDepth = mkOption {
+      type = types.nullOr types.int;
+      default = 1;
+      description = "Optional shallow-clone depth for the initial local repo bootstrap.";
+    };
+
+    repoUserName = mkOption {
+      type = types.str;
+      default = "fishystuff api";
+      description = "Local Dolt repo user.name used when bootstrapping repository config.";
+    };
+
+    repoUserEmail = mkOption {
+      type = types.str;
+      default = "api@fishystuff.fish";
+      description = "Local Dolt repo user.email used when bootstrapping repository config.";
     };
 
     listenAddress = mkOption {
@@ -165,8 +255,8 @@ in
 
     runtimeEnvFile = mkOption {
       type = types.nullOr helpers.pathLikeType;
-      default = "/run/fishystuff/dolt/env";
-      description = "Primary externally managed runtime environment file.";
+      default = null;
+      description = "Optional externally managed runtime environment file.";
     };
 
     user = mkOption {
@@ -186,6 +276,12 @@ in
       default = [ ];
       description = "Supplementary runtime groups.";
     };
+
+    dynamicUser = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether a backend may allocate an ephemeral user.";
+    };
   };
 
   config = {
@@ -199,11 +295,18 @@ in
       roots.store = [
         cfg.package
         sqlServerConfig
+        startScript
         systemdUnit.file
       ];
 
       artifacts = {
         "exe/main" = helpers.mkArtifact {
+          kind = "binary";
+          storePath = lib.getExe startScript;
+          executable = true;
+        };
+
+        "exe/dolt" = helpers.mkArtifact {
           kind = "binary";
           storePath = lib.getExe cfg.package;
           executable = true;
@@ -215,34 +318,24 @@ in
           destination = configName;
         };
 
+        "script/start" = helpers.mkArtifact {
+          kind = "script";
+          storePath = lib.getExe startScript;
+          destination = "start";
+          executable = true;
+        };
+
         "systemd/unit" = systemdUnit.artifact;
       };
 
       activation = {
-        directories = [
-          (helpers.mkActivationDirectory {
-            purpose = "state";
-            path = cfg.dataDir;
-            owner = cfg.user;
-            group = cfg.group;
-            mode = "0750";
-          })
-          (helpers.mkActivationDirectory {
-            purpose = "config";
-            path = cfg.cfgDir;
-            owner = cfg.user;
-            group = cfg.group;
-            mode = "0750";
-          })
-        ];
-        users = [
-          {
-            name = cfg.user;
-            group = cfg.group;
-            system = true;
-          }
-        ];
-        groups = [ { name = cfg.group; } ];
+        directories = [ ];
+        users = optional (!cfg.dynamicUser) {
+          name = cfg.user;
+          group = cfg.group;
+          system = true;
+        };
+        groups = optional (!cfg.dynamicUser) { name = cfg.group; };
         writablePaths = [
           cfg.dataDir
           cfg.cfgDir
@@ -259,7 +352,7 @@ in
         identity = {
           user = cfg.user;
           group = cfg.group;
-          dynamicUser = false;
+          dynamicUser = cfg.dynamicUser;
           supplementaryGroups = cfg.supplementaryGroups;
         };
         restart = {
@@ -292,7 +385,9 @@ in
           }
         );
 
-      requiredCapabilities = [ "run-as-user" ];
+      requiredCapabilities =
+        optional cfg.dynamicUser "dynamic-user"
+        ++ optional (!cfg.dynamicUser) "run-as-user";
 
       backends.systemd = systemdUnit.backend;
     };
@@ -300,36 +395,41 @@ in
   // optionalAttrs (options ? systemd) {
     systemd.services."" = {
       environment = staticEnvironment;
-      restartTriggers = [ sqlServerConfig ];
-      serviceConfig = {
-        Type = "simple";
-        Restart = "on-failure";
-        RestartSec = "5s";
-        User = cfg.user;
-        Group = cfg.group;
-        SupplementaryGroups = cfg.supplementaryGroups;
-        WorkingDirectory = cfg.dataDir;
-        EnvironmentFile =
-          optional (cfg.runtimeEnvFile != null) "-${toString cfg.runtimeEnvFile}"
-          ++ map toString cfg.environmentFiles;
-        PrivateTmp = true;
-        PrivateDevices = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ProtectKernelTunables = true;
-        ProtectKernelModules = true;
-        ProtectControlGroups = true;
-        LockPersonality = true;
-        NoNewPrivileges = true;
-        RestrictRealtime = true;
-        RestrictSUIDSGID = true;
-        SystemCallArchitectures = "native";
-        UMask = "0077";
-        ReadWritePaths = [
-          cfg.dataDir
-          cfg.cfgDir
-        ];
-      };
+      restartTriggers = [
+        sqlServerConfig
+        startScript
+      ];
+      serviceConfig =
+        {
+          Type = "simple";
+          Restart = "on-failure";
+          RestartSec = "5s";
+          DynamicUser = cfg.dynamicUser;
+          SupplementaryGroups = cfg.supplementaryGroups;
+          WorkingDirectory = cfg.dataDir;
+          EnvironmentFile =
+            optional (cfg.runtimeEnvFile != null) "-${toString cfg.runtimeEnvFile}"
+            ++ map toString cfg.environmentFiles;
+          PrivateTmp = true;
+          PrivateDevices = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          ProtectKernelTunables = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          LockPersonality = true;
+          NoNewPrivileges = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          SystemCallArchitectures = "native";
+          UMask = "0077";
+          StateDirectory = cfg.stateDirectoryName;
+          StateDirectoryMode = "0750";
+        }
+        // optionalAttrs (!cfg.dynamicUser) {
+          User = cfg.user;
+          Group = cfg.group;
+        };
     };
   };
 }

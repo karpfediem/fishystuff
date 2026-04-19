@@ -158,7 +158,7 @@ in
 
     dynamicUser = mkOption {
       type = types.bool;
-      default = false;
+      default = true;
       description = "Whether a backend may allocate an ephemeral user.";
     };
 

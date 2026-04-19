@@ -1,28 +1,12 @@
 import "fmt"
 import "deploy"
 import "golang"
-class daemon_reload($st) {
-	$empty_list []str = []
-	$name str = $st->name || "systemd-daemon-reload"
-	$systemctl_exec str = $st->systemctl_exec || "/usr/bin/systemctl"
-	$mtimes []str = $st->mtimes || [
-		"/etc/systemd/system/",
-	]
-
-	exec "${name}" {
-		cmd => $systemctl_exec,
-		args => [
-			"daemon-reload",
-		],
-		mtimes => $mtimes,
-		ifcmd => "/bin/false",
-	}
-}
 
 class service($st) {
 	$name str = $st->name
 	$desired_state str = $st->state || "running"
 	$startup_mode str = $st->startup_mode || "enabled"
+	$listen_exec_name str = $st->listen_exec_name || ""
 
 	panic(
 		($startup_mode != "enabled")
@@ -39,6 +23,7 @@ class service($st) {
 	if $startup_mode == "none" {
 		svc "${name}" {
 			state => $desired_state,
+			Listen => ($listen_exec_name != "") ?: Exec["${listen_exec_name}"],
 		}
 	}
 
@@ -46,6 +31,7 @@ class service($st) {
 		svc "${name}" {
 			state => $desired_state,
 			startup => $startup_mode,
+			Listen => ($listen_exec_name != "") ?: Exec["${listen_exec_name}"],
 		}
 	}
 }

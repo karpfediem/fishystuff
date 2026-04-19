@@ -202,7 +202,7 @@ mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" 
 # Build the API and Dolt service bundles locally, push both closures to a
 # remote host, root them at stable GC-root paths, and deploy the resident beta
 # graph for the current API/DB host shape.
-mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current":
+mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -217,6 +217,38 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
   api_gcroot="${api_gcroot#api_gcroot=}"
   dolt_gcroot='{{dolt_gcroot}}'
   dolt_gcroot="${dolt_gcroot#dolt_gcroot=}"
+  mgmt_modules_dir='{{mgmt_modules_dir}}'
+  mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
+  deploy_dir="$(mktemp -d /tmp/fishystuff-resident-beta.XXXXXX)"
+  trap 'rm -rf "$deploy_dir"' EXIT
+  cp -a mgmt/resident-beta/. "$deploy_dir/"
+  mkdir -p "$deploy_dir/modules/github.com/purpleidea/mgmt/modules"
+  cp -a "$mgmt_modules_dir/misc" "$deploy_dir/modules/github.com/purpleidea/mgmt/modules/"
+  printf '%s\n' \
+    'import "modules/fishystuff-beta-resident/"' \
+    '' \
+    'include fishystuff_beta_resident.host(struct {' \
+    '	cluster => "beta",' \
+    "	hostname => \"${host}\"," \
+    "	api_bundle_path => \"${api_gcroot}\"," \
+    "	dolt_bundle_path => \"${dolt_gcroot}\"," \
+    '	site_base_url => "https://beta.fishystuff.fish",' \
+    '	api_base_url => "https://api.beta.fishystuff.fish",' \
+    '	cdn_base_url => "https://cdn.beta.fishystuff.fish",' \
+    '	telemetry_base_url => "https://telemetry.beta.fishystuff.fish",' \
+    '	deployment_environment => "beta",' \
+    '	startup_mode => "enabled",' \
+    '	dolt_data_dir => "/var/lib/fishystuff/dolt",' \
+    '	dolt_cfg_dir => "/var/lib/fishystuff/dolt/.doltcfg",' \
+    '	dolt_database_name => "fishystuff",' \
+    '	dolt_remote_url => "fishystuff/fishystuff",' \
+    '	dolt_remote_branch => "main",' \
+    '	dolt_clone_depth => "1",' \
+    '	dolt_volume_device => "",' \
+    '	dolt_volume_fs_type => "ext4",' \
+    '	dolt_port => "3306",' \
+    '})' \
+    > "$deploy_dir/main.mcl"
   api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
   dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
   secretspec run --profile beta-deploy -- \
@@ -227,9 +259,6 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
       umask 077
       printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
       chmod 600 "$tmp_key"
-      export FISHYSTUFF_BETA_HOSTNAME="$2"
-      export FISHYSTUFF_API_BUNDLE_PATH="$3"
-      export FISHYSTUFF_DOLT_BUNDLE_PATH="$5"
       SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
       NIX_SSH_KEY_PATH="$tmp_key" \
       bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
@@ -240,17 +269,17 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
           "$5"
       SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
       bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
-          mgmt/resident-beta \
-          "$1" \
           "$7" \
-          "$8"
+          "$1" \
+          "$8" \
+          "$9"
     ' \
-    -- "$target" "$host" "$api_gcroot" "$api_bundle" "$dolt_gcroot" "$dolt_bundle" "$timeout" "$remote_mgmt_bin"
+    -- "$target" "$host" "$api_gcroot" "$api_bundle" "$dolt_gcroot" "$dolt_bundle" "$deploy_dir" "$timeout" "$remote_mgmt_bin"
 
 # Build a temporary resident graph that installs a bundle-backed systemd unit
 # from a local Nix bundle root, validate it, and deploy it to a resident mgmt
 # instance over SSH.
-mgmt-resident-dolt-bundle-probe target="mgmt-root" bundle_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="/home/carp/code/playground/mgmt-missing-features/mgmt":
+mgmt-resident-dolt-bundle-probe target="mgmt-root" bundle_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="/home/carp/code/playground/mgmt-missing-features/mgmt" mgmt_modules_dir="/home/carp/code/mgmt/modules":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -263,11 +292,14 @@ mgmt-resident-dolt-bundle-probe target="mgmt-root" bundle_path="/nix/var/nix/gcr
   remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
   mgmt_bin='{{mgmt_bin}}'
   mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  mgmt_modules_dir='{{mgmt_modules_dir}}'
+  mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
   probe_dir="$(mktemp -d /tmp/fishystuff-resident-bundle-probe.XXXXXX)"
   trap 'rm -rf "$probe_dir"' EXIT
-  mkdir -p "$probe_dir/modules/lib"
+  mkdir -p "$probe_dir/modules/lib" "$probe_dir/modules/github.com/purpleidea/mgmt/modules"
   cp -a mgmt/resident-beta/modules/lib/fishystuff-systemd "$probe_dir/modules/lib/"
   cp -a mgmt/resident-beta/modules/lib/fishystuff-bundle-systemd "$probe_dir/modules/lib/"
+  cp -a "$mgmt_modules_dir/misc" "$probe_dir/modules/github.com/purpleidea/mgmt/modules/"
   printf '%s\n' \
     'import "modules/lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd' \
     '' \
