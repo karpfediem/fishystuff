@@ -73,5 +73,6 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl show fishystuff-dolt.service -p ExecStart --value | grep -- 'sql-server'")
     machine.succeed("systemctl show fishystuff-api.service -p EnvironmentFiles --value | grep '/run/fishystuff/api/env'")
     machine.succeed("systemctl show fishystuff-dolt.service -p EnvironmentFiles --value | grep '/run/fishystuff/dolt/env'")
+    machine.succeed("systemctl show fishystuff-dolt.service -p Environment --value | grep 'HOME=/var/lib/fishystuff/dolt'")
   '';
 }

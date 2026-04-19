@@ -75,12 +75,11 @@ Current scope:
 - support future host-local `mgmt deploy` updates over SSH without exposing etcd
 - keep the desired first stable beta topology explicit:
   - `beta-nbg1-api-db`
-  - `beta-nbg1-cdn`
-  - `beta-nbg1-telemetry`
   - `beta-ash-cdn`
   - `beta-sin-cdn`
 - provide a local bootstrap entrypoint that reads `HETZNER_API_TOKEN` from the
   SecretSpec `beta-deploy` profile
+- keep the initial beta inventory within the current project primary-IP ceiling
 
 Current engine limitation:
 
@@ -90,6 +89,8 @@ Current engine limitation:
   this repo's inventory graph
 - the current inventory graph can create VMs, networks, and volumes, but it
   still cannot trigger the resident host bootstrap as part of VM creation
+- the current `hetzner:vm` resource always creates servers with public IPv4 and
+  IPv6, so private-only internal hosts are not yet expressible in this graph
 - that means new hosts currently require a separate SSH kickstart step after
   they appear in Hetzner
 
@@ -97,6 +98,15 @@ As a result, this module now owns the beta Hetzner inventory up through
 project SSH key, firewall policy, private network, and volume attachment, and
 it now provides a resident host bootstrap path, but it does not yet model a
 first-class post-create lifecycle or the full edge-hardening story.
+
+Current compact beta shape:
+
+- `beta-nbg1-api-db` is the single `nbg1` core host
+- that core host is intended to carry Dolt, the API, and telemetry service
+  placement in the first beta
+- `beta-ash-cdn` and `beta-sin-cdn` are the public CDN edge hosts
+- there is intentionally no dedicated `beta-nbg1-cdn` or
+  `beta-nbg1-telemetry` host in this initial shape
 
 Safety defaults:
 
@@ -128,6 +138,22 @@ To request actual server creation, override the target state explicitly:
 just mgmt-beta-bootstrap state=running converged_timeout=45
 ```
 
+The bootstrap helper runs with explicit loopback etcd URLs so it does not
+collide with an already-running resident `mgmt` on `127.0.0.1:2379` and
+`127.0.0.1:2380`. The `beta-deploy` SecretSpec profile must provide both the
+Hetzner SSH public key used at VM create time and the matching private key used
+later for resident `mgmt` bootstrap and deploy over SSH. Prometheus and pprof
+output remain optional:
+
+```bash
+just mgmt-beta-bootstrap \
+  state=running \
+  converged_timeout=45 \
+  prometheus=true \
+  prometheus_listen=127.0.0.1:39233 \
+  pprof_path=/tmp/fishystuff-beta-bootstrap.pprof
+```
+
 Resident host bootstrap validation:
 
 ```bash
@@ -137,14 +163,29 @@ just mgmt-resident-bootstrap-unify
 Resident host kickstart over SSH:
 
 ```bash
-just mgmt-resident-kickstart-remote target=mgmt-root host=beta-nbg1-api-db
+just mgmt-resident-kickstart-remote \
+  target=root@<host-ip> \
+  host=beta-nbg1-api-db
 ```
 
 Resident graph deploy over SSH:
 
 ```bash
-just mgmt-resident-deploy-remote target=mgmt-root dir=mgmt/resident-deploy-probe
+just mgmt-resident-deploy-remote \
+  target=root@<host-ip> \
+  dir=mgmt/resident-deploy-probe
 ```
+
+Resident bundle-backed systemd probe:
+
+```bash
+just mgmt-resident-dolt-bundle-probe target=mgmt-root
+```
+
+The resident `beta` graph now treats the Nix bundle as the source of truth for
+the rendered systemd unit. Host-local mgmt still owns runtime env files,
+service ordering, and mutable state preparation, but it no longer reconstructs
+`ExecStart` or the unit body from `supervision.argv`.
 
 Default topology inputs:
 
@@ -158,12 +199,9 @@ Default topology inputs:
   - private subnet range: `10.42.0.0/24`
   - private IPs:
     - `beta-nbg1-api-db`: `10.42.0.10`
-    - `beta-nbg1-telemetry`: `10.42.0.30`
   - Dolt data volume: `beta-nbg1-dolt-data` at `20 GB`
   - server plans:
     - `beta-nbg1-api-db`: `cx33`
-    - `beta-nbg1-cdn`: `cx23`
-    - `beta-nbg1-telemetry`: `cx33`
 - `ash` edge region:
   - server plan:
     - `beta-ash-cdn`: `cpx11`
@@ -187,6 +225,8 @@ Topology constraint:
 
 - the current topology is intentionally split into separate regional instances
 - only `nbg1` carries the private core network and Dolt state volume
+- only `beta-nbg1-api-db` is created in the `nbg1` region in the current
+  compact beta shape
 - `ash` and `sin` are currently public CDN edge hosts only
 - this avoids trying to stretch one Hetzner private network across different
   network zones

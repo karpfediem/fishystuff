@@ -1,0 +1,56 @@
+import "fmt"
+import "../lib/fishystuff-beta-resident-layout/" as fishystuff_beta_resident_layout
+import "../fishystuff-beta-resident-core/"
+
+class host($st) {
+	$hostname str = $st->hostname || ""
+	$cluster str = $st->cluster || "beta"
+
+	include fishystuff_beta_resident_layout.catalog(struct {
+		cluster => $cluster,
+	}) as layout
+	include layout.host($hostname) as host_layout
+
+	if $host_layout.api_enabled or $host_layout.dolt_enabled {
+		include fishystuff_beta_resident_core.api_db_host(struct {
+			hostname => $hostname,
+			api_bundle_path => $st->api_bundle_path || "",
+			dolt_bundle_path => $st->dolt_bundle_path || "",
+			site_base_url => $st->site_base_url || $host_layout.site_base_url,
+			api_base_url => $st->api_base_url || $host_layout.api_base_url,
+			cdn_base_url => $st->cdn_base_url || $host_layout.cdn_base_url,
+			telemetry_base_url => $st->telemetry_base_url || $host_layout.telemetry_base_url,
+			deployment_environment => $st->deployment_environment || "beta",
+			startup_mode => $st->startup_mode || "enabled",
+			dolt_data_dir => $st->dolt_data_dir || "/var/lib/fishystuff/dolt",
+			dolt_cfg_dir => $st->dolt_cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
+			dolt_database_name => $st->dolt_database_name || "fishystuff",
+			dolt_remote_url => $st->dolt_remote_url || "fishystuff/fishystuff",
+			dolt_remote_branch => $st->dolt_remote_branch || "main",
+			dolt_clone_depth => $st->dolt_clone_depth || "1",
+			dolt_volume_device => if ($st->dolt_volume_device || "") != "" { $st->dolt_volume_device } else { $host_layout.dolt_volume_device },
+			dolt_volume_fs_type => $st->dolt_volume_fs_type || "ext4",
+			dolt_port => $st->dolt_port || "3306",
+		})
+	}
+
+	panic(
+		(not $host_layout.api_enabled)
+		and (not $host_layout.dolt_enabled)
+		and $host_layout.cdn_expected,
+		fmt.printf(
+			"host %s is a CDN edge in the current beta topology, but fishystuff-cdn resident bundle activation is not implemented yet",
+			$hostname
+		)
+	)
+
+	panic(
+		(not $host_layout.api_enabled)
+		and (not $host_layout.dolt_enabled)
+		and $host_layout.telemetry_expected,
+		fmt.printf(
+			"host %s is a telemetry host in the current beta topology, but resident telemetry bundle activation is not implemented yet",
+			$hostname
+		)
+	)
+}

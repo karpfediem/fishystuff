@@ -7,6 +7,7 @@
 }:
 let
   helpers = import ./helpers.nix { inherit lib; };
+  systemdBackend = import ./systemd-backend.nix { inherit lib pkgs; };
   inherit (lib) mkOption optional optionalAttrs types;
   cfg = config.fishystuff.api;
   apiExe = lib.getExe' cfg.package "fishystuff_server";
@@ -19,6 +20,53 @@ let
   runtimeEnvFiles =
     optional (cfg.runtimeEnvFile != null) (toString cfg.runtimeEnvFile)
     ++ map toString cfg.environmentFiles;
+  systemdEnvironmentFiles =
+    optional (cfg.runtimeEnvFile != null) "-${toString cfg.runtimeEnvFile}"
+    ++ map toString cfg.environmentFiles;
+  serviceArgv =
+    [
+      apiExe
+      "--config"
+      configSource
+      "--bind"
+      "${cfg.listenAddress}:${toString cfg.port}"
+    ]
+    ++ optional (cfg.requestTimeoutSecs != null) "--request-timeout-secs"
+    ++ optional (cfg.requestTimeoutSecs != null) (toString cfg.requestTimeoutSecs)
+    ++ cfg.extraArgs;
+  systemdUnit = systemdBackend.mkSystemdUnit {
+    unitName = "fishystuff-api.service";
+    description = "Fishystuff API service";
+    argv = serviceArgv;
+    environment = helpers.stringifyEnvironment staticEnvironment;
+    environmentFiles = systemdEnvironmentFiles;
+    user = lib.optionalString (!cfg.dynamicUser) cfg.user;
+    group = lib.optionalString (!cfg.dynamicUser) cfg.group;
+    dynamicUser = cfg.dynamicUser;
+    supplementaryGroups = cfg.supplementaryGroups;
+    workingDirectory =
+      if cfg.workingDirectory == null then null else toString cfg.workingDirectory;
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    restartPolicy = "on-failure";
+    restartDelaySeconds = 5;
+    serviceLines = [
+      "PrivateTmp=true"
+      "PrivateDevices=true"
+      "ProtectSystem=strict"
+      "ProtectHome=true"
+      "ProtectKernelTunables=true"
+      "ProtectKernelModules=true"
+      "ProtectControlGroups=true"
+      "LockPersonality=true"
+      "MemoryDenyWriteExecute=true"
+      "NoNewPrivileges=true"
+      "RestrictRealtime=true"
+      "RestrictSUIDSGID=true"
+      "SystemCallArchitectures=native"
+      "UMask=0077"
+    ];
+  };
 in
 {
   _class = "service";
@@ -137,17 +185,7 @@ in
 
     configData.${configName}.source = cfg.baseConfigSource;
 
-    process.argv =
-      [
-        apiExe
-        "--config"
-        configSource
-        "--bind"
-        "${cfg.listenAddress}:${toString cfg.port}"
-      ]
-      ++ optional (cfg.requestTimeoutSecs != null) "--request-timeout-secs"
-      ++ optional (cfg.requestTimeoutSecs != null) (toString cfg.requestTimeoutSecs)
-      ++ cfg.extraArgs;
+    process.argv = serviceArgv;
 
     bundle = {
       id = "fishystuff-api";
@@ -156,6 +194,7 @@ in
         cfg.package
         configSource
         cfg.secretSpecSource
+        systemdUnit.file
       ];
 
       artifacts = {
@@ -170,6 +209,8 @@ in
           storePath = configSource;
           destination = configName;
         };
+
+        "systemd/unit" = systemdUnit.artifact;
       };
 
       activation = {
@@ -235,6 +276,8 @@ in
       requiredCapabilities =
         optional cfg.dynamicUser "dynamic-user"
         ++ optional (!cfg.dynamicUser) "run-as-user";
+
+      backends.systemd = systemdUnit.backend;
     };
   }
   // optionalAttrs (options ? systemd) {
@@ -273,10 +316,6 @@ in
         // optionalAttrs (cfg.workingDirectory != null) {
           WorkingDirectory = toString cfg.workingDirectory;
         };
-    };
-
-    bundle.backends.systemd = {
-      unit = "fishystuff-api.service";
     };
   };
 }

@@ -7,10 +7,17 @@
 }:
 let
   helpers = import ./helpers.nix { inherit lib; };
+  systemdBackend = import ./systemd-backend.nix { inherit lib pkgs; };
   inherit (lib) mkOption optional optionalAttrs types;
   cfg = config.fishystuff.dolt;
   yamlFormat = pkgs.formats.yaml { };
   configName = cfg.configFileName;
+  staticEnvironment = helpers.stringifyEnvironment (
+    cfg.environment
+    // {
+      HOME = cfg.dataDir;
+    }
+  );
   sqlServerConfig = yamlFormat.generate "fishystuff-dolt-sql-server.yaml" {
     log_level = cfg.logLevel;
     behavior = {
@@ -28,6 +35,49 @@ let
   runtimeEnvFiles =
     optional (cfg.runtimeEnvFile != null) (toString cfg.runtimeEnvFile)
     ++ map toString cfg.environmentFiles;
+  systemdEnvironmentFiles =
+    optional (cfg.runtimeEnvFile != null) "-${toString cfg.runtimeEnvFile}"
+    ++ map toString cfg.environmentFiles;
+  serviceArgv = [
+    (lib.getExe cfg.package)
+    "sql-server"
+    "--config"
+    sqlServerConfig
+  ] ++ cfg.extraArgs;
+  systemdUnit = systemdBackend.mkSystemdUnit {
+    unitName = "fishystuff-dolt.service";
+    description = "Fishystuff Dolt SQL service";
+    argv = serviceArgv;
+    environment = staticEnvironment;
+    environmentFiles = systemdEnvironmentFiles;
+    user = cfg.user;
+    group = cfg.group;
+    supplementaryGroups = cfg.supplementaryGroups;
+    workingDirectory = cfg.dataDir;
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    restartPolicy = "on-failure";
+    restartDelaySeconds = 5;
+    readWritePaths = [
+      cfg.dataDir
+      cfg.cfgDir
+    ];
+    serviceLines = [
+      "PrivateTmp=true"
+      "PrivateDevices=true"
+      "ProtectSystem=strict"
+      "ProtectHome=true"
+      "ProtectKernelTunables=true"
+      "ProtectKernelModules=true"
+      "ProtectControlGroups=true"
+      "LockPersonality=true"
+      "NoNewPrivileges=true"
+      "RestrictRealtime=true"
+      "RestrictSUIDSGID=true"
+      "SystemCallArchitectures=native"
+      "UMask=0077"
+    ];
+  };
 in
 {
   _class = "service";
@@ -141,12 +191,7 @@ in
   config = {
     configData.${configName}.source = sqlServerConfig;
 
-    process.argv = [
-      (lib.getExe cfg.package)
-      "sql-server"
-      "--config"
-      sqlServerConfig
-    ] ++ cfg.extraArgs;
+    process.argv = serviceArgv;
 
     bundle = {
       id = "fishystuff-dolt";
@@ -154,6 +199,7 @@ in
       roots.store = [
         cfg.package
         sqlServerConfig
+        systemdUnit.file
       ];
 
       artifacts = {
@@ -168,6 +214,8 @@ in
           storePath = sqlServerConfig;
           destination = configName;
         };
+
+        "systemd/unit" = systemdUnit.artifact;
       };
 
       activation = {
@@ -205,7 +253,7 @@ in
       };
 
       supervision = {
-        environment = helpers.stringifyEnvironment cfg.environment;
+        environment = staticEnvironment;
         environmentFiles = runtimeEnvFiles;
         workingDirectory = cfg.dataDir;
         identity = {
@@ -245,11 +293,13 @@ in
         );
 
       requiredCapabilities = [ "run-as-user" ];
+
+      backends.systemd = systemdUnit.backend;
     };
   }
   // optionalAttrs (options ? systemd) {
     systemd.services."" = {
-      environment = helpers.stringifyEnvironment cfg.environment;
+      environment = staticEnvironment;
       restartTriggers = [ sqlServerConfig ];
       serviceConfig = {
         Type = "simple";
@@ -280,10 +330,6 @@ in
           cfg.cfgDir
         ];
       };
-    };
-
-    bundle.backends.systemd = {
-      unit = "fishystuff-dolt.service";
     };
   };
 }

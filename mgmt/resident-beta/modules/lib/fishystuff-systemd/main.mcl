@@ -1,0 +1,94 @@
+import "fmt"
+import "deploy"
+import "golang"
+class daemon_reload($st) {
+	$empty_list []str = []
+	$name str = $st->name || "systemd-daemon-reload"
+	$systemctl_exec str = $st->systemctl_exec || "/usr/bin/systemctl"
+	$mtimes []str = $st->mtimes || [
+		"/etc/systemd/system/",
+	]
+
+	exec "${name}" {
+		cmd => $systemctl_exec,
+		args => [
+			"daemon-reload",
+		],
+		mtimes => $mtimes,
+		ifcmd => "/bin/false",
+	}
+}
+
+class service($st) {
+	$name str = $st->name
+	$desired_state str = $st->state || "running"
+	$startup_mode str = $st->startup_mode || "enabled"
+
+	panic(
+		($startup_mode != "enabled")
+		and ($startup_mode != "disabled")
+		and ($startup_mode != "none"),
+		fmt.printf("unknown startup_mode %s for %s", $startup_mode, $name)
+	)
+	panic(
+		($desired_state != "running")
+		and ($desired_state != "stopped"),
+		fmt.printf("unknown desired_state %s for %s", $desired_state, $name)
+	)
+
+	if $startup_mode == "none" {
+		svc "${name}" {
+			state => $desired_state,
+		}
+	}
+
+	if $startup_mode != "none" {
+		svc "${name}" {
+			state => $desired_state,
+			startup => $startup_mode,
+		}
+	}
+}
+
+class unit($path, $st) {
+	$empty_list []str = []
+	$description str = $st->description
+	$exec_start str = $st->exec_start
+	$user str = $st->user || ""
+	$group str = $st->group || ""
+	$working_directory str = $st->working_directory || ""
+	$unit_lines []str = $st->unit_lines || $empty_list
+	$environment_lines []str = $st->environment_lines || $empty_list
+	$environment_file str = $st->environment_file || ""
+	$after_units []str = $st->after_units || $empty_list
+	$wants_units []str = $st->wants_units || $empty_list
+	$read_write_paths []str = $st->read_write_paths || $empty_list
+	$service_lines []str = $st->service_lines || $empty_list
+	$restart_policy str = $st->restart_policy || "on-failure"
+	$restart_delay_seconds int = $st->restart_delay_seconds || 5
+	$tmpl = struct {
+		description => $description,
+		unit_lines => $unit_lines,
+		after_units => $after_units,
+		wants_units => $wants_units,
+		user => $user,
+		group => $group,
+		working_directory => $working_directory,
+		environment_lines => $environment_lines,
+		environment_file => $environment_file,
+		exec_start => $exec_start,
+		restart_policy => $restart_policy,
+		restart_delay_seconds => $restart_delay_seconds,
+		read_write_paths => $read_write_paths,
+		service_lines => $service_lines,
+	}
+	$content = golang.template(deploy.readfile("/files/systemd.service.tmpl"), $tmpl)
+
+	file "${path}" {
+		state => "exists",
+		content => $content,
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+	}
+}

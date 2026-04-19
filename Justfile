@@ -85,7 +85,7 @@ mgmt-beta-unify mgmt_bin="../result/bin/mgmt":
 
 # Run the local mgmt Hetzner beta topology bootstrap as a one-shot converging apply.
 # Default state is absent for safety; use state=running to request server creation.
-mgmt-beta-bootstrap state="absent" converged_timeout="30" mgmt_bin="../result/bin/mgmt":
+mgmt-beta-bootstrap state="absent" converged_timeout="30" mgmt_bin="../result/bin/mgmt" client_urls="http://127.0.0.1:3379" server_urls="http://127.0.0.1:3380" prometheus="false" prometheus_listen="127.0.0.1:9233" pprof_path="":
   #!/usr/bin/env bash
   set -euo pipefail
   state='{{state}}'
@@ -94,10 +94,40 @@ mgmt-beta-bootstrap state="absent" converged_timeout="30" mgmt_bin="../result/bi
   converged_timeout="${converged_timeout#converged_timeout=}"
   mgmt_bin='{{mgmt_bin}}'
   mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  client_urls='{{client_urls}}'
+  client_urls="${client_urls#client_urls=}"
+  server_urls='{{server_urls}}'
+  server_urls="${server_urls#server_urls=}"
+  prometheus='{{prometheus}}'
+  prometheus="${prometheus#prometheus=}"
+  prometheus_listen='{{prometheus_listen}}'
+  prometheus_listen="${prometheus_listen#prometheus_listen=}"
+  pprof_path='{{pprof_path}}'
+  pprof_path="${pprof_path#pprof_path=}"
   FISHYSTUFF_HETZNER_STATE="$state" \
     secretspec run --profile beta-deploy -- \
-    bash -lc 'cd mgmt && "$1" run lang --tmp-prefix --no-network --no-watch --converged-timeout "$2" main.mcl' \
-    -- "$mgmt_bin" "$converged_timeout"
+    bash -lc '
+      set -euo pipefail
+      cd mgmt
+      cmd=(
+        "$1" run
+        --client-urls="$2"
+        --server-urls="$3"
+        --advertise-client-urls="$2"
+        --advertise-server-urls="$3"
+      )
+      case "$5" in
+        true|1|yes)
+          cmd+=(--prometheus --prometheus-listen "$6")
+          ;;
+      esac
+      cmd+=(lang --tmp-prefix --no-watch --converged-timeout "$4" main.mcl)
+      if [[ -n "$7" ]]; then
+        export MGMT_PPROF_PATH="$7"
+      fi
+      "${cmd[@]}"
+    ' \
+    -- "$mgmt_bin" "$client_urls" "$server_urls" "$converged_timeout" "$prometheus" "$prometheus_listen" "$pprof_path"
 
 # Type-check the resident bootstrap graph used to install a host-local mgmt service.
 mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
@@ -121,13 +151,24 @@ mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120"
   mgmt_flake='{{mgmt_flake}}'
   mgmt_flake="${mgmt_flake#mgmt_flake=}"
   mgmt_store="$(nix build "$mgmt_flake" --no-link --print-out-paths)"
-  nix copy --to "ssh-ng://$target" "$mgmt_store"
-  bash mgmt/scripts/kickstart-fishystuff-resident-remote.sh \
-    mgmt/resident-bootstrap \
-    "$target" \
-    "$host" \
-    "$timeout" \
-    "$mgmt_store/bin/mgmt"
+  secretspec run --profile beta-deploy -- \
+    bash -lc '
+      set -euo pipefail
+      tmp_key="$(mktemp /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      nix copy --to "ssh-ng://$1?ssh-key=$tmp_key" "$4"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+        bash mgmt/scripts/kickstart-fishystuff-resident-remote.sh \
+          mgmt/resident-bootstrap \
+          "$1" \
+          "$2" \
+          "$3" \
+          "$4/bin/mgmt"
+    ' \
+    -- "$target" "$host" "$timeout" "$mgmt_store"
 
 # Push a self-contained graph directory into the resident mgmt instance on a remote host.
 mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt":
@@ -141,11 +182,154 @@ mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" 
   timeout="${timeout#timeout=}"
   remote_mgmt_bin='{{remote_mgmt_bin}}'
   remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
-  bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
-    "$dir" \
-    "$target" \
-    "$timeout" \
-    "$remote_mgmt_bin"
+  secretspec run --profile beta-deploy -- \
+    bash -lc '
+      set -euo pipefail
+      tmp_key="$(mktemp /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+          "$1" \
+          "$2" \
+          "$3" \
+          "$4"
+    ' \
+    -- "$dir" "$target" "$timeout" "$remote_mgmt_bin"
+
+# Build the API and Dolt service bundles locally, push both closures to a
+# remote host, root them at stable GC-root paths, and deploy the resident beta
+# graph for the current API/DB host shape.
+mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  target='{{target}}'
+  target="${target#target=}"
+  host='{{host}}'
+  host="${host#host=}"
+  timeout='{{timeout}}'
+  timeout="${timeout#timeout=}"
+  remote_mgmt_bin='{{remote_mgmt_bin}}'
+  remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
+  api_gcroot='{{api_gcroot}}'
+  api_gcroot="${api_gcroot#api_gcroot=}"
+  dolt_gcroot='{{dolt_gcroot}}'
+  dolt_gcroot="${dolt_gcroot#dolt_gcroot=}"
+  api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
+  dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
+  secretspec run --profile beta-deploy -- \
+    bash -lc '
+      set -euo pipefail
+      tmp_key="$(mktemp /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      export FISHYSTUFF_BETA_HOSTNAME="$2"
+      export FISHYSTUFF_API_BUNDLE_PATH="$3"
+      export FISHYSTUFF_DOLT_BUNDLE_PATH="$5"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      NIX_SSH_KEY_PATH="$tmp_key" \
+      bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
+          "$1" \
+          "$4" \
+          "$3" \
+          "$6" \
+          "$5"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+          mgmt/resident-beta \
+          "$1" \
+          "$7" \
+          "$8"
+    ' \
+    -- "$target" "$host" "$api_gcroot" "$api_bundle" "$dolt_gcroot" "$dolt_bundle" "$timeout" "$remote_mgmt_bin"
+
+# Build a temporary resident graph that installs a bundle-backed systemd unit
+# from a local Nix bundle root, validate it, and deploy it to a resident mgmt
+# instance over SSH.
+mgmt-resident-dolt-bundle-probe target="mgmt-root" bundle_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="/home/carp/code/playground/mgmt-missing-features/mgmt":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  target='{{target}}'
+  target="${target#target=}"
+  bundle_path='{{bundle_path}}'
+  bundle_path="${bundle_path#bundle_path=}"
+  timeout='{{timeout}}'
+  timeout="${timeout#timeout=}"
+  remote_mgmt_bin='{{remote_mgmt_bin}}'
+  remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
+  mgmt_bin='{{mgmt_bin}}'
+  mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  probe_dir="$(mktemp -d /tmp/fishystuff-resident-bundle-probe.XXXXXX)"
+  trap 'rm -rf "$probe_dir"' EXIT
+  mkdir -p "$probe_dir/modules/lib"
+  cp -a mgmt/resident-beta/modules/lib/fishystuff-systemd "$probe_dir/modules/lib/"
+  cp -a mgmt/resident-beta/modules/lib/fishystuff-bundle-systemd "$probe_dir/modules/lib/"
+  printf '%s\n' \
+    'import "modules/lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd' \
+    '' \
+    'include fishystuff_bundle_systemd.unit(struct {' \
+    "	bundle_path => \"${bundle_path}\"," \
+    '	startup_mode => "enabled",' \
+    '})' \
+    > "$probe_dir/main.mcl"
+  printf 'main: main.mcl\n' > "$probe_dir/metadata.yaml"
+  "$mgmt_bin" run lang --only-unify "$probe_dir/main.mcl"
+  secretspec run --profile beta-deploy -- \
+    bash -lc '
+      set -euo pipefail
+      tmp_key="$(mktemp /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+          "$1" \
+          "$2" \
+          "$3" \
+          "$4"
+    ' \
+    -- "$probe_dir" "$target" "$timeout" "$remote_mgmt_bin"
+
+# Build the Dolt service bundle, copy it to a remote host, root it, install the
+# rendered unit, and verify that the SQL server answers a local health check.
+mgmt-dolt-target-smoke target="mgmt-root" gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" sql_host="127.0.0.1" sql_port="3306" query_timeout="20":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  target='{{target}}'
+  target="${target#target=}"
+  gcroot='{{gcroot}}'
+  gcroot="${gcroot#gcroot=}"
+  sql_host='{{sql_host}}'
+  sql_host="${sql_host#sql_host=}"
+  sql_port='{{sql_port}}'
+  sql_port="${sql_port#sql_port=}"
+  query_timeout='{{query_timeout}}'
+  query_timeout="${query_timeout#query_timeout=}"
+  bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
+  secretspec run --profile beta-deploy -- \
+    bash -lc '
+      set -euo pipefail
+      tmp_key="$(mktemp /tmp/fishystuff-dolt-smoke-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
+      NIX_SSH_KEY_PATH="$tmp_key" \
+      bash mgmt/scripts/smoke-fishystuff-dolt-target.sh \
+        "$1" \
+        "$2" \
+        "$3" \
+        "$4" \
+        "$5" \
+        "$6"
+    ' \
+    -- "$bundle" "$target" "$gcroot" "$sql_host" "$sql_port" "$query_timeout"
 
 # Build the current map runtime and map-serving CDN payload once
 build-map:

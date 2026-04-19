@@ -1,0 +1,58 @@
+import "encoding"
+import "fmt"
+import "os"
+import "../fishystuff-systemd/" as fishystuff_systemd
+
+class unit($st) {
+	$bundle_path str = $st->bundle_path || ""
+	$startup_mode str = $st->startup_mode || ""
+	$systemctl_exec str = $st->systemctl_exec || "/usr/bin/systemctl"
+	$bundle struct{id str; backends struct{systemd struct{service_manager str; units []struct{name str; install_path str; startup str; state str}}}} = encoding.decode_json_flexible(
+		os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
+	)
+	$systemd struct{service_manager str; units []struct{name str; install_path str; startup str; state str}} = $bundle->backends->systemd
+	$unit struct{name str; install_path str; startup str; state str} = $systemd->units[0]
+	$unit_name str = $unit->name
+	$install_path str = $unit->install_path
+	$unit_source_path str = fmt.printf("%s/artifacts/systemd/unit", $bundle_path)
+	$resolved_startup_mode str = if $startup_mode != "" {
+		$startup_mode
+	} else {
+		if ($unit->startup || "") != "" {
+			$unit->startup
+		} else {
+			"enabled"
+		}
+	}
+	$desired_state str = if ($unit->state || "") != "" {
+		$unit->state
+	} else {
+		"running"
+	}
+	$reload_name str = fmt.printf("systemd-daemon-reload-%s", $bundle->id)
+
+	panic($bundle_path == "", "missing bundle_path for fishystuff bundle-backed systemd unit")
+	panic($systemd->service_manager != "systemd", fmt.printf("bundle %s does not declare a systemd backend", $bundle->id))
+	panic(len($systemd->units) != 1, fmt.printf("bundle %s must declare exactly one systemd unit for this class", $bundle->id))
+
+	file "${install_path}" {
+		state => "exists",
+		source => $unit_source_path,
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+	}
+
+	include fishystuff_systemd.daemon_reload(struct {
+		name => $reload_name,
+		systemctl_exec => $systemctl_exec,
+	})
+
+	include fishystuff_systemd.service(struct {
+		name => $unit_name,
+		state => $desired_state,
+		startup_mode => $resolved_startup_mode,
+	})
+
+	File["${install_path}"] -> Exec["${reload_name}"] -> Svc["${unit_name}"]
+}

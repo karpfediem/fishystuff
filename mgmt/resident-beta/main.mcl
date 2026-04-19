@@ -1,0 +1,44 @@
+import "sys"
+import "modules/fishystuff-beta-resident/"
+
+$hostname = sys.defaultenv("FISHYSTUFF_BETA_HOSTNAME", "")
+$api_bundle_path = sys.defaultenv("FISHYSTUFF_API_BUNDLE_PATH", "")
+$dolt_bundle_path = sys.defaultenv("FISHYSTUFF_DOLT_BUNDLE_PATH", "")
+$site_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_SITE_BASE_URL", "https://beta.fishystuff.fish")
+$api_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_API_BASE_URL", "https://api.beta.fishystuff.fish")
+$cdn_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_CDN_BASE_URL", "https://cdn.beta.fishystuff.fish")
+$telemetry_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_TELEMETRY_BASE_URL", "https://telemetry.beta.fishystuff.fish")
+$deployment_environment = sys.defaultenv("FISHYSTUFF_DEPLOYMENT_ENVIRONMENT", "beta")
+$startup_mode = sys.defaultenv("FISHYSTUFF_BETA_STARTUP_MODE", "enabled")
+$dolt_data_dir = sys.defaultenv("FISHYSTUFF_DOLT_DATA_DIR", "/var/lib/fishystuff/dolt")
+$dolt_cfg_dir = sys.defaultenv("FISHYSTUFF_DOLT_CFG_DIR", "${dolt_data_dir}/.doltcfg")
+$dolt_database_name = sys.defaultenv("FISHYSTUFF_DOLT_DATABASE_NAME", "fishystuff")
+$dolt_remote_url = sys.defaultenv("FISHYSTUFF_DOLT_REMOTE_URL", "fishystuff/fishystuff")
+$dolt_remote_branch = sys.defaultenv("FISHYSTUFF_DOLT_REMOTE_BRANCH", "main")
+$dolt_clone_depth = sys.defaultenv("FISHYSTUFF_DOLT_CLONE_DEPTH", "1")
+$dolt_volume_device = sys.defaultenv("FISHYSTUFF_DOLT_VOLUME_DEVICE", "")
+$dolt_volume_fs_type = sys.defaultenv("FISHYSTUFF_DOLT_VOLUME_FS_TYPE", "ext4")
+$dolt_port = sys.defaultenv("FISHYSTUFF_DOLT_PORT", "3306")
+
+panic($hostname == "", "missing resident beta hostname; set FISHYSTUFF_BETA_HOSTNAME")
+
+include fishystuff_beta_resident.host(struct {
+	hostname => $hostname,
+	api_bundle_path => $api_bundle_path,
+	dolt_bundle_path => $dolt_bundle_path,
+	site_base_url => $site_base_url,
+	api_base_url => $api_base_url,
+	cdn_base_url => $cdn_base_url,
+	telemetry_base_url => $telemetry_base_url,
+	deployment_environment => $deployment_environment,
+	startup_mode => $startup_mode,
+	dolt_data_dir => $dolt_data_dir,
+	dolt_cfg_dir => $dolt_cfg_dir,
+	dolt_database_name => $dolt_database_name,
+	dolt_remote_url => $dolt_remote_url,
+	dolt_remote_branch => $dolt_remote_branch,
+	dolt_clone_depth => $dolt_clone_depth,
+	dolt_volume_device => $dolt_volume_device,
+	dolt_volume_fs_type => $dolt_volume_fs_type,
+	dolt_port => $dolt_port,
+})

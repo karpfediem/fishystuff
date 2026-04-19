@@ -1,0 +1,39 @@
+[Unit]
+Description={{ .description }}
+{{- range .unit_lines }}
+{{ . }}
+{{- end }}
+{{- if .after_units }}
+After={{- range $ix, $unit := .after_units }}{{ if $ix }} {{ end }}{{ $unit }}{{- end }}
+{{- end }}
+{{- if .wants_units }}
+Wants={{- range $ix, $unit := .wants_units }}{{ if $ix }} {{ end }}{{ $unit }}{{- end }}
+{{- end }}
+[Service]
+Type=simple
+{{- if .user }}
+User={{ .user }}
+{{- end }}
+{{- if .group }}
+Group={{ .group }}
+{{- end }}
+{{- if .working_directory }}
+WorkingDirectory={{ .working_directory }}
+{{- end }}
+{{- range .environment_lines }}
+{{ . }}
+{{- end }}
+{{- if .environment_file }}
+EnvironmentFile=-{{ .environment_file }}
+{{- end }}
+ExecStart={{ .exec_start }}
+Restart={{ .restart_policy }}
+RestartSec={{ .restart_delay_seconds }}s
+{{- if .read_write_paths }}
+ReadWritePaths={{- range $ix, $path := .read_write_paths }}{{ if $ix }} {{ end }}{{ $path }}{{- end }}
+{{- end }}
+{{- range .service_lines }}
+{{ . }}
+{{- end }}
+[Install]
+WantedBy=multi-user.target
