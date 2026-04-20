@@ -1,9 +1,12 @@
 import "encoding"
 import "deploy"
 import "fmt"
+import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
+import "git:///providers/hetzner-firewall/" as hetzner_firewall
 import "golang"
 import "golang/strings" as golang_strings
 import "os"
+import "sys"
 import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
 import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
 
@@ -24,6 +27,8 @@ class api_db_host($st) {
 	$api_service struct{bundle_path str; gcroot_path str} = $services["api"]
 	$dolt_service struct{bundle_path str; gcroot_path str} = $services["dolt"]
 	$edge_service struct{bundle_path str; gcroot_path str} = $services["edge"]
+	$cluster str = $manifest->cluster || "beta"
+	$api_token str = sys.getenv("HETZNER_API_TOKEN")
 	$api_bundle_path str = $api_service->bundle_path || ""
 	$dolt_bundle_path str = $dolt_service->bundle_path || ""
 	$edge_bundle_path str = $edge_service->bundle_path || ""
@@ -74,6 +79,10 @@ class api_db_host($st) {
 		deployment_environment => $deployment_environment,
 	})
 
+	include fishystuff_beta_access.catalog(struct {
+		cluster => $cluster,
+	}) as access
+
 	panic($hostname == "", "resident core host requires hostname")
 	panic($api_bundle_path == "", fmt.printf("host %s requires services.api.bundle_path in resident manifest", $hostname))
 	panic($dolt_bundle_path == "", fmt.printf("host %s requires services.dolt.bundle_path in resident manifest", $hostname))
@@ -100,6 +109,18 @@ class api_db_host($st) {
 	}
 
 	if $edge_bundle_path != "" {
+		if $tls_enabled {
+			include access.https($hostname) as https_firewall
+
+			include hetzner_firewall.firewall(struct {
+				name => $https_firewall.name,
+				apitoken => $api_token,
+				rules => $https_firewall.rules,
+				applyto => $https_firewall.applyto,
+				labels => $https_firewall.labels,
+			})
+		}
+
 		file "/srv/fishystuff/" {
 			state => "exists",
 			mode => "u=rwx,go=rx",
