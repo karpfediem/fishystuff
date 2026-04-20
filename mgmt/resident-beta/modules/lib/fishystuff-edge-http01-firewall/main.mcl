@@ -1,0 +1,45 @@
+import "fmt"
+import "sys"
+import "value"
+import "../../../../modules/lib/fishystuff-beta-access/" as fishystuff_beta_access
+import "../../../../modules/providers/hetzner-firewall/" as hetzner_firewall
+
+class gate($st) {
+	$cluster str = $st->cluster || "beta"
+	$hostname str = $st->hostname || ""
+	$certificate_name str = $st->certificate_name || ""
+	$api_token str = $st->api_token || sys.getenv("HETZNER_API_TOKEN")
+	$wait_interval_seconds int = $st->wait_interval_seconds || 5
+	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
+	$poll_seconds int = $st->poll_seconds || 30
+	$pending_value_name str = fmt.printf("%s-http01-pending", $certificate_name)
+
+	panic($hostname == "", fmt.printf("missing hostname for temporary HTTP-01 firewall on certificate %s", $certificate_name))
+	panic($certificate_name == "", "temporary HTTP-01 firewall gate requires certificate_name")
+	panic($api_token == "", fmt.printf("missing Hetzner API token for temporary HTTP-01 firewall on %s", $hostname))
+
+	include fishystuff_beta_access.catalog(struct {
+		cluster => $cluster,
+	}) as access
+	include access.http_01($hostname) as http01_firewall
+
+	$pending struct{value bool; ready bool} = value.get_bool($pending_value_name)
+	$ready bool = $pending->ready and $pending->value
+	$firewall_name str = $http01_firewall.name
+
+	value $pending_value_name {
+		any => false,
+	}
+
+	include hetzner_firewall.firewall(struct {
+		name => $firewall_name,
+		apitoken => $api_token,
+		state => if $ready { "exists" } else { "absent" },
+		rules => $http01_firewall.rules,
+		applyto => $http01_firewall.applyto,
+		labels => $http01_firewall.labels,
+		waitinterval => $wait_interval_seconds,
+		waittimeout => $wait_timeout_seconds,
+		poll => $poll_seconds,
+	})
+}

@@ -24,6 +24,22 @@
     "site_root_dir": "/srv/fishystuff/site",
     "cdn_root_dir": "/srv/fishystuff/cdn"
   },
+  "tls": {
+    "enabled": false,
+    "certificate_name": "beta-nbg1-api-db-edge-tls",
+    "acme_email": "",
+    "challenge": "http-01",
+    "dns_provider": "",
+    "dns_env": {},
+    "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+    "http_address": "0.0.0.0",
+    "http_port": 80,
+    "domains": [
+      "beta.fishystuff.fish",
+      "api.beta.fishystuff.fish",
+      "telemetry.beta.fishystuff.fish"
+    ]
+  },
   "services": {
     "api": {
       "bundle_path": "",

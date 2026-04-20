@@ -22,16 +22,17 @@ remote_tar="${remote_tar//$'\n'/}"
 
 cat "$local_tar" | ssh "${ssh_opts[@]}" "$ssh_target" "cat > '$remote_tar'"
 
-ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "$timeout_secs" "$remote_mgmt_bin" "$remote_tar" <<'EOF'
+ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "$timeout_secs" "$remote_mgmt_bin" "$remote_tar" "${HETZNER_API_TOKEN:-}" <<'EOF'
 set -euo pipefail
 
 timeout_secs="${1:?missing timeout seconds}"
 remote_mgmt_bin="${2:?missing remote mgmt binary path}"
 remote_tar="${3:?missing remote tar path}"
-shift 3
+hetzner_api_token="${4:-}"
+shift 4
 remote_tmp="$(mktemp -d /tmp/fishystuff-mgmt-deploy.XXXXXX)"
 trap 'rm -rf "$remote_tmp"; rm -f "$remote_tar"' EXIT
 
 tar -C "$remote_tmp" -xf "$remote_tar"
-sudo "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang "$remote_tmp/"
+sudo HETZNER_API_TOKEN="$hetzner_api_token" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang "$remote_tmp/"
 EOF

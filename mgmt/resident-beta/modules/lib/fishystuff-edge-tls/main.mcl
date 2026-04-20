@@ -1,0 +1,119 @@
+import "encoding"
+import "fmt"
+import "os"
+import "../fishystuff-edge-http01-firewall/" as fishystuff_edge_http01_firewall
+
+class certificate($st) {
+	$enabled bool = $st->enabled || false
+
+	if $enabled {
+		$cluster str = $st->cluster || "beta"
+		$hostname str = $st->hostname || ""
+		$bundle_path str = $st->bundle_path || ""
+		$service_name str = $st->service_name || "fishystuff-edge"
+		$certificate_name str = $st->certificate_name || fmt.printf("%s-cert", $service_name)
+		$acme_email str = $st->acme_email || ""
+		$challenge str = $st->challenge || ""
+		$dns_provider str = $st->dns_provider || ""
+		$dns_env map{str: str} = $st->dns_env || {}
+		$directory_url str = $st->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
+		$http_address str = $st->http_address || "0.0.0.0"
+		$http_port int = $st->http_port || 80
+		$domains []str = $st->domains || []
+		$bundle struct{runtime_overlays []struct{name str; target_path str; secret bool; on_change str}} = encoding.decode_json_flexible(
+			os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
+		)
+		$runtime_overlays []struct{name str; target_path str; secret bool; on_change str} = $bundle->runtime_overlays
+		$fullchain_overlay struct{name str; target_path str; secret bool; on_change str} = $runtime_overlays[0]
+		$private_key_overlay struct{name str; target_path str; secret bool; on_change str} = $runtime_overlays[1]
+		$fullchain_path str = $fullchain_overlay->target_path
+		$private_key_path str = $private_key_overlay->target_path
+
+		panic($bundle_path == "", fmt.printf("missing edge bundle_path for TLS certificate %s", $certificate_name))
+		panic($acme_email == "", fmt.printf("missing acme_email for TLS certificate %s", $certificate_name))
+		panic(len($domains) == 0, fmt.printf("missing domains for TLS certificate %s", $certificate_name))
+		panic(($challenge != "http-01") and ($challenge != "dns-01"), fmt.printf("unsupported TLS ACME challenge %s for %s", $challenge, $certificate_name))
+		panic(($challenge == "http-01") and ($hostname == ""), fmt.printf("missing hostname for HTTP-01 TLS certificate %s", $certificate_name))
+		panic(($challenge == "dns-01") and ($dns_provider == ""), fmt.printf("missing dns_provider for TLS certificate %s", $certificate_name))
+		panic(len($runtime_overlays) != 2, fmt.printf("edge bundle must declare exactly two TLS runtime overlays for %s", $certificate_name))
+		panic($fullchain_overlay->name != "tls-fullchain", fmt.printf("unexpected first edge TLS overlay %s for %s", $fullchain_overlay->name, $certificate_name))
+		panic($private_key_overlay->name != "tls-private-key", fmt.printf("unexpected second edge TLS overlay %s for %s", $private_key_overlay->name, $certificate_name))
+
+		file "/run/fishystuff/edge/" {
+			state => "exists",
+			mode => "u=rwx,go=rx",
+			owner => "root",
+			group => "root",
+		}
+
+		file "/run/fishystuff/edge/tls/" {
+			state => "exists",
+			mode => "u=rwx,go=rx",
+			owner => "root",
+			group => "root",
+		}
+
+		if $challenge == "http-01" {
+			include fishystuff_edge_http01_firewall.gate(struct {
+				cluster => $cluster,
+				hostname => $hostname,
+				certificate_name => $certificate_name,
+			}) as http01_firewall_gate
+
+			acme "${certificate_name}" {
+				accept_tos => true,
+				email => $acme_email,
+				domains => $domains,
+				challenge => $challenge,
+				dns_provider => $dns_provider,
+				dns_env => $dns_env,
+				directory_url => $directory_url,
+				http_address => $http_address,
+				http_port => $http_port,
+				http01_ready => $http01_firewall_gate.ready,
+			}
+
+			Acme["${certificate_name}"].http01_pending -> Value["${http01_firewall_gate.pending_value_name}"].any
+			Hetzner:Firewall["${http01_firewall_gate.firewall_name}"] -> Acme["${certificate_name}"]
+		}
+
+		if $challenge == "dns-01" {
+			acme "${certificate_name}" {
+				accept_tos => true,
+				email => $acme_email,
+				domains => $domains,
+				challenge => $challenge,
+				dns_provider => $dns_provider,
+				dns_env => $dns_env,
+				directory_url => $directory_url,
+				http_address => $http_address,
+				http_port => $http_port,
+			}
+		}
+
+		file "${fullchain_path}" {
+			state => "exists",
+			mode => "u=rw,go=r",
+			owner => "root",
+			group => "root",
+			Notify => Svc["${service_name}"],
+		}
+
+		file "${private_key_path}" {
+			state => "exists",
+			mode => "u=rw,go=",
+			owner => "root",
+			group => "root",
+			Notify => Svc["${service_name}"],
+		}
+
+		Acme["${certificate_name}"].fullchain -> File["${fullchain_path}"].content
+		Acme["${certificate_name}"].private_key -> File["${private_key_path}"].content
+
+		File["/run/fishystuff/edge/"] -> File["/run/fishystuff/edge/tls/"]
+		File["/run/fishystuff/edge/tls/"] -> File["${fullchain_path}"]
+		File["/run/fishystuff/edge/tls/"] -> File["${private_key_path}"]
+		File["${fullchain_path}"] -> Svc["${service_name}"]
+		File["${private_key_path}"] -> Svc["${service_name}"]
+	}
+}

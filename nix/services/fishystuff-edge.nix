@@ -7,9 +7,12 @@
 let
   helpers = import ./helpers.nix { inherit lib; };
   systemdBackend = import ./systemd-backend.nix { inherit lib pkgs; };
-  inherit (lib) mkOption optional types;
+  inherit (lib) mkOption optional optionalString types;
   cfg = config.fishystuff.edge;
   caddyExe = lib.getExe' cfg.package "caddy";
+  tlsDirective = optionalString cfg.tlsEnable ''
+    tls {$CREDENTIALS_DIRECTORY}/fullchain.pem {$CREDENTIALS_DIRECTORY}/privkey.pem
+  '';
   caddyfile = pkgs.writeText "fishystuff-edge.Caddyfile" ''
     {
       auto_https off
@@ -17,6 +20,7 @@ let
     }
 
     ${cfg.siteAddress} {
+      ${tlsDirective}
       root * ${cfg.siteRoot}
       header Cache-Control "no-store"
 
@@ -25,10 +29,12 @@ let
     }
 
     ${cfg.apiAddress} {
+      ${tlsDirective}
       reverse_proxy ${cfg.apiUpstream}
     }
 
     ${cfg.cdnAddress} {
+      ${tlsDirective}
       root * ${cfg.cdnRoot}
 
       @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
@@ -53,6 +59,7 @@ let
     }
 
     ${cfg.telemetryAddress} {
+      ${tlsDirective}
       @telemetry_preflight method OPTIONS
       @telemetry_logs path /v1/logs
       @telemetry_otlp path /v1/metrics /v1/traces
@@ -106,23 +113,28 @@ let
     ];
     restartPolicy = "on-failure";
     restartDelaySeconds = 5;
-    serviceLines = [
-      "AmbientCapabilities=CAP_NET_BIND_SERVICE"
-      "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
-      "PrivateTmp=true"
-      "PrivateDevices=true"
-      "ProtectSystem=strict"
-      "ProtectHome=true"
-      "ProtectKernelTunables=true"
-      "ProtectKernelModules=true"
-      "ProtectControlGroups=true"
-      "LockPersonality=true"
-      "NoNewPrivileges=true"
-      "RestrictRealtime=true"
-      "RestrictSUIDSGID=true"
-      "SystemCallArchitectures=native"
-      "UMask=0022"
-    ];
+    serviceLines =
+      lib.optionals cfg.tlsEnable [
+        "LoadCredential=fullchain.pem:${cfg.tlsCertificatePath}"
+        "LoadCredential=privkey.pem:${cfg.tlsPrivateKeyPath}"
+      ]
+      ++ [
+        "AmbientCapabilities=CAP_NET_BIND_SERVICE"
+        "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+        "PrivateTmp=true"
+        "PrivateDevices=true"
+        "ProtectSystem=strict"
+        "ProtectHome=true"
+        "ProtectKernelTunables=true"
+        "ProtectKernelModules=true"
+        "ProtectControlGroups=true"
+        "LockPersonality=true"
+        "NoNewPrivileges=true"
+        "RestrictRealtime=true"
+        "RestrictSUIDSGID=true"
+        "SystemCallArchitectures=native"
+        "UMask=0022"
+      ];
   };
 in
 {
@@ -171,6 +183,24 @@ in
       type = types.str;
       default = "http://telemetry.beta.fishystuff.fish";
       description = "Public telemetry listener address for Caddy.";
+    };
+
+    tlsEnable = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the edge should terminate TLS with host-provided certificate overlays.";
+    };
+
+    tlsCertificatePath = mkOption {
+      type = types.str;
+      default = "/run/fishystuff/edge/tls/fullchain.pem";
+      description = "Runtime path containing the TLS full chain for the public edge.";
+    };
+
+    tlsPrivateKeyPath = mkOption {
+      type = types.str;
+      default = "/run/fishystuff/edge/tls/privkey.pem";
+      description = "Runtime path containing the TLS private key for the public edge.";
     };
 
     apiUpstream = mkOption {
@@ -272,7 +302,16 @@ in
             group = "root";
             mode = "0755";
           })
-        ];
+        ]
+        ++ optional cfg.tlsEnable (
+          helpers.mkActivationDirectory {
+            purpose = "tls-root";
+            path = "/run/fishystuff/edge/tls";
+            owner = "root";
+            group = "root";
+            mode = "0755";
+          }
+        );
         users = [ ];
         groups = [ ];
         writablePaths = [ ];
@@ -312,7 +351,25 @@ in
         };
       };
 
-      runtimeOverlays = [ ];
+      runtimeOverlays =
+        lib.optionals cfg.tlsEnable [
+          (helpers.mkRuntimeOverlay {
+            name = "tls-fullchain";
+            targetPath = cfg.tlsCertificatePath;
+            format = "pem";
+            required = true;
+            secret = false;
+            onChange = "restart";
+          })
+          (helpers.mkRuntimeOverlay {
+            name = "tls-private-key";
+            targetPath = cfg.tlsPrivateKeyPath;
+            format = "pem";
+            required = true;
+            secret = true;
+            onChange = "restart";
+          })
+        ];
       requiredCapabilities = optional cfg.dynamicUser "dynamic-user";
       backends.systemd = systemdUnit.backend;
     };
