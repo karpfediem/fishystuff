@@ -17,7 +17,7 @@ class api_db_host($st) {
 		startup_mode str;
 		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
-		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; http_address str; http_port int; domains []str};
+		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
 		services map{str: struct{bundle_path str; gcroot_path str}}
 	} = $st->manifest
 	$services map{str: struct{bundle_path str; gcroot_path str}} = $manifest->services
@@ -44,8 +44,7 @@ class api_db_host($st) {
 	$tls_dns_provider str = $manifest->tls->dns_provider || ""
 	$tls_dns_env map{str: str} = $manifest->tls->dns_env || {}
 	$tls_directory_url str = $manifest->tls->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
-	$tls_http_address str = $manifest->tls->http_address || "0.0.0.0"
-	$tls_http_port int = $manifest->tls->http_port || 80
+	$http01_server_name str = fmt.printf("%s-http01-server", $hostname)
 	$tls_domains []str = $manifest->tls->domains || []
 	$dolt_data_dir str = $st->dolt_data_dir || "/var/lib/fishystuff/dolt"
 	$dolt_database_name str = $st->dolt_database_name || "fishystuff"
@@ -122,6 +121,12 @@ class api_db_host($st) {
 			group => "root",
 		}
 
+		if $tls_enabled and ($tls_challenge == "http-01") {
+			http:server "${http01_server_name}" {
+				address => ":80",
+			}
+		}
+
 		include fishystuff_edge_tls.certificate(struct {
 			enabled => $tls_enabled,
 			cluster => $manifest->cluster,
@@ -134,8 +139,7 @@ class api_db_host($st) {
 			dns_provider => $tls_dns_provider,
 			dns_env => $tls_dns_env,
 			directory_url => $tls_directory_url,
-			http_address => $tls_http_address,
-			http_port => $tls_http_port,
+			http01_server_name => $http01_server_name,
 			domains => $tls_domains,
 		})
 	}

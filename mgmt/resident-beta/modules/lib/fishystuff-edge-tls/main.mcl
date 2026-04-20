@@ -26,8 +26,7 @@ class certificate($st) {
 		$dns_provider str = $st->dns_provider || ""
 		$dns_env map{str: str} = $st->dns_env || {}
 		$directory_url str = $st->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
-		$http_address str = $st->http_address || "0.0.0.0"
-		$http_port int = $st->http_port || 80
+		$http01_server_name str = $st->http01_server_name || fmt.printf("%s-http01-server", $certificate_name)
 		$domains []str = $st->domains || []
 		$bundle struct{runtime_overlays []struct{name str; target_path str; secret bool; on_change str}} = encoding.decode_json_flexible(
 			os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
@@ -63,6 +62,8 @@ class certificate($st) {
 		}
 
 		if $challenge == "http-01" {
+			$solver_name str = fmt.printf("%s-http01", $certificate_name)
+
 			include fishystuff_beta_access.catalog(struct {
 				cluster => $cluster,
 			}) as access
@@ -75,25 +76,29 @@ class certificate($st) {
 				labels => $http01_firewall.labels,
 			}) as http01_firewall_gate
 
-			acme "${certificate_name}" {
+			acme:solver:http01 "${solver_name}" {
+				server => $http01_server_name,
+				hosts => $domains,
+			}
+
+			acme:request "${certificate_name}" {
 				accept_tos => true,
 				email => $acme_email,
 				domains => $domains,
 				challenge => $challenge,
-				dns_provider => $dns_provider,
-				dns_env => $dns_env,
+				solver => $solver_name,
 				directory_url => $directory_url,
-				http_address => $http_address,
-				http_port => $http_port,
 				http01_ready => $http01_firewall_gate.ready,
 			}
 
-			Acme["${certificate_name}"].http01_pending -> Value["${http01_firewall_gate.pending_value_name}"].any
-			Hetzner:Firewall["${http01_firewall_gate.firewall_name}"] -> Acme["${certificate_name}"]
+			Acme:Request["${certificate_name}"].http01_pending -> Value["${http01_firewall_gate.pending_value_name}"].any
+			Http:Server["${http01_server_name}"] -> Acme:Request["${certificate_name}"]
+			Acme:Solver:Http01["${solver_name}"] -> Acme:Request["${certificate_name}"]
+			Hetzner:Firewall["${http01_firewall_gate.firewall_name}"] -> Acme:Request["${certificate_name}"]
 		}
 
 		if $challenge == "dns-01" {
-			acme "${certificate_name}" {
+			acme:request "${certificate_name}" {
 				accept_tos => true,
 				email => $acme_email,
 				domains => $domains,
@@ -101,8 +106,6 @@ class certificate($st) {
 				dns_provider => $dns_provider,
 				dns_env => $dns_env,
 				directory_url => $directory_url,
-				http_address => $http_address,
-				http_port => $http_port,
 			}
 		}
 
@@ -122,8 +125,8 @@ class certificate($st) {
 			Notify => Svc["${service_name}"],
 		}
 
-		Acme["${certificate_name}"].fullchain -> File["${fullchain_path}"].content
-		Acme["${certificate_name}"].private_key -> File["${private_key_path}"].content
+		Acme:Request["${certificate_name}"].fullchain -> File["${fullchain_path}"].content
+		Acme:Request["${certificate_name}"].private_key -> File["${private_key_path}"].content
 
 		File["/run/fishystuff/edge/"] -> File["/run/fishystuff/edge/tls/"]
 		File["/run/fishystuff/edge/tls/"] -> File["${fullchain_path}"]
