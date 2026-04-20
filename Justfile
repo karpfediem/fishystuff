@@ -278,7 +278,7 @@ mgmt-resident-deploy-remote target="" dir="mgmt/resident-deploy-probe" timeout="
 # Build the API and Dolt service bundles locally, push both closures to a
 # remote host, and deploy the resident beta graph for the current API/DB host
 # shape. The resident graph owns GC-root selection via nix:gcroot.
-mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="false" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-v02.api.letsencrypt.org/directory" tls_http_address="0.0.0.0" tls_http_port="80" tls_domains_json="[]":
+mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="false" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory" tls_domains_json="[]":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -311,10 +311,6 @@ mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote
   tls_dns_env_json="${tls_dns_env_json#tls_dns_env_json=}"
   tls_directory_url='{{tls_directory_url}}'
   tls_directory_url="${tls_directory_url#tls_directory_url=}"
-  tls_http_address='{{tls_http_address}}'
-  tls_http_address="${tls_http_address#tls_http_address=}"
-  tls_http_port='{{tls_http_port}}'
-  tls_http_port="${tls_http_port#tls_http_port=}"
   tls_domains_json='{{tls_domains_json}}'
   tls_domains_json="${tls_domains_json#tls_domains_json=}"
   if [[ -z "$target" ]]; then
@@ -361,8 +357,6 @@ mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote
     --arg tls_dns_provider "$tls_dns_provider" \
     --argjson tls_dns_env "$tls_dns_env_json" \
     --arg tls_directory_url "$tls_directory_url" \
-    --arg tls_http_address "$tls_http_address" \
-    --argjson tls_http_port "$tls_http_port" \
     --argjson tls_domains "$tls_domains_json" \
     --arg api_bundle "$api_bundle" \
     --arg api_gcroot "$api_gcroot" \
@@ -416,8 +410,6 @@ mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote
         dns_provider: $tls_dns_provider,
         dns_env: $tls_dns_env,
         directory_url: $tls_directory_url,
-        http_address: $tls_http_address,
-        http_port: $tls_http_port,
         domains: $tls_domains
       },
       services: {
@@ -474,7 +466,7 @@ mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote
 # them to a remote host, and deploy the resident graph with API, Dolt, edge,
 # and observability daemons. The resident graph owns GC-root selection via
 # nix:gcroot.
-mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="true" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-v02.api.letsencrypt.org/directory" tls_http_address="0.0.0.0" tls_http_port="80" tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]":
+mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="true" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory" tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -521,10 +513,6 @@ mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" re
   tls_dns_env_json="${tls_dns_env_json#tls_dns_env_json=}"
   tls_directory_url='{{tls_directory_url}}'
   tls_directory_url="${tls_directory_url#tls_directory_url=}"
-  tls_http_address='{{tls_http_address}}'
-  tls_http_address="${tls_http_address#tls_http_address=}"
-  tls_http_port='{{tls_http_port}}'
-  tls_http_port="${tls_http_port#tls_http_port=}"
   tls_domains_json='{{tls_domains_json}}'
   tls_domains_json="${tls_domains_json#tls_domains_json=}"
   if [[ -z "$target" ]]; then
@@ -578,8 +566,6 @@ mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" re
     --arg tls_dns_provider "$tls_dns_provider" \
     --argjson tls_dns_env "$tls_dns_env_json" \
     --arg tls_directory_url "$tls_directory_url" \
-    --arg tls_http_address "$tls_http_address" \
-    --argjson tls_http_port "$tls_http_port" \
     --argjson tls_domains "$tls_domains_json" \
     --arg api_bundle "$api_bundle" \
     --arg api_gcroot "$api_gcroot" \
@@ -633,8 +619,6 @@ mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" re
         dns_provider: $tls_dns_provider,
         dns_env: $tls_dns_env,
         directory_url: $tls_directory_url,
-        http_address: $tls_http_address,
-        http_port: $tls_http_port,
         domains: $tls_domains
       },
       services: {

@@ -31,9 +31,7 @@
     "challenge": "http-01",
     "dns_provider": "",
     "dns_env": {},
-    "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
-    "http_address": "0.0.0.0",
-    "http_port": 80,
+    "directory_url": "https://acme-staging-v02.api.letsencrypt.org/directory",
     "domains": [
       "beta.fishystuff.fish",
       "api.beta.fishystuff.fish",
