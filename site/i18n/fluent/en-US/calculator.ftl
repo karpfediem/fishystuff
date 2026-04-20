@@ -244,3 +244,168 @@ calculator.overlay.toast.downloaded = Overlay JSON downloaded.
 calculator.overlay.error.import_unavailable_browser = Overlay import is unavailable in this browser.
 calculator.overlay.error.read_failed = Failed to read overlay JSON.
 calculator.overlay.error.import_unavailable = Overlay import is unavailable.
+
+calculator.server.option.none = None
+
+calculator.server.result.no_matching_options = No matching options
+calculator.server.result.no_matching_zones = No matching zones
+calculator.server.result.selected = Selected
+calculator.server.result.added = Added
+
+calculator.server.action.remove = Remove {$label}
+calculator.server.action.copy_url = Copy URL
+calculator.server.action.copy_share = Copy Share
+calculator.server.action.clear = Clear
+
+calculator.server.toggle.active_fishing = Active Fishing
+calculator.server.toggle.debug = Debug
+
+calculator.server.search.zones = Search zones
+calculator.server.search.fishing_levels = Search fishing levels
+calculator.server.search.session_units = Search session units
+calculator.server.search.lifeskill_levels = Search lifeskill levels
+calculator.server.search.rods = Search rods
+calculator.server.search.floats = Search floats
+calculator.server.search.chairs = Search chairs
+calculator.server.search.lightstone_sets = Search lightstone sets
+calculator.server.search.backpacks = Search backpacks
+calculator.server.search.foods = Search foods by name or effect
+calculator.server.search.buffs = Search buffs by name or effect
+calculator.server.search.trade_levels = Search trade levels
+calculator.server.search.loot_rows = Search loot rows at this spot
+calculator.server.search.pet_tiers = Search pet tiers
+calculator.server.search.pet_specials = Search pet specials
+calculator.server.search.pet_talents = Search pet talents
+
+calculator.server.section.zone = Zone
+calculator.server.section.bite_time = Bite Time
+calculator.server.section.catch_time = Catch Time
+calculator.server.section.session = Session
+calculator.server.section.gear = Gear
+calculator.server.section.pets = Pets
+calculator.server.section.overlay_proposal = Overlay Proposal
+calculator.server.section.distribution = Distribution
+calculator.server.section.loot = Loot
+calculator.server.section.trade = Trade
+
+calculator.server.field.fishing_level = Fishing Level
+calculator.server.field.fishing_resources = Fishing Resources
+calculator.server.field.active = Active
+calculator.server.field.afk = AFK
+calculator.server.field.amount = Amount
+calculator.server.field.unit = Unit
+calculator.server.field.lifeskill_level = Lifeskill Level
+calculator.server.field.fishing_rod = Fishing Rod
+calculator.server.field.brand = Brand
+calculator.server.field.float = Float
+calculator.server.field.chair = Chair
+calculator.server.field.lightstone_set = Lightstone Set
+calculator.server.field.backpack = Backpack
+calculator.server.field.outfit = Outfit
+calculator.server.field.food = Food
+calculator.server.field.buffs = Buffs
+calculator.server.field.tier = Tier
+calculator.server.field.special = Special
+calculator.server.field.talent = Talent
+calculator.server.field.skills = Skills
+calculator.server.field.mastery = Mastery
+calculator.server.field.target_fish = Target Fish / Loot Item
+calculator.server.field.target_amount = Target Amount
+calculator.server.field.pmf_max_count = PMF Max Count
+calculator.server.field.trade_level = Trade Level
+calculator.server.field.distance_bonus = Distance Bonus
+calculator.server.field.trade_price_curve = Trade Price Curve
+calculator.server.field.discard_grade = Discard fish up to grade
+
+calculator.server.stat.seconds = seconds
+calculator.server.stat.average_total_fishing_time = Average Total Fishing Time
+calculator.server.stat.average_bite_time = Average Bite Time
+calculator.server.stat.min = Min
+calculator.server.stat.average = Average
+calculator.server.stat.max = Max
+calculator.server.stat.effective_min = Effective Min
+calculator.server.stat.effective_average = Effective Average
+calculator.server.stat.effective_max = Effective Max
+calculator.server.stat.auto_fishing_time_aft = Auto-Fishing Time (AFT)
+calculator.server.stat.auto_fishing_time_reduction_afr = Auto-Fishing Time Reduction (AFR)
+calculator.server.stat.item_drr = Item DRR
+calculator.server.stat.chance_to_consume_durability = Chance to Consume Durability
+calculator.server.stat.raw_prize_catch_rate = Raw Prize Catch Rate
+calculator.server.stat.expected_catches = Expected Catches
+calculator.server.stat.expected_catches_per_hour = Expected Catches / Hour
+calculator.server.stat.expected_profit = Expected Profit
+calculator.server.stat.profit_per_hour = Profit / Hour
+calculator.server.stat.bargain_bonus = Bargain Bonus
+calculator.server.stat.sale_multiplier = Sale Multiplier
+
+calculator.server.panel.expand_overlay_proposal = Expand overlay proposal panel
+calculator.server.panel.collapse_overlay_proposal = Collapse overlay proposal panel
+
+calculator.server.helper.mastery = Enter your consolidated fishing mastery directly.
+calculator.server.helper.mastery_formula_prefix = Mastery
+calculator.server.helper.mastery_formula_suffix = drives the direct prize-rate formula before normalization.
+calculator.server.helper.before_zone_group_normalization = before zone-group normalization
+calculator.server.helper.target_amount = Expected time to reach this amount.
+calculator.server.helper.within_current_session_duration = within the current session duration
+calculator.server.helper.select_target_fish = Select a target fish.
+calculator.server.helper.target_status_per_day = {$label} · {$per_day}/day
+calculator.server.helper.target_pmf_count = Shows the discrete outcome distribution up to this catch count; the final bucket rolls up every higher result.
+calculator.server.helper.target_pmf_auto_short = 0 = auto
+calculator.server.helper.target_select_zone_item = Select a target fish or loot item from this zone.
+calculator.server.helper.target_per_day_at_spot = {$per_day} / day at the current spot and setup.
+calculator.server.helper.target_missing_at_spot = This target does not currently appear at this spot.
+calculator.server.helper.target_pmf_auto = 0 = auto. Current final PMF bucket is ≥{$count} (0.5% tail cutoff).
+calculator.server.helper.target_pmf_fixed = Final PMF bucket is ≥{$count}.
+calculator.server.helper.normalize_rates = Normalize rates
+calculator.server.helper.distance_bonus = manual % bonus, capped at +150% in the sale formula
+calculator.server.helper.trade_price_curve = manual % curve, commonly around 105–130%
+calculator.server.helper.apply_trade_settings = Apply Trade Settings
+calculator.server.helper.food_family = Only one food family applies at a time. Higher-tier foods replace lower-tier ones in the same family.
+calculator.server.helper.buff_group = Selecting another buff in the same buff group replaces the previous one.
+calculator.server.helper.fish_only_notice = Fish only. Non-fish loot stays. Red fish are always kept.
+calculator.server.helper.using = using
+calculator.server.helper.per_cast = per cast
+calculator.server.helper.sale = sale
+
+calculator.server.tab.groups = Groups
+calculator.server.tab.silver = Silver
+calculator.server.tab.loot_flow = Loot Flow
+calculator.server.tab.target_fish = Target Fish
+
+calculator.server.discard.none = Do not discard
+calculator.server.discard.white = White
+calculator.server.discard.green = Green
+calculator.server.discard.blue = Blue
+calculator.server.discard.yellow = Yellow
+
+calculator.server.target.expected = Expected ({$timespan})
+calculator.server.target.time_to_target = Time to Target
+calculator.server.target.chance_at_least = Chance to Get at Least {$amount}
+calculator.server.target.no_rows = No loot rows are currently available for target analysis at this spot.
+calculator.server.target.session_distribution_title = Session Count Distribution
+calculator.server.target.session_distribution_description = Discrete session outcome distribution for this target within the current session duration.
+calculator.server.target.count_bucket_probability = count bucket probability
+
+calculator.server.chart.no_loot_rows = No source-backed loot rows are available for this zone yet.
+calculator.server.chart.loot_flow_title = Loot Flow
+calculator.server.chart.loot_flow_description = Each flow starts at a fish group, passes through source-backed species rows, then recombines into silver-weighted group totals. Left-side metrics show droprate composition; right-side metrics show silver contribution.
+calculator.server.chart.group_distribution_title = Group Droprate Distribution
+calculator.server.chart.group_distribution_description.normalized = Current fish-group share after prize, rare, and high-quality weighting.
+calculator.server.chart.group_distribution_description.raw = Raw fish-group rates after prize, rare, and high-quality weighting. These rates can total above or below 100%.
+calculator.server.chart.group_silver_distribution_title = Group Silver Distribution
+calculator.server.chart.group_silver_distribution_description = Expected silver share by fish group after trade and pricing settings.
+calculator.server.chart.aria.group_distribution = Group Droprate Distribution
+calculator.server.chart.aria.group_silver_distribution = Group Silver Distribution
+calculator.server.chart.aria.loot_flow = Expected loot flow from groups to loot rows
+calculator.server.chart.aria.target_distribution = Target Fish Session Distribution
+calculator.server.chart.aria.timeline = Fishing cycle timeline
+calculator.server.chart.aria.distribution_tabs = Distribution tabs
+
+calculator.server.value.unavailable = Unavailable
+
+calculator.server.disclaimer.title = Data Quality Warning
+calculator.server.disclaimer.p1 = The data we currently have is INCOMPLETE and some data may be MISSING entirely.
+calculator.server.disclaimer.p2 = Info about group-rates is based on older data and is OUTDATED.
+calculator.server.disclaimer.p3 = In particular: Prize Fish info is based purely on community estimates and may be totally off. True rates are UNKNOWN.
+calculator.server.disclaimer.p4 = So while this aims to be as accurate as we can be, for now please do not take any of this at face value.
+calculator.server.disclaimer.p5 = Going forward, we will try to crowdsource data and appreciate any future contributions.

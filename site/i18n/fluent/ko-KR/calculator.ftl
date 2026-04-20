@@ -1,0 +1,194 @@
+calculator.loading = 계산기 불러오는 중...
+
+calculator.timespan.unit.minute.one = 분
+calculator.timespan.unit.minute.other = 분
+calculator.timespan.unit.hour.one = 시간
+calculator.timespan.unit.hour.other = 시간
+calculator.timespan.unit.day.one = 일
+calculator.timespan.unit.day.other = 일
+calculator.timespan.unit.week.one = 주
+calculator.timespan.unit.week.other = 주
+
+calculator.resource.exhausted = 고갈
+calculator.resource.low = 낮음
+calculator.resource.average = 보통
+calculator.resource.abundant = 풍부
+
+calculator.timeline.bite_time = 입질 시간
+calculator.timeline.auto_fishing_time = 자동 낚시 시간
+calculator.timeline.catch_time = 낚아올리기 시간
+calculator.timeline.time_saved = 절약 시간
+
+calculator.title.casts_average = 평균 낚시 횟수 ({$timespan})
+calculator.title.durability_loss_average = 평균 내구도 소모 ({$timespan})
+calculator.title.expected_catches = 예상 횟수 ({$timespan})
+calculator.title.expected_profit = 예상 수익 ({$timespan})
+calculator.title.bite_time = 입질 시간: {$seconds}초 ({$percent}%)
+calculator.title.auto_fishing_time = 자동 낚시 시간: {$seconds}초 ({$percent}%)
+calculator.title.catch_time = 낚아올리기 시간: {$seconds}초 ({$percent}%)
+calculator.title.unoptimized_time = 평균 비최적화 시간: {$seconds}초 ({$percent}%)
+
+calculator.server.option.none = 없음
+
+calculator.server.result.no_matching_options = 일치하는 항목 없음
+calculator.server.result.no_matching_zones = 일치하는 지역 없음
+calculator.server.result.selected = 선택됨
+calculator.server.result.added = 추가됨
+
+calculator.server.action.remove = {$label} 제거
+calculator.server.action.copy_url = URL 복사
+calculator.server.action.copy_share = 공유 텍스트 복사
+calculator.server.action.clear = 초기화
+
+calculator.server.toggle.active_fishing = 수동 낚시
+calculator.server.toggle.debug = 디버그
+
+calculator.server.search.zones = 지역 검색
+calculator.server.search.fishing_levels = 낚시 레벨 검색
+calculator.server.search.session_units = 세션 단위 검색
+calculator.server.search.lifeskill_levels = 생활 레벨 검색
+calculator.server.search.rods = 낚싯대 검색
+calculator.server.search.floats = 찌 검색
+calculator.server.search.chairs = 의자 검색
+calculator.server.search.lightstone_sets = 광명석 조합 검색
+calculator.server.search.backpacks = 가방 검색
+calculator.server.search.foods = 음식 이름 또는 효과 검색
+calculator.server.search.buffs = 버프 이름 또는 효과 검색
+calculator.server.search.trade_levels = 무역 레벨 검색
+calculator.server.search.loot_rows = 이 지역의 전리품 항목 검색
+calculator.server.search.pet_tiers = 펫 세대 검색
+calculator.server.search.pet_specials = 펫 특기 검색
+calculator.server.search.pet_talents = 펫 재능 검색
+
+calculator.server.section.zone = 지역
+calculator.server.section.bite_time = 입질 시간
+calculator.server.section.catch_time = 낚아올리기 시간
+calculator.server.section.session = 세션
+calculator.server.section.gear = 장비
+calculator.server.section.pets = 펫
+calculator.server.section.overlay_proposal = 오버레이 제안
+calculator.server.section.distribution = 분포
+calculator.server.section.loot = 전리품
+calculator.server.section.trade = 무역
+
+calculator.server.field.fishing_level = 낚시 레벨
+calculator.server.field.fishing_resources = 낚시 자원
+calculator.server.field.active = 수동
+calculator.server.field.afk = 잠수
+calculator.server.field.amount = 수량
+calculator.server.field.unit = 단위
+calculator.server.field.lifeskill_level = 생활 레벨
+calculator.server.field.fishing_rod = 낚싯대
+calculator.server.field.brand = 브랜드
+calculator.server.field.float = 찌
+calculator.server.field.chair = 의자
+calculator.server.field.lightstone_set = 광명석 조합
+calculator.server.field.backpack = 가방
+calculator.server.field.outfit = 의상
+calculator.server.field.food = 음식
+calculator.server.field.buffs = 버프
+calculator.server.field.tier = 세대
+calculator.server.field.special = 특기
+calculator.server.field.talent = 재능
+calculator.server.field.skills = 기술
+calculator.server.field.mastery = 숙련도
+calculator.server.field.target_fish = 대상 물고기 / 전리품
+calculator.server.field.target_amount = 목표 수량
+calculator.server.field.pmf_max_count = PMF 최대 횟수
+calculator.server.field.trade_level = 무역 레벨
+calculator.server.field.distance_bonus = 거리 보너스
+calculator.server.field.trade_price_curve = 무역 가격 곡선
+calculator.server.field.discard_grade = 이 등급까지 물고기 버리기
+
+calculator.server.stat.seconds = 초
+calculator.server.stat.average_total_fishing_time = 평균 총 낚시 시간
+calculator.server.stat.average_bite_time = 평균 입질 시간
+calculator.server.stat.min = 최소
+calculator.server.stat.average = 평균
+calculator.server.stat.max = 최대
+calculator.server.stat.effective_min = 적용 최소
+calculator.server.stat.effective_average = 적용 평균
+calculator.server.stat.effective_max = 적용 최대
+calculator.server.stat.auto_fishing_time_aft = 자동 낚시 시간 (AFT)
+calculator.server.stat.auto_fishing_time_reduction_afr = 자동 낚시 시간 감소 (AFR)
+calculator.server.stat.item_drr = 아이템 DRR
+calculator.server.stat.chance_to_consume_durability = 내구도 소모 확률
+calculator.server.stat.raw_prize_catch_rate = 원시 상위 어종 획득률
+calculator.server.stat.expected_catches = 예상 횟수
+calculator.server.stat.expected_catches_per_hour = 시간당 예상 횟수
+calculator.server.stat.expected_profit = 예상 수익
+calculator.server.stat.profit_per_hour = 시간당 수익
+calculator.server.stat.bargain_bonus = 흥정 보너스
+calculator.server.stat.sale_multiplier = 판매 배수
+
+calculator.server.panel.expand_overlay_proposal = 오버레이 제안 패널 펼치기
+calculator.server.panel.collapse_overlay_proposal = 오버레이 제안 패널 접기
+
+calculator.server.helper.mastery = 통합 낚시 숙련도를 직접 입력하세요.
+calculator.server.helper.mastery_formula_prefix = 숙련도
+calculator.server.helper.mastery_formula_suffix = 값이 정규화 전 직접 Prize Fish 확률 공식에 적용됩니다.
+calculator.server.helper.before_zone_group_normalization = 지역 그룹 정규화 전
+calculator.server.helper.target_amount = 이 수량에 도달하는 예상 시간입니다.
+calculator.server.helper.within_current_session_duration = 현재 세션 시간 기준
+calculator.server.helper.select_target_fish = 대상 물고기를 선택하세요.
+calculator.server.helper.target_status_per_day = {$label} · 하루 {$per_day}개
+calculator.server.helper.target_pmf_count = 이 횟수까지의 이산 결과 분포를 표시하며, 마지막 버킷에는 그보다 큰 모든 결과가 합쳐집니다.
+calculator.server.helper.target_pmf_auto_short = 0 = 자동
+calculator.server.helper.target_select_zone_item = 이 지역의 대상 물고기 또는 전리품을 선택하세요.
+calculator.server.helper.target_per_day_at_spot = 현재 지역과 설정 기준 하루 {$per_day}개 예상됩니다.
+calculator.server.helper.target_missing_at_spot = 이 대상은 현재 이 지역에 나오지 않습니다.
+calculator.server.helper.target_pmf_auto = 0 = 자동. 현재 마지막 PMF 버킷은 ≥{$count}입니다. (꼬리 확률 0.5% 기준)
+calculator.server.helper.target_pmf_fixed = 마지막 PMF 버킷은 ≥{$count}입니다.
+calculator.server.helper.normalize_rates = 비율 정규화
+calculator.server.helper.distance_bonus = 수동 % 보너스, 판매 공식에서 최대 +150%
+calculator.server.helper.trade_price_curve = 수동 % 곡선, 보통 105–130%
+calculator.server.helper.apply_trade_settings = 무역 설정 적용
+calculator.server.helper.food_family = 한 번에 하나의 음식 계열만 적용됩니다. 같은 계열의 상위 음식은 하위 음식을 대체합니다.
+calculator.server.helper.buff_group = 같은 버프 그룹의 다른 버프를 선택하면 이전 버프를 대체합니다.
+calculator.server.helper.fish_only_notice = 물고기에만 적용됩니다. 물고기가 아닌 전리품은 유지됩니다. 빨간 물고기는 항상 유지됩니다.
+calculator.server.helper.using = 사용
+calculator.server.helper.per_cast = 회당
+calculator.server.helper.sale = 판매
+
+calculator.server.tab.groups = 그룹
+calculator.server.tab.silver = 은화
+calculator.server.tab.loot_flow = 전리품 흐름
+calculator.server.tab.target_fish = 대상 물고기
+
+calculator.server.discard.none = 버리지 않음
+calculator.server.discard.white = 흰색
+calculator.server.discard.green = 녹색
+calculator.server.discard.blue = 파란색
+calculator.server.discard.yellow = 노란색
+
+calculator.server.target.expected = 예상값 ({$timespan})
+calculator.server.target.time_to_target = 목표 도달 시간
+calculator.server.target.chance_at_least = {$amount}개 이상 획득 확률
+calculator.server.target.no_rows = 이 지역에는 현재 대상 분석에 사용할 전리품 행이 없습니다.
+calculator.server.target.session_distribution_title = 세션 횟수 분포
+calculator.server.target.session_distribution_description = 현재 세션 시간 기준 이 대상의 이산 결과 분포입니다.
+calculator.server.target.count_bucket_probability = 횟수 버킷 확률
+
+calculator.server.chart.no_loot_rows = 이 지역에는 아직 소스 기반 전리품 행이 없습니다.
+calculator.server.chart.loot_flow_title = 전리품 흐름
+calculator.server.chart.loot_flow_description = 각 흐름은 물고기 그룹에서 시작해 소스 기반 종 행을 거친 뒤 은화 가중 그룹 합계로 다시 합쳐집니다. 왼쪽 지표는 드롭률 구성을, 오른쪽 지표는 은화 기여도를 보여줍니다.
+calculator.server.chart.group_distribution_title = 그룹 드롭률 분포
+calculator.server.chart.group_distribution_description.normalized = Prize, 희귀, 고품질 가중치를 적용한 현재 물고기 그룹 비중입니다.
+calculator.server.chart.group_distribution_description.raw = Prize, 희귀, 고품질 가중치를 적용한 원시 물고기 그룹 비율입니다. 총합은 100%보다 크거나 작을 수 있습니다.
+calculator.server.chart.group_silver_distribution_title = 그룹 은화 분포
+calculator.server.chart.group_silver_distribution_description = 무역 및 가격 설정 적용 후 물고기 그룹별 예상 은화 비중입니다.
+calculator.server.chart.aria.group_distribution = 그룹 드롭률 분포
+calculator.server.chart.aria.group_silver_distribution = 그룹 은화 분포
+calculator.server.chart.aria.loot_flow = 그룹에서 전리품 행으로 이어지는 예상 전리품 흐름
+calculator.server.chart.aria.target_distribution = 대상 물고기 세션 분포
+calculator.server.chart.aria.timeline = 낚시 사이클 타임라인
+calculator.server.chart.aria.distribution_tabs = 분포 탭
+
+calculator.server.value.unavailable = 이용 불가
+
+calculator.server.disclaimer.title = 데이터 품질 경고
+calculator.server.disclaimer.p1 = 현재 보유한 데이터는 불완전하며 일부 데이터는 완전히 누락되었을 수 있습니다.
+calculator.server.disclaimer.p2 = 그룹 비율 정보는 오래된 데이터를 기반으로 하므로 최신이 아닙니다.
+calculator.server.disclaimer.p3 = 특히 Prize Fish 정보는 전적으로 커뮤니티 추정치 기반이므로 크게 빗나갈 수 있습니다. 실제 확률은 알 수 없습니다.
+calculator.server.disclaimer.p4 = 최대한 정확하게 맞추려 하고 있지만, 지금은 이 결과를 그대로 사실로 받아들이지 마세요.
+calculator.server.disclaimer.p5 = 앞으로는 데이터를 크라우드소싱할 예정이며, 향후 기여를 환영합니다.

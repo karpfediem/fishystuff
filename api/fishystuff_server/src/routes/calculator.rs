@@ -2,6 +2,7 @@ use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Write as _;
+use std::sync::LazyLock;
 
 use async_stream::stream;
 use axum::body::Bytes;
@@ -444,6 +445,23 @@ struct CalculatorData {
 }
 
 const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260419-1";
+type CalculatorRouteCatalog = HashMap<String, String>;
+
+static CALCULATOR_ROUTE_CATALOG_EN: LazyLock<CalculatorRouteCatalog> = LazyLock::new(|| {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../site/i18n/en-US.ziggy"
+    )))
+    .expect("valid en-US calculator route catalog")
+});
+
+static CALCULATOR_ROUTE_CATALOG_KO: LazyLock<CalculatorRouteCatalog> = LazyLock::new(|| {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../site/i18n/ko-KR.ziggy"
+    )))
+    .expect("valid ko-KR calculator route catalog")
+});
 
 #[derive(Debug, Clone, Copy)]
 struct SelectOption<'a> {
@@ -469,6 +487,7 @@ struct SearchableDropdownConfig<'a> {
 }
 
 struct SearchableMultiselectConfig<'a> {
+    lang: FishLang,
     root_id: &'a str,
     bind_key: &'a str,
     search_placeholder: &'a str,
@@ -477,14 +496,34 @@ struct SearchableMultiselectConfig<'a> {
 
 const SEARCHABLE_DROPDOWN_RESULT_LIMIT: usize = 24;
 
-const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
+static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
     value: "",
-    label: "None",
+    label: Box::leak(
+        calculator_route_text(FishLang::En, "calculator.server.option.none").into_boxed_str(),
+    ),
     icon: None,
     grade_tone: "unknown",
     item: None,
     lifeskill_level: None,
-};
+});
+
+static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
+    value: "",
+    label: Box::leak(
+        calculator_route_text(FishLang::Ko, "calculator.server.option.none").into_boxed_str(),
+    ),
+    icon: None,
+    grade_tone: "unknown",
+    item: None,
+    lifeskill_level: None,
+});
+
+fn none_select_option(lang: FishLang) -> SelectOption<'static> {
+    match lang {
+        FishLang::En => *NONE_SELECT_OPTION_EN,
+        FishLang::Ko => *NONE_SELECT_OPTION_KO,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CalculatorSearchableOptionKind {
@@ -675,13 +714,14 @@ pub async fn post_calculator_datastar_eval(
         )?
         .into_datastar_event(),
         PatchElements::new(render_fish_group_chart(
+            data.lang,
             &fish_group_chart,
             normalized_signals.show_normalized_select_rates,
         ))
         .selector("#calculator-fish-group-chart")
         .mode(ElementPatchMode::Outer)
         .into_datastar_event(),
-        PatchElements::new(render_fish_group_silver_chart(&loot_chart))
+        PatchElements::new(render_fish_group_silver_chart(data.lang, &loot_chart))
             .selector("#calculator-fish-group-silver-chart")
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
@@ -694,7 +734,7 @@ pub async fn post_calculator_datastar_eval(
         .selector("#calculator-target-fish-panel")
         .mode(ElementPatchMode::Outer)
         .into_datastar_event(),
-        PatchElements::new(render_loot_chart(&loot_chart))
+        PatchElements::new(render_loot_chart(data.lang, &loot_chart))
             .selector("#calculator-loot-chart")
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
@@ -721,6 +761,7 @@ pub async fn get_calculator_datastar_zone_search(
         .unwrap_or(data.catalog.defaults.zone.as_str());
     let search_text = query.q.unwrap_or_default();
     let fragment = render_zone_search_results(
+        lang,
         "calculator-zone-search-results",
         &data.zones,
         selected_zone,
@@ -773,9 +814,10 @@ pub async fn get_calculator_datastar_option_search(
         .unwrap_or("calculator-search-results");
     let (options, include_none) = searchable_options_for_kind(&data, kind);
     let fragment = render_searchable_select_results(
+        lang,
         data.cdn_base_url.as_str(),
         results_id,
-        &with_optional_none(&options, include_none),
+        &with_optional_none(&options, include_none, lang),
         selected_value,
         &search_text,
     );
@@ -1436,6 +1478,28 @@ fn lang_param(lang: FishLang) -> &'static str {
         FishLang::En => "en",
         FishLang::Ko => "ko",
     }
+}
+
+fn calculator_route_catalog(lang: FishLang) -> &'static CalculatorRouteCatalog {
+    match lang {
+        FishLang::En => &CALCULATOR_ROUTE_CATALOG_EN,
+        FishLang::Ko => &CALCULATOR_ROUTE_CATALOG_KO,
+    }
+}
+
+fn calculator_route_text(lang: FishLang, key: &str) -> String {
+    calculator_route_catalog(lang)
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| key.to_string())
+}
+
+fn calculator_route_text_with_vars(lang: FishLang, key: &str, vars: &[(&str, &str)]) -> String {
+    let mut text = calculator_route_text(lang, key);
+    for (name, value) in vars {
+        text = text.replace(&format!("{{${}}}", name), value);
+    }
+    text
 }
 
 fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
@@ -2745,7 +2809,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let fish_multiplier_raw = effective_fish_multiplier(signals, &items_by_key);
 
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
-    let timespan_text = timespan_text(signals.timespan_amount, &signals.timespan_unit);
+    let timespan_text = timespan_text(data.lang, signals.timespan_amount, &signals.timespan_unit);
     let casts_average_raw = if total_time_raw > 0.0 {
         timespan_seconds / total_time_raw
     } else {
@@ -2811,6 +2875,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_fish_per_hour_raw,
     );
     let fishing_timeline_chart = fishing_timeline_chart(
+        data.lang,
         signals.active,
         bite_time_raw,
         auto_fish_time_raw,
@@ -2888,7 +2953,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
 
     CalculatorDerivedSignals {
         zone_name,
-        abundance_label: calc_abundance_label(signals.resources),
+        abundance_label: calc_abundance_label(data.lang, signals.resources),
         zone_bite_min: fmt2(zone_bite_min_raw),
         zone_bite_max: fmt2(zone_bite_max_raw),
         zone_bite_avg: fmt2(zone_bite_avg_raw),
@@ -2899,32 +2964,52 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         bite_time: fmt2(bite_time_raw),
         auto_fish_time: fmt2(auto_fish_time_raw),
         auto_fish_time_reduction_text: format!("{:.0}%", afr_uncapped_raw * 100.0),
-        casts_title: format!("Average Casts ({timespan_text})"),
+        casts_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.title.casts_average",
+            &[("timespan", &timespan_text)],
+        ),
         casts_average: fmt2(casts_average_raw),
         item_drr_text: format!("{:.0}%", item_drr_raw * 100.0),
         chance_to_consume_durability_text: format!("{:.2}%", chance_to_reduce_raw * 100.0),
-        durability_loss_title: format!("Average Durability Loss ({timespan_text})"),
+        durability_loss_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.title.durability_loss_average",
+            &[("timespan", &timespan_text)],
+        ),
         durability_loss_average: fmt2(durability_loss_average_raw),
         timespan_text: timespan_text.clone(),
-        bite_time_title: format!(
-            "Bite Time: {}s ({}%)",
-            fmt2(bite_time_raw),
-            fmt2(percent_bite)
+        bite_time_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.title.bite_time",
+            &[
+                ("seconds", &fmt2(bite_time_raw)),
+                ("percent", &fmt2(percent_bite)),
+            ],
         ),
-        auto_fish_time_title: format!(
-            "Auto-Fishing Time: {}s ({}%)",
-            fmt2(auto_fish_time_raw),
-            fmt2(percent_af)
+        auto_fish_time_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.title.auto_fishing_time",
+            &[
+                ("seconds", &fmt2(auto_fish_time_raw)),
+                ("percent", &fmt2(percent_af)),
+            ],
         ),
-        catch_time_title: format!(
-            "Catch Time: {}s ({}%)",
-            fmt2(catch_time_raw),
-            fmt2(percent_catch)
+        catch_time_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.title.catch_time",
+            &[
+                ("seconds", &fmt2(catch_time_raw)),
+                ("percent", &fmt2(percent_catch)),
+            ],
         ),
-        unoptimized_time_title: format!(
-            "Average Unoptimized Time: {}s ({}%)",
-            fmt2(unoptimized_time_raw),
-            fmt2(percent_improvement)
+        unoptimized_time_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.title.unoptimized_time",
+            &[
+                ("seconds", &fmt2(unoptimized_time_raw)),
+                ("percent", &fmt2(percent_improvement)),
+            ],
         ),
         show_auto_fishing: !signals.active,
         percent_bite: fmt2(percent_bite),
@@ -5381,14 +5466,20 @@ fn derive_target_fish_summary(
             target_amount,
             target_amount_text: trim_float(f64::from(target_amount)),
             pmf_count_effective_text: "—".to_string(),
-            pmf_count_hint_text: "0 = auto".to_string(),
+            pmf_count_hint_text: calculator_route_text(
+                data.lang,
+                "calculator.server.helper.target_pmf_auto_short",
+            ),
             expected_count_raw: 0.0,
             expected_count_text: "—".to_string(),
             per_day_text: "—".to_string(),
             time_to_target_text: "—".to_string(),
             probability_at_least_text: "—".to_string(),
             session_distribution: Vec::new(),
-            status_text: "Select a target fish or loot item from this zone.".to_string(),
+            status_text: calculator_route_text(
+                data.lang,
+                "calculator.server.helper.target_select_zone_item",
+            ),
         };
     }
 
@@ -5421,7 +5512,7 @@ fn derive_target_fish_summary(
     let time_to_target_text = if per_day_raw > 0.0 {
         human_duration_text((f64::from(target_amount) / per_day_raw) * 86_400.0)
     } else {
-        "Unavailable".to_string()
+        calculator_route_text(data.lang, "calculator.server.value.unavailable")
     };
     let probability_at_least = poisson_probability_at_least(expected_count_raw, target_amount);
     let pmf_is_auto = signals.target_fish_pmf_count <= 0.0;
@@ -5433,12 +5524,13 @@ fn derive_target_fish_summary(
     .max(1);
 
     let status_text = if expected_count_raw > 0.0 {
-        format!(
-            "{} / day at the current spot and setup.",
-            trim_float(per_day_raw)
+        calculator_route_text_with_vars(
+            data.lang,
+            "calculator.server.helper.target_per_day_at_spot",
+            &[("per_day", &trim_float(per_day_raw))],
         )
     } else {
-        "This target does not currently appear at this spot.".to_string()
+        calculator_route_text(data.lang, "calculator.server.helper.target_missing_at_spot")
     };
 
     TargetFishSummary {
@@ -5447,9 +5539,17 @@ fn derive_target_fish_summary(
         target_amount_text: trim_float(f64::from(target_amount)),
         pmf_count_effective_text: pmf_tail_count.to_string(),
         pmf_count_hint_text: if pmf_is_auto {
-            format!("0 = auto. Current final PMF bucket is ≥{pmf_tail_count} (0.5% tail cutoff).")
+            calculator_route_text_with_vars(
+                data.lang,
+                "calculator.server.helper.target_pmf_auto",
+                &[("count", &pmf_tail_count.to_string())],
+            )
         } else {
-            format!("Final PMF bucket is ≥{pmf_tail_count}.")
+            calculator_route_text_with_vars(
+                data.lang,
+                "calculator.server.helper.target_pmf_fixed",
+                &[("count", &pmf_tail_count.to_string())],
+            )
         },
         expected_count_raw,
         expected_count_text: trim_float(expected_count_raw),
@@ -5499,7 +5599,7 @@ fn derive_stat_breakdowns(
     loot_total_catches_raw: f64,
     loot_fish_per_hour_raw: f64,
 ) -> CalculatorStatBreakdownSignals {
-    let abundance_label = calc_abundance_label(signals.resources);
+    let abundance_label = calc_abundance_label(data.lang, signals.resources);
     let afr_item_rows = collect_item_property_breakdown_rows(
         items_by_key,
         data.cdn_base_url.as_str(),
@@ -7058,15 +7158,15 @@ fn percentage_of_average_time(time: f64, unoptimized_time: f64) -> f64 {
     }
 }
 
-fn calc_abundance_label(resources: f64) -> String {
+fn calc_abundance_label(lang: FishLang, resources: f64) -> String {
     if resources <= 14.0 {
-        "Exhausted".to_string()
+        calculator_route_text(lang, "calculator.resource.exhausted")
     } else if resources <= 45.0 {
-        "Low".to_string()
+        calculator_route_text(lang, "calculator.resource.low")
     } else if resources <= 70.0 {
-        "Average".to_string()
+        calculator_route_text(lang, "calculator.resource.average")
     } else {
-        "Abundant".to_string()
+        calculator_route_text(lang, "calculator.resource.abundant")
     }
 }
 
@@ -7080,38 +7180,23 @@ fn timespan_seconds(amount: f64, unit: &str) -> f64 {
     amount.max(0.0) * unit_seconds
 }
 
-fn timespan_text(amount: f64, unit: &str) -> String {
+fn timespan_text(lang: FishLang, amount: f64, unit: &str) -> String {
     let normalized = amount.max(0.0);
-    let label = match unit {
-        "minutes" => {
-            if normalized == 1.0 {
-                "minute"
-            } else {
-                "minutes"
-            }
-        }
-        "hours" => {
-            if normalized == 1.0 {
-                "hour"
-            } else {
-                "hours"
-            }
-        }
-        "days" => {
-            if normalized == 1.0 {
-                "day"
-            } else {
-                "days"
-            }
-        }
-        _ => {
-            if normalized == 1.0 {
-                "week"
-            } else {
-                "weeks"
-            }
-        }
+    let unit_key = match unit {
+        "minutes" => "minute",
+        "hours" => "hour",
+        "days" => "day",
+        _ => "week",
     };
+    let plurality = if (normalized - 1.0).abs() < f64::EPSILON {
+        "one"
+    } else {
+        "other"
+    };
+    let label = calculator_route_text(
+        lang,
+        &format!("calculator.timespan.unit.{unit_key}.{plurality}"),
+    );
     format!("{} {label}", trim_float(normalized))
 }
 
@@ -7212,6 +7297,7 @@ fn render_calculator_app(
     );
     let zone_selected_content = render_searchable_dropdown_text_content(&derived.zone_name);
     let zone_results = render_zone_search_results(
+        data.lang,
         "calculator-zone-search-results",
         &data.zones,
         &signals.zone,
@@ -7228,7 +7314,7 @@ fn render_calculator_app(
             value: &signals.zone,
             search_url: &zone_search_url,
             search_url_root: Some("api"),
-            search_placeholder: "Search zones",
+            search_placeholder: &calculator_route_text(data.lang, "calculator.server.search.zones"),
         },
         &zone_results,
     );
@@ -7247,11 +7333,11 @@ fn render_calculator_app(
                 <div class="flex flex-wrap gap-3">
                     <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
                         <input type="checkbox" class="checkbox checkbox-primary" data-bind="active"__ACTIVE_CHECKED__>
-                        <span>Active Fishing</span>
+                        <span>__TEXT_ACTIVE_FISHING__</span>
                     </label>
                     <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
                         <input type="checkbox" class="checkbox checkbox-primary" data-bind="debug"__DEBUG_CHECKED__>
-                        <span>Debug</span>
+                        <span>__TEXT_DEBUG__</span>
                     </label>
                 </div>
 
@@ -7259,17 +7345,17 @@ fn render_calculator_app(
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-link"></use></svg>
-                        Copy URL
+                        __TEXT_COPY_URL__
                     </button>
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-share-nodes"></use></svg>
-                        Copy Share
+                        __TEXT_COPY_SHARE__
                     </button>
                     <button class="btn btn-dash btn-error"
                             data-on:click="$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-1#fishy-x-circle"></use></svg>
-                        Clear
+                        __TEXT_CLEAR__
                     </button>
                 </div>
             </div>
@@ -7278,29 +7364,29 @@ fn render_calculator_app(
                 <fishy-timeline-chart
                     id="fishing-timeline"
                     class="timeline-chart"
-                    aria-label="Fishing cycle timeline"
+                    aria-label="__TIMELINE_ARIA__"
                     signal-path="_live.fishing_timeline_chart"></fishy-timeline-chart>
             </div>
 
             <div class="grid gap-4">
                 <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.total_time || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">Average Total Fishing Time</div>
+                        <div class="stat-title">__STAT_TOTAL_TIME__</div>
                         <div class="stat-value text-2xl" data-text="$_live.total_time"></div>
-                        <div class="stat-desc">seconds</div>
+                        <div class="stat-desc">__STAT_SECONDS__</div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.bite_time || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">Average Bite Time</div>
+                        <div class="stat-title">__STAT_BITE_TIME__</div>
                         <div class="stat-value text-2xl" data-text="$_live.bite_time"></div>
-                        <div class="stat-desc">seconds</div>
+                        <div class="stat-desc">__STAT_SECONDS__</div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">Auto-Fishing Time (AFT)</div>
+                        <div class="stat-title">__STAT_AUTO_FISHING_TIME_AFT__</div>
                         <div class="stat-value text-2xl" data-text="$_live.auto_fish_time"></div>
-                        <div class="stat-desc">seconds</div>
+                        <div class="stat-desc">__STAT_SECONDS__</div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time_reduction || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
+                        <div class="stat-title">__STAT_AUTO_FISHING_TIME_REDUCTION_AFR__</div>
                         <div class="stat-value text-2xl" data-text="$_live.auto_fish_time_reduction_text"></div>
                     </div>
                 </div>
@@ -7311,11 +7397,11 @@ fn render_calculator_app(
                         <div class="stat-value text-2xl" data-text="$_live.casts_average"></div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.item_drr || ''" data-fishy-stat-color="var(--color-warning)">
-                        <div class="stat-title">Item DRR</div>
+                        <div class="stat-title">__STAT_ITEM_DRR__</div>
                         <div class="stat-value text-2xl" data-text="$_live.item_drr_text"></div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.chance_to_consume_durability || ''" data-fishy-stat-color="var(--color-warning)">
-                        <div class="stat-title">Chance to Consume Durability</div>
+                        <div class="stat-title">__STAT_CHANCE_TO_CONSUME_DURABILITY__</div>
                         <div class="stat-value text-2xl" data-text="$_live.chance_to_consume_durability_text"></div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.durability_loss_average || ''" data-fishy-stat-color="var(--color-warning)">
@@ -7333,26 +7419,26 @@ fn render_calculator_app(
 
     <div class="grid gap-6 lg:grid-cols-2">
         <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Zone</legend>
+            <legend class="fieldset-legend ml-6 px-2">__SECTION_ZONE__</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-4">
                     <input id="calculator-zone-value" type="hidden" data-bind="zone" value="__ZONE_VALUE__">
                     __ZONE_SEARCH_DROPDOWN__
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
-                            <div class="stat-title">Min</div>
+                            <div class="stat-title">__STAT_MIN__</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_min"></div>
-                            <div class="stat-desc">seconds</div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
                         <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
-                            <div class="stat-title">Average</div>
+                            <div class="stat-title">__STAT_AVERAGE__</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_avg"></div>
-                            <div class="stat-desc">seconds</div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
                         <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
-                            <div class="stat-title">Max</div>
+                            <div class="stat-title">__STAT_MAX__</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_max"></div>
-                            <div class="stat-desc">seconds</div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
                     </div>
                 </div>
@@ -7360,33 +7446,33 @@ fn render_calculator_app(
         </fieldset>
 
         <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Bite Time</legend>
+            <legend class="fieldset-legend ml-6 px-2">__SECTION_BITE_TIME__</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-4">
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Fishing Level</legend>
+                        <legend class="fieldset-legend">__FIELD_FISHING_LEVEL__</legend>
                         __LEVEL_SELECT__
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Fishing Resources</legend>
+                        <legend class="fieldset-legend">__FIELD_FISHING_RESOURCES__</legend>
                         <input data-bind="_resources" type="range" class="range-xs range-secondary w-full" min="0" max="100">
-                        <span class="label text-sm font-medium" data-text="$_resources + '% (' + ($_live.abundance_label || 'Exhausted') + ')'"></span>
+                        <span class="label text-sm font-medium" data-text="$_resources + '% (' + ($_live.abundance_label || __ABUNDANCE_FALLBACK_JS__) + ')'"></span>
                     </fieldset>
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
-                            <div class="stat-title">Effective Min</div>
+                            <div class="stat-title">__STAT_EFFECTIVE_MIN__</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_min"></div>
-                            <div class="stat-desc">seconds</div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
                         <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
-                            <div class="stat-title">Effective Average</div>
+                            <div class="stat-title">__STAT_EFFECTIVE_AVERAGE__</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_avg"></div>
-                            <div class="stat-desc">seconds</div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
                         <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
-                            <div class="stat-title">Effective Max</div>
+                            <div class="stat-title">__STAT_EFFECTIVE_MAX__</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_max"></div>
-                            <div class="stat-desc">seconds</div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
                     </div>
                 </div>
@@ -7394,34 +7480,34 @@ fn render_calculator_app(
         </fieldset>
 
         <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Catch Time</legend>
+            <legend class="fieldset-legend ml-6 px-2">__SECTION_CATCH_TIME__</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-3 sm:grid-cols-2">
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Active</legend>
+                        <legend class="fieldset-legend">__FIELD_ACTIVE__</legend>
                         <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeActive">
-                        <span class="label text-xs">seconds</span>
+                        <span class="label text-xs">__STAT_SECONDS__</span>
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">AFK</legend>
+                        <legend class="fieldset-legend">__FIELD_AFK__</legend>
                         <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeAfk">
-                        <span class="label text-xs">seconds</span>
+                        <span class="label text-xs">__STAT_SECONDS__</span>
                     </fieldset>
                 </div>
             </div>
         </fieldset>
 
         <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Session (<span data-text="$_live.timespan_text || '8 hours'"></span>)</legend>
+            <legend class="fieldset-legend ml-6 px-2">__SECTION_SESSION__ (<span data-text="$_live.timespan_text || __TIMESPAN_FALLBACK_JS__"></span>)</legend>
             <div class="card-body gap-3 pt-0">
                 <div class="grid gap-3">
                     <div class="grid grid-cols-2 gap-3">
                         <fieldset class="fieldset">
-                            <legend class="fieldset-legend">Amount</legend>
+                            <legend class="fieldset-legend">__FIELD_AMOUNT__</legend>
                             <input type="number" min="0" step="any" class="input input-sm w-full" id="timespan_amount" data-bind="timespanAmount" name="timespan_amount">
                         </fieldset>
                         <fieldset class="fieldset">
-                            <legend class="fieldset-legend">Unit</legend>
+                            <legend class="fieldset-legend">__FIELD_UNIT__</legend>
                             __TIMESPAN_UNIT_SELECT__
                         </fieldset>
                     </div>
@@ -7439,49 +7525,49 @@ fn render_calculator_app(
         __LOOT_WINDOW__
 
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
-            <legend class="fieldset-legend ml-6 px-2">Gear</legend>
+            <legend class="fieldset-legend ml-6 px-2">__SECTION_GEAR__</legend>
             <div class="card-body pt-0">
                 <div id="items" class="grid gap-4 md:grid-cols-2">
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Lifeskill Level</legend>
+                        <legend class="fieldset-legend">__FIELD_LIFESKILL_LEVEL__</legend>
                         __LIFESKILL_LEVEL_SELECT__
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Fishing Rod</legend>
+                        <legend class="fieldset-legend">__FIELD_FISHING_ROD__</legend>
                         __ROD_SELECT__
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Brand</legend>
+                        <legend class="fieldset-legend">__FIELD_BRAND__</legend>
                         <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-3 py-3 font-medium">
                             <input data-bind="brand" type="checkbox" class="checkbox checkbox-primary">
                         </label>
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Float</legend>
+                        <legend class="fieldset-legend">__FIELD_FLOAT__</legend>
                         __FLOAT_SELECT__
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Chair</legend>
+                        <legend class="fieldset-legend">__FIELD_CHAIR__</legend>
                         __CHAIR_SELECT__
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Lightstone Set</legend>
+                        <legend class="fieldset-legend">__FIELD_LIGHTSTONE_SET__</legend>
                         __LIGHTSTONE_SET_SELECT__
                     </fieldset>
                     <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Backpack</legend>
+                        <legend class="fieldset-legend">__FIELD_BACKPACK__</legend>
                         __BACKPACK_SELECT__
                     </fieldset>
                     <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">Outfit</legend>
+                        <legend class="fieldset-legend">__FIELD_OUTFIT__</legend>
                         __OUTFITS__
                     </fieldset>
                     <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">Food</legend>
+                        <legend class="fieldset-legend">__FIELD_FOOD__</legend>
                         __FOODS__
                     </fieldset>
                     <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">Buffs</legend>
+                        <legend class="fieldset-legend">__FIELD_BUFFS__</legend>
                         __BUFFS__
                     </fieldset>
                 </div>
@@ -7489,7 +7575,7 @@ fn render_calculator_app(
         </fieldset>
 
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
-            <legend class="fieldset-legend ml-6 px-2">Pets</legend>
+            <legend class="fieldset-legend ml-6 px-2">__SECTION_PETS__</legend>
             <div class="card-body pt-0">
                 __PETS__
             </div>
@@ -7498,14 +7584,14 @@ fn render_calculator_app(
 
     <fieldset class="card card-border bg-base-100">
         <legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2">
-            <span class="fishy-calculator-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-edit-4-fill"></use></svg><span>Overlay Proposal</span></span>
+            <span class="fishy-calculator-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-edit-4-fill"></use></svg><span>__SECTION_OVERLAY_PROPOSAL__</span></span>
             <button type="button"
                     class="fishy-calculator-panel-toggle btn btn-ghost btn-xs btn-circle"
                     aria-controls="calculator-overlay-proposal-body"
                     data-class:is-collapsed="$_calculator_ui.overlay_panel_collapsed"
                     data-attr:aria-expanded="(!$_calculator_ui.overlay_panel_collapsed).toString()"
-                    data-attr:aria-label="$_calculator_ui.overlay_panel_collapsed ? 'Expand overlay proposal panel' : 'Collapse overlay proposal panel'"
-                    data-attr:title="$_calculator_ui.overlay_panel_collapsed ? 'Expand overlay proposal panel' : 'Collapse overlay proposal panel'"
+                    data-attr:aria-label="__OVERLAY_PANEL_LABEL_EXPR__"
+                    data-attr:title="__OVERLAY_PANEL_LABEL_EXPR__"
                     data-on:click="$_calculator_ui.overlay_panel_collapsed = !$_calculator_ui.overlay_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-caret-down"></use></svg></button>
         </legend>
         <div id="calculator-overlay-proposal-body" class="card-body pt-0" data-show="!$_calculator_ui.overlay_panel_collapsed">
@@ -7520,8 +7606,327 @@ fn render_calculator_app(
         ("__ZONE_SEARCH_DROPDOWN__", zone_dropdown),
         ("__ZONE_VALUE__", escape_html(&signals.zone)),
         (
+            "__TEXT_ACTIVE_FISHING__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.toggle.active_fishing",
+            )),
+        ),
+        (
+            "__TEXT_DEBUG__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.toggle.debug",
+            )),
+        ),
+        (
+            "__TEXT_COPY_URL__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.copy_url",
+            )),
+        ),
+        (
+            "__TEXT_COPY_SHARE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.copy_share",
+            )),
+        ),
+        (
+            "__TEXT_CLEAR__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.clear",
+            )),
+        ),
+        (
             "__CALCULATOR_ICON_SPRITE_URL__",
             CALCULATOR_ICON_SPRITE_URL.to_string(),
+        ),
+        (
+            "__TIMELINE_ARIA__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.chart.aria.timeline",
+            )),
+        ),
+        (
+            "__STAT_TOTAL_TIME__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.average_total_fishing_time",
+            )),
+        ),
+        (
+            "__STAT_BITE_TIME__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.average_bite_time",
+            )),
+        ),
+        (
+            "__STAT_SECONDS__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.seconds",
+            )),
+        ),
+        (
+            "__STAT_AUTO_FISHING_TIME_AFT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.auto_fishing_time_aft",
+            )),
+        ),
+        (
+            "__STAT_AUTO_FISHING_TIME_REDUCTION_AFR__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.auto_fishing_time_reduction_afr",
+            )),
+        ),
+        (
+            "__STAT_ITEM_DRR__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.item_drr",
+            )),
+        ),
+        (
+            "__STAT_CHANCE_TO_CONSUME_DURABILITY__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.chance_to_consume_durability",
+            )),
+        ),
+        (
+            "__SECTION_ZONE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.zone",
+            )),
+        ),
+        (
+            "__STAT_MIN__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.min",
+            )),
+        ),
+        (
+            "__STAT_AVERAGE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.average",
+            )),
+        ),
+        (
+            "__STAT_MAX__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.max",
+            )),
+        ),
+        (
+            "__SECTION_BITE_TIME__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.bite_time",
+            )),
+        ),
+        (
+            "__FIELD_FISHING_LEVEL__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.fishing_level",
+            )),
+        ),
+        (
+            "__FIELD_FISHING_RESOURCES__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.fishing_resources",
+            )),
+        ),
+        (
+            "__ABUNDANCE_FALLBACK_JS__",
+            escaped_js_string_literal(&calculator_route_text(
+                data.lang,
+                "calculator.resource.exhausted",
+            )),
+        ),
+        (
+            "__STAT_EFFECTIVE_MIN__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.effective_min",
+            )),
+        ),
+        (
+            "__STAT_EFFECTIVE_AVERAGE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.effective_average",
+            )),
+        ),
+        (
+            "__STAT_EFFECTIVE_MAX__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.stat.effective_max",
+            )),
+        ),
+        (
+            "__SECTION_CATCH_TIME__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.catch_time",
+            )),
+        ),
+        (
+            "__FIELD_ACTIVE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.active",
+            )),
+        ),
+        (
+            "__FIELD_AFK__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.afk",
+            )),
+        ),
+        (
+            "__SECTION_SESSION__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.session",
+            )),
+        ),
+        (
+            "__TIMESPAN_FALLBACK_JS__",
+            escaped_js_string_literal(&derived.timespan_text),
+        ),
+        (
+            "__FIELD_AMOUNT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.amount",
+            )),
+        ),
+        (
+            "__FIELD_UNIT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.unit",
+            )),
+        ),
+        (
+            "__SECTION_GEAR__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.gear",
+            )),
+        ),
+        (
+            "__FIELD_LIFESKILL_LEVEL__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.lifeskill_level",
+            )),
+        ),
+        (
+            "__FIELD_FISHING_ROD__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.fishing_rod",
+            )),
+        ),
+        (
+            "__FIELD_BRAND__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.brand",
+            )),
+        ),
+        (
+            "__FIELD_FLOAT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.float",
+            )),
+        ),
+        (
+            "__FIELD_CHAIR__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.chair",
+            )),
+        ),
+        (
+            "__FIELD_LIGHTSTONE_SET__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.lightstone_set",
+            )),
+        ),
+        (
+            "__FIELD_BACKPACK__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.backpack",
+            )),
+        ),
+        (
+            "__FIELD_OUTFIT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.outfit",
+            )),
+        ),
+        (
+            "__FIELD_FOOD__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.food",
+            )),
+        ),
+        (
+            "__FIELD_BUFFS__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.buffs",
+            )),
+        ),
+        (
+            "__SECTION_PETS__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.pets",
+            )),
+        ),
+        (
+            "__SECTION_OVERLAY_PROPOSAL__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.overlay_proposal",
+            )),
+        ),
+        (
+            "__OVERLAY_PANEL_LABEL_EXPR__",
+            format!(
+                "$_calculator_ui.overlay_panel_collapsed ? {} : {}",
+                escaped_js_string_literal(&calculator_route_text(
+                    data.lang,
+                    "calculator.server.panel.expand_overlay_proposal",
+                )),
+                escaped_js_string_literal(&calculator_route_text(
+                    data.lang,
+                    "calculator.server.panel.collapse_overlay_proposal",
+                )),
+            ),
         ),
         (
             "__LEVEL_SELECT__",
@@ -7535,7 +7940,7 @@ fn render_calculator_app(
                 &signals.level.to_string(),
                 &fishing_levels,
                 false,
-                "Search fishing levels",
+                &calculator_route_text(data.lang, "calculator.server.search.fishing_levels"),
                 false,
             ),
         ),
@@ -7551,7 +7956,7 @@ fn render_calculator_app(
                 &signals.timespan_unit,
                 &session_units,
                 false,
-                "Search session units",
+                &calculator_route_text(data.lang, "calculator.server.search.session_units"),
                 true,
             ),
         ),
@@ -7571,7 +7976,7 @@ fn render_calculator_app(
                 &signals.lifeskill_level,
                 &lifeskill_levels,
                 false,
-                "Search lifeskill levels",
+                &calculator_route_text(data.lang, "calculator.server.search.lifeskill_levels"),
                 false,
             ),
         ),
@@ -7603,7 +8008,7 @@ fn render_calculator_app(
                 &signals.rod,
                 &rods,
                 false,
-                "Search rods",
+                &calculator_route_text(data.lang, "calculator.server.search.rods"),
                 false,
             ),
         ),
@@ -7619,7 +8024,7 @@ fn render_calculator_app(
                 &signals.float,
                 &floats,
                 true,
-                "Search floats",
+                &calculator_route_text(data.lang, "calculator.server.search.floats"),
                 false,
             ),
         ),
@@ -7635,7 +8040,7 @@ fn render_calculator_app(
                 &signals.chair,
                 &chairs,
                 true,
-                "Search chairs",
+                &calculator_route_text(data.lang, "calculator.server.search.chairs"),
                 false,
             ),
         ),
@@ -7651,7 +8056,7 @@ fn render_calculator_app(
                 &signals.lightstone_set,
                 &lightstone_sets,
                 true,
-                "Search lightstone sets",
+                &calculator_route_text(data.lang, "calculator.server.search.lightstone_sets"),
                 false,
             ),
         ),
@@ -7667,7 +8072,7 @@ fn render_calculator_app(
                 &signals.backpack,
                 &backpacks,
                 true,
-                "Search backpacks",
+                &calculator_route_text(data.lang, "calculator.server.search.backpacks"),
                 false,
             ),
         ),
@@ -7687,12 +8092,17 @@ fn render_calculator_app(
             render_searchable_multiselect_control(
                 data.cdn_base_url.as_str(),
                 &SearchableMultiselectConfig {
+                    lang: data.lang,
                     root_id: "calculator-food-picker",
                     bind_key: "_food_slots",
-                    search_placeholder: "Search foods by name or effect",
-                    helper_text: Some(
-                        "Only one food family applies at a time. Higher-tier foods replace lower-tier ones in the same family.",
+                    search_placeholder: &calculator_route_text(
+                        data.lang,
+                        "calculator.server.search.foods",
                     ),
+                    helper_text: Some(&calculator_route_text(
+                        data.lang,
+                        "calculator.server.helper.food_family",
+                    )),
                 },
                 &signals.food,
                 &foods,
@@ -7703,12 +8113,17 @@ fn render_calculator_app(
             render_searchable_multiselect_control(
                 data.cdn_base_url.as_str(),
                 &SearchableMultiselectConfig {
+                    lang: data.lang,
                     root_id: "calculator-buff-picker",
                     bind_key: "_buff_slots",
-                    search_placeholder: "Search buffs by name or effect",
-                    helper_text: Some(
-                        "Selecting another buff in the same buff group replaces the previous one.",
+                    search_placeholder: &calculator_route_text(
+                        data.lang,
+                        "calculator.server.search.buffs",
                     ),
+                    helper_text: Some(&calculator_route_text(
+                        data.lang,
+                        "calculator.server.helper.buff_group",
+                    )),
                 },
                 &signals.buff,
                 &buffs,
@@ -7970,6 +8385,7 @@ fn timeline_chart_segment(
 }
 
 fn fishing_timeline_chart(
+    lang: FishLang,
     active: bool,
     bite_time_raw: f64,
     auto_fish_time_raw: f64,
@@ -8005,7 +8421,7 @@ fn fishing_timeline_chart(
     let time_saved_raw = (unoptimized_time_raw - total_time_raw).max(0.0);
 
     let mut segments = vec![timeline_chart_segment(
-        "Bite Time",
+        &calculator_route_text(lang, "calculator.timeline.bite_time"),
         bite_time_raw,
         percent_bite,
         "#46d2a7",
@@ -8014,7 +8430,7 @@ fn fishing_timeline_chart(
     )];
     if !active {
         segments.push(timeline_chart_segment(
-            "Auto-Fishing Time",
+            &calculator_route_text(lang, "calculator.timeline.auto_fishing_time"),
             auto_fish_time_raw,
             percent_af,
             "#4e7296",
@@ -8023,7 +8439,7 @@ fn fishing_timeline_chart(
         ));
     }
     segments.push(timeline_chart_segment(
-        "Catch Time",
+        &calculator_route_text(lang, "calculator.timeline.catch_time"),
         catch_time_raw,
         percent_catch,
         "#d27746",
@@ -8031,7 +8447,7 @@ fn fishing_timeline_chart(
         catch_time_breakdown,
     ));
     segments.push(timeline_chart_segment(
-        "Time Saved",
+        &calculator_route_text(lang, "calculator.timeline.time_saved"),
         time_saved_raw,
         percent_saved,
         "color-mix(in oklab, var(--color-base-100) 55%, var(--color-base-content) 10%)",
@@ -8097,14 +8513,38 @@ fn filtered_loot_flow_rows(
         .collect()
 }
 
-fn render_loot_sankey(chart: &LootChart) -> String {
+fn render_loot_sankey(lang: FishLang, chart: &LootChart) -> String {
     if chart.species_rows.is_empty() {
-        return "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No source-backed loot rows are available for this zone yet.</div>".to_string();
+        return format!(
+            "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.chart.no_loot_rows",
+            ))
+        );
     }
-    "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">Loot Flow</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group, passes through source-backed species rows, then recombines into silver-weighted group totals. Left-side metrics show droprate composition; right-side metrics show silver contribution.</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flow from groups to loot rows\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>".to_string()
+    format!(
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"{}\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.loot_flow_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.loot_flow_description",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.aria.loot_flow",
+        )),
+    )
 }
 
-fn render_fish_group_chart(chart: &FishGroupChart, show_normalized_rates: bool) -> String {
+fn render_fish_group_chart(
+    lang: FishLang,
+    chart: &FishGroupChart,
+    show_normalized_rates: bool,
+) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-fish-group-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -8113,21 +8553,28 @@ fn render_fish_group_chart(chart: &FishGroupChart, show_normalized_rates: bool) 
     }
 
     format!(
-        "<div id=\"calculator-fish-group-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">Group Droprate Distribution</div><div class=\"text-xs text-base-content/70\">{}</div></div>{}</div></div>",
-        if show_normalized_rates {
-            "Current fish-group share after prize, rare, and high-quality weighting."
-        } else {
-            "Raw fish-group rates after prize, rare, and high-quality weighting. These rates can total above or below 100%."
-        },
+        "<div id=\"calculator-fish-group-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div>{}</div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_distribution_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            if show_normalized_rates {
+                "calculator.server.chart.group_distribution_description.normalized"
+            } else {
+                "calculator.server.chart.group_distribution_description.raw"
+            },
+        )),
         render_distribution_chart(
             "fish-group-distribution-chart",
-            "Group Droprate Distribution",
+            &calculator_route_text(lang, "calculator.server.chart.aria.group_distribution"),
             "_calc.fish_group_distribution_chart",
         ),
     )
 }
 
-fn render_fish_group_silver_chart(chart: &LootChart) -> String {
+fn render_fish_group_silver_chart(lang: FishLang, chart: &LootChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-fish-group-silver-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -8136,16 +8583,24 @@ fn render_fish_group_silver_chart(chart: &LootChart) -> String {
     }
 
     format!(
-        "<div id=\"calculator-fish-group-silver-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">Group Silver Distribution</div><div class=\"text-xs text-base-content/70\">Expected silver share by fish group after trade and pricing settings.</div></div>{}</div></div>",
+        "<div id=\"calculator-fish-group-silver-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div>{}</div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_silver_distribution_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_silver_distribution_description",
+        )),
         render_distribution_chart(
             "fish-group-silver-distribution-chart",
-            "Group Silver Distribution",
+            &calculator_route_text(lang, "calculator.server.chart.aria.group_silver_distribution"),
             "_calc.fish_group_silver_distribution_chart",
         ),
     )
 }
 
-fn render_loot_chart(chart: &LootChart) -> String {
+fn render_loot_chart(lang: FishLang, chart: &LootChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-loot-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -8155,7 +8610,7 @@ fn render_loot_chart(chart: &LootChart) -> String {
 
     format!(
         "<div id=\"calculator-loot-chart\" class=\"grid gap-4\">{}</div>",
-        render_loot_sankey(chart),
+        render_loot_sankey(lang, chart),
     )
 }
 
@@ -8166,7 +8621,13 @@ fn render_target_fish_panel(
     target_fish_summary: &TargetFishSummary,
 ) -> String {
     if target_fish_options.is_empty() {
-        return "<div id=\"calculator-target-fish-panel\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No loot rows are currently available for target analysis at this spot.</div>".to_string();
+        return format!(
+            "<div id=\"calculator-target-fish-panel\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.target.no_rows",
+            ))
+        );
     }
 
     let session_distribution_html = if target_fish_summary.session_distribution.is_empty() {
@@ -8176,16 +8637,31 @@ fn render_target_fish_panel(
             "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\">\
                 <div class=\"mb-3 flex items-center justify-between gap-3\">\
                     <div>\
-                        <div class=\"text-sm font-medium\">Session Count Distribution</div>\
-                        <div class=\"text-xs text-base-content/70\">Discrete session outcome distribution for this target within the current session duration.</div>\
+                        <div class=\"text-sm font-medium\">{}</div>\
+                        <div class=\"text-xs text-base-content/70\">{}</div>\
                     </div>\
-                    <div class=\"text-right text-xs text-base-content/70\">count bucket probability</div>\
+                    <div class=\"text-right text-xs text-base-content/70\">{}</div>\
                 </div>\
                 {}\
             </div>",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.target.session_distribution_title",
+            )),
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.target.session_distribution_description",
+            )),
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.target.count_bucket_probability",
+            )),
             render_pmf_chart(
                 "target-fish-pmf-chart",
-                "Target Fish Session Distribution",
+                &calculator_route_text(
+                    data.lang,
+                    "calculator.server.chart.aria.target_distribution"
+                ),
                 "_calc.target_fish_pmf_chart",
             )
         )
@@ -8195,56 +8671,94 @@ fn render_target_fish_panel(
         "<div id=\"calculator-target-fish-panel\" class=\"grid gap-4\">\
             <div class=\"grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem]\">\
                 <fieldset class=\"fieldset\">\
-                    <legend class=\"fieldset-legend\">Target Fish / Loot Item</legend>\
+                    <legend class=\"fieldset-legend\">{}</legend>\
                     {}\
                 </fieldset>\
                 <fieldset class=\"fieldset\">\
-                    <legend class=\"fieldset-legend\">Target Amount</legend>\
+                    <legend class=\"fieldset-legend\">{}</legend>\
                     <input type=\"number\" min=\"1\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"targetFishAmount\">\
-                    <span class=\"label text-xs\">Expected time to reach this amount.</span>\
+                    <span class=\"label text-xs\">{}</span>\
                 </fieldset>\
                 <fieldset class=\"fieldset\">\
-                    <legend class=\"fieldset-legend\">PMF Max Count</legend>\
+                    <legend class=\"fieldset-legend\">{}</legend>\
                     <input type=\"number\" min=\"0\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"targetFishPmfCount\">\
                     <span class=\"label text-xs\">{}</span>\
                 </fieldset>\
             </div>\
             <div class=\"grid gap-3 lg:grid-cols-3\">\
                 <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_expected_count || ''\" data-fishy-stat-color=\"var(--color-info)\">\
-                    <div class=\"text-sm font-medium whitespace-normal leading-snug\">Expected ({})</div>\
+                    <div class=\"text-sm font-medium whitespace-normal leading-snug\">{}</div>\
                     <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
                     <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
                 <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_time_to_target || ''\" data-fishy-stat-color=\"var(--color-info)\">\
-                    <div class=\"text-sm font-medium\">Time to Target</div>\
+                    <div class=\"text-sm font-medium\">{}</div>\
                     <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
                     <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
                 <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_probability_at_least || ''\" data-fishy-stat-color=\"var(--color-info)\">\
-                    <div class=\"text-sm font-medium\">Chance to Get at Least {}</div>\
+                    <div class=\"text-sm font-medium\">{}</div>\
                     <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
-                    <div class=\"mt-1 text-xs text-base-content/70\">within the current session duration</div>\
+                    <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
             </div>\
             {}\
         </div>",
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.target_fish",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.target_amount",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.target_amount",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.pmf_max_count",
+        )),
         render_target_fish_select_control(data, signals, target_fish_options),
         escape_html(&target_fish_summary.pmf_count_hint_text),
-        escape_html(&timespan_text(signals.timespan_amount, &signals.timespan_unit)),
+        escape_html(&calculator_route_text_with_vars(
+            data.lang,
+            "calculator.server.target.expected",
+            &[(
+                "timespan",
+                &timespan_text(data.lang, signals.timespan_amount, &signals.timespan_unit),
+            )],
+        )),
         escape_html(&target_fish_summary.expected_count_text),
         escape_html(&target_fish_summary.status_text),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.target.time_to_target",
+        )),
         escape_html(&target_fish_summary.time_to_target_text),
         escape_html(&if target_fish_summary.selected_label.is_empty() {
-            "Select a target fish.".to_string()
+            calculator_route_text(data.lang, "calculator.server.helper.select_target_fish")
         } else {
-            format!(
-                "{} · {}/day",
-                target_fish_summary.selected_label,
-                target_fish_summary.per_day_text
+            calculator_route_text_with_vars(
+                data.lang,
+                "calculator.server.helper.target_status_per_day",
+                &[
+                    ("label", &target_fish_summary.selected_label),
+                    ("per_day", &target_fish_summary.per_day_text),
+                ],
             )
         }),
-        escape_html(&target_fish_summary.target_amount_text),
+        escape_html(&calculator_route_text_with_vars(
+            data.lang,
+            "calculator.server.target.chance_at_least",
+            &[("amount", &target_fish_summary.target_amount_text)],
+        )),
         escape_html(&target_fish_summary.probability_at_least_text),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.within_current_session_duration",
+        )),
         session_distribution_html,
     )
 }
@@ -8260,46 +8774,46 @@ fn render_fish_group_window(
 ) -> String {
     format!(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100\">\
-            <legend class=\"fieldset-legend ml-6 px-2\">Distribution</legend>\
+            <legend class=\"fieldset-legend ml-6 px-2\">{}</legend>\
             <div class=\"card-body gap-4 pt-0\">\
                 {}\
                 <div class=\"grid gap-4\">\
                     <div class=\"grid gap-3 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-start\">\
                         <fieldset class=\"fieldset\">\
-                            <legend class=\"fieldset-legend\">Mastery</legend>\
+                            <legend class=\"fieldset-legend\">{}</legend>\
                             <input type=\"number\" min=\"0\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
-                            <span class=\"label text-xs\">Enter your consolidated fishing mastery directly.</span>\
+                            <span class=\"label text-xs\">{}</span>\
                         </fieldset>\
                         <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.raw_prize_rate || ''\" data-fishy-stat-color=\"var(--color-warning)\">\
-                            <div class=\"text-sm font-medium\">Raw Prize Catch Rate</div>\
-                            <div class=\"mt-1 text-xs text-base-content/70\">Mastery <span data-text=\"$_calc.raw_prize_mastery_text\">{}</span> drives the direct prize-rate formula before normalization.</div>\
+                            <div class=\"text-sm font-medium\">{}</div>\
+                            <div class=\"mt-1 text-xs text-base-content/70\">{} <span data-text=\"$_calc.raw_prize_mastery_text\">{}</span> {}</div>\
                             <div class=\"mt-3 text-2xl font-semibold\" data-text=\"$_calc.raw_prize_rate_text\">{}</div>\
-                            <div class=\"text-xs text-base-content/70\">before zone-group normalization</div>\
+                            <div class=\"text-xs text-base-content/70\">{}</div>\
                         </div>\
                     </div>\
                     <div class=\"grid gap-4\">\
                         <div class=\"grid gap-3 md:grid-cols-2\">\
                             <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
                                 <input data-bind=\"showNormalizedSelectRates\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"{}>\
-                                <span class=\"text-sm font-medium\">Normalize rates</span>\
+                                <span class=\"text-sm font-medium\">{}</span>\
                             </label>\
                             <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
-                                <label class=\"mb-2 block text-sm font-medium\">Discard fish up to grade</label>\
+                                <label class=\"mb-2 block text-sm font-medium\">{}</label>\
                                 <select data-bind=\"discardGrade\" class=\"select select-sm w-full\">\
-                                    <option value=\"none\">Do not discard</option>\
-                                    <option value=\"white\">White</option>\
-                                    <option value=\"green\">Green</option>\
-                                    <option value=\"blue\">Blue</option>\
-                                    <option value=\"yellow\">Yellow</option>\
+                                    <option value=\"none\">{}</option>\
+                                    <option value=\"white\">{}</option>\
+                                    <option value=\"green\">{}</option>\
+                                    <option value=\"blue\">{}</option>\
+                                    <option value=\"yellow\">{}</option>\
                                 </select>\
-                                <div class=\"mt-2 text-xs text-base-content/70\">Fish only. Non-fish loot stays. Red fish are always kept.</div>\
+                                <div class=\"mt-2 text-xs text-base-content/70\">{}</div>\
                             </div>\
                         </div>\
-                        <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"Distribution tabs\">\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'groups'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'groups').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'groups'\">Groups</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'silver'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'silver').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'silver'\">Silver</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">Loot Flow</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">Target Fish</button>\
+                        <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"{}\">\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'groups'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'groups').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'groups'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'silver'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'silver').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'silver'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">{}</button>\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\">{}\
                         </div>\
@@ -8313,18 +8827,71 @@ fn render_fish_group_window(
                 </div>\
             </div>\
         </fieldset>",
-        render_calculator_data_disclaimer(),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.section.distribution",
+        )),
+        render_calculator_data_disclaimer(data.lang),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.mastery",
+        )),
         escape_html(&trim_float(mastery)),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.mastery",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.raw_prize_catch_rate",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.mastery_formula_prefix",
+        )),
         escape_html(&fish_group_chart.mastery_text),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.mastery_formula_suffix",
+        )),
         escape_html(&fish_group_chart.raw_prize_rate_text),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.before_zone_group_normalization",
+        )),
         if signals.show_normalized_select_rates {
             " checked"
         } else {
             ""
         },
-        render_fish_group_chart(fish_group_chart, signals.show_normalized_select_rates),
-        render_fish_group_silver_chart(loot_chart),
-        render_loot_chart(loot_chart),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.normalize_rates",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.discard_grade",
+        )),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.none")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.white")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.green")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.blue")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.yellow")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.fish_only_notice",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.chart.aria.distribution_tabs",
+        )),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.groups")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.silver")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.loot_flow")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.target_fish")),
+        render_fish_group_chart(data.lang, fish_group_chart, signals.show_normalized_select_rates),
+        render_fish_group_silver_chart(data.lang, loot_chart),
+        render_loot_chart(data.lang, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
     )
 }
@@ -8337,63 +8904,95 @@ fn render_loot_window(
 ) -> String {
     format!(
         "<fieldset id=\"calculator-loot-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
-            <legend class=\"fieldset-legend ml-6 px-2\">Loot</legend>\
+            <legend class=\"fieldset-legend ml-6 px-2\">{}</legend>\
             <div class=\"card-body gap-4 pt-0\">\
                 {}\
                 <div class=\"grid gap-4\">\
                         <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
                             <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_catches || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title whitespace-normal leading-snug\">Expected Catches (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
+                                <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_catches\"></div>\
-                                <div class=\"stat-desc\">using <span data-text=\"$_live.loot_fish_multiplier_text\"></span> per cast</div>\
+                                <div class=\"stat-desc\">{} <span data-text=\"$_live.loot_fish_multiplier_text\"></span> {}</div>\
                             </div>\
                             <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_fish_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title\">Expected Catches / Hour</div>\
+                                <div class=\"stat-title\">{}</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_fish_per_hour\"></div>\
                             </div>\
                             <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_profit || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title whitespace-normal leading-snug\">Expected Profit (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
+                                <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_profit\"></div>\
-                                <div class=\"stat-desc\">sale <span data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
+                                <div class=\"stat-desc\">{} <span data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
                             </div>\
                             <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_profit_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title\">Profit / Hour</div>\
+                                <div class=\"stat-title\">{}</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_profit_per_hour\"></div>\
                             </div>\
                         </div>\
                         <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
-                            <legend class=\"fieldset-legend\">Trade</legend>\
+                            <legend class=\"fieldset-legend\">{}</legend>\
                             <div class=\"grid gap-3\">\
                                 <fieldset class=\"fieldset\">\
-                                    <legend class=\"fieldset-legend\">Trade Level</legend>\
+                                    <legend class=\"fieldset-legend\">{}</legend>\
                                     {}\
                                 </fieldset>\
                                 <div class=\"grid gap-3 sm:grid-cols-2\">\
                                     <fieldset class=\"fieldset\">\
-                                        <legend class=\"fieldset-legend\">Distance Bonus</legend>\
+                                        <legend class=\"fieldset-legend\">{}</legend>\
                                         <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\">\
-                                        <span class=\"label text-xs\">manual % bonus, capped at +150% in the sale formula</span>\
+                                        <span class=\"label text-xs\">{}</span>\
                                     </fieldset>\
                                     <fieldset class=\"fieldset\">\
-                                        <legend class=\"fieldset-legend\">Trade Price Curve</legend>\
+                                        <legend class=\"fieldset-legend\">{}</legend>\
                                         <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradePriceCurve\">\
-                                        <span class=\"label text-xs\">manual % curve, commonly around 105–130%</span>\
+                                        <span class=\"label text-xs\">{}</span>\
                                     </fieldset>\
                                 </div>\
                                 <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
                                     <input data-bind=\"applyTradeModifiers\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
-                                    <span class=\"text-sm font-medium\">Apply Trade Settings</span>\
+                                    <span class=\"text-sm font-medium\">{}</span>\
                                 </label>\
                                 <div class=\"grid gap-3 sm:grid-cols-2\">\
-                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">Bargain Bonus</span><span class=\"font-medium\" data-text=\"$_calc.trade_bargain_bonus_text\"></span></div>\
-                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">Sale Multiplier</span><span class=\"font-medium\" data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
+                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">{}</span><span class=\"font-medium\" data-text=\"$_calc.trade_bargain_bonus_text\"></span></div>\
+                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">{}</span><span class=\"font-medium\" data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
                                 </div>\
                             </div>\
                         </fieldset>\
                 </div>\
             </div>\
         </fieldset>",
-        render_calculator_data_disclaimer(),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.section.loot")),
+        render_calculator_data_disclaimer(data.lang),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.expected_catches",
+        )),
+        escaped_js_string_literal(&timespan_text(
+            data.lang,
+            signals.timespan_amount,
+            &signals.timespan_unit,
+        )),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.helper.using")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.helper.per_cast")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.expected_catches_per_hour",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.expected_profit",
+        )),
+        escaped_js_string_literal(&timespan_text(
+            data.lang,
+            signals.timespan_amount,
+            &signals.timespan_unit,
+        )),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.helper.sale")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.profit_per_hour",
+        )),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.section.trade")),
+        escape_html(&calculator_route_text(data.lang, "calculator.server.field.trade_level")),
         render_searchable_select_control(
             data.cdn_base_url.as_str(),
             data.lang,
@@ -8404,13 +9003,41 @@ fn render_loot_window(
             &signals.trade_level,
             trade_levels,
             false,
-            "Search trade levels",
+            &calculator_route_text(data.lang, "calculator.server.search.trade_levels"),
             false,
         ),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.distance_bonus",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.distance_bonus",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.trade_price_curve",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.trade_price_curve",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.apply_trade_settings",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.bargain_bonus",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.sale_multiplier",
+        )),
     )
 }
 
-fn render_calculator_data_disclaimer() -> String {
+fn render_calculator_data_disclaimer(lang: FishLang) -> String {
     format!(
         "<div class=\"rounded-box border px-4 py-4\" style=\"border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--color-base-300, #d4d4d8) 44%); background: color-mix(in oklab, var(--color-warning, #c77d19) 14%, var(--color-base-100, #ffffff) 86%);\">\
             <div class=\"flex items-start gap-3\">\
@@ -8418,18 +9045,27 @@ fn render_calculator_data_disclaimer() -> String {
                     <svg class=\"fishy-icon size-6\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{}#fishy-alert-fill\"></use></svg>\
                 </div>\
                 <div class=\"min-w-0\">\
-                    <div class=\"text-sm font-semibold uppercase tracking-widest\" style=\"color: color-mix(in oklab, var(--color-warning, #c77d19) 78%, var(--color-base-content, #1f2937) 22%);\">Data Quality Warning</div>\
+                    <div class=\"text-sm font-semibold uppercase tracking-widest\" style=\"color: color-mix(in oklab, var(--color-warning, #c77d19) 78%, var(--color-base-content, #1f2937) 22%);\">{}</div>\
                     <div class=\"mt-2 space-y-2 text-sm leading-relaxed text-base-content/85\">\
-                        <p>The data we currently have is <strong>INCOMPLETE</strong> and some data may be <strong>MISSING</strong> entirely.</p>\
-                        <p>Info about group-rates is based on older data and is <strong>OUTDATED</strong>.</p>\
-                        <p>In particular: Prize Fish info is based purely on community estimates and may be totally off. True rates are <strong>UNKNOWN</strong>.</p>\
-                        <p>So while this aims to be as accurate as we can be, for now please do not take any of this at face value.</p>\
-                        <p>Going forward, we will try to crowdsource data and appreciate any future contributions.</p>\
+                        <p>{}</p>\
+                        <p>{}</p>\
+                        <p>{}</p>\
+                        <p>{}</p>\
+                        <p>{}</p>\
                     </div>\
                 </div>\
             </div>\
         </div>",
         CALCULATOR_ICON_SPRITE_URL,
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.disclaimer.title",
+        )),
+        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p1")),
+        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p2")),
+        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p3")),
+        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p4")),
+        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p5")),
     )
 }
 
@@ -8639,10 +9275,11 @@ fn render_searchable_dropdown_option_content_html(
 fn with_optional_none<'a>(
     options: &[SelectOption<'a>],
     include_none: bool,
+    lang: FishLang,
 ) -> Vec<SelectOption<'a>> {
     let mut values = Vec::with_capacity(options.len() + usize::from(include_none));
     if include_none {
-        values.push(NONE_SELECT_OPTION);
+        values.push(none_select_option(lang));
     }
     values.extend_from_slice(options);
     values
@@ -8756,6 +9393,7 @@ fn render_searchable_dropdown_catalog_html(
 }
 
 fn render_searchable_select_results(
+    lang: FishLang,
     cdn_base_url: &str,
     results_list_id: &str,
     options: &[SelectOption<'_>],
@@ -8771,10 +9409,29 @@ fn render_searchable_select_results(
     )
     .unwrap();
     if matches.is_empty() {
-        html.push_str("<li class=\"menu-disabled\"><span>No matching options</span></li>");
+        write!(
+            html,
+            "<li class=\"menu-disabled\"><span>{}</span></li>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.result.no_matching_options",
+            )),
+        )
+        .unwrap();
     } else {
         for option in matches {
             let is_selected = option.value == current_value;
+            let selected_badge = if is_selected {
+                format!(
+                    "<span class=\"badge badge-soft badge-primary badge-xs\">{}</span>",
+                    escape_html(&calculator_route_text(
+                        lang,
+                        "calculator.server.result.selected",
+                    )),
+                )
+            } else {
+                String::new()
+            };
             write!(
                 html,
                 "<li><button type=\"button\" class=\"justify-between gap-3 text-left{}\" data-searchable-dropdown-option data-value=\"{}\" data-label=\"{}\"><span data-role=\"option-content\" class=\"flex min-w-0 flex-1 items-center gap-3\">{}</span>{}</button></li>",
@@ -8782,11 +9439,7 @@ fn render_searchable_select_results(
                 escape_html(option.value),
                 escape_html(option.label),
                 render_searchable_dropdown_option_content_html(cdn_base_url, option),
-                if is_selected {
-                    "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
-                } else {
-                    ""
-                }
+                selected_badge
             )
             .unwrap();
         }
@@ -8822,16 +9475,17 @@ fn render_searchable_select_control(
     compact: bool,
 ) -> String {
     let results_id = format!("{root_id}-results");
-    let options = with_optional_none(options, include_none);
+    let options = with_optional_none(options, include_none, lang);
     let selected_option = options
         .iter()
         .copied()
         .find(|option| option.value == selected_value);
+    let none_option = none_select_option(lang);
     let selected_label = selected_option
         .map(|option| option.label)
         .unwrap_or_else(|| {
             if selected_value.trim().is_empty() {
-                NONE_SELECT_OPTION.label
+                none_option.label
             } else {
                 selected_value
             }
@@ -8840,8 +9494,14 @@ fn render_searchable_select_control(
         .map(|option| render_searchable_dropdown_option_content_html(cdn_base_url, option))
         .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
     let catalog_html = render_searchable_dropdown_catalog_html(cdn_base_url, &options);
-    let results_html =
-        render_searchable_select_results(cdn_base_url, &results_id, &options, selected_value, "");
+    let results_html = render_searchable_select_results(
+        lang,
+        cdn_base_url,
+        &results_id,
+        &options,
+        selected_value,
+        "",
+    );
     let search_url = render_calculator_option_search_url(lang, kind, &results_id);
     let dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
@@ -8876,14 +9536,14 @@ fn render_target_fish_select_control(
     let root_id = "calculator-target-fish-picker";
     let input_id = "calculator-target-fish-value";
     let results_id = format!("{root_id}-results");
-    let options = with_optional_none(options, true);
+    let options = with_optional_none(options, true, data.lang);
     let selected_option = options
         .iter()
         .copied()
         .find(|option| option.value == signals.target_fish);
     let selected_label = selected_option
         .map(|option| option.label)
-        .unwrap_or(NONE_SELECT_OPTION.label);
+        .unwrap_or_else(|| none_select_option(data.lang).label);
     let selected_content_html = selected_option
         .map(|option| {
             render_searchable_dropdown_option_content_html(data.cdn_base_url.as_str(), option)
@@ -8892,6 +9552,7 @@ fn render_target_fish_select_control(
     let catalog_html =
         render_searchable_dropdown_catalog_html(data.cdn_base_url.as_str(), &options);
     let results_html = render_searchable_select_results(
+        data.lang,
         data.cdn_base_url.as_str(),
         &results_id,
         &options,
@@ -8915,7 +9576,10 @@ fn render_target_fish_select_control(
             value: &signals.target_fish,
             search_url: &search_url,
             search_url_root: Some("api"),
-            search_placeholder: "Search loot rows at this spot",
+            search_placeholder: &calculator_route_text(
+                data.lang,
+                "calculator.server.search.loot_rows",
+            ),
         },
         &results_html,
     );
@@ -9006,6 +9670,7 @@ fn render_searchable_multiselect_bound_select_html(
 }
 
 fn render_searchable_multiselect_selection_html(
+    lang: FishLang,
     cdn_base_url: &str,
     selected_values: &[String],
     options: &[SelectOption<'_>],
@@ -9022,10 +9687,14 @@ fn render_searchable_multiselect_selection_html(
         };
         write!(
             html,
-            "<div class=\"join items-stretch rounded-box border border-base-300 bg-base-100 p-1 text-base-content shadow-sm\"><span class=\"inline-flex min-w-0 items-center px-2 py-1 text-sm\">{}</span><button type=\"button\" class=\"btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70\" data-searchable-multiselect-remove data-value=\"{}\" aria-label=\"Remove {}\">×</button></div>",
+            "<div class=\"join items-stretch rounded-box border border-base-300 bg-base-100 p-1 text-base-content shadow-sm\"><span class=\"inline-flex min-w-0 items-center px-2 py-1 text-sm\">{}</span><button type=\"button\" class=\"btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70\" data-searchable-multiselect-remove data-value=\"{}\" aria-label=\"{}\">×</button></div>",
             render_searchable_dropdown_option_content_html(cdn_base_url, option),
             escape_html(option.value),
-            escape_html(option.label),
+            escape_html(&calculator_route_text_with_vars(
+                lang,
+                "calculator.server.action.remove",
+                &[("label", option.label)],
+            )),
         )
         .unwrap();
     }
@@ -9033,6 +9702,7 @@ fn render_searchable_multiselect_selection_html(
 }
 
 fn render_searchable_multiselect_results_html(
+    lang: FishLang,
     cdn_base_url: &str,
     options: &[SelectOption<'_>],
     selected_values: &[String],
@@ -9065,10 +9735,29 @@ fn render_searchable_multiselect_results_html(
         "<ul data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
     );
     if matches.is_empty() {
-        html.push_str("<li class=\"menu-disabled\"><span>No matching options</span></li>");
+        write!(
+            html,
+            "<li class=\"menu-disabled\"><span>{}</span></li>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.result.no_matching_options",
+            )),
+        )
+        .unwrap();
     } else {
         for option in matches {
             let is_selected = selected.contains(option.value);
+            let selected_badge = if is_selected {
+                format!(
+                    "<span class=\"badge badge-soft badge-primary badge-xs\">{}</span>",
+                    escape_html(&calculator_route_text(
+                        lang,
+                        "calculator.server.result.added",
+                    )),
+                )
+            } else {
+                String::new()
+            };
             write!(
                 html,
                 "<li><button type=\"button\" class=\"justify-between gap-3 text-left{}\" data-searchable-multiselect-option data-selected=\"{}\" data-value=\"{}\" data-label=\"{}\"><span class=\"flex min-w-0 flex-1 items-center gap-3\">{}</span>{}</button></li>",
@@ -9077,11 +9766,7 @@ fn render_searchable_multiselect_results_html(
                 escape_html(option.value),
                 escape_html(option.label),
                 render_searchable_dropdown_option_content_html(cdn_base_url, option),
-                if is_selected {
-                    "<span class=\"badge badge-soft badge-primary badge-xs\">Added</span>"
-                } else {
-                    ""
-                }
+                selected_badge
             )
             .unwrap();
         }
@@ -9102,10 +9787,19 @@ fn render_searchable_multiselect_control(
     let panel_id = format!("{}-panel", config.root_id);
     let search_input_id = format!("{}-search-input", config.root_id);
     let bound_inputs_id = format!("{}-bound-inputs", config.root_id);
-    let selection_html =
-        render_searchable_multiselect_selection_html(cdn_base_url, selected_values, &options);
-    let results_html =
-        render_searchable_multiselect_results_html(cdn_base_url, &options, selected_values, "");
+    let selection_html = render_searchable_multiselect_selection_html(
+        config.lang,
+        cdn_base_url,
+        selected_values,
+        &options,
+    );
+    let results_html = render_searchable_multiselect_results_html(
+        config.lang,
+        cdn_base_url,
+        &options,
+        selected_values,
+        "",
+    );
     let catalog_html = render_searchable_multiselect_catalog_html(cdn_base_url, &options);
     let bound_select_html =
         render_searchable_multiselect_bound_select_html(config.bind_key, selected_values, &options);
@@ -9168,6 +9862,7 @@ fn render_searchable_multiselect_control(
 }
 
 fn render_zone_search_results(
+    lang: FishLang,
     results_list_id: &str,
     zones: &[ZoneEntry],
     current_zone: &str,
@@ -9182,13 +9877,32 @@ fn render_zone_search_results(
     )
     .unwrap();
     if matches.is_empty() {
-        html.push_str("<li class=\"menu-disabled\"><span>No matching zones</span></li>");
+        write!(
+            html,
+            "<li class=\"menu-disabled\"><span>{}</span></li>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.result.no_matching_zones",
+            )),
+        )
+        .unwrap();
     } else {
         for zone in matches {
             let label = zone_name(zone);
             let is_selected = zone.rgb_key.0 == current_zone;
             let active_class = if is_selected { " menu-active" } else { "" };
             let option_content = render_searchable_dropdown_text_content(label);
+            let selected_badge = if is_selected {
+                format!(
+                    "<span class=\"badge badge-soft badge-primary badge-xs\">{}</span>",
+                    escape_html(&calculator_route_text(
+                        lang,
+                        "calculator.server.result.selected",
+                    )),
+                )
+            } else {
+                String::new()
+            };
             write!(
                 html,
                 "<li><button type=\"button\" class=\"justify-between gap-3 text-left{}\" data-searchable-dropdown-option data-value=\"{}\" data-label=\"{}\"><span data-role=\"option-content\" class=\"flex min-w-0 flex-1 items-center gap-3\">{}</span>{}</button></li>",
@@ -9196,11 +9910,7 @@ fn render_zone_search_results(
                 escape_html(&zone.rgb_key.0),
                 escape_html(label),
                 option_content,
-                if is_selected {
-                    "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
-                } else {
-                    ""
-                }
+                selected_badge
             )
             .unwrap();
         }
@@ -9500,9 +10210,10 @@ fn render_pet_cards(
             "<div class=\"pet rounded-box border border-base-300 bg-base-200 p-3\"><div class=\"grid gap-3\">"
         )
         .unwrap();
-        html.push_str(
-            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Tier</legend>",
-        );
+        html.push_str(&format!(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
+            escape_html(&calculator_route_text(lang, "calculator.server.field.tier",))
+        ));
         html.push_str(&render_searchable_select_control(
             cdn_base_url,
             lang,
@@ -9513,13 +10224,17 @@ fn render_pet_cards(
             &pet.tier,
             &tier_options,
             false,
-            "Search pet tiers",
+            &calculator_route_text(lang, "calculator.server.search.pet_tiers"),
             true,
         ));
         html.push_str("</fieldset>");
-        html.push_str(
-            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Special</legend>",
-        );
+        html.push_str(&format!(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.field.special",
+            ))
+        ));
         html.push_str(&render_searchable_select_control(
             cdn_base_url,
             lang,
@@ -9530,13 +10245,17 @@ fn render_pet_cards(
             &pet.special,
             &special_options,
             false,
-            "Search pet specials",
+            &calculator_route_text(lang, "calculator.server.search.pet_specials"),
             true,
         ));
         html.push_str("</fieldset>");
-        html.push_str(
-            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Talent</legend>",
-        );
+        html.push_str(&format!(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.field.talent",
+            ))
+        ));
         html.push_str(&render_searchable_select_control(
             cdn_base_url,
             lang,
@@ -9547,11 +10266,17 @@ fn render_pet_cards(
             &pet.talent,
             &talent_options,
             false,
-            "Search pet talents",
+            &calculator_route_text(lang, "calculator.server.search.pet_talents"),
             true,
         ));
         html.push_str("</fieldset></div>");
-        html.push_str("<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">Skills</legend>");
+        html.push_str(&format!(
+            "<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">{}</legend>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.field.skills",
+            ))
+        ));
         html.push_str(&render_checkbox_group(
             "",
             &skills_id,
@@ -9573,6 +10298,10 @@ fn escape_html(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+fn escaped_js_string_literal(value: &str) -> String {
+    escape_html(&serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string()))
 }
 
 #[cfg(test)]
@@ -10018,6 +10747,32 @@ mod tests {
         assert!(text.contains("value=\"effect:awakening-weapon-outfit\" checked"));
         assert!(text.contains("value=\"item:14330\" checked"));
         assert!(text.contains("src=\"http://127.0.0.1:4040/images/items/00016162.webp\""));
+    }
+
+    #[tokio::test]
+    async fn init_returns_korean_html_fragment_when_lang_is_ko() {
+        let response = get_calculator_datastar_init(
+            State(test_state()),
+            Ok(Query(CalculatorDatastarQuery {
+                lang: Some("ko".to_string()),
+                r#ref: None,
+                datastar: Some("{}".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("search-url=\"/api/v1/calculator/datastar/zone-search?lang=ko\""));
+        assert!(text.contains("placeholder=\"지역 검색\""));
+        assert!(text.contains("오버레이 제안"));
+        assert!(text.contains("시간당 예상 횟수"));
+        assert!(text.contains("선택됨"));
+        assert!(text.contains("오버레이 제안 패널 펼치기"));
     }
 
     #[tokio::test]
