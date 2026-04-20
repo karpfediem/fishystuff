@@ -13,6 +13,7 @@ build-release-no-tailwind:
         export FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$(date -u +%Y%m%dT%H%M%SZ)"; \
       fi; \
     fi; \
+    bun run i18n:build; \
     bun run datastar:build; \
     bun run d3:build; \
     bun run otel:build; \

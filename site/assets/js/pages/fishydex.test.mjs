@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+import { parseFluentMessages } from "../../../scripts/build-i18n.mjs";
+
 const DATASTAR_STATE_SOURCE = fs.readFileSync(
   new URL("../datastar-state.js", import.meta.url),
   "utf8",
@@ -16,6 +18,26 @@ const SHARED_FISH_STATE_SOURCE = fs.readFileSync(
   "utf8",
 );
 const FISHYDEX_SOURCE = fs.readFileSync(new URL("./fishydex.js", import.meta.url), "utf8");
+const ENGLISH_MESSAGES = Object.freeze({
+  ...parseFluentMessages(
+    fs.readFileSync(
+      new URL("../../../i18n/fluent/en-US/common.ftl", import.meta.url),
+      "utf8",
+    ),
+  ),
+  ...parseFluentMessages(
+    fs.readFileSync(
+      new URL("../../../i18n/fluent/en-US/fishydex.ftl", import.meta.url),
+      "utf8",
+    ),
+  ),
+});
+
+function translateMessage(key, vars = {}) {
+  return String(ENGLISH_MESSAGES[key] ?? key).replace(/\{\s*\$([A-Za-z0-9_]+)\s*\}/g, (_match, name) => {
+    return Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : "";
+  });
+}
 
 class MemoryStorage {
   constructor(initial = {}) {
@@ -233,6 +255,19 @@ function createContext(localStorageInitial = {}, options = {}) {
   };
   const window = {
     location,
+  };
+  window.__fishystuffLanguage = {
+    t(key, vars = {}) {
+      return translateMessage(key, vars);
+    },
+    current() {
+      return {
+        contentLang: "en-US",
+        locale: "en-US",
+        apiLang: "en",
+      };
+    },
+    apply() {},
   };
   const localStorage = new MemoryStorage(localStorageInitial);
   const timers = new Map();
@@ -533,7 +568,7 @@ test("fishydex api URL prefers the shared page resolver when present", () => {
 
   assert.equal(
     env.window.Fishydex.fishApiUrl(),
-    "https://api.beta.fishystuff.fish/api/v1/fish",
+    "https://api.beta.fishystuff.fish/api/v1/fish?lang=en",
   );
 });
 
@@ -546,7 +581,7 @@ test("fishydex api URL derives the beta sibling host without runtime config", ()
 
   assert.equal(
     env.window.Fishydex.fishApiUrl(),
-    "https://api.beta.fishystuff.fish/api/v1/fish",
+    "https://api.beta.fishystuff.fish/api/v1/fish?lang=en",
   );
 });
 

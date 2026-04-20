@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-theme="fishy">
+<html data-theme="fishy" lang="$site.localeCode()" data-content-lang="$site.localeCode()">
 <head id="head">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -258,6 +258,8 @@
   <script src="$site.asset('js/theme.js').link()"></script>
   <script src="$site.asset('js/toast.js').link()"></script>
   <script src="$site.asset('js/ui-settings.js').link()"></script>
+  <script src="$site.asset('js/generated/site-i18n.js').link()"></script>
+  <script src="$site.asset('js/site-language.js').link()"></script>
   <script src="$site.asset('js/datastar-persist.js').link()"></script>
   <script src="$site.asset('js/datastar-state.js').link()"></script>
   <script src="$site.asset('js/user-overlays.js').link()"></script>

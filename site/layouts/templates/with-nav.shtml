@@ -94,11 +94,11 @@
                             <ul tabindex="0"
                                 role="menu"
                                 class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-56">
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/guides/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg>Guides</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/map/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg>Map</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/dex/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg>Dex</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/calculator/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg>Calculator</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg>Log</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/guides/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/map/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/dex/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/calculator/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a></li>
                             </ul>
                         </div>
 
@@ -118,11 +118,11 @@
                         </div>
 
                         <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/guides/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg>Guides</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/map/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg>Map</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/dex/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg>Dex</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/calculator/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg>Calculator</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg>Log</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/guides/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/map/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/dex/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/calculator/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
                         </div>
                     </div>
 
@@ -131,24 +131,10 @@
 
                         <div id="language-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
-                                <span id="language-switcher-label">Language</span>
+                                <span id="language-switcher-label" data-i18n-text="language.menu.label" :text="$i18n.getOr('language.menu.label','')"></span>
                                 <svg class="fishy-icon fishy-icon--inline inline-block h-2.5 w-2.5 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-caret-down"></use></svg>
                             </button>
-
-                            <ul tabindex="0"
-                                role="menu"
-                                class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-48">
-                                <li>
-                                    <a data-locale="en-US" href="/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
-                                        English (US)
-                                    </a>
-                                </li>
-                                <li>
-                                    <a data-locale="de-DE" href="/de-DE/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
-                                        Deutsch
-                                    </a>
-                                </li>
-                            </ul>
+                            <div id="language-switcher-panel"></div>
                         </div>
 
                         <div id="client-session-switcher"
@@ -378,16 +364,16 @@
             class="not-prose mx-auto mb-6 mt-8 max-w-[130ch] px-4 md:px-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">About</span>
+                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45" data-i18n-text="footer.about" :text="$i18n.getOr('footer.about','')"></span>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="/community/">
                     <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-community"></use></svg>
-                    Community
+                    <span data-i18n-text="nav.community" :text="$i18n.getOr('nav.community','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="/devlog/">
                     <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-devlog"></use></svg>
-                    Devlog
+                    <span data-i18n-text="nav.devlog" :text="$i18n.getOr('nav.devlog','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="$site.page('report').link()"
@@ -398,7 +384,7 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45">Legal</span>
+                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45" data-i18n-text="footer.legal" :text="$i18n.getOr('footer.legal','')"></span>
                 <a class="text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="$site.page('privacy').link()"
                    :text="$site.page('privacy').title"></a>
@@ -411,42 +397,6 @@
 
     <!-- JS -->
     <script src="$site.asset('js/script.js').link()"></script>
-
-    <!-- Same-page language switcher (static two-locale helper) -->
-    <script>
-        (function () {
-            try {
-                var dePrefix = "/de-DE/";
-                var path = location.pathname;
-                if (!path.startsWith("/")) path = "/" + path;
-                var dropdown = document.getElementById("language-switcher");
-                var label = document.getElementById("language-switcher-label");
-                var toEn = document.querySelector('#language-switcher a[data-locale="en-US"]');
-                var toDe = document.querySelector('#language-switcher a[data-locale="de-DE"]');
-                if (!dropdown || !toEn || !toDe) return;
-                var isDe = path === dePrefix || path.startsWith(dePrefix);
-                var enPath = isDe ? path.slice(dePrefix.length - 1) : path;
-                if (enPath.length === 0) enPath = "/";
-                var dePath = isDe ? path : (dePrefix + (path.startsWith("/") ? path.slice(1) : path));
-                enPath = enPath.replace(/\/{2,}/g, "/");
-                dePath = dePath.replace(/\/{2,}/g, "/");
-                toEn.setAttribute("href", enPath);
-                toDe.setAttribute("href", dePath);
-                toEn.classList.toggle("active", !isDe);
-                toDe.classList.toggle("active", isDe);
-                if (!isDe) {
-                    toEn.setAttribute("aria-current", "page");
-                    toDe.removeAttribute("aria-current");
-                } else {
-                    toDe.setAttribute("aria-current", "page");
-                    toEn.removeAttribute("aria-current");
-                }
-                if (label) {
-                    label.textContent = isDe ? "DE-DE" : "EN-US";
-                }
-            } catch (_) {}
-        })();
-    </script>
 
     <!-- JSON-LD: generic WebPage -->
     <script type="application/ld+json"

@@ -5,14 +5,6 @@
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const GRADE_COLOR_ORDER = ["red", "yellow", "blue", "green", "white", "unknown"];
   const GRADE_FILTER_COLOR_ORDER = ["red", "yellow", "blue", "green", "white"];
-  const GRADE_LABELS = {
-    red: "Red",
-    yellow: "Yellow",
-    blue: "Blue",
-    green: "Green",
-    white: "White",
-    unknown: "Unknown",
-  };
   const METHOD_ORDER = ["rod", "harpoon"];
   const SORT_FIELD_ORDER = ["name", "price"];
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
@@ -24,13 +16,6 @@
     "other",
     "unknown",
   ];
-  const FISH_GUIDE_CATEGORY_LABELS = {
-    freshwater: "Freshwater Fish",
-    saltwater: "Saltwater Fish",
-    crustacean: "Crustacean",
-    other: "Other",
-    unknown: "Unmapped",
-  };
   // Derived from data/data/excel/Encyclopedia_Table.xlsx Category by encyclopedia Key.
   // Index 0 in this string corresponds to encyclopedia key 1; '?' marks gaps in the source.
   const FISH_GUIDE_CATEGORY_SEQUENCE =
@@ -88,6 +73,99 @@
   const ICON_CAUGHT_FILL = spriteIconMarkup("check-badge-solid", "size-7", true);
   const ICON_CAUGHT_LINE = spriteIconMarkup("check-circle-dash-line", "size-7", true);
   const ICON_COIN_STACK = spriteIconMarkup("coin-stack", "", false);
+
+  function languageHelper() {
+    const helper = window.__fishystuffLanguage;
+    return helper && typeof helper.current === "function" && typeof helper.t === "function"
+      ? helper
+      : null;
+  }
+
+  function t(key, vars = {}) {
+    const helper = languageHelper();
+    return helper ? helper.t(key, vars) : key;
+  }
+
+  function currentLanguage() {
+    const helper = languageHelper();
+    return helper ? helper.current() : {
+      contentLang: "en-US",
+      locale: "en-US",
+      apiLang: "en",
+    };
+  }
+
+  function languageText(key, vars = {}) {
+    return t(key, vars);
+  }
+
+  function fishDisplayName(entry, fallbackId) {
+    const name = String(entry && entry.name || "").trim();
+    return name || languageText("fishydex.details.fish_fallback", { id: fallbackId });
+  }
+
+  function panelToggleLabel(isCollapsed, panelKey) {
+    return isCollapsed
+      ? languageText(`fishydex.${panelKey}.expand`)
+      : languageText(`fishydex.${panelKey}.collapse`);
+  }
+
+  function progressAriaLabel(kind, caught, total, percent) {
+    if (kind === "catalog") {
+      return languageText("fishydex.progress.aria.catalog", {
+        caught,
+        total,
+        percent,
+      });
+    }
+    return languageText("fishydex.progress.aria.grade", {
+      grade: gradeLabelForKey(kind),
+      caught,
+      total,
+      percent,
+    });
+  }
+
+  function remainingLabel(total, caught, emptyKey) {
+    if (Number(total) > 0) {
+      return languageText("fishydex.progress.remaining", {
+        count: Math.max(Number(total) - Number(caught), 0),
+      });
+    }
+    return languageText(emptyKey);
+  }
+
+  function matchesLabel(visible, total) {
+    return languageText("fishydex.filter.matches", { visible, total });
+  }
+
+  function sortLabel(field, currentField, direction) {
+    const fieldKey = field === "price" ? "fishydex.catalog.sort.price" : "fishydex.catalog.sort.name";
+    const fieldLabel = languageText(fieldKey);
+    if (currentField === field) {
+      return languageText("fishydex.catalog.sort.current", {
+        field: fieldLabel,
+        direction: languageText(`fishydex.catalog.sort.direction.${direction === "desc" ? "desc" : "asc"}`),
+      });
+    }
+    return languageText("fishydex.catalog.sort.default", {
+      field: fieldLabel,
+    });
+  }
+
+  function favouriteToggleLabel(fishName, isFavourite) {
+    return languageText(
+      isFavourite ? "fishydex.action.favourite.remove" : "fishydex.action.favourite.add",
+      { name: fishName },
+    );
+  }
+
+  function caughtToggleLabel(fishName, isCaught) {
+    return languageText(
+      isCaught ? "fishydex.action.caught.unmark" : "fishydex.action.caught.mark",
+      { name: fishName },
+    );
+  }
 
   function sharedFishStateHelper() {
     const helper = window.__fishystuffSharedFishState;
@@ -338,7 +416,7 @@
       localStorage.setItem(DEX_UI_STORAGE_KEY, json);
       state.persistedUiJson = json;
     } catch (_error) {
-      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+      patchSignals({ _status_message: languageText("fishydex.state.local_storage_unavailable") });
     }
   }
 
@@ -352,11 +430,11 @@
           patch = storedUiSignals(JSON.parse(raw));
         } catch (_error) {
           localStorage.removeItem(DEX_UI_STORAGE_KEY);
-          statusMessage = "Reset corrupted local fishydex filters.";
+          statusMessage = languageText("fishydex.state.corrupt_filters");
         }
       }
     } catch (_error) {
-      statusMessage = "localStorage is unavailable; progress is not persisted.";
+      statusMessage = languageText("fishydex.state.local_storage_unavailable");
     }
     state.persistedUiJson = JSON.stringify(patch);
     return { patch, statusMessage };
@@ -371,9 +449,9 @@
     return {
       caughtIds: result.ids,
       statusMessage: result.status === "corrupted"
-        ? "Reset corrupted local fishydex progress."
+        ? languageText("fishydex.state.corrupt_progress")
         : result.status === "unavailable"
-          ? "localStorage is unavailable; progress is not persisted."
+          ? languageText("fishydex.state.local_storage_unavailable")
           : "",
     };
   }
@@ -387,9 +465,9 @@
     return {
       favouriteIds: result.ids,
       statusMessage: result.status === "corrupted"
-        ? "Reset corrupted local fishydex favourites."
+        ? languageText("fishydex.state.corrupt_favourites")
         : result.status === "unavailable"
-          ? "localStorage is unavailable; progress is not persisted."
+          ? languageText("fishydex.state.local_storage_unavailable")
           : "",
     };
   }
@@ -403,7 +481,7 @@
       return;
     }
     if (!result.ok) {
-      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+      patchSignals({ _status_message: languageText("fishydex.state.local_storage_unavailable") });
       return;
     }
     state.persistedCaughtJson = result.json;
@@ -418,7 +496,7 @@
       return;
     }
     if (!result.ok) {
-      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+      patchSignals({ _status_message: languageText("fishydex.state.local_storage_unavailable") });
       return;
     }
     state.persistedFavouriteJson = result.json;
@@ -437,6 +515,7 @@
 
   function restore(signals) {
     connect(signals);
+    const language = currentLanguage();
     bindPersistListener();
     bindFeedbackResetListener();
     bindSyncListener();
@@ -444,6 +523,7 @@
     const caughtState = loadCaughtIdsFromStorage();
     const favouriteState = loadFavouriteIdsFromStorage();
     Object.assign(signals, uiState.patch, {
+      lang: language,
       fish: [],
       count: 0,
       revision: "",
@@ -463,6 +543,10 @@
         || favouriteState.statusMessage
         || "",
     });
+    const appRoot = document.getElementById("fishydex-app");
+    if (appRoot && languageHelper()) {
+      languageHelper().apply(appRoot);
+    }
     state.uiStateRestored = true;
     sync(signals);
   }
@@ -542,7 +626,10 @@
   }
 
   function fishGuideCategoryLabel(category) {
-    return FISH_GUIDE_CATEGORY_LABELS[category] || FISH_GUIDE_CATEGORY_LABELS.unknown;
+    const translated = languageText(`fishydex.group.guide.${category}`);
+    return translated === `fishydex.group.guide.${category}`
+      ? languageText("fishydex.group.guide.unknown")
+      : translated;
   }
 
   function filterGradeForEntry(entry) {
@@ -575,7 +662,10 @@
   }
 
   function gradeLabelForKey(value) {
-    return GRADE_LABELS[value] || GRADE_LABELS.unknown;
+    const translated = languageText(`fishydex.group.grade.${value}`);
+    return translated === `fishydex.group.grade.${value}`
+      ? languageText("fishydex.group.grade.unknown")
+      : translated;
   }
 
   function completionPercent(caughtCount, totalCount) {
@@ -602,7 +692,7 @@
   }
 
   function compareFishNames(left, right) {
-    return String((left && left.name) || "").localeCompare(String((right && right.name) || ""), undefined, {
+    return String((left && left.name) || "").localeCompare(String((right && right.name) || ""), currentLanguage().locale, {
       sensitivity: "base",
       numeric: true,
     });
@@ -688,7 +778,7 @@
   function formatSilver(value) {
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return "Unavailable";
+      return languageText("fishydex.state.unavailable");
     }
     return SILVER_FORMATTER.format(amount);
   }
@@ -871,13 +961,13 @@
   function renderEmptyState(hasActiveFilters) {
     const empty = createElement("div", "fishydex-empty card card-dash bg-base-100");
     const body = createElement("div", "card-body items-center");
-    const title = createElement("h3", "fishydex-empty-title", "No fish match this filter.");
+    const title = createElement("h3", "fishydex-empty-title", languageText("fishydex.empty.title"));
     const detail = createElement(
       "p",
       "fishydex-subtle",
       hasActiveFilters
-        ? "Try a broader search or clear some filters."
-        : "The fish catalog is empty."
+        ? languageText("fishydex.empty.filtered")
+        : languageText("fishydex.empty.unfiltered")
     );
     body.append(title, detail);
     empty.appendChild(body);
@@ -890,10 +980,7 @@
     }
     button.className = `fishydex-favourite-button btn btn-sm btn-circle shadow-none ${isFavourite ? "btn-soft btn-error is-favourite" : "btn-ghost"}${isStamping ? " is-stamping" : ""}`;
     button.setAttribute("aria-pressed", isFavourite ? "true" : "false");
-    button.setAttribute(
-      "aria-label",
-      `${isFavourite ? "Remove" : "Add"} ${fishName} ${isFavourite ? "from" : "to"} favourites`
-    );
+    button.setAttribute("aria-label", favouriteToggleLabel(fishName, isFavourite));
     button.innerHTML = isFavourite ? ICON_HEART_FILL : ICON_HEART_LINE;
   }
 
@@ -903,13 +990,13 @@
     }
     button.className = `fishydex-caught-button btn btn-sm btn-circle shadow-none ${isCaught ? "btn-soft btn-success is-caught" : "btn-ghost"}${isStamping ? " is-stamping" : ""}`;
     button.setAttribute("aria-pressed", isCaught ? "true" : "false");
-    button.setAttribute("aria-label", `Mark ${fishName} as ${isCaught ? "not caught" : "caught"}`);
+    button.setAttribute("aria-label", caughtToggleLabel(fishName, isCaught));
     button.innerHTML = isCaught ? ICON_CAUGHT_FILL : ICON_CAUGHT_LINE;
   }
 
   function renderFishCard(fish, caughtSet, favouriteSet, snapshot, animationIndex, animateCards) {
     const itemId = fishItemId(fish);
-    const fishName = fish.name || `Fish ${itemId}`;
+    const fishName = fishDisplayName(fish, itemId);
     const gradeTone = filterGradeForEntry(fish);
     const isCaught = caughtSet.has(itemId);
     const isFavourite = favouriteSet.has(itemId);
@@ -927,7 +1014,7 @@
     openButton.type = "button";
     openButton.dataset.action = "open-details";
     openButton.setAttribute("aria-haspopup", "dialog");
-    openButton.setAttribute("aria-label", `Open details for ${fishName}`);
+    openButton.setAttribute("aria-label", languageText("fishydex.details.open", { name: fishName }));
 
     const content = createElement("div", "fishydex-card-content card-body");
     const top = createElement("div", "fishydex-card-top");
@@ -972,7 +1059,12 @@
       `fishydex-placeholder fishy-item-icon-fallback fishy-item-grade-${gradeTone}`,
       "?"
     );
-    setImageWithPlaceholder(icon, placeholder, fishItemIconUrl(itemId), `${fishName} icon`);
+    setImageWithPlaceholder(
+      icon,
+      placeholder,
+      fishItemIconUrl(itemId),
+      languageText("fishydex.details.icon_alt", { name: fishName }),
+    );
     iconWrap.append(icon, placeholder);
 
     main.appendChild(iconWrap);
@@ -994,7 +1086,13 @@
     const legend = createElement("legend", "fishydex-group-title fieldset-legend ml-6 px-2", groupLabel);
     const body = createElement("div", "card-body pt-0");
     const header = createElement("div", "fishydex-group-header");
-    header.appendChild(createElement("span", "fishydex-group-count badge badge-ghost", `${fish.length} fish`));
+    header.appendChild(
+      createElement(
+        "span",
+        "fishydex-group-count badge badge-ghost",
+        languageText("fishydex.group.count", { count: fish.length }),
+      ),
+    );
 
     const grid = createElement("div", "fishydex-card-grid");
     let nextAnimationIndex = animationIndex;
@@ -1044,7 +1142,7 @@
       if (!fish) {
         continue;
       }
-      const fishName = fish.name || `Fish ${fishId}`;
+      const fishName = fishDisplayName(fish, fishId);
       const isCaught = caughtSet.has(fishId);
       const isFavourite = favouriteSet.has(fishId);
       card.classList.toggle("is-caught", isCaught);
@@ -1140,7 +1238,7 @@
       fishId: fishId,
       itemId: fishItemId(fish),
       encyclopediaId: fishEncyclopediaId(fish),
-      name: fish.name || `Fish ${fishId}`,
+      name: fishDisplayName(fish, fishId),
       grade: filterGradeForEntry(fish),
       isDried: entryIsDried(fish),
       catchMethods: entryCatchMethods(fish),
@@ -1206,28 +1304,34 @@
 
     const spotState = bestSpotsStateByItemId(meta.itemId);
     if (!spotState || spotState.status === "loading") {
-      noteElement.textContent = "Loading evidence-backed spots…";
+      noteElement.textContent = languageText("fishydex.details.spots.loading");
       return;
     }
 
     if (spotState.status === "error") {
       noteElement.classList.add("is-error");
-      noteElement.textContent = spotState.message || "Best spot data could not be loaded.";
+      noteElement.textContent = spotState.message || languageText("fishydex.details.spots.error");
       return;
     }
 
     const spots = Array.isArray(spotState.spots) ? spotState.spots : [];
     if (!spots.length) {
-      noteElement.textContent = "No zone evidence is currently attached to this fish.";
+      noteElement.textContent = languageText("fishydex.details.spots.empty");
       return;
     }
 
-    noteElement.textContent = `Showing ${spots.length} known zones, ordered by strongest evidence first.`;
+    noteElement.textContent = languageText("fishydex.details.spots.summary", { count: spots.length });
 
     for (const spot of spots) {
       const card = createElement("article", "fishydex-details-spot rounded-box border border-base-300 bg-base-100");
       const head = createElement("div", "fishydex-details-spot-head");
-      head.appendChild(createElement("div", "fishydex-details-spot-name", spot.zone_name || "Unknown zone"));
+      head.appendChild(
+        createElement(
+          "div",
+          "fishydex-details-spot-name",
+          spot.zone_name || languageText("fishydex.details.spots.unknown_zone"),
+        ),
+      );
       head.appendChild(createElement("div", "fishydex-details-spot-rgb", String(spot.zone_rgb || "")));
 
       const badges = createElement("div", "fishydex-details-spot-badges");
@@ -1241,16 +1345,20 @@
               : group === "General"
                 ? "badge-success"
                 : "badge-neutral";
-        badges.appendChild(createBestSpotBadge(`DB ${group}`, tone));
+        badges.appendChild(createBestSpotBadge(languageText("fishydex.details.spots.db_group", { group }), tone));
       }
       for (const group of Array.isArray(spot.community_groups) ? spot.community_groups : []) {
-        badges.appendChild(createBestSpotBadge(`Community ${group}`, "badge-secondary"));
+        badges.appendChild(
+          createBestSpotBadge(languageText("fishydex.details.spots.community_group", { group }), "badge-secondary"),
+        );
       }
       if (spot.has_ranking_presence) {
         const count = Number(spot.ranking_observation_count);
         badges.appendChild(
           createBestSpotBadge(
-            count > 0 ? `Ranking presence×${count}` : "Ranking presence",
+            count > 0
+              ? languageText("fishydex.details.spots.ranking_weighted", { count })
+              : languageText("fishydex.details.spots.ranking"),
             "badge-ghost"
           )
         );
@@ -1290,8 +1398,8 @@
         status: "error",
         message:
           error && error.message
-            ? `Best spot data could not be loaded (${error.message}).`
-            : "Best spot data could not be loaded.",
+            ? languageText("fishydex.api.best_spots_error", { message: error.message })
+            : languageText("fishydex.details.spots.error"),
       });
     }
 
@@ -1369,7 +1477,9 @@
       caughtBadge.className = meta.caught
         ? "fishydex-caught badge badge-soft badge-success"
         : "fishydex-grade badge badge-soft grade-unknown";
-      caughtBadge.textContent = meta.caught ? "Caught" : "Not Caught";
+      caughtBadge.textContent = meta.caught
+        ? languageText("fishydex.details.caught")
+        : languageText("fishydex.details.not_caught");
     }
     if (gradeBadge instanceof HTMLElement) {
       gradeBadge.className = `fishydex-grade badge badge-soft grade-${meta.grade}`;
@@ -1405,7 +1515,7 @@
         guideImage,
         guidePlaceholder,
         fishEncyclopediaIconUrl(meta.encyclopediaId),
-        `${meta.name} guide image`
+        languageText("fishydex.details.guide_alt", { name: meta.name }),
       );
     }
 
@@ -1736,19 +1846,19 @@
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
-        patchSignals({ _status_message: `Copied ${normalized.length} caught fish IDs.` });
-        showToast("success", `Copied ${normalized.length} caught fish IDs.`);
+        patchSignals({ _status_message: languageText("fishydex.io.copied", { count: normalized.length }) });
+        showToast("success", languageText("fishydex.io.copied", { count: normalized.length }));
         return;
       }
     } catch (_error) {
     }
     downloadJson("fishystuff-fishydex-caught.json", text);
-    patchSignals({ _status_message: `Downloaded ${normalized.length} caught fish IDs.` });
-    showToast("info", `Downloaded ${normalized.length} caught fish IDs.`);
+    patchSignals({ _status_message: languageText("fishydex.io.downloaded", { count: normalized.length }) });
+    showToast("info", languageText("fishydex.io.downloaded", { count: normalized.length }));
   }
 
   function importCaught() {
-    const raw = window.prompt("Paste caught fish JSON (array of IDs or an id:true map).");
+    const raw = window.prompt(languageText("fishydex.io.import_prompt"));
     if (raw === null) {
       return;
     }
@@ -1760,16 +1870,16 @@
           caughtIds: caughtIds,
           favouriteIds: currentSharedFish.favouriteIds,
         },
-        _status_message: `Imported ${caughtIds.length} caught fish IDs.`,
+        _status_message: languageText("fishydex.io.imported", { count: caughtIds.length }),
         _api_error_message: "",
         _api_error_hint: "",
       });
-      showToast("success", `Imported ${caughtIds.length} caught fish IDs.`);
+      showToast("success", languageText("fishydex.io.imported", { count: caughtIds.length }));
     } catch (_error) {
       patchSignals({
-        _status_message: "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.",
+        _status_message: languageText("fishydex.io.import_failed"),
       });
-      showToast("error", "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.");
+      showToast("error", languageText("fishydex.io.import_failed"));
     }
   }
 
@@ -1792,11 +1902,11 @@
   }
 
   function fishApiUrl() {
-    return apiUrl("/api/v1/fish");
+    return apiUrl(`/api/v1/fish?lang=${encodeURIComponent(currentLanguage().apiLang)}`);
   }
 
   function bestSpotsApiUrl(itemId) {
-    return apiUrl(`/api/v1/fish/${itemId}/spots`);
+    return apiUrl(`/api/v1/fish/${itemId}/spots?lang=${encodeURIComponent(currentLanguage().apiLang)}`);
   }
 
   function handleDatastarEvent(event) {
@@ -1815,19 +1925,18 @@
       const status = detail.argsRaw && detail.argsRaw.status;
       patchSignals({
         _api_error_message: status
-          ? `Fish API request failed (HTTP ${status}).`
-          : "Fish API request failed.",
-        _api_error_hint:
-          "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
+          ? languageText("fishydex.api.fish_error_status", { status })
+          : languageText("fishydex.api.fish_error"),
+        _api_error_hint: languageText("fishydex.api.cors_hint"),
       });
       return;
     }
     if (detail.type === "retrying") {
       patchSignals({
-        _api_error_message: "Fish API request is retrying.",
+        _api_error_message: languageText("fishydex.api.retrying"),
         _api_error_hint: detail.argsRaw && detail.argsRaw.message
           ? String(detail.argsRaw.message)
-          : "The request could not be completed cleanly.",
+          : languageText("fishydex.api.retry_hint"),
       });
     }
   }
@@ -1837,5 +1946,10 @@
   window.Fishydex = {
     restore: restore,
     fishApiUrl: fishApiUrl,
+    panelToggleLabel: panelToggleLabel,
+    progressAriaLabel: progressAriaLabel,
+    remainingLabel: remainingLabel,
+    matchesLabel: matchesLabel,
+    sortLabel: sortLabel,
   };
 })();

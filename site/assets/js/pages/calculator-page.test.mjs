@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+import { parseFluentMessages } from "../../../scripts/build-i18n.mjs";
+
 const DATASTAR_STATE_SOURCE = fs.readFileSync(
   new URL("../datastar-state.js", import.meta.url),
   "utf8",
@@ -19,6 +21,40 @@ const CALCULATOR_PAGE_SOURCE = fs.readFileSync(
   new URL("./calculator-page.js", import.meta.url),
   "utf8",
 );
+const ENGLISH_MESSAGES = Object.freeze(
+  parseFluentMessages(
+    fs.readFileSync(
+      new URL("../../../i18n/fluent/en-US/calculator.ftl", import.meta.url),
+      "utf8",
+    ),
+  ),
+);
+
+function translateMessage(key, vars = {}) {
+  return String(ENGLISH_MESSAGES[key] ?? key).replace(/\{\s*\$([A-Za-z0-9_]+)\s*\}/g, (_match, name) => {
+    return Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : "";
+  });
+}
+
+function calculatorMessage(key, vars = {}) {
+  return translateMessage(`calculator.${key}`, vars);
+}
+
+function breakdownTitle(key, vars = {}) {
+  return calculatorMessage(`breakdown.title.${key}`, vars);
+}
+
+function breakdownSection(key) {
+  return calculatorMessage(`breakdown.section.${key}`);
+}
+
+function breakdownLabel(key, vars = {}) {
+  return calculatorMessage(`breakdown.label.${key}`, vars);
+}
+
+function timelineLabel(key) {
+  return calculatorMessage(`timeline.${key}`);
+}
 
 class MemoryStorage {
   constructor(initial = {}) {
@@ -110,6 +146,20 @@ function createContext(localStorageInitial = {}, options = {}) {
       info(message) {
         toastCalls.push({ type: "info", message });
       },
+    },
+    __fishystuffLanguage: {
+      t(key, vars = {}) {
+        return translateMessage(key, vars);
+      },
+      current() {
+        const locale = options.locale || options.lang || "en-US";
+        return {
+          contentLang: options.contentLang || options.lang || "en-US",
+          locale,
+          apiLang: options.apiLang || (String(locale).toLowerCase().startsWith("ko") ? "ko" : "en"),
+        };
+      },
+      apply() {},
     },
   };
   const context = {
@@ -321,6 +371,18 @@ test("calculator restore leaves initial shell state intact when storage is empty
   });
 });
 
+test("calculator API language follows explicit locale choice", () => {
+  const korean = createContext({}, { locale: "ko-KR", lang: "en-US" });
+  assert.equal(korean.window.__fishystuffCalculator.lang, "ko");
+  assert.match(korean.window.__fishystuffCalculator.initUrl(), /\?lang=ko$/);
+  assert.match(korean.window.__fishystuffCalculator.evalUrl(), /\?lang=ko$/);
+
+  const german = createContext({}, { locale: "de-DE", lang: "en-US" });
+  assert.equal(german.window.__fishystuffCalculator.lang, "en");
+  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=en$/);
+  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=en$/);
+});
+
 test("calculator persist stores canonical page state and excludes transient branches", () => {
   const env = createContext();
   const signals = defaultSignals();
@@ -493,8 +555,12 @@ test("calculator action listener handles copy and clear tokens once without clea
   assert.equal(env.toastCalls.length, 3);
   assert.equal(env.toastCalls[0].type, "copyText");
   assert.match(env.toastCalls[0].text, /\?preset=lz:/);
+  assert.equal(env.toastCalls[0].options.success, calculatorMessage("toast.preset_url_copied"));
   assert.equal(env.toastCalls[1].type, "copyText");
   assert.match(env.toastCalls[1].text, /FishyStuff Calculator Preset/);
+  assert.equal(env.toastCalls[1].options.success, calculatorMessage("toast.share_copied"));
+  assert.equal(env.toastCalls[2].type, "info");
+  assert.equal(env.toastCalls[2].message, calculatorMessage("toast.cleared"));
   assert.deepEqual(Array.from(signals.food), []);
   assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
   assert.equal(env.localStorage.getItem("fishystuff.calculator.ui.v1"), null);
@@ -563,52 +629,52 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
       trade_sale_multiplier_text: "120.00%",
       stat_breakdowns: {
         total_time: JSON.stringify({
-          title: "Average Total Fishing Time",
+          title: breakdownTitle("total_time"),
           value_text: "0.00",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         bite_time: JSON.stringify({
-          title: "Average Bite Time",
+          title: breakdownTitle("bite_time"),
           value_text: "0.00",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         auto_fish_time: JSON.stringify({
-          title: "Auto-Fishing Time",
+          title: breakdownTitle("auto_fish_time"),
           value_text: "0.00",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         catch_time: JSON.stringify({
-          title: "Catch Time",
+          title: breakdownTitle("catch_time"),
           value_text: "0.00",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         time_saved: JSON.stringify({
-          title: "Time Saved",
+          title: breakdownTitle("time_saved"),
           value_text: "0.00%",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         casts_average: JSON.stringify({
-          title: "Average Casts (8 hours)",
+          title: breakdownTitle("casts_average", { timespan: "8 hours" }),
           value_text: "0.00",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         effective_bite_avg: JSON.stringify({
-          title: "Effective Bite Average",
+          title: breakdownTitle("effective_bite_avg"),
           value_text: "0.00",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
         loot_total_catches: JSON.stringify({
-          title: "Expected Catches (8 hours)",
+          title: breakdownTitle("loot_total_catches", { timespan: "8 hours" }),
           value_text: "0.00",
           sections: [
-            { label: "Inputs", rows: [] },
-            { label: "Composition", rows: [] },
+            { label: breakdownSection("inputs"), rows: [] },
+            { label: breakdownSection("composition"), rows: [] },
           ],
         }),
         loot_profit_per_hour: JSON.stringify({
-          title: "Profit / Hour",
+          title: breakdownTitle("loot_profit_per_hour"),
           value_text: "0",
-          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+          sections: [{ label: breakdownSection("inputs"), rows: [] }, { label: breakdownSection("composition"), rows: [] }],
         }),
       },
     },
@@ -624,29 +690,29 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
 
   assert.equal(totalTime.value_text, live.total_time);
   assert.equal(totalTime.sections[0].rows[0].value_text, live.bite_time);
-  assert.equal(totalTime.sections[0].rows[1].label, "Auto-Fishing Time");
-  assert.equal(totalTime.sections[1].rows[0].label, "Average total");
-  assert.equal(castsAverage.title, "Average Casts (2 hours)");
+  assert.equal(totalTime.sections[0].rows[1].label, breakdownLabel("auto_fishing_time"));
+  assert.equal(totalTime.sections[1].rows[0].label, breakdownLabel("average_total"));
+  assert.equal(castsAverage.title, breakdownTitle("casts_average", { timespan: "2 hours" }));
   assert.equal(castsAverage.sections[0].rows[0].value_text, "2 hours");
-  assert.equal(castsAverage.formula_terms[1].label, "Session seconds");
+  assert.equal(castsAverage.formula_terms[1].label, breakdownLabel("session_seconds"));
   assert.equal(castsAverage.formula_terms[1].value_text, "7200");
-  assert.equal(catchTime.sections[0].rows[0].label, "AFK catch time");
+  assert.equal(catchTime.sections[0].rows[0].label, breakdownLabel("afk_catch_time"));
   assert.equal(catchTime.sections[1].rows[0].value_text, "3.00");
-  assert.equal(timeSaved.sections[1].rows[1].label, "Saved share");
+  assert.equal(timeSaved.sections[1].rows[1].label, breakdownLabel("saved_share"));
   assert.equal(timeSaved.value_text, "45.64%");
-  assert.equal(effectiveBiteAverage.formula_terms[1].label, "Zone Bite Average");
+  assert.equal(effectiveBiteAverage.formula_terms[1].label, breakdownLabel("zone_bite_average"));
   assert.equal(effectiveBiteAverage.formula_terms[1].value_text, "15.00");
-  assert.equal(totalCatches.title, "Expected Catches (2 hours)");
+  assert.equal(totalCatches.title, breakdownTitle("loot_total_catches", { timespan: "2 hours" }));
   assert.equal(totalCatches.value_text, live.loot_total_catches);
-  assert.equal(totalCatches.sections[0].rows[0].label, "Average casts");
+  assert.equal(totalCatches.sections[0].rows[0].label, breakdownLabel("average_casts"));
   assert.equal(totalCatches.sections[0].rows[0].value_text, live.casts_average);
-  assert.equal(totalCatches.sections[1].rows[0].label, "Expected catches");
+  assert.equal(totalCatches.sections[1].rows[0].label, breakdownLabel("expected_catches"));
   assert.equal(profitPerHour.sections[0].rows[0].value_text, live.loot_total_profit);
   assert.equal(profitPerHour.value_text, live.loot_profit_per_hour);
   assert.equal(live.fishing_timeline_chart.segments.length, 4);
-  assert.equal(live.fishing_timeline_chart.segments[0].label, "Bite Time");
-  assert.equal(live.fishing_timeline_chart.segments[2].label, "Catch Time");
-  assert.equal(live.fishing_timeline_chart.segments[3].label, "Time Saved");
-  assert.equal(live.fishing_timeline_chart.segments[0].breakdown.title, "Average Bite Time");
-  assert.equal(live.fishing_timeline_chart.segments[3].breakdown.title, "Time Saved");
+  assert.equal(live.fishing_timeline_chart.segments[0].label, timelineLabel("bite_time"));
+  assert.equal(live.fishing_timeline_chart.segments[2].label, timelineLabel("catch_time"));
+  assert.equal(live.fishing_timeline_chart.segments[3].label, timelineLabel("time_saved"));
+  assert.equal(live.fishing_timeline_chart.segments[0].breakdown.title, breakdownTitle("bite_time"));
+  assert.equal(live.fishing_timeline_chart.segments[3].breakdown.title, breakdownTitle("time_saved"));
 });
