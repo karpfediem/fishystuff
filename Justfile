@@ -141,7 +141,7 @@ mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
   "$mgmt_bin" run lang --module-path "$module_path" --download --only-unify main.mcl
 
 # Copy a locally built mgmt closure to a remote host and install the resident service there.
-mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/mgmt":
+mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/mgmt" mgmt_package="default":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -152,7 +152,13 @@ mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120"
   timeout="${timeout#timeout=}"
   mgmt_flake='{{mgmt_flake}}'
   mgmt_flake="${mgmt_flake#mgmt_flake=}"
-  mgmt_store="$(nix build "$mgmt_flake" --no-link --print-out-paths)"
+  mgmt_package='{{mgmt_package}}'
+  mgmt_package="${mgmt_package#mgmt_package=}"
+  mgmt_installable="$mgmt_flake"
+  if [[ -n "$mgmt_package" && "$mgmt_package" != "default" ]]; then
+    mgmt_installable="$mgmt_flake#$mgmt_package"
+  fi
+  mgmt_store="$(nix build "$mgmt_installable" --no-link --print-out-paths)"
   secretspec run --profile beta-deploy -- \
     bash -lc '
       set -euo pipefail
