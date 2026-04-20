@@ -141,7 +141,7 @@ mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
   "$mgmt_bin" run lang --module-path "$module_path" --download --only-unify main.mcl
 
 # Copy a locally built mgmt closure to a remote host and install the resident service there.
-mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal":
+mgmt-resident-kickstart-remote target="" host="" timeout="120" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -154,6 +154,14 @@ mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120"
   mgmt_flake="${mgmt_flake#mgmt_flake=}"
   mgmt_package='{{mgmt_package}}'
   mgmt_package="${mgmt_package#mgmt_package=}"
+  if [[ -z "$target" ]]; then
+    echo "missing target=... for mgmt-resident-kickstart-remote" >&2
+    exit 2
+  fi
+  if [[ -z "$host" ]]; then
+    echo "missing host=... for mgmt-resident-kickstart-remote" >&2
+    exit 2
+  fi
   mgmt_installable="$mgmt_flake"
   if [[ -n "$mgmt_package" && "$mgmt_package" != "default" ]]; then
     mgmt_installable="$mgmt_flake#$mgmt_package"
@@ -235,7 +243,7 @@ mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120"
     -- "$target" "$host" "$timeout" "$mgmt_store" "$mgmt_flake"
 
 # Push a self-contained graph directory into the resident mgmt instance on a remote host.
-mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt":
+mgmt-resident-deploy-remote target="" dir="mgmt/resident-deploy-probe" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -246,6 +254,10 @@ mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" 
   timeout="${timeout#timeout=}"
   remote_mgmt_bin='{{remote_mgmt_bin}}'
   remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
+  if [[ -z "$target" ]]; then
+    echo "missing target=... for mgmt-resident-deploy-remote" >&2
+    exit 2
+  fi
   secretspec run --profile beta-deploy -- \
     bash -lc '
       set -euo pipefail
@@ -266,7 +278,7 @@ mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" 
 # Build the API and Dolt service bundles locally, push both closures to a
 # remote host, and deploy the resident beta graph for the current API/DB host
 # shape. The resident graph owns GC-root selection via nix:gcroot.
-mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0":
+mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="false" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-v02.api.letsencrypt.org/directory" tls_http_address="0.0.0.0" tls_http_port="80" tls_domains_json="[]":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -285,14 +297,41 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
   mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
   remote_nix_max_jobs='{{remote_nix_max_jobs}}'
   remote_nix_max_jobs="${remote_nix_max_jobs#remote_nix_max_jobs=}"
+  tls_enabled='{{tls_enabled}}'
+  tls_enabled="${tls_enabled#tls_enabled=}"
+  tls_certificate_name='{{tls_certificate_name}}'
+  tls_certificate_name="${tls_certificate_name#tls_certificate_name=}"
+  tls_acme_email='{{tls_acme_email}}'
+  tls_acme_email="${tls_acme_email#tls_acme_email=}"
+  tls_challenge='{{tls_challenge}}'
+  tls_challenge="${tls_challenge#tls_challenge=}"
+  tls_dns_provider='{{tls_dns_provider}}'
+  tls_dns_provider="${tls_dns_provider#tls_dns_provider=}"
+  tls_dns_env_json='{{tls_dns_env_json}}'
+  tls_dns_env_json="${tls_dns_env_json#tls_dns_env_json=}"
+  tls_directory_url='{{tls_directory_url}}'
+  tls_directory_url="${tls_directory_url#tls_directory_url=}"
+  tls_http_address='{{tls_http_address}}'
+  tls_http_address="${tls_http_address#tls_http_address=}"
+  tls_http_port='{{tls_http_port}}'
+  tls_http_port="${tls_http_port#tls_http_port=}"
+  tls_domains_json='{{tls_domains_json}}'
+  tls_domains_json="${tls_domains_json#tls_domains_json=}"
+  if [[ -z "$target" ]]; then
+    echo "missing target=... for mgmt-resident-push-api-db" >&2
+    exit 2
+  fi
   api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
   dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
   deploy_dir="$(mktemp -d /tmp/fishystuff-resident-beta.XXXXXX)"
   trap 'rm -rf "$deploy_dir"' EXIT
   cp -a mgmt/resident-beta/. "$deploy_dir/"
   mkdir -p "$deploy_dir/files"
-  mkdir -p "$deploy_dir/modules/lib"
-  cp -a mgmt/modules/lib/systemd-daemon-reload "$deploy_dir/modules/lib/"
+  mkdir -p "$deploy_dir/modules/lib" "$deploy_dir/modules/providers"
+  for module_name in fishystuff-beta-access hetzner-firewall-gate systemd-daemon-reload; do
+    cp -a "mgmt/modules/lib/$module_name" "$deploy_dir/modules/lib/"
+  done
+  cp -a mgmt/modules/providers/hetzner-firewall "$deploy_dir/modules/providers/"
   mkdir -p "$deploy_dir/modules/github.com/purpleidea/mgmt/modules"
   cp -a "$mgmt_modules_dir/misc" "$deploy_dir/modules/github.com/purpleidea/mgmt/modules/"
   jq -n \
@@ -315,6 +354,16 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
     --arg dolt_port "3306" \
     --arg site_root_dir "/srv/fishystuff/site" \
     --arg cdn_root_dir "/srv/fishystuff/cdn" \
+    --argjson tls_enabled "$tls_enabled" \
+    --arg tls_certificate_name "$tls_certificate_name" \
+    --arg tls_acme_email "$tls_acme_email" \
+    --arg tls_challenge "$tls_challenge" \
+    --arg tls_dns_provider "$tls_dns_provider" \
+    --argjson tls_dns_env "$tls_dns_env_json" \
+    --arg tls_directory_url "$tls_directory_url" \
+    --arg tls_http_address "$tls_http_address" \
+    --argjson tls_http_port "$tls_http_port" \
+    --argjson tls_domains "$tls_domains_json" \
     --arg api_bundle "$api_bundle" \
     --arg api_gcroot "$api_gcroot" \
     --arg dolt_bundle "$dolt_bundle" \
@@ -358,6 +407,18 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
       content_roots: {
         site_root_dir: $site_root_dir,
         cdn_root_dir: $cdn_root_dir
+      },
+      tls: {
+        enabled: $tls_enabled,
+        certificate_name: $tls_certificate_name,
+        acme_email: $tls_acme_email,
+        challenge: $tls_challenge,
+        dns_provider: $tls_dns_provider,
+        dns_env: $tls_dns_env,
+        directory_url: $tls_directory_url,
+        http_address: $tls_http_address,
+        http_port: $tls_http_port,
+        domains: $tls_domains
       },
       services: {
         api: {bundle_path: $api_bundle, gcroot_path: $api_gcroot},
@@ -413,7 +474,7 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
 # them to a remote host, and deploy the resident graph with API, Dolt, edge,
 # and observability daemons. The resident graph owns GC-root selection via
 # nix:gcroot.
-mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0":
+mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="true" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-v02.api.letsencrypt.org/directory" tls_http_address="0.0.0.0" tls_http_port="80" tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -446,6 +507,30 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
   mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
   remote_nix_max_jobs='{{remote_nix_max_jobs}}'
   remote_nix_max_jobs="${remote_nix_max_jobs#remote_nix_max_jobs=}"
+  tls_enabled='{{tls_enabled}}'
+  tls_enabled="${tls_enabled#tls_enabled=}"
+  tls_certificate_name='{{tls_certificate_name}}'
+  tls_certificate_name="${tls_certificate_name#tls_certificate_name=}"
+  tls_acme_email='{{tls_acme_email}}'
+  tls_acme_email="${tls_acme_email#tls_acme_email=}"
+  tls_challenge='{{tls_challenge}}'
+  tls_challenge="${tls_challenge#tls_challenge=}"
+  tls_dns_provider='{{tls_dns_provider}}'
+  tls_dns_provider="${tls_dns_provider#tls_dns_provider=}"
+  tls_dns_env_json='{{tls_dns_env_json}}'
+  tls_dns_env_json="${tls_dns_env_json#tls_dns_env_json=}"
+  tls_directory_url='{{tls_directory_url}}'
+  tls_directory_url="${tls_directory_url#tls_directory_url=}"
+  tls_http_address='{{tls_http_address}}'
+  tls_http_address="${tls_http_address#tls_http_address=}"
+  tls_http_port='{{tls_http_port}}'
+  tls_http_port="${tls_http_port#tls_http_port=}"
+  tls_domains_json='{{tls_domains_json}}'
+  tls_domains_json="${tls_domains_json#tls_domains_json=}"
+  if [[ -z "$target" ]]; then
+    echo "missing target=... for mgmt-resident-push-full-stack" >&2
+    exit 2
+  fi
   api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
   dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
   edge_bundle="$(nix build .#edge-service-bundle --no-link --print-out-paths)"
@@ -459,8 +544,11 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
   trap 'rm -rf "$deploy_dir"' EXIT
   cp -a mgmt/resident-beta/. "$deploy_dir/"
   mkdir -p "$deploy_dir/files"
-  mkdir -p "$deploy_dir/modules/lib"
-  cp -a mgmt/modules/lib/systemd-daemon-reload "$deploy_dir/modules/lib/"
+  mkdir -p "$deploy_dir/modules/lib" "$deploy_dir/modules/providers"
+  for module_name in fishystuff-beta-access hetzner-firewall-gate systemd-daemon-reload; do
+    cp -a "mgmt/modules/lib/$module_name" "$deploy_dir/modules/lib/"
+  done
+  cp -a mgmt/modules/providers/hetzner-firewall "$deploy_dir/modules/providers/"
   mkdir -p "$deploy_dir/modules/github.com/purpleidea/mgmt/modules"
   cp -a "$mgmt_modules_dir/misc" "$deploy_dir/modules/github.com/purpleidea/mgmt/modules/"
   jq -n \
@@ -483,6 +571,16 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
     --arg dolt_port "3306" \
     --arg site_root_dir "/srv/fishystuff/site" \
     --arg cdn_root_dir "/srv/fishystuff/cdn" \
+    --argjson tls_enabled "$tls_enabled" \
+    --arg tls_certificate_name "$tls_certificate_name" \
+    --arg tls_acme_email "$tls_acme_email" \
+    --arg tls_challenge "$tls_challenge" \
+    --arg tls_dns_provider "$tls_dns_provider" \
+    --argjson tls_dns_env "$tls_dns_env_json" \
+    --arg tls_directory_url "$tls_directory_url" \
+    --arg tls_http_address "$tls_http_address" \
+    --argjson tls_http_port "$tls_http_port" \
+    --argjson tls_domains "$tls_domains_json" \
     --arg api_bundle "$api_bundle" \
     --arg api_gcroot "$api_gcroot" \
     --arg dolt_bundle "$dolt_bundle" \
@@ -526,6 +624,18 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
       content_roots: {
         site_root_dir: $site_root_dir,
         cdn_root_dir: $cdn_root_dir
+      },
+      tls: {
+        enabled: $tls_enabled,
+        certificate_name: $tls_certificate_name,
+        acme_email: $tls_acme_email,
+        challenge: $tls_challenge,
+        dns_provider: $tls_dns_provider,
+        dns_env: $tls_dns_env,
+        directory_url: $tls_directory_url,
+        http_address: $tls_http_address,
+        http_port: $tls_http_port,
+        domains: $tls_domains
       },
       services: {
         api: {bundle_path: $api_bundle, gcroot_path: $api_gcroot},
@@ -580,7 +690,7 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
 # Build a temporary resident graph that installs a bundle-backed systemd unit
 # from a local Nix bundle root, validate it, and deploy it to a resident mgmt
 # instance over SSH.
-mgmt-resident-dolt-bundle-probe target="mgmt-root" timeout="120" bundle_path="" gcroot_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal" mgmt_modules_dir="/home/carp/code/mgmt/modules":
+mgmt-resident-dolt-bundle-probe target="" timeout="120" bundle_path="" gcroot_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal" mgmt_modules_dir="/home/carp/code/mgmt/modules":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -601,6 +711,10 @@ mgmt-resident-dolt-bundle-probe target="mgmt-root" timeout="120" bundle_path="" 
   mgmt_package="${mgmt_package#mgmt_package=}"
   mgmt_modules_dir='{{mgmt_modules_dir}}'
   mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
+  if [[ -z "$target" ]]; then
+    echo "missing target=... for mgmt-resident-dolt-bundle-probe" >&2
+    exit 2
+  fi
   if [[ -z "$bundle_path" ]]; then
     bundle_path="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
   fi
@@ -629,8 +743,8 @@ mgmt-resident-dolt-bundle-probe target="mgmt-root" timeout="120" bundle_path="" 
     '	startup_mode => "enabled",' \
     '})' \
     > "$probe_dir/main.mcl"
-  printf 'main: main.mcl\n' > "$probe_dir/metadata.yaml"
-  "$mgmt_bin" run lang --only-unify "$probe_dir/main.mcl"
+  printf 'main: main.mcl\npath: modules/\n' > "$probe_dir/metadata.yaml"
+  "$mgmt_bin" run lang --module-path "$probe_dir/modules/" --download --only-unify "$probe_dir/main.mcl"
   secretspec run --profile beta-deploy -- \
     env \
     FS_SSH_TARGET="$target" \
@@ -675,7 +789,7 @@ mgmt-resident-dolt-bundle-probe target="mgmt-root" timeout="120" bundle_path="" 
 
 # Build the Dolt service bundle, copy it to a remote host, root it, install the
 # rendered unit, and verify that the SQL server answers a local health check.
-mgmt-dolt-target-smoke target="mgmt-root" gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" sql_host="127.0.0.1" sql_port="3306" query_timeout="20":
+mgmt-dolt-target-smoke target="" gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" sql_host="127.0.0.1" sql_port="3306" query_timeout="20":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
@@ -688,6 +802,10 @@ mgmt-dolt-target-smoke target="mgmt-root" gcroot="/nix/var/nix/gcroots/mgmt/fish
   sql_port="${sql_port#sql_port=}"
   query_timeout='{{query_timeout}}'
   query_timeout="${query_timeout#query_timeout=}"
+  if [[ -z "$target" ]]; then
+    echo "missing target=... for mgmt-dolt-target-smoke" >&2
+    exit 2
+  fi
   bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
   secretspec run --profile beta-deploy -- \
     bash -lc '
