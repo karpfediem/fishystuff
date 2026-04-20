@@ -11,8 +11,16 @@ class certificate($st) {
 		$cluster str = $st->cluster || "beta"
 		$hostname str = $st->hostname || ""
 		$bundle_path str = $st->bundle_path || ""
-		$service_name str = $st->service_name || "fishystuff-edge"
-		$certificate_name str = $st->certificate_name || fmt.printf("%s-cert", $service_name)
+		$service_name str = if ($st->service_name || "") != "" {
+			$st->service_name
+		} else {
+			"fishystuff-edge"
+		}
+		$certificate_name str = if ($st->certificate_name || "") != "" {
+			$st->certificate_name
+		} else {
+			fmt.printf("%s-cert", $service_name)
+		}
 		$acme_email str = $st->acme_email || ""
 		$challenge str = $st->challenge || ""
 		$dns_provider str = $st->dns_provider || ""

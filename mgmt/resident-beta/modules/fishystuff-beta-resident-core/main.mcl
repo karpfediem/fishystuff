@@ -34,7 +34,11 @@ class api_db_host($st) {
 	$deployment_environment str = $st->deployment_environment || "beta"
 	$startup_mode str = $st->startup_mode || "enabled"
 	$tls_enabled bool = $manifest->tls->enabled || false
-	$tls_certificate_name str = $manifest->tls->certificate_name || fmt.printf("%s-edge-tls", $hostname)
+	$tls_certificate_name str = if $manifest->tls->certificate_name != "" {
+		$manifest->tls->certificate_name
+	} else {
+		fmt.printf("%s-edge-tls", $hostname)
+	}
 	$tls_acme_email str = $manifest->tls->acme_email || ""
 	$tls_challenge str = $manifest->tls->challenge || ""
 	$tls_dns_provider str = $manifest->tls->dns_provider || ""

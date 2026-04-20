@@ -88,6 +88,13 @@
           edgeServiceBundle = mkServiceBundle {
             name = "fishystuff-edge";
             serviceModule = serviceModules.edge;
+            configuration.fishystuff.edge = {
+              tlsEnable = true;
+              siteAddress = "https://beta.fishystuff.fish";
+              apiAddress = "https://api.beta.fishystuff.fish";
+              cdnAddress = "https://cdn.beta.fishystuff.fish";
+              telemetryAddress = "https://telemetry.beta.fishystuff.fish";
+            };
           };
           lokiServiceBundle = mkServiceBundle {
             name = "fishystuff-loki";
