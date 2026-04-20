@@ -29,9 +29,8 @@ class gate($st) {
 	include hetzner_firewall.firewall(struct {
 		name => $firewall_name,
 		apitoken => $api_token,
-		state => if $ready { "exists" } else { "absent" },
 		rules => $rules,
-		applyto => $applyto,
+		applyto => if $ready { $applyto } else { [] },
 		labels => $labels,
 		waitinterval => $wait_interval_seconds,
 		waittimeout => $wait_timeout_seconds,

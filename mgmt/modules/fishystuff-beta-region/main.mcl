@@ -92,7 +92,7 @@ class region($st) {
 	}
 
 	if $api_db_enabled {
-		include access.host("api-db", $region_name) as api_db_host
+		include access.host($api_db_name, "api-db", $region_name) as api_db_host
 
 		include hetzner_vm.server(struct {
 			name => $api_db_name,
@@ -142,7 +142,7 @@ class region($st) {
 	}
 
 	if $cdn_enabled {
-		include access.host("cdn", $region_name) as cdn_host
+		include access.host($cdn_name, "cdn", $region_name) as cdn_host
 
 		include hetzner_vm.server(struct {
 			name => $cdn_name,
@@ -179,7 +179,7 @@ class region($st) {
 	}
 
 	if $telemetry_enabled {
-		include access.host("telemetry", $region_name) as telemetry_host
+		include access.host($telemetry_name, "telemetry", $region_name) as telemetry_host
 
 		include hetzner_vm.server(struct {
 			name => $telemetry_name,

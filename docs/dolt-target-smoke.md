@@ -48,7 +48,7 @@ The repo keeps the required SSH material inside SecretSpec:
 Use the helper recipe:
 
 ```bash
-just mgmt-dolt-target-smoke target=mgmt-root
+just mgmt-dolt-target-smoke target=root@<host-ip>
 ```
 
 This recipe:
@@ -92,7 +92,7 @@ You can also override the GC root:
 
 ```bash
 just mgmt-dolt-target-smoke \
-  target=mgmt-root \
+  target=root@203.0.113.10 \
   gcroot=/nix/var/nix/gcroots/mgmt/fishystuff/dolt-smoke-current
 ```
 

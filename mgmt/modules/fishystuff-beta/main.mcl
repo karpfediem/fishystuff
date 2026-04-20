@@ -1,5 +1,4 @@
 import "fmt"
-import "list"
 import "../lib/fishystuff-beta-layout/" as fishystuff_beta_layout
 import "../lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "../lib/hetzner-vm-observed/" as hetzner_vm_observed
@@ -18,6 +17,8 @@ class topology($st) {
 	$infra_state str = if $state == "absent" { "absent" } else { "exists" }
 	$allow_rebuild str = $st->allow_rebuild || ""
 	$image str = $st->image || "debian-13"
+	$http01_host str = $st->http01_host || ""
+	$https_host str = $st->https_host || ""
 	$poll_seconds int = $st->poll_seconds || 60
 	$wait_interval_seconds int = $st->wait_interval_seconds || 5
 	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
@@ -35,7 +36,8 @@ class topology($st) {
 		cluster => $cluster,
 	}) as access
 	include access.ssh as ssh_firewall
-	include access.public_http as public_http_firewall
+	include access.http_01($http01_host) as http01_firewall
+	include access.https($https_host) as https_firewall
 	include layout.nbg1 as nbg1
 	include layout.ash as ash
 	include layout.sin as sin
@@ -86,22 +88,11 @@ class topology($st) {
 	} else {
 		[]
 	}
-	$nbg1_cdn_dns_targets []str = if $nbg1_cdn_public_ipv4.ip != "" {
-		[$nbg1_cdn_public_ipv4.ip,]
+	$cdn_dns_targets []str = if $core_public_ipv4 != "" {
+		[$core_public_ipv4,]
 	} else {
 		[]
 	}
-	$ash_cdn_dns_targets []str = if $ash_cdn_public_ipv4.ip != "" {
-		[$ash_cdn_public_ipv4.ip,]
-	} else {
-		[]
-	}
-	$sin_cdn_dns_targets []str = if $sin_cdn_public_ipv4.ip != "" {
-		[$sin_cdn_public_ipv4.ip,]
-	} else {
-		[]
-	}
-	$cdn_dns_targets []str = list.concat($nbg1_cdn_dns_targets, $ash_cdn_dns_targets, $sin_cdn_dns_targets)
 	$telemetry_dns_targets []str = if $nbg1_telemetry_public_ipv4.ip != "" {
 		[$nbg1_telemetry_public_ipv4.ip,]
 	} else {
@@ -139,29 +130,44 @@ class topology($st) {
 		poll => $poll_seconds,
 	})
 
-	include hetzner_firewall.firewall(struct {
-		name => $ssh_firewall.name,
-		apitoken => $api_token,
-		state => $infra_state,
-		rules => $ssh_firewall.rules,
-		applyto => $ssh_firewall.applyto,
-		labels => $ssh_firewall.labels,
-		waitinterval => $wait_interval_seconds,
-		waittimeout => $wait_timeout_seconds,
-		poll => $poll_seconds,
-	})
+	if $infra_state != "absent" {
+		include hetzner_firewall.firewall(struct {
+			name => $ssh_firewall.name,
+			apitoken => $api_token,
+			rules => $ssh_firewall.rules,
+			applyto => $ssh_firewall.applyto,
+			labels => $ssh_firewall.labels,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+	}
 
-	include hetzner_firewall.firewall(struct {
-		name => $public_http_firewall.name,
-		apitoken => $api_token,
-		state => $infra_state,
-		rules => $public_http_firewall.rules,
-		applyto => $public_http_firewall.applyto,
-		labels => $public_http_firewall.labels,
-		waitinterval => $wait_interval_seconds,
-		waittimeout => $wait_timeout_seconds,
-		poll => $poll_seconds,
-	})
+	if ($infra_state != "absent") and ($http01_host != "") {
+		include hetzner_firewall.firewall(struct {
+			name => $http01_firewall.name,
+			apitoken => $api_token,
+			rules => $http01_firewall.rules,
+			applyto => $http01_firewall.applyto,
+			labels => $http01_firewall.labels,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+	}
+
+	if ($infra_state != "absent") and ($https_host != "") {
+		include hetzner_firewall.firewall(struct {
+			name => $https_firewall.name,
+			apitoken => $api_token,
+			rules => $https_firewall.rules,
+			applyto => $https_firewall.applyto,
+			labels => $https_firewall.labels,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+	}
 
 	include fishystuff_beta_region.region(struct {
 		cluster => $cluster,

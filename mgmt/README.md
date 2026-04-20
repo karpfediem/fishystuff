@@ -120,6 +120,9 @@ Current compact beta shape:
 Safety defaults:
 
 - `mgmt/main.mcl` defaults `FISHYSTUFF_HETZNER_STATE` to `absent`
+- `mgmt/main.mcl` defaults `FISHYSTUFF_HETZNER_HTTP01_HOST` to empty, so
+  public port `80` stays closed unless you explicitly target a host for an
+  `http-01` issuance window
 - destructive rebuilds remain blocked unless
   `FISHYSTUFF_HETZNER_ALLOW_REBUILD=ifneeded` is set explicitly
 
@@ -194,7 +197,7 @@ just mgmt-resident-deploy-remote \
 Resident bundle-backed systemd probe:
 
 ```bash
-just mgmt-resident-dolt-bundle-probe target=mgmt-root
+just mgmt-resident-dolt-bundle-probe target=root@<host-ip>
 ```
 
 The resident `beta` graph now treats the Nix bundle as the source of truth for

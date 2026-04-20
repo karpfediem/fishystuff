@@ -9,6 +9,8 @@ $cluster = sys.defaultenv("FISHYSTUFF_HETZNER_CLUSTER", "beta")
 $state = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "absent")
 $allow_rebuild = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
 $image = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "debian-13")
+$http01_host = sys.defaultenv("FISHYSTUFF_HETZNER_HTTP01_HOST", "")
+$https_host = sys.defaultenv("FISHYSTUFF_HETZNER_HTTPS_HOST", "")
 
 include fishystuff_beta.topology(struct {
 	cluster => $cluster,
@@ -19,6 +21,8 @@ include fishystuff_beta.topology(struct {
 	state => $state,
 	allow_rebuild => $allow_rebuild,
 	image => $image,
+	http01_host => $http01_host,
+	https_host => $https_host,
 	poll_seconds => 60,
 	wait_interval_seconds => 5,
 	wait_timeout_seconds => 600,

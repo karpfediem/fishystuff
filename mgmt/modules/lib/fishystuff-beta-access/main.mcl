@@ -8,25 +8,24 @@ class catalog($st) {
 	$project_label_key = "project"
 	$project_label_value = "fishystuff"
 	$cluster_label_key = "cluster"
+	$hostname_label_key = "hostname"
 	$region_label_key = "region"
 	$role_label_key = "role"
 
 	$ssh_access_label_key = "fishystuff-ssh"
 	$ssh_access_label_value = $cluster
-	$public_http_access_label_key = "fishystuff-public-http"
-	$public_http_access_label_value = $cluster
 	$empty_ips []str = []
 }
 
-class catalog:host($role_name, $region_name) {
+class catalog:host($hostname, $role_name, $region_name) {
 	$labels = {
 		$managed_by_label_key => $managed_by_label_value,
 		$project_label_key => $project_label_value,
 		$cluster_label_key => $cluster,
+		$hostname_label_key => $hostname,
 		$region_label_key => $region_name,
 		$role_label_key => $role_name,
 		$ssh_access_label_key => $ssh_access_label_value,
-		$public_http_access_label_key => $public_http_access_label_value,
 	}
 }
 
@@ -57,13 +56,14 @@ class catalog:ssh {
 	]
 }
 
-class catalog:public_http {
-	$name = fmt.printf("fishystuff-%s-public-http", $cluster)
+class catalog:http_01($hostname) {
+	$name = fmt.printf("fishystuff-%s-%s-http01", $cluster, $hostname)
 	$labels = {
 		$managed_by_label_key => $managed_by_label_value,
 		$project_label_key => $project_label_value,
 		$cluster_label_key => $cluster,
-		"purpose" => "public-http",
+		"purpose" => "http-01",
+		$hostname_label_key => $hostname,
 	}
 	$rules = [
 		struct {
@@ -72,8 +72,28 @@ class catalog:public_http {
 			destinationips => $empty_ips,
 			protocol => "tcp",
 			port => "80",
-			description => "Allow public HTTP",
+			description => "Allow ACME HTTP-01 validation",
 		},
+	]
+	$applyto = [
+		struct {
+			type => "label_selector",
+			server => "",
+			labelselector => fmt.printf("%s=%s", $hostname_label_key, $hostname),
+		},
+	]
+}
+
+class catalog:https($hostname) {
+	$name = fmt.printf("fishystuff-%s-%s-https", $cluster, $hostname)
+	$labels = {
+		$managed_by_label_key => $managed_by_label_value,
+		$project_label_key => $project_label_value,
+		$cluster_label_key => $cluster,
+		"purpose" => "public-https",
+		$hostname_label_key => $hostname,
+	}
+	$rules = [
 		struct {
 			direction => "in",
 			sourceips => ["0.0.0.0/0", "::/0",],
@@ -87,7 +107,7 @@ class catalog:public_http {
 		struct {
 			type => "label_selector",
 			server => "",
-			labelselector => fmt.printf("%s=%s", $public_http_access_label_key, $public_http_access_label_value),
+			labelselector => fmt.printf("%s=%s", $hostname_label_key, $hostname),
 		},
 	]
 }

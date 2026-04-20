@@ -3,7 +3,6 @@ import "fmt"
 class firewall($st) {
 	$name str = $st->name
 	$apitoken str = $st->apitoken || ""
-	$state str = $st->state || "absent"
 	$rules = $st->rules
 	$applyto = $st->applyto
 	$labels = $st->labels
@@ -16,12 +15,12 @@ class firewall($st) {
 
 	hetzner:firewall $name {
 		apitoken => $apitoken,
-		state => $state,
 		rules => $rules,
 		applyto => $applyto,
 		labels => $labels,
 		waitinterval => $waitinterval,
 		waittimeout => $waittimeout,
 		Meta:poll => $poll,
+		Meta:reverse => true,
 	}
 }
