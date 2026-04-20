@@ -1,0 +1,40 @@
+import "fmt"
+import "sys"
+import "value"
+import "../../providers/hetzner-firewall/" as hetzner_firewall
+
+class gate($st) {
+	$firewall_name str = $st->firewall_name || ""
+	$pending_value_name str = $st->pending_value_name || fmt.printf("%s-pending", $firewall_name)
+	$api_token str = $st->api_token || sys.getenv("HETZNER_API_TOKEN")
+	$rules []struct{direction str; sourceips []str; destinationips []str; protocol str; port str; description str} = $st->rules || []
+	$applyto []struct{type str; server str; labelselector str} = $st->applyto || []
+	$labels map{str: str} = $st->labels || {}
+	$wait_interval_seconds int = $st->wait_interval_seconds || 5
+	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
+	$poll_seconds int = $st->poll_seconds || 30
+
+	panic($firewall_name == "", "hetzner firewall gate requires firewall_name")
+	panic($api_token == "", fmt.printf("missing Hetzner API token for firewall gate %s", $firewall_name))
+	panic(len($rules) == 0, fmt.printf("hetzner firewall gate %s requires at least one rule", $firewall_name))
+	panic(len($applyto) == 0, fmt.printf("hetzner firewall gate %s requires at least one applyto target", $firewall_name))
+
+	$pending struct{value bool; ready bool} = value.get_bool($pending_value_name)
+	$ready bool = $pending->ready and $pending->value
+
+	value $pending_value_name {
+		any => false,
+	}
+
+	include hetzner_firewall.firewall(struct {
+		name => $firewall_name,
+		apitoken => $api_token,
+		state => if $ready { "exists" } else { "absent" },
+		rules => $rules,
+		applyto => $applyto,
+		labels => $labels,
+		waitinterval => $wait_interval_seconds,
+		waittimeout => $wait_timeout_seconds,
+		poll => $poll_seconds,
+	})
+}

@@ -1,7 +1,8 @@
 import "encoding"
 import "fmt"
 import "os"
-import "../fishystuff-edge-http01-firewall/" as fishystuff_edge_http01_firewall
+import "../fishystuff-beta-access/" as fishystuff_beta_access
+import "../hetzner-firewall-gate/" as hetzner_firewall_gate
 
 class certificate($st) {
 	$enabled bool = $st->enabled || false
@@ -54,10 +55,16 @@ class certificate($st) {
 		}
 
 		if $challenge == "http-01" {
-			include fishystuff_edge_http01_firewall.gate(struct {
+			include fishystuff_beta_access.catalog(struct {
 				cluster => $cluster,
-				hostname => $hostname,
-				certificate_name => $certificate_name,
+			}) as access
+			include access.http_01($hostname) as http01_firewall
+			include hetzner_firewall_gate.gate(struct {
+				firewall_name => $http01_firewall.name,
+				pending_value_name => fmt.printf("%s-http01-pending", $certificate_name),
+				rules => $http01_firewall.rules,
+				applyto => $http01_firewall.applyto,
+				labels => $http01_firewall.labels,
 			}) as http01_firewall_gate
 
 			acme "${certificate_name}" {
