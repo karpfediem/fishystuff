@@ -12,15 +12,6 @@ if [[ -n "${SSH_OPTS:-}" ]]; then
 	ssh_opts=(${SSH_OPTS})
 fi
 
-env_assignments=()
-while IFS='=' read -r name value; do
-	case "$name" in
-		FISHYSTUFF_*)
-			env_assignments+=("${name}=${value}")
-			;;
-	esac
-done < <(env)
-
 local_tar="$(mktemp /tmp/fishystuff-mgmt-deploy.XXXXXX.tar)"
 trap 'rm -f "$local_tar"' EXIT
 tar -C "$graph_dir" -cf "$local_tar" .
@@ -31,21 +22,16 @@ remote_tar="${remote_tar//$'\n'/}"
 
 cat "$local_tar" | ssh "${ssh_opts[@]}" "$ssh_target" "cat > '$remote_tar'"
 
-ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "$timeout_secs" "$remote_mgmt_bin" "$remote_tar" "${env_assignments[@]}" <<'EOF'
+ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "$timeout_secs" "$remote_mgmt_bin" "$remote_tar" <<'EOF'
 set -euo pipefail
 
 timeout_secs="${1:?missing timeout seconds}"
 remote_mgmt_bin="${2:?missing remote mgmt binary path}"
 remote_tar="${3:?missing remote tar path}"
 shift 3
-remote_env=("$@")
 remote_tmp="$(mktemp -d /tmp/fishystuff-mgmt-deploy.XXXXXX)"
 trap 'rm -rf "$remote_tmp"; rm -f "$remote_tar"' EXIT
 
 tar -C "$remote_tmp" -xf "$remote_tar"
-if [[ "${#remote_env[@]}" -gt 0 ]]; then
-	sudo env "${remote_env[@]}" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 --converged-timeout="${timeout_secs}" lang "$remote_tmp/"
-else
-	sudo "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 --converged-timeout="${timeout_secs}" lang "$remote_tmp/"
-fi
+sudo "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang "$remote_tmp/"
 EOF

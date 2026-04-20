@@ -202,6 +202,21 @@ the rendered systemd unit. Host-local mgmt still owns runtime env files,
 service ordering, and mutable state preparation, but it no longer reconstructs
 `ExecStart` or the unit body from `supervision.argv`.
 
+Bundle push behavior:
+
+- each bundle now carries planner-facing `materialization.json` plus
+  `mode-substitute.txt`, `mode-realise.txt`, and `mode-verify.txt`
+- `push-fishystuff-bundles-remote.sh` pre-materializes `substitute` roots on
+  the target with `nix-store --realise --max-jobs 0`
+- `substitute-or-build` roots are driven through `mode-realise.txt`, which now
+  prefers a derivation path when the bundle exports one
+- the final transfer uses `nix copy --substitute-on-destination`, so cacheable
+  dependencies can still be fetched by the target instead of uploaded from the
+  builder
+- override `remote_nix_max_jobs=` in `just mgmt-resident-push-api-db` or
+  `just mgmt-resident-push-full-stack` if you want target-side builds for the
+  `substitute-or-build` class; `0` means fetch-only
+
 Default topology inputs:
 
 - cluster: `beta`
@@ -271,6 +286,8 @@ Resident mgmt operation:
   the public internet
 - the current resident bootstrap assumes a systemd-based Linux host because
   mgmt's `svc` resource is systemd-specific
+- `--converged-timeout` is a bootstrap-time `mgmt run` concern; the current
+  `mgmt deploy` CLI does not expose that flag
 
 Bootstrap flow:
 
