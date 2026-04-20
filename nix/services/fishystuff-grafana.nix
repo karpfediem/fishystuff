@@ -9,26 +9,39 @@ let
   systemdBackend = import ./systemd-backend.nix { inherit lib pkgs; };
   inherit (lib) mkOption optional types;
   cfg = config.fishystuff.grafana;
-  grafanaExe = lib.getExe' cfg.package "grafana-server";
+  iniSource = pkgs.writeText "fishystuff-grafana.ini" (builtins.readFile cfg.iniSource);
+  provisioningSource = pkgs.runCommandLocal "fishystuff-grafana-provisioning" { } ''
+    mkdir -p "$out"
+    cp -R ${cfg.provisioningSource}/. "$out"/
+  '';
+  dashboardsSource = pkgs.runCommandLocal "fishystuff-grafana-dashboards" { } ''
+    mkdir -p "$out"
+    cp -R ${cfg.dashboardsSource}/. "$out"/
+  '';
+  grafanaExe = lib.getExe' cfg.package "grafana";
   grafanaHome = "${cfg.package}/share/grafana";
   serviceArgv = [
     grafanaExe
+    "server"
     "--homepath"
     grafanaHome
     "--config"
-    cfg.iniSource
+    iniSource
   ];
   staticEnvironment = {
     GF_SERVER_HTTP_ADDR = cfg.listenAddress;
     GF_SERVER_HTTP_PORT = toString cfg.port;
     GF_PATHS_DATA = cfg.dataDir;
-    GF_PATHS_PROVISIONING = toString cfg.provisioningSource;
+    GF_PATHS_PROVISIONING = toString provisioningSource;
     GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH =
-      "${toString cfg.dashboardsSource}/fishystuff-operator-overview.json";
+      "${toString dashboardsSource}/fishystuff-operator-overview.json";
+    GF_ANALYTICS_REPORTING_ENABLED = "false";
+    GF_ANALYTICS_CHECK_FOR_UPDATES = "false";
+    GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES = "false";
     GF_AUTH_ANONYMOUS_ENABLED = "true";
     GF_AUTH_ANONYMOUS_ORG_ROLE = "Viewer";
     GF_AUTH_DISABLE_LOGIN_FORM = "true";
-    FISHYSTUFF_GRAFANA_DASHBOARDS_PATH = toString cfg.dashboardsSource;
+    FISHYSTUFF_GRAFANA_DASHBOARDS_PATH = toString dashboardsSource;
     FISHYSTUFF_DEV_LOKI_HTTP_PORT = toString cfg.lokiPort;
     FISHYSTUFF_DEV_PROMETHEUS_PORT = toString cfg.prometheusPort;
     FISHYSTUFF_DEV_JAEGER_UI_PORT = toString cfg.jaegerPort;
@@ -170,9 +183,9 @@ in
 
       roots.store = [
         cfg.package
-        cfg.iniSource
-        cfg.provisioningSource
-        cfg.dashboardsSource
+        iniSource
+        provisioningSource
+        dashboardsSource
         systemdUnit.file
       ];
 
@@ -185,15 +198,15 @@ in
         })
         (helpers.mkMaterializationRoot {
           handle = "config/base";
-          path = cfg.iniSource;
+          path = iniSource;
         })
         (helpers.mkMaterializationRoot {
           handle = "config/provisioning";
-          path = cfg.provisioningSource;
+          path = provisioningSource;
         })
         (helpers.mkMaterializationRoot {
           handle = "config/dashboards";
-          path = cfg.dashboardsSource;
+          path = dashboardsSource;
         })
         (helpers.mkMaterializationRoot {
           handle = "systemd/unit";
@@ -210,19 +223,19 @@ in
 
         "config/base" = helpers.mkArtifact {
           kind = "config";
-          storePath = cfg.iniSource;
+          storePath = iniSource;
           destination = "grafana.ini";
         };
 
         "config/provisioning" = helpers.mkArtifact {
           kind = "config";
-          storePath = cfg.provisioningSource;
+          storePath = provisioningSource;
           destination = "provisioning";
         };
 
         "config/dashboards" = helpers.mkArtifact {
           kind = "config";
-          storePath = cfg.dashboardsSource;
+          storePath = dashboardsSource;
           destination = "dashboards";
         };
 

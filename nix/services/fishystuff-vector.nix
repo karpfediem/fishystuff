@@ -80,7 +80,11 @@ let
           .correlation = {}
           .http = {}
           .browser = {}
-          .process = string!(._SYSTEMD_UNIT ?? "unknown.service")
+          if exists(._SYSTEMD_UNIT) && !is_null(._SYSTEMD_UNIT) {
+            .process = string!(._SYSTEMD_UNIT)
+          } else {
+            .process = "unknown.service"
+          }
           .service = .process
           .level = "info"
 
@@ -331,6 +335,7 @@ let
       "RestrictSUIDSGID=true"
       "SystemCallArchitectures=native"
       "UMask=0077"
+      "ExecStartPre=/usr/bin/install -d -m 0750 ${cfg.dataDir}/journal ${cfg.dataDir}/archive ${cfg.dataDir}/archive/logs ${cfg.dataDir}/archive/traces ${cfg.dataDir}/archive/otel-logs"
     ];
   };
 in
