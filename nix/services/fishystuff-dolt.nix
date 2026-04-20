@@ -299,6 +299,27 @@ in
         systemdUnit.file
       ];
 
+      materialization.roots = [
+        (helpers.mkMaterializationRoot {
+          handle = "pkg/main";
+          path = cfg.package;
+          class = "nixpkgs-generic";
+          acquisition = "substitute";
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/base";
+          path = sqlServerConfig;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "script/start";
+          path = startScript;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "systemd/unit";
+          path = systemdUnit.file;
+        })
+      ];
+
       artifacts = {
         "exe/main" = helpers.mkArtifact {
           kind = "binary";

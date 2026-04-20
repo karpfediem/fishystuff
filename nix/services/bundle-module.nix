@@ -97,6 +97,48 @@ let
     };
   };
 
+  materializationRootType = types.submodule {
+    options = {
+      handle = mkOption {
+        type = types.str;
+        description = "Stable identifier for this materialization root.";
+      };
+
+      path = mkOption {
+        type = helpers.storePathType;
+        description = "Store path that deployment tooling may need to materialize.";
+      };
+
+      class = mkOption {
+        type = types.str;
+        default = "workspace-local";
+        description = "Planner-facing path class for deployment policy.";
+      };
+
+      acquisition = mkOption {
+        type = types.enum [
+          "push"
+          "substitute"
+          "substitute-or-build"
+        ];
+        default = "push";
+        description = "Generic acquisition mode for this root.";
+      };
+
+      allowBuild = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether a target may build this root locally.";
+      };
+
+      required = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether this root is required for successful activation.";
+      };
+    };
+  };
+
   identityType = types.submodule {
     options = {
       user = mkOption {
@@ -277,6 +319,12 @@ in
       type = types.listOf helpers.storePathType;
       default = [ ];
       description = "Explicit immutable store roots for closure computation.";
+    };
+
+    materialization.roots = mkOption {
+      type = types.listOf materializationRootType;
+      default = [ ];
+      description = "Planner-facing materialization policy for selected store roots.";
     };
 
     artifacts = mkOption {

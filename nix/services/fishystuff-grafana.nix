@@ -176,6 +176,31 @@ in
         systemdUnit.file
       ];
 
+      materialization.roots = [
+        (helpers.mkMaterializationRoot {
+          handle = "pkg/main";
+          path = cfg.package;
+          class = "nixpkgs-generic";
+          acquisition = "substitute";
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/base";
+          path = cfg.iniSource;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/provisioning";
+          path = cfg.provisioningSource;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/dashboards";
+          path = cfg.dashboardsSource;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "systemd/unit";
+          path = systemdUnit.file;
+        })
+      ];
+
       artifacts = {
         "exe/main" = helpers.mkArtifact {
           kind = "binary";

@@ -197,6 +197,25 @@ in
         systemdUnit.file
       ];
 
+      materialization.roots = [
+        (helpers.mkMaterializationRoot {
+          handle = "pkg/main";
+          path = cfg.package;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/base";
+          path = configSource;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/secretspec";
+          path = cfg.secretSpecSource;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "systemd/unit";
+          path = systemdUnit.file;
+        })
+      ];
+
       artifacts = {
         "exe/main" = helpers.mkArtifact {
           kind = "binary";

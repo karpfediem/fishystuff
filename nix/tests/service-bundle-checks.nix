@@ -19,6 +19,8 @@ let
       requiredEnvironment ? { },
       requiredUnitLines ? [ ],
       forbiddenUnitLines ? [ ],
+      requiredMaterializationAcquisition ? null,
+      requiredMaterializationHandle ? null,
     }:
     pkgs.runCommand name
       {
@@ -37,10 +39,20 @@ let
         jq -e '.artifacts["systemd/unit"].destination == "${unitName}"' "$bundle_json" >/dev/null
         jq -e '.artifacts["systemd/unit"].bundle_path == "artifacts/systemd/unit"' "$bundle_json" >/dev/null
         jq -e '.bundle_files.bundle_json == "bundle.json"' "$bundle_json" >/dev/null
+        jq -e '.bundle_files.materialization_json == "materialization.json"' "$bundle_json" >/dev/null
+        jq -e '.bundle_files.mode_substitute == "mode-substitute.txt"' "$bundle_json" >/dev/null
+        jq -e '.bundle_files.mode_realise == "mode-realise.txt"' "$bundle_json" >/dev/null
         jq -e '.bundle_files.registration == "registration"' "$bundle_json" >/dev/null
         jq -e '.bundle_files.store_paths == "store-paths"' "$bundle_json" >/dev/null
+        jq -e '.bundle_files.mode_verify == "mode-verify.txt"' "$bundle_json" >/dev/null
+        jq -e '.materialization.schema_version == 1' "$bundle_json" >/dev/null
+        jq -e '.materialization.roots | length > 0' "$bundle_json" >/dev/null
+        jq -e '.closure.materialization_file == "materialization.json"' "$bundle_json" >/dev/null
+        jq -e '.closure.mode_substitute_file == "mode-substitute.txt"' "$bundle_json" >/dev/null
+        jq -e '.closure.mode_realise_file == "mode-realise.txt"' "$bundle_json" >/dev/null
         jq -e '.closure.registration_file == "registration"' "$bundle_json" >/dev/null
         jq -e '.closure.store_paths_file == "store-paths"' "$bundle_json" >/dev/null
+        jq -e '.closure.mode_verify_file == "mode-verify.txt"' "$bundle_json" >/dev/null
         jq -e '.supervision.argv | length >= ${toString minArgvLength}' "$bundle_json" >/dev/null
         jq -e '.supervision.restart.policy == "on-failure"' "$bundle_json" >/dev/null
         jq -e '.supervision.reload.mode == "restart"' "$bundle_json" >/dev/null
@@ -62,6 +74,10 @@ let
         grep -Fx "$unit_path" "$store_paths" >/dev/null
         test -L "${bundle}/artifacts/systemd/unit"
         test "$(readlink -f "${bundle}/artifacts/systemd/unit")" = "$unit_path"
+        test -f "${bundle}/materialization.json"
+        test -f "${bundle}/mode-substitute.txt"
+        test -f "${bundle}/mode-realise.txt"
+        test -f "${bundle}/mode-verify.txt"
         grep -F "ExecStart=" "$unit_path" >/dev/null
         grep -F "Restart=on-failure" "$unit_path" >/dev/null
         grep -F "WantedBy=multi-user.target" "$unit_path" >/dev/null
@@ -86,6 +102,18 @@ let
             ''
           ) requiredEnvironment
         )}
+        ${if requiredMaterializationHandle == null then
+          ""
+        else
+          ''
+            jq -e '.materialization.roots[] | select(.handle == "${requiredMaterializationHandle}")' "$bundle_json" >/dev/null
+          ''}
+        ${if requiredMaterializationAcquisition == null then
+          ""
+        else
+          ''
+            jq -e '.materialization.roots[] | select(.handle == "${requiredMaterializationHandle}" and .acquisition == "${requiredMaterializationAcquisition}")' "$bundle_json" >/dev/null
+          ''}
 
         if jq -e '.runtimeOverlays[]? | select(.secret == true) | .targetPath | startswith("/nix/store/")' "$bundle_json" >/dev/null; then
           echo "secret overlay target unexpectedly points into the Nix store" >&2
@@ -142,6 +170,8 @@ in
     unitName = "fishystuff-api.service";
     minArgvLength = 3;
     requireSecretSpecPath = true;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "push";
   };
 
   dolt-service-bundle = mkBundleCheck {
@@ -159,6 +189,8 @@ in
       "StateDirectory=fishystuff/dolt"
       "StateDirectoryMode=0750"
     ];
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
     forbiddenUnitLines = [
       "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
     ];

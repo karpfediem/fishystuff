@@ -174,6 +174,24 @@ in
         systemdUnit.file
       ];
 
+      materialization.roots = [
+        (helpers.mkMaterializationRoot {
+          handle = "pkg/main";
+          path = cfg.package;
+          class = "upstream-fixed-output";
+          acquisition = "substitute-or-build";
+          allowBuild = true;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "config/base";
+          path = configSource;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "systemd/unit";
+          path = systemdUnit.file;
+        })
+      ];
+
       artifacts = {
         "exe/main" = helpers.mkArtifact {
           kind = "binary";

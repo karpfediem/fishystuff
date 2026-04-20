@@ -41,6 +41,16 @@ in
     }
     // attrs;
 
+  mkMaterializationRoot =
+    attrs:
+    {
+      class = "workspace-local";
+      acquisition = "push";
+      allowBuild = false;
+      required = true;
+    }
+    // attrs;
+
   mkRuntimeOverlay =
     attrs:
     {

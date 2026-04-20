@@ -20,6 +20,18 @@ let
 
   explicitStoreRoots = service.bundle.roots.store;
   explicitStoreRootStrings = map toString explicitStoreRoots;
+  explicitMaterializationRoots = service.bundle.materialization.roots;
+  materializationRoots =
+    if explicitMaterializationRoots != [ ] then
+      explicitMaterializationRoots
+    else
+      lib.imap1 (
+        idx: path:
+        helpers.mkMaterializationRoot {
+          handle = "root/${toString idx}";
+          inherit path;
+        }
+      ) explicitStoreRoots;
   syntheticRoot =
     if explicitStoreRoots == [ ] then
       throw "Service ${name} did not declare any bundle.roots.store entries."
@@ -105,6 +117,14 @@ let
       on_change = overlay.onChange;
     };
 
+  mkMaterializationRoot =
+    root:
+    root
+    // {
+      path = toString root.path;
+      allow_build = root.allowBuild;
+    };
+
   contract = {
     contractVersion = 1;
     contract_version = 1;
@@ -129,15 +149,28 @@ let
     requiredCapabilities = service.bundle.requiredCapabilities;
     required_capabilities = service.bundle.requiredCapabilities;
     backends = service.bundle.backends;
+    materialization = {
+      schemaVersion = 1;
+      schema_version = 1;
+      roots = map mkMaterializationRoot materializationRoots;
+    };
     bundleFiles = {
       bundleJson = "bundle.json";
+      materializationJson = "materialization.json";
       registration = "registration";
+      modeSubstitute = "mode-substitute.txt";
+      modeRealise = "mode-realise.txt";
       storePaths = "store-paths";
+      modeVerify = "mode-verify.txt";
     };
     bundle_files = {
       bundle_json = "bundle.json";
+      materialization_json = "materialization.json";
       registration = "registration";
+      mode_substitute = "mode-substitute.txt";
+      mode_realise = "mode-realise.txt";
       store_paths = "store-paths";
+      mode_verify = "mode-verify.txt";
     };
   };
 in
@@ -158,6 +191,10 @@ pkgs.runCommand "${name}-service-bundle"
 
     cp ${closureInfo}/registration "$out/registration"
     cp ${closureInfo}/store-paths "$out/store-paths"
+    jq '.materialization' "$contractPath" > "$out/materialization.json"
+    jq -r '.materialization.roots[] | select(.acquisition == "substitute") | .path' "$contractPath" | sort -u > "$out/mode-substitute.txt"
+    jq -r '.materialization.roots[] | select(.acquisition == "substitute-or-build") | .path' "$contractPath" | sort -u > "$out/mode-realise.txt"
+    jq -r '.materialization.roots[] | select(.acquisition == "push") | .path' "$contractPath" | sort -u > "$out/mode-verify.txt"
     jq \
       --arg root "$out" \
       --rawfile storePaths ${closureInfo}/store-paths \
@@ -165,9 +202,13 @@ pkgs.runCommand "${name}-service-bundle"
         storePaths: ($storePaths | split("\n") | map(select(length > 0))),
         closure: {
           root: $root,
+          materialization_file: "materialization.json",
+          mode_substitute_file: "mode-substitute.txt",
+          mode_realise_file: "mode-realise.txt",
           registration_file: "registration",
           store_paths_file: "store-paths",
-          store_paths: ($storePaths | split("\n") | map(select(length > 0)))
+          store_paths: ($storePaths | split("\n") | map(select(length > 0))),
+          mode_verify_file: "mode-verify.txt"
         }
       }' \
       "$contractPath" > "$out/bundle.json"
