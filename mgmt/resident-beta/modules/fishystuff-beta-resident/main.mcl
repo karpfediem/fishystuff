@@ -14,7 +14,7 @@ class host($st) {
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
 		services map{str: struct{bundle_path str; gcroot_path str}}
 	} = $st->manifest
-	$hostname str = $manifest->hostname || ""
+	$hostname str = $manifest->hostname
 	$cluster str = $manifest->cluster || "beta"
 
 	include fishystuff_beta_resident_layout.catalog(struct {

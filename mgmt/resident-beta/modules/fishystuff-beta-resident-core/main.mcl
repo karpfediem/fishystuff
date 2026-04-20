@@ -8,7 +8,7 @@ import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
 import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
 
 class api_db_host($st) {
-	$hostname str = $st->hostname || ""
+	$hostname str = $st->hostname
 	$manifest struct{
 		cluster str;
 		hostname str;
@@ -33,19 +33,19 @@ class api_db_host($st) {
 	$telemetry_base_url str = $st->telemetry_base_url || "https://telemetry.beta.fishystuff.fish"
 	$deployment_environment str = $st->deployment_environment || "beta"
 	$startup_mode str = $st->startup_mode || "enabled"
-	$tls_enabled bool = $manifest->tls->enabled || false
+	$tls_enabled bool = $manifest->tls->enabled
 	$tls_certificate_name str = if $manifest->tls->certificate_name != "" {
 		$manifest->tls->certificate_name
 	} else {
 		fmt.printf("%s-edge-tls", $hostname)
 	}
-	$tls_acme_email str = $manifest->tls->acme_email || ""
-	$tls_challenge str = $manifest->tls->challenge || ""
+	$tls_acme_email str = $manifest->tls->acme_email
+	$tls_challenge str = $manifest->tls->challenge
 	$tls_dns_provider str = $manifest->tls->dns_provider || ""
 	$tls_dns_env map{str: str} = $manifest->tls->dns_env || {}
 	$tls_directory_url str = $manifest->tls->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
 	$http01_server_name str = fmt.printf("%s-http01-server", $hostname)
-	$tls_domains []str = $manifest->tls->domains || []
+	$tls_domains []str = $manifest->tls->domains
 	$dolt_data_dir str = $st->dolt_data_dir || "/var/lib/fishystuff/dolt"
 	$dolt_database_name str = $st->dolt_database_name || "fishystuff"
 	$dolt_volume_device str = $st->dolt_volume_device || ""

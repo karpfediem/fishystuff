@@ -6,6 +6,7 @@ import "../../providers/hetzner-firewall/" as hetzner_firewall
 class gate($st) {
 	$firewall_name str = $st->firewall_name || ""
 	$pending_value_name str = $st->pending_value_name || fmt.printf("%s-pending", $firewall_name)
+	$firewall_ready_value_name str = $st->firewall_ready_value_name || fmt.printf("%s-ready", $firewall_name)
 	$api_token str = $st->api_token || sys.getenv("HETZNER_API_TOKEN")
 	$rules []struct{direction str; sourceips []str; destinationips []str; protocol str; port str; description str} = $st->rules || []
 	$applyto []struct{type str; server str; labelselector str} = $st->applyto || []
@@ -20,9 +21,15 @@ class gate($st) {
 	panic(len($applyto) == 0, fmt.printf("hetzner firewall gate %s requires at least one applyto target", $firewall_name))
 
 	$pending struct{value bool; ready bool} = value.get_bool($pending_value_name)
-	$ready bool = $pending->ready and $pending->value
+	$pending_open bool = $pending->ready and $pending->value
+	$firewall_ready struct{value bool; ready bool} = value.get_bool($firewall_ready_value_name)
+	$ready bool = $pending_open and $firewall_ready->ready and $firewall_ready->value
 
 	value $pending_value_name {
+		any => false,
+	}
+
+	value $firewall_ready_value_name {
 		any => false,
 	}
 
@@ -30,10 +37,12 @@ class gate($st) {
 		name => $firewall_name,
 		apitoken => $api_token,
 		rules => $rules,
-		applyto => if $ready { $applyto } else { [] },
+		applyto => if $pending_open { $applyto } else { [] },
 		labels => $labels,
 		waitinterval => $wait_interval_seconds,
 		waittimeout => $wait_timeout_seconds,
 		poll => $poll_seconds,
 	})
+
+	Hetzner:Firewall["${firewall_name}"].ready -> Value["${firewall_ready_value_name}"].any
 }

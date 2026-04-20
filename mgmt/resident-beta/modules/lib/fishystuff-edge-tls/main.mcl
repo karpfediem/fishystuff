@@ -1,16 +1,16 @@
 import "encoding"
 import "fmt"
+import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
+import "git:///lib/hetzner-firewall-gate/" as hetzner_firewall_gate
 import "os"
-import "../fishystuff-beta-access/" as fishystuff_beta_access
-import "../hetzner-firewall-gate/" as hetzner_firewall_gate
 
 class certificate($st) {
-	$enabled bool = $st->enabled || false
+	$enabled bool = $st->enabled
 
 	if $enabled {
 		$cluster str = $st->cluster || "beta"
-		$hostname str = $st->hostname || ""
-		$bundle_path str = $st->bundle_path || ""
+		$hostname str = $st->hostname
+		$bundle_path str = $st->bundle_path
 		$service_name str = if ($st->service_name || "") != "" {
 			$st->service_name
 		} else {
@@ -21,13 +21,14 @@ class certificate($st) {
 		} else {
 			fmt.printf("%s-cert", $service_name)
 		}
-		$acme_email str = $st->acme_email || ""
-		$challenge str = $st->challenge || ""
+		$account_name str = fmt.printf("%s-account", $certificate_name)
+		$acme_email str = $st->acme_email
+		$challenge str = $st->challenge
 		$dns_provider str = $st->dns_provider || ""
 		$dns_env map{str: str} = $st->dns_env || {}
 		$directory_url str = $st->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
 		$http01_server_name str = $st->http01_server_name || fmt.printf("%s-http01-server", $certificate_name)
-		$domains []str = $st->domains || []
+		$domains []str = $st->domains
 		$bundle struct{runtime_overlays []struct{name str; target_path str; secret bool; on_change str}} = encoding.decode_json_flexible(
 			os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
 		)
@@ -61,6 +62,12 @@ class certificate($st) {
 			group => "root",
 		}
 
+		acme:account "${account_name}" {
+			email => $acme_email,
+			accept_tos => true,
+			directory_url => $directory_url,
+		}
+
 		if $challenge == "http-01" {
 			$solver_name str = fmt.printf("%s-http01", $certificate_name)
 
@@ -82,15 +89,15 @@ class certificate($st) {
 			}
 
 			acme:request "${certificate_name}" {
-				accept_tos => true,
-				email => $acme_email,
+				account => $account_name,
 				domains => $domains,
 				challenge => $challenge,
 				solver => $solver_name,
-				directory_url => $directory_url,
 				http01_ready => $http01_firewall_gate.ready,
 			}
 
+			Acme:Account["${account_name}"].ready -> Acme:Request["${certificate_name}"].account_ready
+			Acme:Account["${account_name}"].data -> Acme:Request["${certificate_name}"].account_data
 			Acme:Request["${certificate_name}"].http01_pending -> Value["${http01_firewall_gate.pending_value_name}"].any
 			Http:Server["${http01_server_name}"] -> Acme:Request["${certificate_name}"]
 			Acme:Solver:Http01["${solver_name}"] -> Acme:Request["${certificate_name}"]
@@ -99,14 +106,15 @@ class certificate($st) {
 
 		if $challenge == "dns-01" {
 			acme:request "${certificate_name}" {
-				accept_tos => true,
-				email => $acme_email,
+				account => $account_name,
 				domains => $domains,
 				challenge => $challenge,
 				dns_provider => $dns_provider,
 				dns_env => $dns_env,
-				directory_url => $directory_url,
 			}
+
+			Acme:Account["${account_name}"].ready -> Acme:Request["${certificate_name}"].account_ready
+			Acme:Account["${account_name}"].data -> Acme:Request["${certificate_name}"].account_data
 		}
 
 		file "${fullchain_path}" {

@@ -67,7 +67,7 @@ sudo env \
 		--advertise-server-urls="$bootstrap_server_url" \
 		--no-pgp \
 		--converged-timeout 15 \
-		lang --module-path "$bootstrap_module_path" --download "$remote_tmp/" || run_status=$?
+		lang --module-path "$bootstrap_module_path" "$remote_tmp/" || run_status=$?
 if [[ "$run_status" != "0" && "$run_status" != "3" ]]; then
 	exit "$run_status"
 fi

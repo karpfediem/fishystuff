@@ -728,7 +728,7 @@ mgmt-resident-dolt-bundle-probe target="" timeout="120" bundle_path="" gcroot_pa
     '})' \
     > "$probe_dir/main.mcl"
   printf 'main: main.mcl\npath: modules/\n' > "$probe_dir/metadata.yaml"
-  "$mgmt_bin" run lang --module-path "$probe_dir/modules/" --download --only-unify "$probe_dir/main.mcl"
+  "$mgmt_bin" run lang --module-path "$probe_dir/modules/" --only-unify "$probe_dir/main.mcl"
   secretspec run --profile beta-deploy -- \
     env \
     FS_SSH_TARGET="$target" \
