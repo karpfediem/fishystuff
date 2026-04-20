@@ -11,6 +11,9 @@ $server_urls = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_SERVER_URLS", "http://1
 $advertise_client_urls = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_ADVERTISE_CLIENT_URLS", $client_urls)
 $advertise_server_urls = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_ADVERTISE_SERVER_URLS", $server_urls)
 $startup_mode = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_STARTUP_MODE", "enabled")
+$environment_dir = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_DIR", "/etc/fishystuff")
+$environment_file = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_FILE", "")
+$environment_file_content = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_FILE_CONTENT", "")
 
 panic($hostname == "", "missing resident mgmt hostname; set FISHYSTUFF_MGMT_BOOTSTRAP_HOSTNAME")
 
@@ -25,4 +28,7 @@ include fishystuff_resident_bootstrap.resident(struct {
 	advertise_client_urls => $advertise_client_urls,
 	advertise_server_urls => $advertise_server_urls,
 	startup_mode => $startup_mode,
+	environment_dir => $environment_dir,
+	environment_file => $environment_file,
+	environment_file_content => $environment_file_content,
 })

@@ -6,6 +6,13 @@ ssh_target="${2:?usage: kickstart-fishystuff-resident-remote.sh GRAPH_DIR SSH_TA
 host_name="${3:?usage: kickstart-fishystuff-resident-remote.sh GRAPH_DIR SSH_TARGET HOSTNAME TIMEOUT_SECS REMOTE_MGMT_BIN}"
 timeout_secs="${4:?usage: kickstart-fishystuff-resident-remote.sh GRAPH_DIR SSH_TARGET HOSTNAME TIMEOUT_SECS REMOTE_MGMT_BIN}"
 remote_mgmt_bin="${5:?usage: kickstart-fishystuff-resident-remote.sh GRAPH_DIR SSH_TARGET HOSTNAME TIMEOUT_SECS REMOTE_MGMT_BIN}"
+bootstrap_environment_dir="/etc/fishystuff"
+bootstrap_environment_file="$bootstrap_environment_dir/fishystuff-mgmt.env"
+bootstrap_environment_file_content=""
+
+if [[ -n "${HETZNER_API_TOKEN:-}" ]]; then
+	bootstrap_environment_file_content="HETZNER_API_TOKEN=$(jq -Rn --arg value "$HETZNER_API_TOKEN" '$value | @sh')"
+fi
 
 ssh_opts=()
 if [[ -n "${SSH_OPTS:-}" ]]; then
@@ -23,13 +30,16 @@ remote_tar="${remote_tar//$'\n'/}"
 
 cat "$local_tar" | ssh "${ssh_opts[@]}" "$ssh_target" "cat > '$remote_tar'"
 
-ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "$host_name" "$timeout_secs" "$remote_mgmt_bin" "$remote_tar" <<'EOF'
+ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "$host_name" "$timeout_secs" "$remote_mgmt_bin" "$remote_tar" "$bootstrap_environment_dir" "$bootstrap_environment_file" "$bootstrap_environment_file_content" <<'EOF'
 set -euo pipefail
 
 host_name="${1:?missing host name}"
 timeout_secs="${2:?missing timeout seconds}"
 remote_mgmt_bin="${3:?missing remote mgmt binary path}"
 remote_tar="${4:?missing remote tar path}"
+bootstrap_environment_dir="${5:-}"
+bootstrap_environment_file="${6:-}"
+bootstrap_environment_file_content="${7:-}"
 remote_tmp="$(mktemp -d /tmp/fishystuff-mgmt-bootstrap.XXXXXX)"
 bootstrap_client_url="http://127.0.0.1:32379"
 bootstrap_server_url="http://127.0.0.1:32380"
@@ -44,6 +54,9 @@ run_status=0
 sudo env \
 	FISHYSTUFF_MGMT_BOOTSTRAP_HOSTNAME="$host_name" \
 	FISHYSTUFF_MGMT_BOOTSTRAP_MGMT_EXEC="/usr/local/bin/mgmt" \
+	FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_DIR="$bootstrap_environment_dir" \
+	FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_FILE="$bootstrap_environment_file" \
+	FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_FILE_CONTENT="$bootstrap_environment_file_content" \
 	timeout "${timeout_secs}s" "$remote_mgmt_bin" run \
 		--hostname "$host_name" \
 		--tmp-prefix \

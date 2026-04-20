@@ -15,12 +15,16 @@ class resident($st) {
 	$advertise_client_urls str = $st->advertise_client_urls || $client_urls
 	$advertise_server_urls str = $st->advertise_server_urls || $server_urls
 	$startup_mode str = $st->startup_mode || "enabled"
+	$environment_dir str = $st->environment_dir || "/etc/fishystuff"
+	$environment_file str = $st->environment_file || ""
+	$environment_file_content str = $st->environment_file_content || ""
 
 	$desired_state = "running"
 	$state_parent = "/var/lib/fishystuff"
 	$state_parent_path = fmt.printf("%s/", $state_parent)
 	$state_root_path = fmt.printf("%s/", $state_root)
 	$unit_dir_path = fmt.printf("%s/", $unit_dir)
+	$environment_dir_path = fmt.printf("%s/", $environment_dir)
 	$service_path = fmt.printf("%s/%s.service", $unit_dir, $service_name)
 	$reload_name = fmt.printf("systemd-daemon-reload-%s", $service_name)
 	$mgmt_exec_start = fmt.printf("%s run --prefix=%s --hostname=%s --client-urls=%s --server-urls=%s --advertise-client-urls=%s --advertise-server-urls=%s --converged-timeout=-1 --max-runtime=0 --no-pgp empty", $mgmt_exec, $state_root, $hostname, $client_urls, $server_urls, $advertise_client_urls, $advertise_server_urls)
@@ -28,10 +32,12 @@ class resident($st) {
 		hostname => $hostname,
 		state_root => $state_root,
 		mgmt_exec_start => $mgmt_exec_start,
+		environment_file => $environment_file,
 	})
 
 	panic($hostname == "", "resident bootstrap requires hostname")
 	panic(($startup_mode != "enabled") and ($startup_mode != "disabled") and ($startup_mode != "none"), fmt.printf("unknown startup_mode %s", $startup_mode))
+	panic(($environment_file == "") and ($environment_file_content != ""), "resident bootstrap environment_file is required when environment_file_content is set")
 
 	include nix_bootstrap.install(struct {
 		state_parent => $state_parent,
@@ -52,6 +58,26 @@ class resident($st) {
 		mode => "u=rwx,go=rx",
 		owner => "root",
 		group => "root",
+	}
+
+	if $environment_file != "" {
+		file "${environment_dir_path}" {
+			state => "exists",
+			mode => "u=rwx,go=rx",
+			owner => "root",
+			group => "root",
+		}
+	}
+
+	if $environment_file_content != "" {
+		file "${environment_file}" {
+			state => "exists",
+			content => fmt.printf("%s\n", $environment_file_content),
+			mode => "u=rw,go=",
+			owner => "root",
+			group => "root",
+			Notify => Svc["${service_name}"],
+		}
 	}
 
 	file "${service_path}" {
@@ -86,4 +112,13 @@ class resident($st) {
 	File["${service_path}"] -> Exec["${reload_name}"]
 	Exec["${reload_name}"] -> Svc["${service_name}"]
 	Exec["${nix_ready_exec_name}"] -> Svc["${service_name}"]
+
+	if $environment_file != "" {
+		File["${environment_dir_path}"] -> File["${service_path}"]
+	}
+
+	if $environment_file_content != "" {
+		File["${environment_dir_path}"] -> File["${environment_file}"]
+		File["${environment_file}"] -> Exec["${reload_name}"]
+	}
 }

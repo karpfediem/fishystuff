@@ -7,6 +7,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory={{ .state_root }}
+Environment=PATH=/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+{{- if .environment_file }}
+EnvironmentFile=-{{ .environment_file }}
+{{- end }}
 ExecStart={{ .mgmt_exec_start }}
 Restart=always
 RestartSec=5s
