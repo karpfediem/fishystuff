@@ -264,8 +264,8 @@ mgmt-resident-deploy-remote target="mgmt-root" dir="mgmt/resident-deploy-probe" 
     -- "$dir" "$target" "$timeout" "$remote_mgmt_bin"
 
 # Build the API and Dolt service bundles locally, push both closures to a
-# remote host, root them at stable GC-root paths, and deploy the resident beta
-# graph for the current API/DB host shape.
+# remote host, and deploy the resident beta graph for the current API/DB host
+# shape. The resident graph owns GC-root selection via nix:gcroot.
 mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0":
   #!/usr/bin/env bash
   set -euo pipefail
@@ -301,7 +301,9 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
     '	cluster => "beta",' \
     "	hostname => \"${host}\"," \
     "	api_bundle_path => \"${api_bundle}\"," \
+    "	api_gcroot_path => \"${api_gcroot}\"," \
     "	dolt_bundle_path => \"${dolt_bundle}\"," \
+    "	dolt_gcroot_path => \"${dolt_gcroot}\"," \
     '	site_base_url => "https://beta.fishystuff.fish",' \
     '	api_base_url => "https://api.beta.fishystuff.fish",' \
     '	cdn_base_url => "https://cdn.beta.fishystuff.fish",' \
@@ -361,9 +363,7 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
       bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
           "$ssh_target" \
           "$api_bundle" \
-          "$api_gcroot" \
-          "$dolt_bundle" \
-          "$dolt_gcroot"
+          "$dolt_bundle"
       SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
       bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
           "$deploy_dir" \
@@ -373,8 +373,9 @@ mgmt-resident-push-api-db target="mgmt-root" host="beta-nbg1-api-db" timeout="12
     '
 
 # Build the current pure service bundles for the single-host beta stack, push
-# them to a remote host, root them at stable GC-root paths, and deploy the
-# resident graph with API, Dolt, edge, and observability daemons.
+# them to a remote host, and deploy the resident graph with API, Dolt, edge,
+# and observability daemons. The resident graph owns GC-root selection via
+# nix:gcroot.
 mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0":
   #!/usr/bin/env bash
   set -euo pipefail
@@ -431,14 +432,23 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
     '	cluster => "beta",' \
     "	hostname => \"${host}\"," \
     "	api_bundle_path => \"${api_bundle}\"," \
+    "	api_gcroot_path => \"${api_gcroot}\"," \
     "	dolt_bundle_path => \"${dolt_bundle}\"," \
+    "	dolt_gcroot_path => \"${dolt_gcroot}\"," \
     "	edge_bundle_path => \"${edge_bundle}\"," \
+    "	edge_gcroot_path => \"${edge_gcroot}\"," \
     "	loki_bundle_path => \"${loki_bundle}\"," \
+    "	loki_gcroot_path => \"${loki_gcroot}\"," \
     "	otel_collector_bundle_path => \"${otel_collector_bundle}\"," \
+    "	otel_collector_gcroot_path => \"${otel_collector_gcroot}\"," \
     "	vector_bundle_path => \"${vector_bundle}\"," \
+    "	vector_gcroot_path => \"${vector_gcroot}\"," \
     "	prometheus_bundle_path => \"${prometheus_bundle}\"," \
+    "	prometheus_gcroot_path => \"${prometheus_gcroot}\"," \
     "	jaeger_bundle_path => \"${jaeger_bundle}\"," \
+    "	jaeger_gcroot_path => \"${jaeger_gcroot}\"," \
     "	grafana_bundle_path => \"${grafana_bundle}\"," \
+    "	grafana_gcroot_path => \"${grafana_gcroot}\"," \
     '	site_base_url => "https://beta.fishystuff.fish",' \
     '	api_base_url => "https://api.beta.fishystuff.fish",' \
     '	cdn_base_url => "https://cdn.beta.fishystuff.fish",' \
@@ -528,23 +538,14 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
       bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
           "$ssh_target" \
           "$api_bundle" \
-          "$api_gcroot" \
           "$dolt_bundle" \
-          "$dolt_gcroot" \
           "$edge_bundle" \
-          "$edge_gcroot" \
           "$loki_bundle" \
-          "$loki_gcroot" \
           "$otel_collector_bundle" \
-          "$otel_collector_gcroot" \
           "$vector_bundle" \
-          "$vector_gcroot" \
           "$prometheus_bundle" \
-          "$prometheus_gcroot" \
           "$jaeger_bundle" \
-          "$jaeger_gcroot" \
-          "$grafana_bundle" \
-          "$grafana_gcroot"
+          "$grafana_bundle"
       SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
       bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
           "$deploy_dir" \
@@ -556,25 +557,43 @@ mgmt-resident-push-full-stack target="mgmt-root" host="beta-nbg1-api-db" timeout
 # Build a temporary resident graph that installs a bundle-backed systemd unit
 # from a local Nix bundle root, validate it, and deploy it to a resident mgmt
 # instance over SSH.
-mgmt-resident-dolt-bundle-probe target="mgmt-root" bundle_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="/home/carp/code/playground/mgmt-missing-features/mgmt" mgmt_modules_dir="/home/carp/code/mgmt/modules":
+mgmt-resident-dolt-bundle-probe target="mgmt-root" timeout="120" bundle_path="" gcroot_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal" mgmt_modules_dir="/home/carp/code/mgmt/modules":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
   target="${target#target=}"
   bundle_path='{{bundle_path}}'
   bundle_path="${bundle_path#bundle_path=}"
+  gcroot_path='{{gcroot_path}}'
+  gcroot_path="${gcroot_path#gcroot_path=}"
   timeout='{{timeout}}'
   timeout="${timeout#timeout=}"
   remote_mgmt_bin='{{remote_mgmt_bin}}'
   remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
   mgmt_bin='{{mgmt_bin}}'
   mgmt_bin="${mgmt_bin#mgmt_bin=}"
+  mgmt_flake='{{mgmt_flake}}'
+  mgmt_flake="${mgmt_flake#mgmt_flake=}"
+  mgmt_package='{{mgmt_package}}'
+  mgmt_package="${mgmt_package#mgmt_package=}"
   mgmt_modules_dir='{{mgmt_modules_dir}}'
   mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
+  if [[ -z "$bundle_path" ]]; then
+    bundle_path="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
+  fi
+  if [[ -z "$mgmt_bin" ]]; then
+    mgmt_installable="$mgmt_flake"
+    if [[ -n "$mgmt_package" && "$mgmt_package" != "default" ]]; then
+      mgmt_installable="$mgmt_flake#$mgmt_package"
+    fi
+    mgmt_store="$(nix build "$mgmt_installable" --no-link --print-out-paths)"
+    mgmt_bin="$mgmt_store/bin/mgmt"
+  fi
   probe_dir="$(mktemp -d /tmp/fishystuff-resident-bundle-probe.XXXXXX)"
   trap 'rm -rf "$probe_dir"' EXIT
   mkdir -p "$probe_dir/modules/lib" "$probe_dir/modules/github.com/purpleidea/mgmt/modules"
   cp -a mgmt/resident-beta/modules/lib/fishystuff-systemd "$probe_dir/modules/lib/"
+  cp -a mgmt/resident-beta/modules/lib/fishystuff-bundle-nix "$probe_dir/modules/lib/"
   cp -a mgmt/resident-beta/modules/lib/fishystuff-bundle-systemd "$probe_dir/modules/lib/"
   cp -a mgmt/modules/lib/systemd-daemon-reload "$probe_dir/modules/lib/"
   cp -a "$mgmt_modules_dir/misc" "$probe_dir/modules/github.com/purpleidea/mgmt/modules/"
@@ -583,11 +602,37 @@ mgmt-resident-dolt-bundle-probe target="mgmt-root" bundle_path="/nix/var/nix/gcr
     '' \
     'include fishystuff_bundle_systemd.unit(struct {' \
     "	bundle_path => \"${bundle_path}\"," \
+    "	gcroot_path => \"${gcroot_path}\"," \
     '	startup_mode => "enabled",' \
     '})' \
     > "$probe_dir/main.mcl"
   printf 'main: main.mcl\n' > "$probe_dir/metadata.yaml"
   "$mgmt_bin" run lang --only-unify "$probe_dir/main.mcl"
+  secretspec run --profile beta-deploy -- \
+    env \
+    FS_SSH_TARGET="$target" \
+    FS_BUNDLE_PATH="$bundle_path" \
+    bash -lc '
+      set -euo pipefail
+      ssh_target="${FS_SSH_TARGET:?}"
+      bundle_path="${FS_BUNDLE_PATH:?}"
+      tmp_key="$(mktemp /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+      trap '\''rm -f "$tmp_key"'\'' EXIT
+      umask 077
+      printf "%s\n" "$HETZNER_SSH_PRIVATE_KEY" > "$tmp_key"
+      chmod 600 "$tmp_key"
+      remote_nix_daemon_path="$(ssh -i "$tmp_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "$ssh_target" '\''if test -x /nix/var/nix/profiles/default/bin/nix-daemon; then printf "%s" /nix/var/nix/profiles/default/bin/nix-daemon; elif command -v nix-daemon >/dev/null 2>&1; then command -v nix-daemon; fi'\'')"
+      if [[ -z "$remote_nix_daemon_path" ]]; then
+        echo "could not detect remote nix-daemon path on $ssh_target" >&2
+        exit 1
+      fi
+      SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+      NIX_SSH_KEY_PATH="$tmp_key" \
+      NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
+      bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
+          "$ssh_target" \
+          "$bundle_path"
+    '
   secretspec run --profile beta-deploy -- \
     bash -lc '
       set -euo pipefail

@@ -3,14 +3,23 @@ import "modules/fishystuff-beta-resident/"
 
 $hostname = sys.defaultenv("FISHYSTUFF_BETA_HOSTNAME", "")
 $api_bundle_path = sys.defaultenv("FISHYSTUFF_API_BUNDLE_PATH", "")
+$api_gcroot_path = sys.defaultenv("FISHYSTUFF_API_GCROOT_PATH", "")
 $dolt_bundle_path = sys.defaultenv("FISHYSTUFF_DOLT_BUNDLE_PATH", "")
+$dolt_gcroot_path = sys.defaultenv("FISHYSTUFF_DOLT_GCROOT_PATH", "")
 $edge_bundle_path = sys.defaultenv("FISHYSTUFF_EDGE_BUNDLE_PATH", "")
+$edge_gcroot_path = sys.defaultenv("FISHYSTUFF_EDGE_GCROOT_PATH", "")
 $loki_bundle_path = sys.defaultenv("FISHYSTUFF_LOKI_BUNDLE_PATH", "")
+$loki_gcroot_path = sys.defaultenv("FISHYSTUFF_LOKI_GCROOT_PATH", "")
 $otel_collector_bundle_path = sys.defaultenv("FISHYSTUFF_OTEL_COLLECTOR_BUNDLE_PATH", "")
+$otel_collector_gcroot_path = sys.defaultenv("FISHYSTUFF_OTEL_COLLECTOR_GCROOT_PATH", "")
 $vector_bundle_path = sys.defaultenv("FISHYSTUFF_VECTOR_BUNDLE_PATH", "")
+$vector_gcroot_path = sys.defaultenv("FISHYSTUFF_VECTOR_GCROOT_PATH", "")
 $prometheus_bundle_path = sys.defaultenv("FISHYSTUFF_PROMETHEUS_BUNDLE_PATH", "")
+$prometheus_gcroot_path = sys.defaultenv("FISHYSTUFF_PROMETHEUS_GCROOT_PATH", "")
 $jaeger_bundle_path = sys.defaultenv("FISHYSTUFF_JAEGER_BUNDLE_PATH", "")
+$jaeger_gcroot_path = sys.defaultenv("FISHYSTUFF_JAEGER_GCROOT_PATH", "")
 $grafana_bundle_path = sys.defaultenv("FISHYSTUFF_GRAFANA_BUNDLE_PATH", "")
+$grafana_gcroot_path = sys.defaultenv("FISHYSTUFF_GRAFANA_GCROOT_PATH", "")
 $site_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_SITE_BASE_URL", "https://beta.fishystuff.fish")
 $api_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_API_BASE_URL", "https://api.beta.fishystuff.fish")
 $cdn_base_url = sys.defaultenv("FISHYSTUFF_PUBLIC_CDN_BASE_URL", "https://cdn.beta.fishystuff.fish")
@@ -34,14 +43,23 @@ panic($hostname == "", "missing resident beta hostname; set FISHYSTUFF_BETA_HOST
 include fishystuff_beta_resident.host(struct {
 	hostname => $hostname,
 	api_bundle_path => $api_bundle_path,
+	api_gcroot_path => $api_gcroot_path,
 	dolt_bundle_path => $dolt_bundle_path,
+	dolt_gcroot_path => $dolt_gcroot_path,
 	edge_bundle_path => $edge_bundle_path,
+	edge_gcroot_path => $edge_gcroot_path,
 	loki_bundle_path => $loki_bundle_path,
+	loki_gcroot_path => $loki_gcroot_path,
 	otel_collector_bundle_path => $otel_collector_bundle_path,
+	otel_collector_gcroot_path => $otel_collector_gcroot_path,
 	vector_bundle_path => $vector_bundle_path,
+	vector_gcroot_path => $vector_gcroot_path,
 	prometheus_bundle_path => $prometheus_bundle_path,
+	prometheus_gcroot_path => $prometheus_gcroot_path,
 	jaeger_bundle_path => $jaeger_bundle_path,
+	jaeger_gcroot_path => $jaeger_gcroot_path,
 	grafana_bundle_path => $grafana_bundle_path,
+	grafana_gcroot_path => $grafana_gcroot_path,
 	site_base_url => $site_base_url,
 	api_base_url => $api_base_url,
 	cdn_base_url => $cdn_base_url,

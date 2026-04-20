@@ -213,6 +213,9 @@ Bundle push behavior:
 - the final transfer uses `nix copy --substitute-on-destination`, so cacheable
   dependencies can still be fetched by the target instead of uploaded from the
   builder
+- resident mgmt now owns bundle liveness and selection through
+  `nix:closure` plus `nix:gcroot`; the push helper no longer mutates GC roots
+  itself
 - override `remote_nix_max_jobs=` in `just mgmt-resident-push-api-db` or
   `just mgmt-resident-push-full-stack` if you want target-side builds for the
   `substitute-or-build` class; `0` means fetch-only

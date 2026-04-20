@@ -2,11 +2,13 @@ import "encoding"
 import "fmt"
 import "golang/strings" as golang_strings
 import "os"
+import "../fishystuff-bundle-nix/" as fishystuff_bundle_nix
 import "../fishystuff-systemd/" as fishystuff_systemd
 import "../systemd-daemon-reload/" as systemd_daemon_reload
 
 class unit($st) {
 	$bundle_path str = $st->bundle_path || ""
+	$gcroot_path str = $st->gcroot_path || ""
 	$startup_mode str = $st->startup_mode || ""
 	$bundle struct{id str; artifacts map{str: struct{kind str; store_path str}}; backends struct{systemd struct{service_manager str; units []struct{name str; install_path str; startup str; state str}}}} = encoding.decode_json_flexible(
 		os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
@@ -45,6 +47,11 @@ class unit($st) {
 	panic($systemd->service_manager != "systemd", fmt.printf("bundle %s does not declare a systemd backend", $bundle->id))
 	panic(len($systemd->units) != 1, fmt.printf("bundle %s must declare exactly one systemd unit for this class", $bundle->id))
 	panic($unit_artifact->kind != "systemd-unit", fmt.printf("bundle %s systemd/unit artifact must be a systemd-unit", $bundle->id))
+
+	include fishystuff_bundle_nix.selected(struct {
+		bundle_path => $bundle_path,
+		gcroot_path => $gcroot_path,
+	})
 
 	if $desired_state == "running" {
 		file "${install_path}" {

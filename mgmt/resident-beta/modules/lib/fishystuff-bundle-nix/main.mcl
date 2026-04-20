@@ -1,0 +1,29 @@
+import "encoding"
+import "fmt"
+import "os"
+
+class selected($st) {
+	$bundle_path str = $st->bundle_path || ""
+	$gcroot_path str = $st->gcroot_path || ""
+	$bundle struct{id str} = encoding.decode_json_flexible(
+		os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
+	)
+	$bundle_id str = $bundle->id || ""
+	$closure_name str = fmt.printf("nix-closure-%s", $bundle_id)
+
+	panic($bundle_path == "", "missing bundle_path for fishystuff bundle-backed nix selection")
+	panic($bundle_id == "", fmt.printf("bundle %s did not declare an id", $bundle_path))
+
+	nix:closure "${closure_name}" {
+		paths => [$bundle_path,],
+		mode => "verify",
+	}
+
+	if $gcroot_path != "" {
+		nix:gcroot "${gcroot_path}" {
+			target => $bundle_path,
+			state => "exists",
+			force => true,
+		}
+	}
+}

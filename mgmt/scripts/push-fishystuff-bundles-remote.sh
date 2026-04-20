@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if (( $# < 3 )) || (( $# % 2 == 0 )); then
-	echo "usage: push-fishystuff-bundles-remote.sh SSH_TARGET BUNDLE_PATH GCROOT_PATH [BUNDLE_PATH GCROOT_PATH ...]" >&2
+if (( $# < 2 )); then
+	echo "usage: push-fishystuff-bundles-remote.sh SSH_TARGET BUNDLE_PATH [BUNDLE_PATH ...]" >&2
 	exit 1
 fi
 
@@ -34,15 +34,13 @@ if [[ -n "${NIX_REMOTE_PROGRAM_PATH:-}" ]]; then
 fi
 
 bundle_paths=()
-remote_args=()
 substitute_roots=()
 realise_inputs=()
 declare -A seen_substitute=()
 declare -A seen_realise=()
 while (( $# > 0 )); do
 	bundle_path="${1:?missing bundle path}"
-	gcroot_path="${2:?missing gcroot path}"
-	shift 2
+	shift
 
 	bundle_path="$(readlink -f "$bundle_path")"
 	if [[ ! -f "${bundle_path}/bundle.json" ]]; then
@@ -75,7 +73,6 @@ while (( $# > 0 )); do
 	fi
 
 	bundle_paths+=("$bundle_path")
-	remote_args+=("$bundle_path" "$gcroot_path")
 done
 
 remote_preamble=(
@@ -137,18 +134,3 @@ EOF
 
 echo "[bundle-push] copying ${#bundle_paths[@]} bundle closure(s) to ${ssh_target}"
 nix copy --no-check-sigs --substitute-on-destination --to "$nix_copy_target" "${bundle_paths[@]}"
-
-ssh "${ssh_opts[@]}" "$ssh_target" /bin/bash -s -- "${remote_args[@]}" <<'EOF'
-set -euo pipefail
-
-while (( $# > 0 )); do
-	bundle_path="${1:?missing bundle path}"
-	gcroot_path="${2:?missing gcroot path}"
-	shift 2
-
-	sudo install -d -m 0755 "$(dirname "$gcroot_path")"
-	sudo ln -sfnT "$bundle_path" "$gcroot_path"
-	test -f "$gcroot_path/bundle.json"
-	test -f "$gcroot_path/store-paths"
-done
-EOF
