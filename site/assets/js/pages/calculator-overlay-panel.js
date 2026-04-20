@@ -1,12 +1,13 @@
 (function () {
   const TAG_NAME = "fishy-calculator-overlay-panel";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
+  const LANGUAGE_CHANGE_EVENT = "fishystuff:languagechange";
   const GROUP_OPTIONS = Object.freeze([
-    { slotIdx: 1, label: "Prize" },
-    { slotIdx: 2, label: "Rare" },
-    { slotIdx: 3, label: "High-Quality" },
-    { slotIdx: 4, label: "General" },
-    { slotIdx: 5, label: "Trash" },
+    { slotIdx: 1, key: "prize", grade: "Prize" },
+    { slotIdx: 2, key: "rare", grade: "Rare" },
+    { slotIdx: 3, key: "high_quality", grade: "HighQuality" },
+    { slotIdx: 4, key: "general", grade: "General" },
+    { slotIdx: 5, key: "trash", grade: "Trash" },
   ]);
   const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
@@ -21,6 +22,39 @@
   function trimString(value) {
     const normalized = String(value ?? "").trim();
     return normalized || "";
+  }
+
+  function languageHelper() {
+    const helper = globalThis.window?.__fishystuffLanguage;
+    return helper && typeof helper.current === "function" && typeof helper.t === "function"
+      ? helper
+      : null;
+  }
+
+  function overlayLocale() {
+    const helper = languageHelper();
+    const locale = trimString(
+      helper?.current?.().locale
+      || globalThis.document?.documentElement?.lang
+      || "en-US",
+    ).toLowerCase();
+    if (locale.startsWith("ko")) {
+      return "ko-KR";
+    }
+    if (locale.startsWith("de")) {
+      return "de-DE";
+    }
+    return "en-US";
+  }
+
+  function overlayText(key, vars = {}) {
+    const helper = languageHelper();
+    if (!helper) {
+      return `calculator.overlay.${key}`;
+    }
+    return helper.t(`calculator.overlay.${key}`, vars, {
+      locale: overlayLocale(),
+    });
   }
 
   function escapeHtml(value) {
@@ -103,13 +137,30 @@
     return globalThis.window?.__fishystuffUserOverlays ?? null;
   }
 
+  function groupOption(slotIdx) {
+    return GROUP_OPTIONS.find((option) => option.slotIdx === Number(slotIdx)) || null;
+  }
+
   function groupLabel(slotIdx) {
-    return GROUP_OPTIONS.find((option) => option.slotIdx === Number(slotIdx))?.label || "Unassigned";
+    const option = groupOption(slotIdx);
+    return option ? overlayText(`group.${option.key}`) : overlayText("group.unassigned");
+  }
+
+  function itemGradeOptionsMarkup(selectedGrade) {
+    return [
+      { value: "", label: overlayText("option.auto") },
+      ...GROUP_OPTIONS.map((option) => ({
+        value: option.grade,
+        label: groupLabel(option.slotIdx),
+      })),
+    ].map((option) => `
+      <option value="${escapeHtml(option.value)}"${trimString(selectedGrade) === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>
+    `).join("");
   }
 
   function groupOptionsMarkup(selectedSlotIdx) {
     return GROUP_OPTIONS.map((option) => `
-      <option value="${option.slotIdx}"${Number(selectedSlotIdx) === option.slotIdx ? " selected" : ""}>${escapeHtml(option.label)}</option>
+      <option value="${option.slotIdx}"${Number(selectedSlotIdx) === option.slotIdx ? " selected" : ""}>${escapeHtml(groupLabel(option.slotIdx))}</option>
     `).join("");
   }
 
@@ -135,11 +186,11 @@
     }
     const readerCtor = globalThis.FileReader;
     if (typeof readerCtor !== "function") {
-      throw new Error("Overlay import is unavailable in this browser.");
+      throw new Error(overlayText("error.import_unavailable_browser"));
     }
     return new Promise((resolve, reject) => {
       const reader = new readerCtor();
-      reader.onerror = () => reject(reader.error || new Error("Failed to read overlay JSON."));
+      reader.onerror = () => reject(reader.error || new Error(overlayText("error.read_failed")));
       reader.onload = () => resolve(String(reader.result ?? ""));
       reader.readAsText(file);
     });
@@ -191,7 +242,7 @@
       overlay_added: true,
       slot_idx: Number.parseInt(itemOverlay?.slotIdx, 10) || 4,
       group_label: groupLabel(itemOverlay?.slotIdx),
-      label: trimString(itemOverlay?.name) || itemId,
+      label: trimString(itemOverlay?.name) || overlayText("item.fallback_label", { id: itemId }),
       icon_url: globalThis.window?.__fishystuffResolveFishItemIconUrl?.(itemId) || "",
       icon_grade_tone: itemGradeTone(itemOverlay?.grade),
       default_raw_rate_pct: 0,
@@ -264,25 +315,23 @@
     const currentItemMap = buildEditorItemMap(editor);
     for (const [zoneKey, zoneOverlay] of Object.entries(overlay.zones || {})) {
       for (const [slotKey, groupOverlay] of Object.entries(zoneOverlay.groups || {})) {
-        const label = trimString(
-          trimString(zoneKey) === trimString(editor.zone_rgb_key)
-            ? editor.groups.find((row) => String(row.slot_idx) === slotKey)?.label
-            : groupLabel(slotKey),
-        ) || groupLabel(slotKey);
+        const label = groupLabel(slotKey);
         const detailParts = [];
         if (groupOverlay.present === false) {
-          detailParts.push("removed from zone mix");
+          detailParts.push(overlayText("change.detail.removed_from_zone_mix"));
         } else if (groupOverlay.present === true) {
-          detailParts.push("forced into zone mix");
+          detailParts.push(overlayText("change.detail.forced_into_zone_mix"));
         }
         if (normalizeNumber(groupOverlay.rawRatePercent) != null) {
-          detailParts.push(`raw ${percentText(groupOverlay.rawRatePercent)}`);
+          detailParts.push(overlayText("change.detail.raw", {
+            percent: percentText(groupOverlay.rawRatePercent),
+          }));
         }
         entries.push({
           key: `group:${zoneKey}:${slotKey}`,
           scope: zoneLabelForKey(zoneKey, editor),
-          label: `${label} group`,
-          detail: detailParts.join(" · ") || "customized",
+          label: overlayText("change.group_label", { group: label }),
+          detail: detailParts.join(" · ") || overlayText("change.detail.customized"),
           resetKind: "group",
           zoneKey,
           slotKey,
@@ -293,21 +342,25 @@
         const label = trimString(itemOverlay.name) || trimString(editorRow?.label) || itemId;
         const detailParts = [];
         if (editorRow?.default_present === false && itemOverlay) {
-          detailParts.push("added to zone");
+          detailParts.push(overlayText("change.detail.added_to_zone"));
         } else if (itemOverlay.present === false) {
-          detailParts.push("removed from zone");
+          detailParts.push(overlayText("change.detail.removed_from_zone"));
         }
         if (Number.parseInt(itemOverlay.slotIdx, 10) >= 1) {
-          detailParts.push(`group ${groupLabel(itemOverlay.slotIdx)}`);
+          detailParts.push(overlayText("change.detail.group", {
+            group: groupLabel(itemOverlay.slotIdx),
+          }));
         }
         if (normalizeNumber(itemOverlay.rawRatePercent) != null) {
-          detailParts.push(`raw ${percentText(itemOverlay.rawRatePercent)}`);
+          detailParts.push(overlayText("change.detail.raw", {
+            percent: percentText(itemOverlay.rawRatePercent),
+          }));
         }
         entries.push({
           key: `item:${zoneKey}:${itemId}`,
           scope: zoneLabelForKey(zoneKey, editor),
           label,
-          detail: detailParts.join(" · ") || "customized",
+          detail: detailParts.join(" · ") || overlayText("change.detail.customized"),
           resetKind: "item",
           zoneKey,
           itemId,
@@ -316,14 +369,16 @@
     }
     for (const [itemId, priceOverride] of Object.entries(priceOverrides)) {
       const editorRow = currentItemMap.get(itemId);
-      const label = trimString(editorRow?.label) || `Item ${itemId}`;
+      const label = trimString(editorRow?.label) || overlayText("item.fallback_label", { id: itemId });
       entries.push({
         key: `price:${itemId}`,
-        scope: "Global price",
+        scope: overlayText("change.scope.global_price"),
         label,
         detail: normalizeNumber(priceOverride.basePrice) != null
-          ? `base price ${silverText(priceOverride.basePrice)}`
-          : "customized",
+          ? overlayText("change.detail.base_price", {
+              silver: silverText(priceOverride.basePrice),
+            })
+          : overlayText("change.detail.customized"),
         resetKind: "price",
         itemId,
       });
@@ -358,7 +413,7 @@
   }
 
   function itemRowMarkup(row, state) {
-    const label = trimString(row.label) || `Item ${row.item_id}`;
+    const label = trimString(row.label) || overlayText("item.fallback_label", { id: row.item_id });
     const tone = trimString(row.icon_grade_tone) || "unknown";
     const iconUrl = trimString(row.icon_url);
     const iconMarkup = iconUrl
@@ -371,19 +426,19 @@
             ${iconMarkup}
             <div class="min-w-0">
               <div class="font-medium">${escapeHtml(label)}</div>
-              <div class="text-[11px] text-base-content/55">ID ${escapeHtml(row.item_id)}</div>
+              <div class="text-[11px] text-base-content/55">${escapeHtml(overlayText("item.id", { id: row.item_id }))}</div>
             </div>
           </div>
         </td>
         <td class="align-top text-xs text-base-content/70">
-          <div>${escapeHtml(row.group_label || "Unassigned")}</div>
-          <div>Raw ${escapeHtml(row.default_raw_rate_text || "0%")}</div>
+          <div>${escapeHtml(groupLabel(state.slotIdx || row.slot_idx))}</div>
+          <div>${escapeHtml(overlayText("item.default_raw", { percent: row.default_raw_rate_text || "0%" }))}</div>
           <div>${escapeHtml(row.base_price_text || "0")}</div>
         </td>
         <td class="align-top">
           <div class="flex flex-wrap items-center gap-2">
-            ${changedBadge(state.factChanged, "Facts")}
-            ${changedBadge(state.priceChanged, "Price")}
+            ${changedBadge(state.factChanged, overlayText("badge.facts"))}
+            ${changedBadge(state.priceChanged, overlayText("badge.price"))}
           </div>
           <label class="label cursor-pointer justify-start gap-2 py-1">
             <input
@@ -392,7 +447,7 @@
               data-item-present="${escapeHtml(row.item_id)}"
               ${state.present ? "checked" : ""}
             >
-            <span class="text-xs">Included</span>
+            <span class="text-xs">${escapeHtml(overlayText("item.included"))}</span>
           </label>
           <select class="select select-sm w-full max-w-36" data-item-slot="${escapeHtml(row.item_id)}">
             ${groupOptionsMarkup(state.slotIdx)}
@@ -407,11 +462,11 @@
             data-item-rate="${escapeHtml(row.item_id)}"
             value="${escapeHtml(state.rawRatePercent)}"
           >
-          <div class="mt-1 text-[11px] text-base-content/55">raw %</div>
+          <div class="mt-1 text-[11px] text-base-content/55">${escapeHtml(overlayText("item.raw_percent"))}</div>
         </td>
         <td class="align-top text-xs text-base-content/70">
           <div>${escapeHtml(row.normalized_rate_text || "0%")}</div>
-          <div>normalized</div>
+          <div>${escapeHtml(overlayText("item.normalized"))}</div>
         </td>
         <td class="align-top">
           <input
@@ -422,26 +477,27 @@
             data-item-price="${escapeHtml(row.item_id)}"
             value="${escapeHtml(state.basePrice)}"
           >
-          <div class="mt-1 text-[11px] text-base-content/55">base silver</div>
+          <div class="mt-1 text-[11px] text-base-content/55">${escapeHtml(overlayText("item.base_silver"))}</div>
         </td>
       </tr>
     `;
   }
 
   function groupRowMarkup(row, state) {
+    const groupName = groupLabel(row.slot_idx);
     const currentRawText = percentText(state.rawRatePercent);
     const bonusText = Number(row.bonus_rate_pct) > 0
       ? `+${trimString(row.bonus_rate_text || "")}`
       : trimString(row.bonus_rate_text || "0%");
     return `
       <tr>
-        <td class="font-medium">${escapeHtml(row.label)}</td>
+        <td class="font-medium">${escapeHtml(groupName)}</td>
         <td class="align-top min-w-40">
           ${explainableStatMarkup({
             valueText: trimString(row.default_raw_rate_text || "0%"),
             detailText: row.default_present
-              ? "included in source defaults"
-              : "absent from source defaults",
+              ? overlayText("item.default_included")
+              : overlayText("item.default_absent"),
           })}
         </td>
         <td>
@@ -452,7 +508,7 @@
               data-group-present="${escapeHtml(row.slot_idx)}"
               ${state.present ? "checked" : ""}
             >
-            <span class="text-xs">Included</span>
+            <span class="text-xs">${escapeHtml(overlayText("item.included"))}</span>
           </label>
         </td>
         <td>
@@ -464,12 +520,14 @@
             data-group-rate="${escapeHtml(row.slot_idx)}"
             value="${escapeHtml(state.rawRatePercent)}"
           >
-          <div class="mt-1 text-[11px] text-base-content/55">raw base %</div>
+          <div class="mt-1 text-[11px] text-base-content/55">${escapeHtml(overlayText("group.raw_base_percent"))}</div>
         </td>
         <td class="align-top min-w-40">
           ${explainableStatMarkup({
             valueText: bonusText,
-            detailText: `effective raw ${trimString(row.effective_raw_weight_text || "0%")} before normalization`,
+            detailText: overlayText("group.detail.effective_raw_before_normalization", {
+              percent: trimString(row.effective_raw_weight_text || "0%"),
+            }),
             breakdown: row.bonus_rate_breakdown,
             color: "var(--color-warning)",
           })}
@@ -477,7 +535,10 @@
         <td class="align-top min-w-44">
           ${explainableStatMarkup({
             valueText: trimString(row.normalized_share_text || "0%"),
-            detailText: `raw ${currentRawText} + bonus ${trimString(row.bonus_rate_text || "0%")} before normalization`,
+            detailText: overlayText("group.detail.raw_plus_bonus_before_normalization", {
+              raw: currentRawText,
+              bonus: trimString(row.bonus_rate_text || "0%"),
+            }),
             breakdown: row.normalized_share_breakdown,
             color: "var(--color-info)",
           })}
@@ -492,6 +553,7 @@
       this._rafId = 0;
       this._handleSignalPatch = () => this.scheduleRender();
       this._handleOverlayChange = () => this.scheduleRender();
+      this._handleLanguageChange = () => this.scheduleRender();
       this._handleClick = (event) => this.handleClick(event);
       this._handleChange = (event) => this.handleChange(event);
     }
@@ -504,6 +566,7 @@
         sharedUserOverlays()?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
         this._handleOverlayChange,
       );
+      globalThis.window?.addEventListener?.(LANGUAGE_CHANGE_EVENT, this._handleLanguageChange);
       this.scheduleRender();
     }
 
@@ -515,6 +578,7 @@
         sharedUserOverlays()?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
         this._handleOverlayChange,
       );
+      globalThis.window?.removeEventListener?.(LANGUAGE_CHANGE_EVENT, this._handleLanguageChange);
       if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
         globalThis.cancelAnimationFrame(this._rafId);
       }
@@ -568,48 +632,48 @@
                   data-reset-zone="${escapeHtml(entry.zoneKey || "")}"
                   data-reset-slot="${escapeHtml(entry.slotKey || "")}"
                   data-reset-item="${escapeHtml(entry.itemId || "")}"
-                >Restore</button>
+                >${escapeHtml(overlayText("action.restore"))}</button>
               </div>
             </div>
           `).join("")
-        : '<div class="rounded-box border border-dashed border-base-300 bg-base-200/50 px-3 py-3 text-sm text-base-content/60">No personal overlay changes yet. Changes stay local until you export the JSON and send it to maintainers.</div>';
+        : `<div class="rounded-box border border-dashed border-base-300 bg-base-200/50 px-3 py-3 text-sm text-base-content/60">${escapeHtml(overlayText("section.no_changes"))}</div>`;
 
       this.innerHTML = `
         <div class="fishy-overlay-panel space-y-4">
           <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div class="space-y-1">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Personal Overlay</p>
-              <h3 class="text-lg font-semibold">${escapeHtml(editor.zone_name || "Current zone proposal")}</h3>
-              <p class="max-w-3xl text-sm text-base-content/72">These changes stay in browser storage only. Export the overlay JSON when you want to submit a proposal that can later be turned into a Dolt merge request.</p>
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(overlayText("title"))}</p>
+              <h3 class="text-lg font-semibold">${escapeHtml(editor.zone_name || overlayText("current_zone_proposal"))}</h3>
+              <p class="max-w-3xl text-sm text-base-content/72">${escapeHtml(overlayText("description"))}</p>
             </div>
             <div class="flex flex-wrap gap-2">
               <input type="file" class="hidden" accept=".json,application/json" data-import-file>
-              <button type="button" class="btn btn-soft btn-secondary" data-action="import-json">Import JSON</button>
-              <button type="button" class="btn btn-soft btn-secondary" data-action="export-json">Export JSON</button>
-              <button type="button" class="btn btn-dash btn-warning" data-action="reset-zone">Reset Zone</button>
-              <button type="button" class="btn btn-dash btn-error" data-action="reset-all">Reset All</button>
+              <button type="button" class="btn btn-soft btn-secondary" data-action="import-json">${escapeHtml(overlayText("action.import_json"))}</button>
+              <button type="button" class="btn btn-soft btn-secondary" data-action="export-json">${escapeHtml(overlayText("action.export_json"))}</button>
+              <button type="button" class="btn btn-dash btn-warning" data-action="reset-zone">${escapeHtml(overlayText("action.reset_zone"))}</button>
+              <button type="button" class="btn btn-dash btn-error" data-action="reset-all">${escapeHtml(overlayText("action.reset_all"))}</button>
             </div>
           </div>
 
           <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
             <section class="rounded-box border border-base-300 bg-base-100 p-3">
               <div class="mb-3">
-                <div class="text-sm font-semibold">Zone Groups</div>
-                <div class="text-xs text-base-content/65">Edit raw base group rates only. Bonus and normalized values are read-only calculator outputs.</div>
+                <div class="text-sm font-semibold">${escapeHtml(overlayText("section.zone_groups"))}</div>
+                <div class="text-xs text-base-content/65">${escapeHtml(overlayText("section.zone_groups_help"))}</div>
               </div>
               <div class="mb-3 rounded-box border border-warning/20 bg-warning/8 px-3 py-2 text-xs leading-relaxed text-base-content/72">
-                Normalized share uses effective raw weight, not just the raw input. The calculator adds any accrued group bonus to the raw % first, then normalizes all active groups to 100%. Hover <span class="font-semibold">Bonus</span> or <span class="font-semibold">Normalized</span> to inspect the computed-stat breakdown.
+                ${escapeHtml(overlayText("section.zone_groups_notice"))}
               </div>
               <div class="overflow-x-auto">
                 <table class="table table-sm fishy-overlay-table">
                   <thead>
                     <tr>
-                      <th>Group</th>
-                      <th>Default</th>
-                      <th>Present</th>
-                      <th>Raw %</th>
-                      <th>Bonus</th>
-                      <th>Normalized</th>
+                      <th>${escapeHtml(overlayText("column.group"))}</th>
+                      <th>${escapeHtml(overlayText("column.default"))}</th>
+                      <th>${escapeHtml(overlayText("column.present"))}</th>
+                      <th>${escapeHtml(overlayText("column.raw_percent"))}</th>
+                      <th>${escapeHtml(overlayText("column.bonus"))}</th>
+                      <th>${escapeHtml(overlayText("column.normalized"))}</th>
                     </tr>
                   </thead>
                   <tbody>${groupMarkup}</tbody>
@@ -619,8 +683,12 @@
 
             <section class="rounded-box border border-base-300 bg-base-100 p-3">
               <div class="mb-3">
-                <div class="text-sm font-semibold">Current Changes</div>
-                <div class="text-xs text-base-content/65">${changes.length} active overlay entr${changes.length === 1 ? "y" : "ies"} across zones and prices.</div>
+                <div class="text-sm font-semibold">${escapeHtml(overlayText("section.current_changes"))}</div>
+                <div class="text-xs text-base-content/65">${escapeHtml(
+                  overlayText(changes.length === 1 ? "section.current_changes_count.one" : "section.current_changes_count.other", {
+                    count: changes.length,
+                  }),
+                )}</div>
               </div>
               <div class="space-y-2">${changeMarkup}</div>
             </section>
@@ -628,19 +696,19 @@
 
           <section class="rounded-box border border-base-300 bg-base-100 p-3">
             <div class="mb-3">
-              <div class="text-sm font-semibold">Zone Items</div>
-              <div class="text-xs text-base-content/65">Change zone membership, raw item rates, or local item prices for the current calculator zone. Normalized results stay read-only.</div>
+              <div class="text-sm font-semibold">${escapeHtml(overlayText("section.zone_items"))}</div>
+              <div class="text-xs text-base-content/65">${escapeHtml(overlayText("section.zone_items_help"))}</div>
             </div>
             <div class="overflow-x-auto">
               <table class="table table-sm fishy-overlay-table fishy-overlay-item-table">
                 <thead>
                   <tr>
-                    <th>Item</th>
-                    <th>Default</th>
-                    <th>State</th>
-                    <th>Raw %</th>
-                    <th>Normalized</th>
-                    <th>Base Price</th>
+                    <th>${escapeHtml(overlayText("column.item"))}</th>
+                    <th>${escapeHtml(overlayText("column.default"))}</th>
+                    <th>${escapeHtml(overlayText("column.state"))}</th>
+                    <th>${escapeHtml(overlayText("column.raw_percent"))}</th>
+                    <th>${escapeHtml(overlayText("column.normalized"))}</th>
+                    <th>${escapeHtml(overlayText("column.base_price"))}</th>
                   </tr>
                 </thead>
                 <tbody>${itemMarkup}</tbody>
@@ -650,50 +718,43 @@
 
           <section class="rounded-box border border-base-300 bg-base-100 p-3">
             <div class="mb-3">
-              <div class="text-sm font-semibold">Add Item</div>
-              <div class="text-xs text-base-content/65">Use this for items that are missing from the current zone defaults. Added rows are overlay-only until submitted and merged into the source dataset.</div>
+              <div class="text-sm font-semibold">${escapeHtml(overlayText("section.add_item"))}</div>
+              <div class="text-xs text-base-content/65">${escapeHtml(overlayText("section.add_item_help"))}</div>
             </div>
             <div class="grid gap-3 md:grid-cols-6">
               <label class="fieldset">
-                <span class="fieldset-legend">Item ID</span>
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.item_id"))}</span>
                 <input type="number" min="1" step="1" class="input input-sm w-full" data-add-item-id>
               </label>
               <label class="fieldset md:col-span-2">
-                <span class="fieldset-legend">Label</span>
-                <input type="text" class="input input-sm w-full" data-add-item-name placeholder="Fish or item name">
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.label"))}</span>
+                <input type="text" class="input input-sm w-full" data-add-item-name placeholder="${escapeHtml(overlayText("placeholder.item_name"))}">
               </label>
               <label class="fieldset">
-                <span class="fieldset-legend">Group</span>
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.group"))}</span>
                 <select class="select select-sm w-full" data-add-item-slot>${groupOptionsMarkup(4)}</select>
               </label>
               <label class="fieldset">
-                <span class="fieldset-legend">Raw %</span>
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.raw_percent"))}</span>
                 <input type="number" min="0" step="any" class="input input-sm w-full" data-add-item-rate value="0">
               </label>
               <label class="fieldset">
-                <span class="fieldset-legend">Base Price</span>
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.base_price"))}</span>
                 <input type="number" min="0" step="1" class="input input-sm w-full" data-add-item-price value="0">
               </label>
               <label class="fieldset">
-                <span class="fieldset-legend">Grade</span>
-                <select class="select select-sm w-full" data-add-item-grade>
-                  <option value="">Auto</option>
-                  <option value="Prize">Prize</option>
-                  <option value="Rare">Rare</option>
-                  <option value="HighQuality">High-Quality</option>
-                  <option value="General">General</option>
-                  <option value="Trash">Trash</option>
-                </select>
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.grade"))}</span>
+                <select class="select select-sm w-full" data-add-item-grade>${itemGradeOptionsMarkup("")}</select>
               </label>
               <label class="fieldset">
-                <span class="fieldset-legend">Fish</span>
+                <span class="fieldset-legend">${escapeHtml(overlayText("field.fish"))}</span>
                 <label class="label cursor-pointer justify-start gap-2 rounded-box border border-base-300 bg-base-200 px-3 py-2">
                   <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" data-add-item-is-fish checked>
-                  <span class="text-sm">Is fish</span>
+                  <span class="text-sm">${escapeHtml(overlayText("field.is_fish"))}</span>
                 </label>
               </label>
               <div class="fieldset md:col-span-2 self-end">
-                <button type="button" class="btn btn-primary btn-sm" data-action="add-item">Add Overlay Item</button>
+                <button type="button" class="btn btn-primary btn-sm" data-action="add-item">${escapeHtml(overlayText("action.add_item"))}</button>
               </div>
             </div>
           </section>
@@ -751,16 +812,16 @@
         }
         const shared = sharedUserOverlays();
         if (!shared?.importText) {
-          throw new Error("Overlay import is unavailable.");
+          throw new Error(overlayText("error.import_unavailable"));
         }
         const importedSnapshot = shared.importText(await readTextFile(file));
         replaceCalculatorSignalRoot("overlay", importedSnapshot.overlay || { zones: {} });
         replaceCalculatorSignalRoot("priceOverrides", importedSnapshot.priceOverrides || {});
-        globalThis.window?.__fishystuffToast?.success?.("Overlay JSON imported.");
+        globalThis.window?.__fishystuffToast?.success?.(overlayText("toast.imported"));
         return importedSnapshot;
       } catch (error) {
         globalThis.window?.__fishystuffToast?.error?.(
-          trimString(error?.message) || "Overlay JSON import failed.",
+          trimString(error?.message) || overlayText("toast.import_failed"),
         );
         return null;
       } finally {
@@ -914,7 +975,7 @@
       const grade = trimString(this.querySelector("[data-add-item-grade]")?.value);
       const isFish = this.querySelector("[data-add-item-is-fish]")?.checked !== false;
       if (!Number.isInteger(itemId) || itemId <= 0 || !name) {
-        globalThis.window?.__fishystuffToast?.info?.("Add-item form needs an item ID and label.");
+        globalThis.window?.__fishystuffToast?.info?.(overlayText("toast.add_item_missing"));
         return;
       }
       const zoneOverlay = cloneJson(currentZoneOverlay(zoneKey));
@@ -981,7 +1042,7 @@
         const exported = sharedUserOverlays()?.exportText?.() || "{}";
         const filename = `fishystuff-overlay-${new Date().toISOString().slice(0, 10)}.json`;
         if (downloadText(filename, exported)) {
-          globalThis.window?.__fishystuffToast?.info?.("Overlay JSON downloaded.");
+          globalThis.window?.__fishystuffToast?.info?.(overlayText("toast.downloaded"));
         }
         return;
       }

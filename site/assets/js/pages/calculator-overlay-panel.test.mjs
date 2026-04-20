@@ -3,12 +3,32 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+import { parseFluentMessages } from "../../../scripts/build-i18n.mjs";
+
 const SOURCE = fs.readFileSync(
   new URL("./calculator-overlay-panel.js", import.meta.url),
   "utf8",
 );
+const ENGLISH_MESSAGES = Object.freeze(
+  parseFluentMessages(
+    fs.readFileSync(
+      new URL("../../../i18n/fluent/en-US/calculator.ftl", import.meta.url),
+      "utf8",
+    ),
+  ),
+);
 
-function createContext() {
+function translateMessage(key, vars = {}) {
+  return String(ENGLISH_MESSAGES[key] ?? key).replace(/\{\s*\$([A-Za-z0-9_]+)\s*\}/g, (_match, name) => {
+    return Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : "";
+  });
+}
+
+function overlayMessage(key, vars = {}) {
+  return translateMessage(`calculator.overlay.${key}`, vars);
+}
+
+function createContext(options = {}) {
   const registry = new Map();
   const toastCalls = [];
   const overlayState = {
@@ -150,6 +170,21 @@ function createContext() {
           toastCalls.push({ tone: "error", message });
         },
       },
+      __fishystuffLanguage: {
+        t(key, vars = {}) {
+          if (typeof options.translate === "function") {
+            return options.translate(key, vars);
+          }
+          return translateMessage(key, vars);
+        },
+        current() {
+          return {
+            contentLang: options.contentLang || "en-US",
+            locale: options.locale || "en-US",
+            apiLang: options.apiLang || "en",
+          };
+        },
+      },
       document: null,
       addEventListener() {},
       removeEventListener() {},
@@ -254,5 +289,21 @@ test("overlay panel import replaces live overlay and price roots", async () => {
   assert.deepEqual(env.calculatorSignals.priceOverrides, {
     999: { basePrice: 4567.89 },
   });
-  assert.deepEqual(env.toastCalls, [{ tone: "success", message: "Overlay JSON imported." }]);
+  assert.deepEqual(env.toastCalls, [{ tone: "success", message: overlayMessage("toast.imported") }]);
+});
+
+test("overlay panel render uses the shared language helper for panel copy", () => {
+  const env = createContext({
+    translate(key) {
+      return `T:${key}`;
+    },
+  });
+  const Panel = env.registry.get("fishy-calculator-overlay-panel");
+  const panel = new Panel();
+
+  panel.render();
+
+  assert.match(panel.innerHTML, /T:calculator\.overlay\.title/);
+  assert.match(panel.innerHTML, /T:calculator\.overlay\.section\.zone_groups/);
+  assert.match(panel.innerHTML, /T:calculator\.overlay\.action\.import_json/);
 });
