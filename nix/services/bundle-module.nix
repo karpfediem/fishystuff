@@ -109,6 +109,12 @@ let
         description = "Store path that deployment tooling may need to materialize.";
       };
 
+      drv = mkOption {
+        type = types.nullOr helpers.artifactPathType;
+        default = null;
+        description = "Optional derivation path that can realize this root when target-side builds are allowed.";
+      };
+
       class = mkOption {
         type = types.str;
         default = "workspace-local";

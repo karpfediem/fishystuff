@@ -45,6 +45,7 @@ in
     attrs:
     {
       class = "workspace-local";
+      drv = null;
       acquisition = "push";
       allowBuild = false;
       required = true;

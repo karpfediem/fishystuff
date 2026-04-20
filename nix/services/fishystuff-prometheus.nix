@@ -178,6 +178,7 @@ in
         (helpers.mkMaterializationRoot {
           handle = "pkg/main";
           path = cfg.package;
+          drv = cfg.package.drvPath;
           class = "upstream-fixed-output";
           acquisition = "substitute-or-build";
           allowBuild = true;

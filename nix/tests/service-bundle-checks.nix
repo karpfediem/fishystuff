@@ -47,6 +47,7 @@ let
         jq -e '.bundle_files.mode_verify == "mode-verify.txt"' "$bundle_json" >/dev/null
         jq -e '.materialization.schema_version == 1' "$bundle_json" >/dev/null
         jq -e '.materialization.roots | length > 0' "$bundle_json" >/dev/null
+        jq -e '[.materialization.roots[] | select(.allow_build == true) | .drv_path] | all(. != null)' "$bundle_json" >/dev/null
         jq -e '.closure.materialization_file == "materialization.json"' "$bundle_json" >/dev/null
         jq -e '.closure.mode_substitute_file == "mode-substitute.txt"' "$bundle_json" >/dev/null
         jq -e '.closure.mode_realise_file == "mode-realise.txt"' "$bundle_json" >/dev/null

@@ -122,6 +122,8 @@ let
     root
     // {
       path = toString root.path;
+      drvPath = if root.drv == null then null else toString root.drv;
+      drv_path = if root.drv == null then null else toString root.drv;
       allow_build = root.allowBuild;
     };
 
@@ -193,7 +195,7 @@ pkgs.runCommand "${name}-service-bundle"
     cp ${closureInfo}/store-paths "$out/store-paths"
     jq '.materialization' "$contractPath" > "$out/materialization.json"
     jq -r '.materialization.roots[] | select(.acquisition == "substitute") | .path' "$contractPath" | sort -u > "$out/mode-substitute.txt"
-    jq -r '.materialization.roots[] | select(.acquisition == "substitute-or-build") | .path' "$contractPath" | sort -u > "$out/mode-realise.txt"
+    jq -r '.materialization.roots[] | select(.acquisition == "substitute-or-build") | (.drv_path // .path)' "$contractPath" | sort -u > "$out/mode-realise.txt"
     jq -r '.materialization.roots[] | select(.acquisition == "push") | .path' "$contractPath" | sort -u > "$out/mode-verify.txt"
     jq \
       --arg root "$out" \
