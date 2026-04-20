@@ -177,6 +177,12 @@ just mgmt-resident-kickstart-remote \
   host=beta-nbg1-api-db
 ```
 
+The default resident handoff now builds `mgmt` from
+`/home/carp/code/playground/mgmt-missing-features#minimal`, which keeps the
+remote closure small enough for weak Hetzner VPS targets. Override
+`mgmt_flake=` or `mgmt_package=` if you need a different checkout or package
+output.
+
 Resident graph deploy over SSH:
 
 ```bash

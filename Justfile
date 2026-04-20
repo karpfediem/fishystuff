@@ -141,7 +141,7 @@ mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
   "$mgmt_bin" run lang --module-path "$module_path" --download --only-unify main.mcl
 
 # Copy a locally built mgmt closure to a remote host and install the resident service there.
-mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/mgmt" mgmt_package="default":
+mgmt-resident-kickstart-remote target="mgmt-root" host="mgmt-root" timeout="120" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal":
   #!/usr/bin/env bash
   set -euo pipefail
   target='{{target}}'
