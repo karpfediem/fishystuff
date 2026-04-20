@@ -8,24 +8,23 @@ import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
 
 class api_db_host($st) {
 	$hostname str = $st->hostname || ""
-	$api_bundle_path str = $st->api_bundle_path || ""
-	$api_gcroot_path str = $st->api_gcroot_path || ""
-	$dolt_bundle_path str = $st->dolt_bundle_path || ""
-	$dolt_gcroot_path str = $st->dolt_gcroot_path || ""
-	$edge_bundle_path str = $st->edge_bundle_path || ""
-	$edge_gcroot_path str = $st->edge_gcroot_path || ""
-	$loki_bundle_path str = $st->loki_bundle_path || ""
-	$loki_gcroot_path str = $st->loki_gcroot_path || ""
-	$otel_collector_bundle_path str = $st->otel_collector_bundle_path || ""
-	$otel_collector_gcroot_path str = $st->otel_collector_gcroot_path || ""
-	$vector_bundle_path str = $st->vector_bundle_path || ""
-	$vector_gcroot_path str = $st->vector_gcroot_path || ""
-	$prometheus_bundle_path str = $st->prometheus_bundle_path || ""
-	$prometheus_gcroot_path str = $st->prometheus_gcroot_path || ""
-	$jaeger_bundle_path str = $st->jaeger_bundle_path || ""
-	$jaeger_gcroot_path str = $st->jaeger_gcroot_path || ""
-	$grafana_bundle_path str = $st->grafana_bundle_path || ""
-	$grafana_gcroot_path str = $st->grafana_gcroot_path || ""
+	$manifest struct{
+		cluster str;
+		hostname str;
+		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
+		deployment_environment str;
+		startup_mode str;
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		content_roots struct{site_root_dir str; cdn_root_dir str};
+		services map{str: struct{bundle_path str; gcroot_path str}}
+	} = $st->manifest
+	$services map{str: struct{bundle_path str; gcroot_path str}} = $manifest->services
+	$api_service struct{bundle_path str; gcroot_path str} = $services["api"]
+	$dolt_service struct{bundle_path str; gcroot_path str} = $services["dolt"]
+	$edge_service struct{bundle_path str; gcroot_path str} = $services["edge"]
+	$api_bundle_path str = $api_service->bundle_path || ""
+	$dolt_bundle_path str = $dolt_service->bundle_path || ""
+	$edge_bundle_path str = $edge_service->bundle_path || ""
 	$site_base_url str = $st->site_base_url || "https://beta.fishystuff.fish"
 	$api_base_url str = $st->api_base_url || "https://api.beta.fishystuff.fish"
 	$cdn_base_url str = $st->cdn_base_url || "https://cdn.beta.fishystuff.fish"
@@ -61,8 +60,8 @@ class api_db_host($st) {
 	})
 
 	panic($hostname == "", "resident core host requires hostname")
-	panic($api_bundle_path == "", fmt.printf("host %s requires FISHYSTUFF_API_BUNDLE_PATH", $hostname))
-	panic($dolt_bundle_path == "", fmt.printf("host %s requires FISHYSTUFF_DOLT_BUNDLE_PATH", $hostname))
+	panic($api_bundle_path == "", fmt.printf("host %s requires services.api.bundle_path in resident manifest", $hostname))
+	panic($dolt_bundle_path == "", fmt.printf("host %s requires services.dolt.bundle_path in resident manifest", $hostname))
 
 	file "/var/lib/fishystuff/" {
 		state => "exists",
@@ -131,72 +130,15 @@ class api_db_host($st) {
 		group => "root",
 	}
 
-	include fishystuff_bundle_systemd.unit(struct {
-		bundle_path => $dolt_bundle_path,
-		gcroot_path => $dolt_gcroot_path,
-		startup_mode => $startup_mode,
-	})
-
-	include fishystuff_bundle_systemd.unit(struct {
-		bundle_path => $api_bundle_path,
-		gcroot_path => $api_gcroot_path,
-		startup_mode => $startup_mode,
-	})
-
-	if $edge_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $edge_bundle_path,
-			gcroot_path => $edge_gcroot_path,
-			startup_mode => $startup_mode,
-		})
-	}
-
-	if $loki_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $loki_bundle_path,
-			gcroot_path => $loki_gcroot_path,
-			startup_mode => $startup_mode,
-		})
-	}
-
-	if $otel_collector_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $otel_collector_bundle_path,
-			gcroot_path => $otel_collector_gcroot_path,
-			startup_mode => $startup_mode,
-		})
-	}
-
-	if $vector_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $vector_bundle_path,
-			gcroot_path => $vector_gcroot_path,
-			startup_mode => $startup_mode,
-		})
-	}
-
-	if $prometheus_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $prometheus_bundle_path,
-			gcroot_path => $prometheus_gcroot_path,
-			startup_mode => $startup_mode,
-		})
-	}
-
-	if $jaeger_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $jaeger_bundle_path,
-			gcroot_path => $jaeger_gcroot_path,
-			startup_mode => $startup_mode,
-		})
-	}
-
-	if $grafana_bundle_path != "" {
-		include fishystuff_bundle_systemd.unit(struct {
-			bundle_path => $grafana_bundle_path,
-			gcroot_path => $grafana_gcroot_path,
-			startup_mode => $startup_mode,
-		})
+	forkv $service_name, $service in $services {
+		$service_def struct{bundle_path str; gcroot_path str} = $service
+		if ($service_def->bundle_path || "") != "" {
+			include fishystuff_bundle_systemd.unit(struct {
+				bundle_path => $service_def->bundle_path,
+				gcroot_path => $service_def->gcroot_path || "",
+				startup_mode => $startup_mode,
+			})
+		}
 	}
 
 	File["/run/fishystuff/"] -> File["/run/fishystuff/api/"]

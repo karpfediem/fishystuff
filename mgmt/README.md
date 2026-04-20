@@ -202,6 +202,13 @@ the rendered systemd unit. Host-local mgmt still owns runtime env files,
 service ordering, and mutable state preparation, but it no longer reconstructs
 `ExecStart` or the unit body from `supervision.argv`.
 
+The resident deploy graph is now manifest-driven. The push helpers generate
+`files/resident-manifest.json` inside the temporary deploy graph, `main.mcl`
+loads it via `deploy.readfile(...)`, and the resident core loops the manifest's
+`services` map to activate bundle-backed units. That keeps the manifest in the
+deploy filesystem instead of installing a separate host-local config file or
+expanding one environment variable per service input.
+
 Bundle push behavior:
 
 - each bundle now carries planner-facing `materialization.json` plus

@@ -3,8 +3,18 @@ import "../lib/fishystuff-beta-resident-layout/" as fishystuff_beta_resident_lay
 import "../fishystuff-beta-resident-core/"
 
 class host($st) {
-	$hostname str = $st->hostname || ""
-	$cluster str = $st->cluster || "beta"
+	$manifest struct{
+		cluster str;
+		hostname str;
+		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
+		deployment_environment str;
+		startup_mode str;
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		content_roots struct{site_root_dir str; cdn_root_dir str};
+		services map{str: struct{bundle_path str; gcroot_path str}}
+	} = $st->manifest
+	$hostname str = $manifest->hostname || ""
+	$cluster str = $manifest->cluster || "beta"
 
 	include fishystuff_beta_resident_layout.catalog(struct {
 		cluster => $cluster,
@@ -13,42 +23,25 @@ class host($st) {
 
 	if $host_layout.api_enabled or $host_layout.dolt_enabled {
 		include fishystuff_beta_resident_core.api_db_host(struct {
+			manifest => $manifest,
 			hostname => $hostname,
-			api_bundle_path => $st->api_bundle_path || "",
-			api_gcroot_path => $st->api_gcroot_path || "",
-			dolt_bundle_path => $st->dolt_bundle_path || "",
-			dolt_gcroot_path => $st->dolt_gcroot_path || "",
-			edge_bundle_path => $st->edge_bundle_path || "",
-			edge_gcroot_path => $st->edge_gcroot_path || "",
-			loki_bundle_path => $st->loki_bundle_path || "",
-			loki_gcroot_path => $st->loki_gcroot_path || "",
-			otel_collector_bundle_path => $st->otel_collector_bundle_path || "",
-			otel_collector_gcroot_path => $st->otel_collector_gcroot_path || "",
-			vector_bundle_path => $st->vector_bundle_path || "",
-			vector_gcroot_path => $st->vector_gcroot_path || "",
-			prometheus_bundle_path => $st->prometheus_bundle_path || "",
-			prometheus_gcroot_path => $st->prometheus_gcroot_path || "",
-			jaeger_bundle_path => $st->jaeger_bundle_path || "",
-			jaeger_gcroot_path => $st->jaeger_gcroot_path || "",
-			grafana_bundle_path => $st->grafana_bundle_path || "",
-			grafana_gcroot_path => $st->grafana_gcroot_path || "",
-			site_base_url => $st->site_base_url || $host_layout.site_base_url,
-			api_base_url => $st->api_base_url || $host_layout.api_base_url,
-			cdn_base_url => $st->cdn_base_url || $host_layout.cdn_base_url,
-			telemetry_base_url => $st->telemetry_base_url || $host_layout.telemetry_base_url,
-			deployment_environment => $st->deployment_environment || "beta",
-			startup_mode => $st->startup_mode || "enabled",
-			dolt_data_dir => $st->dolt_data_dir || "/var/lib/fishystuff/dolt",
-			dolt_cfg_dir => $st->dolt_cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
-			dolt_database_name => $st->dolt_database_name || "fishystuff",
-			dolt_remote_url => $st->dolt_remote_url || "fishystuff/fishystuff",
-			dolt_remote_branch => $st->dolt_remote_branch || "main",
-			dolt_clone_depth => $st->dolt_clone_depth || "1",
-			dolt_volume_device => if ($st->dolt_volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $st->dolt_volume_device || "" },
-			dolt_volume_fs_type => $st->dolt_volume_fs_type || "ext4",
-			dolt_port => $st->dolt_port || "3306",
-			site_root_dir => $st->site_root_dir || "/srv/fishystuff/site",
-			cdn_root_dir => $st->cdn_root_dir || "/srv/fishystuff/cdn",
+			site_base_url => $manifest->public_urls->site_base_url || $host_layout.site_base_url,
+			api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
+			cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
+			telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
+			deployment_environment => $manifest->deployment_environment || "beta",
+			startup_mode => $manifest->startup_mode || "enabled",
+			dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
+			dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
+			dolt_database_name => $manifest->dolt->database_name || "fishystuff",
+			dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
+			dolt_remote_branch => $manifest->dolt->remote_branch || "main",
+			dolt_clone_depth => $manifest->dolt->clone_depth || "1",
+			dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
+			dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",
+			dolt_port => $manifest->dolt->port || "3306",
+			site_root_dir => $manifest->content_roots->site_root_dir || "/srv/fishystuff/site",
+			cdn_root_dir => $manifest->content_roots->cdn_root_dir || "/srv/fishystuff/cdn",
 		})
 	}
 

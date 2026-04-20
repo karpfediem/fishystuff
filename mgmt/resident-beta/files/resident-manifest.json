@@ -1,0 +1,65 @@
+{
+  "cluster": "beta",
+  "hostname": "",
+  "public_urls": {
+    "site_base_url": "https://beta.fishystuff.fish",
+    "api_base_url": "https://api.beta.fishystuff.fish",
+    "cdn_base_url": "https://cdn.beta.fishystuff.fish",
+    "telemetry_base_url": "https://telemetry.beta.fishystuff.fish"
+  },
+  "deployment_environment": "beta",
+  "startup_mode": "enabled",
+  "dolt": {
+    "data_dir": "/var/lib/fishystuff/dolt",
+    "cfg_dir": "/var/lib/fishystuff/dolt/.doltcfg",
+    "database_name": "fishystuff",
+    "remote_url": "fishystuff/fishystuff",
+    "remote_branch": "main",
+    "clone_depth": "1",
+    "volume_device": "__auto__",
+    "volume_fs_type": "ext4",
+    "port": "3306"
+  },
+  "content_roots": {
+    "site_root_dir": "/srv/fishystuff/site",
+    "cdn_root_dir": "/srv/fishystuff/cdn"
+  },
+  "services": {
+    "api": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
+    },
+    "dolt": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current"
+    },
+    "edge": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/edge-current"
+    },
+    "loki": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/loki-current"
+    },
+    "otel_collector": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current"
+    },
+    "vector": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/vector-current"
+    },
+    "prometheus": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current"
+    },
+    "jaeger": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current"
+    },
+    "grafana": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current"
+    }
+  }
+}
