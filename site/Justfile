@@ -37,6 +37,7 @@ build-release-no-tailwind:
 # one-off release
 build-release:
     just build-tailwind
+    bun run embed:build
     just build-release-no-tailwind
 
 release: build-release

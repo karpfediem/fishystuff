@@ -3,6 +3,7 @@
   stdenv,
   stdenvNoCC,
   bun,
+  chromium,
   imagemagick,
   nodejs,
   python3Packages,
@@ -75,6 +76,7 @@ stdenvNoCC.mkDerivation {
 
   nativeBuildInputs = [
     bun
+    chromium
     imagemagick
     nodejs
     python3Packages.fonttools
@@ -107,12 +109,12 @@ stdenvNoCC.mkDerivation {
     bun run d3:build
     bun run otel:build
     bun run images:build
-    bun run embed:build
     bun run icons:build
     bun run tailwind:scan
     bun --bun ./node_modules/@tailwindcss/cli/dist/index.mjs \
       -i tailwind.input.css \
       -o assets/css/site.css
+    bun run embed:build
 
     rm -rf .release-out
     mkdir -p .release-out
