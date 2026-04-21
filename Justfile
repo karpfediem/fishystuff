@@ -516,7 +516,7 @@ mgmt-resident-push-full-stack *args:
   tls_dns_provider=""
   tls_dns_env_json="{}"
   tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory"
-  tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]"
+  tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"cdn.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]"
 
   raw_args='{{args}}'
   IFS=" " read -r -a overrides <<< "$raw_args"

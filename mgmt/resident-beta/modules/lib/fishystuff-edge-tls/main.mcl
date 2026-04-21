@@ -3,6 +3,7 @@ import "fmt"
 import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "git:///lib/hetzner-firewall-gate/" as hetzner_firewall_gate
 import "os"
+import "value"
 
 class certificate($st) {
 	$enabled bool = $st->enabled
@@ -82,6 +83,7 @@ class certificate($st) {
 				applyto => $http01_firewall.applyto,
 				labels => $http01_firewall.labels,
 			}) as http01_firewall_gate
+			$http01_firewall_ready struct{value bool; ready bool} = value.get_bool($http01_firewall_gate.firewall_ready_value_name)
 
 			acme:solver:http01 "${solver_name}" {
 				server => $http01_server_name,
@@ -93,7 +95,7 @@ class certificate($st) {
 				domains => $domains,
 				challenge => $challenge,
 				solver => $solver_name,
-				http01_ready => $http01_firewall_gate.ready,
+				http01_ready => $http01_firewall_ready->ready and $http01_firewall_ready->value,
 			}
 
 			Acme:Account["${account_name}"].ready -> Acme:Request["${certificate_name}"].account_ready
