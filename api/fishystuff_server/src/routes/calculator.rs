@@ -1698,7 +1698,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         .collect::<std::collections::HashSet<_>>();
 
     signals.level = signals.level.clamp(0, 5);
-    signals.mastery = signals.mastery.max(0.0);
+    signals.mastery = signals.mastery.clamp(0.0, 3000.0);
     signals.resources = signals.resources.clamp(0.0, 100.0);
     signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
     signals.trade_price_curve = signals.trade_price_curve.max(0.0);
@@ -10097,13 +10097,16 @@ fn render_fish_group_window(
             <div class=\"card-body gap-4 pt-0\">\
                 {}\
                 <div class=\"grid gap-4\">\
-                    <div class=\"grid gap-3 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-start\">\
-                        <fieldset class=\"fieldset\">\
+                    <div class=\"grid grid-cols-2 items-start gap-3\">\
+                        <fieldset class=\"fieldset min-w-0\">\
                             <legend class=\"fieldset-legend\">{}</legend>\
-                            <input type=\"number\" min=\"0\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
+                            <div class=\"grid gap-2\">\
+                                <input type=\"number\" min=\"0\" max=\"3000\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
+                                <input type=\"range\" min=\"0\" max=\"3000\" step=\"50\" class=\"range-xs range-secondary w-full\" data-bind=\"mastery\" value=\"{}\">\
+                            </div>\
                             <span class=\"label text-xs\">{}</span>\
                         </fieldset>\
-                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.raw_prize_rate || ''\" data-fishy-stat-color=\"var(--color-warning)\">\
+                        <div class=\"min-w-0 rounded-box border border-base-300 bg-base-100 px-3 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.raw_prize_rate || ''\" data-fishy-stat-color=\"var(--color-warning)\">\
                             <div class=\"text-sm font-medium\">{}</div>\
                             <div class=\"mt-1 text-xs text-base-content/70\">{} <span data-text=\"$_calc.raw_prize_mastery_text\">{}</span> {}</div>\
                             <div class=\"mt-3 text-2xl font-semibold\" data-text=\"$_calc.raw_prize_rate_text\">{}</div>\
@@ -10155,6 +10158,7 @@ fn render_fish_group_window(
             data.lang,
             "calculator.server.field.mastery",
         )),
+        escape_html(&trim_float(mastery)),
         escape_html(&trim_float(mastery)),
         escape_html(&calculator_route_text(
             data.lang,
@@ -12093,8 +12097,14 @@ mod tests {
             text.contains("data-computed:buff=\"Array.isArray($_buff_slots) ? $_buff_slots : []\"")
         );
         assert!(text.contains("Search foods by name or effect"));
-        assert!(text.contains("data-bind=\"mastery\""));
-        assert!(text.contains("step=\"50\""));
+        assert!(text.contains("class=\"grid grid-cols-2 items-start gap-3\""));
+        assert_eq!(text.matches("data-bind=\"mastery\"").count(), 2);
+        assert!(text.contains(
+            "type=\"number\" min=\"0\" max=\"3000\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\""
+        ));
+        assert!(text.contains(
+            "type=\"range\" min=\"0\" max=\"3000\" step=\"50\" class=\"range-xs range-secondary w-full\" data-bind=\"mastery\""
+        ));
         assert!(text.contains("Raw Prize Catch Rate"));
         assert!(text.contains("data-text=\"$_calc.raw_prize_mastery_text\""));
         assert!(text.contains("data-text=\"$_calc.raw_prize_rate_text\""));
@@ -12917,6 +12927,32 @@ mod tests {
 
         assert!(parsed.food.is_empty());
         assert!(parsed.buff.is_empty());
+    }
+
+    #[test]
+    fn normalize_signals_clamps_mastery_to_slider_range() {
+        let mut parsed = parse_calculator_signals_value(
+            serde_json::json!({
+                "mastery": 3200
+            }),
+            &CalculatorSignals::default(),
+            &RequestId("req-test".to_string()),
+        )
+        .expect("mastery should parse");
+
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: Vec::new(),
+        };
+
+        normalize_signals(&mut parsed, &data);
+
+        assert_eq!(parsed.mastery, 3000.0);
     }
 
     #[test]
