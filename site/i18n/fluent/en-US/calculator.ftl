@@ -678,6 +678,13 @@ calculator.server.zone_loot_summary.note.unavailable.overlay = Expected zone loo
 calculator.server.zone_loot_summary.note.unavailable.default = Expected zone loot data is unavailable for this zone.
 calculator.server.zone_loot_summary.profile.overlay = Personal overlay proposal
 calculator.server.zone_loot_summary.profile.default = Calculator defaults
+calculator.server.zone_loot_summary.title = Zone catch profile groups
+calculator.server.zone_loot.method.fishing = Fishing
+calculator.server.zone_loot.method.harpoon = Harpoon
+calculator.server.zone_loot.method_note.fishing = Rod-based zone groups and in-group species rates.
+calculator.server.zone_loot.method_note.harpoon = Harpoon-only zone groups and in-group species rates.
+calculator.server.zone_loot.conditions = Conditions
+calculator.server.zone_loot.empty_group = No source-backed species rows are currently assigned to this group.
 
 calculator.server.value.unavailable = Unavailable
 

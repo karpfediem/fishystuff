@@ -353,6 +353,13 @@ calculator.server.zone_loot_summary.note.unavailable.overlay = Erwartete Zonenbe
 calculator.server.zone_loot_summary.note.unavailable.default = Erwartete Zonenbeutedaten sind für diese Zone nicht verfügbar.
 calculator.server.zone_loot_summary.profile.overlay = Persönlicher Overlay-Vorschlag
 calculator.server.zone_loot_summary.profile.default = Rechner-Standardwerte
+calculator.server.zone_loot_summary.title = Zonenfangprofil-Gruppen
+calculator.server.zone_loot.method.fishing = Fischen
+calculator.server.zone_loot.method.harpoon = Harpune
+calculator.server.zone_loot.method_note.fishing = Rutenbasierte Zonengruppen und Artenraten innerhalb der Gruppe.
+calculator.server.zone_loot.method_note.harpoon = Nur-Harpunen-Zonengruppen und Artenraten innerhalb der Gruppe.
+calculator.server.zone_loot.conditions = Bedingungen
+calculator.server.zone_loot.empty_group = Dieser Gruppe sind derzeit keine quellgestützten Artenzeilen zugeordnet.
 
 calculator.server.value.unavailable = Nicht verfügbar
 

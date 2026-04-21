@@ -9719,6 +9719,214 @@ fn render_loot_chart(lang: CalculatorLocale, chart: &LootChart) -> String {
     )
 }
 
+fn zone_loot_summary_matches_method(methods: &[String], method: &str) -> bool {
+    let methods = zone_loot_catch_methods(methods);
+    match method {
+        "harpoon" => methods.iter().any(|candidate| candidate == "harpoon"),
+        _ => methods.is_empty() || methods.iter().any(|candidate| candidate == "rod"),
+    }
+}
+
+fn zone_loot_summary_group_contains_species(
+    group: &ZoneLootSummaryGroupRow,
+    row: &ZoneLootSummarySpeciesRow,
+) -> bool {
+    (group.slot_idx > 0 && row.slot_idx == group.slot_idx)
+        || (!group.label.trim().is_empty() && row.group_label == group.label)
+}
+
+fn calculator_zone_loot_method_label(lang: CalculatorLocale, method: &str) -> String {
+    calculator_route_text(
+        lang,
+        if method == "harpoon" {
+            "calculator.server.zone_loot.method.harpoon"
+        } else {
+            "calculator.server.zone_loot.method.fishing"
+        },
+    )
+}
+
+fn calculator_zone_loot_method_note(lang: CalculatorLocale, method: &str) -> String {
+    calculator_route_text(
+        lang,
+        if method == "harpoon" {
+            "calculator.server.zone_loot.method_note.harpoon"
+        } else {
+            "calculator.server.zone_loot.method_note.fishing"
+        },
+    )
+}
+
+fn calculator_zone_loot_conditions_label(lang: CalculatorLocale) -> String {
+    calculator_route_text(lang, "calculator.server.zone_loot.conditions")
+}
+
+fn render_zone_loot_summary_panel(
+    lang: CalculatorLocale,
+    summary: &ZoneLootSummaryResponse,
+) -> String {
+    let title = calculator_route_text(lang, "calculator.server.zone_loot_summary.title");
+    if !summary.available {
+        return format!(
+            "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">\
+                <div class=\"font-medium\">{}</div>\
+                <div class=\"mt-1\">{}</div>\
+            </div>",
+            escape_html(&title),
+            escape_html(&summary.note),
+        );
+    }
+
+    let methods = ["rod", "harpoon"]
+        .into_iter()
+        .filter(|method| {
+            summary
+                .groups
+                .iter()
+                .any(|group| zone_loot_summary_matches_method(&group.catch_methods, method))
+                || summary
+                    .species_rows
+                    .iter()
+                    .any(|row| zone_loot_summary_matches_method(&row.catch_methods, method))
+        })
+        .collect::<Vec<_>>();
+
+    let profile_markup = methods
+        .into_iter()
+        .map(|method| {
+            let groups = summary
+                .groups
+                .iter()
+                .filter(|group| zone_loot_summary_matches_method(&group.catch_methods, method))
+                .collect::<Vec<_>>();
+            let groups_markup = groups
+                .iter()
+                .map(|group| {
+                    let rows = summary
+                        .species_rows
+                        .iter()
+                        .filter(|row| {
+                            zone_loot_summary_matches_method(&row.catch_methods, method)
+                                && zone_loot_summary_group_contains_species(group, row)
+                        })
+                        .collect::<Vec<_>>();
+                    let rows_markup = if rows.is_empty() {
+                        format!(
+                            "<div class=\"px-2 py-2 text-xs text-base-content/55\">{}</div>",
+                            escape_html(&calculator_route_text(
+                                lang,
+                                "calculator.server.zone_loot.empty_group"
+                            ))
+                        )
+                    } else {
+                        rows.iter()
+                            .map(|row| {
+                                let metric = if !row.drop_rate_text.trim().is_empty() {
+                                    row.drop_rate_text.as_str()
+                                } else {
+                                    row.presence_text.as_deref().unwrap_or("")
+                                };
+                                let subtitle = row
+                                    .presence_text
+                                    .as_deref()
+                                    .filter(|text| {
+                                        !text.trim().is_empty()
+                                            && row.drop_rate_text.trim() != text.trim()
+                                    })
+                                    .unwrap_or("");
+                                format!(
+                                    "<div class=\"rounded-box border border-base-300/80 bg-base-100 px-3 py-2\">\
+                                        <div class=\"flex items-start justify-between gap-3\">\
+                                            <div class=\"min-w-0\">\
+                                                <div class=\"truncate text-sm font-medium\">{}</div>\
+                                                {}\
+                                            </div>\
+                                            <div class=\"shrink-0 text-sm font-semibold\">{}</div>\
+                                        </div>\
+                                    </div>",
+                                    escape_html(&row.label),
+                                    if subtitle.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!(
+                                            "<div class=\"mt-1 text-xs text-base-content/65\">{}</div>",
+                                            escape_html(subtitle)
+                                        )
+                                    },
+                                    escape_html(metric),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("")
+                    };
+                    format!(
+                        "<div class=\"rounded-box border border-base-300 bg-base-200/75 p-3\">\
+                            <div class=\"flex items-start justify-between gap-3\">\
+                                <div class=\"min-w-0\">\
+                                    <div class=\"badge badge-soft badge-sm\">{}</div>\
+                                    {}\
+                                </div>\
+                                <div class=\"shrink-0 text-sm font-semibold\">{}</div>\
+                            </div>\
+                            <div class=\"mt-3 grid gap-2\">{}</div>\
+                        </div>",
+                        escape_html(&group.label),
+                        if group.condition_text.trim().is_empty() {
+                            String::new()
+                        } else {
+                            format!(
+                                "<div class=\"mt-2 text-xs text-base-content/70\" title=\"{}\"><span class=\"font-medium\">{}:</span> {}</div>",
+                                escape_html(
+                                    if group.condition_tooltip.trim().is_empty() {
+                                        &group.condition_text
+                                    } else {
+                                        &group.condition_tooltip
+                                    }
+                                ),
+                                escape_html(&calculator_zone_loot_conditions_label(lang)),
+                                escape_html(&group.condition_text),
+                            )
+                        },
+                        escape_html(&group.drop_rate_text),
+                        rows_markup,
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("");
+            format!(
+                "<div class=\"rounded-box border border-base-300 bg-base-100/75 p-3\">\
+                    <div class=\"flex items-start justify-between gap-3\">\
+                        <div class=\"min-w-0\">\
+                            <div class=\"badge badge-outline badge-sm\">{}</div>\
+                            <div class=\"mt-2 text-xs text-base-content/70\">{}</div>\
+                        </div>\
+                    </div>\
+                    <div class=\"mt-3 grid gap-3\">{}</div>\
+                </div>",
+                escape_html(&calculator_zone_loot_method_label(lang, method)),
+                escape_html(&calculator_zone_loot_method_note(lang, method)),
+                groups_markup,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+
+    format!(
+        "<div id=\"calculator-zone-loot-summary\" class=\"rounded-box border border-base-300 bg-base-200 p-4\">\
+            <div class=\"mb-3\">\
+                <div class=\"text-sm font-medium\">{}</div>\
+                <div class=\"text-xs text-base-content/70\">{}</div>\
+                <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
+            </div>\
+            <div class=\"grid gap-3\">{}</div>\
+        </div>",
+        escape_html(&title),
+        escape_html(&summary.profile_label),
+        escape_html(&summary.note),
+        profile_markup,
+    )
+}
+
 fn render_target_fish_panel(
     data: &CalculatorData,
     signals: &CalculatorSignals,
@@ -9877,6 +10085,13 @@ fn render_fish_group_window(
     target_fish_options: &[SelectOption<'_>],
     target_fish_summary: &TargetFishSummary,
 ) -> String {
+    let zone = data
+        .zones
+        .iter()
+        .find(|zone| zone.rgb_key.0 == signals.zone)
+        .cloned()
+        .unwrap_or_default();
+    let zone_loot_summary = derive_zone_loot_summary_response(signals, data, &zone);
     format!(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100\">\
             <legend class=\"fieldset-legend ml-6 px-2\">{}</legend>\
@@ -9920,7 +10135,7 @@ fn render_fish_group_window(
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">{}</button>\
                         </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\">{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\" class=\"grid gap-4\">{}{}\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'silver'\">{}\
                         </div>\
@@ -9995,6 +10210,7 @@ fn render_fish_group_window(
         escape_html(&calculator_route_text(data.lang, "calculator.server.tab.loot_flow")),
         escape_html(&calculator_route_text(data.lang, "calculator.server.tab.target_fish")),
         render_fish_group_chart(data.lang, fish_group_chart, signals.show_normalized_select_rates),
+        render_zone_loot_summary_panel(data.lang, &zone_loot_summary),
         render_fish_group_silver_chart(data.lang, loot_chart),
         render_loot_chart(data.lang, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
@@ -11475,6 +11691,9 @@ mod tests {
     use fishystuff_api::models::fish::FishListResponse;
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::zone_loot_summary::{
+        ZoneLootSummaryGroupRow, ZoneLootSummaryResponse, ZoneLootSummarySpeciesRow,
+    };
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
@@ -13536,6 +13755,63 @@ mod tests {
             "Mastery 200-699 · Mastery 700-1199 · Mastery 1200+ · Fishing Level Guru 1+"
         );
         assert_eq!(summary.groups[0].catch_methods, vec!["harpoon".to_string()]);
+    }
+
+    #[test]
+    fn render_zone_loot_summary_panel_splits_fishing_and_harpoon_profiles() {
+        let summary = ZoneLootSummaryResponse {
+            available: true,
+            zone_name: Some("Margoria".to_string()),
+            note: "Zone catch profile uses calculator default session settings.".to_string(),
+            profile_label: "Calculator defaults".to_string(),
+            groups: vec![
+                ZoneLootSummaryGroupRow {
+                    slot_idx: 4,
+                    label: "General".to_string(),
+                    drop_rate_text: "62.00%".to_string(),
+                    condition_text: "Fishing Level Guru 1+".to_string(),
+                    catch_methods: vec!["rod".to_string()],
+                    ..ZoneLootSummaryGroupRow::default()
+                },
+                ZoneLootSummaryGroupRow {
+                    slot_idx: 6,
+                    label: "Harpoon".to_string(),
+                    drop_rate_text: "100.00%".to_string(),
+                    condition_text: "Mastery 1200+".to_string(),
+                    catch_methods: vec!["harpoon".to_string()],
+                    ..ZoneLootSummaryGroupRow::default()
+                },
+            ],
+            species_rows: vec![
+                ZoneLootSummarySpeciesRow {
+                    slot_idx: 4,
+                    group_label: "General".to_string(),
+                    label: "Croaker".to_string(),
+                    drop_rate_text: "18.00%".to_string(),
+                    catch_methods: vec!["rod".to_string()],
+                    ..ZoneLootSummarySpeciesRow::default()
+                },
+                ZoneLootSummarySpeciesRow {
+                    slot_idx: 6,
+                    group_label: "Harpoon".to_string(),
+                    label: "Mako Shark".to_string(),
+                    drop_rate_text: "35.00%".to_string(),
+                    catch_methods: vec!["harpoon".to_string()],
+                    ..ZoneLootSummarySpeciesRow::default()
+                },
+            ],
+        };
+
+        let html = super::render_zone_loot_summary_panel(CalculatorLocale::EnUs, &summary);
+
+        assert!(html.contains("id=\"calculator-zone-loot-summary\""));
+        assert!(html.contains(">Zone catch profile groups<"));
+        assert!(html.contains(">Fishing<"));
+        assert!(html.contains(">Harpoon<"));
+        assert!(html.contains("Conditions:</span> Fishing Level Guru 1+"));
+        assert!(html.contains("Conditions:</span> Mastery 1200+"));
+        assert!(html.contains(">Croaker<"));
+        assert!(html.contains(">Mako Shark<"));
     }
 
     #[test]
