@@ -4,11 +4,14 @@ nav.map = Karte
 nav.dex = Dex
 nav.calculator = Rechner
 nav.community = Community
-nav.log = Änderungsprotokoll
-nav.devlog = Devlog
+nav.log = Fanglog
+nav.devlog = Entwicklungslog
 
 footer.about = Über
 footer.legal = Rechtliches
+footer.report_bugs = Fehler melden
+footer.privacy = Datenschutz
+footer.terms_of_service = Nutzungsbedingungen
 
 by = Von
 by_lower = von

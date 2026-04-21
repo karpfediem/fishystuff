@@ -4,11 +4,14 @@ nav.map = Map
 nav.dex = Dex
 nav.calculator = Calculator
 nav.community = Community
-nav.log = Log
-nav.devlog = Devlog
+nav.log = Fishing Log
+nav.devlog = Development Log
 
 footer.about = About
 footer.legal = Legal
+footer.report_bugs = Report Bugs
+footer.privacy = Privacy
+footer.terms_of_service = Terms of Service
 
 by = By
 by_lower = by

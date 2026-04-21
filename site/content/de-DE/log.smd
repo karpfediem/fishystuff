@@ -1,5 +1,5 @@
 ---
-.title = "Log",
+.title = "Fanglog",
 .description = "Erfasse deine Angelhauls und Sessions. Diese Seite ist noch in Arbeit.",
 .date = @date("2026-04-19T00:00:00"),
 .author = "Karpfen",
