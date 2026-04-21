@@ -24,7 +24,8 @@ The legacy `FISHYSTUFF_PUBLIC_OTEL_*` names are still accepted as compatibility
 aliases.
 The repo-managed release build also rewrites `zine.ziggy` through
 `site/scripts/run-zine-release.sh`, so canonical URLs, Open Graph URLs, RSS
-links, and the runtime config all resolve from the same public site base.
+links, `sitemap.xml`, `robots.txt`, and the runtime config all resolve from the
+same public site base.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
