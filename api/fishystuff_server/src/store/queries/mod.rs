@@ -34,11 +34,11 @@ ORDER BY region_group_id, region_id";
 pub const ZONES_SQL: &str =
     "SELECT R, G, B, name, active, confirmed, `index`, bite_time_min, bite_time_max FROM `zones_merged`";
 
-pub const EVENT_ZONE_ASSIGNMENT_COUNT_SQL: &str =
-    "SELECT COUNT(1) FROM event_zone_assignment WHERE layer_revision_id = ?";
+pub const EVENT_ZONE_ASSIGNMENT_EXISTS_SQL: &str =
+    "SELECT 1 FROM event_zone_assignment WHERE layer_revision_id = ? LIMIT 1";
 
-pub const EVENT_ZONE_RING_SUPPORT_COUNT_SQL: &str =
-    "SELECT COUNT(1) FROM event_zone_ring_support WHERE layer_revision_id = ?";
+pub const EVENT_ZONE_RING_SUPPORT_EXISTS_SQL: &str =
+    "SELECT 1 FROM event_zone_ring_support WHERE layer_revision_id = ? LIMIT 1";
 
 pub const EVENTS_SNAPSHOT_BASE_SQL: &str = "
 SELECT

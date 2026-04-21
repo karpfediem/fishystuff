@@ -83,6 +83,13 @@ fn support_status_implies_presence(value: &str) -> bool {
 }
 
 impl DoltMySqlStore {
+    fn fish_best_spots_index_cache_key(ref_id: Option<&str>) -> String {
+        match ref_id {
+            Some(ref_id) => ref_id.to_string(),
+            None => "head".to_string(),
+        }
+    }
+
     fn community_fish_zone_support_cache_key(ref_id: Option<&str>) -> String {
         match ref_id {
             Some(ref_id) => ref_id.to_string(),
@@ -252,18 +259,62 @@ impl DoltMySqlStore {
         Ok(response)
     }
 
-    pub(super) fn query_fish_best_spots(
+    pub(super) fn query_fish_best_spots_index_cached(
         &self,
-        _lang: FishLang,
         ref_id: Option<&str>,
-        item_id: i32,
-    ) -> AppResult<FishBestSpotsResponse> {
+    ) -> AppResult<HashMap<i32, Vec<FishBestSpotEntry>>> {
+        let cache_key = Self::fish_best_spots_index_cache_key(ref_id);
+        loop {
+            if let Ok(cache) = self.fish_best_spots_index_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.fish_best_spots_index_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("fish best spots index inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("fish best spots index inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.query_fish_best_spots_index(ref_id);
+
+        let (inflight_lock, inflight_cvar) = &*self.fish_best_spots_index_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("fish best spots index inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let response = result?;
+
+        if let Ok(mut cache) = self.fish_best_spots_index_cache.lock() {
+            cache.insert(cache_key, response.clone());
+        }
+
+        Ok(response)
+    }
+
+    fn query_fish_best_spots_index(
+        &self,
+        ref_id: Option<&str>,
+    ) -> AppResult<HashMap<i32, Vec<FishBestSpotEntry>>> {
         let zones = self
             .query_zones(ref_id)?
             .into_iter()
             .map(|zone| (zone.rgb_u32, zone))
             .collect::<HashMap<_, _>>();
-        let mut spots = HashMap::<u32, FishBestSpotAccumulator>::new();
+        let mut spots_by_item = HashMap::<i32, HashMap<u32, FishBestSpotAccumulator>>::new();
 
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
@@ -284,37 +335,35 @@ impl DoltMySqlStore {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
 
         let db_query = format!(
-            "SELECT DISTINCT zone_rgb, slot_idx FROM (\
-                 SELECT CAST(fz.zone_rgb AS UNSIGNED) AS zone_rgb, CAST(fz.slot_idx AS SIGNED) AS slot_idx \
-                 FROM flockfish_zone_group_slots{as_of} fz \
-                 JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
-                 JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey0 \
-                 WHERE fz.resolution_status = 'numeric' AND sg.ItemKey = ? \
-                 UNION \
-                 SELECT CAST(fz.zone_rgb AS UNSIGNED) AS zone_rgb, CAST(fz.slot_idx AS SIGNED) AS slot_idx \
-                 FROM flockfish_zone_group_slots{as_of} fz \
-                 JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
-                 JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey1 \
-                 WHERE fz.resolution_status = 'numeric' AND sg.ItemKey = ? \
-                 UNION \
-                 SELECT CAST(fz.zone_rgb AS UNSIGNED) AS zone_rgb, CAST(fz.slot_idx AS SIGNED) AS slot_idx \
-                 FROM flockfish_zone_group_slots{as_of} fz \
-                 JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
-                 JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey2 \
-                 WHERE fz.resolution_status = 'numeric' AND sg.ItemKey = ? \
-                 UNION \
-                 SELECT CAST(fz.zone_rgb AS UNSIGNED) AS zone_rgb, CAST(fz.slot_idx AS SIGNED) AS slot_idx \
-                 FROM flockfish_zone_group_slots{as_of} fz \
-                 JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
-                 JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey3 \
-                 WHERE fz.resolution_status = 'numeric' AND sg.ItemKey = ? \
-             ) matches \
-             ORDER BY zone_rgb, slot_idx"
+            "SELECT DISTINCT CAST(sg.ItemKey AS SIGNED), CAST(fz.zone_rgb AS UNSIGNED), CAST(fz.slot_idx AS SIGNED) \
+             FROM flockfish_zone_group_slots{as_of} fz \
+             JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
+             JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey0 \
+             WHERE fz.resolution_status = 'numeric' \
+             UNION \
+             SELECT DISTINCT CAST(sg.ItemKey AS SIGNED), CAST(fz.zone_rgb AS UNSIGNED), CAST(fz.slot_idx AS SIGNED) \
+             FROM flockfish_zone_group_slots{as_of} fz \
+             JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
+             JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey1 \
+             WHERE fz.resolution_status = 'numeric' \
+             UNION \
+             SELECT DISTINCT CAST(sg.ItemKey AS SIGNED), CAST(fz.zone_rgb AS UNSIGNED), CAST(fz.slot_idx AS SIGNED) \
+             FROM flockfish_zone_group_slots{as_of} fz \
+             JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
+             JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey2 \
+             WHERE fz.resolution_status = 'numeric' \
+             UNION \
+             SELECT DISTINCT CAST(sg.ItemKey AS SIGNED), CAST(fz.zone_rgb AS UNSIGNED), CAST(fz.slot_idx AS SIGNED) \
+             FROM flockfish_zone_group_slots{as_of} fz \
+             JOIN item_main_group_table{as_of} mg ON mg.ItemMainGroupKey = fz.item_main_group_key \
+             JOIN item_sub_group_table{as_of} sg ON sg.ItemSubGroupKey = mg.ItemSubGroupKey3 \
+             WHERE fz.resolution_status = 'numeric'"
         );
-        let db_rows: Vec<(u64, i64)> = conn
-            .exec(db_query, (item_id, item_id, item_id, item_id))
-            .map_err(db_unavailable)?;
-        for (zone_rgb_u32, slot_idx) in db_rows {
+        let db_rows: Vec<(i64, u64, i64)> = conn.query(db_query).map_err(db_unavailable)?;
+        for (item_id, zone_rgb_u32, slot_idx) in db_rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
             let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
                 continue;
             };
@@ -325,7 +374,9 @@ impl DoltMySqlStore {
                 continue;
             };
             let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);
-            let spot = spots
+            let spot = spots_by_item
+                .entry(item_id)
+                .or_default()
                 .entry(zone_rgb_u32)
                 .or_insert_with(|| FishBestSpotAccumulator {
                     zone_rgb,
@@ -337,39 +388,44 @@ impl DoltMySqlStore {
 
         let community_query = format!(
             "SELECT \
+                CAST(item_id AS SIGNED), \
                 CAST(zone_rgb AS UNSIGNED), \
                 COALESCE(source_id, ''), \
                 COALESCE(notes, '') \
-             FROM community_zone_fish_support{as_of} \
-             WHERE item_id = ?"
+             FROM community_zone_fish_support{as_of}"
         );
-        let community_rows: Vec<(u64, String, String)> =
-            match conn.exec(community_query, (item_id,)) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "community_zone_fish_support") => Vec::new(),
-                Err(err) => return Err(db_unavailable(err)),
+        let community_rows: Vec<(i64, u64, String, String)> = match conn.query(community_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "community_zone_fish_support") => Vec::new(),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        for (item_id, zone_rgb_u32, source_id, notes) in community_rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
             };
-        for (zone_rgb_u32, source_id, notes) in community_rows {
             let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
                 continue;
             };
             if !is_community_guess_source_id(&source_id) {
                 continue;
             }
+            let Some(meta) = parse_community_prize_guess_notes(&notes) else {
+                continue;
+            };
+            let Some(group_label) = fish_group_label(meta.slot_idx) else {
+                continue;
+            };
             let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);
-            let spot = spots
+            let spot = spots_by_item
+                .entry(item_id)
+                .or_default()
                 .entry(zone_rgb_u32)
                 .or_insert_with(|| FishBestSpotAccumulator {
                     zone_rgb,
                     zone_name,
                     ..FishBestSpotAccumulator::default()
                 });
-
-            if let Some(meta) = parse_community_prize_guess_notes(&notes) {
-                if let Some(group_label) = fish_group_label(meta.slot_idx) {
-                    spot.community_groups.insert(group_label.to_string());
-                }
-            }
+            spot.community_groups.insert(group_label.to_string());
         }
 
         if let Some(map_version_id) = self.defaults.map_version_id.as_ref() {
@@ -390,45 +446,30 @@ impl DoltMySqlStore {
                     self.resolve_event_zone_support_mode(&layer_revision_id)?
                 {
                     let fish_identities = self.query_fish_identities(ref_id)?;
-                    let event_fish_ids = Self::build_event_fish_identity_map(&fish_identities)
-                        .into_iter()
-                        .filter_map(|(fish_id, (mapped_item_id, _, _))| {
-                            (mapped_item_id == item_id).then_some(fish_id)
-                        })
-                        .chain(std::iter::once(item_id))
-                        .collect::<BTreeSet<_>>()
-                        .into_iter()
-                        .collect::<Vec<_>>();
-
-                    if !event_fish_ids.is_empty() {
-                        let fish_id_csv = event_fish_ids
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(",");
-                        let ranking_query = match support_mode {
-                            EventZoneSupportMode::Assignment => format!(
-                                "SELECT CAST(z.zone_rgb AS UNSIGNED), COUNT(1) \
-                                 FROM events e \
-                                 JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ? \
-                                 WHERE e.water_ok = 1 \
-                                   AND e.source_kind = ? \
-                                   AND e.fish_id IN ({fish_id_csv}) \
-                                 GROUP BY z.zone_rgb"
-                            ),
-                            EventZoneSupportMode::RingSupport => format!(
-                                "SELECT CAST(ring.zone_rgb AS UNSIGNED), COUNT(DISTINCT e.event_id) \
-                                 FROM events e \
-                                 JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ? \
-                                 WHERE e.water_ok = 1 \
-                                   AND e.source_kind = ? \
-                                   AND e.fish_id IN ({fish_id_csv}) \
-                                 GROUP BY ring.zone_rgb"
-                            ),
-                        };
-                        let ranking_rows: Vec<(u64, u64)> = match conn
-                            .exec(ranking_query, (&layer_revision_id, SOURCE_KIND_RANKING))
-                        {
+                    let event_fish_identities =
+                        Self::build_event_fish_identity_map(&fish_identities);
+                    let ranking_query = match support_mode {
+                        EventZoneSupportMode::Assignment => {
+                            "SELECT CAST(e.fish_id AS SIGNED), CAST(z.zone_rgb AS UNSIGNED), COUNT(1) \
+                             FROM events e \
+                             JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ? \
+                             WHERE e.water_ok = 1 \
+                               AND e.source_kind = ? \
+                             GROUP BY e.fish_id, z.zone_rgb"
+                                .to_string()
+                        }
+                        EventZoneSupportMode::RingSupport => {
+                            "SELECT CAST(e.fish_id AS SIGNED), CAST(ring.zone_rgb AS UNSIGNED), COUNT(DISTINCT e.event_id) \
+                             FROM events e \
+                             JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ? \
+                             WHERE e.water_ok = 1 \
+                               AND e.source_kind = ? \
+                             GROUP BY e.fish_id, ring.zone_rgb"
+                                .to_string()
+                        }
+                    };
+                    let ranking_rows: Vec<(i64, u64, u64)> =
+                        match conn.exec(ranking_query, (&layer_revision_id, SOURCE_KIND_RANKING)) {
                             Ok(rows) => rows,
                             Err(err)
                                 if support_mode == EventZoneSupportMode::Assignment
@@ -444,85 +485,115 @@ impl DoltMySqlStore {
                             }
                             Err(err) => return Err(db_unavailable(err)),
                         };
-                        for (zone_rgb_u32, observation_count) in ranking_rows {
-                            let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
-                                continue;
-                            };
-                            let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);
-                            let spot = spots.entry(zone_rgb_u32).or_insert_with(|| {
-                                FishBestSpotAccumulator {
-                                    zone_rgb,
-                                    zone_name,
-                                    ..FishBestSpotAccumulator::default()
-                                }
+                    for (fish_id, zone_rgb_u32, observation_count) in ranking_rows {
+                        let Ok(fish_id) = i32::try_from(fish_id) else {
+                            continue;
+                        };
+                        let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
+                            continue;
+                        };
+                        let item_id = event_fish_identities
+                            .get(&fish_id)
+                            .map(|(item_id, _, _)| *item_id)
+                            .unwrap_or(fish_id);
+                        let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);
+                        let spot = spots_by_item
+                            .entry(item_id)
+                            .or_default()
+                            .entry(zone_rgb_u32)
+                            .or_insert_with(|| FishBestSpotAccumulator {
+                                zone_rgb,
+                                zone_name,
+                                ..FishBestSpotAccumulator::default()
                             });
-                            spot.has_ranking_presence = true;
-                            spot.ranking_observation_count =
-                                u32::try_from(observation_count).unwrap_or(u32::MAX);
-                        }
+                        spot.has_ranking_presence = true;
+                        let observation_count =
+                            u32::try_from(observation_count).unwrap_or(u32::MAX);
+                        spot.ranking_observation_count = spot
+                            .ranking_observation_count
+                            .saturating_add(observation_count);
                     }
                 }
             }
         }
 
-        let mut spots = spots
-            .into_values()
-            .map(|spot| FishBestSpotEntry {
-                zone_rgb: spot.zone_rgb,
-                zone_name: spot.zone_name,
-                db_groups: spot.db_groups.into_iter().collect(),
-                community_groups: spot.community_groups.into_iter().collect(),
-                has_ranking_presence: spot.has_ranking_presence,
-                ranking_observation_count: (spot.ranking_observation_count > 0)
-                    .then_some(spot.ranking_observation_count),
-            })
-            .collect::<Vec<_>>();
+        let mut out = HashMap::new();
+        for (item_id, item_spots) in spots_by_item {
+            let mut spots = item_spots
+                .into_values()
+                .map(|spot| FishBestSpotEntry {
+                    zone_rgb: spot.zone_rgb,
+                    zone_name: spot.zone_name,
+                    db_groups: spot.db_groups.into_iter().collect(),
+                    community_groups: spot.community_groups.into_iter().collect(),
+                    has_ranking_presence: spot.has_ranking_presence,
+                    ranking_observation_count: (spot.ranking_observation_count > 0)
+                        .then_some(spot.ranking_observation_count),
+                })
+                .collect::<Vec<_>>();
 
-        spots.sort_by(|left, right| {
-            let left_tier = if !left.db_groups.is_empty() {
-                0
-            } else if !left.community_groups.is_empty() {
-                1
-            } else {
-                2
-            };
-            let right_tier = if !right.db_groups.is_empty() {
-                0
-            } else if !right.community_groups.is_empty() {
-                1
-            } else {
-                2
-            };
-            let left_group_rank = left
-                .db_groups
-                .iter()
-                .chain(left.community_groups.iter())
-                .map(|group| fish_group_rank(group))
-                .min()
-                .unwrap_or(u8::MAX);
-            let right_group_rank = right
-                .db_groups
-                .iter()
-                .chain(right.community_groups.iter())
-                .map(|group| fish_group_rank(group))
-                .min()
-                .unwrap_or(u8::MAX);
-            left_tier
-                .cmp(&right_tier)
-                .then_with(|| left_group_rank.cmp(&right_group_rank))
-                .then_with(|| {
-                    right
-                        .ranking_observation_count
-                        .unwrap_or(0)
-                        .cmp(&left.ranking_observation_count.unwrap_or(0))
-                })
-                .then_with(|| {
-                    left.zone_name
-                        .to_lowercase()
-                        .cmp(&right.zone_name.to_lowercase())
-                })
-                .then_with(|| left.zone_rgb.cmp(&right.zone_rgb))
-        });
+            spots.sort_by(|left, right| {
+                let left_tier = if !left.db_groups.is_empty() {
+                    0
+                } else if !left.community_groups.is_empty() {
+                    1
+                } else {
+                    2
+                };
+                let right_tier = if !right.db_groups.is_empty() {
+                    0
+                } else if !right.community_groups.is_empty() {
+                    1
+                } else {
+                    2
+                };
+                let left_group_rank = left
+                    .db_groups
+                    .iter()
+                    .chain(left.community_groups.iter())
+                    .map(|group| fish_group_rank(group))
+                    .min()
+                    .unwrap_or(u8::MAX);
+                let right_group_rank = right
+                    .db_groups
+                    .iter()
+                    .chain(right.community_groups.iter())
+                    .map(|group| fish_group_rank(group))
+                    .min()
+                    .unwrap_or(u8::MAX);
+                left_tier
+                    .cmp(&right_tier)
+                    .then_with(|| left_group_rank.cmp(&right_group_rank))
+                    .then_with(|| {
+                        right
+                            .ranking_observation_count
+                            .unwrap_or(0)
+                            .cmp(&left.ranking_observation_count.unwrap_or(0))
+                    })
+                    .then_with(|| {
+                        left.zone_name
+                            .to_lowercase()
+                            .cmp(&right.zone_name.to_lowercase())
+                    })
+                    .then_with(|| left.zone_rgb.cmp(&right.zone_rgb))
+            });
+            out.insert(item_id, spots);
+        }
+
+        Ok(out)
+    }
+
+    pub(super) fn query_fish_best_spots(
+        &self,
+        _lang: FishLang,
+        ref_id: Option<&str>,
+        item_id: i32,
+    ) -> AppResult<FishBestSpotsResponse> {
+        let spots = self
+            .query_fish_best_spots_index_cached(ref_id)?
+            .get(&item_id)
+            .cloned()
+            .unwrap_or_default();
 
         Ok(FishBestSpotsResponse {
             revision: self

@@ -29,7 +29,8 @@ use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
 };
 use fishystuff_api::models::fish::{
-    CommunityFishZoneSupportResponse, FishBestSpotsResponse, FishEntry, FishListResponse,
+    CommunityFishZoneSupportResponse, FishBestSpotEntry, FishBestSpotsResponse, FishEntry,
+    FishListResponse,
 };
 use fishystuff_api::models::meta::{
     CanonicalMapInfo, MapVersionInfo, MetaDefaults, MetaResponse, PatchInfo,
@@ -93,6 +94,11 @@ const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
 pub struct DoltMySqlStore {
     pool: Pool,
     defaults: MetaDefaults,
+    dolt_revision_cache: Arc<Mutex<HashMap<String, String>>>,
+    layer_revision_id_cache: Arc<Mutex<HashMap<String, String>>>,
+    event_zone_assignment_exists_cache: Arc<Mutex<HashMap<String, bool>>>,
+    event_zone_ring_support_exists_cache: Arc<Mutex<HashMap<String, bool>>>,
+    event_zone_support_mode_cache: Arc<Mutex<HashMap<String, Option<EventZoneSupportMode>>>>,
     calculator_catalog_cache: Arc<Mutex<HashMap<String, CalculatorCatalogResponse>>>,
     calculator_catalog_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     calculator_source_data_cache: Arc<Mutex<HashMap<String, CalculatorCatalogSourceData>>>,
@@ -103,6 +109,8 @@ pub struct DoltMySqlStore {
     fish_list_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     fish_best_spots_cache: Arc<Mutex<HashMap<String, FishBestSpotsResponse>>>,
     fish_best_spots_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    fish_best_spots_index_cache: Arc<Mutex<HashMap<String, HashMap<i32, Vec<FishBestSpotEntry>>>>>,
+    fish_best_spots_index_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     community_fish_zone_support_cache:
         Arc<Mutex<HashMap<String, CommunityFishZoneSupportResponse>>>,
     community_fish_zone_support_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
@@ -364,6 +372,11 @@ impl DoltMySqlStore {
         let store = Self {
             pool,
             defaults,
+            dolt_revision_cache: Arc::new(Mutex::new(HashMap::new())),
+            layer_revision_id_cache: Arc::new(Mutex::new(HashMap::new())),
+            event_zone_assignment_exists_cache: Arc::new(Mutex::new(HashMap::new())),
+            event_zone_ring_support_exists_cache: Arc::new(Mutex::new(HashMap::new())),
+            event_zone_support_mode_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_catalog_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_catalog_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             calculator_source_data_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -374,6 +387,8 @@ impl DoltMySqlStore {
             fish_list_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             fish_best_spots_cache: Arc::new(Mutex::new(HashMap::new())),
             fish_best_spots_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            fish_best_spots_index_cache: Arc::new(Mutex::new(HashMap::new())),
+            fish_best_spots_index_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             community_fish_zone_support_cache: Arc::new(Mutex::new(HashMap::new())),
             community_fish_zone_support_inflight: Arc::new((
                 Mutex::new(HashSet::new()),
@@ -551,52 +566,98 @@ impl DoltMySqlStore {
             .map(|value| value.0.trim())
             .filter(|value| !value.is_empty());
         let requested_layer_id = layer_id.map(str::trim).filter(|value| !value.is_empty());
-        if let (Some(map_version_id), Some(layer_id)) = (requested_map_version, requested_layer_id)
-        {
+        let cache_key = format!(
+            "map={}|layer={}|patch={}|at={}|window={}",
+            requested_map_version.unwrap_or(""),
+            requested_layer_id.unwrap_or(""),
+            patch_id
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(""),
+            at_ts_utc.map(|value| value.to_string()).unwrap_or_default(),
+            window_to_ts_utc,
+        );
+        if let Ok(cache) = self.layer_revision_id_cache.lock() {
+            if let Some(cached) = cache.get(&cache_key) {
+                return Ok(cached.clone());
+            }
+        }
+
+        let resolved = (|| -> AppResult<String> {
+            if let (Some(map_version_id), Some(layer_id)) =
+                (requested_map_version, requested_layer_id)
+            {
+                let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+                let row: Option<String> = match conn.exec_first(
+                    "SELECT layer_revision_id \
+                     FROM layer_revisions \
+                     WHERE layer_id = ? AND map_version_id = ? \
+                     ORDER BY created_at DESC \
+                     LIMIT 1",
+                    (layer_id, map_version_id),
+                ) {
+                    Ok(value) => value,
+                    Err(err) if is_missing_table(&err, "layer_revisions") => {
+                        return Err(AppError::unavailable(
+                            "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
+                        ));
+                    }
+                    Err(err) => return Err(db_unavailable(err)),
+                };
+                return row.ok_or_else(|| {
+                    AppError::not_found(format!(
+                        "no layer revision for layer_id={} map_version_id={}",
+                        layer_id, map_version_id
+                    ))
+                });
+            }
+            if let Some(map_version_id) = requested_map_version {
+                return Ok(map_version_id.to_string());
+            }
+
+            let layer_id = requested_layer_id.ok_or_else(|| {
+                AppError::invalid_argument(
+                    "layer_revision_id is required (or provide layer_id with patch_id/at_ts_utc)",
+                )
+            })?;
+
             let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-            let row: Option<String> = match conn.exec_first(
-                "SELECT layer_revision_id \
-                 FROM layer_revisions \
-                 WHERE layer_id = ? AND map_version_id = ? \
-                 ORDER BY created_at DESC \
-                 LIMIT 1",
-                (layer_id, map_version_id),
-            ) {
-                Ok(value) => value,
-                Err(err) if is_missing_table(&err, "layer_revisions") => {
-                    return Err(AppError::unavailable(
-                        "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
-                    ));
-                }
-                Err(err) => return Err(db_unavailable(err)),
-            };
-            if let Some(value) = row {
-                return Ok(value);
+            if let Some(patch_id) = patch_id.map(str::trim).filter(|value| !value.is_empty()) {
+                let row: Option<String> = match conn.exec_first(
+                    "SELECT layer_revision_id \
+                     FROM layer_revisions \
+                     WHERE layer_id = ? AND patch_id = ? \
+                     ORDER BY created_at DESC \
+                     LIMIT 1",
+                    (layer_id, patch_id),
+                ) {
+                    Ok(value) => value,
+                    Err(err) if is_missing_table(&err, "layer_revisions") => {
+                        return Err(AppError::unavailable(
+                            "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
+                        ));
+                    }
+                    Err(err) => return Err(db_unavailable(err)),
+                };
+                return row.ok_or_else(|| {
+                    AppError::not_found(format!(
+                        "no layer revision for layer_id={} patch_id={}",
+                        layer_id, patch_id
+                    ))
+                });
             }
-            return Err(AppError::not_found(format!(
-                "no layer revision for layer_id={} map_version_id={}",
-                layer_id, map_version_id
-            )));
-        }
-        if let Some(map_version_id) = requested_map_version {
-            return Ok(map_version_id.to_string());
-        }
 
-        let layer_id = requested_layer_id.ok_or_else(|| {
-            AppError::invalid_argument(
-                "layer_revision_id is required (or provide layer_id with patch_id/at_ts_utc)",
-            )
-        })?;
-
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        if let Some(patch_id) = patch_id.map(str::trim).filter(|value| !value.is_empty()) {
+            let at_ts = at_ts_utc.unwrap_or(window_to_ts_utc);
+            let at_dt = epoch_to_mysql_datetime(at_ts)?;
             let row: Option<String> = match conn.exec_first(
                 "SELECT layer_revision_id \
                  FROM layer_revisions \
-                 WHERE layer_id = ? AND patch_id = ? \
-                 ORDER BY created_at DESC \
+                 WHERE layer_id = ? \
+                   AND (effective_from_utc IS NULL OR effective_from_utc <= ?) \
+                   AND (effective_to_utc IS NULL OR effective_to_utc > ?) \
+                 ORDER BY effective_from_utc DESC, created_at DESC \
                  LIMIT 1",
-                (layer_id, patch_id),
+                (layer_id, at_dt.as_str(), at_dt.as_str()),
             ) {
                 Ok(value) => value,
                 Err(err) if is_missing_table(&err, "layer_revisions") => {
@@ -606,40 +667,19 @@ impl DoltMySqlStore {
                 }
                 Err(err) => return Err(db_unavailable(err)),
             };
-            return row.ok_or_else(|| {
+            row.ok_or_else(|| {
                 AppError::not_found(format!(
-                    "no layer revision for layer_id={} patch_id={}",
-                    layer_id, patch_id
+                    "no effective layer revision for layer_id={} at_ts_utc={}",
+                    layer_id, at_ts
                 ))
-            });
+            })
+        })()?;
+
+        if let Ok(mut cache) = self.layer_revision_id_cache.lock() {
+            cache.insert(cache_key, resolved.clone());
         }
 
-        let at_ts = at_ts_utc.unwrap_or(window_to_ts_utc);
-        let at_dt = epoch_to_mysql_datetime(at_ts)?;
-        let row: Option<String> = match conn.exec_first(
-            "SELECT layer_revision_id \
-             FROM layer_revisions \
-             WHERE layer_id = ? \
-               AND (effective_from_utc IS NULL OR effective_from_utc <= ?) \
-               AND (effective_to_utc IS NULL OR effective_to_utc > ?) \
-             ORDER BY effective_from_utc DESC, created_at DESC \
-             LIMIT 1",
-            (layer_id, at_dt.as_str(), at_dt.as_str()),
-        ) {
-            Ok(value) => value,
-            Err(err) if is_missing_table(&err, "layer_revisions") => {
-                return Err(AppError::unavailable(
-                    "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
-                ));
-            }
-            Err(err) => return Err(db_unavailable(err)),
-        };
-        row.ok_or_else(|| {
-            AppError::not_found(format!(
-                "no effective layer revision for layer_id={} at_ts_utc={}",
-                layer_id, at_ts
-            ))
-        })
+        Ok(resolved)
     }
 
     fn query_dolt_head_revision(&self) -> Option<String> {
@@ -647,6 +687,13 @@ impl DoltMySqlStore {
     }
 
     fn query_dolt_revision(&self, ref_id: Option<&str>) -> Option<String> {
+        let cache_key = Self::revision_cache_key(ref_id);
+        if let Ok(cache) = self.dolt_revision_cache.lock() {
+            if let Some(cached) = cache.get(&cache_key) {
+                return Some(cached.clone());
+            }
+        }
+
         let ref_id = ref_id.map(str::trim).filter(|value| !value.is_empty());
         if let Some(value) = ref_id {
             validate_dolt_ref(value).ok()?;
@@ -660,7 +707,11 @@ impl DoltMySqlStore {
         if hash.is_empty() {
             None
         } else {
-            Some(format!("dolt:{hash}"))
+            let revision = format!("dolt:{hash}");
+            if let Ok(mut cache) = self.dolt_revision_cache.lock() {
+                cache.insert(cache_key, revision.clone());
+            }
+            Some(revision)
         }
     }
 
@@ -1112,42 +1163,74 @@ impl DoltMySqlStore {
     }
 
     fn has_event_zone_assignment(&self, layer_revision_id: &str) -> AppResult<bool> {
+        if let Ok(cache) = self.event_zone_assignment_exists_cache.lock() {
+            if let Some(cached) = cache.get(layer_revision_id) {
+                return Ok(*cached);
+            }
+        }
+
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let count: Option<i64> = match conn.exec_first(
-            queries::EVENT_ZONE_ASSIGNMENT_COUNT_SQL,
+        let exists: Option<u8> = match conn.exec_first(
+            queries::EVENT_ZONE_ASSIGNMENT_EXISTS_SQL,
             (layer_revision_id,),
         ) {
-            Ok(count) => count,
+            Ok(value) => value,
             Err(err) if is_missing_table(&err, "event_zone_assignment") => return Ok(false),
             Err(err) => return Err(db_unavailable(err)),
         };
-        Ok(count.unwrap_or(0) > 0)
+        let exists = exists.is_some();
+        if let Ok(mut cache) = self.event_zone_assignment_exists_cache.lock() {
+            cache.insert(layer_revision_id.to_string(), exists);
+        }
+        Ok(exists)
     }
 
     fn has_event_zone_ring_support(&self, layer_revision_id: &str) -> AppResult<bool> {
+        if let Ok(cache) = self.event_zone_ring_support_exists_cache.lock() {
+            if let Some(cached) = cache.get(layer_revision_id) {
+                return Ok(*cached);
+            }
+        }
+
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let count: Option<i64> = match conn.exec_first(
-            queries::EVENT_ZONE_RING_SUPPORT_COUNT_SQL,
+        let exists: Option<u8> = match conn.exec_first(
+            queries::EVENT_ZONE_RING_SUPPORT_EXISTS_SQL,
             (layer_revision_id,),
         ) {
-            Ok(count) => count,
+            Ok(value) => value,
             Err(err) if is_missing_table(&err, "event_zone_ring_support") => return Ok(false),
             Err(err) => return Err(db_unavailable(err)),
         };
-        Ok(count.unwrap_or(0) > 0)
+        let exists = exists.is_some();
+        if let Ok(mut cache) = self.event_zone_ring_support_exists_cache.lock() {
+            cache.insert(layer_revision_id.to_string(), exists);
+        }
+        Ok(exists)
     }
 
     fn resolve_event_zone_support_mode(
         &self,
         layer_revision_id: &str,
     ) -> AppResult<Option<EventZoneSupportMode>> {
-        if self.has_event_zone_ring_support(layer_revision_id)? {
-            return Ok(Some(EventZoneSupportMode::RingSupport));
+        if let Ok(cache) = self.event_zone_support_mode_cache.lock() {
+            if let Some(cached) = cache.get(layer_revision_id) {
+                return Ok(*cached);
+            }
         }
-        if self.has_event_zone_assignment(layer_revision_id)? {
-            return Ok(Some(EventZoneSupportMode::Assignment));
+
+        let support_mode = if self.has_event_zone_ring_support(layer_revision_id)? {
+            Some(EventZoneSupportMode::RingSupport)
+        } else if self.has_event_zone_assignment(layer_revision_id)? {
+            Some(EventZoneSupportMode::Assignment)
+        } else {
+            None
+        };
+
+        if let Ok(mut cache) = self.event_zone_support_mode_cache.lock() {
+            cache.insert(layer_revision_id.to_string(), support_mode);
         }
-        Ok(None)
+
+        Ok(support_mode)
     }
 
     fn load_water_tiles(&self, map_version: &str, tile_px: i32) -> AppResult<(i32, i32, Vec<u32>)> {
@@ -1897,9 +1980,22 @@ impl Store for DoltMySqlStore {
     async fn prime_startup_caches(&self) -> AppResult<()> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
+            let _ = this.query_dolt_head_revision();
             this.query_zones(None)?;
             this.query_fish_identities(None)?;
             this.query_community_fish_zone_support_cached(None)?;
+            if let Some(map_version_id) = this.defaults.map_version_id.as_ref() {
+                let layer_revision_id = this.resolve_layer_revision_id(
+                    None,
+                    Some(map_version_id),
+                    Some(ZONE_MASK_LAYER_ID),
+                    None,
+                    None,
+                    0,
+                )?;
+                let _ = this.resolve_event_zone_support_mode(&layer_revision_id)?;
+            }
+            this.query_fish_best_spots_index_cached(None)?;
             for lang in [FishLang::En, FishLang::Ko] {
                 this.query_fish_list_cached(lang, None)?;
                 this.query_calculator_catalog(lang, None)?;
