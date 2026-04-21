@@ -68,6 +68,8 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     assert.match(generatedFallback, /\.canonical = "\/guides\/money\/",/);
     assert.match(generatedFallback, /\.translation_target_path = "site\/content\/de-DE\/guides\/money\/index\.smd",/);
     assert.match(generatedFallback, /\.translation_help_url = "\/de-DE\/community\/",/);
+    assert.match(generatedFallback, /\.translation_source_file_url = "https:\/\/github\.com\/karpfediem\/fishystuff\/blob\/main\/site\/content\/en-US\/guides\/money\/index\.smd",/);
+    assert.match(generatedFallback, /\.translation_create_file_url = "https:\/\/github\.com\/karpfediem\/fishystuff\/new\/main\?filename=site%2Fcontent%2Fde-DE%2Fguides%2Fmoney%2Findex\.smd",/);
     assert.match(generatedFallback, /\[Profile\]\(\/profil\/\)/);
     assert.match(generatedFallback, /\[Community\]\(\/community\/\)/);
     assert.equal(fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "money.png"), "utf8"), "png");

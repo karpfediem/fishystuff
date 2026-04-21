@@ -9,7 +9,8 @@ import { buildShellPageEntries, buildShellPagePathSet, renderShellPageSource } f
 const scriptPath = fileURLToPath(import.meta.url);
 const siteDir = path.resolve(path.dirname(scriptPath), "..");
 const TRANSLATION_HELP_ROUTE_KEY = "/community/";
-const TRANSLATION_REPOSITORY_URL = "https://github.com/karpfediem/fishystuff";
+const GITHUB_REPOSITORY_URL = "https://github.com/karpfediem/fishystuff";
+const GITHUB_DEFAULT_BRANCH = "main";
 
 function parseArgs(argv) {
   const args = {
@@ -171,7 +172,8 @@ function renderFallbackPageSource(source, metadata) {
     { key: ".translation_source_locale", value: metadata.sourceLocale },
     { key: ".translation_target_locale", value: metadata.targetLocale },
     { key: ".translation_help_url", value: metadata.helpUrl },
-    { key: ".translation_repository_url", value: metadata.repositoryUrl },
+    { key: ".translation_source_file_url", value: metadata.sourceFileUrl },
+    { key: ".translation_create_file_url", value: metadata.createFileUrl },
     { key: ".translation_target_path", value: metadata.targetPath },
     { key: ".translation_source_path", value: metadata.sourcePath },
     { key: ".canonical", value: metadata.sourcePath },
@@ -187,6 +189,21 @@ function joinPath(prefix, routeKey) {
     return normalizedRoute;
   }
   return `${normalizedPrefix}${normalizedRoute}`.replace(/\/{2,}/g, "/");
+}
+
+function encodeGitHubPath(filePath) {
+  return String(filePath ?? "")
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function buildGitHubBlobUrl(repositoryUrl, branch, filePath) {
+  return `${repositoryUrl}/blob/${encodeURIComponent(branch)}/${encodeGitHubPath(filePath)}`;
+}
+
+function buildGitHubNewFileUrl(repositoryUrl, branch, filePath) {
+  return `${repositoryUrl}/new/${encodeURIComponent(branch)}?filename=${encodeURIComponent(filePath)}`;
 }
 
 function splitUrlParts(href) {
@@ -334,14 +351,17 @@ export function buildShellContentTree({
       }
       const targetPath = path.join(outRoot, locale, sourceEntry.relativePath);
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      const sourceFilePath = `site/content/${canonicalLanguage}/${sourceEntry.relativePath}`;
+      const targetFilePath = `site/content/${locale}/${sourceEntry.relativePath}`;
       fs.writeFileSync(targetPath, renderFallbackPageSource(sourceEntry.source, {
         sourceLocale: canonicalLanguage,
         targetLocale: locale,
         helpUrl: pageManifest[TRANSLATION_HELP_ROUTE_KEY]?.[locale]
           ?? pageManifest[TRANSLATION_HELP_ROUTE_KEY]?.[canonicalLanguage]
           ?? joinPath(contentLanguage.pathPrefix, TRANSLATION_HELP_ROUTE_KEY),
-        repositoryUrl: TRANSLATION_REPOSITORY_URL,
-        targetPath: `site/content/${locale}/${sourceEntry.relativePath}`,
+        sourceFileUrl: buildGitHubBlobUrl(GITHUB_REPOSITORY_URL, GITHUB_DEFAULT_BRANCH, sourceFilePath),
+        createFileUrl: buildGitHubNewFileUrl(GITHUB_REPOSITORY_URL, GITHUB_DEFAULT_BRANCH, targetFilePath),
+        targetPath: targetFilePath,
         targetPathPrefix: contentLanguage.pathPrefix,
         sourcePath: pageManifest[sourceEntry.routeKey]?.[canonicalLanguage]
           ?? joinPath(sourceLanguage.pathPrefix, sourceEntry.routeKey),

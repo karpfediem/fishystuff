@@ -25,8 +25,8 @@
           <p class="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/70">
             <span :text="$i18n.getOr('translation_notice.help','')"></span>
             <a class="link link-hover link-neutral font-medium" href="$page.custom.getOr('translation_help_url','/community/')" :text="$i18n.getOr('translation_notice.community_link','')"></a>
-            <a class="link link-hover link-neutral font-medium" href="$page.custom.getOr('translation_repository_url','https://github.com/karpfediem/fishystuff')" :text="$i18n.getOr('translation_notice.repository_link','')"></a>
-            <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_source_path')" href="$page.custom.get('translation_source_path')" :text="$i18n.getOr('translation_notice.source_link','')"></a>
+            <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_source_file_url')" href="$page.custom.get('translation_source_file_url')" :text="$i18n.getOr('translation_notice.source_file_link','')"></a>
+            <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_create_file_url')" href="$page.custom.get('translation_create_file_url')" :text="$i18n.getOr('translation_notice.create_file_link','')"></a>
           </p>
           <p class="m-0 break-all text-xs font-mono text-base-content/55" :if="$page.custom.has('translation_target_path')">
             <span :text="$i18n.getOr('translation_notice.target_path_label','')"></span>
