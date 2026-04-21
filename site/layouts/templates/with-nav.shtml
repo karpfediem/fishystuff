@@ -377,14 +377,14 @@
                     <span data-i18n-text="nav.community" :text="$i18n.getOr('nav.community','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
-                   href="$site.page('log').link()">
-                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg>
-                    <span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span>
+                   href="$site.page('devlog').link()">
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-devlog"></use></svg>
+                    <span data-i18n-text="nav.devlog" :text="$i18n.getOr('nav.devlog','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
-                   href="$site.page('report').link()">
-                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-bug-report"></use></svg>
-                    <span data-i18n-text="footer.report_bugs" :text="$i18n.getOr('footer.report_bugs','')"></span>
+                   href="$site.page('feedback').link()">
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-feedback"></use></svg>
+                    <span data-i18n-text="footer.feedback" :text="$i18n.getOr('footer.feedback','')"></span>
                 </a>
             </div>
 

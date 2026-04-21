@@ -31,7 +31,7 @@ const iconSources = {
   "nav-dex": { type: "mingcute", name: "fish-fill" },
   "nav-calculator": { type: "mingcute", name: "chart-line-fill" },
   "nav-community": { type: "mingcute", name: "group-3-fill" },
-  "nav-bug-report": { type: "mingcute", name: "bug-fill" },
+  "nav-feedback": { type: "mingcute", name: "message-1-fill" },
   "nav-log": { type: "mingcute", name: "paper-fill" },
   "nav-devlog": { type: "mingcute", name: "rss-2-fill" },
   "theme-palette": { type: "mingcute", name: "palette-2-fill" },

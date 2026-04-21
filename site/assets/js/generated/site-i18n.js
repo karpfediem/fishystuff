@@ -673,7 +673,7 @@
       "nav.devlog": "Development Log",
       "footer.about": "About",
       "footer.legal": "Legal",
-      "footer.report_bugs": "Report Bugs",
+      "footer.feedback": "Feedback",
       "footer.privacy": "Privacy",
       "footer.terms_of_service": "Terms of Service",
       "by": "By",
@@ -1663,7 +1663,7 @@
       "nav.devlog": "Development Log",
       "footer.about": "About",
       "footer.legal": "Legal",
-      "footer.report_bugs": "Report Bugs",
+      "footer.feedback": "Feedback",
       "footer.privacy": "Privacy",
       "footer.terms_of_service": "Terms of Service",
       "by": "By",
@@ -2653,7 +2653,7 @@
       "nav.devlog": "Entwicklungslog",
       "footer.about": "Über",
       "footer.legal": "Rechtliches",
-      "footer.report_bugs": "Fehler melden",
+      "footer.feedback": "Feedback",
       "footer.privacy": "Datenschutz",
       "footer.terms_of_service": "Nutzungsbedingungen",
       "by": "Von",
@@ -3005,6 +3005,10 @@
       "en-US": "/devlog/",
       "de-DE": "/de-DE/devlog/"
     },
+    "/feedback/": {
+      "en-US": "/feedback/",
+      "de-DE": "/de-DE/feedback/"
+    },
     "/guides/active/harpooning/": {
       "en-US": "/guides/active/harpooning/",
       "de-DE": "/de-DE/guides/active/harpooning/"
@@ -3064,10 +3068,6 @@
     "/privacy/": {
       "en-US": "/privacy/",
       "de-DE": "/de-DE/privacy/"
-    },
-    "/report/": {
-      "en-US": "/report/",
-      "de-DE": "/de-DE/report/"
     },
     "/terms-of-service/": {
       "en-US": "/terms-of-service/",

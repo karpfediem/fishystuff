@@ -9,7 +9,7 @@ nav.devlog = Entwicklungslog
 
 footer.about = Über
 footer.legal = Rechtliches
-footer.report_bugs = Fehler melden
+footer.feedback = Feedback
 footer.privacy = Datenschutz
 footer.terms_of_service = Nutzungsbedingungen
 
