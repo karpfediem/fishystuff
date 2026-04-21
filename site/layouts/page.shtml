@@ -33,18 +33,22 @@
             </header>
 
             <ctx :if="$page.custom.getOr('translation_fallback', false)">
-                <aside class="alert alert-warning not-prose items-start gap-3">
-                    <svg class="fishy-icon mt-0.5 size-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-alert-triangle"></use></svg>
-                    <div class="grid gap-2">
-                        <div class="font-semibold text-base-content" :text="$i18n.getOr('translation_notice.title','')"></div>
+                <aside class="card card-border not-prose bg-base-100 shadow-sm">
+                    <div class="card-body gap-3 p-4 sm:p-5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="badge badge-ghost badge-sm">
+                                <svg class="fishy-icon size-3.5 opacity-65" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-alert-triangle"></use></svg>
+                                <span :text="$i18n.getOr('translation_notice.title','')"></span>
+                            </span>
+                        </div>
                         <p class="m-0 text-sm text-base-content/80" :text="$i18n.getOr('translation_notice.body','')"></p>
-                        <p class="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/80">
+                        <p class="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/70">
                             <span :text="$i18n.getOr('translation_notice.help','')"></span>
-                            <a class="font-semibold underline underline-offset-2" href="$page.custom.getOr('translation_help_url','/community/')" :text="$i18n.getOr('translation_notice.community_link','')"></a>
-                            <a class="font-semibold underline underline-offset-2" href="$page.custom.getOr('translation_repository_url','https://github.com/karpfediem/fishystuff')" :text="$i18n.getOr('translation_notice.repository_link','')"></a>
-                            <a class="font-semibold underline underline-offset-2" :if="$page.custom.has('translation_source_path')" href="$page.custom.get('translation_source_path')" :text="$i18n.getOr('translation_notice.source_link','')"></a>
+                            <a class="link link-hover link-neutral font-medium" href="$page.custom.getOr('translation_help_url','/community/')" :text="$i18n.getOr('translation_notice.community_link','')"></a>
+                            <a class="link link-hover link-neutral font-medium" href="$page.custom.getOr('translation_repository_url','https://github.com/karpfediem/fishystuff')" :text="$i18n.getOr('translation_notice.repository_link','')"></a>
+                            <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_source_path')" href="$page.custom.get('translation_source_path')" :text="$i18n.getOr('translation_notice.source_link','')"></a>
                         </p>
-                        <p class="m-0 text-xs font-mono text-base-content/65" :if="$page.custom.has('translation_target_path')">
+                        <p class="m-0 break-all text-xs font-mono text-base-content/55" :if="$page.custom.has('translation_target_path')">
                             <span :text="$i18n.getOr('translation_notice.target_path_label','')"></span>
                             <span> </span>
                             <span :text="$page.custom.get('translation_target_path')"></span>
