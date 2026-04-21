@@ -4,7 +4,7 @@ nav.map = Map
 nav.dex = Dex
 nav.calculator = Calculator
 nav.community = Community
-nav.log = Fishing Log
+nav.log = Log
 nav.devlog = Development Log
 
 footer.about = About

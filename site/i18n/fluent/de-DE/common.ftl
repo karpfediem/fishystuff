@@ -4,7 +4,7 @@ nav.map = Karte
 nav.dex = Dex
 nav.calculator = Rechner
 nav.community = Community
-nav.log = Fanglog
+nav.log = Log
 nav.devlog = Entwicklungslog
 
 footer.about = Über
