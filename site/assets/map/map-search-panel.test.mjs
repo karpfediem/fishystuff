@@ -188,7 +188,7 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /data-fish-filter-term="favourite"/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-id="235"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.1\.1"/);
-  assert.match(elements.searchSelection.innerHTML, /icons\.svg#fishy-calendar-2-fill/);
+  assert.match(elements.searchSelection.innerHTML, /icons\.svg(?:\?[^"]+)?#fishy-calendar-2-fill/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.1\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-bound="to"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
@@ -257,11 +257,14 @@ test("renderSearchSelection renders an unresolved date term with an inline patch
   assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-dropdown/);
   assert.match(elements.searchSelection.innerHTML, /custom-option-mode="iso-date"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-select-path="root\.0"/);
-  assert.match(elements.searchSelection.innerHTML, /icons\.svg#fishy-calendar-2-fill/);
+  assert.match(elements.searchSelection.innerHTML, /icons\.svg(?:\?[^"]+)?#fishy-calendar-2-fill/);
   assert.match(elements.searchSelection.innerHTML, />Choose date</);
   assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-trigger/);
   assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-panel/);
+  assert.match(elements.searchSelection.innerHTML, /option-density="roomy"/);
+  assert.match(elements.searchSelection.innerHTML, /panel-mode="detached"/);
   assert.match(elements.searchSelection.innerHTML, /panel-anchor-closest="\.fishy-applied-term"/);
+  assert.match(elements.searchSelection.innerHTML, /panel-min-width="panel"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-patch-id=""/);
@@ -374,7 +377,7 @@ test("renderSearchResults renders unresolved date prompt rows without a concrete
   assert.equal(elements.searchResultsShell.hidden, false);
   assert.match(elements.searchResults.innerHTML, /data-patch-bound="to"/);
   assert.match(elements.searchResults.innerHTML, />Before</);
-  assert.match(elements.searchResults.innerHTML, /icons\.svg#fishy-calendar-2-fill/);
+  assert.match(elements.searchResults.innerHTML, /icons\.svg(?:\?[^"]+)?#fishy-calendar-2-fill/);
   assert.doesNotMatch(elements.searchResults.innerHTML, /badge badge-ghost badge-xs/);
   assert.doesNotMatch(elements.searchResults.innerHTML, /data-patch-id=/);
   assert.match(elements.searchResults.innerHTML, /Pick a patch or date to limit samples\./);

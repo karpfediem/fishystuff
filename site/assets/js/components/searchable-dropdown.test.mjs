@@ -187,7 +187,7 @@ async function loadModule() {
     return import(`./searchable-dropdown.js?test=${Date.now()}-${Math.random()}`);
 }
 
-test("FishySearchableDropdown detaches its panel to the document body and restores it on close", async (t) => {
+test("FishySearchableDropdown keeps its panel attached by default", async (t) => {
     t.after(() => {
         globalThis.HTMLElement = originalHTMLElement;
         globalThis.Element = originalElement;
@@ -207,6 +207,55 @@ test("FishySearchableDropdown detaches its panel to the document body and restor
     const searchInput = new FakeElement();
     const results = new FakeElement();
 
+    trigger.setRect({ left: 240, top: 120, width: 156, height: 32 });
+    panel.setRect({ left: 0, top: 0, width: 288, height: 220 });
+    dropdown.setQuery('[data-role="trigger"]', trigger);
+    dropdown.setQuery('[data-role="panel"]', panel);
+    panel.setQuery('[data-role="search-input"]', searchInput);
+    panel.setQuery('[data-role="results"]', results);
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(results);
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.open();
+
+    assert.equal(panel.parentNode, dropdown);
+    assert.equal(panel.style.position, undefined);
+    assert.equal(panel.hidden, false);
+    assert.equal(dropdown.searchInputElement(), searchInput);
+    assert.equal(dropdown.resultsElement(), results);
+
+    dropdown.close();
+
+    assert.equal(panel.parentNode, dropdown);
+    assert.equal(panel.hidden, true);
+});
+
+test("FishySearchableDropdown detaches its panel to the document body in detached mode and restores it on close", async (t) => {
+    t.after(() => {
+        globalThis.HTMLElement = originalHTMLElement;
+        globalThis.Element = originalElement;
+        globalThis.Node = originalNode;
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.customElements = originalCustomElements;
+        globalThis.HTMLInputElement = originalHTMLInputElement;
+        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
+    });
+
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement();
+    const panel = new FakeElement();
+    const searchInput = new FakeElement();
+    const results = new FakeElement();
+
+    dropdown.setAttribute("panel-mode", "detached");
     trigger.setRect({ left: 240, top: 120, width: 156, height: 32 });
     panel.setRect({ left: 0, top: 0, width: 288, height: 220 });
     dropdown.setQuery('[data-role="trigger"]', trigger);
@@ -287,6 +336,7 @@ test("searchable dropdown can anchor its detached panel to a wider ancestor", as
     const searchInput = new FakeElement();
     const results = new FakeElement();
 
+    dropdown.setAttribute("panel-mode", "detached");
     dropdown.setAttribute("panel-anchor-closest", ".fishymap-date-term-content");
     dropdown.setClosest(".fishymap-date-term-content", anchor);
     anchor.setRect({ left: 180, top: 132, width: 420, height: 40 });
@@ -309,4 +359,51 @@ test("searchable dropdown can anchor its detached panel to a wider ancestor", as
     assert.equal(panel.style.left, "180px");
     assert.equal(panel.style.top, "180px");
     assert.equal(panel.style.width, "420px");
+});
+
+test("searchable dropdown can keep its panel minimum width when the anchor is narrower", async (t) => {
+    t.after(() => {
+        globalThis.HTMLElement = originalHTMLElement;
+        globalThis.Element = originalElement;
+        globalThis.Node = originalNode;
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.customElements = originalCustomElements;
+        globalThis.HTMLInputElement = originalHTMLInputElement;
+        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
+    });
+
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const anchor = new FakeElement();
+    const trigger = new FakeElement();
+    const panel = new FakeElement();
+    const searchInput = new FakeElement();
+    const results = new FakeElement();
+
+    dropdown.setAttribute("panel-mode", "detached");
+    dropdown.setAttribute("panel-anchor-closest", ".fishymap-date-term-content");
+    dropdown.setAttribute("panel-min-width", "panel");
+    dropdown.setClosest(".fishymap-date-term-content", anchor);
+    anchor.setRect({ left: 180, top: 132, width: 220, height: 40 });
+    trigger.setRect({ left: 248, top: 136, width: 156, height: 32 });
+    panel.setRect({ left: 0, top: 0, width: 288, height: 220 });
+    dropdown.setQuery('[data-role="trigger"]', trigger);
+    dropdown.setQuery('[data-role="panel"]', panel);
+    panel.setQuery('[data-role="search-input"]', searchInput);
+    panel.setQuery('[data-role="results"]', results);
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(results);
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.open();
+
+    assert.equal(panel.style.left, "180px");
+    assert.equal(panel.style.top, "180px");
+    assert.equal(panel.style.width, "288px");
 });

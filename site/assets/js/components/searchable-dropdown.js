@@ -259,14 +259,17 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         this._cancelClose();
-        const panelRect = this._measurePanelRect();
-        this._detachPanel();
         panel.hidden = false;
         this.style.zIndex = "60";
         this._setExpanded(true);
         this._attachOutsideListener();
-        this._attachViewportListeners();
-        this._positionPanel(panelRect.width);
+        let detachedPanelWidth = 0;
+        if (this._usesDetachedPanel()) {
+            detachedPanelWidth = this._measurePanelRect().width;
+            this._detachPanel();
+            this._attachViewportListeners();
+            this._positionPanel(detachedPanelWidth);
+        }
         input.value = "";
         this._lastSearchKey = "";
 
@@ -274,7 +277,9 @@ export class FishySearchableDropdown extends HTMLElement {
             if (!this.isConnected || !this.isOpen()) {
                 return;
             }
-            this._positionPanel(panelRect.width);
+            if (this._usesDetachedPanel()) {
+                this._positionPanel(detachedPanelWidth);
+            }
             input.focus();
             this.search("");
         });
@@ -291,9 +296,13 @@ export class FishySearchableDropdown extends HTMLElement {
         this.style.zIndex = "";
         this._abortSearch();
         this._detachOutsideListener();
-        this._detachViewportListeners();
+        if (this._usesDetachedPanel()) {
+            this._detachViewportListeners();
+        }
         this._setExpanded(false);
-        this._restorePanel();
+        if (this._usesDetachedPanel()) {
+            this._restorePanel();
+        }
     }
 
     refreshResults() {
@@ -944,6 +953,10 @@ export class FishySearchableDropdown extends HTMLElement {
         return this.triggerElement();
     }
 
+    _usesDetachedPanel() {
+        return getStringAttribute(this, "panel-mode") === "detached";
+    }
+
     _ownsNode(node) {
         if (!(node instanceof Node)) {
             return false;
@@ -961,10 +974,13 @@ export class FishySearchableDropdown extends HTMLElement {
         const viewportWidth = Math.max(window.innerWidth || 0, 320);
         const viewportHeight = Math.max(window.innerHeight || 0, 240);
         const anchorRect = anchor.getBoundingClientRect();
+        const panelWidth = Math.round(measuredWidth || panel.getBoundingClientRect().width || 0);
+        const anchorWidth = Math.round(anchorRect.width || 0);
+        const widthSource = getStringAttribute(this, "panel-min-width");
         const width = Math.max(
             0,
             Math.min(
-                Math.round(anchorRect.width || measuredWidth || panel.getBoundingClientRect().width),
+                widthSource === "panel" ? Math.max(anchorWidth, panelWidth) : (anchorWidth || panelWidth),
                 viewportWidth - 24,
             ),
         );

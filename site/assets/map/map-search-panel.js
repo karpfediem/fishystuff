@@ -82,7 +82,10 @@ function patchDropdownMarkup(term, context, path, boundLabel, patch) {
         value="${context.escapeHtml(patchId)}"
         placeholder="${context.escapeHtml(mapText("search.patch.dropdown_placeholder"))}"
         custom-option-mode="iso-date"
+        option-density="roomy"
+        panel-mode="detached"
         panel-anchor-closest=".fishy-applied-term"
+        panel-min-width="panel"
       >
         <input
           id="${context.escapeHtml(inputId)}"
