@@ -20,6 +20,20 @@ function trimString(value) {
   return normalized || "";
 }
 
+function normalizeCatchMethods(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const methods = [];
+  for (const rawMethod of value) {
+    const normalized = trimString(rawMethod).toLowerCase();
+    if ((normalized === "rod" || normalized === "harpoon") && !methods.includes(normalized)) {
+      methods.push(normalized);
+    }
+  }
+  return methods;
+}
+
 function normalizePointKind(value) {
   const normalized = trimString(value).toLowerCase();
   if (normalized === "bookmark" || normalized === "waypoint" || normalized === "clicked") {
@@ -83,6 +97,9 @@ function buildZoneLootGroups(summary) {
       dropRateText: trimString(group?.dropRateText),
       dropRateSourceKind: trimString(group?.dropRateSourceKind),
       dropRateTooltip: trimString(group?.dropRateTooltip),
+      conditionText: trimString(group?.conditionText),
+      conditionTooltip: trimString(group?.conditionTooltip),
+      catchMethods: normalizeCatchMethods(group?.catchMethods),
       rows: speciesRows.filter((row) => {
         const rowGroupLabel = trimString(row?.groupLabel);
         const groupLabel = trimString(group?.label);
@@ -90,9 +107,85 @@ function buildZoneLootGroups(summary) {
           return true;
         }
         return (Number.parseInt(row?.slotIdx, 10) || 0) === (Number.parseInt(group?.slotIdx, 10) || index + 1);
-      }),
+      }).map((row) => ({
+        ...cloneJson(row),
+        catchMethods: normalizeCatchMethods(row?.catchMethods),
+      })),
     }))
     .filter((group) => group.label);
+}
+
+function zoneLootMethodLabel(method) {
+  return method === "harpoon"
+    ? mapText("info.zone_loot.method.harpoon")
+    : mapText("info.zone_loot.method.fishing");
+}
+
+function zoneLootMethodNote(method) {
+  return method === "harpoon"
+    ? mapText("info.zone_loot.method_note.harpoon")
+    : mapText("info.zone_loot.method_note.fishing");
+}
+
+function rowMatchesZoneLootMethod(row, method) {
+  const methods = normalizeCatchMethods(row?.catchMethods);
+  if (method === "harpoon") {
+    return methods.includes("harpoon");
+  }
+  return methods.length === 0 || methods.includes("rod");
+}
+
+function groupMatchesZoneLootMethod(group, method) {
+  const methods = normalizeCatchMethods(group?.catchMethods);
+  if (method === "harpoon") {
+    return methods.includes("harpoon");
+  }
+  return methods.length === 0 || methods.includes("rod");
+}
+
+function buildZoneLootMethodProfiles(groups) {
+  const profiles = [];
+
+  const fishingGroups = groups
+    .map((group) => ({
+      ...cloneJson(group),
+      rows: (Array.isArray(group?.rows) ? group.rows : []).filter((row) => rowMatchesZoneLootMethod(row, "rod")),
+    }))
+    .filter(
+      (group) =>
+        groupMatchesZoneLootMethod(group, "rod") &&
+        (group.rows.length > 0 || trimString(group?.dropRateText)),
+    );
+  if (fishingGroups.length) {
+    profiles.push({
+      method: "rod",
+      label: zoneLootMethodLabel("rod"),
+      note: zoneLootMethodNote("rod"),
+      groups: fishingGroups,
+    });
+  }
+
+  const harpoonGroups = groups
+    .map((group) => ({
+      ...cloneJson(group),
+      rows: (Array.isArray(group?.rows) ? group.rows : [])
+        .filter((row) => rowMatchesZoneLootMethod(row, "harpoon")),
+    }))
+    .filter(
+      (group) =>
+        groupMatchesZoneLootMethod(group, "harpoon") &&
+        (group.rows.length > 0 || trimString(group?.dropRateText)),
+    );
+  if (harpoonGroups.length) {
+    profiles.push({
+      method: "harpoon",
+      label: zoneLootMethodLabel("harpoon"),
+      note: zoneLootMethodNote("harpoon"),
+      groups: harpoonGroups,
+    });
+  }
+
+  return profiles;
 }
 
 function buildZoneLootSection(summary, status) {
@@ -101,7 +194,8 @@ function buildZoneLootSection(summary, status) {
     return null;
   }
   const groups = buildZoneLootGroups(summary);
-  const available = summary?.available === true && groups.length > 0;
+  const profiles = buildZoneLootMethodProfiles(groups);
+  const available = summary?.available === true && profiles.some((profile) => profile.groups.length > 0);
   const statusText =
     normalizedStatus === "loaded"
       ? mapText("info.zone_loot.status.loaded")
@@ -121,6 +215,7 @@ function buildZoneLootSection(summary, status) {
     summary: trimString(summary?.profileLabel) || mapText("info.zone_loot.summary.default"),
     note: trimString(summary?.note),
     groups,
+    profiles,
     available,
   };
 }

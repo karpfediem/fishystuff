@@ -822,6 +822,35 @@ fishymap-search-panel {
   gap: 0.6rem;
 }
 
+.fishymap-zone-loot-profiles {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.fishymap-zone-loot-profile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fishymap-zone-loot-profile-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.fishymap-zone-loot-profile-note {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--color-base-content) 72%, transparent);
+}
+
 .fishymap-zone-loot-group {
   display: flex;
   min-width: 0;
@@ -832,9 +861,23 @@ fishymap-search-panel {
 .fishymap-zone-loot-group-header {
   display: flex;
   min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.6rem;
+}
+
+.fishymap-zone-loot-group-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fishymap-zone-loot-group-condition {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--color-base-content) 74%, transparent);
 }
 
 .fishymap-zone-loot-group-header > :last-child {

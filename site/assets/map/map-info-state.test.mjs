@@ -76,6 +76,23 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "Source-backed General group share",
+            conditionText: "Zone base rate 80%",
+            conditionTooltip: "Zone base rate: 80%",
+            catchMethods: ["rod"],
+          },
+          {
+            slotIdx: 6,
+            label: "Harpoon",
+            fillColor: "#c7f9f1",
+            strokeColor: "#2dd4bf",
+            textColor: "#083344",
+            dropRateText: "100%",
+            dropRateSourceKind: "database",
+            dropRateTooltip: "Source-backed Harpoon group share",
+            conditionText: "Mastery 200-699 · Mastery 700-1199 · Mastery 1200+ · Fishing Level Guru 1+",
+            conditionTooltip:
+              "Mastery 200-699 | Mastery 700-1199 | Mastery 1200+ | Fishing Level Guru 1+",
+            catchMethods: ["harpoon"],
           },
         ],
         speciesRows: [
@@ -91,6 +108,23 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "DB-backed drop rate",
+            catchMethods: ["rod"],
+          },
+          {
+            slotIdx: 6,
+            groupLabel: "Harpoon",
+            label: "Mako Shark",
+            iconUrl: "/i/mako-shark.png",
+            iconGradeTone: "rare",
+            fillColor: "#c7f9f1",
+            strokeColor: "#2dd4bf",
+            textColor: "#083344",
+            dropRateText: "27.5%",
+            dropRateSourceKind: "database",
+            dropRateTooltip: "Harpoon in-group rate",
+            presenceText: "Community confirmed×1 · General group",
+            presenceTooltip: "Community confirmed×1 · General group 9001 · source community_zone_fish_support",
+            catchMethods: ["harpoon"],
           },
         ],
       },
@@ -111,12 +145,20 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
     "Catch Profile",
   );
   assert.equal(
-    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.groups?.[0]?.rows?.[0]?.label,
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.rows?.[0]?.label,
     "Sea Eel",
   );
   assert.equal(
-    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.groups?.[0]?.dropRateText,
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.dropRateText,
     "80%",
+  );
+  assert.deepEqual(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.map((profile) => profile.method),
+    ["rod", "harpoon"],
+  );
+  assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[1]?.groups?.[0]?.rows?.[0]?.dropRateText,
+    "27.5%",
   );
   assert.deepEqual(
     viewModel.panes.find((pane) => pane.id === "territory")?.sections[0].facts,

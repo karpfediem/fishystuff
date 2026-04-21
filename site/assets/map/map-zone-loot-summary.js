@@ -17,6 +17,20 @@ function trimString(value) {
   return normalized || "";
 }
 
+function normalizeCatchMethods(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const methods = [];
+  for (const rawMethod of value) {
+    const normalized = trimString(rawMethod).toLowerCase();
+    if ((normalized === "rod" || normalized === "harpoon") && !methods.includes(normalized)) {
+      methods.push(normalized);
+    }
+  }
+  return methods;
+}
+
 function rgbTripletString(rgbU32) {
   return [(rgbU32 >> 16) & 0xff, (rgbU32 >> 8) & 0xff, rgbU32 & 0xff].join(",");
 }
@@ -65,6 +79,9 @@ export function normalizeZoneLootSummary(raw) {
             dropRateText: trimString(group.dropRateText),
             dropRateSourceKind: trimString(group.dropRateSourceKind),
             dropRateTooltip: trimString(group.dropRateTooltip),
+            conditionText: trimString(group.conditionText),
+            conditionTooltip: trimString(group.conditionTooltip),
+            catchMethods: normalizeCatchMethods(group.catchMethods),
           }))
       : [],
     speciesRows: Array.isArray(source.speciesRows)
@@ -85,6 +102,7 @@ export function normalizeZoneLootSummary(raw) {
             presenceText: trimString(row.presenceText),
             presenceSourceKind: trimString(row.presenceSourceKind),
             presenceTooltip: trimString(row.presenceTooltip),
+            catchMethods: normalizeCatchMethods(row.catchMethods),
           }))
       : [],
   };

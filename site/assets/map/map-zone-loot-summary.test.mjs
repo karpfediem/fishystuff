@@ -32,6 +32,9 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
         dropRateText: "80%",
         dropRateSourceKind: "database",
         dropRateTooltip: "Source-backed General group share",
+        conditionText: "Zone base rate 80%",
+        conditionTooltip: "Zone base rate: 80%",
+        catchMethods: ["rod"],
       },
     ],
     speciesRows: [
@@ -43,6 +46,7 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
         presenceText: "Community confirmed×2 · General subgroup",
         presenceTooltip:
           "Community confirmed×2 · General subgroup 11054 · source community_presence_sheet",
+        catchMethods: ["rod"],
       },
     ],
   });
@@ -51,12 +55,15 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.equal(summary.groups[0].slotIdx, 4);
   assert.equal(summary.groups[0].dropRateText, "80%");
   assert.equal(summary.groups[0].dropRateSourceKind, "database");
+  assert.equal(summary.groups[0].conditionText, "Zone base rate 80%");
+  assert.deepEqual(summary.groups[0].catchMethods, ["rod"]);
   assert.equal(summary.speciesRows[0].groupLabel, "General");
   assert.equal(summary.speciesRows[0].dropRateText, "80%");
   assert.equal(
     summary.speciesRows[0].presenceText,
     "Community confirmed×2 · General subgroup",
   );
+  assert.deepEqual(summary.speciesRows[0].catchMethods, ["rod"]);
   assert.match(summary.speciesRows[0].presenceTooltip, /community_presence_sheet/);
 });
 

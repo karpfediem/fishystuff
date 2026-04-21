@@ -306,6 +306,7 @@ calculator.server.group.rare = Selten
 calculator.server.group.high_quality = Hochwertig
 calculator.server.group.general = Allgemein
 calculator.server.group.trash = Schrott
+calculator.server.group.harpoon = Harpune
 calculator.server.group.prize_curve_result = Ergebnis der Preisfisch-Kurve
 calculator.server.group.prize_curve_result_detail = Direktes Preisgewicht vor der Normalisierung
 calculator.server.group.zone_base_rate = Zonen-Basisrate

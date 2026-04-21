@@ -202,9 +202,18 @@ function zoneLootRowMarkup(entry) {
 function zoneLootGroupHeaderMarkup(group) {
   const metric = zoneLootMetricTone(group);
   const provenanceRail = provenanceRailMarkup(group);
+  const conditionText = trimString(group?.conditionText);
+  const conditionTooltip = trimString(group?.conditionTooltip);
   return `
     <div class="fishymap-zone-loot-group-header">
-      <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
+      <div class="fishymap-zone-loot-group-heading">
+        <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
+        ${
+          conditionText
+            ? `<div class="fishymap-zone-loot-group-condition" title="${escapeHtml(conditionTooltip || conditionText)}">${escapeHtml(conditionText)}</div>`
+            : ""
+        }
+      </div>
       <div class="fishymap-zone-loot-group-rate">
         <div class="fishymap-zone-loot-metric fishymap-zone-loot-metric--group" style="--fishymap-zone-loot-fill:${escapeHtml(metric.fillColor)};--fishymap-zone-loot-stroke:${escapeHtml(metric.strokeColor)};--fishymap-zone-loot-text:${escapeHtml(metric.textColor)};">
           <div class="fishymap-zone-loot-metric-primary">${escapeHtml(group.dropRateText || "—")}</div>
@@ -215,8 +224,7 @@ function zoneLootGroupHeaderMarkup(group) {
   `;
 }
 
-function zoneLootSectionMarkup(section) {
-  const groups = Array.isArray(section?.groups) ? section.groups : [];
+function zoneLootGroupCollectionMarkup(groups) {
   const groupMarkup = groups.length
     ? groups
         .map((group) => `
@@ -233,6 +241,32 @@ function zoneLootSectionMarkup(section) {
         `)
         .join("")
     : `<div class="px-2 py-3 text-xs text-base-content/60">${escapeHtml(mapText("info.empty_zone"))}</div>`;
+  return `<div class="fishymap-zone-loot-groups">${groupMarkup}</div>`;
+}
+
+function zoneLootProfileMarkup(profile) {
+  const groups = Array.isArray(profile?.groups) ? profile.groups : [];
+  return `
+    <div class="fishymap-zone-loot-profile rounded-box border border-base-300/85 bg-base-100/75 p-3">
+      <div class="fishymap-zone-loot-profile-header">
+        <span class="badge badge-outline badge-sm">${escapeHtml(profile?.label || "")}</span>
+        ${
+          trimString(profile?.note)
+            ? `<span class="fishymap-zone-loot-profile-note">${escapeHtml(profile.note)}</span>`
+            : ""
+        }
+      </div>
+      ${zoneLootGroupCollectionMarkup(groups)}
+    </div>
+  `;
+}
+
+function zoneLootSectionMarkup(section) {
+  const profiles = Array.isArray(section?.profiles) ? section.profiles : [];
+  const groups = Array.isArray(section?.groups) ? section.groups : [];
+  const profileMarkup = profiles.length
+    ? profiles.map((profile) => zoneLootProfileMarkup(profile)).join("")
+    : zoneLootGroupCollectionMarkup(groups);
   return `
     <section class="space-y-2">
       <div class="flex items-center justify-between gap-3">
@@ -245,7 +279,7 @@ function zoneLootSectionMarkup(section) {
           ? `<div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-base-content/80">${escapeHtml(section.note)}</div>`
           : ""
       }
-      <div class="fishymap-zone-loot-groups">${groupMarkup}</div>
+      <div class="fishymap-zone-loot-profiles">${profileMarkup}</div>
     </section>
   `;
 }

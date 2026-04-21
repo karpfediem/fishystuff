@@ -550,6 +550,7 @@ calculator.server.group.rare = Rare
 calculator.server.group.high_quality = High-Quality
 calculator.server.group.general = General
 calculator.server.group.trash = Trash
+calculator.server.group.harpoon = Harpoon
 calculator.server.group.prize_curve_result = Prize curve result
 calculator.server.group.prize_curve_result_detail = Direct prize weight before normalization
 calculator.server.group.zone_base_rate = Zone base rate
