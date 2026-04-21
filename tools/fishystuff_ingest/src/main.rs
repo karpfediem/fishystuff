@@ -25,19 +25,47 @@ use fishystuff_analytics::{
 };
 use fishystuff_core::constants::{DISTANCE_PER_PIXEL, MAP_HEIGHT, MAP_WIDTH, SECTOR_SCALE};
 use fishystuff_core::coord::{pixel_if_in_bounds, world_to_pixel_f, world_to_pixel_round};
-use fishystuff_core::masks::{pack_rgb_u32, WaterSampler, ZoneMask};
+use fishystuff_core::masks::{pack_rgb_u32, WaterSampler, ZoneLookupRows, ZoneMask};
 use fishystuff_core::snap::snap_to_water;
 use fishystuff_core::tile::{pixel_to_tile, tile_dimensions};
 use fishystuff_core::transform::TransformKind;
 use fishystuff_store::sqlite::SqliteStore;
 use fishystuff_store::{Event, WaterTile};
 use fishystuff_zones_meta::{DoltZonesMetaProvider, ZonesMetaProvider};
-use ranking::{parse_datetime_utc, RankingRow};
+use ranking::{open_ranking_reader, parse_datetime_utc, RankingRow};
 
 const SOURCE_KIND_RANKING: u8 = 1;
 const RANKING_RING_RADIUS_WORLD_UNITS: f64 = 500.0;
 const RANKING_RING_SAMPLE_COUNT: usize = 64;
 const ZONE_MASK_LAYER_ID: &str = "zone_mask";
+
+enum ZoneMaskAsset {
+    Png(ZoneMask),
+    Field(ZoneLookupRows),
+}
+
+impl ZoneMaskAsset {
+    fn width(&self) -> u32 {
+        match self {
+            Self::Png(mask) => mask.width(),
+            Self::Field(mask) => u32::from(mask.width()),
+        }
+    }
+
+    fn height(&self) -> u32 {
+        match self {
+            Self::Png(mask) => mask.height(),
+            Self::Field(mask) => u32::from(mask.height()),
+        }
+    }
+
+    fn sample_rgb_u32_clamped(&self, px: i32, py: i32) -> u32 {
+        match self {
+            Self::Png(mask) => mask.sample_rgb_u32_clamped(px, py),
+            Self::Field(mask) => mask.sample_rgb_u32_clamped(px, py),
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "fishystuff_ingest")]
@@ -646,10 +674,10 @@ fn run_ingest(command: IngestCommand, config: Option<&fishystuff_config::Config>
     let mut store = SqliteStore::open(&out_db).context("open db")?;
     let file = File::open(&ranking_csv)
         .with_context(|| format!("open ranking csv: {}", ranking_csv.display()))?;
-    let mut rdr = ReaderBuilder::new().delimiter(b';').from_reader(file);
+    let mut rdr = open_ranking_reader(file).context("open ranking reader")?;
 
     let mut batch: Vec<Event> = Vec::with_capacity(1024);
-    for result in rdr.deserialize::<RankingRow>() {
+    while let Some(result) = rdr.next_row() {
         let row = result.context("read ranking row")?;
         let ts_utc = parse_datetime_utc(&row.date)?;
         let mut px = None;
@@ -683,7 +711,7 @@ fn run_ingest(command: IngestCommand, config: Option<&fishystuff_config::Config>
 
         batch.push(Event {
             ts_utc,
-            fish_id: row.encyclopedia_key,
+            fish_id: row.fish_id,
             world_x: row.x,
             world_z: row.z,
             px,
@@ -716,6 +744,9 @@ fn run_ingest_mysql(
     let map_version = resolve_map_version(map_version, config)?;
     let store = MySqlIngestStore::open(&database_url).context("open mysql store")?;
     let input_sha256 = sha256_file(&ranking_csv)?;
+    let baseline_event_id = store
+        .max_event_id()
+        .context("load max event id before ingest")?;
 
     let ingest_run_id = store
         .start_ingest_run(SOURCE_KIND_RANKING, &map_version, &input_sha256)
@@ -723,13 +754,12 @@ fn run_ingest_mysql(
 
     let file = File::open(&ranking_csv)
         .with_context(|| format!("open ranking csv: {}", ranking_csv.display()))?;
-    let mut rdr = ReaderBuilder::new().delimiter(b';').from_reader(file);
+    let mut rdr = open_ranking_reader(file).context("open ranking reader")?;
 
     let mut rows_seen = 0u64;
-    let mut rows_inserted = 0u64;
     let mut rows_skipped = 0u64;
     let mut batch: Vec<RankingEventRow> = Vec::with_capacity(1024);
-    for result in rdr.deserialize::<RankingRow>() {
+    while let Some(result) = rdr.next_row() {
         rows_seen += 1;
         let row = result.context("read ranking row")?;
         match ranking_row_to_event_row(&row) {
@@ -741,15 +771,18 @@ fn run_ingest_mysql(
         }
 
         if batch.len() >= 1024 {
-            rows_inserted += store.insert_events(&batch).context("insert mysql events")?;
+            store.insert_events(&batch).context("insert mysql events")?;
             batch.clear();
         }
     }
 
     if !batch.is_empty() {
-        rows_inserted += store.insert_events(&batch).context("insert mysql events")?;
+        store.insert_events(&batch).context("insert mysql events")?;
     }
 
+    let rows_inserted = store
+        .count_events_after_id(baseline_event_id, SOURCE_KIND_RANKING)
+        .context("count inserted mysql events")?;
     let rows_deduped = ranking_rows_deduped(rows_seen, rows_inserted, rows_skipped);
     let run_notes = format!(
         "source=ranking_csv skipped={} input_sha256={}",
@@ -799,7 +832,7 @@ fn ranking_row_to_event_row(row: &RankingRow) -> Result<RankingEventRow> {
     let length_milli = ((row.length.max(0.0)) * 1000.0).round() as i32;
     let event_uid = ranking_event_uid(
         ts_utc_epoch,
-        row.encyclopedia_key,
+        row.fish_id,
         length_milli,
         world_x,
         world_y,
@@ -811,7 +844,7 @@ fn ranking_row_to_event_row(row: &RankingRow) -> Result<RankingEventRow> {
         source_kind: SOURCE_KIND_RANKING,
         source_id: None,
         ts_utc,
-        fish_id: row.encyclopedia_key,
+        fish_id: row.fish_id,
         length_milli,
         world_x,
         world_y,
@@ -1040,8 +1073,8 @@ fn run_build_event_zone_assignment_mysql(
         bail!("layer_label must be non-empty");
     }
     let database_url = resolve_database_url()?;
-    let mask = ZoneMask::load_png(&zone_mask_path).context("load zone mask")?;
-    validate_zonemask_dims(&mask)?;
+    let mask = load_zone_mask_asset(&zone_mask_path).context("load zone mask")?;
+    validate_zone_mask_dims(&mask)?;
     let store = MySqlIngestStore::open(&database_url).context("open mysql store")?;
     let notes = format!(
         "auto-created by build-event-zone-assignment; label={layer_label}; zone_mask_path={}",
@@ -1199,7 +1232,7 @@ fn run_build_zone_mask_event_zone_assignment_mysql(
 }
 
 fn build_event_zone_ring_support_rows(
-    mask: &ZoneMask,
+    mask: &ZoneMaskAsset,
     event_id: i64,
     ring_center_px_x: i32,
     ring_center_px_y: i32,
@@ -1222,7 +1255,7 @@ fn build_event_zone_ring_support_rows(
 }
 
 fn ranking_ring_zone_overlaps(
-    mask: &ZoneMask,
+    mask: &ZoneMaskAsset,
     ring_center_px_x: i32,
     ring_center_px_y: i32,
 ) -> Vec<u32> {
@@ -1265,6 +1298,9 @@ fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<Pa
     }
 
     let candidates = [
+        zone_mask_root.join(format!("fields/zone_mask.{map_version}.bin")),
+        zone_mask_root.join(format!("zone_mask.{map_version}.bin")),
+        zone_mask_root.join(format!("images/exact_lookup/zone_mask.{map_version}.bin")),
         zone_mask_root.join(format!("zones_mask_{map_version}.png")),
         zone_mask_root.join(format!("{map_version}.png")),
         zone_mask_root.join("zones_mask.png"),
@@ -1276,8 +1312,11 @@ fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<Pa
     }
 
     bail!(
-        "zone mask not found under {} (looked for zones_mask_{}.png, {}.png, zones_mask.png)",
+        "zone mask not found under {} (looked for fields/zone_mask.{}.bin, zone_mask.{}.bin, images/exact_lookup/zone_mask.{}.bin, zones_mask_{}.png, {}.png, zones_mask.png)",
         zone_mask_root.display(),
+        map_version,
+        map_version,
+        map_version,
         map_version,
         map_version
     )
@@ -1350,11 +1389,15 @@ fn resolve_zone_mask_root_for_map_version(
             .map(PathBuf::from)
     });
     if let Some(root) = configured_root {
-        return Ok(Some(root));
+        if resolve_zone_mask_path(&root, map_version).is_ok() {
+            return Ok(Some(root));
+        }
     }
 
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let candidate_roots = [
+        repo_root.join("data/cdn/public"),
+        repo_root.join("data/cdn/public/fields"),
         repo_root.join("data/cdn/public/images"),
         repo_root.join("data/imagery"),
     ];
@@ -1534,6 +1577,38 @@ fn run_build_zone_mask_field_metadata(field: PathBuf, out: PathBuf) -> Result<()
         summary.field_id_count,
         summary.entry_count,
     );
+    Ok(())
+}
+
+fn load_zone_mask_asset(path: &Path) -> Result<ZoneMaskAsset> {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("png") => ZoneMask::load_png(path)
+            .map(ZoneMaskAsset::Png)
+            .with_context(|| format!("load png zone mask: {}", path.display())),
+        Some("bin") => {
+            let bytes = std::fs::read(path)
+                .with_context(|| format!("read zone mask field: {}", path.display()))?;
+            ZoneLookupRows::from_bytes(&bytes)
+                .map(ZoneMaskAsset::Field)
+                .with_context(|| format!("decode zone mask field: {}", path.display()))
+        }
+        _ => bail!(
+            "unsupported zone mask format for {} (expected .png or .bin)",
+            path.display()
+        ),
+    }
+}
+
+fn validate_zone_mask_dims(mask: &ZoneMaskAsset) -> Result<()> {
+    if mask.width() as i32 != MAP_WIDTH || mask.height() as i32 != MAP_HEIGHT {
+        bail!(
+            "zone mask dimensions mismatch: got {}x{}, expected {}x{}",
+            mask.width(),
+            mask.height(),
+            MAP_WIDTH,
+            MAP_HEIGHT
+        );
+    }
     Ok(())
 }
 
@@ -2439,6 +2514,7 @@ mod tests {
     fn ranking_dedupe_key_collapses_reimported_rows() {
         let row = RankingRow {
             date: "2025-04-25 23:57:51".to_string(),
+            fish_id: 555,
             encyclopedia_key: 555,
             length: 12.345,
             x: 10.4,
@@ -2458,6 +2534,7 @@ mod tests {
     fn ranking_dedupe_key_normalizes_equivalent_timestamp_formats() {
         let dotted = RankingRow {
             date: "12.04.2025 23:57".to_string(),
+            fish_id: 21,
             encyclopedia_key: 21,
             length: 114.683,
             x: -249_904.0,
@@ -2466,6 +2543,7 @@ mod tests {
         };
         let am_pm = RankingRow {
             date: "2025-04-12 11:57:00 PM".to_string(),
+            fish_id: dotted.fish_id,
             encyclopedia_key: dotted.encyclopedia_key,
             length: dotted.length,
             x: dotted.x,
@@ -2484,6 +2562,7 @@ mod tests {
     fn ranking_dedupe_key_normalizes_subunit_coordinate_noise() {
         let precise = RankingRow {
             date: "24.04.2025 13:44".to_string(),
+            fish_id: 60,
             encyclopedia_key: 60,
             length: 32.022,
             x: 369_908.38,
@@ -2492,6 +2571,7 @@ mod tests {
         };
         let rounded = RankingRow {
             date: precise.date.clone(),
+            fish_id: precise.fish_id,
             encyclopedia_key: precise.encyclopedia_key,
             length: precise.length,
             x: 369_908.0,
@@ -2517,6 +2597,7 @@ mod tests {
     fn ranking_row_maps_to_direct_evidence_semantics() {
         let row = RankingRow {
             date: "2025-04-25 23:57:51".to_string(),
+            fish_id: 5,
             encyclopedia_key: 555,
             length: 12.345,
             x: 10.4,
@@ -2524,11 +2605,34 @@ mod tests {
             z: 30.6,
         };
         let event = ranking_row_to_event_row(&row).expect("event");
+        assert_eq!(event.fish_id, row.fish_id);
         assert_eq!(event.snap_px_x, event.map_px_x);
         assert_eq!(event.snap_px_y, event.map_px_y);
         assert_eq!(event.snap_dist_px, 0);
         assert!(event.water_ok);
         assert_eq!(event.length_milli, 12345);
+    }
+
+    #[test]
+    fn ranking_uid_uses_source_fish_id_for_original_rows() {
+        let row = RankingRow {
+            date: "20.04.2025 11:17".to_string(),
+            fish_id: 5,
+            encyclopedia_key: 8205,
+            length: 127.89,
+            x: -245_980.0,
+            y: -3_814.0,
+            z: -48_696.0,
+        };
+
+        let event = ranking_row_to_event_row(&row).expect("event");
+        let ts_utc_epoch = parse_datetime_utc(&row.date).expect("timestamp");
+
+        assert_eq!(event.fish_id, 5);
+        assert_eq!(
+            event.event_uid,
+            ranking_event_uid(ts_utc_epoch, 5, 127_890, -245_980, -3_814, -48_696)
+        );
     }
 
     #[test]
@@ -2545,7 +2649,7 @@ mod tests {
                 }
             }
         }
-        let mask = ZoneMask::from_rgb(width, height, data).expect("mask");
+        let mask = ZoneMaskAsset::Png(ZoneMask::from_rgb(width, height, data).expect("mask"));
 
         let rows = build_event_zone_ring_support_rows(&mask, 42, 3, 6);
 
@@ -2569,7 +2673,7 @@ mod tests {
                 }
             }
         }
-        let mask = ZoneMask::from_rgb(width, height, data).expect("mask");
+        let mask = ZoneMaskAsset::Png(ZoneMask::from_rgb(width, height, data).expect("mask"));
 
         let rows = build_event_zone_ring_support_rows(&mask, 77, 5, 6);
 

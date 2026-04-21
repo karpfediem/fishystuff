@@ -142,9 +142,34 @@ impl MySqlIngestStore {
         Ok(())
     }
 
-    pub fn insert_events(&self, events: &[RankingEventRow]) -> Result<u64> {
+    pub fn max_event_id(&self) -> Result<i64> {
+        let mut conn = self.pool.get_conn().context("get mysql conn")?;
+        let event_id: Option<i64> = conn
+            .query_first("SELECT MAX(event_id) FROM events")
+            .context("query max event id")?;
+        Ok(event_id.unwrap_or(0))
+    }
+
+    pub fn count_events_after_id(&self, after_event_id: i64, source_kind: u8) -> Result<u64> {
+        let mut conn = self.pool.get_conn().context("get mysql conn")?;
+        let count: Option<u64> = conn
+            .exec_first(
+                "SELECT COUNT(*) \
+                 FROM events \
+                 WHERE event_id > :after_event_id \
+                   AND source_kind = :source_kind",
+                params! {
+                    "after_event_id" => after_event_id,
+                    "source_kind" => i64::from(source_kind),
+                },
+            )
+            .context("count events after event id")?;
+        Ok(count.unwrap_or(0))
+    }
+
+    pub fn insert_events(&self, events: &[RankingEventRow]) -> Result<()> {
         if events.is_empty() {
-            return Ok(0);
+            return Ok(());
         }
         let mut conn = self.pool.get_conn().context("get mysql conn")?;
         conn.exec_batch(
@@ -181,7 +206,7 @@ impl MySqlIngestStore {
             }),
         )
         .context("insert mysql events")?;
-        Ok(conn.affected_rows())
+        Ok(())
     }
 
     pub fn load_events_after_id(
@@ -247,21 +272,21 @@ impl MySqlIngestStore {
                     e.snap_px_y, \
                     e.map_px_x, \
                     e.map_px_y, \
-                    EXISTS( \
-                        SELECT 1 \
-                        FROM event_zone_assignment z \
-                        WHERE z.layer_revision_id = :layer_revision_id \
-                          AND z.event_id = e.event_id \
-                    ) AS has_assignment, \
-                    EXISTS( \
-                        SELECT 1 \
-                        FROM event_zone_ring_support ring \
-                        WHERE ring.layer_revision_id = :layer_revision_id \
-                          AND ring.event_id = e.event_id \
-                    ) AS has_ring_support \
+                    IF(z.event_id IS NULL, 0, 1) AS has_assignment, \
+                    IF(ring.event_id IS NULL, 0, 1) AS has_ring_support \
                  FROM events e \
+                 LEFT JOIN event_zone_assignment z \
+                   ON z.layer_revision_id = :layer_revision_id \
+                  AND z.event_id = e.event_id \
+                 LEFT JOIN ( \
+                    SELECT DISTINCT event_id \
+                    FROM event_zone_ring_support \
+                    WHERE layer_revision_id = :layer_revision_id \
+                 ) ring \
+                   ON ring.event_id = e.event_id \
                  WHERE e.water_ok = 1 \
                    AND e.event_id > :after_event_id \
+                   AND (z.event_id IS NULL OR ring.event_id IS NULL) \
                  ORDER BY e.event_id \
                  LIMIT :limit_rows",
                 params! {

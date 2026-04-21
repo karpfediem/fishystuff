@@ -17,7 +17,7 @@ alpha0 = 1.0
 top_k = 30
 
 [zone_masks]
-root = "data/cdn/public/images"
+root = "data/cdn/public"
 
 [server]
 cors_allowed_origins = "https://fishystuff.fish"
