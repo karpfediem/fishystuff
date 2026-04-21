@@ -183,12 +183,19 @@ For browser use, the convenience entrypoints are:
 
 ```bash
 just open dashboard
+just open dashboard-beta
 just open grafana
+just open grafana-beta
 just open loki
 just open jaeger
 just open prometheus
 just open loki-status
 ```
+
+`dashboard-beta` and `grafana-beta` use the `beta-deploy` SecretSpec profile to
+create an SSH tunnel to `root@beta.fishystuff.fish` and then open the remote
+Grafana UI locally on `127.0.0.1:3300`. Override the SSH endpoint or local port
+with `ssh_target=...` and `local_port=...` when needed.
 
 The first provisioned dashboard is `Fishystuff Local Observability` at:
 
