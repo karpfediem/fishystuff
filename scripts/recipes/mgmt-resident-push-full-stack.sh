@@ -45,6 +45,10 @@ tls_dns_env_json="{}"
 tls_dns_env_keys_csv=""
 tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory"
 tls_domains_json=""
+site_base_url_override=""
+api_base_url_override=""
+cdn_base_url_override=""
+telemetry_base_url_override=""
 
 raw_args="$*"
 IFS=" " read -r -a overrides <<< "$raw_args"
@@ -90,6 +94,10 @@ for arg in "${overrides[@]}"; do
     tls_dns_env_keys_csv=*) tls_dns_env_keys_csv="${arg#tls_dns_env_keys_csv=}" ;;
     tls_directory_url=*) tls_directory_url="${arg#tls_directory_url=}" ;;
     tls_domains_json=*) tls_domains_json="${arg#tls_domains_json=}" ;;
+    site_base_url=*) site_base_url_override="${arg#site_base_url=}" ;;
+    api_base_url=*) api_base_url_override="${arg#api_base_url=}" ;;
+    cdn_base_url=*) cdn_base_url_override="${arg#cdn_base_url=}" ;;
+    telemetry_base_url=*) telemetry_base_url_override="${arg#telemetry_base_url=}" ;;
     *)
       echo "unknown override for mgmt-resident-push-full-stack: $arg" >&2
       exit 2
@@ -123,18 +131,26 @@ build_release_map_runtime() {
 
 deployment_environment="$(normalize_deployment_environment "$deployment_environment")"
 deployment_domain_name="$(deployment_domain "$deployment_environment")"
-site_base_url="https://$deployment_domain_name"
-api_base_url="https://api.$deployment_domain_name"
-cdn_base_url="https://cdn.$deployment_domain_name"
-telemetry_base_url="https://telemetry.$deployment_domain_name"
+site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
+api_base_url="${api_base_url_override:-https://api.$deployment_domain_name}"
+cdn_base_url="${cdn_base_url_override:-https://cdn.$deployment_domain_name}"
+telemetry_base_url="${telemetry_base_url_override:-https://telemetry.$deployment_domain_name}"
 tls_dns_env_json="$(merge_json_env_from_keys "$tls_dns_env_json" "$tls_dns_env_keys_csv")"
 if [[ -z "$tls_domains_json" ]]; then
+  site_tls_domain="${site_base_url#https://}"
+  site_tls_domain="${site_tls_domain%/}"
+  api_tls_domain="${api_base_url#https://}"
+  api_tls_domain="${api_tls_domain%/}"
+  cdn_tls_domain="${cdn_base_url#https://}"
+  cdn_tls_domain="${cdn_tls_domain%/}"
+  telemetry_tls_domain="${telemetry_base_url#https://}"
+  telemetry_tls_domain="${telemetry_tls_domain%/}"
   tls_domains_json="$(
     jq -cn \
-      --arg site "${site_base_url#https://}" \
-      --arg api "${api_base_url#https://}" \
-      --arg cdn "${cdn_base_url#https://}" \
-      --arg telemetry "${telemetry_base_url#https://}" \
+      --arg site "$site_tls_domain" \
+      --arg api "$api_tls_domain" \
+      --arg cdn "$cdn_tls_domain" \
+      --arg telemetry "$telemetry_tls_domain" \
       '[$site, $api, $cdn, $telemetry]'
   )"
 fi
@@ -227,10 +243,6 @@ if service_selected edge; then
   if [[ -n "$site_content_override" ]]; then
     case "$site_content_override" in
       /nix/store/*)
-        if [[ ! -e "$site_content_override" ]]; then
-          echo "site_content store path does not exist locally: $site_content_override" >&2
-          exit 2
-        fi
         site_content="$site_content_override"
         ;;
       *)

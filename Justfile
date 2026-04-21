@@ -7,9 +7,9 @@ up:
 watch:
   devenv up --profile watch --no-tui
 
-# Open a local service UI in the default browser, or tunnel beta Grafana first.
-open target ssh_target="root@beta.fishystuff.fish" local_port="3300":
-  bash scripts/recipes/open.sh "{{target}}" "{{ssh_target}}" "{{local_port}}"
+# Open a deployment service URL or tunnel a private service UI first.
+open deployment *services:
+  bash scripts/recipes/open.sh "{{deployment}}" {{services}}
 
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
@@ -23,15 +23,6 @@ serve-db:
 update_fishing_table:
     bash scripts/recipes/update-fishing-table.sh
 
-
-# Build and deploy the discord bot
-deploy-bot:
-  bash scripts/recipes/deploy-bot.sh
-
-# Build and deploy the Axum API
-deploy-api:
-  bash scripts/recipes/deploy-api.sh
-
 # Run the Discord bot with the SecretSpec bot profile
 bot-run:
   secretspec run --profile bot -- cargo run --manifest-path bot/Cargo.toml
@@ -44,25 +35,9 @@ cdn-stage:
 cdn-stage-icons:
   node tools/scripts/build_item_icons_from_source.mjs --output-dir data/cdn/public/images/items
 
-# Push the staged CDN tree to Bunny Storage via HTTP API.
-# Override BUNNY_STORAGE_PARALLEL (or legacy BUNNY_FTP_PARALLEL) in the shell if needed.
-cdn-push:
-  secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
-
 # Compute the exact CDN filenames required by the current deployment inputs.
 cdn-required-files out="data/cdn/required-files.json":
   ./tools/scripts/compute_required_cdn_filenames.sh --out "{{out}}"
-
-# Refresh the staged tree and then push it to Bunny Storage
-cdn-sync:
-  just cdn-stage
-  just cdn-push
-
-# Build the map runtime, refresh staged map assets, and push only the CDN map root.
-cdn-sync-map:
-  ./tools/scripts/build_map.sh
-  ./tools/scripts/stage_cdn_assets.sh --map-only
-  BUNNY_SYNC_ROOTS=map secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 
 # Validate that the local SecretSpec provider has the required values for a profile
 secrets-check profile="api":
@@ -81,38 +56,13 @@ mgmt-beta-bootstrap state="absent" converged_timeout="30" mgmt_bin="../result/bi
 mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
   bash scripts/recipes/mgmt-resident-bootstrap-unify.sh "{{mgmt_bin}}"
 
-# Copy a locally built mgmt closure to a remote host and install the resident service there.
-mgmt-resident-kickstart-remote target="" host="" timeout="120" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal":
-  bash scripts/recipes/mgmt-resident-kickstart-remote.sh "{{target}}" "{{host}}" "{{timeout}}" "{{mgmt_flake}}" "{{mgmt_package}}"
+# Copy one or more local closures to a remote host.
+push-closure host *closures:
+  bash scripts/recipes/push-closure.sh "{{host}}" {{closures}}
 
-# Push a self-contained graph directory into the resident mgmt instance on a remote host.
-mgmt-resident-deploy-remote target="" dir="mgmt/resident-deploy-probe" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt":
-  bash scripts/recipes/mgmt-resident-deploy-remote.sh "{{target}}" "{{dir}}" "{{timeout}}" "{{remote_mgmt_bin}}"
-
-# Build the API and Dolt service bundles locally, push both closures to a
-# remote host, and deploy the resident beta graph for the current API/DB host
-# shape. The resident graph owns GC-root selection via nix:gcroot.
-mgmt-resident-push-api-db *args:
-  bash scripts/recipes/mgmt-resident-push-api-db.sh "{{args}}"
-
-# Build the current pure service bundles for the single-host beta stack, push
-# them to a remote host, and deploy the resident graph with API, Dolt, edge,
-# and observability daemons. The resident graph owns GC-root selection via
-# nix:gcroot. Set `services_csv=` to a comma-separated subset when you only
-# want to rebuild and push specific optional services.
-mgmt-resident-push-full-stack *args:
-  bash scripts/recipes/mgmt-resident-push-full-stack.sh "{{args}}"
-
-# Build a temporary resident graph that installs a bundle-backed systemd unit
-# from a local Nix bundle root, validate it, and deploy it to a resident mgmt
-# instance over SSH.
-mgmt-resident-dolt-bundle-probe target="" timeout="120" bundle_path="" gcroot_path="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" remote_mgmt_bin="/usr/local/bin/mgmt" mgmt_bin="" mgmt_flake="/home/carp/code/playground/mgmt-missing-features" mgmt_package="minimal" mgmt_modules_dir="/home/carp/code/mgmt/modules":
-  bash scripts/recipes/mgmt-resident-dolt-bundle-probe.sh "{{target}}" "{{timeout}}" "{{bundle_path}}" "{{gcroot_path}}" "{{remote_mgmt_bin}}" "{{mgmt_bin}}" "{{mgmt_flake}}" "{{mgmt_package}}" "{{mgmt_modules_dir}}"
-
-# Build the Dolt service bundle, copy it to a remote host, root it, install the
-# rendered unit, and verify that the SQL server answers a local health check.
-mgmt-dolt-target-smoke target="" gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" sql_host="127.0.0.1" sql_port="3306" query_timeout="20":
-  bash scripts/recipes/mgmt-dolt-target-smoke.sh "{{target}}" "{{gcroot}}" "{{sql_host}}" "{{sql_port}}" "{{query_timeout}}"
+# Deploy the selected services for a named deployment.
+deploy deployment *services:
+  bash scripts/recipes/deploy.sh "{{deployment}}" {{services}}
 
 # Build the current map runtime and map-serving CDN payload once
 build-map:
