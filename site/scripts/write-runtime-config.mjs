@@ -2,8 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { resolveDocumentTitleSuffix } from "./branding.mjs";
-
 function parseArgs(argv) {
   const args = {
     out: ".out/runtime-config.js",
@@ -195,16 +193,6 @@ export function buildRuntimeConfig(env = process.env) {
     publicTelemetryBaseUrl,
     publicTelemetryTracesEndpoint,
   } = resolvePublicBaseUrls(env);
-  const siteBaseUrl =
-    normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_SITE_BASE_URL) || publicSiteBaseUrl;
-  const deploymentName =
-    String(
-      env.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT
-      ?? env.FISHYSTUFF_RUNTIME_DEPLOYMENT_NAME
-      ?? env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT
-      ?? "",
-    ).trim()
-    || "production";
   const runtimeTelemetryEnabledDefault = normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false);
   const telemetryDefaultMode = normalizeTelemetryDefaultMode(
     env.FISHYSTUFF_RUNTIME_TELEMETRY_DEFAULT_MODE,
@@ -215,17 +203,12 @@ export function buildRuntimeConfig(env = process.env) {
     || publicTelemetryTracesEndpoint;
 
   return {
-    siteBaseUrl,
+    siteBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_SITE_BASE_URL) || publicSiteBaseUrl,
     apiBaseUrl:
       normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_API_BASE_URL) || publicApiBaseUrl,
     cdnBaseUrl:
       normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_CDN_BASE_URL) || publicCdnBaseUrl,
-    deploymentName,
-    documentTitleSuffix: resolveDocumentTitleSuffix({
-      ...env,
-      deploymentName,
-      siteBaseUrl,
-    }),
     mapAssetCacheKey: normalizeCacheKey(env.FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY),
     client: {
       telemetry: {
@@ -237,7 +220,9 @@ export function buildRuntimeConfig(env = process.env) {
       debug: normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_DEBUG, false),
       serviceName:
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME ?? "").trim() || "fishystuff-site",
-      deploymentEnvironment: deploymentName,
+      deploymentEnvironment:
+        String(env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT ?? "").trim()
+        || "production",
       serviceVersion:
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
       exporterEndpoint: traceExporterEndpoint,

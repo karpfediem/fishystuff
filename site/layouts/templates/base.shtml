@@ -261,58 +261,6 @@
       }));
     })();
   </script>
-  <script>
-    (function () {
-      function trimString(value) {
-        return String(value || '').trim();
-      }
-
-      function resolveDocumentTitleSuffix(runtimeConfig) {
-        return trimString(runtimeConfig && runtimeConfig.documentTitleSuffix) || 'FishyStuff';
-      }
-
-      function stripBrandSuffix(value) {
-        var normalized = trimString(value);
-        var configuredSuffix = resolveDocumentTitleSuffix(window.__fishystuffRuntimeConfig || {});
-        var knownSuffixes = [configuredSuffix, 'FishyStuff'];
-        for (var index = 0; index < knownSuffixes.length; index += 1) {
-          var suffix = trimString(knownSuffixes[index]);
-          if (!suffix) {
-            continue;
-          }
-          var brandTail = ' | ' + suffix;
-          if (normalized.endsWith(brandTail)) {
-            return trimString(normalized.slice(0, -brandTail.length));
-          }
-        }
-        return normalized;
-      }
-
-      function formatDocumentTitle(pageTitle) {
-        var normalizedPageTitle = stripBrandSuffix(pageTitle);
-        var suffix = resolveDocumentTitleSuffix(window.__fishystuffRuntimeConfig || {});
-        if (!normalizedPageTitle || normalizedPageTitle === suffix) {
-          return suffix;
-        }
-        return normalizedPageTitle + ' | ' + suffix;
-      }
-
-      function setDocumentTitle(pageTitle) {
-        var nextTitle = formatDocumentTitle(pageTitle);
-        var titleElement = document.getElementById('title') || document.querySelector('title');
-        document.title = nextTitle;
-        if (titleElement && titleElement.textContent !== nextTitle) {
-          titleElement.textContent = nextTitle;
-        }
-        return nextTitle;
-      }
-
-      window.__fishystuffDocumentTitleSuffix = resolveDocumentTitleSuffix(window.__fishystuffRuntimeConfig || {});
-      window.__fishystuffFormatDocumentTitle = formatDocumentTitle;
-      window.__fishystuffSetDocumentTitle = setDocumentTitle;
-      setDocumentTitle(document.title);
-    })();
-  </script>
   <script src="$site.asset('js/client-session.js').link()"></script>
   <!-- Keep OTEL parser-inserted so fetch instrumentation can patch before page modules boot. -->
   <script type="module" src="$site.asset('js/otel.js').link()"></script>

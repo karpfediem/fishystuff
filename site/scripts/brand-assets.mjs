@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { isBetaDeploymentSite } from "./branding.mjs";
 import { resolvePublicBaseUrls } from "./write-runtime-config.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -12,6 +11,15 @@ const siteDir = path.resolve(scriptDir, "..");
 const BETTA_ICON_CDN_PATH = "/images/items/00820996.webp";
 const BETTA_ICON_SOURCE_PATH = path.join(repoRoot, "data", "data", "FishIcons", "00820996.png");
 const DEFAULT_EMBED_LOGO_PATH = path.join(siteDir, "assets", "img", "logo.png");
+
+export function isBetaDeploymentSite(baseUrl) {
+  try {
+    const hostname = new URL(String(baseUrl ?? "")).hostname.toLowerCase();
+    return hostname === "beta.fishystuff.fish" || hostname.startsWith("beta.");
+  } catch {
+    return false;
+  }
+}
 
 export function resolveBrandAssets(env = process.env) {
   const { publicSiteBaseUrl, publicCdnBaseUrl } = resolvePublicBaseUrls(env);
@@ -38,5 +46,3 @@ export function resolveBrandAssets(env = process.env) {
     embedLogoPath: DEFAULT_EMBED_LOGO_PATH,
   };
 }
-
-export { isBetaDeploymentSite };
