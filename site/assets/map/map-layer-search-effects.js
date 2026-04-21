@@ -1,11 +1,5 @@
 import { MAP_SEARCH_LAYER_SUPPORT } from "./map-search-contract.js";
-
-const TERM_KIND_LABELS = Object.freeze({
-  fish: "Fish",
-  "fish-filter": "Fish filters",
-  zone: "Zones",
-  semantic: "Semantic fields",
-});
+import { mapText } from "./map-i18n.js";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -63,9 +57,24 @@ function normalizeLayerClipMasks(value) {
   return next;
 }
 
+function termKindLabel(termKind) {
+  switch (termKind) {
+    case "fish":
+      return mapText("layers.search_kind.fish");
+    case "fish-filter":
+      return mapText("layers.search_kind.fish_filters");
+    case "zone":
+      return mapText("layers.search_kind.zones");
+    case "semantic":
+      return mapText("layers.search_kind.semantic_fields");
+    default:
+      return termKind;
+  }
+}
+
 export function layerSearchTermKindLabels(layerId) {
   return (MAP_SEARCH_LAYER_SUPPORT[String(layerId ?? "").trim()]?.termKinds || []).map(
-    (termKind) => TERM_KIND_LABELS[termKind] || termKind,
+    (termKind) => termKindLabel(termKind),
   );
 }
 

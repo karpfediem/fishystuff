@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   buildHoverTooltipRows,
@@ -184,3 +185,4 @@ test("patchTouchesHoverTooltipSignals stays narrow", () => {
     false,
   );
 });
+installMapTestI18n();

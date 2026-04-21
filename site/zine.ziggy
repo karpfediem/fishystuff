@@ -63,6 +63,7 @@ Multilingual {
     "map/map-app-live.js",
     "map/map-app-live-entry.js",
     "map/map-otel-metrics.js",
+    "map/map-i18n.js",
     "map/map.css",
     "map/map-page-state.js",
     "map/map-page-persist.js",

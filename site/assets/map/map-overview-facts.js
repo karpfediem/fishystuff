@@ -2,6 +2,7 @@ import {
   zoneCatalogEntryForRgb,
   zoneDisplayNameFromCatalog,
 } from "./map-zone-catalog.js";
+import { mapText } from "./map-i18n.js";
 
 export const PRIMARY_OVERVIEW_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
 const POINT_LABEL_PRIMARY_FACT_KEYS = Object.freeze([
@@ -195,7 +196,7 @@ export function buildZonePaneFacts(layerSamples, { zoneCatalog = [], runtimeLaye
     rows.push({
       key: "zone",
       icon: "hover-zone",
-      label: "Zone",
+      label: mapText("overview.zone"),
       value: zoneName,
       ...(zoneFact?.statusIcon ? { statusIcon: zoneFact.statusIcon } : {}),
       ...(zoneFact?.statusIconTone ? { statusIconTone: zoneFact.statusIconTone } : {}),
@@ -205,7 +206,7 @@ export function buildZonePaneFacts(layerSamples, { zoneCatalog = [], runtimeLaye
     rows.push({
       key: "rgb",
       icon: "theme-palette",
-      label: "RGB",
+      label: mapText("overview.rgb"),
       value: formatRgbTriplet(rgb),
       swatchRgb: formatSwatchRgb(rgb),
     });
@@ -214,7 +215,7 @@ export function buildZonePaneFacts(layerSamples, { zoneCatalog = [], runtimeLaye
     rows.push({
       key: "bite_time",
       icon: "stopwatch",
-      label: "Bite Time",
+      label: mapText("overview.bite_time"),
       value: biteTime,
     });
   }
@@ -232,7 +233,7 @@ function buildResourcesFactRow(layerSamples, runtimeLayers = []) {
   return {
     key: "resources",
     icon: "hover-resources",
-    label: "Resources",
+    label: mapText("overview.resources"),
     value: fact.value,
     ...(fact.statusIcon ? { statusIcon: fact.statusIcon } : {}),
     ...(fact.statusIconTone ? { statusIconTone: fact.statusIconTone } : {}),
@@ -250,7 +251,7 @@ function buildOriginFactRow(layerSamples, runtimeLayers = []) {
   return {
     key: "origin",
     icon: "trade-origin",
-    label: "Origin",
+    label: mapText("overview.origin"),
     value: fact.value,
     ...(fact.statusIcon ? { statusIcon: fact.statusIcon } : {}),
     ...(fact.statusIconTone ? { statusIconTone: fact.statusIconTone } : {}),

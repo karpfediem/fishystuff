@@ -1,5 +1,6 @@
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
+import { mapText } from "./map-i18n.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
@@ -134,7 +135,7 @@ function itemGradeTone(grade, isPrize) {
 }
 
 function fishIdentityMarkup(entry, accessoryMarkup = "") {
-  const name = trimString(entry?.label) || "Unknown fish";
+  const name = trimString(entry?.label) || mapText("info.fish.unknown");
   const gradeTone = itemGradeTone(entry?.iconGradeTone, entry?.isPrize === true);
   const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
   const iconUrl = trimString(entry?.iconUrl);
@@ -162,7 +163,7 @@ function provenanceRailMarkup(entry) {
     presenceValueText: trimString(entry?.presenceText),
   });
   return `
-    <div class="fishy-provenance-rail" aria-label="Fact provenance">
+    <div class="fishy-provenance-rail" aria-label="${escapeHtml(mapText("info.provenance"))}">
       ${segments
         .map(
           (segment) => `
@@ -225,18 +226,18 @@ function zoneLootSectionMarkup(section) {
               ${
                 group.rows.length
                   ? group.rows.map((row) => zoneLootRowMarkup(row)).join("")
-                  : '<div class="px-2 py-2 text-[11px] text-base-content/55">No rows are assigned to this group in the current overlay yet.</div>'
+                  : `<div class="px-2 py-2 text-[11px] text-base-content/55">${escapeHtml(mapText("info.empty_group"))}</div>`
               }
             </div>
           </div>
         `)
         .join("")
-    : '<div class="px-2 py-3 text-xs text-base-content/60">No fish rows are available for this zone yet.</div>';
+    : `<div class="px-2 py-3 text-xs text-base-content/60">${escapeHtml(mapText("info.empty_zone"))}</div>`;
   return `
     <section class="space-y-2">
       <div class="flex items-center justify-between gap-3">
-        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title || "Fish")}</p>
-        <span class="text-[11px] text-base-content/55">${escapeHtml(section.statusText || "zone loot: idle")}</span>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title || mapText("info.section.fish"))}</p>
+        <span class="text-[11px] text-base-content/55">${escapeHtml(section.statusText || mapText("info.zone_loot.status.idle"))}</span>
       </div>
       <p class="text-xs text-base-content/70">${escapeHtml(section.summary || "")}</p>
       ${
@@ -272,7 +273,7 @@ function sectionMarkup(section) {
 }
 
 function emptyPanelMarkup() {
-  return '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">Click the map, use a waypoint target, or select a bookmark to inspect facts at a world point.</div>';
+  return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">${escapeHtml(mapText("info.empty_selection"))}</div>`;
 }
 
 function ensureInfoPanelMarkup(host) {
@@ -284,7 +285,7 @@ function ensureInfoPanelMarkup(host) {
       id="fishymap-zone-info-tabs"
       role="tablist"
       class="tabs tabs-box bg-base-200/80 p-1"
-      aria-label="Point layer tabs"
+      aria-label="${escapeHtml(mapText("info.tabs"))}"
       hidden
     ></div>
     <div id="fishymap-zone-info-panel" class="space-y-3">
@@ -490,7 +491,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
         available: false,
         zoneName: "",
         profileLabel: "",
-        note: trimString(error?.message) || "Zone loot summary is unavailable.",
+        note: trimString(error?.message) || mapText("info.zone_loot.unavailable"),
         groups: [],
         speciesRows: [],
       };

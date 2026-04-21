@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import { renderLayerStack } from "./map-layer-panel.js";
 
@@ -102,3 +103,4 @@ test("renderLayerStack rerenders when hover fact preview values change", () => {
   assert.match(container.innerHTML, /Margoria South/);
   assert.match(container.innerHTML, /12,34,56/);
 });
+installMapTestI18n();

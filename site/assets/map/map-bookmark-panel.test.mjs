@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import { renderBookmarkManager } from "./map-bookmark-panel.js";
 import {
@@ -106,3 +107,4 @@ test("renderBookmarkManager shows a subtitle when the saved title differs from t
   assert.match(elements.bookmarksList.innerHTML, /fishymap-bookmark-subtitle/);
   assert.match(elements.bookmarksList.innerHTML, /Margoria South/);
 });
+installMapTestI18n();

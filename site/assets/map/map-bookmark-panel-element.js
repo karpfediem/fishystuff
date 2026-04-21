@@ -1,4 +1,5 @@
 import { renderBookmarkManager } from "./map-bookmark-panel.js";
+import { mapCountText, mapText } from "./map-i18n.js";
 import {
   dispatchShellSignalPatch,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
@@ -130,20 +131,20 @@ function ensureBookmarkPanelMarkup(host) {
   host.innerHTML = `
     <div id="fishymap-bookmarks-controls">
       <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--primary">
-        <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-copy"></use></svg>Copy</button>
-        <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-export"></use></svg>Export</button>
-        <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-import"></use></svg>Import</button>
-        <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg>Cancel</button>
+        <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-copy"></use></svg>${escapeHtml(mapText("bookmarks.copy"))}</button>
+        <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-export"></use></svg>${escapeHtml(mapText("bookmarks.export"))}</button>
+        <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-import"></use></svg>${escapeHtml(mapText("bookmarks.import"))}</button>
+        <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg>${escapeHtml(mapText("bookmarks.cancel"))}</button>
       </div>
       <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--secondary">
-        <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-select-all"></use></svg>Select all</button>
-        <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg><span id="fishymap-bookmark-clear-selection-label">Clear</span></button>
-        <button id="fishymap-bookmark-delete-selected" class="btn btn-ghost btn-error btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-trash"></use></svg>Delete</button>
+        <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-select-all"></use></svg>${escapeHtml(mapText("bookmarks.select_all"))}</button>
+        <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg><span id="fishymap-bookmark-clear-selection-label">${escapeHtml(mapText("bookmarks.clear"))}</span></button>
+        <button id="fishymap-bookmark-delete-selected" class="btn btn-ghost btn-error btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-trash"></use></svg>${escapeHtml(mapText("bookmarks.delete"))}</button>
       </div>
       <input id="fishymap-bookmark-import-input" class="hidden" type="file" accept=".xml,.txt,text/xml,application/xml">
     </div>
     <div id="fishymap-bookmarks-list" class="rounded-box border border-base-300/70 bg-base-200 p-1">
-      <div class="fishymap-bookmark-empty text-sm text-base-content/65">No bookmarks yet.</div>
+      <div class="fishymap-bookmark-empty text-sm text-base-content/65">${escapeHtml(mapText("bookmarks.empty"))}</div>
     </div>
   `;
 }
@@ -264,7 +265,7 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
         return;
       }
       const confirmImpl = globalThis.confirm?.bind(globalThis);
-      if (typeof confirmImpl === "function" && !confirmImpl(`Delete ${current.bookmarkUi.selectedIds.length} selected bookmarks?`)) {
+      if (typeof confirmImpl === "function" && !confirmImpl(mapCountText("bookmarks.confirm.delete_selected", current.bookmarkUi.selectedIds.length))) {
         return;
       }
       const selectedIds = new Set(current.bookmarkUi.selectedIds);
@@ -280,14 +281,14 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
         current.bookmarkUi.selectedIds.includes(bookmark.id),
       );
       if (!selectedBookmarks.length) {
-        this.showSiteToast("warning", "Select one or more bookmarks to copy.");
+        this.showSiteToast("warning", mapText("bookmarks.toast.select_to_copy"));
         return;
       }
       try {
         await copyTextToClipboard(serializeBookmarksForExport(selectedBookmarks));
         this.showSiteToast("success", buildBookmarkSelectionCopyMessage(selectedBookmarks.length));
       } catch (_error) {
-        this.showSiteToast("error", "Clipboard access is unavailable in this browser.");
+        this.showSiteToast("error", mapText("bookmarks.toast.clipboard_unavailable"));
       }
     };
     this._handleExportClick = () => {
@@ -297,7 +298,7 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
       );
       const exportBookmarks = selectedBookmarks.length ? selectedBookmarks : current.bookmarks;
       if (!exportBookmarks.length) {
-        this.showSiteToast("warning", "There are no bookmarks to export yet.");
+        this.showSiteToast("warning", mapText("bookmarks.toast.no_export"));
         return;
       }
       try {
@@ -307,12 +308,12 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
           buildBookmarkExportMessage(exportBookmarks.length, selectedBookmarks.length),
         );
       } catch (_error) {
-        this.showSiteToast("error", "Bookmark export is unavailable in this browser.");
+        this.showSiteToast("error", mapText("bookmarks.toast.export_unavailable"));
       }
     };
     this._handleImportTriggerClick = () => {
       if (!this._elements?.bookmarkImportInput) {
-        this.showSiteToast("error", "Bookmark import is unavailable in this browser.");
+        this.showSiteToast("error", mapText("bookmarks.toast.import_unavailable"));
         return;
       }
       this._elements.bookmarkImportInput.value = "";
@@ -326,7 +327,7 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
       try {
         const importedBookmarks = parseImportedBookmarks(await readBookmarkImportFile(file));
         if (!importedBookmarks.length) {
-          this.showSiteToast("warning", "The selected file did not contain any bookmark XML.");
+          this.showSiteToast("warning", mapText("bookmarks.toast.import_no_xml"));
           return;
         }
         const current = this.bundle();
@@ -350,7 +351,7 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
         );
       } catch (error) {
         console.warn("Failed to import map bookmarks", error);
-        this.showSiteToast("error", "Bookmark import failed. Choose a valid WorldmapBookMark XML file.");
+        this.showSiteToast("error", mapText("bookmarks.toast.import_failed"));
       } finally {
         if (this._elements?.bookmarkImportInput) {
           this._elements.bookmarkImportInput.value = "";
@@ -389,7 +390,9 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
           return;
         }
         const confirmImpl = globalThis.confirm?.bind(globalThis);
-        if (typeof confirmImpl === "function" && !confirmImpl(`Delete bookmark "${bookmarkDisplayLabel(bookmark)}"?`)) {
+        if (typeof confirmImpl === "function" && !confirmImpl(mapText("bookmarks.confirm.delete_single", {
+          label: bookmarkDisplayLabel(bookmark),
+        }))) {
           return;
         }
         this.writeBookmarkState((bookmarks, bookmarkUi) => {
@@ -409,7 +412,10 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
         if (!bookmark || typeof promptImpl !== "function") {
           return;
         }
-        const nextLabel = promptImpl("Rename bookmark", bookmarkDisplayLabel(bookmark));
+        const nextLabel = promptImpl(
+          mapText("bookmarks.prompt.rename"),
+          bookmarkDisplayLabel(bookmark),
+        );
         if (nextLabel == null) {
           return;
         }
@@ -442,10 +448,10 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
         }
         void copyTextToClipboard(serializeBookmarksForExport([bookmark]))
           .then(() => {
-            this.showSiteToast("success", "Copied bookmark XML.");
+            this.showSiteToast("success", mapText("bookmarks.toast.copied_single"));
           })
           .catch(() => {
-            this.showSiteToast("error", "Clipboard access is unavailable in this browser.");
+            this.showSiteToast("error", mapText("bookmarks.toast.clipboard_unavailable"));
           });
       }
     };

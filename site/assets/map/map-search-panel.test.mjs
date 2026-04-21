@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
+
+installMapTestI18n();
 
 function createRenderElements() {
   return {

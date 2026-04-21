@@ -20,75 +20,82 @@ import {
   setSearchExpressionGroupOperator,
   toggleSearchExpressionNodeNegated,
 } from "./map-search-contract.js";
+import { mapText } from "./map-i18n.js";
 import { resolveSearchProjection } from "./map-search-projection.js";
 
 export { normalizeFishFilterTerm, normalizeFishFilterTerms } from "./map-search-contract.js";
-const FISH_FILTER_TERM_METADATA = Object.freeze({
-  favourite: Object.freeze({
-    label: "Favourite",
-    description: "Fish marked with a heart in Fishydex.",
-    searchText: "favourite favourites favorite favorites heart liked",
-    icon: "heart-fill",
-    iconClass: "text-error",
-  }),
-  missing: Object.freeze({
-    label: "Missing",
-    description: "Fish not marked caught in Fishydex.",
-    searchText: "missing uncaught not caught not yet caught",
-    icon: "check-circle-dash-fill",
-    iconClass: "text-warning",
-  }),
-  red: Object.freeze({
-    label: "Red",
-    description: "Prize or red-grade fish and loot.",
-    searchText: "red prize red-grade fish loot item grade",
-    icon: "nav-dex",
-    iconClass: "text-error",
-  }),
-  yellow: Object.freeze({
-    label: "Yellow",
-    description: "Rare or yellow-grade fish and loot.",
-    searchText: "yellow rare yellow-grade fish loot item grade",
-    icon: "nav-dex",
-    iconClass: "text-warning",
-  }),
-  blue: Object.freeze({
-    label: "Blue",
-    description: "High-quality or blue-grade fish and loot.",
-    searchText: "blue highquality high-quality high quality blue-grade fish loot item grade",
-    icon: "nav-dex",
-    iconClass: "text-info",
-  }),
-  green: Object.freeze({
-    label: "Green",
-    description: "General or green-grade fish and loot.",
-    searchText: "green general green-grade fish loot item grade",
-    icon: "nav-dex",
-    iconClass: "text-success",
-  }),
-  white: Object.freeze({
-    label: "White",
-    description: "Trash or white-grade fish and loot.",
-    searchText: "white trash white-grade fish loot item grade",
-    icon: "nav-dex",
-    iconClass: "text-base-content/70",
-  }),
-});
 const FISH_GRADE_FILTER_TERMS = new Set(["red", "yellow", "blue", "green", "white"]);
-const PATCH_BOUND_PROMPT_MATCHES = Object.freeze([
-  Object.freeze({
-    bound: "from",
-    label: "After",
-    description: "Pick a patch or date to limit samples.",
-    searchText: "after from since patch date newer later",
-  }),
-  Object.freeze({
-    bound: "to",
-    label: "Before",
-    description: "Pick a patch or date to limit samples.",
-    searchText: "before to until through patch date older earlier",
-  }),
-]);
+
+function fishFilterMetadata() {
+  return {
+    favourite: {
+      label: mapText("search.filter.favourite.label"),
+      description: mapText("search.filter.favourite.description"),
+      searchText: "favourite favourites favorite favorites heart liked",
+      icon: "heart-fill",
+      iconClass: "text-error",
+    },
+    missing: {
+      label: mapText("search.filter.missing.label"),
+      description: mapText("search.filter.missing.description"),
+      searchText: "missing uncaught not caught not yet caught",
+      icon: "check-circle-dash-fill",
+      iconClass: "text-warning",
+    },
+    red: {
+      label: mapText("search.filter.red.label"),
+      description: mapText("search.filter.red.description"),
+      searchText: "red prize red-grade fish loot item grade",
+      icon: "nav-dex",
+      iconClass: "text-error",
+    },
+    yellow: {
+      label: mapText("search.filter.yellow.label"),
+      description: mapText("search.filter.yellow.description"),
+      searchText: "yellow rare yellow-grade fish loot item grade",
+      icon: "nav-dex",
+      iconClass: "text-warning",
+    },
+    blue: {
+      label: mapText("search.filter.blue.label"),
+      description: mapText("search.filter.blue.description"),
+      searchText: "blue highquality high-quality high quality blue-grade fish loot item grade",
+      icon: "nav-dex",
+      iconClass: "text-info",
+    },
+    green: {
+      label: mapText("search.filter.green.label"),
+      description: mapText("search.filter.green.description"),
+      searchText: "green general green-grade fish loot item grade",
+      icon: "nav-dex",
+      iconClass: "text-success",
+    },
+    white: {
+      label: mapText("search.filter.white.label"),
+      description: mapText("search.filter.white.description"),
+      searchText: "white trash white-grade fish loot item grade",
+      icon: "nav-dex",
+      iconClass: "text-base-content/70",
+    },
+  };
+}
+
+function patchBoundPromptMatches() {
+  return [
+    {
+      bound: "from",
+      label: mapText("search.patch.prompt.after"),
+      description: mapText("search.patch.prompt.description"),
+      searchText: "after from since patch date newer later",
+    },
+    {
+      bound: "to",
+      label: mapText("search.patch.prompt.before"),
+      description: mapText("search.patch.prompt.description"),
+      searchText: "before to until through patch date older earlier",
+    },
+  ];
+}
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -522,11 +529,12 @@ function findFishFilterMatches(searchText, selectedTerms) {
   }
   const selected = new Set(normalizeFishFilterTerms(selectedTerms));
   const matches = [];
+  const metadataByTerm = fishFilterMetadata();
   for (const term of FISH_FILTER_TERM_ORDER) {
     if (selected.has(term)) {
       continue;
     }
-    const metadata = FISH_FILTER_TERM_METADATA[term];
+    const metadata = metadataByTerm[term];
     let score = 0;
     for (const queryTerm of terms) {
       const best = Math.max(
@@ -562,19 +570,20 @@ function findFishFilterMatches(searchText, selectedTerms) {
 }
 
 export function buildDefaultFishFilterMatches(stateBundle) {
+  const metadataByTerm = fishFilterMetadata();
   const selected = new Set(resolveSelectedFishFilterTerms(stateBundle));
   return FISH_FILTER_TERM_ORDER.filter((term) => !selected.has(term)).map((term) => ({
     kind: "fish-filter",
     term,
-    label: FISH_FILTER_TERM_METADATA[term]?.label || term,
-    description: FISH_FILTER_TERM_METADATA[term]?.description || "",
+    label: metadataByTerm[term]?.label || term,
+    description: metadataByTerm[term]?.description || "",
     _score: 0,
   }));
 }
 
 function buildPatchBoundPromptMatches(stateBundle) {
   const selectedBounds = resolveSelectedPatchBoundSet(stateBundle);
-  return PATCH_BOUND_PROMPT_MATCHES
+  return patchBoundPromptMatches()
     .filter((match) => !selectedBounds.has(match.bound))
     .map((match) => ({
       kind: "patch-bound",
@@ -667,7 +676,7 @@ function findPatchPromptMatches(searchText, stateBundle) {
   }
   const selectedBounds = resolveSelectedPatchBoundSet(stateBundle);
   const matches = [];
-  for (const candidate of PATCH_BOUND_PROMPT_MATCHES) {
+  for (const candidate of patchBoundPromptMatches()) {
     if (selectedBounds.has(candidate.bound)) {
       continue;
     }
@@ -1062,5 +1071,5 @@ export function patchTouchesSearchPanelSignals(patch) {
 }
 
 export function fishFilterTermMetadata(term) {
-  return FISH_FILTER_TERM_METADATA[normalizeFishFilterTerm(term)] || null;
+  return fishFilterMetadata()[normalizeFishFilterTerm(term)] || null;
 }

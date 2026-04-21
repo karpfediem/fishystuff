@@ -1,15 +1,20 @@
 import { buildAppliedSearchTermsView } from "../js/components/applied-search-terms.js";
+import { mapCountText, mapText } from "./map-i18n.js";
 
 function normalizeExpressionOperator(value) {
   return String(value ?? "").trim().toLowerCase() === "and" ? "and" : "or";
 }
 
 function patchBoundLabel(bound) {
-  return String(bound || "").trim().toLowerCase() === "to" ? "Before" : "After";
+  return String(bound || "").trim().toLowerCase() === "to"
+    ? mapText("search.bound.before")
+    : mapText("search.bound.after");
 }
 
 function nextPatchBoundLabel(bound) {
-  return String(bound || "").trim().toLowerCase() === "to" ? "After" : "Before";
+  return String(bound || "").trim().toLowerCase() === "to"
+    ? mapText("search.bound.after")
+    : mapText("search.bound.before");
 }
 
 function searchControlId(prefix, path) {
@@ -24,7 +29,7 @@ function searchControlId(prefix, path) {
 function patchDropdownValueMarkup(patchId, patch, escapeHtml) {
   const normalizedPatchId = String(patchId || "").trim();
   if (!normalizedPatchId && !patch) {
-    return `<span class="truncate font-medium text-base-content/60">Choose date</span>`;
+    return `<span class="truncate font-medium text-base-content/60">${escapeHtml(mapText("search.patch.choose_date"))}</span>`;
   }
   if (!patch) {
     return `<span class="fishymap-date-term-label truncate font-medium">${escapeHtml(normalizedPatchId)}</span>`;
@@ -75,7 +80,7 @@ function patchDropdownMarkup(term, context, path, boundLabel, patch) {
         input-id="${context.escapeHtml(inputId)}"
         label="${context.escapeHtml(selectedLabel)}"
         value="${context.escapeHtml(patchId)}"
-        placeholder="Search patches or enter YYYY-MM-DD"
+        placeholder="${context.escapeHtml(mapText("search.patch.dropdown_placeholder"))}"
         custom-option-mode="iso-date"
         panel-anchor-closest=".fishy-applied-term"
       >
@@ -114,7 +119,7 @@ function patchDropdownMarkup(term, context, path, boundLabel, patch) {
                 type="search"
                 class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
                 style="outline: none; box-shadow: none;"
-                placeholder="Search patches"
+                placeholder="${context.escapeHtml(mapText("search.patch.search_placeholder"))}"
                 autocomplete="off"
                 spellcheck="false"
               >
@@ -144,7 +149,7 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       key: `fish-filter:${term.term}`,
       path,
       label,
-      kindLabel: "Filter",
+      kindLabel: mapText("search.kind.filter"),
       grade: term.term,
       negated,
       contentMarkup: `
@@ -153,7 +158,7 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
           <span class="font-medium">${context.escapeHtml(label)}</span>
         </span>
       `,
-      removeLabel: `Remove ${label}`,
+      removeLabel: mapText("search.action.remove", { label }),
       removeAttributes: {
         "data-fish-filter-term": term.term,
       },
@@ -170,7 +175,7 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       key: `patch-bound:${term.bound}:${patchId || "__pending__"}`,
       path,
       label: patchLabel ? `${boundLabel} ${patchLabel}` : boundLabel,
-      kindLabel: "Date",
+      kindLabel: mapText("search.kind.date"),
       grade: "patch",
       allowNegation: false,
       negated: false,
@@ -184,13 +189,15 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
             class="badge badge-ghost badge-xs cursor-pointer"
             type="button"
             data-expression-patch-toggle-path="${context.escapeHtml(path)}"
-            aria-label="${context.escapeHtml(`Change date bound to ${nextPatchBoundLabel(term.bound)}`)}"
-            title="${context.escapeHtml(`Change date bound to ${nextPatchBoundLabel(term.bound)}`)}"
+            aria-label="${context.escapeHtml(mapText("search.patch.change_bound", { bound: nextPatchBoundLabel(term.bound) }))}"
+            title="${context.escapeHtml(mapText("search.patch.change_bound", { bound: nextPatchBoundLabel(term.bound) }))}"
           >${context.escapeHtml(boundLabel)}</button>
           ${patchDropdownMarkup(term, context, path, boundLabel, patch)}
         </span>
       `,
-      removeLabel: patchLabel ? `Remove ${boundLabel} ${patchLabel}` : `Remove ${boundLabel}`,
+      removeLabel: mapText("search.action.remove", {
+        label: patchLabel ? `${boundLabel} ${patchLabel}` : boundLabel,
+      }),
       removeAttributes: {
         "data-patch-bound": term.bound,
         ...(patchId ? { "data-patch-id": patchId } : {}),
@@ -200,19 +207,19 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
 
   if (term.kind === "fish") {
     const fish = context.fishLookup.get(term.fishId);
-    const name = fish?.name || `Fish ${term.fishId}`;
+    const name = fish?.name || mapText("search.fish.fallback", { id: term.fishId });
     return {
       type: "term",
       key: `fish:${term.fishId}`,
       path,
       label: name,
-      kindLabel: "Fish",
+      kindLabel: mapText("search.kind.fish"),
       grade: context.resolveFishGrade(fish),
       negated,
       contentMarkup:
         context.fishIdentityMarkup({ ...(fish || {}), fishId: term.fishId, name }, { interactive: true })
         || `<span class="truncate max-w-36">${context.escapeHtml(name)}</span>`,
-      removeLabel: `Remove ${name}`,
+      removeLabel: mapText("search.action.remove", { label: name }),
       removeAttributes: {
         "data-fish-id": term.fishId,
       },
@@ -221,13 +228,13 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
 
   if (term.kind === "zone") {
     const zone = context.zoneLookup.get(term.zoneRgb);
-    const name = zone?.name || `Zone ${context.formatZone(term.zoneRgb)}`;
+    const name = zone?.name || mapText("search.zone.fallback", { zone: context.formatZone(term.zoneRgb) });
     return {
       type: "term",
       key: `zone:${term.zoneRgb}`,
       path,
       label: name,
-      kindLabel: "Zone",
+      kindLabel: mapText("search.kind.zone"),
       grade: "zone",
       negated,
       description: "",
@@ -242,7 +249,7 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
           },
           { interactive: true },
         ) || `<span class="truncate max-w-40">${context.escapeHtml(name)}</span>`,
-      removeLabel: `Remove ${name}`,
+      removeLabel: mapText("search.action.remove", { label: name }),
       removeAttributes: {
         "data-zone-rgb": term.zoneRgb,
       },
@@ -254,20 +261,20 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       context.semanticLookup.get(
         `${String(term.layerId || "").trim()}:${Number.parseInt(term.fieldId, 10)}`,
       ) || null;
-    const name = semanticTerm?.label || `Field ${term.fieldId}`;
+    const name = semanticTerm?.label || mapText("search.semantic.field", { id: term.fieldId });
     return {
       type: "term",
       key: `semantic:${term.layerId}:${term.fieldId}`,
       path,
       label: name,
-      kindLabel: semanticTerm?.layerName || "Map",
+      kindLabel: semanticTerm?.layerName || mapText("search.kind.map"),
       grade: "semantic",
       negated,
       description: semanticTerm?.description || "",
       contentMarkup:
         context.semanticIdentityMarkup(name, { interactive: true })
         || `<span class="truncate max-w-40">${context.escapeHtml(name)}</span>`,
-      removeLabel: `Remove ${name}`,
+      removeLabel: mapText("search.action.remove", { label: name }),
       removeAttributes: {
         "data-semantic-layer-id": term.layerId,
         "data-semantic-field-id": term.fieldId,
@@ -457,7 +464,7 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
   if (elements.searchCount) {
     setTextContent(
       elements.searchCount,
-      `${matches.length} ${matches.length === 1 ? "match" : "matches"}`,
+      mapCountText("search.results.match_count", matches.length),
     );
     setBooleanProperty(elements.searchCount, "hidden", !query);
   }
@@ -479,8 +486,8 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
               data-fish-filter-term="${escapeHtml(match.term)}"
               role="button"
               tabindex="0"
-              aria-label="Add ${escapeHtml(match.label || match.term)}"
-              title="Add ${escapeHtml(match.label || match.term)}"
+              aria-label="${escapeHtml(mapText("search.action.add", { label: match.label || match.term }))}"
+              title="${escapeHtml(mapText("search.action.add", { label: match.label || match.term }))}"
             >
               <span class="min-w-0 flex-1 text-left">
                 <span class="flex items-center gap-2">
@@ -508,8 +515,12 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
               role="button"
               tabindex="0"
               ${patchId ? `data-patch-id="${escapeHtml(patchId)}"` : ""}
-              aria-label="${escapeHtml(promptOnly ? `Add ${boundLabel}` : `Add ${boundLabel} ${patchLabel}`)}"
-              title="${escapeHtml(promptOnly ? `Add ${boundLabel}` : `Add ${boundLabel} ${patchLabel}`)}"
+              aria-label="${escapeHtml(mapText("search.action.add", {
+                label: promptOnly ? boundLabel : `${boundLabel} ${patchLabel}`,
+              }))}"
+              title="${escapeHtml(mapText("search.action.add", {
+                label: promptOnly ? boundLabel : `${boundLabel} ${patchLabel}`,
+              }))}"
             >
               <span class="min-w-0 flex-1 text-left">
                 <span class="flex items-center gap-2">
@@ -521,7 +532,7 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
                 <span class="mt-1 block truncate text-xs text-base-content/60">
                   ${
                     promptOnly
-                      ? escapeHtml(match.description || "Pick a patch or date to limit samples.")
+                      ? escapeHtml(match.description || mapText("search.patch.pick_patch_or_date"))
                       : `<code>${escapeHtml(patchId)}</code>`
                   }
                 </span>
@@ -541,13 +552,13 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
             data-zone-rgb="${match.zoneRgb}"
             role="button"
             tabindex="0"
-            aria-label="Add ${escapeHtml(match.name)}"
-            title="Add ${escapeHtml(match.name)}"
+            aria-label="${escapeHtml(mapText("search.action.add", { label: match.name }))}"
+            title="${escapeHtml(mapText("search.action.add", { label: match.name }))}"
           >
             <span class="min-w-0 flex-1 text-left">
               <span class="flex items-center gap-2">
                 ${zoneMarkup}
-                <span class="badge badge-outline badge-xs">Zone</span>
+                <span class="badge badge-outline badge-xs">${escapeHtml(mapText("search.zone.badge"))}</span>
               </span>
               <span class="block truncate text-xs text-base-content/60">
                 <code>${escapeHtml(match.rgbKey)}</code>
@@ -559,7 +570,7 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
       `;
       }
       if (match.kind === "semantic") {
-        const semanticLabel = match.label || `Field ${match.fieldId}`;
+        const semanticLabel = match.label || mapText("search.semantic.field", { id: match.fieldId });
         const semanticMarkup =
           semanticIdentityMarkup(semanticLabel, { interactive: true }) ||
           `<span class="truncate">${escapeHtml(semanticLabel)}</span>`;
@@ -572,13 +583,13 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
               data-semantic-label="${escapeHtml(semanticLabel)}"
               role="button"
               tabindex="0"
-              aria-label="Add ${escapeHtml(semanticLabel)}"
-              title="Add ${escapeHtml(semanticLabel)}"
+              aria-label="${escapeHtml(mapText("search.action.add", { label: semanticLabel }))}"
+              title="${escapeHtml(mapText("search.action.add", { label: semanticLabel }))}"
             >
               <span class="min-w-0 flex-1 text-left">
                 <span class="block">${semanticMarkup}</span>
                 <span class="mt-1 block truncate text-xs text-base-content/60">
-                  ${escapeHtml(match.description || `Field ${match.fieldId}`)}
+                  ${escapeHtml(match.description || mapText("search.semantic.field", { id: match.fieldId }))}
                 </span>
               </span>
             </div>
@@ -592,8 +603,8 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
             data-fish-id="${match.fishId}"
             role="button"
             tabindex="0"
-            aria-label="Add ${escapeHtml(match.name)}"
-            title="Add ${escapeHtml(match.name)}"
+            aria-label="${escapeHtml(mapText("search.action.add", { label: match.name }))}"
+            title="${escapeHtml(mapText("search.action.add", { label: match.name }))}"
           >
             <span class="min-w-0 flex-1 text-left">
               ${fishIdentityMarkup(match, { interactive: true })}

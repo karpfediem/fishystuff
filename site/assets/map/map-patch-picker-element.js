@@ -2,6 +2,7 @@ import {
   buildPatchPickerStateBundle,
   patchTouchesPatchPickerSignals,
 } from "./map-patch-picker-live.js";
+import { mapText } from "./map-i18n.js";
 import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
@@ -114,19 +115,19 @@ function ensurePatchPickerMarkup(host, ids) {
   }
   host.innerHTML = `
     <fieldset id="fishymap-patch-picker-fieldset" class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
-      <legend class="fieldset-legend px-1 text-sm font-semibold">Patch window</legend>
-      <span class="label px-1 pt-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Inclusive</span>
+      <legend class="fieldset-legend px-1 text-sm font-semibold">${escapeHtml(mapText("patch_picker.window"))}</legend>
+      <span class="label px-1 pt-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(mapText("patch_picker.inclusive"))}</span>
       <div class="flex flex-col gap-3">
         <label class="form-control gap-2">
-          <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">From</span>
+          <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">${escapeHtml(mapText("patch_picker.from"))}</span>
           <input id="${escapeHtml(ids.fromInputId)}" type="hidden" value="">
           <fishy-searchable-dropdown
             id="${escapeHtml(ids.fromPickerId)}"
             class="relative block w-full"
             input-id="${escapeHtml(ids.fromInputId)}"
-            label="Loading patches…"
+            label="${escapeHtml(mapText("patch_picker.loading"))}"
             value=""
-            placeholder="Search patches"
+            placeholder="${escapeHtml(mapText("patch_picker.search"))}"
           >
             <button
               type="button"
@@ -136,7 +137,7 @@ function ensurePatchPickerMarkup(host, ids) {
               aria-expanded="false"
               aria-controls="${escapeHtml(ids.fromPanelId)}"
             >
-              <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">Loading patches…</span></span></span>
+              <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">${escapeHtml(mapText("patch_picker.loading"))}</span></span></span>
               <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
             </button>
             <div id="${escapeHtml(ids.fromPanelId)}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
@@ -149,14 +150,14 @@ function ensurePatchPickerMarkup(host, ids) {
                     type="search"
                     class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
                     style="outline: none; box-shadow: none;"
-                    placeholder="Search patches"
+                    placeholder="${escapeHtml(mapText("patch_picker.search"))}"
                     autocomplete="off"
                     spellcheck="false"
                   >
                 </label>
                 <div class="px-1 pb-1">
                   <ul id="${escapeHtml(ids.fromResultsId)}" tabindex="-1" data-role="results" class="menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1">
-                    <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading patches…</span></span></li>
+                    <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>${escapeHtml(mapText("patch_picker.loading"))}</span></span></li>
                   </ul>
                 </div>
               </div>
@@ -165,15 +166,15 @@ function ensurePatchPickerMarkup(host, ids) {
           </fishy-searchable-dropdown>
         </label>
         <label class="form-control gap-2">
-          <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">Until (incl.)</span>
+          <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">${escapeHtml(mapText("patch_picker.until_inclusive"))}</span>
           <input id="${escapeHtml(ids.toInputId)}" type="hidden" value="">
           <fishy-searchable-dropdown
             id="${escapeHtml(ids.toPickerId)}"
             class="relative block w-full"
             input-id="${escapeHtml(ids.toInputId)}"
-            label="Loading patches…"
+            label="${escapeHtml(mapText("patch_picker.loading"))}"
             value=""
-            placeholder="Search patches"
+            placeholder="${escapeHtml(mapText("patch_picker.search"))}"
           >
             <button
               type="button"
@@ -183,7 +184,7 @@ function ensurePatchPickerMarkup(host, ids) {
               aria-expanded="false"
               aria-controls="${escapeHtml(ids.toPanelId)}"
             >
-              <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">Loading patches…</span></span></span>
+              <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">${escapeHtml(mapText("patch_picker.loading"))}</span></span></span>
               <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
             </button>
             <div id="${escapeHtml(ids.toPanelId)}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
@@ -196,14 +197,14 @@ function ensurePatchPickerMarkup(host, ids) {
                     type="search"
                     class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
                     style="outline: none; box-shadow: none;"
-                    placeholder="Search patches"
+                    placeholder="${escapeHtml(mapText("patch_picker.search"))}"
                     autocomplete="off"
                     spellcheck="false"
                   >
                 </label>
                 <div class="px-1 pb-1">
                   <ul id="${escapeHtml(ids.toResultsId)}" tabindex="-1" data-role="results" class="menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1">
-                    <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading patches…</span></span></li>
+                    <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>${escapeHtml(mapText("patch_picker.loading"))}</span></span></li>
                   </ul>
                 </div>
               </div>
@@ -310,7 +311,7 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
         ? [
             createTemplate(globalThis.document, {
               value: "",
-              label: "Now",
+              label: mapText("patch_picker.now"),
               searchText: "now latest current",
             }),
           ]
@@ -321,9 +322,9 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
       || (bound === "to" && !selectedId ? extraTemplates[0] : null);
     const placeholderLabel = bundle.state.ready
       ? patches.length
-        ? "Select patch"
-        : "No patches available"
-      : "Loading patches…";
+        ? mapText("patch_picker.select")
+        : mapText("patch_picker.none")
+      : mapText("patch_picker.loading");
     syncSelectedContent(picker.dropdown, selectedTemplate, placeholderLabel, {
       loading: !bundle.state.ready,
     });

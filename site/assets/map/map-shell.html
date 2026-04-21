@@ -85,7 +85,7 @@
       <div hidden
            data-init="const shell = el.closest('#map-page-shell'); shell.__fishymapInitialSignals = $; shell.dispatchEvent(new CustomEvent('fishymap-live-init', { bubbles: true, detail: $ }))"></div>
       <canvas id="bevy"></canvas>
-      <div id="fishymap-toolbar" class="not-prose" aria-label="Map windows">
+      <div id="fishymap-toolbar" class="not-prose" aria-label="" data-i18n-attr-aria-label="map.toolbar.map_windows">
         <button
           class="fishymap-toolbar-button"
           data-window-toggle="search"
@@ -93,8 +93,10 @@
           type="button"
           data-attr:data-open="$_map_ui.windowUi.search.open ? 'true' : 'false'"
           data-attr:aria-pressed="$_map_ui.windowUi.search.open"
-          data-attr:aria-label="$_map_ui.windowUi.search.open ? 'Hide search' : 'Show search'"
-          data-attr:title="$_map_ui.windowUi.search.open ? 'Hide search' : 'Show search'"
+          aria-label=""
+          title=""
+          data-i18n-attr-aria-label="map.toolbar.search"
+          data-i18n-attr-title="map.toolbar.search"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-magnifying-glass"></use></svg>
         </button>
@@ -105,8 +107,10 @@
           type="button"
           data-attr:data-open="$_map_ui.windowUi.bookmarks.open ? 'true' : 'false'"
           data-attr:aria-pressed="$_map_ui.windowUi.bookmarks.open"
-          data-attr:aria-label="$_map_ui.windowUi.bookmarks.open ? 'Hide bookmarks' : 'Show bookmarks'"
-          data-attr:title="$_map_ui.windowUi.bookmarks.open ? 'Hide bookmarks' : 'Show bookmarks'"
+          aria-label=""
+          title=""
+          data-i18n-attr-aria-label="map.toolbar.bookmarks"
+          data-i18n-attr-title="map.toolbar.bookmarks"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmarks"></use></svg>
         </button>
@@ -117,8 +121,10 @@
           type="button"
           data-attr:data-open="$_map_ui.windowUi.settings.open ? 'true' : 'false'"
           data-attr:aria-pressed="$_map_ui.windowUi.settings.open"
-          data-attr:aria-label="$_map_ui.windowUi.settings.open ? 'Hide settings' : 'Show settings'"
-          data-attr:title="$_map_ui.windowUi.settings.open ? 'Hide settings' : 'Show settings'"
+          aria-label=""
+          title=""
+          data-i18n-attr-aria-label="map.toolbar.settings"
+          data-i18n-attr-title="map.toolbar.settings"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
         </button>
@@ -129,8 +135,10 @@
           type="button"
           data-attr:data-open="$_map_ui.windowUi.zoneInfo.open ? 'true' : 'false'"
           data-attr:aria-pressed="$_map_ui.windowUi.zoneInfo.open"
-          data-attr:aria-label="$_map_ui.windowUi.zoneInfo.open ? 'Hide info' : 'Show info'"
-          data-attr:title="$_map_ui.windowUi.zoneInfo.open ? 'Hide info' : 'Show info'"
+          aria-label=""
+          title=""
+          data-i18n-attr-aria-label="map.toolbar.info"
+          data-i18n-attr-title="map.toolbar.info"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-inspect-fill"></use></svg>
         </button>
@@ -141,8 +149,10 @@
           type="button"
           data-attr:data-open="$_map_ui.windowUi.layers.open ? 'true' : 'false'"
           data-attr:aria-pressed="$_map_ui.windowUi.layers.open"
-          data-attr:aria-label="$_map_ui.windowUi.layers.open ? 'Hide layers' : 'Show layers'"
-          data-attr:title="$_map_ui.windowUi.layers.open ? 'Hide layers' : 'Show layers'"
+          aria-label=""
+          title=""
+          data-i18n-attr-aria-label="map.toolbar.layers"
+          data-i18n-attr-title="map.toolbar.layers"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-squares-2x2"></use></svg>
         </button>
@@ -163,20 +173,21 @@
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-magnifying-glass"></use></svg>
-            <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
+            <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight" data-i18n-text="map.search.window_title"></span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
             <input
               id="fishymap-search"
               class="grow"
               type="search"
-              placeholder="Search fish, zone, filter, or patch"
+              placeholder=""
+              data-i18n-attr-placeholder="map.search.placeholder"
               autocomplete="off"
               data-bind="_map_ui.search.query"
               data-on:input="$_map_ui.search.open = true"
               data-on:focus="$_map_ui.search.open = true"
             >
-            <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
+            <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden></span>
           </label>
         </div>
         <div
@@ -210,11 +221,11 @@
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmarks"></use></svg>
-            <span class="fishymap-window-title text-lg leading-tight">Bookmarks</span>
+            <span class="fishymap-window-title text-lg leading-tight" data-i18n-text="map.bookmarks.window_title"></span>
           </div>
           <button id="fishymap-bookmark-place" class="btn btn-primary btn-sm" type="button">
             <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmark-add"></use></svg>
-            <span id="fishymap-bookmark-place-label">New bookmark</span>
+            <span id="fishymap-bookmark-place-label" data-i18n-text="map.bookmarks.new"></span>
           </button>
         </div>
         <div
@@ -246,13 +257,13 @@
             <span id="fishymap-zone-info-title-icon" class="fishy-icon fishymap-window-title-icon size-5" aria-hidden="true">
               <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-inspect-fill"></use></svg>
             </span>
-            <span id="fishymap-zone-info-title" class="fishymap-window-title truncate text-lg leading-tight">Details</span>
+            <span id="fishymap-zone-info-title" class="fishymap-window-title truncate text-lg leading-tight" data-i18n-text="map.info.window_title"></span>
           </div>
           <span id="fishymap-zone-info-status" class="inline-flex min-w-0 items-center gap-2 text-xs text-base-content/60">
             <span id="fishymap-zone-info-status-icon" class="inline-flex text-base-content/55" aria-hidden="true">
               <svg class="size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-information-circle"></use></svg>
             </span>
-            <span id="fishymap-zone-info-status-text" class="truncate">no selection</span>
+            <span id="fishymap-zone-info-status-text" class="truncate" data-i18n-text="map.info.status.no_selection"></span>
           </span>
         </div>
         <div
@@ -282,7 +293,7 @@
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-squares-2x2"></use></svg>
-            <p class="fishymap-window-title text-lg leading-tight">Layers</p>
+            <p class="fishymap-window-title text-lg leading-tight" data-i18n-text="map.layers.window_title"></p>
           </div>
           <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
         </div>
@@ -313,7 +324,7 @@
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
-            <p class="fishymap-window-title text-lg leading-tight">Settings</p>
+            <p class="fishymap-window-title text-lg leading-tight" data-i18n-text="map.settings.window_title"></p>
           </div>
           <span
             id="fishymap-ready-pill"
@@ -322,7 +333,8 @@
             data-class:badge-outline="!$_map_runtime.ready"
           >
             <span class="loading loading-spinner loading-xs" aria-hidden="true" data-show="!$_map_runtime.ready" style="display: none"></span>
-            <span data-text="$_map_runtime.ready ? 'Ready' : 'Loading'">Loading</span>
+            <span data-show="$_map_runtime.ready" style="display: none" data-i18n-text="map.settings.ready"></span>
+            <span data-show="!$_map_runtime.ready" data-i18n-text="map.settings.loading"></span>
           </span>
         </div>
 
@@ -339,20 +351,22 @@
                 class="btn btn-outline btn-secondary btn-sm w-full"
                 type="button"
                 data-on:click="$_map_actions.resetViewToken = ($_map_actions.resetViewToken || 0) + 1"
-              >Reset view</button>
+                data-i18n-text="map.settings.reset_view"
+              ></button>
               <button
                 id="fishymap-reset-ui"
                 class="btn btn-outline btn-sm w-full"
                 type="button"
                 data-on:click="$_map_actions.resetUiToken = ($_map_actions.resetUiToken || 0) + 1"
-              >Reset UI</button>
+                data-i18n-text="map.settings.reset_ui"
+              ></button>
             </div>
 
             <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
-              <legend class="fieldset-legend px-1 text-sm font-semibold">Display</legend>
+              <legend class="fieldset-legend px-1 text-sm font-semibold" data-i18n-text="map.settings.display"></legend>
               <div class="space-y-3 pt-1">
                 <label class="flex items-center justify-between gap-3 text-sm">
-                  <span class="font-semibold">Auto-adjust view</span>
+                  <span class="font-semibold" data-i18n-text="map.settings.auto_adjust_view"></span>
                   <input id="fishymap-auto-adjust-view" class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked data-bind="_map_ui.windowUi.settings.autoAdjustView">
                 </label>
               </div>
@@ -365,10 +379,10 @@
             data-attr:open="$_map_bridged.ui.diagnosticsOpen"
             data-on:toggle="$_map_bridged.ui.diagnosticsOpen = evt.currentTarget.open"
           >
-            <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
+            <summary class="collapse-title min-h-0 py-3 text-sm font-semibold" data-i18n-text="map.settings.diagnostics"></summary>
             <div class="collapse-content space-y-3">
               <div id="fishymap-status-lines" class="space-y-1 text-xs text-base-content/70"></div>
-              <pre id="fishymap-diagnostic-json" class="rounded-box border border-neutral/20 bg-neutral text-neutral-content p-3 text-[11px] leading-5">Waiting for bridge events…</pre>
+              <pre id="fishymap-diagnostic-json" class="rounded-box border border-neutral/20 bg-neutral text-neutral-content p-3 text-[11px] leading-5" data-i18n-text="map.settings.waiting_bridge_events"></pre>
             </div>
           </details>
         </div>
@@ -380,12 +394,10 @@
       <div id="fishymap-error-overlay" class="card card-border border-error/40 bg-base-100 not-prose" hidden>
         <div class="space-y-3 px-4 py-4">
           <div class="flex items-center justify-between gap-3">
-            <p class="fishymap-window-title text-lg leading-tight text-error">Map renderer unavailable</p>
-            <span class="badge badge-error badge-sm">Error</span>
+            <p class="fishymap-window-title text-lg leading-tight text-error" data-i18n-text="map.error.renderer_unavailable"></p>
+            <span class="badge badge-error badge-sm" data-i18n-text="map.error.badge"></span>
           </div>
-          <p class="text-sm text-base-content/80">
-            The webpage loaded, but the Bevy/WebGL renderer could not start.
-          </p>
+          <p class="text-sm text-base-content/80" data-i18n-text="map.error.renderer_start_failed"></p>
           <pre id="fishymap-error-message" class="rounded-box bg-neutral text-neutral-content p-3 text-[11px] leading-5"></pre>
         </div>
       </div>

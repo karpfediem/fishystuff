@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   FishyMapLayerPanelElement,
@@ -41,3 +42,4 @@ test("layer panel element exposes render and scheduling hooks", () => {
   assert.equal(typeof element.scheduleRender, "function");
   assert.equal(typeof element.writeBridgedFilters, "function");
 });
+installMapTestI18n();

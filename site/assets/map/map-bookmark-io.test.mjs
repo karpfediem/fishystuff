@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   buildBookmarkExportMessage,
@@ -9,6 +10,8 @@ import {
   parseImportedBookmarks,
   serializeBookmarksForExport,
 } from "./map-bookmark-io.js";
+
+installMapTestI18n();
 
 test("bookmark io serializes bookmarks to WorldmapBookMark XML", () => {
   const xml = serializeBookmarksForExport([
@@ -54,6 +57,6 @@ test("bookmark io status messages stay user-facing", () => {
   assert.equal(buildBookmarkExportMessage(1, 1), "Exported 1 selected bookmark.");
   assert.equal(
     buildBookmarkImportMessage(2, 1),
-    "Imported 2 bookmarks; skipped 1 duplicate.",
+    "Imported 2 bookmarks. Skipped 1 duplicate.",
   );
 });

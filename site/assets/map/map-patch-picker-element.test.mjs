@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   readMapPatchPickerShellSignals,
@@ -33,3 +34,4 @@ test("registerFishyMapPatchPickerElement defines the custom element once", () =>
   assert.equal(registry.definitions.size, 1);
   assert.ok(registry.get("fishymap-patch-picker"));
 });
+installMapTestI18n();

@@ -3,48 +3,9 @@ import {
   zoneCatalogEntryForRgb,
   zoneDisplayNameFromCatalog,
 } from "./map-zone-catalog.js";
+import { mapText } from "./map-i18n.js";
 
 const DEFAULT_FACT_ICON = "information-circle";
-
-const LAYER_HOVER_FACT_DEFINITIONS = Object.freeze({
-  zone_mask: Object.freeze([
-    Object.freeze({
-      key: "zone",
-      factKeys: Object.freeze(["zone"]),
-      name: "Zone Name",
-      label: "Zone",
-      icon: "hover-zone",
-      defaultVisible: true,
-    }),
-    Object.freeze({
-      key: "rgb",
-      factKeys: Object.freeze(["rgb"]),
-      name: "RGB",
-      label: "RGB",
-      defaultVisible: true,
-    }),
-  ]),
-  region_groups: Object.freeze([
-    Object.freeze({
-      key: "resource_group",
-      factKeys: Object.freeze(["resource_group", "resources", "resource_region"]),
-      name: "Resources",
-      label: "Resources",
-      icon: "hover-resources",
-      defaultVisible: false,
-    }),
-  ]),
-  regions: Object.freeze([
-    Object.freeze({
-      key: "origin_region",
-      factKeys: Object.freeze(["origin_region", "origin"]),
-      name: "Origin",
-      label: "Origin",
-      icon: "trade-origin",
-      defaultVisible: false,
-    }),
-  ]),
-});
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -60,7 +21,7 @@ function trimString(value) {
 }
 
 function factLabelFallback(value) {
-  return trimString(value).replace(/_/g, " ") || "Details";
+  return trimString(value).replace(/_/g, " ") || mapText("hover.details");
 }
 
 function normalizeRgbTriplet(input) {
@@ -131,7 +92,46 @@ function detailFactByKeys(sample, factKeys) {
 }
 
 function definitionsForLayer(layerId) {
-  return LAYER_HOVER_FACT_DEFINITIONS[trimString(layerId)] || [];
+  const definitions = {
+    zone_mask: [
+      {
+        key: "zone",
+        factKeys: ["zone"],
+        name: mapText("hover.zone_name"),
+        label: mapText("hover.zone"),
+        icon: "hover-zone",
+        defaultVisible: true,
+      },
+      {
+        key: "rgb",
+        factKeys: ["rgb"],
+        name: mapText("hover.rgb"),
+        label: mapText("hover.rgb"),
+        defaultVisible: true,
+      },
+    ],
+    region_groups: [
+      {
+        key: "resource_group",
+        factKeys: ["resource_group", "resources", "resource_region"],
+        name: mapText("hover.resources"),
+        label: mapText("hover.resources"),
+        icon: "hover-resources",
+        defaultVisible: false,
+      },
+    ],
+    regions: [
+      {
+        key: "origin_region",
+        factKeys: ["origin_region", "origin"],
+        name: mapText("hover.origin"),
+        label: mapText("hover.origin"),
+        icon: "trade-origin",
+        defaultVisible: false,
+      },
+    ],
+  };
+  return definitions[trimString(layerId)] || [];
 }
 
 function zoneMaskFactRow(definition, sample, zoneCatalog) {

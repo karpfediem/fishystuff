@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 
@@ -184,3 +185,4 @@ test("buildInfoViewModel falls back to Details when no layer label is available"
   assert.equal(viewModel.descriptor.titleIcon, "inspect-fill");
   assert.equal(viewModel.descriptor.statusIcon, "information-circle");
 });
+installMapTestI18n();

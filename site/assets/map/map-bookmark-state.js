@@ -3,6 +3,7 @@ import {
   preferredPointLabelForLayerSamples,
   preferredOverviewRow,
 } from "./map-overview-facts.js";
+import { mapText } from "./map-i18n.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -183,7 +184,7 @@ export function bookmarkDisplayLabel(bookmark, fallbackIndex = 0, stateBundle = 
   if (fallbackLabel) {
     return fallbackLabel;
   }
-  return `Bookmark ${fallbackIndex + 1}`;
+  return mapText("bookmarks.fallback", { index: fallbackIndex + 1 });
 }
 
 export function bookmarkCurrentPointSubtitle(bookmark, fallbackIndex = 0, stateBundle = null) {
@@ -216,7 +217,7 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBund
   const rows = [
     {
       icon: "bookmark",
-      label: "Bookmark",
+      label: mapText("bookmarks.row_label"),
       value: displayLabel,
       hideLabel: true,
     },

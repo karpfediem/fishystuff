@@ -3,6 +3,7 @@ import {
   FISHYMAP_POINT_ICON_SCALE_MIN,
 } from "./map-host.js";
 import { buildLayerPanelHoverFactPreview } from "./map-hover-facts.js";
+import { mapText } from "./map-i18n.js";
 import { layerSearchTermKindLabels } from "./map-layer-search-effects.js";
 import {
   clampLayerOpacity,
@@ -18,18 +19,18 @@ import {
 
 function layerKindLabel(kind) {
   if (kind === "fish-evidence") {
-    return "Evidence";
+    return mapText("layers.kind.evidence");
   }
   if (kind === "vector-geojson") {
-    return "Vector";
+    return mapText("layers.kind.vector");
   }
   if (kind === "waypoints") {
-    return "Waypoints";
+    return mapText("layers.kind.waypoints");
   }
   if (kind === "tiled-raster") {
-    return "Raster";
+    return mapText("layers.kind.raster");
   }
-  return "Layer";
+  return mapText("layers.kind.layer");
 }
 
 function escapeAttribute(value) {
@@ -46,7 +47,7 @@ function hoverFactIconMarkup(row, escapeHtml) {
 function hoverFactValueMarkup(row, escapeHtml) {
   const value = String(row?.value || "").trim();
   if (!value) {
-    return '<span class="text-base-content/35">Unavailable</span>';
+    return `<span class="text-base-content/35">${escapeHtml(mapText("layers.unavailable"))}</span>`;
   }
   return escapeHtml(value);
 }
@@ -91,7 +92,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
     const loadingKey = "__loading__";
     if (container.dataset.renderKey !== loadingKey) {
       container.dataset.renderKey = loadingKey;
-      container.innerHTML = renderLoadingPanelMarkup("Layer registry is loading…");
+      container.innerHTML = renderLoadingPanelMarkup(mapText("layers.loading_registry"));
     }
     return;
   }
@@ -188,7 +189,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
       const locked = Boolean(layer.locked);
       const settingsExpanded = expandedLayerIds.has(layer.layerId);
       const kind = layerKindLabel(layer.kind);
-      const visibilityLabel = visible ? "Hide" : "Show";
+      const visibilityLabel = visible ? mapText("layers.hide") : mapText("layers.show");
       const clipMaskValue = String(flatClipMasks[layer.layerId] || "").trim();
       const clipMaskName = clipMaskValue ? layerNameById.get(clipMaskValue) || clipMaskValue : "";
       const clippedLayers = clippedLayersByMask.get(layer.layerId) || [];
@@ -196,12 +197,12 @@ export function renderLayerStack(container, stateBundle, options = {}) {
       const relationBadges = [];
       if (clipMaskName) {
         relationBadges.push(
-          `<span class="badge badge-soft badge-xs">Clipped by ${escapeHtml(clipMaskName)}</span>`,
+          `<span class="badge badge-soft badge-xs">${escapeHtml(mapText("layers.badge.clipped_by", { mask: clipMaskName }))}</span>`,
         );
       }
       if (clippedLayers.length) {
         relationBadges.push(
-          `<span class="badge badge-soft badge-xs">Masks ${clippedLayers.length}</span>`,
+          `<span class="badge badge-soft badge-xs">${escapeHtml(mapText("layers.badge.masks", { count: clippedLayers.length }))}</span>`,
         );
       }
       const waypointControls = [];
@@ -214,7 +215,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
               type="checkbox"
               ${layer.waypointConnectionsVisible ? "checked" : ""}
             >
-            <span class="label-text text-xs text-base-content/70">Connections</span>
+            <span class="label-text text-xs text-base-content/70">${escapeHtml(mapText("layers.connections"))}</span>
           </label>
         `);
       }
@@ -227,7 +228,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
               type="checkbox"
               ${layer.waypointLabelsVisible ? "checked" : ""}
             >
-            <span class="label-text text-xs text-base-content/70">Names</span>
+            <span class="label-text text-xs text-base-content/70">${escapeHtml(mapText("layers.names"))}</span>
           </label>
         `);
       }
@@ -241,7 +242,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
               type="checkbox"
               ${layer.pointIconsVisible ? "checked" : ""}
             >
-            <span class="label-text text-xs text-base-content/70">Icons</span>
+            <span class="label-text text-xs text-base-content/70">${escapeHtml(mapText("layers.icons"))}</span>
           </label>
         `);
       }
@@ -262,7 +263,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
               class="fishymap-layer-drag btn btn-sm btn-circle btn-ghost"
               data-layer-drag="${escapeAttribute(layer.layerId)}"
               type="button"
-              aria-label="${locked ? `${layer.name} is pinned to the ground layer` : `Drag ${layer.name}`}"
+              aria-label="${escapeHtml(locked ? mapText("layers.drag_pinned", { name: layer.name }) : mapText("layers.drag", { name: layer.name }))}"
               draggable="${locked ? "false" : "true"}"
               ${locked ? "disabled" : ""}
               tabindex="-1"
@@ -278,9 +279,9 @@ export function renderLayerStack(container, stateBundle, options = {}) {
               }"
               data-layer-settings-toggle="${escapeAttribute(layer.layerId)}"
               type="button"
-              aria-label="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
+              aria-label="${escapeHtml(settingsExpanded ? mapText("layers.settings_hide", { name: layer.name }) : mapText("layers.settings_show", { name: layer.name }))}"
               aria-expanded="${settingsExpanded ? "true" : "false"}"
-              title="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
+              title="${escapeHtml(settingsExpanded ? mapText("layers.settings_hide", { name: layer.name }) : mapText("layers.settings_show", { name: layer.name }))}"
             >
               ${layerSettingsIcon()}
             </button>
@@ -304,14 +305,14 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                   <div class="fishymap-layer-controls">
                     <div class="fishymap-layer-relations">
                       <span class="badge badge-ghost badge-xs">${kind}</span>
-                      ${locked ? '<span class="badge badge-outline badge-xs">Ground</span>' : ""}
+                      ${locked ? `<span class="badge badge-outline badge-xs">${escapeHtml(mapText("layers.badge.ground"))}</span>` : ""}
                       ${relationBadges.join("")}
                     </div>
                     ${
                       clippedLayerNames.length
                         ? `
                           <p class="text-[11px] text-base-content/45">
-                            Masking ${escapeHtml(clippedLayerNames.join(", "))}
+                            ${escapeHtml(mapText("layers.masking", { names: clippedLayerNames.join(", ") }))}
                           </p>
                         `
                         : ""
@@ -322,7 +323,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                         : `
                           <fieldset class="fishymap-layer-opacity-control fieldset">
                             <div class="flex items-center justify-between gap-3">
-                              <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
+                              <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(mapText("layers.opacity"))}</span>
                               <span class="text-xs font-semibold text-base-content/60" data-layer-opacity-value>${layerOpacityLabel(layer.opacity)}</span>
                             </div>
                             <input
@@ -333,7 +334,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                               max="1"
                               step="0.05"
                               value="${layerOpacityValue(layer.opacity)}"
-                              aria-label="Opacity for ${escapeHtml(layer.name)}"
+                              aria-label="${escapeHtml(mapText("layers.opacity_for", { name: layer.name }))}"
                             >
                           </fieldset>
                         `
@@ -342,7 +343,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                       waypointControls.length
                         ? `
                           <fieldset class="fieldset">
-                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(mapText("layers.waypoints"))}</span>
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                               ${waypointControls.join("")}
                             </div>
@@ -354,7 +355,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                       searchTermKinds.length
                         ? `
                           <fieldset class="fieldset">
-                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Search filters</span>
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(mapText("layers.search_filters"))}</span>
                             <div class="flex flex-wrap gap-1.5">
                               ${searchTermKinds
                                 .map(
@@ -371,15 +372,15 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                       hoverFactRows.length
                         ? `
                           <fieldset class="fieldset">
-                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Hover facts</span>
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(mapText("layers.hover_facts"))}</span>
                             <div class="overflow-x-auto rounded-box border border-base-300/60 bg-base-100/60">
                               <table class="table table-xs fishymap-layer-facts-table">
                                 <thead>
                                   <tr>
-                                    <th class="w-8">Icon</th>
-                                    <th>Name</th>
-                                    <th>Fact</th>
-                                    <th class="w-14 text-right">Show</th>
+                                    <th class="w-8">${escapeHtml(mapText("layers.table.icon"))}</th>
+                                    <th>${escapeHtml(mapText("layers.table.name"))}</th>
+                                    <th>${escapeHtml(mapText("layers.table.fact"))}</th>
+                                    <th class="w-14 text-right">${escapeHtml(mapText("layers.table.show"))}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -397,7 +398,10 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                                               data-layer-hover-fact-key="${escapeAttribute(row.key)}"
                                               type="checkbox"
                                               ${row.enabled ? "checked" : ""}
-                                              aria-label="Show ${escapeHtml(row.name || row.label || row.key)} while hovering ${escapeHtml(layer.name)}"
+                                              aria-label="${escapeHtml(mapText("layers.hover_show", {
+                                                fact: row.name || row.label || row.key,
+                                                layer: layer.name,
+                                              }))}"
                                             >
                                           </td>
                                         </tr>
@@ -415,14 +419,14 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                       pointControls.length
                         ? `
                           <fieldset class="fieldset">
-                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Fish Evidence</span>
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(mapText("layers.fish_evidence"))}</span>
                             <div class="space-y-2">
                               <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                                 ${pointControls.join("")}
                               </div>
                               <div class="space-y-2">
                                 <div class="flex items-center justify-between gap-3">
-                                  <span class="text-xs font-semibold text-base-content/70">Fish icon size</span>
+                                  <span class="text-xs font-semibold text-base-content/70">${escapeHtml(mapText("layers.fish_icon_size"))}</span>
                                   <span class="text-xs font-semibold text-base-content/60" data-layer-point-icon-scale-value>${pointIconScaleLabel(layer.pointIconScale)}</span>
                                 </div>
                                 <input
@@ -433,7 +437,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                                   max="${FISHYMAP_POINT_ICON_SCALE_MAX}"
                                   step="0.05"
                                   value="${pointIconScaleValue(layer.pointIconScale)}"
-                                  aria-label="Fish icon size for ${escapeHtml(layer.name)}"
+                                  aria-label="${escapeHtml(mapText("layers.fish_icon_size_for", { name: layer.name }))}"
                                 >
                               </div>
                             </div>

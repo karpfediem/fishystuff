@@ -1,4 +1,5 @@
 import { resolveApiBaseUrl } from "./map-host.js";
+import { mapText } from "./map-i18n.js";
 import { zoneRgbFromSample } from "./map-overview-facts.js";
 
 const DEFAULT_ZONE_LOOT_SUMMARY_PATH = "/api/v1/zone_loot_summary";
@@ -99,7 +100,7 @@ export async function loadZoneLootSummary(
 ) {
   const normalizedZoneRgb = Number.parseInt(zoneRgb, 10);
   if (!Number.isInteger(normalizedZoneRgb) || normalizedZoneRgb < 0) {
-    throw new Error("zone loot summary requires a valid zone rgb");
+    throw new Error(mapText("zone_loot.error.invalid_zone_rgb"));
   }
   const baseUrl = resolveApiBaseUrl(locationLike);
   const response = await fetchImpl(`${baseUrl}${DEFAULT_ZONE_LOOT_SUMMARY_PATH}`, {
@@ -114,9 +115,9 @@ export async function loadZoneLootSummary(
   });
   if (!response.ok) {
     if (response.status === 404) {
-      throw new Error("Zone loot summary endpoint is unavailable on the current API build.");
+      throw new Error(mapText("zone_loot.error.missing_endpoint"));
     }
-    throw new Error(`zone loot summary request failed: ${response.status}`);
+    throw new Error(mapText("zone_loot.error.request_failed", { status: response.status }));
   }
   return normalizeZoneLootSummary(await response.json());
 }

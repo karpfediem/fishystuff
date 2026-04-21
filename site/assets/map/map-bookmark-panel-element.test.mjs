@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   buildBookmarkPlacementSelectionResult,
@@ -131,3 +132,4 @@ test("buildBookmarkPlacementSelectionResult keeps the runtime point label for bo
   assert.ok(result);
   assert.equal(result.bookmark.label, "Margoria (RG218)");
 });
+installMapTestI18n();

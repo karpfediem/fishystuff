@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   loadZoneLootSummary,
@@ -127,3 +128,4 @@ test("loadZoneLootSummary reports a clear message when the API build lacks the e
     /Zone loot summary endpoint is unavailable on the current API build\./,
   );
 });
+installMapTestI18n();

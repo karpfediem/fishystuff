@@ -5,6 +5,7 @@ import {
   buildZonePaneFacts,
   preferredOverviewRow,
 } from "./map-overview-facts.js";
+import { mapText } from "./map-i18n.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -34,7 +35,6 @@ function normalizeSelectionLayerSamples(selection) {
   return selection.layerSamples.filter((sample) => isPlainObject(sample)).map((sample) => cloneJson(sample));
 }
 
-const INFO_WINDOW_TITLE = "Details";
 const INFO_WINDOW_TITLE_ICON = "inspect-fill";
 const INFO_WINDOW_STATUS_ICON = "information-circle";
 
@@ -42,13 +42,13 @@ function pointKindStatusText(pointKind, pointLabel) {
   const normalizedLabel = trimString(pointLabel);
   switch (normalizePointKind(pointKind)) {
     case "bookmark":
-      return normalizedLabel || "Bookmark";
+      return normalizedLabel || mapText("info.status.bookmark");
     case "waypoint":
-      return normalizedLabel || "Waypoint";
+      return normalizedLabel || mapText("info.status.waypoint");
     case "clicked":
-      return "Clicked point";
+      return mapText("info.status.clicked");
     default:
-      return "no selection";
+      return mapText("info.status.no_selection");
   }
 }
 
@@ -64,7 +64,7 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
   if (preferred?.value) {
     return preferred.value;
   }
-  return INFO_WINDOW_TITLE;
+  return mapText("info.window_title");
 }
 
 function buildZoneLootGroups(summary) {
@@ -104,19 +104,21 @@ function buildZoneLootSection(summary, status) {
   const available = summary?.available === true && groups.length > 0;
   const statusText =
     normalizedStatus === "loaded"
-      ? "zone loot: loaded"
+      ? mapText("info.zone_loot.status.loaded")
       : normalizedStatus === "loading"
-        ? "zone loot: loading"
-        : normalizedStatus
-          ? `zone loot: ${normalizedStatus}`
-          : "zone loot: idle";
+        ? mapText("info.zone_loot.status.loading")
+        : normalizedStatus === "error"
+          ? mapText("info.zone_loot.status.error")
+          : normalizedStatus
+            ? mapText("info.zone_loot.status.other", { status: normalizedStatus })
+            : mapText("info.zone_loot.status.idle");
 
   return {
     id: "zone-loot",
     kind: "zone-loot",
-    title: "Catch Profile",
+    title: mapText("info.zone_loot.title"),
     statusText,
-    summary: trimString(summary?.profileLabel) || "Calculator defaults",
+    summary: trimString(summary?.profileLabel) || mapText("info.zone_loot.summary.default"),
     note: trimString(summary?.note),
     groups,
     available,
@@ -162,7 +164,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
   const panes = [
     paneDescriptor(
       "zone",
-      "Zone",
+      mapText("info.pane.zone"),
       "hover-zone",
       zoneFacts.find((fact) => fact.key === "zone")?.value || "",
       [
@@ -170,7 +172,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
           ? {
               id: "zone-facts",
               kind: "facts",
-              title: "Zone",
+              title: mapText("info.section.zone"),
               facts: zoneFacts,
             }
           : null,
@@ -179,7 +181,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
     ),
     paneDescriptor(
       "territory",
-      "Territory",
+      mapText("info.pane.territory"),
       "hover-resources",
       territoryFacts[0]?.value || "",
       territoryFacts.length
@@ -187,7 +189,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
             {
               id: "territory-facts",
               kind: "facts",
-              title: "Territory",
+              title: mapText("info.section.territory"),
               facts: territoryFacts,
             },
           ]
@@ -195,7 +197,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
     ),
     paneDescriptor(
       "trade",
-      "Trade",
+      mapText("info.pane.trade"),
       "trade-origin",
       tradeFacts[0]?.value || "",
       tradeFacts.length
@@ -203,7 +205,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
             {
               id: "trade-facts",
               kind: "facts",
-              title: "Trade",
+              title: mapText("info.section.trade"),
               facts: tradeFacts,
             },
           ]

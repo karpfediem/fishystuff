@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   FishyMapInfoPanelElement,
@@ -41,3 +42,4 @@ test("info panel element exposes refresh and signal patch handlers", () => {
   assert.equal(typeof element.refreshZoneLootSummary, "function");
   assert.equal(typeof element.render, "function");
 });
+installMapTestI18n();

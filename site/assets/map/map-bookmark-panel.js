@@ -1,5 +1,9 @@
+import { mapText } from "./map-i18n.js";
+
 export function bookmarkClearSelectionLabel(selectedCount) {
-  return selectedCount > 0 ? `Clear (${selectedCount})` : "Clear";
+  return selectedCount > 0
+    ? mapText("bookmarks.clear_with_count", { count: selectedCount })
+    : mapText("bookmarks.clear");
 }
 
 export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi, options = {}) {
@@ -32,7 +36,7 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
     typeof options.bookmarkDisplayLabel === "function"
       ? options.bookmarkDisplayLabel
       : (bookmark, fallbackIndex = 0) =>
-          String(bookmark?.label || "").trim() || `Bookmark ${fallbackIndex + 1}`;
+          String(bookmark?.label || "").trim() || mapText("bookmarks.fallback", { index: fallbackIndex + 1 });
   const bookmarkCurrentPointSubtitle =
     typeof options.bookmarkCurrentPointSubtitle === "function"
       ? options.bookmarkCurrentPointSubtitle
@@ -62,7 +66,9 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
   setBooleanProperty(elements.bookmarkPlace, "disabled", !canPlace && !bookmarkUi?.placing);
   setTextContent(
     elements.bookmarkPlaceLabel,
-    bookmarkUi?.placing ? "Click map to place" : "New bookmark",
+    bookmarkUi?.placing
+      ? mapText("bookmarks.click_to_place")
+      : mapText("bookmarks.new"),
   );
   setBooleanProperty(elements.bookmarkCopySelected, "disabled", selectedIds.length === 0);
   setBooleanProperty(elements.bookmarkExport, "disabled", normalizedBookmarks.length === 0);
@@ -99,14 +105,14 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
                     class="fishymap-bookmark-drag btn btn-xs btn-circle btn-ghost"
                     data-bookmark-drag="${escapeHtml(bookmark.id)}"
                     type="button"
-                    aria-label="Drag ${escapeHtml(displayLabel)}"
+                    aria-label="${escapeHtml(mapText("bookmarks.action.drag", { label: displayLabel }))}"
                     draggable="true"
                     tabindex="-1"
                   >
                     ${dragHandleIcon()}
                   </button>
                   <span class="fishymap-bookmark-order badge badge-soft badge-sm">${index + 1}</span>
-                  <label class="fishymap-bookmark-toggle" aria-label="Select ${escapeHtml(displayLabel)}">
+                  <label class="fishymap-bookmark-toggle" aria-label="${escapeHtml(mapText("bookmarks.action.select", { label: displayLabel }))}">
                     <input
                       class="checkbox checkbox-sm"
                       type="checkbox"
@@ -131,8 +137,8 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
                       class="fishymap-bookmark-rename btn btn-soft btn-sm btn-square"
                       type="button"
                       data-bookmark-rename="${escapeHtml(bookmark.id)}"
-                      aria-label="Rename bookmark"
-                      title="Rename bookmark"
+                      aria-label="${escapeHtml(mapText("bookmarks.action.rename"))}"
+                      title="${escapeHtml(mapText("bookmarks.action.rename"))}"
                     >
                       ${spriteIcon("bookmark-edit", "size-5")}
                     </button>
@@ -152,8 +158,8 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
                     class="fishymap-bookmark-activate btn btn-soft btn-sm btn-square"
                     type="button"
                     data-bookmark-activate="${escapeHtml(bookmark.id)}"
-                    aria-label="Inspect bookmark"
-                    title="Inspect bookmark"
+                    aria-label="${escapeHtml(mapText("bookmarks.action.inspect"))}"
+                    title="${escapeHtml(mapText("bookmarks.action.inspect"))}"
                   >
                     ${spriteIcon("map-view", "size-5")}
                   </button>
@@ -161,8 +167,8 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
                     class="fishymap-bookmark-copy btn btn-soft btn-primary btn-sm btn-square"
                     type="button"
                     data-bookmark-copy="${escapeHtml(bookmark.id)}"
-                    aria-label="Copy bookmark XML"
-                    title="Copy bookmark XML"
+                    aria-label="${escapeHtml(mapText("bookmarks.action.copy_xml"))}"
+                    title="${escapeHtml(mapText("bookmarks.action.copy_xml"))}"
                   >
                     ${spriteIcon("copy", "size-5")}
                   </button>
@@ -170,8 +176,8 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
                     class="fishymap-bookmark-delete btn btn-ghost btn-error btn-xs btn-square"
                     type="button"
                     data-bookmark-delete="${escapeHtml(bookmark.id)}"
-                    aria-label="Delete bookmark"
-                    title="Delete bookmark"
+                    aria-label="${escapeHtml(mapText("bookmarks.action.delete"))}"
+                    title="${escapeHtml(mapText("bookmarks.action.delete"))}"
                   >
                     ${spriteIcon("trash", "size-4")}
                   </button>
@@ -182,7 +188,7 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
           .join("")
       : `
         <div class="fishymap-bookmark-empty text-sm text-base-content/65">
-          No bookmarks yet.
+          ${escapeHtml(mapText("bookmarks.empty"))}
         </div>
       `,
   );

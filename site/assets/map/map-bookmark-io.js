@@ -1,4 +1,5 @@
 import { bookmarkDisplayLabel, normalizeBookmarks } from "./map-bookmark-state.js";
+import { mapCountText, mapText } from "./map-i18n.js";
 
 function escapeXml(value) {
   return String(value ?? "")
@@ -26,10 +27,6 @@ function formatBookmarkCoordinate(value) {
   return Number.isInteger(normalized) ? normalized.toFixed(1) : String(normalized);
 }
 
-function pluralizeBookmarks(count) {
-  return count === 1 ? "bookmark" : "bookmarks";
-}
-
 function parseBookmarkXmlAttributes(nodeText) {
   const attributes = {};
   const attributePattern = /([A-Za-z_:][A-Za-z0-9:._-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
@@ -41,7 +38,7 @@ function parseBookmarkXmlAttributes(nodeText) {
 
 function normalizeBookmarkLabelFromXml(label, index) {
   const trimmedLabel = String(label || "").trim().replace(/^\d+\s*:\s*/, "").trim();
-  return trimmedLabel || `Bookmark ${index + 1}`;
+  return trimmedLabel || mapText("bookmarks.fallback", { index: index + 1 });
 }
 
 function bookmarkMergeKey(bookmark, index = 0) {
@@ -137,7 +134,7 @@ export async function copyTextToClipboard(text, options = {}) {
 
   const doc = options.document ?? globalThis.document;
   if (!doc?.createElement || !doc?.body?.appendChild) {
-    throw new Error("Clipboard API unavailable");
+    throw new Error(mapText("bookmarks.toast.clipboard_unavailable"));
   }
   const probe = doc.createElement("textarea");
   probe.value = String(text ?? "");
@@ -151,7 +148,7 @@ export async function copyTextToClipboard(text, options = {}) {
   const copied = doc.execCommand?.("copy");
   probe.remove();
   if (!copied) {
-    throw new Error("Clipboard API unavailable");
+    throw new Error(mapText("bookmarks.toast.clipboard_unavailable"));
   }
 }
 
@@ -165,7 +162,7 @@ export function downloadBookmarkExport(bookmarks, options = {}) {
     typeof blobCtor !== "function" ||
     typeof urlApi?.createObjectURL !== "function"
   ) {
-    throw new Error("Bookmark export is unavailable");
+    throw new Error(mapText("bookmarks.toast.export_unavailable"));
   }
   const timestamp = Number.isFinite(options.now) ? options.now : Date.now();
   const anchor = doc.createElement("a");
@@ -192,31 +189,35 @@ export async function readBookmarkImportFile(file, options = {}) {
   }
   const readerCtor = options.FileReader ?? globalThis.FileReader;
   if (typeof readerCtor !== "function") {
-    throw new Error("Bookmark import is unavailable");
+    throw new Error(mapText("bookmarks.toast.import_unavailable"));
   }
   return new Promise((resolve, reject) => {
     const reader = new readerCtor();
-    reader.onerror = () => reject(reader.error || new Error("Failed to read bookmark import"));
+    reader.onerror = () => {
+      reject(reader.error || new Error(mapText("bookmarks.toast.import_failed")));
+    };
     reader.onload = () => resolve(String(reader.result ?? ""));
     reader.readAsText(file);
   });
 }
 
 export function buildBookmarkSelectionCopyMessage(count) {
-  return `Copied XML for ${count} ${pluralizeBookmarks(count)}.`;
+  return mapCountText("bookmarks.toast.copy_selection", count);
 }
 
 export function buildBookmarkExportMessage(count, selectedCount = 0) {
   return selectedCount
-    ? `Exported ${count} selected ${pluralizeBookmarks(count)}.`
-    : `Exported ${count} ${pluralizeBookmarks(count)}.`;
+    ? mapCountText("bookmarks.toast.export_selected", count)
+    : mapCountText("bookmarks.toast.export_all", count);
 }
 
 export function buildBookmarkImportMessage(importedCount, skippedCount = 0) {
   if (!importedCount) {
-    return "No new bookmarks were imported.";
+    return mapText("bookmarks.toast.import_none");
   }
-  return `Imported ${importedCount} ${pluralizeBookmarks(importedCount)}${
-    skippedCount ? `; skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.` : "."
-  }`;
+  const importedText = mapCountText("bookmarks.toast.imported", importedCount);
+  if (!skippedCount) {
+    return importedText;
+  }
+  return `${importedText} ${mapCountText("bookmarks.toast.skipped_duplicates", skippedCount)}`;
 }
