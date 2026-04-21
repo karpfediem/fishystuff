@@ -371,16 +371,27 @@ test("calculator restore leaves initial shell state intact when storage is empty
   });
 });
 
-test("calculator API language follows explicit locale choice", () => {
+test("calculator API URLs keep locale and apiLang separate", () => {
   const korean = createContext({}, { locale: "ko-KR", lang: "en-US" });
   assert.equal(korean.window.__fishystuffCalculator.lang, "ko");
-  assert.match(korean.window.__fishystuffCalculator.initUrl(), /\?lang=ko$/);
-  assert.match(korean.window.__fishystuffCalculator.evalUrl(), /\?lang=ko$/);
+  assert.equal(korean.window.__fishystuffCalculator.locale, "ko-KR");
+  assert.equal(korean.window.__fishystuffCalculator.apiLang, "ko");
+  assert.match(korean.window.__fishystuffCalculator.initUrl(), /\?lang=ko&locale=ko-KR$/);
+  assert.match(korean.window.__fishystuffCalculator.evalUrl(), /\?lang=ko&locale=ko-KR$/);
 
   const german = createContext({}, { locale: "de-DE", lang: "en-US" });
   assert.equal(german.window.__fishystuffCalculator.lang, "en");
-  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=en$/);
-  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=en$/);
+  assert.equal(german.window.__fishystuffCalculator.locale, "de-DE");
+  assert.equal(german.window.__fishystuffCalculator.apiLang, "en");
+  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=en&locale=de-DE$/);
+  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=en&locale=de-DE$/);
+
+  const mixed = createContext({}, { locale: "de-DE", apiLang: "ko", lang: "en-US" });
+  assert.equal(mixed.window.__fishystuffCalculator.lang, "ko");
+  assert.equal(mixed.window.__fishystuffCalculator.locale, "de-DE");
+  assert.equal(mixed.window.__fishystuffCalculator.apiLang, "ko");
+  assert.match(mixed.window.__fishystuffCalculator.initUrl(), /\?lang=ko&locale=de-DE$/);
+  assert.match(mixed.window.__fishystuffCalculator.evalUrl(), /\?lang=ko&locale=de-DE$/);
 });
 
 test("calculator persist stores canonical page state and excludes transient branches", () => {

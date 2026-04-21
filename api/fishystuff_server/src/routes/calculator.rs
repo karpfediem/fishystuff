@@ -38,12 +38,14 @@ use crate::store::{
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
     pub lang: Option<String>,
+    pub locale: Option<String>,
     pub r#ref: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CalculatorDatastarQuery {
     pub lang: Option<String>,
+    pub locale: Option<String>,
     pub r#ref: Option<String>,
     pub datastar: Option<String>,
 }
@@ -51,6 +53,7 @@ pub struct CalculatorDatastarQuery {
 #[derive(Debug, Deserialize)]
 pub struct CalculatorZoneSearchQuery {
     pub lang: Option<String>,
+    pub locale: Option<String>,
     pub r#ref: Option<String>,
     pub q: Option<String>,
     pub selected: Option<String>,
@@ -59,6 +62,7 @@ pub struct CalculatorZoneSearchQuery {
 #[derive(Debug, Deserialize)]
 pub struct CalculatorSearchableOptionQuery {
     pub lang: Option<String>,
+    pub locale: Option<String>,
     pub r#ref: Option<String>,
     pub kind: Option<String>,
     pub q: Option<String>,
@@ -438,7 +442,8 @@ struct TargetFishDistributionBucket {
 struct CalculatorData {
     catalog: CalculatorCatalogResponse,
     cdn_base_url: String,
-    lang: FishLang,
+    lang: CalculatorLocale,
+    api_lang: FishLang,
     zones: Vec<ZoneEntry>,
     zone_group_rates: HashMap<String, CalculatorZoneGroupRateEntry>,
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
@@ -447,12 +452,49 @@ struct CalculatorData {
 const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260419-1";
 type CalculatorRouteCatalog = HashMap<String, String>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CalculatorLocale {
+    EnUs,
+    DeDe,
+    KoKr,
+}
+
+impl CalculatorLocale {
+    fn from_query(locale: Option<&str>, lang: Option<&str>) -> Self {
+        let value = locale.unwrap_or_default().trim().to_ascii_lowercase();
+        if value.starts_with("ko") || value == "kr" || value == "korean" {
+            return Self::KoKr;
+        }
+        if value.starts_with("de") || value == "german" || value == "deutsch" {
+            return Self::DeDe;
+        }
+        Self::from(FishLang::from_param(lang))
+    }
+}
+
+impl From<FishLang> for CalculatorLocale {
+    fn from(value: FishLang) -> Self {
+        match value {
+            FishLang::En => Self::EnUs,
+            FishLang::Ko => Self::KoKr,
+        }
+    }
+}
+
 static CALCULATOR_ROUTE_CATALOG_EN: LazyLock<CalculatorRouteCatalog> = LazyLock::new(|| {
     serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../site/i18n/en-US.ziggy"
     )))
     .expect("valid en-US calculator route catalog")
+});
+
+static CALCULATOR_ROUTE_CATALOG_DE: LazyLock<CalculatorRouteCatalog> = LazyLock::new(|| {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../site/i18n/de-DE.ziggy"
+    )))
+    .expect("valid de-DE calculator route catalog")
 });
 
 static CALCULATOR_ROUTE_CATALOG_KO: LazyLock<CalculatorRouteCatalog> = LazyLock::new(|| {
@@ -487,7 +529,7 @@ struct SearchableDropdownConfig<'a> {
 }
 
 struct SearchableMultiselectConfig<'a> {
-    lang: FishLang,
+    lang: CalculatorLocale,
     root_id: &'a str,
     bind_key: &'a str,
     search_placeholder: &'a str,
@@ -499,7 +541,20 @@ const SEARCHABLE_DROPDOWN_RESULT_LIMIT: usize = 24;
 static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
     value: "",
     label: Box::leak(
-        calculator_route_text(FishLang::En, "calculator.server.option.none").into_boxed_str(),
+        calculator_route_text(CalculatorLocale::EnUs, "calculator.server.option.none")
+            .into_boxed_str(),
+    ),
+    icon: None,
+    grade_tone: "unknown",
+    item: None,
+    lifeskill_level: None,
+});
+
+static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
+    value: "",
+    label: Box::leak(
+        calculator_route_text(CalculatorLocale::DeDe, "calculator.server.option.none")
+            .into_boxed_str(),
     ),
     icon: None,
     grade_tone: "unknown",
@@ -510,7 +565,8 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
 static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
     value: "",
     label: Box::leak(
-        calculator_route_text(FishLang::Ko, "calculator.server.option.none").into_boxed_str(),
+        calculator_route_text(CalculatorLocale::KoKr, "calculator.server.option.none")
+            .into_boxed_str(),
     ),
     icon: None,
     grade_tone: "unknown",
@@ -518,10 +574,11 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     lifeskill_level: None,
 });
 
-fn none_select_option(lang: FishLang) -> SelectOption<'static> {
+fn none_select_option(lang: CalculatorLocale) -> SelectOption<'static> {
     match lang {
-        FishLang::En => *NONE_SELECT_OPTION_EN,
-        FishLang::Ko => *NONE_SELECT_OPTION_KO,
+        CalculatorLocale::EnUs => *NONE_SELECT_OPTION_EN,
+        CalculatorLocale::DeDe => *NONE_SELECT_OPTION_DE,
+        CalculatorLocale::KoKr => *NONE_SELECT_OPTION_KO,
     }
 }
 
@@ -591,7 +648,8 @@ pub async fn get_calculator_catalog(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, query.r#ref, &request_id).await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, locale, query.r#ref, &request_id).await?;
 
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -612,9 +670,16 @@ pub async fn post_zone_loot_summary(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let summary =
-        load_zone_loot_summary_data(&state, lang, query.r#ref.clone(), &request_id, payload)
-            .await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let summary = load_zone_loot_summary_data(
+        &state,
+        lang,
+        locale,
+        query.r#ref.clone(),
+        &request_id,
+        payload,
+    )
+    .await?;
     Ok(Json(summary))
 }
 
@@ -628,7 +693,8 @@ pub async fn get_calculator_datastar_init(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
     let raw_signals = match query.datastar.as_deref() {
         Some(payload) if !payload.trim().is_empty() => {
             let value = serde_json::from_str::<Value>(payload).map_err(|err| {
@@ -639,9 +705,15 @@ pub async fn get_calculator_datastar_init(
         }
         _ => data.catalog.defaults.clone(),
     };
-    let (data, normalized_signals, derived) =
-        load_calculator_runtime_data(&state, lang, query.r#ref.clone(), &request_id, raw_signals)
-            .await?;
+    let (data, normalized_signals, derived) = load_calculator_runtime_data(
+        &state,
+        lang,
+        locale,
+        query.r#ref.clone(),
+        &request_id,
+        raw_signals,
+    )
+    .await?;
     calculator_datastar_init_response(&data, normalized_signals, derived)
 }
 
@@ -656,11 +728,18 @@ pub async fn post_calculator_datastar_init(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
-    let (data, normalized_signals, derived) =
-        load_calculator_runtime_data(&state, lang, query.r#ref.clone(), &request_id, raw_signals)
-            .await?;
+    let (data, normalized_signals, derived) = load_calculator_runtime_data(
+        &state,
+        lang,
+        locale,
+        query.r#ref.clone(),
+        &request_id,
+        raw_signals,
+    )
+    .await?;
     calculator_datastar_init_response(&data, normalized_signals, derived)
 }
 
@@ -675,11 +754,18 @@ pub async fn post_calculator_datastar_eval(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
-    let (data, normalized_signals, derived) =
-        load_calculator_runtime_data(&state, lang, query.r#ref.clone(), &request_id, raw_signals)
-            .await?;
+    let (data, normalized_signals, derived) = load_calculator_runtime_data(
+        &state,
+        lang,
+        locale,
+        query.r#ref.clone(),
+        &request_id,
+        raw_signals,
+    )
+    .await?;
     let items_by_key = data
         .catalog
         .items
@@ -752,7 +838,8 @@ pub async fn get_calculator_datastar_zone_search(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
     let selected_zone = query
         .selected
         .as_deref()
@@ -761,7 +848,7 @@ pub async fn get_calculator_datastar_zone_search(
         .unwrap_or(data.catalog.defaults.zone.as_str());
     let search_text = query.q.unwrap_or_default();
     let fragment = render_zone_search_results(
-        lang,
+        data.lang,
         "calculator-zone-search-results",
         &data.zones,
         selected_zone,
@@ -787,7 +874,9 @@ pub async fn get_calculator_datastar_option_search(
                 .with_request_id(request_id.0.clone())
         })?;
     let lang = FishLang::from_param(query.lang.as_deref());
-    let mut data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let mut data =
+        load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
     if kind == CalculatorSearchableOptionKind::TargetFish {
         let zone = query
             .zone
@@ -814,10 +903,10 @@ pub async fn get_calculator_datastar_option_search(
         .unwrap_or("calculator-search-results");
     let (options, include_none) = searchable_options_for_kind(&data, kind);
     let fragment = render_searchable_select_results(
-        lang,
+        data.lang,
         data.cdn_base_url.as_str(),
         results_id,
-        &with_optional_none(&options, include_none, lang),
+        &with_optional_none(&options, include_none, data.lang),
         selected_value,
         &search_text,
     );
@@ -1375,13 +1464,14 @@ fn coerce_value_bool(value: &mut Value) {
 
 async fn load_calculator_data(
     state: &SharedState,
-    lang: FishLang,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
 ) -> AppResult<CalculatorData> {
     let catalog = with_timeout(
         state.config.request_timeout_secs,
-        state.store.calculator_catalog(lang, ref_id.clone()),
+        state.store.calculator_catalog(api_lang, ref_id.clone()),
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
@@ -1401,6 +1491,7 @@ async fn load_calculator_data(
         catalog,
         cdn_base_url: state.config.runtime_cdn_base_url.clone(),
         lang,
+        api_lang,
         zones,
         zone_group_rates,
         zone_loot_entries: Vec::new(),
@@ -1409,19 +1500,20 @@ async fn load_calculator_data(
 
 async fn load_calculator_runtime_data(
     state: &SharedState,
-    lang: FishLang,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
     raw_signals: CalculatorSignals,
 ) -> AppResult<(CalculatorData, CalculatorSignals, CalculatorDerivedSignals)> {
-    let mut data = load_calculator_data(state, lang, ref_id.clone(), request_id).await?;
+    let mut data = load_calculator_data(state, api_lang, lang, ref_id.clone(), request_id).await?;
     let mut signals = raw_signals;
     normalize_signals(&mut signals, &data);
     data.zone_loot_entries = with_timeout(
         state.config.request_timeout_secs,
         state
             .store
-            .calculator_zone_loot(lang, ref_id, signals.zone.clone()),
+            .calculator_zone_loot(api_lang, ref_id, signals.zone.clone()),
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
@@ -1434,12 +1526,13 @@ async fn load_calculator_runtime_data(
 
 async fn load_zone_loot_summary_data(
     state: &SharedState,
-    lang: FishLang,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
     request: ZoneLootSummaryRequest,
 ) -> AppResult<ZoneLootSummaryResponse> {
-    let mut data = load_calculator_data(state, lang, ref_id.clone(), request_id).await?;
+    let mut data = load_calculator_data(state, api_lang, lang, ref_id.clone(), request_id).await?;
     let requested_zone_key = request.rgb.0.trim().to_string();
     let zone = data
         .zones
@@ -1463,7 +1556,7 @@ async fn load_zone_loot_summary_data(
         state.config.request_timeout_secs,
         state
             .store
-            .calculator_zone_loot(lang, ref_id, signals.zone.clone()),
+            .calculator_zone_loot(api_lang, ref_id, signals.zone.clone()),
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
@@ -1480,21 +1573,34 @@ fn lang_param(lang: FishLang) -> &'static str {
     }
 }
 
-fn calculator_route_catalog(lang: FishLang) -> &'static CalculatorRouteCatalog {
+fn locale_param(lang: CalculatorLocale) -> &'static str {
     match lang {
-        FishLang::En => &CALCULATOR_ROUTE_CATALOG_EN,
-        FishLang::Ko => &CALCULATOR_ROUTE_CATALOG_KO,
+        CalculatorLocale::EnUs => "en-US",
+        CalculatorLocale::DeDe => "de-DE",
+        CalculatorLocale::KoKr => "ko-KR",
     }
 }
 
-fn calculator_route_text(lang: FishLang, key: &str) -> String {
+fn calculator_route_catalog(lang: CalculatorLocale) -> &'static CalculatorRouteCatalog {
+    match lang {
+        CalculatorLocale::EnUs => &CALCULATOR_ROUTE_CATALOG_EN,
+        CalculatorLocale::DeDe => &CALCULATOR_ROUTE_CATALOG_DE,
+        CalculatorLocale::KoKr => &CALCULATOR_ROUTE_CATALOG_KO,
+    }
+}
+
+fn calculator_route_text(lang: CalculatorLocale, key: &str) -> String {
     calculator_route_catalog(lang)
         .get(key)
         .cloned()
         .unwrap_or_else(|| key.to_string())
 }
 
-fn calculator_route_text_with_vars(lang: FishLang, key: &str, vars: &[(&str, &str)]) -> String {
+fn calculator_route_text_with_vars(
+    lang: CalculatorLocale,
+    key: &str,
+    vars: &[(&str, &str)],
+) -> String {
     let mut text = calculator_route_text(lang, key);
     for (name, value) in vars {
         text = text.replace(&format!("{{${}}}", name), value);
@@ -1514,11 +1620,11 @@ fn calculator_group_label_key(slot_idx: u8) -> Option<&'static str> {
     }
 }
 
-fn calculator_group_display_label_for_slot(lang: FishLang, slot_idx: u8) -> Option<String> {
+fn calculator_group_display_label_for_slot(lang: CalculatorLocale, slot_idx: u8) -> Option<String> {
     calculator_group_label_key(slot_idx).map(|key| calculator_route_text(lang, key))
 }
 
-fn calculator_group_display_label(lang: FishLang, label: &str) -> String {
+fn calculator_group_display_label(lang: CalculatorLocale, label: &str) -> String {
     fish_group_slot_idx(label)
         .and_then(|slot_idx| calculator_group_display_label_for_slot(lang, slot_idx))
         .unwrap_or_else(|| label.to_string())
@@ -1789,7 +1895,7 @@ fn overlay_editor_percent_value_text(value_pct: f64) -> String {
 
 fn overlay_editor_group_input_rows(
     row: &FishGroupChartRow,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> Vec<ComputedStatBreakdownRow> {
     if row.rate_inputs.is_empty() {
         vec![computed_stat_breakdown_row(
@@ -1804,7 +1910,7 @@ fn overlay_editor_group_input_rows(
 
 fn overlay_editor_group_bonus_breakdown(
     row: &FishGroupChartRow,
-    lang: FishLang,
+    lang: CalculatorLocale,
     current_present: bool,
     current_raw_rate_pct: f64,
     bonus_rate_pct: f64,
@@ -1896,7 +2002,7 @@ fn overlay_editor_group_bonus_breakdown(
 
 fn overlay_editor_group_normalized_breakdown(
     row: &FishGroupChartRow,
-    lang: FishLang,
+    lang: CalculatorLocale,
     current_present: bool,
     current_raw_rate_pct: f64,
     bonus_rate_pct: f64,
@@ -3456,7 +3562,7 @@ fn computed_stat_breakdown_zone_loot_item_row(
     }
 }
 
-fn pet_slot_name(lang: FishLang, slot_idx: usize) -> String {
+fn pet_slot_name(lang: CalculatorLocale, slot_idx: usize) -> String {
     calculator_route_text_with_vars(
         lang,
         "calculator.breakdown.label.pet_slot",
@@ -3465,7 +3571,7 @@ fn pet_slot_name(lang: FishLang, slot_idx: usize) -> String {
 }
 
 fn collect_pet_afr_breakdown_rows(
-    lang: FishLang,
+    lang: CalculatorLocale,
     pets: &[&CalculatorPetSignals],
     pet_stats: &[(f64, f64)],
     catalog: &CalculatorPetCatalog,
@@ -3489,7 +3595,7 @@ fn collect_pet_afr_breakdown_rows(
 }
 
 fn collect_pet_drr_breakdown_rows(
-    lang: FishLang,
+    lang: CalculatorLocale,
     pets: &[&CalculatorPetSignals],
     pet_stats: &[(f64, f64)],
     catalog: &CalculatorPetCatalog,
@@ -3513,7 +3619,7 @@ fn collect_pet_drr_breakdown_rows(
 }
 
 fn collect_fish_multiplier_breakdown_rows(
-    lang: FishLang,
+    lang: CalculatorLocale,
     items_by_key: &HashMap<&str, &CalculatorItemEntry>,
     cdn_base_url: &str,
     signals: &CalculatorSignals,
@@ -3554,7 +3660,7 @@ fn collect_fish_multiplier_breakdown_rows(
 
 fn loot_group_profit_breakdown_rows(
     loot_rows: &[LootChartRow],
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> Vec<ComputedStatBreakdownRow> {
     loot_rows
         .iter()
@@ -4394,7 +4500,7 @@ fn default_zone_loot_group_values(
 }
 
 fn zone_loot_group_values(
-    lang: FishLang,
+    lang: CalculatorLocale,
     slot_idx: u8,
     chart_row: Option<&FishGroupChartRow>,
 ) -> (String, String, String, String) {
@@ -4437,7 +4543,7 @@ fn fish_group_distribution_breakdown(
     total_catches_raw: f64,
     total_weight_pct: f64,
     show_normalized_rates: bool,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> ComputedStatBreakdown {
     let text = |key: &str| calculator_route_text(lang, key);
     let text_with_vars =
@@ -4550,7 +4656,7 @@ fn fish_group_distribution_breakdown(
     }
 }
 
-fn loot_species_silver_breakdown_detail(row: &LootSpeciesRow, lang: FishLang) -> String {
+fn loot_species_silver_breakdown_detail(row: &LootSpeciesRow, lang: CalculatorLocale) -> String {
     let mut parts = Vec::new();
     if !row.drop_rate_text.is_empty() {
         parts.push(calculator_route_text_with_vars(
@@ -4579,7 +4685,7 @@ fn loot_species_count_breakdown(
     row: &LootSpeciesRow,
     total_catches_raw: f64,
     group_share_pct: f64,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> ComputedStatBreakdown {
     let text = |key: &str| calculator_route_text(lang, key);
     let text_with_vars =
@@ -4669,7 +4775,7 @@ fn loot_species_count_breakdown(
 fn loot_species_silver_share_breakdown(
     row: &LootSpeciesRow,
     total_profit_raw: f64,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> ComputedStatBreakdown {
     let text = |key: &str| calculator_route_text(lang, key);
     let text_with_vars =
@@ -4781,7 +4887,7 @@ fn group_silver_distribution_breakdown(
     row: &LootChartRow,
     species_rows: &[LootSpeciesRow],
     total_profit_raw: f64,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> ComputedStatBreakdown {
     let text = |key: &str| calculator_route_text(lang, key);
     let text_with_vars =
@@ -4907,7 +5013,7 @@ fn zone_loot_group_drop_rate_fields(
 fn loot_species_presence_scope_text(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> String {
     let text = |key: &str| calculator_route_text(lang, key);
     let text_with_vars =
@@ -5017,7 +5123,7 @@ fn loot_species_presence_line(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
     include_source_id: bool,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> String {
     let text = |key: &str| calculator_route_text(lang, key);
     let text_with_vars =
@@ -5102,7 +5208,10 @@ fn loot_species_presence_line(
     }
 }
 
-fn loot_species_presence_text(entry: &CalculatorZoneLootEntry, lang: FishLang) -> Option<String> {
+fn loot_species_presence_text(
+    entry: &CalculatorZoneLootEntry,
+    lang: CalculatorLocale,
+) -> Option<String> {
     loot_species_presence_evidence(entry)
         .into_iter()
         .next()
@@ -5111,7 +5220,7 @@ fn loot_species_presence_text(entry: &CalculatorZoneLootEntry, lang: FishLang) -
 
 fn loot_species_presence_tooltip(
     entry: &CalculatorZoneLootEntry,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> Option<String> {
     let parts = loot_species_presence_evidence(entry)
         .into_iter()
@@ -5163,7 +5272,7 @@ fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'stat
 fn loot_species_drop_rate_tooltip(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> String {
     let text_with_vars =
         |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
@@ -5262,7 +5371,7 @@ fn loot_species_drop_rate_tooltip(
 fn loot_species_evidence_text(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> String {
     let mut parts = Vec::new();
     if loot_species_drop_rate_source_kind(entry) != "derived"
@@ -7743,7 +7852,7 @@ fn percentage_of_average_time(time: f64, unoptimized_time: f64) -> f64 {
     }
 }
 
-fn calc_abundance_label(lang: FishLang, resources: f64) -> String {
+fn calc_abundance_label(lang: CalculatorLocale, resources: f64) -> String {
     if resources <= 14.0 {
         calculator_route_text(lang, "calculator.resource.exhausted")
     } else if resources <= 45.0 {
@@ -7765,7 +7874,7 @@ fn timespan_seconds(amount: f64, unit: &str) -> f64 {
     amount.max(0.0) * unit_seconds
 }
 
-fn timespan_text(lang: FishLang, amount: f64, unit: &str) -> String {
+fn timespan_text(lang: CalculatorLocale, amount: f64, unit: &str) -> String {
     let normalized = amount.max(0.0);
     let unit_key = match unit {
         "minutes" => "minute",
@@ -7877,8 +7986,9 @@ fn render_calculator_app(
     let active_checked = if signals.active { " checked" } else { "" };
     let debug_checked = if signals.debug { " checked" } else { "" };
     let zone_search_url = format!(
-        "/api/v1/calculator/datastar/zone-search?lang={}",
-        lang_param(data.lang)
+        "/api/v1/calculator/datastar/zone-search?lang={}&locale={}",
+        lang_param(data.api_lang),
+        locale_param(data.lang)
     );
     let zone_selected_content = render_searchable_dropdown_text_content(&derived.zone_name);
     let zone_results = render_zone_search_results(
@@ -8517,6 +8627,7 @@ fn render_calculator_app(
             "__LEVEL_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-level-picker",
                 "calculator-level-value",
@@ -8533,6 +8644,7 @@ fn render_calculator_app(
             "__TIMESPAN_UNIT_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-session-unit-picker",
                 "calculator-session-unit-value",
@@ -8553,6 +8665,7 @@ fn render_calculator_app(
             "__LIFESKILL_LEVEL_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-lifeskill-level-picker",
                 "calculator-lifeskill-level-value",
@@ -8585,6 +8698,7 @@ fn render_calculator_app(
             "__ROD_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-rod-picker",
                 "calculator-rod-value",
@@ -8601,6 +8715,7 @@ fn render_calculator_app(
             "__FLOAT_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-float-picker",
                 "calculator-float-value",
@@ -8617,6 +8732,7 @@ fn render_calculator_app(
             "__CHAIR_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-chair-picker",
                 "calculator-chair-value",
@@ -8633,6 +8749,7 @@ fn render_calculator_app(
             "__LIGHTSTONE_SET_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-lightstone-set-picker",
                 "calculator-lightstone-set-value",
@@ -8649,6 +8766,7 @@ fn render_calculator_app(
             "__BACKPACK_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 "calculator-backpack-picker",
                 "calculator-backpack-value",
@@ -8719,6 +8837,7 @@ fn render_calculator_app(
             "__PETS__",
             render_pet_cards(
                 data.cdn_base_url.as_str(),
+                data.api_lang,
                 data.lang,
                 &data.catalog.pets,
                 signals,
@@ -8885,7 +9004,7 @@ fn groups_distribution_segments(
     rows: &[FishGroupChartRow],
     total_catches_raw: f64,
     show_normalized_rates: bool,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> Vec<DistributionChartSegment> {
     let total_weight_pct = rows.iter().map(|row| row.weight_pct.max(0.0)).sum::<f64>();
 
@@ -8923,7 +9042,7 @@ fn groups_distribution_segments(
 fn group_silver_distribution_segments(
     loot_rows: &[LootChartRow],
     species_rows: &[LootSpeciesRow],
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> Vec<DistributionChartSegment> {
     let total_profit_raw = loot_rows
         .iter()
@@ -8975,7 +9094,7 @@ fn timeline_chart_segment(
 }
 
 fn fishing_timeline_chart(
-    lang: FishLang,
+    lang: CalculatorLocale,
     active: bool,
     bite_time_raw: f64,
     auto_fish_time_raw: f64,
@@ -9103,7 +9222,7 @@ fn filtered_loot_flow_rows(
         .collect()
 }
 
-fn render_loot_sankey(lang: FishLang, chart: &LootChart) -> String {
+fn render_loot_sankey(lang: CalculatorLocale, chart: &LootChart) -> String {
     if chart.species_rows.is_empty() {
         return format!(
             "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -9131,7 +9250,7 @@ fn render_loot_sankey(lang: FishLang, chart: &LootChart) -> String {
 }
 
 fn render_fish_group_chart(
-    lang: FishLang,
+    lang: CalculatorLocale,
     chart: &FishGroupChart,
     show_normalized_rates: bool,
 ) -> String {
@@ -9164,7 +9283,7 @@ fn render_fish_group_chart(
     )
 }
 
-fn render_fish_group_silver_chart(lang: FishLang, chart: &LootChart) -> String {
+fn render_fish_group_silver_chart(lang: CalculatorLocale, chart: &LootChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-fish-group-silver-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -9190,7 +9309,7 @@ fn render_fish_group_silver_chart(lang: FishLang, chart: &LootChart) -> String {
     )
 }
 
-fn render_loot_chart(lang: FishLang, chart: &LootChart) -> String {
+fn render_loot_chart(lang: CalculatorLocale, chart: &LootChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-loot-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -9585,6 +9704,7 @@ fn render_loot_window(
         escape_html(&calculator_route_text(data.lang, "calculator.server.field.trade_level")),
         render_searchable_select_control(
             data.cdn_base_url.as_str(),
+            data.api_lang,
             data.lang,
             "calculator-trade-level-picker",
             "calculator-trade-level-value",
@@ -9627,7 +9747,7 @@ fn render_loot_window(
     )
 }
 
-fn render_calculator_data_disclaimer(lang: FishLang) -> String {
+fn render_calculator_data_disclaimer(lang: CalculatorLocale) -> String {
     format!(
         "<div class=\"rounded-box border px-4 py-4\" style=\"border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--color-base-300, #d4d4d8) 44%); background: color-mix(in oklab, var(--color-warning, #c77d19) 14%, var(--color-base-100, #ffffff) 86%);\">\
             <div class=\"flex items-start gap-3\">\
@@ -9659,7 +9779,7 @@ fn render_calculator_data_disclaimer(lang: FishLang) -> String {
     )
 }
 
-fn render_item_effect_badges(lang: FishLang, item: &CalculatorItemEntry) -> String {
+fn render_item_effect_badges(lang: CalculatorLocale, item: &CalculatorItemEntry) -> String {
     let text_with_vars =
         |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     let text = |key: &str| calculator_route_text(lang, key);
@@ -9821,7 +9941,7 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
 }
 
 fn render_searchable_dropdown_option_content_html(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
@@ -9891,7 +10011,7 @@ fn render_searchable_dropdown_option_content_html(
 fn with_optional_none<'a>(
     options: &[SelectOption<'a>],
     include_none: bool,
-    lang: FishLang,
+    lang: CalculatorLocale,
 ) -> Vec<SelectOption<'a>> {
     let mut values = Vec::with_capacity(options.len() + usize::from(include_none));
     if include_none {
@@ -9989,7 +10109,7 @@ fn fuzzy_select_matches<'a>(
 }
 
 fn render_searchable_dropdown_catalog_html(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     options: &[SelectOption<'_>],
 ) -> String {
@@ -10010,7 +10130,7 @@ fn render_searchable_dropdown_catalog_html(
 }
 
 fn render_searchable_select_results(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     results_list_id: &str,
     options: &[SelectOption<'_>],
@@ -10066,13 +10186,15 @@ fn render_searchable_select_results(
 }
 
 fn render_calculator_option_search_url(
-    lang: FishLang,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
     kind: CalculatorSearchableOptionKind,
     results_id: &str,
 ) -> String {
     format!(
-        "/api/v1/calculator/datastar/option-search?lang={}&kind={}&results_id={}",
-        lang_param(lang),
+        "/api/v1/calculator/datastar/option-search?lang={}&locale={}&kind={}&results_id={}",
+        lang_param(api_lang),
+        locale_param(lang),
         kind.param(),
         results_id,
     )
@@ -10080,7 +10202,8 @@ fn render_calculator_option_search_url(
 
 fn render_searchable_select_control(
     cdn_base_url: &str,
-    lang: FishLang,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
     root_id: &str,
     input_id: &str,
     bind_key: &str,
@@ -10119,7 +10242,7 @@ fn render_searchable_select_control(
         selected_value,
         "",
     );
-    let search_url = render_calculator_option_search_url(lang, kind, &results_id);
+    let search_url = render_calculator_option_search_url(api_lang, lang, kind, &results_id);
     let dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
             catalog_html: Some(&catalog_html),
@@ -10181,8 +10304,9 @@ fn render_target_fish_select_control(
         "",
     );
     let search_url = format!(
-        "/api/v1/calculator/datastar/option-search?lang={}&kind=target_fish&results_id={}&zone={}",
-        lang_param(data.lang),
+        "/api/v1/calculator/datastar/option-search?lang={}&locale={}&kind=target_fish&results_id={}&zone={}",
+        lang_param(data.api_lang),
+        locale_param(data.lang),
         escape_html(&results_id),
         escape_html(&signals.zone),
     );
@@ -10225,7 +10349,7 @@ fn render_searchable_multiselect_search_text(option: SelectOption<'_>) -> String
 }
 
 fn render_searchable_multiselect_catalog_html(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     options: &[SelectOption<'_>],
 ) -> String {
@@ -10292,7 +10416,7 @@ fn render_searchable_multiselect_bound_select_html(
 }
 
 fn render_searchable_multiselect_selection_html(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     selected_values: &[String],
     options: &[SelectOption<'_>],
@@ -10324,7 +10448,7 @@ fn render_searchable_multiselect_selection_html(
 }
 
 fn render_searchable_multiselect_results_html(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     options: &[SelectOption<'_>],
     selected_values: &[String],
@@ -10485,7 +10609,7 @@ fn render_searchable_multiselect_control(
 }
 
 fn render_zone_search_results(
-    lang: FishLang,
+    lang: CalculatorLocale,
     results_list_id: &str,
     zones: &[ZoneEntry],
     current_zone: &str,
@@ -10682,7 +10806,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
 }
 
 fn render_checkbox_group(
-    lang: FishLang,
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     id: &str,
     bind_key: &str,
@@ -10808,7 +10932,8 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
 
 fn render_pet_cards(
     cdn_base_url: &str,
-    lang: FishLang,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
 ) -> String {
@@ -10840,6 +10965,7 @@ fn render_pet_cards(
         ));
         html.push_str(&render_searchable_select_control(
             cdn_base_url,
+            api_lang,
             lang,
             &format!("calculator-pet{slot}-tier-picker"),
             &format!("calculator-pet{slot}-tier-value"),
@@ -10861,6 +10987,7 @@ fn render_pet_cards(
         ));
         html.push_str(&render_searchable_select_control(
             cdn_base_url,
+            api_lang,
             lang,
             &format!("calculator-pet{slot}-special-picker"),
             &format!("calculator-pet{slot}-special-value"),
@@ -10882,6 +11009,7 @@ fn render_pet_cards(
         ));
         html.push_str(&render_searchable_select_control(
             cdn_base_url,
+            api_lang,
             lang,
             &format!("calculator-pet{slot}-talent-picker"),
             &format!("calculator-pet{slot}-talent-value"),
@@ -10974,8 +11102,8 @@ mod tests {
         normalize_named_array, normalize_signals, parse_calculator_signals_value,
         pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
         trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
-        FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
+        CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
     };
 
     struct MockStore;
@@ -11276,6 +11404,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorDatastarQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
                 datastar: Some("{}".to_string()),
             })),
@@ -11310,7 +11439,12 @@ mod tests {
         assert!(text.contains("placeholder=\"Search zones\""));
         assert!(text.contains("<fishy-searchable-dropdown"));
         assert!(text.contains("input-id=\"calculator-zone-value\""));
-        assert!(text.contains("search-url=\"/api/v1/calculator/datastar/zone-search?lang=en\""));
+        assert!(text.contains(
+            "search-url=\"/api/v1/calculator/datastar/zone-search?lang=en&amp;locale=en-US\""
+        ));
+        assert!(text.contains(
+            "search-url=\"/api/v1/calculator/datastar/option-search?lang=en&amp;locale=en-US&amp;kind=rod"
+        ));
         assert!(text.contains("search-url-root=\"api\""));
         assert!(text.contains("data-role=\"selected-content\""));
         assert!(text.contains("kind=rod"));
@@ -11380,6 +11514,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorDatastarQuery {
                 lang: Some("ko".to_string()),
+                locale: Some("ko-KR".to_string()),
                 r#ref: None,
                 datastar: Some("{}".to_string()),
             })),
@@ -11392,7 +11527,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("search-url=\"/api/v1/calculator/datastar/zone-search?lang=ko\""));
+        assert!(text.contains(
+            "search-url=\"/api/v1/calculator/datastar/zone-search?lang=ko&amp;locale=ko-KR\""
+        ));
         assert!(text.contains("placeholder=\"지역 검색\""));
         assert!(text.contains("오버레이 제안"));
         assert!(text.contains("시간당 예상 횟수"));
@@ -11406,6 +11543,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
             })),
             Extension(RequestId("req-test".to_string())),
@@ -11450,6 +11588,7 @@ mod tests {
         let (_, _, derived) = load_calculator_runtime_data(
             &state,
             FishLang::En,
+            CalculatorLocale::EnUs,
             None,
             &RequestId("req-test".to_string()),
             defaults,
@@ -11553,6 +11692,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
             })),
             Extension(RequestId("req-test".to_string())),
@@ -11575,6 +11715,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorDatastarQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
                 datastar: Some(r#"{"zone":"vlia bech"}"#.to_string()),
             })),
@@ -11597,6 +11738,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorZoneSearchQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
                 q: Some("vlia bech".to_string()),
                 selected: Some("240,74,74".to_string()),
@@ -11632,6 +11774,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorSearchableOptionQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
                 kind: Some("rod".to_string()),
                 q: Some("baleno".to_string()),
@@ -11672,6 +11815,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorSearchableOptionQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
                 kind: Some("lightstone_set".to_string()),
                 q: Some("blacksmith".to_string()),
@@ -11701,6 +11845,7 @@ mod tests {
             State(test_state()),
             Ok(Query(CalculatorSearchableOptionQuery {
                 lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
                 r#ref: None,
                 kind: Some("lifeskill_level".to_string()),
                 q: Some("guru".to_string()),
@@ -11827,7 +11972,8 @@ mod tests {
                 session_presets: Vec::new(),
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: Vec::new(),
@@ -12144,7 +12290,8 @@ mod tests {
                 ..CalculatorCatalogResponse::default()
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: Vec::new(),
@@ -12264,11 +12411,11 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&normalized_signals, &entry, FishLang::En),
+            loot_species_evidence_text(&normalized_signals, &entry, CalculatorLocale::EnUs),
             "DB 25% · Community guess 5% · Community confirmed×1 · zone-only"
         );
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
+            loot_species_evidence_text(&raw_signals, &entry, CalculatorLocale::EnUs),
             "DB 30% · Community guess 2% · Community confirmed×1 · zone-only"
         );
     }
@@ -12299,11 +12446,11 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&normalized_signals, &entry, FishLang::En),
+            loot_species_evidence_text(&normalized_signals, &entry, CalculatorLocale::EnUs),
             "Community guess 4.65%"
         );
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
+            loot_species_evidence_text(&raw_signals, &entry, CalculatorLocale::EnUs),
             "Community guess 2%"
         );
     }
@@ -12333,11 +12480,11 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
+            loot_species_evidence_text(&raw_signals, &entry, CalculatorLocale::EnUs),
             "Community confirmed×2 · Prize subgroup 11054 · source community_presence_sheet"
         );
         assert_eq!(
-            loot_species_presence_text(&entry, FishLang::En),
+            loot_species_presence_text(&entry, CalculatorLocale::EnUs),
             Some("Community confirmed×2 · Prize subgroup".to_string())
         );
     }
@@ -12381,12 +12528,12 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_presence_text(&entry, FishLang::En),
+            loot_species_presence_text(&entry, CalculatorLocale::EnUs),
             Some("Ranking ring fully inside zone ×8".to_string())
         );
         assert_eq!(loot_species_presence_source_kind(&entry), "mixed");
         assert_eq!(
-            loot_species_presence_tooltip(&entry, FishLang::En),
+            loot_species_presence_tooltip(&entry, CalculatorLocale::EnUs),
             Some(
                 "Ranking ring fully inside zone ×8 · source layer_revision:v1 | Community confirmed×2 · Prize group 11056 · source community_zone_fish_support | Ranking ring overlaps zone edge ×3 · source layer_revision:v1".to_string()
             )
@@ -12415,7 +12562,7 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
+            loot_species_evidence_text(&raw_signals, &entry, CalculatorLocale::EnUs),
             "DB 0.00005%"
         );
     }
@@ -12450,7 +12597,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: vec![ZoneEntry {
                 rgb_key: fishystuff_api::ids::RgbKey("240,74,74".to_string()),
                 name: Some("Velia Beach".to_string()),
@@ -12553,7 +12701,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: vec![ZoneEntry {
                 rgb_key: fishystuff_api::ids::RgbKey("overlay_group_zone".to_string()),
                 name: Some("Overlay Bay".to_string()),
@@ -12654,7 +12803,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -12715,7 +12865,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![
@@ -12759,7 +12910,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -12807,7 +12959,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "edania_longing_lake".to_string(),
@@ -12891,8 +13044,9 @@ mod tests {
             },
         ];
 
-        let normalized = super::groups_distribution_segments(&rows, 52.0, true, FishLang::En);
-        let raw = super::groups_distribution_segments(&rows, 52.0, false, FishLang::En);
+        let normalized =
+            super::groups_distribution_segments(&rows, 52.0, true, CalculatorLocale::EnUs);
+        let raw = super::groups_distribution_segments(&rows, 52.0, false, CalculatorLocale::EnUs);
 
         assert_eq!(normalized[0].value_text, "5.81%");
         assert_eq!(normalized[0].detail_text, "3.02");
@@ -13061,7 +13215,7 @@ mod tests {
         ];
 
         let segments =
-            super::group_silver_distribution_segments(&rows, &species_rows, FishLang::En);
+            super::group_silver_distribution_segments(&rows, &species_rows, CalculatorLocale::EnUs);
         let breakdown = segments[0]
             .breakdown
             .as_ref()
@@ -13115,7 +13269,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -13239,7 +13394,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![
@@ -13309,7 +13465,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -13367,7 +13524,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -13424,7 +13582,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -13480,7 +13639,8 @@ mod tests {
                 ..CalculatorCatalogResponse::default()
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "240,74,74".to_string(),
@@ -13550,7 +13710,8 @@ mod tests {
                 ..CalculatorCatalogResponse::default()
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "bonus_zone".to_string(),
@@ -13674,7 +13835,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "overlay_zone".to_string(),
@@ -13761,7 +13923,8 @@ mod tests {
                 ..CalculatorCatalogResponse::default()
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "prize_overlay_zone".to_string(),
@@ -13805,7 +13968,8 @@ mod tests {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            lang: FishLang::En,
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
             zones: vec![ZoneEntry {
                 rgb_key: fishystuff_api::ids::RgbKey("prize_editor_zone".to_string()),
                 name: Some("Prize Coast".to_string()),

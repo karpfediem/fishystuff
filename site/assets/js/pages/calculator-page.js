@@ -36,25 +36,29 @@
   }
 
   function calculatorSurfaceLanguage() {
-    const helper = languageHelper();
-    const locale = String(helper?.current?.().locale || document.documentElement.lang || "en-US")
-      .trim()
-      .toLowerCase();
-    if (locale.startsWith("ko")) {
+    const current = languageHelper()?.current?.() || {};
+    const locale = String(current.locale || document.documentElement.lang || "en-US").trim();
+    const localeKey = locale.toLowerCase();
+    const apiLang = String(current.apiLang || "").trim().toLowerCase();
+    const resolvedApiLang = apiLang === "ko" ? "ko" : (localeKey.startsWith("ko") ? "ko" : "en");
+    if (localeKey.startsWith("ko")) {
       return {
         locale: "ko-KR",
-        lang: "ko",
+        apiLang: resolvedApiLang,
+        lang: resolvedApiLang,
       };
     }
-    if (locale.startsWith("de")) {
+    if (localeKey.startsWith("de")) {
       return {
         locale: "de-DE",
-        lang: "en",
+        apiLang: resolvedApiLang,
+        lang: resolvedApiLang,
       };
     }
     return {
       locale: "en-US",
-      lang: "en",
+      apiLang: resolvedApiLang,
+      lang: resolvedApiLang,
     };
   }
 
@@ -208,7 +212,6 @@
     };
   }
 
-  const calculatorLang = calculatorSurfaceLanguage().lang;
   const urlParams = new URLSearchParams(window.location.search);
   const presetQueryParam = urlParams.get("preset");
 
@@ -697,11 +700,17 @@
   };
 
   function calculatorInitUrl() {
-    return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${calculatorLang}`);
+    const language = calculatorSurfaceLanguage();
+    return window.__fishystuffResolveApiUrl(
+      `/api/v1/calculator/datastar/init?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}`,
+    );
   }
 
   function calculatorEvalUrl() {
-    return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/eval?lang=${calculatorLang}`);
+    const language = calculatorSurfaceLanguage();
+    return window.__fishystuffResolveApiUrl(
+      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}`,
+    );
   }
 
   function calculatorEvalSignalPatchFilter() {
@@ -1654,7 +1663,9 @@
 
   window.__fishystuffCalculator = {
     iconSpriteUrl: ICON_SPRITE_URL,
-    lang: calculatorLang,
+    lang: calculatorSurfaceLanguage().lang,
+    locale: calculatorSurfaceLanguage().locale,
+    apiLang: calculatorSurfaceLanguage().apiLang,
     initUrl: calculatorInitUrl,
     evalUrl: calculatorEvalUrl,
     evalSignalPatchFilter: calculatorEvalSignalPatchFilter,
