@@ -336,7 +336,7 @@ deployment_tls_directory_url() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
-    beta) printf '%s' "$(deployment_env_or_default "$deployment" "tls_directory_url" "https://acme-staging-v02.api.letsencrypt.org/directory")" ;;
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "tls_directory_url" "https://acme-v02.api.letsencrypt.org/directory")" ;;
     production) printf '%s' "$(deployment_env_or_default "$deployment" "tls_directory_url" "https://acme-v02.api.letsencrypt.org/directory")" ;;
     local) printf '%s' "https://acme-v02.api.letsencrypt.org/directory" ;;
   esac

@@ -25,7 +25,7 @@ tls_challenge="http-01"
 tls_dns_provider=""
 tls_dns_env_json="{}"
 tls_dns_env_keys_csv=""
-tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory"
+tls_directory_url="https://acme-v02.api.letsencrypt.org/directory"
 tls_domains_json=""
 
 raw_args="$*"
