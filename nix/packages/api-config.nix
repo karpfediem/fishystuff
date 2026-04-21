@@ -1,7 +1,16 @@
 { runCommandLocal }:
-
+let
+  apiConfigToml = builtins.path {
+    path = ../../api/config.toml;
+    name = "fishystuff-api-config.toml";
+  };
+  secretSpecToml = builtins.path {
+    path = ../../secretspec.toml;
+    name = "fishystuff-secretspec.toml";
+  };
+in
 runCommandLocal "fishystuff-api-config" { } ''
   mkdir -p $out/etc/fishystuff
-  cp ${../../api/config.toml} $out/etc/fishystuff/config.toml
-  cp ${../../secretspec.toml} $out/etc/fishystuff/secretspec.toml
+  cp ${apiConfigToml} $out/etc/fishystuff/config.toml
+  cp ${secretSpecToml} $out/etc/fishystuff/secretspec.toml
 ''

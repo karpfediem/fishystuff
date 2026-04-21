@@ -10,6 +10,10 @@ let
   yamlFormat = pkgs.formats.yaml { };
   inherit (lib) mkOption optional types;
   cfg = config.fishystuff.jaeger;
+  uiConfigSource = builtins.path {
+    path = cfg.uiConfigSource;
+    name = "fishystuff-jaeger-ui-config.json";
+  };
   configSource = yamlFormat.generate "fishystuff-jaeger.yaml" {
     service = {
       extensions = [ "jaeger_storage" "jaeger_query" "healthcheckv2" ];
@@ -40,7 +44,7 @@ let
           traces = "local_trace_storage";
           metrics = "local_metrics_storage";
         };
-        ui.config_file = cfg.uiConfigSource;
+        ui.config_file = uiConfigSource;
         grpc.endpoint = "${cfg.queryGrpcListenAddress}:${toString cfg.queryGrpcPort}";
         http.endpoint = "${cfg.uiListenAddress}:${toString cfg.uiPort}";
       };
@@ -242,7 +246,7 @@ in
 
       roots.store = [
         cfg.package
-        cfg.uiConfigSource
+        uiConfigSource
         configSource
         systemdUnit.file
       ];
@@ -258,7 +262,7 @@ in
         })
         (helpers.mkMaterializationRoot {
           handle = "config/ui";
-          path = cfg.uiConfigSource;
+          path = uiConfigSource;
         })
         (helpers.mkMaterializationRoot {
           handle = "config/base";
@@ -285,7 +289,7 @@ in
 
         "config/ui" = helpers.mkArtifact {
           kind = "config";
-          storePath = cfg.uiConfigSource;
+          storePath = uiConfigSource;
           destination = "jaeger-ui.json";
         };
 

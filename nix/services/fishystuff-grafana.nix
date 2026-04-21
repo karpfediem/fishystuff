@@ -10,14 +10,14 @@ let
   inherit (lib) mkOption optional types;
   cfg = config.fishystuff.grafana;
   iniSource = pkgs.writeText "fishystuff-grafana.ini" (builtins.readFile cfg.iniSource);
-  provisioningSource = pkgs.runCommandLocal "fishystuff-grafana-provisioning" { } ''
-    mkdir -p "$out"
-    cp -R ${cfg.provisioningSource}/. "$out"/
-  '';
-  dashboardsSource = pkgs.runCommandLocal "fishystuff-grafana-dashboards" { } ''
-    mkdir -p "$out"
-    cp -R ${cfg.dashboardsSource}/. "$out"/
-  '';
+  provisioningSource = builtins.path {
+    path = cfg.provisioningSource;
+    name = "fishystuff-grafana-provisioning";
+  };
+  dashboardsSource = builtins.path {
+    path = cfg.dashboardsSource;
+    name = "fishystuff-grafana-dashboards";
+  };
   grafanaExe = lib.getExe' cfg.package "grafana";
   grafanaHome = "${cfg.package}/share/grafana";
   serviceArgv = [
