@@ -69,6 +69,17 @@
       document.documentElement.setAttribute('data-theme', active);
     })();
   </script>
+  <link rel="preload" href="$site.asset('css/fonts/Comfortaa/Comfortaa-VariableFont_wght.site.woff2').link()" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="$site.asset('css/fonts/Itim/Itim-Regular.site.woff2').link()" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="$site.asset('css/fonts/Pacifico/Pacifico-Regular.site.woff2').link()" as="font" type="font/woff2" crossorigin>
+  <!-- Discover stylesheets before noncritical scripts to avoid visible restyling during navigation. -->
+  <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
+  <link rel="stylesheet" href="$site.asset('css/site.css').link()">
+  <ctx :if="$page.custom.getOr('code_styles', false)">
+    <link rel="stylesheet" href="$site.asset('css/fira_code.css').link()">
+    <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
+  </ctx>
+  <link rel="stylesheet" href="$site.asset('css/style.css').link()">
   <script src="/runtime-config.js"></script>
   <script>
     (function () {
@@ -264,15 +275,6 @@
   <script src="$site.asset('js/datastar-state.js').link()"></script>
   <script src="$site.asset('js/user-overlays.js').link()"></script>
   <script src="$site.asset('js/shared-fish-state.js').link()"></script>
-  <!-- Tailwind + daisyUI (compiled) -->
-  <link rel="stylesheet" href="$site.asset('css/site.css').link()">
-  <!-- CSS -->
-  <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
-  <ctx :if="$page.custom.getOr('code_styles', false)">
-    <link rel="stylesheet" href="$site.asset('css/fira_code.css').link()">
-    <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
-  </ctx>
-  <link rel="stylesheet" href="$site.asset('css/style.css').link()">
   <style>
     :where(.fishy-icon) {
       display: inline-block;
