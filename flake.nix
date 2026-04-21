@@ -12,6 +12,8 @@
     crane.url = "github:ipetkov/crane";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs = { nixpkgs.follows = "nixpkgs"; };
+    zine.url = "github:trevorriles/zine/fix-nix-flake";
+    zine.inputs = { nixpkgs.follows = "nixpkgs"; };
 
     waypoints.url = "github:flockenberger/bdo-fish-waypoints";
     waypoints.flake = false;
@@ -45,7 +47,21 @@
             inherit apiWorkspaceCargoToml;
             apiWorkspaceCargoLock = ./nix/locks/api/Cargo.lock;
           };
-          apiCargoSrc = craneLib.cleanCargoSource apiWorkspaceSrc;
+          apiCargoSrc = pkgs.lib.cleanSourceWith {
+            name = "fishystuff-api-cargo-src";
+            src = apiWorkspaceSrc;
+            filter = path: type:
+              let
+                root = "${toString apiWorkspaceSrc}/";
+                rel = pkgs.lib.removePrefix root (toString path);
+              in
+                craneLib.filterCargoSources path type
+                || rel == "site"
+                || rel == "site/i18n"
+                || pkgs.lib.hasPrefix "site/i18n/" rel;
+          };
+          siteSrc = pkgs.callPackage ./nix/packages/site-src.nix { };
+          siteMapRuntimeCacheKey = import ./nix/packages/site-map-runtime-cache-key.nix;
           tilegenWorkspaceSrc = pkgs.callPackage ./nix/packages/tilegen-workspace-src.nix {
             inherit tilegenWorkspaceCargoToml;
           };
@@ -63,6 +79,9 @@
           };
           botWaypoints = pkgs.callPackage ./nix/packages/bot-waypoints.nix {
             inherit filteredWaypointsSrc;
+          };
+          zineCli = inputs'.zine.packages.default.override {
+            zigPreferMusl = true;
           };
           botSrc = pkgs.callPackage ./nix/packages/bot-src.nix {
             inherit botWaypoints;
@@ -88,9 +107,37 @@
           apiEntrypoint = pkgs.callPackage ./nix/packages/api-entrypoint.nix {
             inherit api;
           };
+          defaultDeploymentEnvironment = "beta";
+          deploymentBaseHost =
+            deploymentEnvironment:
+            if deploymentEnvironment == "production" then
+              "fishystuff.fish"
+            else
+              "${deploymentEnvironment}.fishystuff.fish";
+          deploymentBaseUrl =
+            subdomain: deploymentEnvironment:
+            let
+              baseHost = deploymentBaseHost deploymentEnvironment;
+            in
+            if subdomain == "" then
+              "https://${baseHost}"
+            else
+              "https://${subdomain}.${baseHost}";
           cdnContent = pkgs.callPackage ./nix/packages/cdn-content.nix {
             inherit cdnBaseContent cdnMinimapVisual;
           };
+          siteContentFor =
+            deploymentEnvironment:
+            pkgs.callPackage ./nix/packages/site-content.nix {
+              inherit siteSrc zineCli deploymentEnvironment;
+              mapAssetCacheKey = siteMapRuntimeCacheKey;
+              publicSiteBaseUrl = deploymentBaseUrl "" deploymentEnvironment;
+              publicApiBaseUrl = deploymentBaseUrl "api" deploymentEnvironment;
+              publicCdnBaseUrl = deploymentBaseUrl "cdn" deploymentEnvironment;
+              publicTelemetryBaseUrl = deploymentBaseUrl "telemetry" deploymentEnvironment;
+            };
+          siteContent = siteContentFor "production";
+          siteContentBeta = siteContentFor defaultDeploymentEnvironment;
           apiServiceBaseConfig = pkgs.callPackage ./nix/packages/api-service-base-config.nix { };
           serviceModules = import ./nix/services {
             inherit pkgs;
@@ -106,21 +153,28 @@
             configuration.fishystuff.api = {
               package = api;
               baseConfigSource = apiServiceBaseConfig;
+              runtimeEnvFile = "/run/fishystuff/api/env";
+              environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
+              environment.FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
             };
           };
           doltServiceBundle = mkServiceBundle {
             name = "fishystuff-dolt";
             serviceModule = serviceModules.dolt;
+            configuration.fishystuff.dolt = {
+              runtimeEnvFile = "/run/fishystuff/api/env";
+              environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
+            };
           };
           edgeServiceBundle = mkServiceBundle {
             name = "fishystuff-edge";
             serviceModule = serviceModules.edge;
             configuration.fishystuff.edge = {
               tlsEnable = true;
-              siteAddress = "https://beta.fishystuff.fish";
-              apiAddress = "https://api.beta.fishystuff.fish";
-              cdnAddress = "https://cdn.beta.fishystuff.fish";
-              telemetryAddress = "https://telemetry.beta.fishystuff.fish";
+              siteAddress = deploymentBaseUrl "" defaultDeploymentEnvironment;
+              apiAddress = deploymentBaseUrl "api" defaultDeploymentEnvironment;
+              cdnAddress = deploymentBaseUrl "cdn" defaultDeploymentEnvironment;
+              telemetryAddress = deploymentBaseUrl "telemetry" defaultDeploymentEnvironment;
             };
           };
           lokiServiceBundle = mkServiceBundle {
@@ -193,6 +247,8 @@
             minimap-display-tiles = minimapDisplayTiles;
             minimap-source-tiles = minimapSourceTiles;
             prometheus-service-bundle = prometheusServiceBundle;
+            site-content = siteContent;
+            site-content-beta = siteContentBeta;
             vector-service-bundle = vectorServiceBundle;
           };
           checks =
