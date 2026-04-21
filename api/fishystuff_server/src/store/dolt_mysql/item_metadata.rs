@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use mysql::prelude::Queryable;
 
@@ -50,6 +50,26 @@ fn normalized_item_name_expr() -> &'static str {
     "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(it.`ItemName`, ''), '[의상] ', ''), '[이벤트] ', ''), '의 낚시 배낭', ' 낚시 배낭'), '의 낚시복', ' 낚시복'), '  ', ' '))"
 }
 
+fn dedupe_non_empty_values(values: &[String]) -> Vec<String> {
+    let mut out = values
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+fn quote_sql_string_list(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| format!("'{}'", value.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 impl DoltMySqlStore {
     pub(super) fn query_item_table_metadata(
         &self,
@@ -90,8 +110,8 @@ impl DoltMySqlStore {
                      MAX(NULLIF(TRIM(l.`text`), '')) AS item_name_en \
                  FROM languagedata_en{as_of} l \
                  WHERE l.`id` IN ({id_list}) \
-                   AND COALESCE(l.`format`, '') = 'A' \
-                   AND COALESCE(l.`unk`, '') = '' \
+                   AND l.`format` = 'A' \
+                   AND l.`unk` IS NULL \
                  GROUP BY CAST(l.`id` AS SIGNED) \
              ) l \
                ON l.item_id = CAST(it.`Index` AS SIGNED) \
@@ -107,76 +127,71 @@ impl DoltMySqlStore {
         exact_names: &[String],
         normalized_names: &[String],
     ) -> AppResult<HashMap<i32, ItemSourceMetadata>> {
+        let exact_names = dedupe_non_empty_values(exact_names);
+        let normalized_names = dedupe_non_empty_values(normalized_names);
         if exact_names.is_empty() && normalized_names.is_empty() {
             return Ok(HashMap::new());
         }
+        let item_ids =
+            self.query_item_table_matching_ids_by_names(ref_id, &exact_names, &normalized_names)?;
+        self.query_item_table_metadata(ref_id, &item_ids)
+    }
+
+    fn query_item_table_matching_ids_by_names(
+        &self,
+        ref_id: Option<&str>,
+        exact_names: &[String],
+        normalized_names: &[String],
+    ) -> AppResult<Vec<i32>> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
         } else {
             String::new()
         };
-        let quote_list = |values: &[String]| {
-            values
-                .iter()
-                .map(|value| format!("'{}'", value.replace('\'', "''")))
-                .collect::<Vec<_>>()
-                .join(",")
-        };
-        let exact_filter = if exact_names.is_empty() {
-            String::from("FALSE")
-        } else {
-            format!(
-                "NULLIF(TRIM(it.`ItemName`), '') IN ({})",
-                quote_list(exact_names)
-            )
-        };
-        let normalized_filter = if normalized_names.is_empty() {
-            String::from("FALSE")
-        } else {
-            format!(
-                "{} IN ({})",
-                normalized_item_name_expr(),
-                quote_list(normalized_names)
-            )
-        };
-        let query = format!(
-            "SELECT \
-                CAST(it.`Index` AS SIGNED), \
-                it.`ItemName`, \
-                MAX( \
-                    CASE \
-                        WHEN COALESCE(l.`format`, '') = 'A' \
-                         AND COALESCE(l.`unk`, '') = '' \
-                        THEN NULLIF(TRIM(l.`text`), '') \
-                        ELSE NULL \
-                    END \
-                ) AS item_name_en, \
-                it.`EquipType`, \
-                it.`IconImageFile`, \
-                it.`GradeType`, \
-                CASE \
-                    WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
-                    THEN CAST(it.`EnduranceLimit` AS SIGNED) \
-                    ELSE NULL \
-                END AS endurance_limit \
-             FROM item_table{as_of} it \
-             LEFT JOIN languagedata_en{as_of} l \
-               ON l.`id` = CAST(it.`Index` AS SIGNED) \
-             WHERE ({exact_filter}) OR ({normalized_filter}) \
-             GROUP BY CAST(it.`Index` AS SIGNED), \
-                      it.`ItemName`, \
-                      it.`EquipType`, \
-                      it.`IconImageFile`, \
-                      it.`GradeType`, \
-                      CASE \
-                          WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
-                          THEN CAST(it.`EnduranceLimit` AS SIGNED) \
-                          ELSE NULL \
-                      END"
-        );
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let mut item_ids = HashSet::<i32>::new();
 
-        self.query_item_table_metadata_from_query(query)
+        if !exact_names.is_empty() {
+            let exact_query = format!(
+                "SELECT CAST(it.`Index` AS SIGNED) \
+                 FROM item_table{as_of} it \
+                 WHERE it.`ItemName` IN ({})",
+                quote_sql_string_list(exact_names)
+            );
+            let rows: Vec<i64> = match conn.query(exact_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "item_table") => return Ok(Vec::new()),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+            item_ids.extend(
+                rows.into_iter()
+                    .filter_map(|item_id| i32::try_from(item_id).ok()),
+            );
+        }
+
+        if !normalized_names.is_empty() {
+            let normalized_query = format!(
+                "SELECT CAST(it.`Index` AS SIGNED) \
+                 FROM item_table{as_of} it \
+                 WHERE {} IN ({})",
+                normalized_item_name_expr(),
+                quote_sql_string_list(normalized_names)
+            );
+            let rows: Vec<i64> = match conn.query(normalized_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "item_table") => return Ok(Vec::new()),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+            item_ids.extend(
+                rows.into_iter()
+                    .filter_map(|item_id| i32::try_from(item_id).ok()),
+            );
+        }
+
+        let mut item_ids = item_ids.into_iter().collect::<Vec<_>>();
+        item_ids.sort_unstable();
+        Ok(item_ids)
     }
 
     fn query_item_table_metadata_from_query(

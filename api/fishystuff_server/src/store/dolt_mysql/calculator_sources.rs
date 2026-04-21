@@ -823,9 +823,9 @@ impl DoltMySqlStore {
                         ) \
                     ) AS source_name_en \
                 FROM languagedata_en{as_of} l \
-                WHERE COALESCE(l.`format`, '') = 'B' \
-                  AND COALESCE(l.`unk`, '') = '10' \
-                  AND COALESCE(l.`text`, '') LIKE 'Set % - [%' \
+                WHERE l.`format` = 'B' \
+                  AND l.`unk` = '10' \
+                  AND l.`text` LIKE 'Set % - [%' \
                 GROUP BY CAST(l.`id` AS SIGNED) \
              ) l_en \
                ON l_en.skill_id = CAST(TRIM(COALESCE(ls.`SetOptionSkillNo`, '')) AS SIGNED) \

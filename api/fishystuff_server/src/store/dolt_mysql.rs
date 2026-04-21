@@ -662,7 +662,7 @@ impl DoltMySqlStore {
              FROM fish_names_ko{as_of} k \
              JOIN languagedata_en{as_of} en ON en.`id` = k.fish_id \
                AND en.`format` = 'A' \
-               AND COALESCE(en.`unk`, '') = '' \
+               AND en.`unk` IS NULL \
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL"
         );
 
@@ -715,7 +715,7 @@ impl DoltMySqlStore {
              FROM fish_names_ko{as_of} f \
              JOIN languagedata_en{as_of} en ON en.`id` = f.fish_id \
                AND en.`format` = 'A' \
-               AND COALESCE(en.`unk`, '') = '' \
+               AND en.`unk` IS NULL \
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
              JOIN item_table{as_of} it ON it.`Index` = f.fish_id \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = f.fish_id \
@@ -734,7 +734,7 @@ impl DoltMySqlStore {
              FROM fish_table{as_of} ft \
              JOIN languagedata_en{as_of} en ON en.`id` = ft.item_key \
                AND en.`format` = 'A' \
-               AND COALESCE(en.`unk`, '') = '' \
+               AND en.`unk` IS NULL \
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
              LEFT JOIN item_table{as_of} it ON it.`Index` = ft.item_key \
              LEFT JOIN fish_names_ko{as_of} f ON f.fish_id = ft.item_key \
@@ -872,7 +872,7 @@ impl DoltMySqlStore {
              FROM fish_table{as_of} ft \
              JOIN languagedata_en{as_of} en ON en.`id` = ft.item_key \
                AND en.`format` = 'A' \
-               AND COALESCE(en.`unk`, '') = '' \
+               AND en.`unk` IS NULL \
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL"
         );
 

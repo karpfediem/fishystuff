@@ -699,7 +699,7 @@ impl DoltMySqlStore {
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = it.`Index` \
              LEFT JOIN languagedata_en{as_of} en ON en.`id` = it.`Index` \
                AND en.`format` = 'A' \
-               AND COALESCE(en.`unk`, '') = '' \
+               AND en.`unk` IS NULL \
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
              WHERE it.`Index` IN ({item_id_csv})"
         );

@@ -878,6 +878,7 @@ fn run_import(command: ImportCommand) -> Result<()> {
     if languagedata_stats.is_some() {
         run_dolt_table_import(&dolt_repo, "languagedata_en", &outputs.languagedata_csv)?;
     }
+    ensure_calculator_lookup_indexes(&dolt_repo)?;
 
     if commit {
         let msg = build_commit_message(commit_msg, &digests);
@@ -1603,6 +1604,84 @@ fn ensure_community_zone_fish_support_table(repo_path: &Path) -> Result<()> {
             KEY `idx_community_zone_fish_support_status` (`support_status`)\
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
         "ensure community_zone_fish_support table",
+    )
+}
+
+fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
+    ensure_dolt_index(
+        repo_path,
+        "languagedata_en",
+        "idx_languagedata_en_id_format_unk",
+        "CREATE INDEX `idx_languagedata_en_id_format_unk` \
+         ON `languagedata_en` (`id`, `format`(1), `unk`(8));",
+    )?;
+    ensure_dolt_index(
+        repo_path,
+        "languagedata_en",
+        "idx_languagedata_en_format_unk_id",
+        "CREATE INDEX `idx_languagedata_en_format_unk_id` \
+         ON `languagedata_en` (`format`(1), `unk`(8), `id`);",
+    )?;
+    ensure_dolt_index(
+        repo_path,
+        "item_table",
+        "idx_item_table_item_name",
+        "CREATE INDEX `idx_item_table_item_name` \
+         ON `item_table` (`ItemName`(191));",
+    )?;
+    Ok(())
+}
+
+fn dolt_table_exists(repo_path: &Path, table_name: &str) -> Result<bool> {
+    let query = format!(
+        "SELECT 1 AS present \
+         FROM information_schema.tables \
+         WHERE table_schema = DATABASE() \
+           AND table_name = {} \
+         LIMIT 1",
+        sql_value(table_name)
+    );
+    Ok(
+        !run_dolt_select_named_rows(repo_path, &query, &format!("check {table_name} table"))?
+            .is_empty(),
+    )
+}
+
+fn dolt_index_exists(repo_path: &Path, table_name: &str, index_name: &str) -> Result<bool> {
+    let query = format!(
+        "SELECT 1 AS present \
+         FROM information_schema.statistics \
+         WHERE table_schema = DATABASE() \
+           AND table_name = {} \
+           AND index_name = {} \
+         LIMIT 1",
+        sql_value(table_name),
+        sql_value(index_name)
+    );
+    Ok(!run_dolt_select_named_rows(
+        repo_path,
+        &query,
+        &format!("check {table_name}.{index_name} index"),
+    )?
+    .is_empty())
+}
+
+fn ensure_dolt_index(
+    repo_path: &Path,
+    table_name: &str,
+    index_name: &str,
+    create_sql: &str,
+) -> Result<()> {
+    if !dolt_table_exists(repo_path, table_name)? {
+        return Ok(());
+    }
+    if dolt_index_exists(repo_path, table_name, index_name)? {
+        return Ok(());
+    }
+    run_dolt_sql_query_or_remote(
+        repo_path,
+        create_sql,
+        &format!("create {table_name}.{index_name} index"),
     )
 }
 
