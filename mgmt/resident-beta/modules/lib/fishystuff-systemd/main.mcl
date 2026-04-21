@@ -7,6 +7,7 @@ class service($st) {
 	$desired_state str = $st->state || "running"
 	$startup_mode str = $st->startup_mode || "enabled"
 	$listen_exec_name str = $st->listen_exec_name || ""
+	$refresh_action str = $st->refresh_action || ""
 
 	panic(
 		($startup_mode != "enabled")
@@ -19,10 +20,17 @@ class service($st) {
 		and ($desired_state != "stopped"),
 		fmt.printf("unknown desired_state %s for %s", $desired_state, $name)
 	)
+	panic(
+		($refresh_action != "")
+		and ($refresh_action != "reload-or-try-restart")
+		and ($refresh_action != "try-restart"),
+		fmt.printf("unknown refresh_action %s for %s", $refresh_action, $name)
+	)
 
 	if $startup_mode == "none" {
 		svc "${name}" {
 			state => $desired_state,
+			refresh_action => $refresh_action,
 			Listen => ($listen_exec_name != "") ?: Exec["${listen_exec_name}"],
 		}
 	}
@@ -31,6 +39,7 @@ class service($st) {
 		svc "${name}" {
 			state => $desired_state,
 			startup => $startup_mode,
+			refresh_action => $refresh_action,
 			Listen => ($listen_exec_name != "") ?: Exec["${listen_exec_name}"],
 		}
 	}

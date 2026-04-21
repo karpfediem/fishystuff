@@ -47,26 +47,13 @@ class unit($st) {
 		gcroot_path => $gcroot_path,
 	})
 
-	if $desired_state == "running" {
-		file "${install_path}" {
-			state => "exists",
-			content => os.readfile($unit_source_path),
-			mode => "u=rw,go=r",
-			owner => "root",
-			group => "root",
-			Notify => Svc["${service_name}"],
-		}
-	}
-
-	if $desired_state != "running" {
-		file "${install_path}" {
-			state => "exists",
-			content => os.readfile($unit_source_path),
-			mode => "u=rw,go=r",
-			owner => "root",
-			group => "root",
-			Notify => Exec["${reload_name}"],
-		}
+	file "${install_path}" {
+		state => "exists",
+		content => os.readfile($unit_source_path),
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+		Notify => Exec["${reload_name}"],
 	}
 
 	include systemd_daemon_reload.reload($reload_name)
@@ -75,6 +62,7 @@ class unit($st) {
 		name => $service_name,
 		state => $desired_state,
 		startup_mode => $resolved_startup_mode,
+		refresh_action => "try-restart",
 		listen_exec_name => $reload_name,
 	})
 

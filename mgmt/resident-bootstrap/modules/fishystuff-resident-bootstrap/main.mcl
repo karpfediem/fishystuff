@@ -104,6 +104,7 @@ class resident($st) {
 	if $startup_mode == "none" {
 		svc "${service_name}" {
 			state => $desired_state,
+			refresh_action => "try-restart",
 			Listen => Exec["${reload_name}"],
 		}
 	}
@@ -112,6 +113,7 @@ class resident($st) {
 		svc "${service_name}" {
 			state => $desired_state,
 			startup => $startup_mode,
+			refresh_action => "try-restart",
 			Listen => Exec["${reload_name}"],
 		}
 	}
