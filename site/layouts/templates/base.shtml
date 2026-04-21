@@ -72,7 +72,6 @@
   <link rel="preload" href="$site.asset('css/fonts/Comfortaa/Comfortaa-VariableFont_wght.site.woff2').link()" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="$site.asset('css/fonts/Itim/Itim-Regular.site.woff2').link()" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="$site.asset('css/fonts/Pacifico/Pacifico-Regular.site.woff2').link()" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/img/icons.svg?v=20260419-2" as="image" type="image/svg+xml" fetchpriority="high">
   <!-- Discover stylesheets before noncritical scripts to avoid visible restyling during navigation. -->
   <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
   <link rel="stylesheet" href="$site.asset('css/site.css').link()">
