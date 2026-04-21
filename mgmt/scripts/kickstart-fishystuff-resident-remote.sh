@@ -49,11 +49,11 @@ trap 'rm -rf "$remote_tmp"; rm -f "$remote_tar"' EXIT
 tar -C "$remote_tmp" -xf "$remote_tar"
 sudo install -d -m 0755 /usr/local/bin
 sudo install -d -m 0755 "$bootstrap_module_path"
-sudo ln -sfn "$remote_mgmt_bin" /usr/local/bin/mgmt
 run_status=0
 sudo env \
 	FISHYSTUFF_MGMT_BOOTSTRAP_HOSTNAME="$host_name" \
 	FISHYSTUFF_MGMT_BOOTSTRAP_MGMT_EXEC="/usr/local/bin/mgmt" \
+	FISHYSTUFF_MGMT_BOOTSTRAP_MGMT_EXEC_SOURCE="$remote_mgmt_bin" \
 	FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_DIR="$bootstrap_environment_dir" \
 	FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_FILE="$bootstrap_environment_file" \
 	FISHYSTUFF_MGMT_BOOTSTRAP_ENVIRONMENT_FILE_CONTENT="$bootstrap_environment_file_content" \
@@ -70,6 +70,15 @@ sudo env \
 		lang --module-path "$bootstrap_module_path" "$remote_tmp/" || run_status=$?
 if [[ "$run_status" != "0" && "$run_status" != "3" ]]; then
 	exit "$run_status"
+fi
+desired_mgmt_bin="$(readlink -f /usr/local/bin/mgmt || true)"
+main_pid="$(sudo systemctl show -p MainPID --value fishystuff-mgmt.service || true)"
+running_mgmt_bin=""
+if [[ -n "$main_pid" && "$main_pid" != "0" && -e "/proc/$main_pid/exe" ]]; then
+	running_mgmt_bin="$(readlink -f "/proc/$main_pid/exe" || true)"
+fi
+if [[ -n "$desired_mgmt_bin" && "$running_mgmt_bin" != "$desired_mgmt_bin" ]]; then
+	sudo systemctl restart fishystuff-mgmt.service
 fi
 sudo systemctl is-enabled fishystuff-mgmt.service >/dev/null
 sudo systemctl is-active fishystuff-mgmt.service >/dev/null

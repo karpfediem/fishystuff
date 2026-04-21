@@ -7,6 +7,7 @@ import "../lib/systemd-daemon-reload/" as systemd_daemon_reload
 class resident($st) {
 	$hostname str = $st->hostname
 	$mgmt_exec str = $st->mgmt_exec || "/usr/local/bin/mgmt"
+	$mgmt_exec_source str = $st->mgmt_exec_source || $mgmt_exec
 	$service_name str = $st->service_name || "fishystuff-mgmt"
 	$state_root str = $st->state_root || "/var/lib/fishystuff/mgmt"
 	$unit_dir str = $st->unit_dir || "/etc/systemd/system"
@@ -36,6 +37,7 @@ class resident($st) {
 	})
 
 	panic($hostname == "", "resident bootstrap requires hostname")
+	panic($mgmt_exec_source == "", "resident bootstrap requires mgmt_exec_source")
 	panic(($startup_mode != "enabled") and ($startup_mode != "disabled") and ($startup_mode != "none"), fmt.printf("unknown startup_mode %s", $startup_mode))
 	panic(($environment_file == "") and ($environment_file_content != ""), "resident bootstrap environment_file is required when environment_file_content is set")
 
@@ -89,6 +91,14 @@ class resident($st) {
 		Notify => Svc["${service_name}"],
 	}
 
+	file "${mgmt_exec}" {
+		state => "exists",
+		source => $mgmt_exec_source,
+		symlink => true,
+		force => true,
+		Notify => Svc["${service_name}"],
+	}
+
 	include systemd_daemon_reload.reload($reload_name)
 
 	if $startup_mode == "none" {
@@ -109,6 +119,7 @@ class resident($st) {
 	File["${state_parent_path}"] -> File["${state_root_path}"]
 	File["${state_root_path}"] -> Svc["${service_name}"]
 	File["${unit_dir_path}"] -> File["${service_path}"]
+	File["${mgmt_exec}"] -> Svc["${service_name}"]
 	File["${service_path}"] -> Exec["${reload_name}"]
 	Exec["${reload_name}"] -> Svc["${service_name}"]
 	Exec["${nix_ready_exec_name}"] -> Svc["${service_name}"]

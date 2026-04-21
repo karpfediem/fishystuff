@@ -3,6 +3,7 @@ import "modules/fishystuff-resident-bootstrap/"
 
 $hostname = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_HOSTNAME", "")
 $mgmt_exec = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_MGMT_EXEC", "/usr/local/bin/mgmt")
+$mgmt_exec_source = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_MGMT_EXEC_SOURCE", $mgmt_exec)
 $service_name = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_SERVICE_NAME", "fishystuff-mgmt")
 $state_root = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_STATE_ROOT", "/var/lib/fishystuff/mgmt")
 $unit_dir = sys.defaultenv("FISHYSTUFF_MGMT_BOOTSTRAP_UNIT_DIR", "/etc/systemd/system")
@@ -20,6 +21,7 @@ panic($hostname == "", "missing resident mgmt hostname; set FISHYSTUFF_MGMT_BOOT
 include fishystuff_resident_bootstrap.resident(struct {
 	hostname => $hostname,
 	mgmt_exec => $mgmt_exec,
+	mgmt_exec_source => $mgmt_exec_source,
 	service_name => $service_name,
 	state_root => $state_root,
 	unit_dir => $unit_dir,
