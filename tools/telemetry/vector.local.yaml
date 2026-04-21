@@ -68,6 +68,8 @@ transforms:
       .correlation = {}
       .http = {}
       .browser = {}
+      .host = "local"
+      .service_state = "log"
 
       wrapped = parse_regex(.raw_line, r'^\[(?P<wrapped_timestamp>[^\]]+)\] \[(?P<process>[^\]]+)\] (?P<body>.*)$') ?? null
       if wrapped != null {
@@ -158,6 +160,8 @@ transforms:
       .correlation = {}
       .http = {}
       .browser = {}
+      .host = "browser"
+      .service_state = "log"
       first_resource_log = get(., ["resourceLogs", 0]) ?? {}
       first_scope_log = get(first_resource_log, ["scopeLogs", 0]) ?? {}
       first_log_record = get(first_scope_log, ["logRecords", 0]) ?? {}
@@ -294,8 +298,10 @@ sinks:
     labels:
       app: "{{ app }}"
       env: "{{ deployment_environment }}"
+      host: "{{ host }}"
       process: "{{ process }}"
       service: "{{ service }}"
+      service_state: "{{ service_state }}"
       level: "{{ level }}"
     structured_metadata:
       log_schema: "{{ log_schema }}"

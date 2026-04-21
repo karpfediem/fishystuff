@@ -80,18 +80,71 @@ let
           .correlation = {}
           .http = {}
           .browser = {}
+          .host = "unknown"
+          .service_state = "log"
+          .logger = "journald"
+          if exists(._HOSTNAME) && !is_null(._HOSTNAME) {
+            .host = string!(._HOSTNAME)
+          }
           if exists(._SYSTEMD_UNIT) && !is_null(._SYSTEMD_UNIT) {
             .process = string!(._SYSTEMD_UNIT)
           } else {
             .process = "unknown.service"
           }
-          .service = .process
+          service_match = parse_regex(.process, r'^(?P<service>.+)\.service$') ?? null
+          if service_match != null {
+            .service = service_match.service
+          } else {
+            .service = .process
+          }
           .level = "info"
+          if exists(.SYSLOG_IDENTIFIER) && !is_null(.SYSLOG_IDENTIFIER) {
+            .logger = string!(.SYSLOG_IDENTIFIER)
+          }
+          priority = null
+          if exists(.PRIORITY) && !is_null(.PRIORITY) {
+            priority = string!(.PRIORITY)
+          }
+          if priority == "0" || priority == "1" || priority == "2" {
+            .level = "critical"
+          } else if priority == "3" {
+            .level = "error"
+          } else if priority == "4" {
+            .level = "warn"
+          } else if priority == "5" {
+            .level = "notice"
+          } else if priority == "7" {
+            .level = "debug"
+          }
 
           if !exists(.message) || is_null(.message) {
             .message = "journal entry"
           } else {
             .message = string!(.message)
+          }
+
+          if .logger == "systemd" {
+            if parse_regex(.message, r'^Starting ') != null {
+              .service_state = "starting"
+            } else if parse_regex(.message, r'^Started ') != null {
+              .service_state = "started"
+            } else if parse_regex(.message, r'^Stopping ') != null {
+              .service_state = "stopping"
+            } else if parse_regex(.message, r'^Stopped ') != null {
+              .service_state = "stopped"
+            } else if parse_regex(.message, r'^Scheduled restart job') != null {
+              .service_state = "restarting"
+            } else if parse_regex(.message, r'^Main process exited') != null || parse_regex(.message, r'Failed with result') != null || parse_regex(.message, r'^Failed ') != null {
+              .service_state = "failed"
+            }
+          }
+
+          if .service_state == "failed" {
+            .level = "error"
+          } else if .service_state == "stopping" || .service_state == "stopped" || .service_state == "restarting" {
+            if .level == "info" || .level == "notice" {
+              .level = "warn"
+            }
           }
       normalized_telemetry_logs:
         type: remap
@@ -106,6 +159,8 @@ let
           .correlation = {}
           .http = {}
           .browser = {}
+          .host = "browser"
+          .service_state = "log"
           first_resource_log = get(., ["resourceLogs", 0]) ?? {}
           first_scope_log = get(first_resource_log, ["scopeLogs", 0]) ?? {}
           first_log_record = get(first_scope_log, ["logRecords", 0]) ?? {}
@@ -242,8 +297,10 @@ let
         labels:
           app: "{{ app }}"
           env: "{{ deployment_environment }}"
+          host: "{{ host }}"
           process: "{{ process }}"
           service: "{{ service }}"
+          service_state: "{{ service_state }}"
           level: "{{ level }}"
         structured_metadata:
           log_schema: "{{ log_schema }}"

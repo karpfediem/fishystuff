@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Operator-oriented overview for beta or production: user traffic, frontend health, trace latency, and correlated warnings/errors.",
+  "description": "Operator-oriented overview for beta or production: service health from Vector/Loki, user traffic, frontend health, trace latency, and correlated warnings/errors.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -49,7 +49,7 @@
       },
       "id": 1,
       "options": {
-        "content": "### Fishystuff Operator Overview\nUse this as the first-stop dashboard for beta or production traffic.\n\n- `Sessions Started` shows whether people are actively entering the site.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.\n- The logs panel stays focused on warning and error signals for fast triage.",
+        "content": "### Fishystuff Operator Overview\nUse this as the first-stop dashboard for beta or production traffic.\n\n- `Service Instances With Errors` and `Service Errors By Instance` come from deployment-host Vector logs.\n- `Recent Service Lifecycle Events` surfaces restarts, stops, and failed units from systemd journal entries.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.",
         "mode": "markdown"
       },
       "title": "Overview",
@@ -421,13 +421,30 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "fishystuff-prometheus"
+        "type": "loki",
+        "uid": "fishystuff-loki"
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 0,
-          "min": 0
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
         },
         "overrides": []
       },
@@ -457,18 +474,122 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "fishystuff-prometheus"
+            "type": "loki",
+            "uid": "fishystuff-loki"
           },
           "editorMode": "code",
-          "expr": "count(sum by (service_name) (increase(traces_span_metrics_calls_total[15m])))",
+          "expr": "count(sum by (host, service) (count_over_time({app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])))",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Services Seen (15m)",
+      "title": "Service Instances With Errors (30m)",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 18,
+      "options": {
+        "displayMode": "basic",
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (host, service) (count_over_time({app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])) or sum by (host, service) (count_over_time({app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\"}[30d])) * 0",
+          "instant": true,
+          "legendFormat": "{{host}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Errors By Instance (30m)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 19,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "{app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", service_state!=\"log\"} | json",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Service Lifecycle Events",
+      "type": "logs"
     },
     {
       "datasource": {
@@ -489,7 +610,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "id": 10,
       "options": {
@@ -539,7 +660,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 16
       },
       "id": 11,
       "options": {
@@ -589,7 +710,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 24
       },
       "id": 12,
       "options": {
@@ -639,7 +760,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 16
+        "y": 24
       },
       "id": 13,
       "options": {
@@ -689,7 +810,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 16
+        "y": 24
       },
       "id": 14,
       "options": {
@@ -750,7 +871,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 32
       },
       "id": 15,
       "options": {
@@ -800,7 +921,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 32
       },
       "id": 16,
       "options": {
@@ -851,7 +972,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 40
       },
       "id": 17,
       "options": {
@@ -898,6 +1019,6 @@
   "timezone": "browser",
   "title": "Fishystuff Operator Overview",
   "uid": "fishystuff-operator-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
