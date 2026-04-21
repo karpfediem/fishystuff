@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   buildPageManifest,
   LANGUAGE_CONFIG,
+  loadLocaleCatalogs,
   parseFluentMessages,
   resolveLocaleCatalogs,
 } from "./build-i18n.mjs";
@@ -128,4 +129,12 @@ test("resolveLocaleCatalogs fills missing locale keys from the default locale", 
       "nav.map": "Map",
     },
   });
+});
+
+test("de-DE calculator catalog overrides core calculator UI strings", () => {
+  const catalogs = resolveLocaleCatalogs(loadLocaleCatalogs(), LANGUAGE_CONFIG.defaultLocale);
+
+  assert.equal(catalogs["de-DE"]["calculator.loading"], "Rechner wird geladen...");
+  assert.equal(catalogs["de-DE"]["calculator.server.field.fishing_level"], "Angelstufe");
+  assert.equal(catalogs["de-DE"]["calculator.overlay.title"], "Persönliches Overlay");
 });
