@@ -764,6 +764,29 @@ mgmt-resident-push-full-stack *args:
     done
     return 1
   }
+  build_release_map_runtime() {
+    local site_content_path="$1"
+    local runtime_config_path="$site_content_path/runtime-config.js"
+    local map_asset_cache_key=""
+
+    if [[ ! -f "$runtime_config_path" ]]; then
+      echo "runtime-config.js missing from site content: $runtime_config_path" >&2
+      exit 2
+    fi
+
+    map_asset_cache_key="$(
+      node ./tools/scripts/print_runtime_map_asset_cache_key.mjs "$runtime_config_path"
+    )"
+    if [[ -z "$map_asset_cache_key" ]]; then
+      echo "failed to resolve mapAssetCacheKey from $runtime_config_path" >&2
+      exit 2
+    fi
+
+    echo "rebuilding map runtime for cache key: $map_asset_cache_key" >&2
+    FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$map_asset_cache_key" \
+      ./tools/scripts/build_map.sh
+    ./tools/scripts/stage_cdn_assets.sh --map-only
+  }
   if ! service_selected api || ! service_selected dolt; then
     echo "services_csv must include both api and dolt for mgmt-resident-push-full-stack" >&2
     exit 2
@@ -853,6 +876,7 @@ mgmt-resident-push-full-stack *args:
           ;;
       esac
     else
+      build_release_map_runtime "$site_content"
       case "$cdn_content_mode" in
         local|substitute)
           cdn_content="$(
