@@ -62,7 +62,7 @@
     <div class="fishydex-bento">
       <fieldset class="fishydex-stats card card-border bg-base-100">
         <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
-          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-chart-pie-2-fill"></use></svg><span data-i18n-text="fishydex.progress.panel"></span></span>
+          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-chart-pie-2-fill"></use></svg><span data-i18n-text="fishydex.progress.panel"></span></span>
           <button type="button"
                   class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle"
                   data-panel-toggle="progress"
@@ -71,7 +71,7 @@
                   data-attr:aria-expanded="(!$_progress_panel_collapsed).toString()"
                   data-attr:aria-label="window.Fishydex.panelToggleLabel($_progress_panel_collapsed, 'progress')"
                   data-attr:title="window.Fishydex.panelToggleLabel($_progress_panel_collapsed, 'progress')"
-                  data-on:click="$_progress_panel_collapsed = !$_progress_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
+                  data-on:click="$_progress_panel_collapsed = !$_progress_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-caret-down"></use></svg></button>
         </legend>
         <div id="fishydex-progress-body" class="card-body fishydex-stats-body pt-0" data-show="!$_progress_panel_collapsed">
         <div class="fishydex-progress-overview rounded-box border border-base-300 bg-base-200">
@@ -196,7 +196,7 @@
 
       <fieldset class="fishydex-screen card card-border bg-base-100">
         <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
-          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-filter-2-fill"></use></svg><span data-i18n-text="fishydex.filter.panel"></span></span>
+          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-filter-2-fill"></use></svg><span data-i18n-text="fishydex.filter.panel"></span></span>
           <button type="button"
                   class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle"
                   data-panel-toggle="filter"
@@ -205,14 +205,14 @@
                   data-attr:aria-expanded="(!$_filter_panel_collapsed).toString()"
                   data-attr:aria-label="window.Fishydex.panelToggleLabel($_filter_panel_collapsed, 'filter')"
                   data-attr:title="window.Fishydex.panelToggleLabel($_filter_panel_collapsed, 'filter')"
-                  data-on:click="$_filter_panel_collapsed = !$_filter_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
+                  data-on:click="$_filter_panel_collapsed = !$_filter_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-caret-down"></use></svg></button>
         </legend>
         <div id="fishydex-filter-body" class="card-body fishydex-panel-body pt-0" data-show="!$_filter_panel_collapsed">
         <div class="fishydex-controls">
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend" data-i18n-text="fishydex.filter.search.legend"></legend>
             <label class="fishydex-search-field input input-bordered">
-              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-search-field"></use></svg>
+              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-search-field"></use></svg>
               <span class="sr-only" data-i18n-text="fishydex.filter.search.sr"></span>
               <input class="fishydex-search"
                      type="search"
@@ -239,19 +239,19 @@
                         data-class:is-active="$caught_filter === 'caught'"
                         data-class:btn-active="$caught_filter === 'caught'"
                         data-attr:aria-pressed="($caught_filter === 'caught').toString()"
-                        data-on:click="$caught_filter = 'caught'"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-badge-solid"></use></svg><span data-i18n-text="fishydex.filter.status.caught"></span></button>
+                        data-on:click="$caught_filter = 'caught'"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-check-badge-solid"></use></svg><span data-i18n-text="fishydex.filter.status.caught"></span></button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-missing"
                         data-class:is-active="$caught_filter === 'missing'"
                         data-class:btn-active="$caught_filter === 'missing'"
                         data-attr:aria-pressed="($caught_filter === 'missing').toString()"
-                        data-on:click="$caught_filter = 'missing'"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-circle-dash-fill"></use></svg><span data-i18n-text="fishydex.filter.status.missing"></span></button>
+                        data-on:click="$caught_filter = 'missing'"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-check-circle-dash-fill"></use></svg><span data-i18n-text="fishydex.filter.status.missing"></span></button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-favourite"
                         data-class:is-active="$favourite_filter"
                         data-class:btn-active="$favourite_filter"
                         data-attr:aria-pressed="$favourite_filter.toString()"
-                        data-on:click="$favourite_filter = !$favourite_filter"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-heart-fill"></use></svg><span data-i18n-text="fishydex.filter.status.favourite"></span></button>
+                        data-on:click="$favourite_filter = !$favourite_filter"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-heart-fill"></use></svg><span data-i18n-text="fishydex.filter.status.favourite"></span></button>
               </div>
             </fieldset>
 
@@ -362,7 +362,7 @@
 
     <fieldset class="fishydex-grid-shell card card-border bg-base-100">
       <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
-        <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-nav-dex"></use></svg><span data-i18n-text="fishydex.catalog.panel"></span></span>
+        <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="fishydex.catalog.panel"></span></span>
         <span class="fishydex-panel-controls" role="group" data-i18n-attr-aria-label="fishydex.catalog.controls" aria-label="">
           <span class="join" role="group" data-i18n-attr-aria-label="fishydex.catalog.view" aria-label="">
             <button type="button"
@@ -385,13 +385,13 @@
                     data-class:is-active="$sort_field === 'price'"
                     data-attr:aria-pressed="($sort_field === 'price').toString()"
                     data-attr:aria-label="window.Fishydex.sortLabel('price', $sort_field, $sort_direction)"
-                    data-on:click="$sort_direction = $sort_field === 'price' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'price'"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><span data-show="$sort_field === 'price' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span><span data-show="$sort_field === 'price' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span></span><span data-i18n-text="fishydex.catalog.sort.price"></span></button>
+                    data-on:click="$sort_direction = $sort_field === 'price' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'price'"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><span data-show="$sort_field === 'price' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-arrow-up-fill"></use></svg></span><span data-show="$sort_field === 'price' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-arrow-down-fill"></use></svg></span></span></span><span data-i18n-text="fishydex.catalog.sort.price"></span></button>
             <button type="button"
                     class="btn btn-sm btn-ghost fishydex-sort-button"
                     data-class:is-active="$sort_field === 'name'"
                     data-attr:aria-pressed="($sort_field === 'name').toString()"
                     data-attr:aria-label="window.Fishydex.sortLabel('name', $sort_field, $sort_direction)"
-                    data-on:click="$sort_direction = $sort_field === 'name' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'name'"><span data-show="$sort_field === 'name' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg></span><span data-show="$sort_field === 'name' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-za-sort-descending-letters-fill"></use></svg></span><span data-i18n-text="fishydex.catalog.sort.name"></span></button>
+                    data-on:click="$sort_direction = $sort_field === 'name' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'name'"><span data-show="$sort_field === 'name' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-az-sort-ascending-letters-fill"></use></svg></span><span data-show="$sort_field === 'name' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-za-sort-descending-letters-fill"></use></svg></span><span data-i18n-text="fishydex.catalog.sort.name"></span></button>
           </span>
           <span class="loading loading-spinner loading-xs fishydex-panel-spinner" data-show="$_loading"></span>
         </span>
@@ -449,7 +449,7 @@
                 data-i18n-attr-aria-label="fishydex.details.close"
                 data-i18n-attr-title="fishydex.details.close"
                 aria-label=""
-                title=""><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-x-circle"></use></svg><span class="sr-only" data-i18n-text="fishydex.details.close_short"></span></button>
+                title=""><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-x-circle"></use></svg><span class="sr-only" data-i18n-text="fishydex.details.close_short"></span></button>
       </div>
 
       <div class="fishydex-details-guide">

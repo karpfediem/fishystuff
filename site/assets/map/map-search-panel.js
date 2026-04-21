@@ -101,7 +101,7 @@ function patchDropdownMarkup(term, context, path, boundLabel, patch) {
             ${patchDropdownValueMarkup(patchId, patch, context.escapeHtml)}
           </span>
           <svg class="fishy-icon size-3.5 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
-            <use width="100%" height="100%" href="/img/icons.svg#fishy-caret-down"></use>
+            <use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-caret-down"></use>
           </svg>
         </button>
         <div
@@ -112,7 +112,7 @@ function patchDropdownMarkup(term, context, path, boundLabel, patch) {
           <div class="rounded-box border border-base-300 bg-base-100 p-1">
             <label class="flex items-center gap-2 px-2 py-2 text-sm">
               <svg class="fishy-icon size-4 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
-                <use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use>
+                <use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-search-field"></use>
               </svg>
               <input
                 data-role="search-input"
@@ -183,7 +183,7 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       contentMarkup: `
         <span class="inline-flex min-w-0 items-center gap-2">
           <svg class="fishy-icon size-4 shrink-0 text-base-content/60" viewBox="0 0 24 24" aria-hidden="true">
-            <use width="100%" height="100%" href="/img/icons.svg#fishy-calendar-2-fill"></use>
+            <use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-calendar-2-fill"></use>
           </svg>
           <button
             class="badge badge-ghost badge-xs cursor-pointer"
@@ -525,7 +525,7 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
               <span class="min-w-0 flex-1 text-left">
                 <span class="flex items-center gap-2">
                   <svg class="fishy-icon size-4 shrink-0 text-base-content/60" viewBox="0 0 24 24" aria-hidden="true">
-                    <use width="100%" height="100%" href="/img/icons.svg#fishy-calendar-2-fill"></use>
+                    <use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-calendar-2-fill"></use>
                   </svg>
                   <span class="font-semibold">${escapeHtml(patchLabel)}</span>
                 </span>

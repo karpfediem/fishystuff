@@ -22,7 +22,7 @@ import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signa
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
-const ICON_SPRITE_URL = "/img/icons.svg";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const SEARCH_PANEL_TAG_NAME = "fishymap-search-panel";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const EXPRESSION_DRAG_PROXY_SCALE = 0.78;

@@ -32,7 +32,7 @@ import {
 const LAYER_PANEL_TAG_NAME = "fishymap-layer-panel";
 const FISHYMAP_POINT_ICON_SCALE_MAX = 3;
 const FISHYMAP_POINT_ICON_SCALE_MIN = 0.25;
-const ICON_SPRITE_URL = "/img/icons.svg";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const DRAG_ATTACH_EDGE_PX_MIN = 14;
 const DRAG_ATTACH_EDGE_PX_MAX = 22;
 const HTMLElementBase = globalThis.HTMLElement ?? class {};

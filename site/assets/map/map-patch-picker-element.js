@@ -138,12 +138,12 @@ function ensurePatchPickerMarkup(host, ids) {
               aria-controls="${escapeHtml(ids.fromPanelId)}"
             >
               <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">${escapeHtml(mapText("patch_picker.loading"))}</span></span></span>
-              <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
+              <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-caret-down"></use></svg>
             </button>
             <div id="${escapeHtml(ids.fromPanelId)}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
               <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
                 <label class="flex min-h-10 w-full min-w-full items-center gap-3 bg-base-100 px-3 py-2 text-sm">
-                  <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+                  <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-search-field"></use></svg>
                   <input
                     id="${escapeHtml(ids.fromSearchId)}"
                     data-role="search-input"
@@ -185,12 +185,12 @@ function ensurePatchPickerMarkup(host, ids) {
               aria-controls="${escapeHtml(ids.toPanelId)}"
             >
               <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">${escapeHtml(mapText("patch_picker.loading"))}</span></span></span>
-              <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
+              <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-caret-down"></use></svg>
             </button>
             <div id="${escapeHtml(ids.toPanelId)}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
               <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
                 <label class="flex min-h-10 w-full min-w-full items-center gap-3 bg-base-100 px-3 py-2 text-sm">
-                  <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+                  <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-search-field"></use></svg>
                   <input
                     id="${escapeHtml(ids.toSearchId)}"
                     data-role="search-input"

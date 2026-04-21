@@ -34,7 +34,7 @@ import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signa
 export { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 
 const BOOKMARK_PANEL_TAG_NAME = "fishymap-bookmark-panel";
-const ICON_SPRITE_URL = "/img/icons.svg";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function cloneJson(value) {
@@ -131,15 +131,15 @@ function ensureBookmarkPanelMarkup(host) {
   host.innerHTML = `
     <div id="fishymap-bookmarks-controls">
       <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--primary">
-        <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-copy"></use></svg>${escapeHtml(mapText("bookmarks.copy"))}</button>
-        <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-export"></use></svg>${escapeHtml(mapText("bookmarks.export"))}</button>
-        <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-import"></use></svg>${escapeHtml(mapText("bookmarks.import"))}</button>
-        <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg>${escapeHtml(mapText("bookmarks.cancel"))}</button>
+        <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-copy"></use></svg>${escapeHtml(mapText("bookmarks.copy"))}</button>
+        <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-export"></use></svg>${escapeHtml(mapText("bookmarks.export"))}</button>
+        <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-import"></use></svg>${escapeHtml(mapText("bookmarks.import"))}</button>
+        <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-clear"></use></svg>${escapeHtml(mapText("bookmarks.cancel"))}</button>
       </div>
       <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--secondary">
-        <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-select-all"></use></svg>${escapeHtml(mapText("bookmarks.select_all"))}</button>
-        <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg><span id="fishymap-bookmark-clear-selection-label">${escapeHtml(mapText("bookmarks.clear"))}</span></button>
-        <button id="fishymap-bookmark-delete-selected" class="btn btn-ghost btn-error btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-trash"></use></svg>${escapeHtml(mapText("bookmarks.delete"))}</button>
+        <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-select-all"></use></svg>${escapeHtml(mapText("bookmarks.select_all"))}</button>
+        <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-clear"></use></svg><span id="fishymap-bookmark-clear-selection-label">${escapeHtml(mapText("bookmarks.clear"))}</span></button>
+        <button id="fishymap-bookmark-delete-selected" class="btn btn-ghost btn-error btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-trash"></use></svg>${escapeHtml(mapText("bookmarks.delete"))}</button>
       </div>
       <input id="fishymap-bookmark-import-input" class="hidden" type="file" accept=".xml,.txt,text/xml,application/xml">
     </div>

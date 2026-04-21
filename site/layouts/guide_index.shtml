@@ -101,7 +101,7 @@
             </ctx>
             <ctx :if="$loop.it.custom.has('og_image').not()">
               <figure class="grid aspect-[3/2] place-items-center bg-base-200/70 p-8">
-                <svg class="fishy-icon size-24 text-base-content/55" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-book-open"></use></svg>
+                <svg class="fishy-icon size-24 text-base-content/55" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-book-open"></use></svg>
               </figure>
             </ctx>
           </ctx>

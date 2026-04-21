@@ -6,7 +6,7 @@ import { readMapShellSignals } from "./map-shell-signals.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
-const ICON_SPRITE_URL = "/img/icons.svg";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const HOVER_TOOLTIP_TAG_NAME = "fishymap-hover-tooltip";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
