@@ -1502,6 +1502,28 @@ fn calculator_route_text_with_vars(lang: FishLang, key: &str, vars: &[(&str, &st
     text
 }
 
+fn calculator_group_label_key(slot_idx: u8) -> Option<&'static str> {
+    match slot_idx {
+        1 => Some("calculator.server.group.prize"),
+        2 => Some("calculator.server.group.rare"),
+        3 => Some("calculator.server.group.high_quality"),
+        4 => Some("calculator.server.group.general"),
+        5 => Some("calculator.server.group.trash"),
+        0 => Some("calculator.breakdown.label.unassigned"),
+        _ => None,
+    }
+}
+
+fn calculator_group_display_label_for_slot(lang: FishLang, slot_idx: u8) -> Option<String> {
+    calculator_group_label_key(slot_idx).map(|key| calculator_route_text(lang, key))
+}
+
+fn calculator_group_display_label(lang: FishLang, label: &str) -> String {
+    fish_group_slot_idx(label)
+        .and_then(|slot_idx| calculator_group_display_label_for_slot(lang, slot_idx))
+        .unwrap_or_else(|| label.to_string())
+}
+
 fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
     let defaults = data.catalog.defaults.clone();
     let item_name_to_key = data
@@ -1765,12 +1787,15 @@ fn overlay_editor_percent_value_text(value_pct: f64) -> String {
     }
 }
 
-fn overlay_editor_group_input_rows(row: &FishGroupChartRow) -> Vec<ComputedStatBreakdownRow> {
+fn overlay_editor_group_input_rows(
+    row: &FishGroupChartRow,
+    lang: FishLang,
+) -> Vec<ComputedStatBreakdownRow> {
     if row.rate_inputs.is_empty() {
         vec![computed_stat_breakdown_row(
-            "Inputs",
-            "Unavailable",
-            "No direct inputs were recorded for this value.",
+            calculator_route_text(lang, "calculator.breakdown.section.inputs"),
+            calculator_route_text(lang, "calculator.server.value.unavailable"),
+            calculator_route_text(lang, "calculator.overlay.breakdown.detail.no_direct_inputs"),
         )]
     } else {
         row.rate_inputs.clone()
@@ -1779,72 +1804,90 @@ fn overlay_editor_group_input_rows(row: &FishGroupChartRow) -> Vec<ComputedStatB
 
 fn overlay_editor_group_bonus_breakdown(
     row: &FishGroupChartRow,
+    lang: FishLang,
     current_present: bool,
     current_raw_rate_pct: f64,
     bonus_rate_pct: f64,
     effective_raw_weight_pct: f64,
     normalized_share_pct: f64,
 ) -> String {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let breakdown_inputs = text("calculator.breakdown.section.inputs");
+    let breakdown_composition = text("calculator.breakdown.section.composition");
+    let group_label = calculator_group_display_label(lang, &row.label);
     let summary_text = if current_present {
         if bonus_rate_pct > 0.0 {
-            "Accrued bonus added to the current raw base rate before normalization."
+            text("calculator.overlay.breakdown.summary.accrued_bonus.active.some")
         } else {
-            "No accrued bonus is currently applied before normalization."
+            text("calculator.overlay.breakdown.summary.accrued_bonus.active.none")
         }
     } else {
-        "This group is currently excluded from the zone mix, so no accrued bonus is applied."
+        text("calculator.overlay.breakdown.summary.accrued_bonus.inactive")
     };
     stat_breakdown_json(
         computed_stat_breakdown(
-            format!("{} accrued bonus", row.label),
+            text_with_vars(
+                "calculator.overlay.breakdown.title.accrued_bonus",
+                &[("group", &group_label)],
+            ),
             overlay_editor_percent_value_text(bonus_rate_pct),
             summary_text,
-            "Accrued bonus = Effective raw weight - Current raw base rate.",
+            text("calculator.overlay.breakdown.formula.accrued_bonus"),
             vec![
-                computed_stat_breakdown_section("Inputs", overlay_editor_group_input_rows(row)),
                 computed_stat_breakdown_section(
-                    "Composition",
+                    breakdown_inputs,
+                    overlay_editor_group_input_rows(row, lang),
+                ),
+                computed_stat_breakdown_section(
+                    breakdown_composition,
                     vec![
                         computed_stat_breakdown_row(
-                            "Current raw base rate",
+                            text("calculator.overlay.breakdown.label.current_raw_base_rate"),
                             overlay_editor_percent_value_text(current_raw_rate_pct),
-                            "Editable raw base rate from the overlay proposal before accrued bonuses are applied.",
+                            text("calculator.overlay.breakdown.detail.current_raw_base_rate.overlay"),
                         ),
                         computed_stat_breakdown_row(
-                            "Effective raw weight",
+                            text("calculator.overlay.breakdown.label.effective_raw_weight"),
                             overlay_editor_percent_value_text(effective_raw_weight_pct),
                             if current_present {
-                                "Raw weight after accrued group bonuses are added."
+                                text("calculator.overlay.breakdown.detail.effective_raw_weight.active")
                             } else {
-                                "Excluded groups contribute no effective raw weight while they are removed from the zone mix."
+                                text(
+                                    "calculator.overlay.breakdown.detail.effective_raw_weight.inactive",
+                                )
                             },
                         ),
                         computed_stat_breakdown_row(
-                            "Accrued bonus",
+                            text("calculator.overlay.breakdown.label.accrued_bonus"),
                             overlay_editor_percent_value_text(bonus_rate_pct),
                             if bonus_rate_pct > 0.0 {
-                                "Extra raw weight currently being added before normalization."
+                                text("calculator.overlay.breakdown.detail.accrued_bonus.some")
                             } else {
-                                "No extra raw weight is currently being added before normalization."
+                                text("calculator.overlay.breakdown.detail.accrued_bonus.none")
                             },
                         ),
                         computed_stat_breakdown_row(
-                            "Normalized share",
+                            text("calculator.overlay.breakdown.label.normalized_share"),
                             overlay_editor_percent_value_text(normalized_share_pct),
-                            "Shown for reference after all effective raw weights are normalized.",
+                            text("calculator.overlay.breakdown.detail.normalized_share.reference"),
                         ),
                     ],
                 ),
             ],
         )
         .with_formula_terms(vec![
-            computed_stat_formula_term("Accrued bonus", overlay_editor_percent_value_text(bonus_rate_pct)),
             computed_stat_formula_term(
-                "Effective raw weight",
+                text("calculator.overlay.breakdown.label.accrued_bonus"),
+                overlay_editor_percent_value_text(bonus_rate_pct),
+            ),
+            computed_stat_formula_term(
+                text("calculator.overlay.breakdown.label.effective_raw_weight"),
                 overlay_editor_percent_value_text(effective_raw_weight_pct),
             ),
             computed_stat_formula_term(
-                "Current raw base rate",
+                text("calculator.overlay.breakdown.label.current_raw_base_rate"),
                 overlay_editor_percent_value_text(current_raw_rate_pct),
             ),
         ]),
@@ -1853,6 +1896,7 @@ fn overlay_editor_group_bonus_breakdown(
 
 fn overlay_editor_group_normalized_breakdown(
     row: &FishGroupChartRow,
+    lang: FishLang,
     current_present: bool,
     current_raw_rate_pct: f64,
     bonus_rate_pct: f64,
@@ -1860,50 +1904,68 @@ fn overlay_editor_group_normalized_breakdown(
     total_effective_raw_weight_pct: f64,
     normalized_share_pct: f64,
 ) -> String {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let breakdown_inputs = text("calculator.breakdown.section.inputs");
+    let breakdown_composition = text("calculator.breakdown.section.composition");
+    let group_label = calculator_group_display_label(lang, &row.label);
     let summary_text = if current_present {
-        "Accrued group bonuses are added to the current raw base rate first, then all effective raw weights are normalized into the final group shares."
+        text("calculator.overlay.breakdown.summary.normalized_share.active")
     } else {
-        "This group is currently excluded from the zone mix, so it contributes 0% normalized share."
+        text("calculator.overlay.breakdown.summary.normalized_share.inactive")
     };
     stat_breakdown_json(
         computed_stat_breakdown(
-            format!("{} normalized share", row.label),
+            text_with_vars(
+                "calculator.overlay.breakdown.title.normalized_share",
+                &[("group", &group_label)],
+            ),
             overlay_editor_percent_value_text(normalized_share_pct),
             summary_text,
-            "Normalized share = Effective raw weight / All effective raw weights.",
+            text("calculator.overlay.breakdown.formula.normalized_share"),
             vec![
-                computed_stat_breakdown_section("Inputs", overlay_editor_group_input_rows(row)),
                 computed_stat_breakdown_section(
-                    "Composition",
+                    breakdown_inputs,
+                    overlay_editor_group_input_rows(row, lang),
+                ),
+                computed_stat_breakdown_section(
+                    breakdown_composition,
                     vec![
                         computed_stat_breakdown_row(
-                            "Current raw base rate",
+                            text("calculator.overlay.breakdown.label.current_raw_base_rate"),
                             overlay_editor_percent_value_text(current_raw_rate_pct),
-                            "Editable raw base rate before accrued bonuses are applied.",
+                            text(
+                                "calculator.overlay.breakdown.detail.current_raw_base_rate.before_bonuses",
+                            ),
                         ),
                         computed_stat_breakdown_row(
-                            "Accrued bonus",
+                            text("calculator.overlay.breakdown.label.accrued_bonus"),
                             overlay_editor_percent_value_text(bonus_rate_pct),
-                            "Added to the raw base rate before normalization.",
+                            text("calculator.overlay.breakdown.detail.accrued_bonus.before_normalization"),
                         ),
                         computed_stat_breakdown_row(
-                            "Effective raw weight",
+                            text("calculator.overlay.breakdown.label.effective_raw_weight"),
                             overlay_editor_percent_value_text(effective_raw_weight_pct),
                             if current_present {
-                                "Combined pre-normalization raw weight for this group."
+                                text("calculator.overlay.breakdown.detail.effective_raw_weight.combined")
                             } else {
-                                "Excluded groups contribute no effective raw weight while removed from the zone mix."
+                                text(
+                                    "calculator.overlay.breakdown.detail.effective_raw_weight.inactive",
+                                )
                             },
                         ),
                         computed_stat_breakdown_row(
-                            "All effective raw weights",
+                            text("calculator.overlay.breakdown.label.all_effective_raw_weights"),
                             overlay_editor_percent_value_text(total_effective_raw_weight_pct),
-                            "Denominator after all active group bonuses have been applied.",
+                            text(
+                                "calculator.overlay.breakdown.detail.all_effective_raw_weights.denominator",
+                            ),
                         ),
                         computed_stat_breakdown_row(
-                            "Normalized share",
+                            text("calculator.overlay.breakdown.label.normalized_share"),
                             overlay_editor_percent_value_text(normalized_share_pct),
-                            "Final group share used by the calculator after normalization.",
+                            text("calculator.overlay.breakdown.detail.normalized_share.final"),
                         ),
                     ],
                 ),
@@ -1911,15 +1973,15 @@ fn overlay_editor_group_normalized_breakdown(
         )
         .with_formula_terms(vec![
             computed_stat_formula_term(
-                "Normalized share",
+                text("calculator.overlay.breakdown.label.normalized_share"),
                 overlay_editor_percent_value_text(normalized_share_pct),
             ),
             computed_stat_formula_term(
-                "Effective raw weight",
+                text("calculator.overlay.breakdown.label.effective_raw_weight"),
                 overlay_editor_percent_value_text(effective_raw_weight_pct),
             ),
             computed_stat_formula_term(
-                "All effective raw weights",
+                text("calculator.overlay.breakdown.label.all_effective_raw_weights"),
                 overlay_editor_percent_value_text(total_effective_raw_weight_pct),
             ),
         ]),
@@ -1980,7 +2042,7 @@ fn build_overlay_editor_signal(
             };
             CalculatorOverlayEditorGroupRow {
                 slot_idx,
-                label: row.label.to_string(),
+                label: calculator_group_display_label(data.lang, &row.label),
                 default_present,
                 default_raw_rate_pct,
                 default_raw_rate_text: overlay_editor_percent_value_text(default_raw_rate_pct),
@@ -1996,6 +2058,7 @@ fn build_overlay_editor_signal(
                 normalized_share_text: overlay_editor_percent_value_text(normalized_share_pct),
                 bonus_rate_breakdown: overlay_editor_group_bonus_breakdown(
                     row,
+                    data.lang,
                     current_present,
                     current_raw_rate_pct,
                     bonus_rate_pct,
@@ -2004,6 +2067,7 @@ fn build_overlay_editor_signal(
                 ),
                 normalized_share_breakdown: overlay_editor_group_normalized_breakdown(
                     row,
+                    data.lang,
                     current_present,
                     current_raw_rate_pct,
                     bonus_rate_pct,
@@ -2025,9 +2089,10 @@ fn build_overlay_editor_signal(
                 default_present: !entry.overlay.added,
                 overlay_added: entry.overlay.added,
                 slot_idx: default_slot_idx,
-                group_label: fish_group_label(default_slot_idx)
-                    .unwrap_or("Unassigned")
-                    .to_string(),
+                group_label: calculator_group_display_label_for_slot(data.lang, default_slot_idx)
+                    .unwrap_or_else(|| {
+                        calculator_route_text(data.lang, "calculator.breakdown.label.unassigned")
+                    }),
                 label: entry.name.clone(),
                 icon_url: entry
                     .icon
@@ -2939,10 +3004,15 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             &fish_group_chart.rows,
             loot_total_catches_raw,
             signals.show_normalized_select_rates,
+            data.lang,
         ),
     };
     let fish_group_silver_distribution_chart = DistributionChartSignal {
-        segments: group_silver_distribution_segments(&loot_chart.rows, &loot_chart.species_rows),
+        segments: group_silver_distribution_segments(
+            &loot_chart.rows,
+            &loot_chart.species_rows,
+            data.lang,
+        ),
     };
     let target_fish_pmf_chart = target_fish_pmf_chart(&target_fish_summary);
     let loot_sankey_chart = LootSankeySignal {
@@ -3293,7 +3363,7 @@ fn computed_stat_breakdown(
     sections: Vec<ComputedStatBreakdownSection>,
 ) -> ComputedStatBreakdown {
     ComputedStatBreakdown {
-        kind_label: "Computed stat".to_string(),
+        kind_label: String::new(),
         title: title.into(),
         value_text: value_text.into(),
         summary_text: summary_text.into(),
@@ -3386,11 +3456,16 @@ fn computed_stat_breakdown_zone_loot_item_row(
     }
 }
 
-fn pet_slot_name(slot_idx: usize) -> String {
-    format!("Pet {slot_idx}")
+fn pet_slot_name(lang: FishLang, slot_idx: usize) -> String {
+    calculator_route_text_with_vars(
+        lang,
+        "calculator.breakdown.label.pet_slot",
+        &[("slot", &slot_idx.to_string())],
+    )
 }
 
 fn collect_pet_afr_breakdown_rows(
+    lang: FishLang,
     pets: &[&CalculatorPetSignals],
     pet_stats: &[(f64, f64)],
     catalog: &CalculatorPetCatalog,
@@ -3405,7 +3480,7 @@ fn collect_pet_afr_breakdown_rows(
             let special_label = option_label(&catalog.specials, &pet.special);
             let tier_label = option_label(&catalog.tiers, &pet.tier);
             Some(computed_stat_breakdown_row(
-                pet_slot_name(index + 1),
+                pet_slot_name(lang, index + 1),
                 format!("+{}%", trim_float(amount * 100.0)),
                 format!("{special_label} · {tier_label}"),
             ))
@@ -3414,6 +3489,7 @@ fn collect_pet_afr_breakdown_rows(
 }
 
 fn collect_pet_drr_breakdown_rows(
+    lang: FishLang,
     pets: &[&CalculatorPetSignals],
     pet_stats: &[(f64, f64)],
     catalog: &CalculatorPetCatalog,
@@ -3428,7 +3504,7 @@ fn collect_pet_drr_breakdown_rows(
             let talent_label = option_label(&catalog.talents, &pet.talent);
             let tier_label = option_label(&catalog.tiers, &pet.tier);
             Some(computed_stat_breakdown_row(
-                pet_slot_name(index + 1),
+                pet_slot_name(lang, index + 1),
                 format!("+{}%", trim_float(amount * 100.0)),
                 format!("{talent_label} · {tier_label}"),
             ))
@@ -3437,6 +3513,7 @@ fn collect_pet_drr_breakdown_rows(
 }
 
 fn collect_fish_multiplier_breakdown_rows(
+    lang: FishLang,
     items_by_key: &HashMap<&str, &CalculatorItemEntry>,
     cdn_base_url: &str,
     signals: &CalculatorSignals,
@@ -3459,9 +3536,15 @@ fn collect_fish_multiplier_breakdown_rows(
                 .filter(|value| *value > 1.0)
                 .map(|value| {
                     let detail = if (value - applied_multiplier).abs() < 0.0001 {
-                        "Applied highest fish multiplier.".to_string()
+                        calculator_route_text(
+                            lang,
+                            "calculator.breakdown.detail.applied_highest_fish_multiplier",
+                        )
                     } else {
-                        "Lower source; the highest selected fish multiplier applies.".to_string()
+                        calculator_route_text(
+                            lang,
+                            "calculator.breakdown.detail.lower_source_highest_multiplier_applies",
+                        )
                     };
                     (format!("×{}", trim_float(value)), detail)
                 })
@@ -3469,15 +3552,22 @@ fn collect_fish_multiplier_breakdown_rows(
     )
 }
 
-fn loot_group_profit_breakdown_rows(loot_rows: &[LootChartRow]) -> Vec<ComputedStatBreakdownRow> {
+fn loot_group_profit_breakdown_rows(
+    loot_rows: &[LootChartRow],
+    lang: FishLang,
+) -> Vec<ComputedStatBreakdownRow> {
     loot_rows
         .iter()
         .filter(|row| row.expected_profit_raw > 0.0)
         .map(|row| {
             computed_stat_breakdown_row(
-                row.label,
+                calculator_group_display_label(lang, &row.label),
                 row.expected_profit_text.clone(),
-                format!("{} of expected silver", row.silver_share_text),
+                calculator_route_text_with_vars(
+                    lang,
+                    "calculator.breakdown.detail.group_expected_silver_share",
+                    &[("share", &row.silver_share_text)],
+                ),
             )
         })
         .collect()
@@ -3537,10 +3627,13 @@ fn derive_fish_group_chart(
     data: &CalculatorData,
     items_by_key: &HashMap<&str, &CalculatorItemEntry>,
 ) -> FishGroupChart {
+    let text = |key: &str| calculator_route_text(data.lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(data.lang, key, vars);
     let Some(zone_group_rate) = data.zone_group_rates.get(&signals.zone) else {
         return FishGroupChart {
             available: false,
-            note: "Fish group data is unavailable for this zone.".to_string(),
+            note: text("calculator.server.chart.group_distribution_note.unavailable"),
             raw_prize_rate_text: "0.00%".to_string(),
             mastery_text: trim_float(signals.mastery),
             rows: Vec::new(),
@@ -3800,40 +3893,40 @@ fn derive_fish_group_chart(
 
     let prize_inputs = vec![
         computed_stat_breakdown_row(
-            "Mastery",
+            text("calculator.server.field.mastery"),
             trim_float(signals.mastery),
-            "Current mastery input",
+            text("calculator.breakdown.detail.current_mastery_input_for_prize_curve_lookup"),
         ),
         computed_stat_breakdown_row(
-            "Prize curve result",
+            text("calculator.server.group.prize_curve_result"),
             percent_value_text(prize_weight * 100.0),
-            "Direct prize weight before normalization",
+            text("calculator.server.group.prize_curve_result_detail"),
         ),
     ];
 
     let mut rare_inputs = vec![computed_stat_breakdown_row(
-        "Zone base rate",
+        text("calculator.server.group.zone_base_rate"),
         percent_value_text(rare_base * 100.0),
-        "Base group rate from zone data",
+        text("calculator.server.group.zone_base_rate_detail"),
     )];
     rare_inputs.extend(rare_bonus_inputs);
 
     let mut high_quality_inputs = vec![computed_stat_breakdown_row(
-        "Zone base rate",
+        text("calculator.server.group.zone_base_rate"),
         percent_value_text(high_quality_base * 100.0),
-        "Base group rate from zone data",
+        text("calculator.server.group.zone_base_rate_detail"),
     )];
     high_quality_inputs.extend(high_quality_bonus_inputs);
 
     let general_inputs = vec![computed_stat_breakdown_row(
-        "Zone base rate",
+        text("calculator.server.group.zone_base_rate"),
         percent_value_text(general_base * 100.0),
-        "Base group rate from zone data",
+        text("calculator.server.group.zone_base_rate_detail"),
     )];
     let trash_inputs = vec![computed_stat_breakdown_row(
-        "Zone base rate",
+        text("calculator.server.group.zone_base_rate"),
         percent_value_text(trash_base * 100.0),
-        "Base group rate from zone data",
+        text("calculator.server.group.zone_base_rate_detail"),
     )];
 
     let build_group_row =
@@ -3868,9 +3961,9 @@ fn derive_fish_group_chart(
                 rate_inputs.insert(
                     0,
                     computed_stat_breakdown_row(
-                        "Personal overlay raw base rate",
+                        text("calculator.server.group.personal_overlay_raw_base_rate"),
                         percent_value_text(explicit_raw_pct),
-                        "Explicit raw base group rate supplied by the current personal overlay proposal before any group bonuses are added.",
+                        text("calculator.server.group.personal_overlay_raw_base_rate_detail"),
                     ),
                 );
             } else if is_overlay_row
@@ -3879,12 +3972,13 @@ fn derive_fish_group_chart(
                 rate_inputs.insert(
                     0,
                     computed_stat_breakdown_row(
-                        "Overlay-adjusted normalized share",
+                        text("calculator.server.group.overlay_adjusted_normalized_share"),
                         percent_value_text(effective_current_share_pct),
-                        "Another raw-weight override changed how this group's normalized share resolves.",
+                        text("calculator.server.group.overlay_adjusted_normalized_share_detail"),
                     ),
                 );
             }
+            let display_label = calculator_group_display_label(data.lang, label);
             FishGroupChartRow {
                 label,
                 fill_color,
@@ -3902,43 +3996,57 @@ fn derive_fish_group_chart(
                 },
                 drop_rate_tooltip: if let Some(explicit_raw_pct) = explicit_raw_pct {
                     if bonus_weight_pct > 0.0 {
-                        format!(
-                            "Personal overlay raw group base rate {} plus active group bonus {} resolves to {} total raw weight and {} normalized share.",
-                            percent_value_text(explicit_raw_pct),
-                            percent_value_text(bonus_weight_pct),
-                            percent_value_text(effective_weight_pct),
-                            percent_value_text(effective_current_share_pct)
+                        text_with_vars(
+                            "calculator.server.group.tooltip.overlay_explicit_with_bonus",
+                            &[
+                                ("base", &percent_value_text(explicit_raw_pct)),
+                                ("bonus", &percent_value_text(bonus_weight_pct)),
+                                ("weight", &percent_value_text(effective_weight_pct)),
+                                ("share", &percent_value_text(effective_current_share_pct)),
+                            ],
                         )
                     } else {
-                        format!(
-                            "Personal overlay raw group base rate {}. Current normalized share {} after the active group weights are normalized.",
-                            percent_value_text(explicit_raw_pct),
-                            percent_value_text(effective_current_share_pct)
+                        text_with_vars(
+                            "calculator.server.group.tooltip.overlay_explicit",
+                            &[
+                                ("base", &percent_value_text(explicit_raw_pct)),
+                                ("share", &percent_value_text(effective_current_share_pct)),
+                            ],
                         )
                     }
                 } else if is_overlay_row && effective_current_share_pct > 0.0 {
-                    format!(
-                        "Personal overlay changed the active raw group weights. {} currently resolves to {} normalized share.",
-                        label,
-                        percent_value_text(effective_current_share_pct)
+                    text_with_vars(
+                        "calculator.server.group.tooltip.overlay_adjusted",
+                        &[
+                            ("group", &display_label),
+                            ("share", &percent_value_text(effective_current_share_pct)),
+                        ],
                     )
                 } else if default_current_share_pct > 0.0 {
-                    format!("Source-backed {} group share", label)
+                    text_with_vars(
+                        "calculator.server.group.tooltip.source_backed_share",
+                        &[("group", &display_label)],
+                    )
                 } else {
                     String::new()
                 },
                 bonus_text: if let Some(explicit_raw_pct) = explicit_raw_pct {
                     if bonus_weight_pct > 0.0 {
-                        format!(
-                            "Base {} + bonus {}",
-                            percent_value_text(explicit_raw_pct),
-                            percent_value_text(bonus_weight_pct)
+                        text_with_vars(
+                            "calculator.server.group.bonus.base_plus_bonus",
+                            &[
+                                ("base", &percent_value_text(explicit_raw_pct)),
+                                ("bonus", &percent_value_text(bonus_weight_pct)),
+                            ],
                         )
                     } else {
-                        format!("Base {}", percent_value_text(explicit_raw_pct))
+                        text_with_vars(
+                            "calculator.server.group.bonus.base_only",
+                            &[("base", &percent_value_text(explicit_raw_pct))],
+                        )
                     }
                 } else if is_overlay_row {
-                    "Normalized from active raw weights".to_string()
+                    text("calculator.server.group.bonus.normalized_from_active_weights")
                 } else {
                     default_bonus_text
                 },
@@ -3953,9 +4061,9 @@ fn derive_fish_group_chart(
     FishGroupChart {
         available: true,
         note: if group_overlay_active {
-            "Personal raw base group-rate overrides are active. Edited base values have active group bonuses added first, then the resulting weights are normalized into the current group shares.".to_string()
+            text("calculator.server.chart.group_distribution_note.overlay_active")
         } else {
-            "Zone groups are renormalized to 100% after applying Rare and High-Quality bonuses plus prize weight from mastery.".to_string()
+            text("calculator.server.chart.group_distribution_note.default")
         },
         raw_prize_rate_text: format!("{}%", trim_float(prize_weight * 100.0)),
         mastery_text: trim_float(signals.mastery),
@@ -3967,10 +4075,12 @@ fn derive_fish_group_chart(
                 "#f87171",
                 "#450a0a",
                 "rgb(248 113 113 / 0.48)",
-                format!(
-                    "Mastery {} → {}% raw prize",
-                    trim_float(signals.mastery),
-                    trim_float(prize_weight * 100.0)
+                text_with_vars(
+                    "calculator.server.group.bonus.mastery_raw_prize",
+                    &[
+                        ("mastery", &trim_float(signals.mastery)),
+                        ("rate", &percent_value_text(prize_weight * 100.0)),
+                    ],
                 ),
                 0.0,
                 prize_weight * 100.0,
@@ -3988,9 +4098,12 @@ fn derive_fish_group_chart(
                 "#422006",
                 "rgb(250 204 21 / 0.48)",
                 if rare_bonus > 0.0 {
-                    format!("+{}% Rare", trim_float(rare_bonus * 100.0))
+                    text_with_vars(
+                        "calculator.server.group.bonus.rare",
+                        &[("rate", &trim_float(rare_bonus * 100.0))],
+                    )
                 } else {
-                    "No bonus".to_string()
+                    text("calculator.server.group.bonus.none")
                 },
                 rare_base * 100.0,
                 rare_weight * 100.0,
@@ -4008,9 +4121,12 @@ fn derive_fish_group_chart(
                 "#172554",
                 "rgb(96 165 250 / 0.48)",
                 if high_quality_bonus > 0.0 {
-                    format!("+{}% HQ", trim_float(high_quality_bonus * 100.0))
+                    text_with_vars(
+                        "calculator.server.group.bonus.high_quality",
+                        &[("rate", &trim_float(high_quality_bonus * 100.0))],
+                    )
                 } else {
-                    "No bonus".to_string()
+                    text("calculator.server.group.bonus.none")
                 },
                 high_quality_base * 100.0,
                 high_quality_weight * 100.0,
@@ -4027,7 +4143,7 @@ fn derive_fish_group_chart(
                 "#4ade80",
                 "#052e16",
                 "rgb(74 222 128 / 0.48)",
-                "No bonus".to_string(),
+                text("calculator.server.group.bonus.none"),
                 general_base * 100.0,
                 general_weight * 100.0,
                 base_current_share_by_slot
@@ -4043,7 +4159,7 @@ fn derive_fish_group_chart(
                 "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
                 "var(--color-base-content)",
                 "color-mix(in srgb, var(--color-base-content) 24%, transparent)",
-                "No bonus".to_string(),
+                text("calculator.server.group.bonus.none"),
                 trash_base * 100.0,
                 trash_weight * 100.0,
                 base_current_share_by_slot
@@ -4278,12 +4394,13 @@ fn default_zone_loot_group_values(
 }
 
 fn zone_loot_group_values(
+    lang: FishLang,
     slot_idx: u8,
     chart_row: Option<&FishGroupChartRow>,
 ) -> (String, String, String, String) {
     if let Some(chart_row) = chart_row {
         return (
-            chart_row.label.to_string(),
+            calculator_group_display_label(lang, &chart_row.label),
             chart_row.fill_color.to_string(),
             chart_row.stroke_color.to_string(),
             chart_row.text_color.to_string(),
@@ -4293,14 +4410,14 @@ fn zone_loot_group_values(
         default_zone_loot_group_values(slot_idx)
     {
         return (
-            label.to_string(),
+            calculator_group_display_label(lang, label),
             fill_color.to_string(),
             stroke_color.to_string(),
             text_color.to_string(),
         );
     }
     (
-        "Unassigned".to_string(),
+        calculator_route_text(lang, "calculator.breakdown.label.unassigned"),
         "var(--color-base-200)".to_string(),
         "var(--color-base-300)".to_string(),
         "var(--color-base-content)".to_string(),
@@ -4320,93 +4437,100 @@ fn fish_group_distribution_breakdown(
     total_catches_raw: f64,
     total_weight_pct: f64,
     show_normalized_rates: bool,
+    lang: FishLang,
 ) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let group_label = calculator_group_display_label(lang, &row.label);
     let input_rows = if row.rate_inputs.is_empty() {
         vec![computed_stat_breakdown_row(
-            "Inputs",
-            "Unavailable",
-            "No direct inputs were recorded for this value.",
+            text("calculator.breakdown.section.inputs"),
+            text("calculator.server.value.unavailable"),
+            text("calculator.breakdown.detail.no_direct_inputs"),
         )]
     } else {
         row.rate_inputs.clone()
     };
 
     let raw_weight_detail = if row.weight_pct <= 0.0 && row.base_share_pct > 0.0 {
-        "Zeroed out because no source-backed rows are currently mapped to this group.".to_string()
+        text("calculator.server.group.breakdown.detail.raw_group_weight.zeroed_out")
     } else if row.label == "Prize" {
-        "Derived directly from the mastery prize curve.".to_string()
+        text("calculator.server.group.breakdown.detail.raw_group_weight.prize_curve")
     } else if row.weight_pct > row.base_share_pct {
-        "Zone base rate plus active bonus sources.".to_string()
+        text("calculator.server.group.breakdown.detail.raw_group_weight.bonus_sources")
     } else {
-        "No extra bonus sources applied.".to_string()
+        text("calculator.server.group.breakdown.detail.raw_group_weight.no_bonus")
     };
 
     let mut composition_rows = vec![
         computed_stat_breakdown_row(
-            "Raw group weight",
+            text("calculator.server.group.breakdown.label.raw_group_weight"),
             percent_value_text(row.weight_pct),
             raw_weight_detail,
         ),
         computed_stat_breakdown_row(
-            "All-group weight total",
+            text("calculator.server.group.breakdown.label.all_group_weight_total"),
             percent_value_text(total_weight_pct),
-            "Other group bonuses change this denominator.",
+            text("calculator.server.group.breakdown.detail.all_group_weight_total.denominator"),
         ),
     ];
     if show_normalized_rates {
         composition_rows.push(computed_stat_breakdown_row(
-            "Current share",
+            text("calculator.server.group.breakdown.label.current_share"),
             percent_value_text(row.current_share_pct),
-            "Normalized share after prize, rare, and high-quality weighting.",
+            text("calculator.server.group.breakdown.detail.current_share.normalized"),
         ));
     } else {
         composition_rows.push(computed_stat_breakdown_row(
-            "Normalized share",
+            text("calculator.overlay.breakdown.label.normalized_share"),
             percent_value_text(row.current_share_pct),
-            "Used for expected catches and downstream loot weighting.",
+            text("calculator.server.group.breakdown.detail.normalized_share.expected_catches"),
         ));
     }
     composition_rows.push(computed_stat_breakdown_row(
-        "Expected catches",
+        text("calculator.breakdown.label.expected_catches"),
         trim_float(total_catches_raw * (row.current_share_pct / 100.0)),
-        "Based on the current session-size assumptions.",
+        text("calculator.server.group.breakdown.detail.expected_catches.session_size"),
     ));
 
     ComputedStatBreakdown {
-        kind_label: "Computed stat".to_string(),
-        title: format!("{} group", row.label),
+        kind_label: text("calculator.breakdown.kind.computed_stat"),
+        title: text_with_vars(
+            "calculator.server.group.breakdown.title.group",
+            &[("group", &group_label)],
+        ),
         value_text: percent_value_text(if show_normalized_rates {
             row.current_share_pct
         } else {
             row.weight_pct
         }),
         summary_text: if show_normalized_rates {
-            "Normalized share after prize, rare, and high-quality weighting.".to_string()
+            text("calculator.server.group.breakdown.summary.normalized")
         } else {
-            "Raw group weight before normalization. Expected catches still use the normalized share."
-                .to_string()
+            text("calculator.server.group.breakdown.summary.raw")
         },
         formula_text: if show_normalized_rates {
-            "Current share = Raw group weight / All-group weight total.".to_string()
+            text("calculator.server.group.breakdown.formula.normalized")
         } else {
-            "Current value = Raw group weight.".to_string()
+            text("calculator.server.group.breakdown.formula.raw")
         },
         sections: vec![
             ComputedStatBreakdownSection {
-                label: "Inputs".to_string(),
+                label: text("calculator.breakdown.section.inputs"),
                 rows: input_rows,
             },
             ComputedStatBreakdownSection {
-                label: "Composition".to_string(),
+                label: text("calculator.breakdown.section.composition"),
                 rows: composition_rows,
             },
         ],
         formula_terms: vec![
             computed_stat_formula_term(
                 if show_normalized_rates {
-                    "Current share"
+                    text("calculator.server.group.breakdown.label.current_share")
                 } else {
-                    "Current value"
+                    text("calculator.server.group.breakdown.label.current_value")
                 },
                 percent_value_text(if show_normalized_rates {
                     row.current_share_pct
@@ -4414,25 +4538,39 @@ fn fish_group_distribution_breakdown(
                     row.weight_pct
                 }),
             ),
-            computed_stat_formula_term("Raw group weight", percent_value_text(row.weight_pct)),
             computed_stat_formula_term(
-                "All-group weight total",
+                text("calculator.server.group.breakdown.label.raw_group_weight"),
+                percent_value_text(row.weight_pct),
+            ),
+            computed_stat_formula_term(
+                text("calculator.server.group.breakdown.label.all_group_weight_total"),
                 percent_value_text(total_weight_pct),
             ),
         ],
     }
 }
 
-fn loot_species_silver_breakdown_detail(row: &LootSpeciesRow) -> String {
+fn loot_species_silver_breakdown_detail(row: &LootSpeciesRow, lang: FishLang) -> String {
     let mut parts = Vec::new();
     if !row.drop_rate_text.is_empty() {
-        parts.push(format!("{} in-group rate", row.drop_rate_text));
+        parts.push(calculator_route_text_with_vars(
+            lang,
+            "calculator.server.loot.breakdown.detail.in_group_rate_value",
+            &[("rate", &row.drop_rate_text)],
+        ));
     }
     if !row.expected_count_text.is_empty() {
-        parts.push(format!("{} expected catches", row.expected_count_text));
+        parts.push(calculator_route_text_with_vars(
+            lang,
+            "calculator.server.loot.breakdown.detail.expected_catches_value",
+            &[("count", &row.expected_count_text)],
+        ));
     }
     if row.expected_profit_raw <= 0.0 && row.expected_count_raw > 0.0 {
-        parts.push("0 silver after current pricing or discard settings".to_string());
+        parts.push(calculator_route_text(
+            lang,
+            "calculator.server.loot.breakdown.detail.zero_silver_after_pricing_or_discard",
+        ));
     }
     parts.join(" · ")
 }
@@ -4441,166 +4579,199 @@ fn loot_species_count_breakdown(
     row: &LootSpeciesRow,
     total_catches_raw: f64,
     group_share_pct: f64,
+    lang: FishLang,
 ) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     let group_share_text = percent_value_text(group_share_pct);
     let in_group_rate_text = percent_value_text(row.within_group_rate_raw * 100.0);
+    let group_label = calculator_group_display_label(lang, &row.group_label);
 
     computed_stat_breakdown(
-        format!("{} expected catches", row.label),
+        text_with_vars(
+            "calculator.server.loot.breakdown.title.species_expected_catches",
+            &[("species", &row.label)],
+        ),
         row.expected_count_text.clone(),
         if row.expected_count_raw > 0.0 {
-            "Expected catches for this loot row from the active session size, normalized group share, and in-group rate."
+            text("calculator.server.loot.breakdown.summary.species_expected_catches.active")
         } else {
-            "This loot row currently contributes no expected catches under the active session settings."
+            text("calculator.server.loot.breakdown.summary.species_expected_catches.none")
         },
-        "Expected catches = Group share × In-group rate × Session catches.",
+        text("calculator.server.loot.breakdown.formula.species_expected_catches"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                text("calculator.breakdown.section.inputs"),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            format!("{} share", row.group_label),
+                            text_with_vars(
+                                "calculator.server.loot.breakdown.label.group_share_for_group",
+                                &[("group", &group_label)],
+                            ),
                             group_share_text.clone(),
-                            format!(
-                                "Normalized group share for {} before within-group loot weighting.",
-                                row.group_label,
+                            text_with_vars(
+                                "calculator.server.loot.breakdown.detail.group_share_before_loot_weighting",
+                                &[("group", &group_label)],
                             ),
                         ),
-                        "Group share",
+                        text("calculator.breakdown.label.group_share"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "In-group rate",
+                            text("calculator.breakdown.label.in_group_rate"),
                             in_group_rate_text.clone(),
                             row.drop_rate_tooltip.clone(),
                         ),
-                        "In-group rate",
+                        text("calculator.breakdown.label.in_group_rate"),
                         2,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Session catches",
+                            text("calculator.server.loot.breakdown.label.session_catches"),
                             trim_float(total_catches_raw),
-                            "Average catches over the current session duration.",
+                            text("calculator.server.loot.breakdown.detail.session_catches"),
                         ),
-                        "Session catches",
+                        text("calculator.server.loot.breakdown.label.session_catches"),
                         3,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                text("calculator.breakdown.section.composition"),
                 vec![computed_stat_breakdown_row(
-                    "Expected catches",
+                    text("calculator.breakdown.label.expected_catches"),
                     row.expected_count_text.clone(),
-                    "Average catches for this loot row under the current settings.",
+                    text("calculator.server.loot.breakdown.detail.species_expected_catches"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Expected catches", row.expected_count_text.clone()),
-        computed_stat_formula_term("Group share", group_share_text),
-        computed_stat_formula_term("In-group rate", in_group_rate_text),
-        computed_stat_formula_term("Session catches", trim_float(total_catches_raw)),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.expected_catches"),
+            row.expected_count_text.clone(),
+        ),
+        computed_stat_formula_term(text("calculator.breakdown.label.group_share"), group_share_text),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.in_group_rate"),
+            in_group_rate_text,
+        ),
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.session_catches"),
+            trim_float(total_catches_raw),
+        ),
     ])
 }
 
 fn loot_species_silver_share_breakdown(
     row: &LootSpeciesRow,
     total_profit_raw: f64,
+    lang: FishLang,
 ) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     let base_price_text = fmt_silver(row.base_price_raw);
     let sale_multiplier_text = format!("×{}", trim_float(row.sale_multiplier_raw));
     let expected_silver_detail = if row.discarded {
-        "Currently zeroed because this loot row is being discarded under the active filters."
-            .to_string()
+        text("calculator.server.loot.breakdown.detail.silver_share.discarded")
     } else if row.expected_profit_raw <= 0.0 {
-        "Currently zero because no priced output is available under the active settings."
-            .to_string()
+        text("calculator.server.loot.breakdown.detail.silver_share.no_priced_output")
     } else {
-        "Expected catches multiplied by base price and the current trade sale multiplier."
-            .to_string()
+        text("calculator.server.loot.breakdown.detail.silver_share.expected_silver")
     };
 
     computed_stat_breakdown(
-        format!("{} silver share", row.label),
+        text_with_vars(
+            "calculator.server.loot.breakdown.title.species_silver_share",
+            &[("species", &row.label)],
+        ),
         row.silver_share_text.clone(),
         if row.expected_profit_raw > 0.0 {
-            "Expected silver contribution from this loot row after current pricing and trade settings."
+            text("calculator.server.loot.breakdown.summary.species_silver_share.active")
         } else {
-            "This loot row currently contributes no expected silver after the active pricing, discard, and trade settings."
+            text("calculator.server.loot.breakdown.summary.species_silver_share.none")
         },
-        "Item expected silver = Expected catches × Base price × Trade sale multiplier.; Silver share = Item expected silver / All-item expected silver total.",
+        text("calculator.server.loot.breakdown.formula.species_silver_share"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                text("calculator.breakdown.section.inputs"),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Expected catches",
+                            text("calculator.breakdown.label.expected_catches"),
                             row.expected_count_text.clone(),
-                            "Average catches for this loot row.",
+                            text("calculator.server.loot.breakdown.detail.average_catches_this_row"),
                         ),
-                        "Expected catches",
+                        text("calculator.breakdown.label.expected_catches"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Base price",
+                            text("calculator.server.loot.breakdown.label.base_price"),
                             base_price_text.clone(),
-                            "Current price source for this loot row before trade sale modifiers.",
+                            text("calculator.server.loot.breakdown.detail.base_price"),
                         ),
-                        "Base price",
+                        text("calculator.server.loot.breakdown.label.base_price"),
                         2,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Trade sale multiplier",
+                            text("calculator.breakdown.label.trade_sale_multiplier"),
                             sale_multiplier_text.clone(),
-                            "Current sale multiplier after trade settings.",
+                            text("calculator.breakdown.detail.current_sale_multiplier_after_trade_settings"),
                         ),
-                        "Trade sale multiplier",
+                        text("calculator.breakdown.label.trade_sale_multiplier"),
                         3,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "All-item expected silver total",
+                            text("calculator.server.loot.breakdown.label.all_item_expected_silver_total"),
                             fmt_silver(total_profit_raw),
-                            "Denominator for the Loot Flow silver-share distribution.",
+                            text("calculator.server.loot.breakdown.detail.all_item_expected_silver_total"),
                         ),
-                        "All-item expected silver total",
+                        text("calculator.server.loot.breakdown.label.all_item_expected_silver_total"),
                         4,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                text("calculator.breakdown.section.composition"),
                 vec![
                     computed_stat_breakdown_row(
-                        "Item expected silver",
+                        text("calculator.server.loot.breakdown.label.item_expected_silver"),
                         row.expected_profit_text.clone(),
                         expected_silver_detail,
                     ),
                     computed_stat_breakdown_row(
-                        "Silver share",
+                        text("calculator.breakdown.label.silver_share"),
                         row.silver_share_text.clone(),
-                        "Calculated from item expected silver divided by total expected silver.",
+                        text("calculator.server.loot.breakdown.detail.silver_share.from_total"),
                     ),
                 ],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Item expected silver", row.expected_profit_text.clone()),
-        computed_stat_formula_term("Expected catches", row.expected_count_text.clone()),
-        computed_stat_formula_term("Base price", base_price_text),
-        computed_stat_formula_term("Trade sale multiplier", sale_multiplier_text),
-        computed_stat_formula_term("Silver share", row.silver_share_text.clone()),
         computed_stat_formula_term(
-            "All-item expected silver total",
+            text("calculator.server.loot.breakdown.label.item_expected_silver"),
+            row.expected_profit_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.expected_catches"),
+            row.expected_count_text.clone(),
+        ),
+        computed_stat_formula_term(text("calculator.server.loot.breakdown.label.base_price"), base_price_text),
+        computed_stat_formula_term(text("calculator.breakdown.label.trade_sale_multiplier"), sale_multiplier_text),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.silver_share"),
+            row.silver_share_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.all_item_expected_silver_total"),
             fmt_silver(total_profit_raw),
         ),
     ])
@@ -4610,7 +4781,12 @@ fn group_silver_distribution_breakdown(
     row: &LootChartRow,
     species_rows: &[LootSpeciesRow],
     total_profit_raw: f64,
+    lang: FishLang,
 ) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let group_label = calculator_group_display_label(lang, &row.label);
     let mut contributing_rows = species_rows
         .iter()
         .filter(|species_row| {
@@ -4627,9 +4803,9 @@ fn group_silver_distribution_breakdown(
 
     let input_rows = if contributing_rows.is_empty() {
         vec![computed_stat_breakdown_row(
-            "Contributing loot",
-            "Unavailable",
-            "No source-backed loot rows are currently contributing silver to this group.",
+            text("calculator.server.loot.breakdown.label.contributing_loot"),
+            text("calculator.server.value.unavailable"),
+            text("calculator.server.loot.breakdown.detail.contributing_loot.unavailable"),
         )]
     } else {
         contributing_rows
@@ -4638,7 +4814,7 @@ fn group_silver_distribution_breakdown(
                 computed_stat_breakdown_loot_species_row(
                     species_row,
                     species_row.expected_profit_text.clone(),
-                    loot_species_silver_breakdown_detail(species_row),
+                    loot_species_silver_breakdown_detail(species_row, lang),
                 )
             })
             .collect()
@@ -4646,60 +4822,66 @@ fn group_silver_distribution_breakdown(
 
     let composition_rows = vec![
         computed_stat_breakdown_row(
-            "Normalized group share",
+            text("calculator.server.loot.breakdown.label.normalized_group_share"),
             row.count_share_text.clone(),
-            "Determines how many catches land in this group before within-group loot weighting.",
+            text("calculator.server.loot.breakdown.detail.normalized_group_share"),
         ),
         computed_stat_breakdown_row(
-            "Expected catches",
+            text("calculator.breakdown.label.expected_catches"),
             row.expected_count_text.clone(),
-            "Average catches landing in this group under the current session-size assumptions.",
+            text("calculator.server.loot.breakdown.detail.group_expected_catches"),
         ),
         computed_stat_breakdown_row(
-            "Group expected silver",
+            text("calculator.breakdown.label.group_expected_silver"),
             row.expected_profit_text.clone(),
-            "Sum of the contributing loot rows after prices and trade modifiers.",
+            text("calculator.server.loot.breakdown.detail.group_expected_silver"),
         ),
         computed_stat_breakdown_row(
-            "All-group silver total",
+            text("calculator.server.loot.breakdown.label.all_group_expected_silver_total"),
             fmt_silver(total_profit_raw),
-            "Denominator for the silver-share distribution.",
+            text("calculator.server.loot.breakdown.detail.all_group_expected_silver_total"),
         ),
         computed_stat_breakdown_row(
-            "Silver share",
+            text("calculator.breakdown.label.silver_share"),
             row.silver_share_text.clone(),
-            "Calculated from group expected silver divided by total expected silver.",
+            text("calculator.server.loot.breakdown.detail.group_silver_share_from_total"),
         ),
     ];
 
     ComputedStatBreakdown {
-        kind_label: "Computed stat".to_string(),
-        title: format!("{} silver share", row.label),
+        kind_label: text("calculator.breakdown.kind.computed_stat"),
+        title: text_with_vars(
+            "calculator.server.loot.breakdown.title.group_silver_share",
+            &[("group", &group_label)],
+        ),
         value_text: row.silver_share_text.clone(),
         summary_text: if row.expected_profit_raw > 0.0 {
-            "Expected silver share from the loot rows currently mapped to this group after prices and trade settings."
-                .to_string()
+            text("calculator.server.loot.breakdown.summary.group_silver_share.active")
         } else {
-            "This group currently contributes no expected silver after the active prices, discard choices, and trade settings."
-                .to_string()
+            text("calculator.server.loot.breakdown.summary.group_silver_share.none")
         },
-        formula_text: "Silver share = Group expected silver / All-group expected silver total."
-            .to_string(),
+        formula_text: text("calculator.server.loot.breakdown.formula.group_silver_share"),
         sections: vec![
             ComputedStatBreakdownSection {
-                label: "Inputs".to_string(),
+                label: text("calculator.breakdown.section.inputs"),
                 rows: input_rows,
             },
             ComputedStatBreakdownSection {
-                label: "Composition".to_string(),
+                label: text("calculator.breakdown.section.composition"),
                 rows: composition_rows,
             },
         ],
         formula_terms: vec![
-            computed_stat_formula_term("Silver share", row.silver_share_text.clone()),
-            computed_stat_formula_term("Group expected silver", row.expected_profit_text.clone()),
             computed_stat_formula_term(
-                "All-group expected silver total",
+                text("calculator.breakdown.label.silver_share"),
+                row.silver_share_text.clone(),
+            ),
+            computed_stat_formula_term(
+                text("calculator.breakdown.label.group_expected_silver"),
+                row.expected_profit_text.clone(),
+            ),
+            computed_stat_formula_term(
+                text("calculator.server.loot.breakdown.label.all_group_expected_silver_total"),
                 fmt_silver(total_profit_raw),
             ),
         ],
@@ -4725,44 +4907,73 @@ fn zone_loot_group_drop_rate_fields(
 fn loot_species_presence_scope_text(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
+    lang: FishLang,
 ) -> String {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     if evidence.source_family == "ranking" {
         return match evidence.scope.as_str() {
-            "ring_full" => "ring fully inside zone".to_string(),
-            "ring_partial" => "ring overlaps zone edge".to_string(),
-            _ => "ring overlaps zone".to_string(),
+            "ring_full" => text("calculator.server.presence.scope.ring_full"),
+            "ring_partial" => text("calculator.server.presence.scope.ring_partial"),
+            _ => text("calculator.server.presence.scope.ring_default"),
         };
     }
     if let Some(subgroup_key) = evidence.subgroup_key {
-        if let Some(slot_idx) = evidence.slot_idx.and_then(fish_group_label) {
+        if let Some(slot_idx) = evidence.slot_idx {
+            let group_label = calculator_group_display_label_for_slot(lang, slot_idx)
+                .unwrap_or_else(|| fish_group_label(slot_idx).unwrap_or_default().to_string());
             if include_structural_ids {
-                return format!("{slot_idx} subgroup {subgroup_key}");
+                return text_with_vars(
+                    "calculator.server.presence.scope.subgroup.group_key",
+                    &[("group", &group_label), ("key", &subgroup_key.to_string())],
+                );
             }
-            return format!("{slot_idx} subgroup");
+            return text_with_vars(
+                "calculator.server.presence.scope.subgroup.group",
+                &[("group", &group_label)],
+            );
         }
         if include_structural_ids {
-            return format!("subgroup {subgroup_key}");
+            return text_with_vars(
+                "calculator.server.presence.scope.subgroup.key",
+                &[("key", &subgroup_key.to_string())],
+            );
         }
-        return "subgroup".to_string();
+        return text("calculator.server.presence.scope.subgroup");
     }
-    if let Some(slot_label) = evidence.slot_idx.and_then(fish_group_label) {
+    if let Some(slot_idx) = evidence.slot_idx {
+        let slot_label = calculator_group_display_label_for_slot(lang, slot_idx)
+            .unwrap_or_else(|| fish_group_label(slot_idx).unwrap_or_default().to_string());
         if let Some(item_main_group_key) = evidence.item_main_group_key {
             if include_structural_ids {
-                return format!("{slot_label} group {item_main_group_key}");
+                return text_with_vars(
+                    "calculator.server.presence.scope.group.group_key",
+                    &[
+                        ("group", &slot_label),
+                        ("key", &item_main_group_key.to_string()),
+                    ],
+                );
             }
         }
-        return format!("{slot_label} group");
+        return text_with_vars(
+            "calculator.server.presence.scope.group.group",
+            &[("group", &slot_label)],
+        );
     }
     if let Some(item_main_group_key) = evidence.item_main_group_key {
         if include_structural_ids {
-            return format!("group {item_main_group_key}");
+            return text_with_vars(
+                "calculator.server.presence.scope.group.key",
+                &[("key", &item_main_group_key.to_string())],
+            );
         }
-        return "group".to_string();
+        return text("calculator.server.presence.scope.group");
     }
     match evidence.scope.as_str() {
-        "group_inferred" => "group-inferred".to_string(),
-        "group" => "group".to_string(),
-        _ => "zone-only".to_string(),
+        "group_inferred" => text("calculator.server.presence.scope.group_inferred"),
+        "group" => text("calculator.server.presence.scope.group"),
+        _ => text("calculator.server.presence.scope.zone_only"),
     }
 }
 
@@ -4806,7 +5017,11 @@ fn loot_species_presence_line(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
     include_source_id: bool,
+    lang: FishLang,
 ) -> String {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     let compact_claims = evidence
         .claim_count
         .map(|count| format!("×{count}"))
@@ -4817,57 +5032,90 @@ fn loot_species_presence_line(
         .unwrap_or_default();
     match evidence.source_family.as_str() {
         "ranking" => {
-            let scope = loot_species_presence_scope_text(evidence, include_structural_ids);
-            let mut text = format!("Ranking {scope}{spaced_claims}");
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids, lang);
+            let mut value = text_with_vars(
+                "calculator.server.presence.line.ranking",
+                &[("scope", &scope), ("claims", &spaced_claims)],
+            );
             if include_source_id {
                 if let Some(source_id) = evidence
                     .source_id
                     .as_deref()
                     .filter(|value| !value.trim().is_empty())
                 {
-                    text.push_str(&format!(" · source {source_id}"));
+                    value = text_with_vars(
+                        "calculator.server.presence.line.ranking_with_source",
+                        &[
+                            ("scope", &scope),
+                            ("claims", &spaced_claims),
+                            ("source", source_id),
+                        ],
+                    );
                 }
             }
-            text
+            value
         }
         "community" => {
             let status = match evidence.status.as_deref().unwrap_or_default() {
-                "confirmed" => "Community confirmed",
-                "guessed" => "Community guessed presence",
-                "data_incomplete" => "Community incomplete",
-                _ => "Community unconfirmed",
+                "confirmed" => text("calculator.server.presence.status.community.confirmed"),
+                "guessed" => text("calculator.server.presence.status.community.guessed"),
+                "data_incomplete" => {
+                    text("calculator.server.presence.status.community.data_incomplete")
+                }
+                _ => text("calculator.server.presence.status.community.unconfirmed"),
             };
-            let scope = loot_species_presence_scope_text(evidence, include_structural_ids);
-            let mut text = format!("{status}{compact_claims} · {scope}");
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids, lang);
+            let mut value = text_with_vars(
+                "calculator.server.presence.line.community",
+                &[
+                    ("status", &status),
+                    ("claims", &compact_claims),
+                    ("scope", &scope),
+                ],
+            );
             if include_source_id {
                 if let Some(source_id) = evidence
                     .source_id
                     .as_deref()
                     .filter(|value| !value.trim().is_empty())
                 {
-                    text.push_str(&format!(" · source {source_id}"));
+                    value = text_with_vars(
+                        "calculator.server.presence.line.community_with_source",
+                        &[
+                            ("status", &status),
+                            ("claims", &compact_claims),
+                            ("scope", &scope),
+                            ("source", source_id),
+                        ],
+                    );
                 }
             }
-            text
+            value
         }
         _ => {
-            let scope = loot_species_presence_scope_text(evidence, include_structural_ids);
-            format!("Presence{compact_claims} · {scope}")
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids, lang);
+            text_with_vars(
+                "calculator.server.presence.line.generic",
+                &[("claims", &compact_claims), ("scope", &scope)],
+            )
         }
     }
 }
 
-fn loot_species_presence_text(entry: &CalculatorZoneLootEntry) -> Option<String> {
+fn loot_species_presence_text(entry: &CalculatorZoneLootEntry, lang: FishLang) -> Option<String> {
     loot_species_presence_evidence(entry)
         .into_iter()
         .next()
-        .map(|evidence| loot_species_presence_line(evidence, false, false))
+        .map(|evidence| loot_species_presence_line(evidence, false, false, lang))
 }
 
-fn loot_species_presence_tooltip(entry: &CalculatorZoneLootEntry) -> Option<String> {
+fn loot_species_presence_tooltip(
+    entry: &CalculatorZoneLootEntry,
+    lang: FishLang,
+) -> Option<String> {
     let parts = loot_species_presence_evidence(entry)
         .into_iter()
-        .map(|evidence| loot_species_presence_line(evidence, true, true))
+        .map(|evidence| loot_species_presence_line(evidence, true, true, lang))
         .collect::<Vec<_>>();
     (!parts.is_empty()).then_some(parts.join(" | "))
 }
@@ -4915,7 +5163,10 @@ fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'stat
 fn loot_species_drop_rate_tooltip(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
+    lang: FishLang,
 ) -> String {
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     if entry.overlay.slot_overlay_active {
         let effective_rate_text = percent_value_text(entry.within_group_rate * 100.0);
         let base_detail = if let Some(rate) = entry
@@ -4926,25 +5177,38 @@ fn loot_species_drop_rate_tooltip(
             })
             .and_then(|evidence| evidence.rate)
         {
-            format!(" Base DB raw rate {}%.", format_evidence_percent(rate))
+            text_with_vars(
+                "calculator.server.loot.tooltip.overlay.base_db_raw_rate",
+                &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+            )
         } else {
             String::new()
         };
         if let Some(explicit_rate_percent) = entry.overlay.explicit_rate_percent {
-            return format!(
-                "Personal overlay raw in-group rate {}. Current normalized in-group rate {} after this group's raw rates are normalized.{}",
-                percent_value_text(explicit_rate_percent),
-                effective_rate_text,
-                base_detail
+            return text_with_vars(
+                "calculator.server.loot.tooltip.overlay.explicit",
+                &[
+                    ("base", &percent_value_text(explicit_rate_percent)),
+                    ("rate", &effective_rate_text),
+                    ("base_detail", &base_detail),
+                ],
             );
         }
         if entry.overlay.added {
-            return format!(
-                "Personal overlay added this row to the zone. It currently resolves to normalized in-group rate {effective_rate_text}.{base_detail}"
+            return text_with_vars(
+                "calculator.server.loot.tooltip.overlay.added",
+                &[
+                    ("rate", &effective_rate_text),
+                    ("base_detail", &base_detail),
+                ],
             );
         }
-        return format!(
-            "Personal overlay changed this group's raw rates. Current normalized in-group rate {effective_rate_text}.{base_detail}"
+        return text_with_vars(
+            "calculator.server.loot.tooltip.overlay.changed",
+            &[
+                ("rate", &effective_rate_text),
+                ("base_detail", &base_detail),
+            ],
         );
     }
 
@@ -4955,7 +5219,12 @@ fn loot_species_drop_rate_tooltip(
             evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
         })
         .and_then(|evidence| evidence_display_rate(signals, evidence))
-        .map(|rate| format!("DB {}%", format_evidence_percent(rate)));
+        .map(|rate| {
+            text_with_vars(
+                "calculator.server.loot.tooltip.db_rate",
+                &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+            )
+        });
 
     let guessed_rate_text = entry
         .evidence
@@ -4964,7 +5233,12 @@ fn loot_species_drop_rate_tooltip(
             evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
         })
         .and_then(|evidence| evidence_display_rate(signals, evidence))
-        .map(|rate| format!("Community guess {}%", format_evidence_percent(rate)));
+        .map(|rate| {
+            text_with_vars(
+                "calculator.server.loot.tooltip.community_guess",
+                &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+            )
+        });
 
     let mut parts = Vec::new();
     if let Some(text) = db_rate_text {
@@ -4974,9 +5248,12 @@ fn loot_species_drop_rate_tooltip(
         parts.push(text);
     }
     if parts.is_empty() {
-        return format!(
-            "Derived {}% from current group weights",
-            format_evidence_percent(entry.within_group_rate)
+        return text_with_vars(
+            "calculator.server.loot.tooltip.derived",
+            &[(
+                "rate",
+                &format!("{}%", format_evidence_percent(entry.within_group_rate)),
+            )],
         );
     }
     parts.join(" · ")
@@ -4985,20 +5262,21 @@ fn loot_species_drop_rate_tooltip(
 fn loot_species_evidence_text(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
+    lang: FishLang,
 ) -> String {
     let mut parts = Vec::new();
     if loot_species_drop_rate_source_kind(entry) != "derived"
         || loot_species_presence_evidence(entry).is_empty()
     {
-        parts.push(loot_species_drop_rate_tooltip(signals, entry));
+        parts.push(loot_species_drop_rate_tooltip(signals, entry, lang));
     }
-    if let Some(presence_text) =
-        loot_species_presence_tooltip(entry).or_else(|| loot_species_presence_text(entry))
+    if let Some(presence_text) = loot_species_presence_tooltip(entry, lang)
+        .or_else(|| loot_species_presence_text(entry, lang))
     {
         parts.push(presence_text);
     }
     if parts.is_empty() {
-        parts.push(loot_species_drop_rate_tooltip(signals, entry));
+        parts.push(loot_species_drop_rate_tooltip(signals, entry, lang));
     }
     parts.join(" · ")
 }
@@ -5020,10 +5298,13 @@ fn derive_loot_chart(
     total_catches_raw: f64,
     fish_multiplier_raw: f64,
 ) -> LootChart {
+    let text = |key: &str| calculator_route_text(data.lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(data.lang, key, vars);
     if !fish_group_chart.available {
         return LootChart {
             available: false,
-            note: "Expected loot data is unavailable for this zone.".to_string(),
+            note: text("calculator.server.loot.note.unavailable"),
             fish_multiplier_text: "×1".to_string(),
             trade_bargain_bonus_text: "0.00%".to_string(),
             trade_sale_multiplier_text: "×1".to_string(),
@@ -5094,9 +5375,9 @@ fn derive_loot_chart(
         };
         let drop_rate_text = loot_species_drop_rate_text(signals, entry);
         let drop_rate_source_kind = loot_species_drop_rate_source_kind(entry).to_string();
-        let drop_rate_tooltip = loot_species_drop_rate_tooltip(signals, entry);
-        let presence_text = loot_species_presence_text(entry);
-        let presence_tooltip = loot_species_presence_tooltip(entry);
+        let drop_rate_tooltip = loot_species_drop_rate_tooltip(signals, entry, data.lang);
+        let presence_text = loot_species_presence_text(entry, data.lang);
+        let presence_tooltip = loot_species_presence_tooltip(entry, data.lang);
         *group_profit_by_slot.entry(entry.slot_idx).or_default() += expected_profit_raw;
         species_rows.push(LootSpeciesRow {
             slot_idx: entry.slot_idx,
@@ -5125,7 +5406,7 @@ fn derive_loot_chart(
             presence_text: presence_text.clone(),
             presence_source_kind: loot_species_presence_source_kind(entry),
             presence_tooltip,
-            evidence_text: loot_species_evidence_text(signals, entry),
+            evidence_text: loot_species_evidence_text(signals, entry, data.lang),
             count_breakdown: String::new(),
             silver_breakdown: String::new(),
             within_group_rate_raw: entry.within_group_rate,
@@ -5164,17 +5445,19 @@ fn derive_loot_chart(
             species_row,
             total_catches_raw,
             group_share_pct,
+            data.lang,
         ));
         species_row.silver_breakdown = stat_breakdown_json(loot_species_silver_share_breakdown(
             species_row,
             total_profit_raw,
+            data.lang,
         ));
         if signals.show_silver_amounts {
             species_row.rate_text = percent_value_text(silver_share);
             species_row.rate_source_kind = "derived".to_string();
-            species_row.rate_tooltip = format!(
-                "Derived {} of total expected silver",
-                percent_value_text(silver_share)
+            species_row.rate_tooltip = text_with_vars(
+                "calculator.server.loot.tooltip.derived_total_expected_silver",
+                &[("share", &percent_value_text(silver_share))],
             );
         } else {
             species_row.rate_text = species_row.drop_rate_text.clone();
@@ -5219,6 +5502,7 @@ fn derive_loot_chart(
                     total_catches_raw,
                     total_group_weight_pct,
                     true,
+                    data.lang,
                 )),
                 silver_breakdown: String::new(),
             }
@@ -5229,6 +5513,7 @@ fn derive_loot_chart(
             row,
             &species_rows,
             total_profit_raw,
+            data.lang,
         ));
     }
     let profit_per_catch_raw = if total_catches_raw > 0.0 {
@@ -5240,13 +5525,13 @@ fn derive_loot_chart(
 
     LootChart {
         available: true,
-        note: "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices. Species rows show DB in-group rates separately from community-guessed prize rates and community presence evidence. Fish auto-discard applies only to fish, not non-fish loot.".to_string(),
+        note: text("calculator.server.loot.note.available"),
         fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
         trade_bargain_bonus_text: format!("+{}%", trim_float(bargain_bonus_raw * 100.0)),
         trade_sale_multiplier_text: if signals.apply_trade_modifiers {
             format!("×{}", trim_float(sale_multiplier_raw))
         } else {
-            "Off (×1)".to_string()
+            text("calculator.server.loot.trade_sale_multiplier.off")
         },
         show_silver_amounts: signals.show_silver_amounts,
         total_profit_raw,
@@ -5264,6 +5549,7 @@ fn derive_zone_loot_summary_response(
     data: &CalculatorData,
     zone: &ZoneEntry,
 ) -> ZoneLootSummaryResponse {
+    let text = |key: &str| calculator_route_text(data.lang, key);
     let items_by_key = data
         .catalog
         .items
@@ -5295,7 +5581,7 @@ fn derive_zone_loot_summary_response(
             let slot_idx = fish_group_slot_idx(row.label).unwrap_or(0);
             ZoneLootSummaryGroupRow {
                 slot_idx,
-                label: row.label.to_string(),
+                label: calculator_group_display_label(data.lang, row.label),
                 fill_color: row.fill_color.to_string(),
                 stroke_color: row.stroke_color.to_string(),
                 text_color: row.text_color.to_string(),
@@ -5322,7 +5608,7 @@ fn derive_zone_loot_summary_response(
             }
             summary_groups.push(ZoneLootSummaryGroupRow {
                 slot_idx: *slot_idx,
-                label: chart_row.label.to_string(),
+                label: calculator_group_display_label(data.lang, &chart_row.label),
                 fill_color: chart_row.fill_color.to_string(),
                 stroke_color: chart_row.stroke_color.to_string(),
                 text_color: chart_row.text_color.to_string(),
@@ -5342,7 +5628,7 @@ fn derive_zone_loot_summary_response(
         .filter(|row| visible_group_labels.contains(row.group_label))
         .map(|row| ZoneLootSummarySpeciesRow {
             slot_idx: row.slot_idx,
-            group_label: row.group_label.to_string(),
+            group_label: calculator_group_display_label(data.lang, &row.group_label),
             label: row.label.clone(),
             icon_url: row.icon_url.clone(),
             icon_grade_tone: row.icon_grade_tone.clone(),
@@ -5362,10 +5648,10 @@ fn derive_zone_loot_summary_response(
         .iter()
         .filter(|entry| entry.within_group_rate <= 0.0)
         .filter_map(|entry| {
-            let presence_text = loot_species_presence_text(entry)?;
+            let presence_text = loot_species_presence_text(entry, data.lang)?;
             let chart_row = group_row_by_slot.get(&entry.slot_idx).copied();
             let (group_label, fill_color, stroke_color, text_color) =
-                zone_loot_group_values(entry.slot_idx, chart_row);
+                zone_loot_group_values(data.lang, entry.slot_idx, chart_row);
             let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
                 zone_loot_group_drop_rate_fields(chart_row);
             if seen_group_slots.insert(entry.slot_idx) {
@@ -5397,7 +5683,8 @@ fn derive_zone_loot_summary_response(
                 drop_rate_tooltip: String::new(),
                 presence_text: Some(presence_text),
                 presence_source_kind: loot_species_presence_source_kind(entry),
-                presence_tooltip: loot_species_presence_tooltip(entry).unwrap_or_default(),
+                presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
+                    .unwrap_or_default(),
             })
         })
         .collect::<Vec<_>>();
@@ -5422,29 +5709,29 @@ fn derive_zone_loot_summary_response(
         zone_name: zone.name.clone(),
         note: if available {
             if overlay_active && has_presence_only_rows && !fish_group_chart.available {
-                "Personal overlay proposal is active for this zone. Presence support is still available even though calculator group rates are unavailable, so unresolved rows stay listed with Unassigned when no slot is known.".to_string()
+                text("calculator.server.zone_loot_summary.note.overlay_presence_without_groups")
             } else if overlay_active && has_presence_only_rows {
-                "Personal overlay proposal is active for this zone. Rows with unresolved group share or drop-rate support stay visible until their structure is filled in or the overlay entry is removed.".to_string()
+                text("calculator.server.zone_loot_summary.note.overlay_presence")
             } else if overlay_active {
-                "Personal overlay proposal is active for this zone. Edited raw group and item rates are normalized into the current zone composition shown here.".to_string()
+                text("calculator.server.zone_loot_summary.note.overlay")
             } else if has_presence_only_rows && !fish_group_chart.available {
-                "Presence support is available for this zone, but calculator group rates are unavailable. Rows without a resolved group or drop rate stay listed, using Unassigned when no slot is known.".to_string()
+                text("calculator.server.zone_loot_summary.note.presence_without_groups")
             } else if has_presence_only_rows {
-                "Zone catch profile uses calculator default session settings. Rows with unresolved group share or drop-rate support stay visible in the list until their structure is filled in.".to_string()
+                text("calculator.server.zone_loot_summary.note.presence")
             } else {
-                "Zone catch profile uses calculator default session settings. Groups follow the current calculator ordering, and rows show each fish or item's in-group droprate.".to_string()
+                text("calculator.server.zone_loot_summary.note.default")
             }
         } else {
             if overlay_active {
-                "Expected zone loot data is unavailable for this zone, even with the current personal overlay proposal.".to_string()
+                text("calculator.server.zone_loot_summary.note.unavailable.overlay")
             } else {
-                "Expected zone loot data is unavailable for this zone.".to_string()
+                text("calculator.server.zone_loot_summary.note.unavailable.default")
             }
         },
         profile_label: if overlay_active {
-            "Personal overlay proposal".to_string()
+            text("calculator.server.zone_loot_summary.profile.overlay")
         } else {
-            "Calculator defaults".to_string()
+            text("calculator.server.zone_loot_summary.profile.default")
         },
         groups: summary_groups,
         species_rows,
@@ -5599,6 +5886,11 @@ fn derive_stat_breakdowns(
     loot_total_catches_raw: f64,
     loot_fish_per_hour_raw: f64,
 ) -> CalculatorStatBreakdownSignals {
+    let breakdown_text = |key: &str| calculator_route_text(data.lang, key);
+    let breakdown_text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(data.lang, key, vars);
+    let breakdown_inputs = breakdown_text("calculator.breakdown.section.inputs");
+    let breakdown_composition = breakdown_text("calculator.breakdown.section.composition");
     let abundance_label = calc_abundance_label(data.lang, signals.resources);
     let afr_item_rows = collect_item_property_breakdown_rows(
         items_by_key,
@@ -5613,7 +5905,8 @@ fn derive_stat_breakdowns(
         |item| item.afr.map(f64::from),
         "",
     );
-    let pet_afr_rows = collect_pet_afr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
+    let pet_afr_rows =
+        collect_pet_afr_breakdown_rows(data.lang, pets, pet_stats, &data.catalog.pets);
     let highest_pet_afr_raw = pets
         .iter()
         .map(|pet| pet_afr(pet, pet_stats))
@@ -5632,22 +5925,22 @@ fn derive_stat_breakdowns(
     let mut afr_input_rows = Vec::new();
     afr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
         afr_item_rows,
-        "AFR (uncapped)",
+        breakdown_text("calculator.breakdown.label.uncapped_afr"),
         1,
     ));
     afr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
         pet_afr_rows,
-        "AFR (uncapped)",
+        breakdown_text("calculator.breakdown.label.uncapped_afr"),
         1,
     ));
     if afr_input_rows.is_empty() {
         afr_input_rows.push(computed_stat_breakdown_row_with_formula_part(
             computed_stat_breakdown_row(
-                "AFR sources",
+                breakdown_text("calculator.breakdown.label.afr_sources"),
                 "0%",
-                "No active AFR items, buffs, or pet specials are selected.",
+                breakdown_text("calculator.breakdown.detail.no_active_afr_sources"),
             ),
-            "AFR (uncapped)",
+            breakdown_text("calculator.breakdown.label.uncapped_afr"),
             1,
         ));
     }
@@ -5665,31 +5958,33 @@ fn derive_stat_breakdowns(
         |item| item.item_drr.map(f64::from),
         "",
     );
-    let pet_drr_rows = collect_pet_drr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
+    let pet_drr_rows =
+        collect_pet_drr_breakdown_rows(data.lang, pets, pet_stats, &data.catalog.pets);
     let mut item_drr_input_rows = Vec::new();
     item_drr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
         item_drr_item_rows.clone(),
-        "Item DRR",
+        breakdown_text("calculator.server.stat.item_drr"),
         1,
     ));
     item_drr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
         pet_drr_rows.clone(),
-        "Item DRR",
+        breakdown_text("calculator.server.stat.item_drr"),
         1,
     ));
     if item_drr_input_rows.is_empty() {
         item_drr_input_rows.push(computed_stat_breakdown_row_with_formula_part(
             computed_stat_breakdown_row(
-                "Item DRR sources",
+                breakdown_text("calculator.breakdown.label.item_drr_sources"),
                 "0%",
-                "No active Item DRR items or pet talents are selected.",
+                breakdown_text("calculator.breakdown.detail.no_active_item_drr_sources"),
             ),
-            "Item DRR",
+            breakdown_text("calculator.server.stat.item_drr"),
             1,
         ));
     }
 
     let fish_multiplier_rows = collect_fish_multiplier_breakdown_rows(
+        data.lang,
         items_by_key,
         data.cdn_base_url.as_str(),
         signals,
@@ -5697,9 +5992,9 @@ fn derive_stat_breakdowns(
     );
     let fish_multiplier_input_rows = if fish_multiplier_rows.is_empty() {
         vec![computed_stat_breakdown_row(
-            "Fish multiplier sources",
+            breakdown_text("calculator.breakdown.label.fish_multiplier_sources"),
             "×1",
-            "No selected item currently raises fish per cast above the base multiplier.",
+            breakdown_text("calculator.breakdown.detail.no_selected_item_raises_fish_multiplier"),
         )]
     } else {
         fish_multiplier_rows
@@ -5711,244 +6006,304 @@ fn derive_stat_breakdowns(
     let mastery_prize_rate =
         mastery_prize_rate_for_bracket(&data.catalog.mastery_prize_curve, signals.mastery);
     let raw_prize_breakdown = computed_stat_breakdown(
-        "Raw Prize Catch Rate",
+        breakdown_text("calculator.server.stat.raw_prize_catch_rate"),
         fish_group_chart.raw_prize_rate_text.clone(),
-        "Prize catch rate is read from the mastery prize curve before any zone-group normalization.",
-        "Raw rate = resolved mastery prize-curve entry.",
+        breakdown_text("calculator.breakdown.summary.raw_prize_rate"),
+        breakdown_text("calculator.breakdown.formula.raw_prize_rate"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Fishing mastery",
+                    breakdown_text("calculator.breakdown.label.fishing_mastery"),
                     trim_float(signals.mastery),
-                    "Current mastery input used for the prize curve lookup.",
+                    breakdown_text(
+                        "calculator.breakdown.detail.current_mastery_input_for_prize_curve_lookup",
+                    ),
                 )],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Resolved curve rate",
+                        breakdown_text("calculator.breakdown.label.resolved_curve_rate"),
                         percent_value_text(mastery_prize_rate * 100.0),
-                        "Prize rate from the current mastery bracket.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.prize_rate_from_current_mastery_bracket",
+                        ),
                     ),
                     computed_stat_breakdown_row(
-                        "Raw rate",
+                        breakdown_text("calculator.breakdown.label.raw_rate"),
                         fish_group_chart.raw_prize_rate_text.clone(),
-                        "Shown before zone-group normalization.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.shown_before_zone_group_normalization",
+                        ),
                     ),
                 ],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Raw rate", fish_group_chart.raw_prize_rate_text.clone()),
         computed_stat_formula_term(
-            "resolved mastery prize-curve entry",
+            breakdown_text("calculator.breakdown.label.raw_rate"),
+            fish_group_chart.raw_prize_rate_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.resolved_mastery_prize_curve_entry"),
             fish_group_chart.raw_prize_rate_text.clone(),
         ),
     ]);
 
     let total_time_breakdown = computed_stat_breakdown(
-        "Average Total Fishing Time",
+        breakdown_text("calculator.breakdown.title.total_time"),
         fmt2(total_time_raw),
         if signals.active {
-            "Active mode uses bite time plus active catch time."
+            breakdown_text("calculator.breakdown.summary.total_time.active")
         } else {
-            "AFK mode uses bite time, passive auto-fishing time, and AFK catch time."
+            breakdown_text("calculator.breakdown.summary.total_time.afk")
         },
         if signals.active {
-            "Average total = Average bite time + Active catch time."
+            breakdown_text("calculator.breakdown.formula.total_time.active")
         } else {
-            "Average total = Average bite time + Auto-Fishing Time + AFK catch time."
+            breakdown_text("calculator.breakdown.formula.total_time.afk")
         },
         vec![
-            computed_stat_breakdown_section(
-                "Inputs",
-                {
-                    let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
-                        computed_stat_breakdown_row(
-                            "Average bite time",
-                            fmt2(bite_time_raw),
-                            "Effective average bite time after level and abundance modifiers.",
+            computed_stat_breakdown_section(breakdown_inputs.clone(), {
+                let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
+                    computed_stat_breakdown_row(
+                        breakdown_text("calculator.breakdown.label.average_bite_time"),
+                        fmt2(bite_time_raw),
+                        breakdown_text(
+                            "calculator.breakdown.detail.effective_average_after_modifiers",
                         ),
-                        "Average bite time",
-                        1,
-                    )];
-                    if signals.active {
-                        rows.push(computed_stat_breakdown_row_with_formula_part(
-                            computed_stat_breakdown_row(
-                                "Active catch time",
-                                fmt2(catch_time_active_raw),
-                                "Manual catch-time input used in active mode.",
-                            ),
-                            "Active catch time",
-                            2,
-                        ));
-                    } else {
-                        rows.push(computed_stat_breakdown_row_with_formula_part(
-                            computed_stat_breakdown_row(
-                                "Auto-Fishing Time",
-                                fmt2(auto_fish_time_raw),
-                                "Passive waiting phase after AFR is applied.",
-                            ),
-                            "Auto-Fishing Time",
-                            2,
-                        ));
-                        rows.push(computed_stat_breakdown_row_with_formula_part(
-                            computed_stat_breakdown_row(
-                                "AFK catch time",
-                                fmt2(catch_time_afk_raw),
-                                "Manual catch-time input used in AFK mode.",
-                            ),
-                            "AFK catch time",
-                            3,
-                        ));
-                    }
-                    rows
-                },
-            ),
+                    ),
+                    breakdown_text("calculator.breakdown.label.average_bite_time"),
+                    1,
+                )];
+                if signals.active {
+                    rows.push(computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.breakdown.label.active_catch_time"),
+                            fmt2(catch_time_active_raw),
+                            breakdown_text("calculator.breakdown.detail.manual_catch_time_active"),
+                        ),
+                        breakdown_text("calculator.breakdown.label.active_catch_time"),
+                        2,
+                    ));
+                } else {
+                    rows.push(computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.breakdown.label.auto_fishing_time"),
+                            fmt2(auto_fish_time_raw),
+                            breakdown_text("calculator.breakdown.detail.passive_waiting_after_afr"),
+                        ),
+                        breakdown_text("calculator.breakdown.label.auto_fishing_time"),
+                        2,
+                    ));
+                    rows.push(computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.breakdown.label.afk_catch_time"),
+                            fmt2(catch_time_afk_raw),
+                            breakdown_text("calculator.breakdown.detail.manual_catch_time_afk"),
+                        ),
+                        breakdown_text("calculator.breakdown.label.afk_catch_time"),
+                        3,
+                    ));
+                }
+                rows
+            }),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Average total",
+                    breakdown_text("calculator.breakdown.label.average_total"),
                     fmt2(total_time_raw),
-                    "Average fishing cycle duration used for downstream casts and loot calculations.",
+                    breakdown_text("calculator.breakdown.detail.average_cycle_downstream"),
                 )],
             ),
         ],
     )
     .with_formula_terms(if signals.active {
         vec![
-            computed_stat_formula_term("Average total", fmt2(total_time_raw)),
-            computed_stat_formula_term("Average bite time", fmt2(bite_time_raw)),
-            computed_stat_formula_term("Active catch time", fmt2(catch_time_active_raw)),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.average_total"),
+                fmt2(total_time_raw),
+            ),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.average_bite_time"),
+                fmt2(bite_time_raw),
+            ),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.active_catch_time"),
+                fmt2(catch_time_active_raw),
+            ),
         ]
     } else {
         vec![
-            computed_stat_formula_term("Average total", fmt2(total_time_raw)),
-            computed_stat_formula_term("Average bite time", fmt2(bite_time_raw)),
-            computed_stat_formula_term("Auto-Fishing Time", fmt2(auto_fish_time_raw)),
-            computed_stat_formula_term("AFK catch time", fmt2(catch_time_afk_raw)),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.average_total"),
+                fmt2(total_time_raw),
+            ),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.average_bite_time"),
+                fmt2(bite_time_raw),
+            ),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.auto_fishing_time"),
+                fmt2(auto_fish_time_raw),
+            ),
+            computed_stat_formula_term(
+                breakdown_text("calculator.breakdown.label.afk_catch_time"),
+                fmt2(catch_time_afk_raw),
+            ),
         ]
     });
 
     let bite_time_factor_rows = vec![
         computed_stat_breakdown_row_with_formula_part(
             computed_stat_breakdown_row(
-                "Zone average bite time",
+                breakdown_text("calculator.breakdown.label.zone_average_bite_time"),
                 fmt2(zone_bite_avg_raw),
-                format!("Derived from {} zone bite-time metadata.", zone_name),
+                breakdown_text_with_vars(
+                    "calculator.breakdown.detail.derived_from_zone_bite_metadata",
+                    &[("zone", zone_name)],
+                ),
             ),
-            "Zone average bite time",
+            breakdown_text("calculator.breakdown.label.zone_average_bite_time"),
             1,
         ),
         computed_stat_breakdown_row_with_formula_part(
             computed_stat_breakdown_row(
-                "Level factor",
+                breakdown_text("calculator.breakdown.label.level_factor"),
                 format!("×{}", trim_float(factor_level)),
-                format!(
-                    "Fishing level {} reduces the base bite window.",
-                    signals.level
+                breakdown_text_with_vars(
+                    "calculator.breakdown.detail.fishing_level_reduces_base_window",
+                    &[("level", &signals.level.to_string())],
                 ),
             ),
-            "Level factor",
+            breakdown_text("calculator.breakdown.label.level_factor"),
             2,
         ),
         computed_stat_breakdown_row_with_formula_part(
             computed_stat_breakdown_row(
-                "Abundance factor",
+                breakdown_text("calculator.breakdown.label.abundance_factor"),
                 format!("×{}", trim_float(factor_resources)),
-                format!(
-                    "Resources {}% ({}) scale the bite window.",
-                    trim_float(signals.resources),
-                    abundance_label
+                breakdown_text_with_vars(
+                    "calculator.breakdown.detail.resources_scale_bite_window",
+                    &[
+                        ("resources", &trim_float(signals.resources)),
+                        ("abundance", &abundance_label),
+                    ],
                 ),
             ),
-            "Abundance factor",
+            breakdown_text("calculator.breakdown.label.abundance_factor"),
             3,
         ),
     ];
     let bite_time_breakdown = computed_stat_breakdown(
-        "Average Bite Time",
+        breakdown_text("calculator.breakdown.title.bite_time"),
         fmt2(bite_time_raw),
-        "Effective average bite time after level and resource abundance scaling.",
-        "Average bite time = Zone average bite time × Level factor × Abundance factor.",
+        breakdown_text("calculator.breakdown.summary.bite_time"),
+        breakdown_text("calculator.breakdown.formula.bite_time"),
         vec![
-            computed_stat_breakdown_section("Inputs", bite_time_factor_rows.clone()),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_inputs.clone(),
+                bite_time_factor_rows.clone(),
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Average bite time",
+                    breakdown_text("calculator.breakdown.label.average_bite_time"),
                     fmt2(bite_time_raw),
-                    "Used in the total fishing time calculation.",
+                    breakdown_text("calculator.breakdown.detail.used_in_total_fishing_time_calc"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Average bite time", fmt2(bite_time_raw)),
-        computed_stat_formula_term("Zone average bite time", fmt2(zone_bite_avg_raw)),
-        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
         computed_stat_formula_term(
-            "Abundance factor",
+            breakdown_text("calculator.breakdown.label.average_bite_time"),
+            fmt2(bite_time_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_average_bite_time"),
+            fmt2(zone_bite_avg_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.level_factor"),
+            format!("×{}", trim_float(factor_level)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.abundance_factor"),
             format!("×{}", trim_float(factor_resources)),
         ),
     ]);
 
     let auto_fish_time_breakdown = computed_stat_breakdown(
-        "Auto-Fishing Time",
+        breakdown_text("calculator.breakdown.title.auto_fish_time"),
         fmt2(auto_fish_time_raw),
-        "Passive AFK phase after bite time and before the AFK catch interaction completes.",
-        "Auto-Fishing Time = max(180 × (1 - AFR), 60).",
+        breakdown_text("calculator.breakdown.summary.auto_fish_time"),
+        breakdown_text("calculator.breakdown.formula.auto_fish_time"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Baseline auto-fishing time",
+                            breakdown_text("calculator.breakdown.label.baseline_auto_fishing_time"),
                             "180",
-                            "Backend keeps the passive AFK baseline even when Active Fishing is enabled.",
+                            breakdown_text(
+                                "calculator.breakdown.detail.backend_passive_afk_baseline",
+                            ),
                         ),
-                        "Baseline auto-fishing time",
+                        breakdown_text("calculator.breakdown.label.baseline_auto_fishing_time"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Applied AFR",
+                            breakdown_text("calculator.breakdown.label.applied_afr"),
                             format!("{}%", trim_float(afr_raw * 100.0)),
-                            "Capped AFR used by the passive auto-fishing timer.",
+                            breakdown_text("calculator.breakdown.detail.capped_afr_passive_timer"),
                         ),
-                        "Applied AFR",
+                        breakdown_text("calculator.breakdown.label.applied_afr"),
                         2,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Minimum auto-fishing time",
+                            breakdown_text("calculator.breakdown.label.minimum_auto_fishing_time"),
                             "60",
-                            "The passive timer cannot go below 60 seconds.",
+                            breakdown_text("calculator.breakdown.detail.passive_timer_minimum"),
                         ),
-                        "Minimum auto-fishing time",
+                        breakdown_text("calculator.breakdown.label.minimum_auto_fishing_time"),
                         3,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Auto-Fishing Time",
+                    breakdown_text("calculator.breakdown.label.auto_fishing_time"),
                     fmt2(auto_fish_time_raw),
-                    "Used only in AFK total fishing time calculations.",
+                    breakdown_text("calculator.breakdown.detail.used_only_in_afk_total_calc"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Auto-Fishing Time", fmt2(auto_fish_time_raw)),
-        computed_stat_formula_term("Baseline auto-fishing time", "180"),
-        computed_stat_formula_term("Applied AFR", format!("{}%", trim_float(afr_raw * 100.0))),
-        computed_stat_formula_term("Minimum auto-fishing time", "60"),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.auto_fishing_time"),
+            fmt2(auto_fish_time_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.baseline_auto_fishing_time"),
+            "180",
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.applied_afr"),
+            format!("{}%", trim_float(afr_raw * 100.0)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.minimum_auto_fishing_time"),
+            "60",
+        ),
     ]);
 
     let catch_time_raw = if signals.active {
@@ -5957,50 +6312,59 @@ fn derive_stat_breakdowns(
         catch_time_afk_raw
     };
     let catch_time_input_label = if signals.active {
-        "Active catch time"
+        breakdown_text("calculator.breakdown.label.active_catch_time")
     } else {
-        "AFK catch time"
+        breakdown_text("calculator.breakdown.label.afk_catch_time")
     };
+    let catch_time_formula_part = catch_time_input_label.clone();
+    let catch_time_formula_label = catch_time_input_label.clone();
     let catch_time_detail = if signals.active {
-        "Manual catch-time input used in active mode."
+        breakdown_text("calculator.breakdown.detail.manual_catch_time_active")
     } else {
-        "Manual catch-time input used after the passive auto-fishing timer finishes."
+        breakdown_text("calculator.breakdown.detail.manual_catch_after_passive_timer")
     };
     let catch_time_breakdown = computed_stat_breakdown(
-        "Catch Time",
+        breakdown_text("calculator.breakdown.title.catch_time"),
         fmt2(catch_time_raw),
         if signals.active {
-            "Manual catch-time input currently used in active fishing mode."
+            breakdown_text("calculator.breakdown.summary.catch_time.active")
         } else {
-            "Manual catch-time input currently used in AFK fishing mode."
+            breakdown_text("calculator.breakdown.summary.catch_time.afk")
         },
-        format!("Catch time = {catch_time_input_label}."),
+        if signals.active {
+            breakdown_text("calculator.breakdown.formula.catch_time.active")
+        } else {
+            breakdown_text("calculator.breakdown.formula.catch_time.afk")
+        },
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![computed_stat_breakdown_row_with_formula_part(
                     computed_stat_breakdown_row(
                         catch_time_input_label,
                         fmt2(catch_time_raw),
                         catch_time_detail,
                     ),
-                    catch_time_input_label,
+                    catch_time_formula_part,
                     1,
                 )],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Catch time",
+                    breakdown_text("calculator.breakdown.label.catch_time"),
                     fmt2(catch_time_raw),
-                    "Used in the total fishing time calculation.",
+                    breakdown_text("calculator.breakdown.detail.used_in_total_fishing_time_calc"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Catch time", fmt2(catch_time_raw)),
-        computed_stat_formula_term(catch_time_input_label, fmt2(catch_time_raw)),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.catch_time"),
+            fmt2(catch_time_raw),
+        ),
+        computed_stat_formula_term(catch_time_formula_label, fmt2(catch_time_raw)),
     ]);
 
     let unoptimized_time_raw = zone_bite_avg_raw
@@ -6014,90 +6378,110 @@ fn derive_stat_breakdowns(
         (100.0 - percentage_of_average_time(total_time_raw, unoptimized_time_raw)).max(0.0),
     );
     let time_saved_breakdown = computed_stat_breakdown(
-        "Time Saved",
+        breakdown_text("calculator.breakdown.title.time_saved"),
         time_saved_share_text.clone(),
         if time_saved_raw > 0.0 {
-            "Share of the unoptimized baseline cycle removed by bite-time reduction and the current fishing mode timings."
+            breakdown_text("calculator.breakdown.summary.time_saved.some")
         } else {
-            "No time is currently being saved versus the unoptimized baseline cycle."
+            breakdown_text("calculator.breakdown.summary.time_saved.none")
         },
-        "Time saved = Average unoptimized time - Average total fishing time.; Saved share = Time saved / Average unoptimized time.",
+        breakdown_text("calculator.breakdown.formula.time_saved"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Average unoptimized time",
+                            breakdown_text("calculator.breakdown.label.average_unoptimized_time"),
                             fmt2(unoptimized_time_raw),
                             if signals.active {
-                                "Baseline active cycle using zone average bite time plus active catch time."
+                                breakdown_text("calculator.breakdown.detail.baseline_active_cycle")
                             } else {
-                                "Baseline AFK cycle using zone average bite time, 180-second auto-fishing, and AFK catch time."
+                                breakdown_text("calculator.breakdown.detail.baseline_afk_cycle")
                             },
                         ),
-                        "Average unoptimized time",
+                        breakdown_text("calculator.breakdown.label.average_unoptimized_time"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Average total fishing time",
+                            breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
                             fmt2(total_time_raw),
-                            "Current optimized cycle duration after level, abundance, and AFR effects.",
+                            breakdown_text(
+                                "calculator.breakdown.detail.current_optimized_cycle_duration",
+                            ),
                         ),
-                        "Average total fishing time",
+                        breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
                         2,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Time saved",
+                        breakdown_text("calculator.breakdown.label.time_saved"),
                         fmt2(time_saved_raw),
-                        "Absolute seconds removed from the unoptimized baseline cycle.",
+                        breakdown_text("calculator.breakdown.detail.absolute_seconds_removed"),
                     ),
                     computed_stat_breakdown_row(
-                        "Saved share",
+                        breakdown_text("calculator.breakdown.label.saved_share"),
                         time_saved_share_text.clone(),
-                        "Portion of the baseline cycle represented by the saved time segment.",
+                        breakdown_text("calculator.breakdown.detail.baseline_cycle_portion"),
                     ),
                 ],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Time saved", fmt2(time_saved_raw)),
-        computed_stat_formula_term("Average unoptimized time", fmt2(unoptimized_time_raw)),
-        computed_stat_formula_term("Average total fishing time", fmt2(total_time_raw)),
-        computed_stat_formula_term("Saved share", time_saved_share_text.clone()),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.time_saved"),
+            fmt2(time_saved_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_unoptimized_time"),
+            fmt2(unoptimized_time_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
+            fmt2(total_time_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.saved_share"),
+            time_saved_share_text.clone(),
+        ),
     ]);
 
     let auto_fish_time_reduction_breakdown = computed_stat_breakdown(
-        "Auto-Fishing Time Reduction",
+        breakdown_text("calculator.server.stat.auto_fishing_time_reduction_afr"),
         format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
-        "Auto-Fishing Time Reduction combines the strongest pet AFR special with additive item and buff AFR.",
-        "AFR (uncapped) = highest pet AFR + additive item AFR; Applied AFR = min(AFR, 66.67%).",
+        breakdown_text("calculator.breakdown.summary.auto_fish_time_reduction"),
+        breakdown_text("calculator.breakdown.formula.auto_fish_time_reduction"),
         vec![
-            computed_stat_breakdown_section("Inputs", afr_input_rows),
+            computed_stat_breakdown_section(breakdown_inputs.clone(), afr_input_rows),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Uncapped AFR",
+                        breakdown_text("calculator.breakdown.label.uncapped_afr"),
                         format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
-                        "Shown on the stat card before the timing cap is applied.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.shown_on_stat_card_before_timing_cap",
+                        ),
                     ),
                     computed_stat_breakdown_row(
-                        "Timing cap",
+                        breakdown_text("calculator.breakdown.label.timing_cap"),
                         "66.67%",
-                        "Auto-Fishing Time cannot be reduced by more than two thirds.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.auto_fishing_time_cannot_be_reduced_more_than_two_thirds",
+                        ),
                         ),
                     computed_stat_breakdown_row(
-                        "Applied AFR",
+                        breakdown_text("calculator.breakdown.label.applied_afr"),
                         format!("{}%", trim_float(afr_raw * 100.0)),
-                        "Value used to derive Auto-Fishing Time.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.value_used_to_derive_auto_fishing_time",
+                        ),
                     ),
                 ],
             ),
@@ -6105,636 +6489,801 @@ fn derive_stat_breakdowns(
     )
     .with_formula_terms(vec![
         computed_stat_formula_term_with_aliases(
-            "AFR (uncapped)",
+            breakdown_text("calculator.breakdown.label.uncapped_afr"),
             format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
             ["AFR"],
         ),
         computed_stat_formula_term(
-            "highest pet AFR",
+            breakdown_text("calculator.breakdown.label.highest_pet_afr"),
             format!("{}%", trim_float(highest_pet_afr_raw * 100.0)),
         ),
         computed_stat_formula_term(
-            "additive item AFR",
+            breakdown_text("calculator.breakdown.label.additive_item_afr"),
             format!("{}%", trim_float(additive_item_afr_raw * 100.0)),
         ),
-        computed_stat_formula_term("Applied AFR", format!("{}%", trim_float(afr_raw * 100.0))),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.applied_afr"),
+            format!("{}%", trim_float(afr_raw * 100.0)),
+        ),
     ]);
 
     let casts_average_breakdown = computed_stat_breakdown(
-        format!("Average Casts ({timespan_text})"),
+        breakdown_text_with_vars(
+            "calculator.breakdown.title.casts_average",
+            &[("timespan", timespan_text)],
+        ),
         fmt2(casts_average_raw),
-        "Average number of fishing cycles completed inside the current session duration.",
-        "Average casts = Session seconds / Average total fishing time.",
+        breakdown_text("calculator.breakdown.summary.casts_average"),
+        breakdown_text("calculator.breakdown.formula.casts_average"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Session duration",
+                            breakdown_text("calculator.breakdown.label.session_duration"),
                             human_duration_text(timespan_seconds),
-                            format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.session_duration_seconds",
+                                &[
+                                    ("timespan", timespan_text),
+                                    ("seconds", &trim_float(timespan_seconds)),
+                                ],
+                            ),
                         ),
-                        "Session duration",
+                        breakdown_text("calculator.breakdown.label.session_duration"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Average total fishing time",
+                            breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
                             fmt2(total_time_raw),
-                            "Average cycle duration used as the denominator.",
+                            breakdown_text(
+                                "calculator.breakdown.detail.denominator_average_cycle_duration",
+                            ),
                         ),
-                        "Average total fishing time",
+                        breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
                         2,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Average casts",
+                    breakdown_text("calculator.breakdown.label.average_casts"),
                     fmt2(casts_average_raw),
-                    "Average completed casts for the selected session duration.",
+                    breakdown_text("calculator.breakdown.detail.average_completed_casts_session"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Average casts", fmt2(casts_average_raw)),
-        computed_stat_formula_term("Session seconds", session_seconds_text.clone()),
-        computed_stat_formula_term("Average total fishing time", fmt2(total_time_raw)),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_casts"),
+            fmt2(casts_average_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.session_seconds"),
+            session_seconds_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
+            fmt2(total_time_raw),
+        ),
     ]);
 
     let item_drr_breakdown = computed_stat_breakdown(
-        "Item DRR",
+        breakdown_text("calculator.server.stat.item_drr"),
         format!("{}%", trim_float(item_drr_raw * 100.0)),
-        "Item DRR is the additive total from selected item, buff, outfit, backpack, and pet DRR sources.",
-        "Item DRR = sum of additive DRR sources.",
+        breakdown_text("calculator.breakdown.summary.item_drr"),
+        breakdown_text("calculator.breakdown.formula.item_drr"),
         vec![
-            computed_stat_breakdown_section("Inputs", item_drr_input_rows),
+            computed_stat_breakdown_section(breakdown_inputs.clone(), item_drr_input_rows),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Item DRR",
+                    breakdown_text("calculator.server.stat.item_drr"),
                     format!("{}%", trim_float(item_drr_raw * 100.0)),
-                    "Used as the durability-resistance term in the durability consumption formula.",
+                    breakdown_text(
+                        "calculator.breakdown.detail.used_as_durability_resistance_term",
+                    ),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Item DRR", format!("{}%", trim_float(item_drr_raw * 100.0))),
         computed_stat_formula_term(
-            "sum of additive DRR sources",
+            breakdown_text("calculator.server.stat.item_drr"),
+            format!("{}%", trim_float(item_drr_raw * 100.0)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.sum_additive_drr_sources"),
             format!("{}%", trim_float(item_drr_raw * 100.0)),
         ),
     ]);
 
     let chance_to_consume_durability_breakdown = computed_stat_breakdown(
-        "Chance to Consume Durability",
+        breakdown_text("calculator.server.stat.chance_to_consume_durability"),
         format!("{:.2}%", chance_to_reduce_raw * 100.0),
-        "Durability consumption combines Brandstone, Item DRR, and lifeskill-level DRR into one remaining-consumption chance.",
-        "Chance = Brandstone factor × (1 - Item DRR) × (1 - Lifeskill DRR).",
+        breakdown_text("calculator.breakdown.summary.chance_to_consume_durability"),
+        breakdown_text("calculator.breakdown.formula.chance_to_consume_durability"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 {
                     let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Brandstone factor",
+                            breakdown_text("calculator.breakdown.label.brandstone_factor"),
                             format!("×{}", trim_float(brandstone_durability_factor)),
                             if signals.brand {
-                                "Brandstone halves durability consumption."
+                                breakdown_text(
+                                    "calculator.breakdown.detail.brandstone_halves_durability_consumption",
+                                )
                             } else {
-                                "No Brandstone reduction is active."
+                                breakdown_text(
+                                    "calculator.breakdown.detail.no_brandstone_reduction_active",
+                                )
                             },
                         ),
-                        "Brandstone factor",
+                        breakdown_text("calculator.breakdown.label.brandstone_factor"),
                         1,
                     )];
                     rows.extend(computed_stat_breakdown_rows_with_formula_part(
                         item_drr_item_rows,
-                        "Item DRR",
+                        breakdown_text("calculator.server.stat.item_drr"),
                         2,
                     ));
                     rows.extend(computed_stat_breakdown_rows_with_formula_part(
                         pet_drr_rows,
-                        "Item DRR",
+                        breakdown_text("calculator.server.stat.item_drr"),
                         2,
                     ));
                     rows.push(computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
                             lifeskill_level
                                 .map(|level| level.name.clone())
-                                .unwrap_or_else(|| "Lifeskill DRR".to_string()),
+                                .unwrap_or_else(|| {
+                                    breakdown_text("calculator.breakdown.label.lifeskill_drr")
+                                }),
                             format!("+{}%", trim_float(lifeskill_level_drr_raw * 100.0)),
-                            "Fishing lifeskill level durability resistance.",
+                            breakdown_text(
+                                "calculator.breakdown.detail.fishing_lifeskill_level_durability_resistance",
+                            ),
                         ),
-                        "Lifeskill DRR",
+                        breakdown_text("calculator.breakdown.label.lifeskill_drr"),
                         3,
                     ));
                     rows
                 },
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Total Item DRR",
+                        breakdown_text("calculator.breakdown.label.total_item_drr"),
                         format!("{}%", trim_float(item_drr_raw * 100.0)),
-                        "Combined additive item and pet durability resistance.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.combined_additive_item_and_pet_durability_resistance",
+                        ),
                     ),
                     computed_stat_breakdown_row(
-                        "Chance",
+                        breakdown_text("calculator.breakdown.label.chance"),
                         format!("{:.2}%", chance_to_reduce_raw * 100.0),
-                        "Final per-cast chance to consume durability.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.final_per_cast_consumption_chance",
+                        ),
                     ),
                 ],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Chance", format!("{:.2}%", chance_to_reduce_raw * 100.0)),
         computed_stat_formula_term(
-            "Brandstone factor",
+            breakdown_text("calculator.breakdown.label.chance"),
+            format!("{:.2}%", chance_to_reduce_raw * 100.0),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.brandstone_factor"),
             format!("×{}", trim_float(brandstone_durability_factor)),
         ),
-        computed_stat_formula_term("Item DRR", format!("{}%", trim_float(item_drr_raw * 100.0))),
         computed_stat_formula_term(
-            "Lifeskill DRR",
+            breakdown_text("calculator.server.stat.item_drr"),
+            format!("{}%", trim_float(item_drr_raw * 100.0)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.lifeskill_drr"),
             format!("+{}%", trim_float(lifeskill_level_drr_raw * 100.0)),
         ),
     ]);
 
     let durability_loss_average_breakdown = computed_stat_breakdown(
-        format!("Average Durability Loss ({timespan_text})"),
+        breakdown_text_with_vars(
+            "calculator.breakdown.title.durability_loss_average",
+            &[("timespan", timespan_text)],
+        ),
         fmt2(durability_loss_average_raw),
-        "Average durability loss over the current session duration.",
-        "Average loss = Average casts × Chance to consume durability.",
+        breakdown_text("calculator.breakdown.summary.durability_loss_average"),
+        breakdown_text("calculator.breakdown.formula.durability_loss_average"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Average casts",
+                            breakdown_text("calculator.breakdown.label.average_casts"),
                             fmt2(casts_average_raw),
-                            format!("Average casts for {timespan_text}."),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.average_casts_for_timespan",
+                                &[("timespan", timespan_text)],
+                            ),
                         ),
-                        "Average casts",
+                        breakdown_text("calculator.breakdown.label.average_casts"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Chance to consume durability",
+                            breakdown_text(
+                                "calculator.breakdown.label.chance_to_consume_durability",
+                            ),
                             format!("{:.2}%", chance_to_reduce_raw * 100.0),
-                            "Final per-cast consumption chance.",
+                            breakdown_text(
+                                "calculator.breakdown.detail.final_per_cast_consumption_chance",
+                            ),
                         ),
-                        "Chance to consume durability",
+                        breakdown_text("calculator.breakdown.label.chance_to_consume_durability"),
                         2,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Average loss",
+                    breakdown_text("calculator.breakdown.label.average_loss"),
                     fmt2(durability_loss_average_raw),
-                    "Expected durability consumed over the current session duration.",
+                    breakdown_text(
+                        "calculator.breakdown.detail.expected_durability_consumed_session",
+                    ),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Average loss", fmt2(durability_loss_average_raw)),
-        computed_stat_formula_term("Average casts", fmt2(casts_average_raw)),
         computed_stat_formula_term(
-            "Chance to consume durability",
+            breakdown_text("calculator.breakdown.label.average_loss"),
+            fmt2(durability_loss_average_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_casts"),
+            fmt2(casts_average_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.chance_to_consume_durability"),
             format!("{:.2}%", chance_to_reduce_raw * 100.0),
         ),
     ]);
 
     let zone_bite_min_breakdown = computed_stat_breakdown(
-        "Zone Bite Min",
+        breakdown_text("calculator.breakdown.title.zone_bite_min"),
         fmt2(zone_bite_min_raw),
-        "Minimum bite time read directly from the selected zone metadata.",
-        "Zone Bite Min = selected zone minimum bite-time entry.",
+        breakdown_text("calculator.breakdown.summary.zone_bite_min"),
+        breakdown_text("calculator.breakdown.formula.zone_bite_min"),
         vec![computed_stat_breakdown_section(
-            "Inputs",
+            breakdown_inputs.clone(),
             vec![computed_stat_breakdown_row(
-                "Selected zone",
+                breakdown_text("calculator.breakdown.label.selected_zone"),
                 fmt2(zone_bite_min_raw),
                 zone_name.to_string(),
             )],
         )],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Zone Bite Min", fmt2(zone_bite_min_raw)),
         computed_stat_formula_term(
-            "selected zone minimum bite-time entry",
+            breakdown_text("calculator.breakdown.label.zone_bite_min"),
+            fmt2(zone_bite_min_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.selected_zone_minimum_bite_time_entry"),
             fmt2(zone_bite_min_raw),
         ),
     ]);
 
     let zone_bite_avg_breakdown = computed_stat_breakdown(
-        "Zone Bite Average",
+        breakdown_text("calculator.breakdown.title.zone_bite_avg"),
         fmt2(zone_bite_avg_raw),
-        "Zone average bite time before level or abundance modifiers.",
-        "Zone Bite Average = (Zone Bite Min + Zone Bite Max) / 2.",
+        breakdown_text("calculator.breakdown.summary.zone_bite_avg"),
+        breakdown_text("calculator.breakdown.formula.zone_bite_avg"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Zone min",
+                            breakdown_text("calculator.breakdown.label.zone_min"),
                             fmt2(zone_bite_min_raw),
                             zone_name.to_string(),
                         ),
-                        "Zone min",
+                        breakdown_text("calculator.breakdown.label.zone_min"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Zone max",
+                            breakdown_text("calculator.breakdown.label.zone_max"),
                             fmt2(zone_bite_max_raw),
                             zone_name.to_string(),
                         ),
-                        "Zone max",
+                        breakdown_text("calculator.breakdown.label.zone_max"),
                         2,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Zone average",
+                    breakdown_text("calculator.breakdown.label.zone_bite_average"),
                     fmt2(zone_bite_avg_raw),
-                    "Base zone average before level and abundance scaling.",
+                    breakdown_text("calculator.breakdown.detail.base_zone_average_before_scaling"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Zone Bite Average", fmt2(zone_bite_avg_raw)),
-        computed_stat_formula_term("Zone Bite Min", fmt2(zone_bite_min_raw)),
-        computed_stat_formula_term("Zone Bite Max", fmt2(zone_bite_max_raw)),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_bite_average"),
+            fmt2(zone_bite_avg_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_bite_min"),
+            fmt2(zone_bite_min_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_bite_max"),
+            fmt2(zone_bite_max_raw),
+        ),
     ]);
 
     let zone_bite_max_breakdown = computed_stat_breakdown(
-        "Zone Bite Max",
+        breakdown_text("calculator.breakdown.title.zone_bite_max"),
         fmt2(zone_bite_max_raw),
-        "Maximum bite time read directly from the selected zone metadata.",
-        "Zone Bite Max = selected zone maximum bite-time entry.",
+        breakdown_text("calculator.breakdown.summary.zone_bite_max"),
+        breakdown_text("calculator.breakdown.formula.zone_bite_max"),
         vec![computed_stat_breakdown_section(
-            "Inputs",
+            breakdown_inputs.clone(),
             vec![computed_stat_breakdown_row(
-                "Selected zone",
+                breakdown_text("calculator.breakdown.label.selected_zone"),
                 fmt2(zone_bite_max_raw),
                 zone_name.to_string(),
             )],
         )],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Zone Bite Max", fmt2(zone_bite_max_raw)),
         computed_stat_formula_term(
-            "selected zone maximum bite-time entry",
+            breakdown_text("calculator.breakdown.label.zone_bite_max"),
+            fmt2(zone_bite_max_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.selected_zone_maximum_bite_time_entry"),
             fmt2(zone_bite_max_raw),
         ),
     ]);
 
     let effective_bite_min_breakdown = computed_stat_breakdown(
-        "Effective Bite Min",
+        breakdown_text("calculator.breakdown.title.effective_bite_min"),
         fmt2(effective_bite_min_raw),
-        "Zone minimum bite time after level and abundance scaling.",
-        "Effective Bite Min = Zone Bite Min × Level factor × Abundance factor.",
+        breakdown_text("calculator.breakdown.summary.effective_bite_min"),
+        breakdown_text("calculator.breakdown.formula.effective_bite_min"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Zone min",
+                            breakdown_text("calculator.breakdown.label.zone_min"),
                             fmt2(zone_bite_min_raw),
                             zone_name.to_string(),
                         ),
-                        "Zone min",
+                        breakdown_text("calculator.breakdown.label.zone_min"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Level factor",
+                            breakdown_text("calculator.breakdown.label.level_factor"),
                             format!("×{}", trim_float(factor_level)),
-                            format!("Fishing level {} modifier.", signals.level),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.fishing_level_modifier",
+                                &[("level", &signals.level.to_string())],
+                            ),
                         ),
-                        "Level factor",
+                        breakdown_text("calculator.breakdown.label.level_factor"),
                         2,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Abundance factor",
+                            breakdown_text("calculator.breakdown.label.abundance_factor"),
                             format!("×{}", trim_float(factor_resources)),
-                            format!(
-                                "Resources {}% ({})",
-                                trim_float(signals.resources),
-                                abundance_label
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.resources_abundance",
+                                &[
+                                    ("resources", &trim_float(signals.resources)),
+                                    ("abundance", &abundance_label),
+                                ],
                             ),
                         ),
-                        "Abundance factor",
+                        breakdown_text("calculator.breakdown.label.abundance_factor"),
                         3,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Effective min",
+                    breakdown_text("calculator.breakdown.label.effective_min"),
                     fmt2(effective_bite_min_raw),
-                    "Lower end of the current effective bite window.",
+                    breakdown_text("calculator.breakdown.detail.lower_end_effective_window"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Effective Bite Min", fmt2(effective_bite_min_raw)),
-        computed_stat_formula_term("Zone Bite Min", fmt2(zone_bite_min_raw)),
-        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
         computed_stat_formula_term(
-            "Abundance factor",
+            breakdown_text("calculator.breakdown.label.effective_bite_min"),
+            fmt2(effective_bite_min_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_bite_min"),
+            fmt2(zone_bite_min_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.level_factor"),
+            format!("×{}", trim_float(factor_level)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.abundance_factor"),
             format!("×{}", trim_float(factor_resources)),
         ),
     ]);
 
     let effective_bite_avg_breakdown = computed_stat_breakdown(
-        "Effective Bite Average",
+        breakdown_text("calculator.breakdown.title.effective_bite_avg"),
         fmt2(bite_time_raw),
-        "Zone average bite time after level and abundance scaling.",
-        "Effective Bite Average = Zone Bite Average × Level factor × Abundance factor.",
+        breakdown_text("calculator.breakdown.summary.effective_bite_avg"),
+        breakdown_text("calculator.breakdown.formula.effective_bite_avg"),
         vec![
-            computed_stat_breakdown_section("Inputs", bite_time_factor_rows),
+            computed_stat_breakdown_section(breakdown_inputs.clone(), bite_time_factor_rows),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Effective average",
+                    breakdown_text("calculator.breakdown.label.effective_average"),
                     fmt2(bite_time_raw),
-                    "Matches the Average Bite Time stat.",
+                    breakdown_text("calculator.breakdown.detail.matches_average_bite_time_stat"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Effective Bite Average", fmt2(bite_time_raw)),
-        computed_stat_formula_term("Zone Bite Average", fmt2(zone_bite_avg_raw)),
-        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
         computed_stat_formula_term(
-            "Abundance factor",
+            breakdown_text("calculator.breakdown.label.effective_bite_average"),
+            fmt2(bite_time_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_bite_average"),
+            fmt2(zone_bite_avg_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.level_factor"),
+            format!("×{}", trim_float(factor_level)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.abundance_factor"),
             format!("×{}", trim_float(factor_resources)),
         ),
     ]);
 
     let effective_bite_max_breakdown = computed_stat_breakdown(
-        "Effective Bite Max",
+        breakdown_text("calculator.breakdown.title.effective_bite_max"),
         fmt2(effective_bite_max_raw),
-        "Zone maximum bite time after level and abundance scaling.",
-        "Effective Bite Max = Zone Bite Max × Level factor × Abundance factor.",
+        breakdown_text("calculator.breakdown.summary.effective_bite_max"),
+        breakdown_text("calculator.breakdown.formula.effective_bite_max"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Zone max",
+                            breakdown_text("calculator.breakdown.label.zone_max"),
                             fmt2(zone_bite_max_raw),
                             zone_name.to_string(),
                         ),
-                        "Zone max",
+                        breakdown_text("calculator.breakdown.label.zone_max"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Level factor",
+                            breakdown_text("calculator.breakdown.label.level_factor"),
                             format!("×{}", trim_float(factor_level)),
-                            format!("Fishing level {} modifier.", signals.level),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.fishing_level_modifier",
+                                &[("level", &signals.level.to_string())],
+                            ),
                         ),
-                        "Level factor",
+                        breakdown_text("calculator.breakdown.label.level_factor"),
                         2,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Abundance factor",
+                            breakdown_text("calculator.breakdown.label.abundance_factor"),
                             format!("×{}", trim_float(factor_resources)),
-                            format!(
-                                "Resources {}% ({})",
-                                trim_float(signals.resources),
-                                abundance_label
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.resources_abundance",
+                                &[
+                                    ("resources", &trim_float(signals.resources)),
+                                    ("abundance", &abundance_label),
+                                ],
                             ),
                         ),
-                        "Abundance factor",
+                        breakdown_text("calculator.breakdown.label.abundance_factor"),
                         3,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Effective max",
+                    breakdown_text("calculator.breakdown.label.effective_max"),
                     fmt2(effective_bite_max_raw),
-                    "Upper end of the current effective bite window.",
+                    breakdown_text("calculator.breakdown.detail.upper_end_effective_window"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Effective Bite Max", fmt2(effective_bite_max_raw)),
-        computed_stat_formula_term("Zone Bite Max", fmt2(zone_bite_max_raw)),
-        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
         computed_stat_formula_term(
-            "Abundance factor",
+            breakdown_text("calculator.breakdown.label.effective_bite_max"),
+            fmt2(effective_bite_max_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.zone_bite_max"),
+            fmt2(zone_bite_max_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.level_factor"),
+            format!("×{}", trim_float(factor_level)),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.abundance_factor"),
             format!("×{}", trim_float(factor_resources)),
         ),
     ]);
 
     let loot_total_catches_breakdown = computed_stat_breakdown(
-        format!("Expected Catches ({timespan_text})"),
-        fmt2(loot_total_catches_raw),
-        "Expected catches over the current session duration after the active fish-per-cast multiplier is applied.",
-        "Expected catches = Average casts × Applied fish multiplier.",
-        vec![
-            computed_stat_breakdown_section(
-                "Inputs",
-                {
-                    let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
-                        computed_stat_breakdown_row(
-                            "Average casts",
-                            fmt2(casts_average_raw),
-                            format!("Average casts during {timespan_text}."),
-                        ),
-                        "Average casts",
-                        1,
-                    )];
-                    rows.extend(computed_stat_breakdown_rows_with_formula_part(
-                        fish_multiplier_input_rows,
-                        "Applied fish multiplier",
-                        2,
-                    ));
-                    rows
-                },
-            ),
-            computed_stat_breakdown_section(
-                "Composition",
-                vec![computed_stat_breakdown_row(
-                    "Expected catches",
-                    fmt2(loot_total_catches_raw),
-                    "Expected catches for the selected session duration.",
-                )],
-            ),
-        ],
-    )
-    .with_formula_terms(vec![
-        computed_stat_formula_term("Expected catches", fmt2(loot_total_catches_raw)),
-        computed_stat_formula_term("Average casts", fmt2(casts_average_raw)),
-        computed_stat_formula_term(
-            "Applied fish multiplier",
-            applied_fish_multiplier_text.clone(),
+        breakdown_text_with_vars(
+            "calculator.breakdown.title.loot_total_catches",
+            &[("timespan", timespan_text)],
         ),
-    ]);
-
-    let loot_fish_per_hour_breakdown = computed_stat_breakdown(
-        "Expected Catches / Hour",
-        fmt2(loot_fish_per_hour_raw),
-        "Hourly catch throughput after the active fish-per-cast multiplier is applied.",
-        "Catches / hour = (3600 / Average total fishing time) × Applied fish multiplier.",
+        fmt2(loot_total_catches_raw),
+        breakdown_text("calculator.breakdown.summary.loot_total_catches"),
+        breakdown_text("calculator.breakdown.formula.loot_total_catches"),
         vec![
-            computed_stat_breakdown_section("Inputs", {
+            computed_stat_breakdown_section(breakdown_inputs.clone(), {
                 let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
                     computed_stat_breakdown_row(
-                        "Average total fishing time",
-                        fmt2(total_time_raw),
-                        "Average seconds per full fishing cycle.",
+                        breakdown_text("calculator.breakdown.label.average_casts"),
+                        fmt2(casts_average_raw),
+                        breakdown_text_with_vars(
+                            "calculator.breakdown.detail.average_casts_during_timespan",
+                            &[("timespan", timespan_text)],
+                        ),
                     ),
-                    "Average total fishing time",
+                    breakdown_text("calculator.breakdown.label.average_casts"),
                     1,
                 )];
                 rows.extend(computed_stat_breakdown_rows_with_formula_part(
-                    collect_fish_multiplier_breakdown_rows(
-                        items_by_key,
-                        data.cdn_base_url.as_str(),
-                        signals,
-                        fish_multiplier_raw,
-                    ),
-                    "Applied fish multiplier",
+                    fish_multiplier_input_rows,
+                    breakdown_text("calculator.breakdown.label.applied_fish_multiplier"),
                     2,
                 ));
                 rows
             }),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Catches / hour",
-                    fmt2(loot_fish_per_hour_raw),
-                    "Expected hourly catch throughput.",
+                    breakdown_text("calculator.breakdown.label.expected_catches"),
+                    fmt2(loot_total_catches_raw),
+                    breakdown_text("calculator.breakdown.detail.expected_catches_selected_session"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Catches / hour", fmt2(loot_fish_per_hour_raw)),
-        computed_stat_formula_term("Average total fishing time", fmt2(total_time_raw)),
         computed_stat_formula_term(
-            "Applied fish multiplier",
+            breakdown_text("calculator.breakdown.label.expected_catches"),
+            fmt2(loot_total_catches_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_casts"),
+            fmt2(casts_average_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.applied_fish_multiplier"),
             applied_fish_multiplier_text.clone(),
         ),
     ]);
 
-    let loot_group_rows = loot_group_profit_breakdown_rows(&loot_chart.rows);
+    let loot_fish_per_hour_breakdown = computed_stat_breakdown(
+        breakdown_text("calculator.breakdown.title.loot_fish_per_hour"),
+        fmt2(loot_fish_per_hour_raw),
+        breakdown_text("calculator.breakdown.summary.loot_fish_per_hour"),
+        breakdown_text("calculator.breakdown.formula.loot_fish_per_hour"),
+        vec![
+            computed_stat_breakdown_section(breakdown_inputs.clone(), {
+                let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
+                    computed_stat_breakdown_row(
+                        breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
+                        fmt2(total_time_raw),
+                        breakdown_text("calculator.breakdown.detail.average_seconds_full_cycle"),
+                    ),
+                    breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
+                    1,
+                )];
+                rows.extend(computed_stat_breakdown_rows_with_formula_part(
+                    collect_fish_multiplier_breakdown_rows(
+                        data.lang,
+                        items_by_key,
+                        data.cdn_base_url.as_str(),
+                        signals,
+                        fish_multiplier_raw,
+                    ),
+                    breakdown_text("calculator.breakdown.label.applied_fish_multiplier"),
+                    2,
+                ));
+                rows
+            }),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.breakdown.label.catches_per_hour"),
+                    fmt2(loot_fish_per_hour_raw),
+                    breakdown_text("calculator.breakdown.detail.expected_hourly_catch_throughput"),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.catches_per_hour"),
+            fmt2(loot_fish_per_hour_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.average_total_fishing_time"),
+            fmt2(total_time_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.applied_fish_multiplier"),
+            applied_fish_multiplier_text.clone(),
+        ),
+    ]);
+
+    let loot_group_rows = loot_group_profit_breakdown_rows(&loot_chart.rows, data.lang);
     let loot_group_silver_terms = join_formula_term_values(
         loot_group_rows.iter().map(|row| row.value_text.as_str()),
         " + ",
         "0",
     );
     let loot_total_profit_breakdown = computed_stat_breakdown(
-        format!("Expected Profit ({timespan_text})"),
+        breakdown_text_with_vars(
+            "calculator.breakdown.title.loot_total_profit",
+            &[("timespan", timespan_text)],
+        ),
         loot_chart.total_profit_text.clone(),
-        "Expected silver over the current session duration after prices and trade modifiers are applied.",
-        "Expected profit = Σ(Group expected silver).",
+        breakdown_text("calculator.breakdown.summary.loot_total_profit"),
+        breakdown_text("calculator.breakdown.formula.loot_total_profit"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 if loot_group_rows.is_empty() {
                     vec![computed_stat_breakdown_row(
-                        "Group silver",
+                        breakdown_text("calculator.breakdown.label.group_silver"),
                         "0",
-                        "No source-backed loot rows are currently contributing expected silver.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.no_source_backed_loot_rows_contributing_expected_silver",
+                        ),
                     )]
                 } else {
                     loot_group_rows
                 },
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Trade sale multiplier",
+                        breakdown_text("calculator.breakdown.label.trade_sale_multiplier"),
                         loot_chart.trade_sale_multiplier_text.clone(),
-                        "Current sale multiplier after trade settings.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.current_sale_multiplier_after_trade_settings",
+                        ),
                     ),
                     computed_stat_breakdown_row(
-                        "Expected profit",
+                        breakdown_text("calculator.breakdown.label.expected_profit"),
                         loot_chart.total_profit_text.clone(),
-                        "Expected silver across the selected session duration.",
+                        breakdown_text("calculator.breakdown.detail.expected_silver_selected_session"),
                     ),
                 ],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Expected profit", loot_chart.total_profit_text.clone()),
-        computed_stat_formula_term("Group expected silver", loot_group_silver_terms),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_profit"),
+            loot_chart.total_profit_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.group_expected_silver"),
+            loot_group_silver_terms,
+        ),
     ]);
 
     let loot_profit_per_hour_breakdown = computed_stat_breakdown(
-        "Profit / Hour",
+        breakdown_text("calculator.breakdown.title.loot_profit_per_hour"),
         loot_chart.profit_per_hour_text.clone(),
-        "Hourly silver throughput after prices and trade modifiers are applied.",
-        "Profit / hour = Expected profit / Session hours.",
+        breakdown_text("calculator.breakdown.summary.loot_profit_per_hour"),
+        breakdown_text("calculator.breakdown.formula.loot_profit_per_hour"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            format!("Expected profit ({timespan_text})"),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.label.expected_profit_for_timespan",
+                                &[("timespan", timespan_text)],
+                            ),
                             loot_chart.total_profit_text.clone(),
-                            "Expected silver over the current session duration.",
+                            breakdown_text(
+                                "calculator.breakdown.detail.expected_silver_current_session",
+                            ),
                         ),
-                        "Expected profit",
+                        breakdown_text("calculator.breakdown.label.expected_profit"),
                         1,
                     ),
                     computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
-                            "Session duration",
+                            breakdown_text("calculator.breakdown.label.session_duration"),
                             human_duration_text(timespan_seconds),
-                            format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.session_duration_seconds",
+                                &[
+                                    ("timespan", timespan_text),
+                                    ("seconds", &trim_float(timespan_seconds)),
+                                ],
+                            ),
                         ),
-                        "Session hours",
+                        breakdown_text("calculator.breakdown.label.session_hours"),
                         2,
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Profit / hour",
+                    breakdown_text("calculator.breakdown.label.profit_per_hour"),
                     loot_chart.profit_per_hour_text.clone(),
-                    "Expected hourly silver throughput.",
+                    breakdown_text("calculator.breakdown.detail.expected_hourly_silver_throughput"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Profit / hour", loot_chart.profit_per_hour_text.clone()),
-        computed_stat_formula_term("Expected profit", loot_chart.total_profit_text.clone()),
-        computed_stat_formula_term("Session hours", session_hours_text.clone()),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.profit_per_hour"),
+            loot_chart.profit_per_hour_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_profit"),
+            loot_chart.total_profit_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.session_hours"),
+            session_hours_text.clone(),
+        ),
     ]);
 
     let target_group_share_by_slot = fish_group_chart
@@ -6773,7 +7322,9 @@ fn derive_stat_breakdowns(
         .iter()
         .map(|entry| {
             let group_row = target_group_share_by_slot.get(&entry.slot_idx).copied();
-            let group_label = group_row.map(|row| row.label).unwrap_or("Unassigned");
+            let group_label = group_row
+                .map(|row| row.label.to_string())
+                .unwrap_or_else(|| breakdown_text("calculator.breakdown.label.unassigned"));
             let group_share = group_row
                 .map(|row| row.current_share_pct / 100.0)
                 .unwrap_or_default();
@@ -6782,11 +7333,13 @@ fn derive_stat_breakdowns(
                 entry,
                 data.cdn_base_url.as_str(),
                 trim_float(expected_count_raw),
-                format!(
-                    "{} share {} · {} in-group rate",
-                    group_label,
-                    percent_value_text(group_share * 100.0),
-                    percent_value_text(entry.within_group_rate * 100.0)
+                breakdown_text_with_vars(
+                    "calculator.breakdown.detail.target_row_share_in_group_rate",
+                    &[
+                        ("group", &group_label),
+                        ("share", &percent_value_text(group_share * 100.0)),
+                        ("rate", &percent_value_text(entry.within_group_rate * 100.0)),
+                    ],
                 ),
             )
         })
@@ -6798,145 +7351,177 @@ fn derive_stat_breakdowns(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let target_expected_count_breakdown = computed_stat_breakdown(
-        format!("Expected ({timespan_text})"),
+        breakdown_text_with_vars(
+            "calculator.server.target.expected",
+            &[("timespan", timespan_text)],
+        ),
         target_fish_summary.expected_count_text.clone(),
         if target_fish_summary.selected_label.is_empty() {
-            "Select a target fish or loot item to see the expected count breakdown."
+            breakdown_text("calculator.breakdown.summary.target_expected_count.empty")
         } else {
-            "Expected session count for the currently selected target."
+            breakdown_text("calculator.breakdown.summary.target_expected_count.selected")
         },
-        "Expected count = Σ(Expected catches × Group share × In-group rate).",
+        breakdown_text("calculator.breakdown.formula.target_expected_count"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 if target_input_rows.is_empty() {
                     vec![computed_stat_breakdown_row(
-                        "Target rows",
-                        "Unavailable",
-                        "No matching source-backed loot rows are currently contributing to this target.",
+                        breakdown_text("calculator.breakdown.label.target_rows"),
+                        breakdown_text("calculator.server.value.unavailable"),
+                        breakdown_text(
+                            "calculator.breakdown.detail.no_matching_source_backed_target_rows",
+                        ),
                     )]
                 } else {
                     target_input_rows
                 },
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        format!("Expected catches ({timespan_text})"),
+                        breakdown_text_with_vars(
+                            "calculator.breakdown.title.loot_total_catches",
+                            &[("timespan", timespan_text)],
+                        ),
                         fmt2(loot_total_catches_raw),
-                        "Session catch volume used for the target calculation.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.session_catch_volume_used_target_calc",
+                        ),
                     ),
                     computed_stat_breakdown_row(
-                        "Expected count",
+                        breakdown_text("calculator.breakdown.label.expected_count"),
                         target_fish_summary.expected_count_text.clone(),
-                        "Combined expected count across all matching loot rows.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.combined_expected_count_matching_target_rows",
+                        ),
                     ),
                 ],
             ),
         ],
     )
     .with_formula_terms(vec![
-        computed_stat_formula_term("Expected count", target_fish_summary.expected_count_text.clone()),
-        computed_stat_formula_term("Expected catches", fmt2(loot_total_catches_raw)),
-        computed_stat_formula_term("Group share", target_group_share_terms),
-        computed_stat_formula_term("In-group rate", target_in_group_rate_terms),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_count"),
+            target_fish_summary.expected_count_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_catches"),
+            fmt2(loot_total_catches_raw),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.group_share"),
+            target_group_share_terms,
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.in_group_rate"),
+            target_in_group_rate_terms,
+        ),
     ]);
 
     let target_time_to_target_breakdown = computed_stat_breakdown(
-        "Time to Target",
+        breakdown_text("calculator.server.target.time_to_target"),
         target_fish_summary.time_to_target_text.clone(),
-        "Estimated time to reach the selected target amount at the current setup.",
-        "Time to target = Target amount / Expected catches per day.",
+        breakdown_text("calculator.breakdown.summary.target_time_to_target"),
+        breakdown_text("calculator.breakdown.formula.target_time_to_target"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Target amount",
+                        breakdown_text("calculator.breakdown.label.target_amount"),
                         target_fish_summary.target_amount_text.clone(),
-                        "Current target amount input.",
+                        breakdown_text("calculator.breakdown.detail.current_target_amount_input"),
                     ),
                     computed_stat_breakdown_row(
-                        "Expected / day",
+                        breakdown_text("calculator.breakdown.label.expected_per_day"),
                         target_fish_summary.per_day_text.clone(),
-                        "Expected daily count for the selected target.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.expected_daily_count_selected_target",
+                        ),
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Time to target",
+                    breakdown_text("calculator.server.target.time_to_target"),
                     target_fish_summary.time_to_target_text.clone(),
-                    "Estimated time to reach the target amount.",
+                    breakdown_text("calculator.breakdown.detail.estimated_time_to_reach_target"),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
         computed_stat_formula_term(
-            "Time to target",
+            breakdown_text("calculator.server.target.time_to_target"),
             target_fish_summary.time_to_target_text.clone(),
         ),
         computed_stat_formula_term(
-            "Target amount",
+            breakdown_text("calculator.breakdown.label.target_amount"),
             target_fish_summary.target_amount_text.clone(),
         ),
         computed_stat_formula_term(
-            "Expected catches per day",
+            breakdown_text("calculator.breakdown.label.expected_catches_per_day"),
             target_fish_summary.per_day_text.clone(),
         ),
     ]);
 
     let target_probability_breakdown = computed_stat_breakdown(
-        format!(
-            "Chance to Get at Least {}",
-            target_fish_summary.target_amount_text
+        breakdown_text_with_vars(
+            "calculator.server.target.chance_at_least",
+            &[("amount", &target_fish_summary.target_amount_text)],
         ),
         target_fish_summary.probability_at_least_text.clone(),
-        "Probability of seeing at least the target amount within the current session duration.",
-        "Probability = 1 - PoissonCDF(Target amount - 1, λ).",
+        breakdown_text("calculator.breakdown.summary.target_probability"),
+        breakdown_text("calculator.breakdown.formula.target_probability"),
         vec![
             computed_stat_breakdown_section(
-                "Inputs",
+                breakdown_inputs.clone(),
                 vec![
                     computed_stat_breakdown_row(
-                        "Expected session count (λ)",
+                        breakdown_text("calculator.breakdown.label.expected_session_count"),
                         target_fish_summary.expected_count_text.clone(),
-                        "Expected count for the current target in one session.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.expected_count_current_target_session",
+                        ),
                     ),
                     computed_stat_breakdown_row(
-                        "Target amount",
+                        breakdown_text("calculator.breakdown.label.target_amount"),
                         target_fish_summary.target_amount_text.clone(),
-                        "Threshold used for the tail probability.",
+                        breakdown_text(
+                            "calculator.breakdown.detail.threshold_used_for_tail_probability",
+                        ),
                     ),
                 ],
             ),
             computed_stat_breakdown_section(
-                "Composition",
+                breakdown_composition.clone(),
                 vec![computed_stat_breakdown_row(
-                    "Probability",
+                    breakdown_text("calculator.breakdown.label.probability"),
                     target_fish_summary.probability_at_least_text.clone(),
-                    "Probability of meeting or exceeding the target during one session.",
+                    breakdown_text(
+                        "calculator.breakdown.detail.probability_meeting_or_exceeding_target",
+                    ),
                 )],
             ),
         ],
     )
     .with_formula_terms(vec![
         computed_stat_formula_term(
-            "Probability",
+            breakdown_text("calculator.breakdown.label.probability"),
             target_fish_summary.probability_at_least_text.clone(),
         ),
         computed_stat_formula_term(
-            "Target amount - 1",
+            breakdown_text("calculator.breakdown.label.target_amount_minus_one"),
             target_fish_summary
                 .target_amount
                 .saturating_sub(1)
                 .to_string(),
         ),
         computed_stat_formula_term_with_aliases(
-            "Expected session count (λ)",
+            breakdown_text("calculator.breakdown.label.expected_session_count"),
             target_fish_summary.expected_count_text.clone(),
             ["λ"],
         ),
@@ -8079,6 +8664,7 @@ fn render_calculator_app(
         (
             "__OUTFITS__",
             render_checkbox_group(
+                data.lang,
                 data.cdn_base_url.as_str(),
                 "outfits",
                 "_outfit_slots",
@@ -8299,12 +8885,13 @@ fn groups_distribution_segments(
     rows: &[FishGroupChartRow],
     total_catches_raw: f64,
     show_normalized_rates: bool,
+    lang: FishLang,
 ) -> Vec<DistributionChartSegment> {
     let total_weight_pct = rows.iter().map(|row| row.weight_pct.max(0.0)).sum::<f64>();
 
     rows.iter()
         .map(|row| DistributionChartSegment {
-            label: row.label.to_string(),
+            label: calculator_group_display_label(lang, &row.label),
             value_text: percent_value_text(if show_normalized_rates {
                 row.current_share_pct
             } else {
@@ -8327,6 +8914,7 @@ fn groups_distribution_segments(
                 total_catches_raw,
                 total_weight_pct,
                 show_normalized_rates,
+                lang,
             )),
         })
         .collect()
@@ -8335,6 +8923,7 @@ fn groups_distribution_segments(
 fn group_silver_distribution_segments(
     loot_rows: &[LootChartRow],
     species_rows: &[LootSpeciesRow],
+    lang: FishLang,
 ) -> Vec<DistributionChartSegment> {
     let total_profit_raw = loot_rows
         .iter()
@@ -8344,7 +8933,7 @@ fn group_silver_distribution_segments(
     loot_rows
         .iter()
         .map(|row| DistributionChartSegment {
-            label: row.label.to_string(),
+            label: calculator_group_display_label(lang, row.label),
             value_text: row.silver_share_text.clone(),
             detail_text: compact_silver_text(row.expected_profit_raw),
             width_pct: if total_profit_raw > 0.0 {
@@ -8360,6 +8949,7 @@ fn group_silver_distribution_segments(
                 row,
                 species_rows,
                 total_profit_raw,
+                lang,
             )),
         })
         .collect()
@@ -9069,7 +9659,10 @@ fn render_calculator_data_disclaimer(lang: FishLang) -> String {
     )
 }
 
-fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
+fn render_item_effect_badges(lang: FishLang, item: &CalculatorItemEntry) -> String {
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let text = |key: &str| calculator_route_text(lang, key);
     let mut badges = Vec::new();
     if let Some(category_label) = buff_category_label(item) {
         badges.push(render_effect_badge(
@@ -9079,25 +9672,37 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     }
     if let Some(afr) = item.afr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("-{}% AFT", format_effect_percent(afr)),
+            &text_with_vars(
+                "calculator.server.badge.aft",
+                &[("percent", &format_effect_percent(afr))],
+            ),
             "border-blue-400 bg-blue-300 text-blue-950",
         ));
     }
     if let Some(bonus_rare) = item.bonus_rare.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("+{}% Rare", format_effect_percent(bonus_rare)),
+            &text_with_vars(
+                "calculator.server.badge.rare",
+                &[("percent", &format_effect_percent(bonus_rare))],
+            ),
             "border-yellow-400 bg-yellow-300 text-yellow-950",
         ));
     }
     if let Some(bonus_big) = item.bonus_big.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("+{}% HQ", format_effect_percent(bonus_big)),
+            &text_with_vars(
+                "calculator.server.badge.hq",
+                &[("percent", &format_effect_percent(bonus_big))],
+            ),
             "border-blue-400 bg-blue-300 text-blue-950",
         ));
     }
     if let Some(item_drr) = item.item_drr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("+{}% Item DRR", format_effect_percent(item_drr)),
+            &text_with_vars(
+                "calculator.server.badge.item_drr",
+                &[("percent", &format_effect_percent(item_drr))],
+            ),
             "border-amber-400 bg-amber-300 text-amber-950",
         ));
     }
@@ -9106,25 +9711,34 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
         .filter(|value| *value > 0.0 && (*value - 1.0).abs() > 0.0001)
     {
         badges.push(render_effect_badge(
-            &format!("Fish ×{}", trim_float(f64::from(fish_multiplier))),
+            &text_with_vars(
+                "calculator.server.badge.fish_multiplier",
+                &[("multiplier", &trim_float(f64::from(fish_multiplier)))],
+            ),
             "border-base-content/15 bg-base-300 text-base-content",
         ));
     }
     if let Some(exp_fish) = item.exp_fish.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("+{}% Fish EXP", format_effect_percent(exp_fish)),
+            &text_with_vars(
+                "calculator.server.badge.fish_exp",
+                &[("percent", &format_effect_percent(exp_fish))],
+            ),
             "border-cyan-400 bg-cyan-300 text-cyan-950",
         ));
     }
     if let Some(exp_life) = item.exp_life.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("+{}% Life EXP", format_effect_percent(exp_life)),
+            &text_with_vars(
+                "calculator.server.badge.life_exp",
+                &[("percent", &format_effect_percent(exp_life))],
+            ),
             "border-green-400 bg-green-300 text-green-950",
         ));
     }
     if badges.is_empty() && item.r#type == "outfit" {
         badges.push(render_effect_badge(
-            "Set effect",
+            &text("calculator.server.badge.set_effect"),
             "border-base-content/15 bg-base-300 text-base-content",
         ));
     }
@@ -9207,6 +9821,7 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
 }
 
 fn render_searchable_dropdown_option_content_html(
+    lang: FishLang,
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
@@ -9235,15 +9850,16 @@ fn render_searchable_dropdown_option_content_html(
     }
     let badges = option
         .item
-        .map(render_item_effect_badges)
+        .map(|item| render_item_effect_badges(lang, item))
         .or_else(|| {
             option.lifeskill_level.map(|level| {
                 format!(
                     "<span class=\"mt-1 flex flex-wrap gap-1\">{}</span>",
                     render_effect_badge(
-                        &format!(
-                            "+{}% Lv DRR",
-                            format_effect_percent(level.lifeskill_level_drr)
+                        &calculator_route_text_with_vars(
+                            lang,
+                            "calculator.server.badge.level_drr",
+                            &[("percent", &format_effect_percent(level.lifeskill_level_drr),)],
                         ),
                         "border-amber-400 bg-amber-300 text-amber-950",
                     )
@@ -9373,6 +9989,7 @@ fn fuzzy_select_matches<'a>(
 }
 
 fn render_searchable_dropdown_catalog_html(
+    lang: FishLang,
     cdn_base_url: &str,
     options: &[SelectOption<'_>],
 ) -> String {
@@ -9384,7 +10001,7 @@ fn render_searchable_dropdown_catalog_html(
             "<template data-role=\"selected-content\" data-value=\"{}\" data-label=\"{}\">{}</template>",
             escape_html(option.value),
             escape_html(option.label),
-            render_searchable_dropdown_option_content_html(cdn_base_url, *option),
+            render_searchable_dropdown_option_content_html(lang, cdn_base_url, *option),
         )
         .unwrap();
     }
@@ -9438,7 +10055,7 @@ fn render_searchable_select_results(
                 if is_selected { " menu-active" } else { "" },
                 escape_html(option.value),
                 escape_html(option.label),
-                render_searchable_dropdown_option_content_html(cdn_base_url, option),
+                render_searchable_dropdown_option_content_html(lang, cdn_base_url, option),
                 selected_badge
             )
             .unwrap();
@@ -9491,9 +10108,9 @@ fn render_searchable_select_control(
             }
         });
     let selected_content_html = selected_option
-        .map(|option| render_searchable_dropdown_option_content_html(cdn_base_url, option))
+        .map(|option| render_searchable_dropdown_option_content_html(lang, cdn_base_url, option))
         .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
-    let catalog_html = render_searchable_dropdown_catalog_html(cdn_base_url, &options);
+    let catalog_html = render_searchable_dropdown_catalog_html(lang, cdn_base_url, &options);
     let results_html = render_searchable_select_results(
         lang,
         cdn_base_url,
@@ -9546,11 +10163,15 @@ fn render_target_fish_select_control(
         .unwrap_or_else(|| none_select_option(data.lang).label);
     let selected_content_html = selected_option
         .map(|option| {
-            render_searchable_dropdown_option_content_html(data.cdn_base_url.as_str(), option)
+            render_searchable_dropdown_option_content_html(
+                data.lang,
+                data.cdn_base_url.as_str(),
+                option,
+            )
         })
         .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
     let catalog_html =
-        render_searchable_dropdown_catalog_html(data.cdn_base_url.as_str(), &options);
+        render_searchable_dropdown_catalog_html(data.lang, data.cdn_base_url.as_str(), &options);
     let results_html = render_searchable_select_results(
         data.lang,
         data.cdn_base_url.as_str(),
@@ -9604,6 +10225,7 @@ fn render_searchable_multiselect_search_text(option: SelectOption<'_>) -> String
 }
 
 fn render_searchable_multiselect_catalog_html(
+    lang: FishLang,
     cdn_base_url: &str,
     options: &[SelectOption<'_>],
 ) -> String {
@@ -9622,7 +10244,7 @@ fn render_searchable_multiselect_catalog_html(
             escape_html(option.label),
             escape_html(&render_searchable_multiselect_search_text(*option)),
             category_key_attr,
-            render_searchable_dropdown_option_content_html(cdn_base_url, *option),
+            render_searchable_dropdown_option_content_html(lang, cdn_base_url, *option),
         )
         .unwrap();
     }
@@ -9688,7 +10310,7 @@ fn render_searchable_multiselect_selection_html(
         write!(
             html,
             "<div class=\"join items-stretch rounded-box border border-base-300 bg-base-100 p-1 text-base-content shadow-sm\"><span class=\"inline-flex min-w-0 items-center px-2 py-1 text-sm\">{}</span><button type=\"button\" class=\"btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70\" data-searchable-multiselect-remove data-value=\"{}\" aria-label=\"{}\">×</button></div>",
-            render_searchable_dropdown_option_content_html(cdn_base_url, option),
+            render_searchable_dropdown_option_content_html(lang, cdn_base_url, option),
             escape_html(option.value),
             escape_html(&calculator_route_text_with_vars(
                 lang,
@@ -9765,7 +10387,7 @@ fn render_searchable_multiselect_results_html(
                 if is_selected { "true" } else { "false" },
                 escape_html(option.value),
                 escape_html(option.label),
-                render_searchable_dropdown_option_content_html(cdn_base_url, option),
+                render_searchable_dropdown_option_content_html(lang, cdn_base_url, option),
                 selected_badge
             )
             .unwrap();
@@ -9800,7 +10422,8 @@ fn render_searchable_multiselect_control(
         selected_values,
         "",
     );
-    let catalog_html = render_searchable_multiselect_catalog_html(cdn_base_url, &options);
+    let catalog_html =
+        render_searchable_multiselect_catalog_html(config.lang, cdn_base_url, &options);
     let bound_select_html =
         render_searchable_multiselect_bound_select_html(config.bind_key, selected_values, &options);
     let selection_hidden_attr = if selection_html.is_empty() {
@@ -10059,6 +10682,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
 }
 
 fn render_checkbox_group(
+    lang: FishLang,
     cdn_base_url: &str,
     id: &str,
     bind_key: &str,
@@ -10117,7 +10741,7 @@ fn render_checkbox_group(
         let tone_class = format!("fishy-item-grade-{grade_tone}");
         let badges = option
             .item
-            .map(render_item_effect_badges)
+            .map(|item| render_item_effect_badges(lang, item))
             .unwrap_or_default();
         if uses_item_presentation {
             write!(
@@ -10278,6 +10902,7 @@ fn render_pet_cards(
             ))
         ));
         html.push_str(&render_checkbox_group(
+            lang,
             "",
             &skills_id,
             &skill_bind,
@@ -11639,11 +12264,11 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&normalized_signals, &entry),
+            loot_species_evidence_text(&normalized_signals, &entry, FishLang::En),
             "DB 25% · Community guess 5% · Community confirmed×1 · zone-only"
         );
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry),
+            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
             "DB 30% · Community guess 2% · Community confirmed×1 · zone-only"
         );
     }
@@ -11674,11 +12299,11 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&normalized_signals, &entry),
+            loot_species_evidence_text(&normalized_signals, &entry, FishLang::En),
             "Community guess 4.65%"
         );
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry),
+            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
             "Community guess 2%"
         );
     }
@@ -11708,11 +12333,11 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry),
+            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
             "Community confirmed×2 · Prize subgroup 11054 · source community_presence_sheet"
         );
         assert_eq!(
-            loot_species_presence_text(&entry),
+            loot_species_presence_text(&entry, FishLang::En),
             Some("Community confirmed×2 · Prize subgroup".to_string())
         );
     }
@@ -11756,12 +12381,12 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_presence_text(&entry),
+            loot_species_presence_text(&entry, FishLang::En),
             Some("Ranking ring fully inside zone ×8".to_string())
         );
         assert_eq!(loot_species_presence_source_kind(&entry), "mixed");
         assert_eq!(
-            loot_species_presence_tooltip(&entry),
+            loot_species_presence_tooltip(&entry, FishLang::En),
             Some(
                 "Ranking ring fully inside zone ×8 · source layer_revision:v1 | Community confirmed×2 · Prize group 11056 · source community_zone_fish_support | Ranking ring overlaps zone edge ×3 · source layer_revision:v1".to_string()
             )
@@ -11790,7 +12415,7 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&raw_signals, &entry),
+            loot_species_evidence_text(&raw_signals, &entry, FishLang::En),
             "DB 0.00005%"
         );
     }
@@ -12266,8 +12891,8 @@ mod tests {
             },
         ];
 
-        let normalized = super::groups_distribution_segments(&rows, 52.0, true);
-        let raw = super::groups_distribution_segments(&rows, 52.0, false);
+        let normalized = super::groups_distribution_segments(&rows, 52.0, true, FishLang::En);
+        let raw = super::groups_distribution_segments(&rows, 52.0, false, FishLang::En);
 
         assert_eq!(normalized[0].value_text, "5.81%");
         assert_eq!(normalized[0].detail_text, "3.02");
@@ -12435,7 +13060,8 @@ mod tests {
             },
         ];
 
-        let segments = super::group_silver_distribution_segments(&rows, &species_rows);
+        let segments =
+            super::group_silver_distribution_segments(&rows, &species_rows, FishLang::En);
         let breakdown = segments[0]
             .breakdown
             .as_ref()

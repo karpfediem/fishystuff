@@ -3,6 +3,21 @@ function trimString(value) {
     return normalized || "";
 }
 
+function generatedCatalog() {
+    const generated = typeof window === "object" ? window.__fishystuffGeneratedI18n : null;
+    const locale = typeof document === "object"
+        ? trimString(document?.documentElement?.lang)
+        : "";
+    return generated?.catalogs?.[locale]
+        || generated?.catalogs?.["en-US"]
+        || {};
+}
+
+function generatedText(key, fallback) {
+    const value = trimString(generatedCatalog()?.[key]);
+    return value || fallback;
+}
+
 function normalizeBreakdownRow(row = {}) {
     const label = trimString(row?.label);
     const valueText = trimString(row?.value_text ?? row?.valueText);
@@ -72,7 +87,8 @@ export function normalizeStatBreakdownPayload(payload = {}) {
         return null;
     }
     return {
-        eyebrow: trimString(payload?.kind_label ?? payload?.kindLabel) || "Computed stat",
+        eyebrow: trimString(payload?.kind_label ?? payload?.kindLabel)
+            || generatedText("calculator.breakdown.kind.computed_stat", "Computed stat"),
         title: title || "Breakdown",
         valueText,
         summaryText,
