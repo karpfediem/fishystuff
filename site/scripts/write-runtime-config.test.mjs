@@ -15,6 +15,8 @@ test("runtime config defaults to the production sibling-host layout", () => {
   assert.equal(runtimeConfig.siteBaseUrl, "https://fishystuff.fish");
   assert.equal(runtimeConfig.apiBaseUrl, "https://api.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.fishystuff.fish");
+  assert.equal(runtimeConfig.deploymentName, "production");
+  assert.equal(runtimeConfig.documentTitleSuffix, "FishyStuff");
   assert.equal(runtimeConfig.client.telemetry.defaultMode, "opt-in");
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
@@ -52,11 +54,14 @@ test("runtime config derives telemetry default mode from explicit and legacy env
 test("runtime config derives beta sibling hosts from the public site base", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
+    FISHYSTUFF_DEPLOYMENT_ENVIRONMENT: "beta",
   });
 
   assert.equal(runtimeConfig.siteBaseUrl, "https://beta.fishystuff.fish");
   assert.equal(runtimeConfig.apiBaseUrl, "https://api.beta.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.beta.fishystuff.fish");
+  assert.equal(runtimeConfig.deploymentName, "beta");
+  assert.equal(runtimeConfig.documentTitleSuffix, "FishyStuff (Beta)");
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
     "https://telemetry.beta.fishystuff.fish/v1/traces",
@@ -90,6 +95,7 @@ test("public base URL resolution is reusable across site build helpers", () => {
 test("runtime config prefers explicit public overrides over derived sibling hosts", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
+    FISHYSTUFF_DEPLOYMENT_ENVIRONMENT: "beta",
     FISHYSTUFF_PUBLIC_API_BASE_URL: "https://api-preview.fishystuff.fish",
     FISHYSTUFF_PUBLIC_CDN_BASE_URL: "https://cdn-preview.fishystuff.fish",
     FISHYSTUFF_PUBLIC_TELEMETRY_TRACES_ENDPOINT:
@@ -98,6 +104,7 @@ test("runtime config prefers explicit public overrides over derived sibling host
 
   assert.equal(runtimeConfig.apiBaseUrl, "https://api-preview.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn-preview.fishystuff.fish");
+  assert.equal(runtimeConfig.documentTitleSuffix, "FishyStuff (Beta)");
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
     "https://telemetry-preview.fishystuff.fish/custom/traces",
@@ -113,6 +120,25 @@ test("runtime config still accepts legacy public OTEL overrides", () => {
     runtimeConfig.tracing.exporterEndpoint,
     "https://otel-preview.fishystuff.fish/custom/traces",
   );
+});
+
+test("runtime config allows explicit document title suffix overrides", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_DEPLOYMENT_ENVIRONMENT: "beta",
+    FISHYSTUFF_PUBLIC_DOCUMENT_TITLE_SUFFIX: "FishyStuff Preview",
+  });
+
+  assert.equal(runtimeConfig.documentTitleSuffix, "FishyStuff Preview");
+});
+
+test("runtime config derives non-production title suffixes from the deployment name", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_DEPLOYMENT_ENVIRONMENT: "preview-east",
+  });
+
+  assert.equal(runtimeConfig.deploymentName, "preview-east");
+  assert.equal(runtimeConfig.documentTitleSuffix, "FishyStuff (Preview East)");
+  assert.equal(runtimeConfig.tracing.deploymentEnvironment, "preview-east");
 });
 
 test("runtime config allows explicit local browser metrics overrides", () => {
