@@ -2,6 +2,13 @@
   "@context": "https://schema.org",
   "@type": "WebPage",
   "@id": "{}",
+  "url": "{}",
   "name": "{}",
-  "description": "{}"
+  "description": "{}",
+  "inLanguage": "{}",
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "{}",
+    "url": "{}"
+  }
 }

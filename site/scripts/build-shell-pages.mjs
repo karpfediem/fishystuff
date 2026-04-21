@@ -6,6 +6,7 @@ import { resolveBrandAssets } from "./brand-assets.mjs";
 import { buildPageManifest } from "./build-i18n.mjs";
 import { buildDocumentTitle, resolveDocumentTitleSuffix } from "./document-title.mjs";
 import { LANGUAGE_CONFIG } from "./language-config.mjs";
+import { joinUrl, resolvePublicBaseUrls } from "./write-runtime-config.mjs";
 import { buildShellPageEntries, buildShellPagePathSet, renderShellPageSource } from "./shell-pages.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -13,6 +14,7 @@ const siteDir = path.resolve(path.dirname(scriptPath), "..");
 const TRANSLATION_HELP_ROUTE_KEY = "/community/";
 const GITHUB_REPOSITORY_URL = "https://github.com/karpfediem/fishystuff";
 const GITHUB_DEFAULT_BRANCH = "main";
+const DEFAULT_PAGE_DESCRIPTION = "Fishy Stuff: Fishing Guides and Tools for Black Desert";
 
 function parseArgs(argv) {
   const args = {
@@ -93,7 +95,7 @@ function trimString(value) {
 }
 
 function renderQuoted(value) {
-  return `"${String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return JSON.stringify(String(value ?? ""));
 }
 
 function normalizeRouteKey(relativePath) {
@@ -140,6 +142,25 @@ function parseTitle(source) {
   } catch {
     return trimString(match[1].slice(1, -1));
   }
+}
+
+function parseStringField(source, fieldName) {
+  const { frontmatter } = parseFrontmatterParts(source);
+  const match = frontmatter.match(
+    new RegExp(`^\\s*\\.${fieldName}\\s*=\\s*("(?:\\\\.|[^"])*")\\s*,?\\s*$`, "m"),
+  );
+  if (!match) {
+    return "";
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return trimString(match[1].slice(1, -1));
+  }
+}
+
+function resolvePageDescription(source) {
+  return parseStringField(source, "description") || DEFAULT_PAGE_DESCRIPTION;
 }
 
 function renderCustomField(field) {
@@ -232,6 +253,268 @@ function applyDefaultDocumentTitle(source, documentTitleSuffix) {
   return `---\n${mergeCustomFields(frontmatter, [
     { key: ".document_title", value: buildDocumentTitle(pageTitle, documentTitleSuffix) },
   ])}\n---\n${body}`;
+}
+
+function localeToOgLocale(locale) {
+  const normalized = trimString(locale);
+  if (!normalized) {
+    return "";
+  }
+  return normalized.replace(/-/g, "_");
+}
+
+function buildHreflangLinksHtml(routeKey, pageManifest, config, publicSiteBaseUrl) {
+  const localizedPaths = pageManifest[routeKey];
+  if (!localizedPaths) {
+    return "";
+  }
+
+  const links = [];
+  for (const contentLanguage of config.contentLanguages) {
+    const href = localizedPaths[contentLanguage.code];
+    if (!href) {
+      continue;
+    }
+    links.push(
+      `<link rel="alternate" hreflang="${contentLanguage.code}" href="${joinUrl(publicSiteBaseUrl, href)}">`,
+    );
+  }
+
+  const defaultHref = localizedPaths[config.defaultContentLang];
+  if (defaultHref) {
+    links.push(
+      `<link rel="alternate" hreflang="x-default" href="${joinUrl(publicSiteBaseUrl, defaultHref)}">`,
+    );
+  }
+
+  return links.join("\n");
+}
+
+function buildOgLocaleAlternateHtml(currentLocale, routeKey, pageManifest, config) {
+  const localizedPaths = pageManifest[routeKey];
+  if (!localizedPaths) {
+    return "";
+  }
+
+  return config.contentLanguages
+    .map((contentLanguage) => contentLanguage.code)
+    .filter((locale) => locale !== currentLocale && localizedPaths[locale])
+    .map((locale) => `<meta property="og:locale:alternate" content="${localeToOgLocale(locale)}">`)
+    .join("\n");
+}
+
+function isAbsoluteUrl(value) {
+  return /^https?:\/\//i.test(trimString(value));
+}
+
+function resolveSiteRelativeAssetPath(rootDir, href) {
+  const normalized = trimString(href).replace(/^\/+/, "");
+  if (!normalized || isAbsoluteUrl(normalized) || normalized.startsWith("data:")) {
+    return "";
+  }
+  return path.join(rootDir, "assets", normalized);
+}
+
+function readPngDimensions(buffer) {
+  if (buffer.length < 24 || buffer.toString("ascii", 1, 4) !== "PNG") {
+    return null;
+  }
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
+}
+
+function readWebpDimensions(buffer) {
+  if (buffer.length < 30 || buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WEBP") {
+    return null;
+  }
+
+  const chunkType = buffer.toString("ascii", 12, 16);
+  if (chunkType === "VP8X" && buffer.length >= 30) {
+    return {
+      width: 1 + buffer.readUIntLE(24, 3),
+      height: 1 + buffer.readUIntLE(27, 3),
+    };
+  }
+
+  if (chunkType === "VP8 " && buffer.length >= 30) {
+    return {
+      width: buffer.readUInt16LE(26) & 0x3fff,
+      height: buffer.readUInt16LE(28) & 0x3fff,
+    };
+  }
+
+  if (chunkType === "VP8L" && buffer.length >= 25) {
+    const bits = buffer.readUInt32LE(21);
+    return {
+      width: (bits & 0x3fff) + 1,
+      height: ((bits >> 14) & 0x3fff) + 1,
+    };
+  }
+
+  return null;
+}
+
+function readJpegDimensions(buffer) {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    return null;
+  }
+
+  let offset = 2;
+  while (offset + 8 < buffer.length) {
+    if (buffer[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = buffer[offset + 1];
+    const segmentLength = buffer.readUInt16BE(offset + 2);
+    if (
+      (marker >= 0xc0 && marker <= 0xc3)
+      || (marker >= 0xc5 && marker <= 0xc7)
+      || (marker >= 0xc9 && marker <= 0xcb)
+      || (marker >= 0xcd && marker <= 0xcf)
+    ) {
+      return {
+        height: buffer.readUInt16BE(offset + 5),
+        width: buffer.readUInt16BE(offset + 7),
+      };
+    }
+    if (segmentLength < 2) {
+      break;
+    }
+    offset += 2 + segmentLength;
+  }
+
+  return null;
+}
+
+function readImageDimensions(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return null;
+  }
+
+  const buffer = fs.readFileSync(filePath);
+  return readPngDimensions(buffer) || readWebpDimensions(buffer) || readJpegDimensions(buffer);
+}
+
+function resolveImageMimeType(...candidates) {
+  const mimeTypesByExtension = new Map([
+    [".png", "image/png"],
+    [".webp", "image/webp"],
+    [".jpg", "image/jpeg"],
+    [".jpeg", "image/jpeg"],
+    [".gif", "image/gif"],
+    [".svg", "image/svg+xml"],
+  ]);
+
+  for (const candidate of candidates) {
+    const normalized = trimString(candidate).split(/[?#]/, 1)[0];
+    if (!normalized) {
+      continue;
+    }
+    const mimeType = mimeTypesByExtension.get(path.extname(normalized).toLowerCase());
+    if (mimeType) {
+      return mimeType;
+    }
+  }
+
+  return "";
+}
+
+function resolveOgImageInfo({
+  source,
+  filePath,
+  rootDir,
+  fallbackHref,
+  pageTitle,
+  resolvedDescription,
+}) {
+  const ogImageAsset = parseStringField(source, "og_image_asset");
+  if (ogImageAsset) {
+    return {
+      filePath: path.join(path.dirname(filePath), ogImageAsset),
+      href: ogImageAsset,
+      alt: pageTitle || resolvedDescription,
+    };
+  }
+
+  const ogImageHref = parseStringField(source, "og_image");
+  if (ogImageHref) {
+    return {
+      filePath: ogImageHref.startsWith("/")
+        ? resolveSiteRelativeAssetPath(rootDir, ogImageHref)
+        : path.join(path.dirname(filePath), ogImageHref),
+      href: ogImageHref,
+      alt: pageTitle || resolvedDescription,
+    };
+  }
+
+  return {
+    filePath: resolveSiteRelativeAssetPath(rootDir, fallbackHref),
+    href: fallbackHref,
+    alt: resolvedDescription,
+  };
+}
+
+function applyDefaultSeoMetadata({
+  source,
+  filePath,
+  routeKey,
+  locale,
+  config,
+  pageManifest,
+  rootDir,
+  publicSiteBaseUrl,
+  ogImageHref,
+}) {
+  const pageTitle = parseTitle(source);
+  const resolvedDescription = resolvePageDescription(source);
+  const ogLocale = localeToOgLocale(locale);
+  const hreflangLinksHtml = buildHreflangLinksHtml(routeKey, pageManifest, config, publicSiteBaseUrl);
+  const ogLocaleAlternateHtml = buildOgLocaleAlternateHtml(locale, routeKey, pageManifest, config);
+  const ogImageInfo = resolveOgImageInfo({
+    source,
+    filePath,
+    rootDir,
+    fallbackHref: ogImageHref,
+    pageTitle,
+    resolvedDescription,
+  });
+  const ogImageDimensions = readImageDimensions(ogImageInfo.filePath);
+  const ogImageType = resolveImageMimeType(ogImageInfo.filePath, ogImageInfo.href);
+
+  const fields = [];
+  if (!pageSourceHasFrontmatterField(source, "resolved_description")) {
+    fields.push({ key: ".resolved_description", value: resolvedDescription });
+  }
+  if (!pageSourceHasFrontmatterField(source, "hreflang_links_html")) {
+    fields.push({ key: ".hreflang_links_html", value: hreflangLinksHtml });
+  }
+  if (!pageSourceHasFrontmatterField(source, "og_locale")) {
+    fields.push({ key: ".og_locale", value: ogLocale });
+  }
+  if (!pageSourceHasFrontmatterField(source, "og_locale_alternate_html")) {
+    fields.push({ key: ".og_locale_alternate_html", value: ogLocaleAlternateHtml });
+  }
+  if (!pageSourceHasFrontmatterField(source, "og_image_alt")) {
+    fields.push({ key: ".og_image_alt", value: ogImageInfo.alt });
+  }
+  if (ogImageType && !pageSourceHasFrontmatterField(source, "og_image_type")) {
+    fields.push({ key: ".og_image_type", value: ogImageType });
+  }
+  if (ogImageDimensions && !pageSourceHasFrontmatterField(source, "og_image_width")) {
+    fields.push({ key: ".og_image_width", value: String(ogImageDimensions.width) });
+  }
+  if (ogImageDimensions && !pageSourceHasFrontmatterField(source, "og_image_height")) {
+    fields.push({ key: ".og_image_height", value: String(ogImageDimensions.height) });
+  }
+  if (fields.length === 0) {
+    return source;
+  }
+
+  const { frontmatter, body } = parseFrontmatterParts(source);
+  return `---\n${mergeCustomFields(frontmatter, fields)}\n---\n${body}`;
 }
 
 function renderFallbackPageSource(source, metadata) {
@@ -390,6 +673,7 @@ export function buildShellContentTree({
   const pageManifest = buildPageManifest(config, rootDir);
   const brandAssets = resolveBrandAssets(env);
   const documentTitleSuffix = resolveDocumentTitleSuffix(env);
+  const { publicSiteBaseUrl } = resolvePublicBaseUrls(env);
   const canonicalLanguage = config.defaultContentLang;
   const canonicalContentDir = path.join(rootDir, "content", canonicalLanguage);
   fs.rmSync(outRoot, { recursive: true, force: true });
@@ -450,10 +734,24 @@ export function buildShellContentTree({
       if (!filePath.endsWith(".smd")) {
         continue;
       }
+      const relativePath = path.relative(localeDir, filePath);
+      const routeKey = normalizeRouteKey(relativePath);
       const source = fs.readFileSync(filePath, "utf8");
       const branded = applyDefaultBrandAssets(source, brandAssets);
       const titled = applyDefaultDocumentTitle(branded, documentTitleSuffix);
-      fs.writeFileSync(filePath, applyDefaultOgImage(titled, ogImageHref), "utf8");
+      const withOgImage = applyDefaultOgImage(titled, ogImageHref);
+      const withSeoMetadata = applyDefaultSeoMetadata({
+        source: withOgImage,
+        filePath,
+        routeKey,
+        locale: contentLanguage.code,
+        config,
+        pageManifest,
+        rootDir,
+        publicSiteBaseUrl,
+        ogImageHref,
+      });
+      fs.writeFileSync(filePath, withSeoMetadata, "utf8");
     }
   }
   return { outRoot, entries: shellEntries, fallbackGroups: contentGroups.size };

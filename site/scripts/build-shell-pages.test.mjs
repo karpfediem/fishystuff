@@ -7,6 +7,17 @@ import path from "node:path";
 import { buildShellContentTree } from "./build-shell-pages.mjs";
 import { LANGUAGE_CONFIG } from "./language-config.mjs";
 
+function writePngStub(filePath, width, height) {
+  const buffer = Buffer.alloc(24);
+  buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  buffer.writeUInt32BE(13, 8);
+  buffer.write("IHDR", 12, "ascii");
+  buffer.writeUInt32BE(width, 16);
+  buffer.writeUInt32BE(height, 20);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, buffer);
+}
+
 test("buildShellContentTree copies tracked pages and generates shell pages", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "fishystuff-shell-pages-"));
   const outRoot = path.join(rootDir, ".generated", "content");
@@ -39,6 +50,8 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     }, null, 2));
     fs.mkdirSync(path.join(rootDir, "content", "en-US"), { recursive: true });
     fs.mkdirSync(path.join(rootDir, "content", "de-DE"), { recursive: true });
+    writePngStub(path.join(rootDir, "assets", "img", "embed.png"), 900, 300);
+    writePngStub(path.join(rootDir, "assets", "de-DE", "embed.png"), 900, 300);
     fs.writeFileSync(path.join(rootDir, "content", "en-US", "community.smd"), "---\n.title = \"Community\",\n---\n");
     fs.mkdirSync(path.join(rootDir, "content", "en-US", "guides", "money"), { recursive: true });
     fs.writeFileSync(path.join(rootDir, "content", "en-US", "guides", "money", "index.smd"), [
@@ -66,15 +79,29 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
 
     assert.match(communitySource, /\.title = "Community",/);
     assert.match(communitySource, /\.document_title = "Community \| FishyStuff",/);
+    assert.match(communitySource, /\.resolved_description = "Fishy Stuff: Fishing Guides and Tools for Black Desert",/);
+    assert.match(communitySource, /\.hreflang_links_html = "<link rel=\\"alternate\\" hreflang=\\"en-US\\" href=\\"https:\/\/fishystuff\.fish\/community\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"de-DE\\" href=\\"https:\/\/fishystuff\.fish\/de-DE\/community\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"x-default\\" href=\\"https:\/\/fishystuff\.fish\/community\/\\">",/);
+    assert.match(communitySource, /\.og_locale = "en_US",/);
+    assert.match(communitySource, /\.og_locale_alternate_html = "<meta property=\\"og:locale:alternate\\" content=\\"de_DE\\">",/);
+    assert.match(communitySource, /\.og_image_alt = "Community",/);
+    assert.match(communitySource, /\.og_image_type = "image\/png",/);
+    assert.match(communitySource, /\.og_image_width = "900",/);
+    assert.match(communitySource, /\.og_image_height = "300",/);
     assert.match(communitySource, /\.og_image = "\/img\/embed\.png",/);
     assert.match(deLogSource, /\.title = "Fanglog",/);
     assert.match(deLogSource, /\.document_title = "Fanglog \| FishyStuff",/);
+    assert.match(deLogSource, /\.og_locale = "de_DE",/);
+    assert.match(deLogSource, /\.og_locale_alternate_html = "",/);
+    assert.match(deLogSource, /\.og_image_type = "image\/png",/);
     assert.match(deLogSource, /\.og_image = "\/de-DE\/embed\.png",/);
     assert.match(enIndexSource, /\.layout = "frontpage\.shtml"/);
     assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff",/);
     assert.match(enIndexSource, /\.og_image = "\/img\/embed\.png",/);
     assert.match(deProfileSource, /\.translation_key = "profile"/);
     assert.match(deProfileSource, /\.document_title = "Profil \| FishyStuff",/);
+    assert.match(deProfileSource, /\.og_locale = "de_DE",/);
+    assert.match(deProfileSource, /\.og_locale_alternate_html = "<meta property=\\"og:locale:alternate\\" content=\\"en_US\\">",/);
+    assert.match(deProfileSource, /\.og_image_type = "image\/png",/);
     assert.match(deProfileSource, /\.og_image = "\/de-DE\/embed\.png",/);
     const generatedFallback = fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "index.smd"), "utf8");
     assert.match(generatedFallback, /\.translation_fallback = true,/);
@@ -84,6 +111,7 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     assert.match(generatedFallback, /\.translation_source_file_url = "https:\/\/github\.com\/karpfediem\/fishystuff\/blob\/main\/site\/content\/en-US\/guides\/money\/index\.smd",/);
     assert.match(generatedFallback, /\.translation_create_file_url = "https:\/\/github\.com\/karpfediem\/fishystuff\/new\/main\?filename=site%2Fcontent%2Fde-DE%2Fguides%2Fmoney%2Findex\.smd",/);
     assert.doesNotMatch(generatedFallback, /\.og_image =/);
+    assert.match(generatedFallback, /\.og_image_type = "image\/png",/);
     assert.match(generatedFallback, /\[Profile\]\(\/profil\/\)/);
     assert.match(generatedFallback, /\[Community\]\(\/community\/\)/);
     assert.equal(fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "money.png"), "utf8"), "png");
@@ -132,6 +160,7 @@ test("buildShellContentTree injects the sourced betta icon for beta builds", () 
       /\.brand_logo_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,
     );
     assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff \(Beta\)",/);
+    assert.match(enIndexSource, /\.hreflang_links_html = "<link rel=\\"alternate\\" hreflang=\\"en-US\\" href=\\"https:\/\/beta\.fishystuff\.fish\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"de-DE\\" href=\\"https:\/\/beta\.fishystuff\.fish\/de-DE\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"x-default\\" href=\\"https:\/\/beta\.fishystuff\.fish\/\\">",/);
     assert.match(
       enIndexSource,
       /\.brand_logo_nav_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,

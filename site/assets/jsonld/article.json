@@ -3,7 +3,8 @@
   "@type": "Article",
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": "{}"
+    "@id": "{}",
+    "url": "{}"
   },
   "headline": "{}",
   "description": "{}",
@@ -21,5 +22,6 @@
     }
   },
   "datePublished": "{}",
-  "dateModified": "{}"
+  "dateModified": "{}",
+  "inLanguage": "{}"
 }

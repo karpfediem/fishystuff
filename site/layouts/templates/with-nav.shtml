@@ -3,20 +3,13 @@
     <title id="title"><super></title>
 
     <head id="head">
-        <!-- ===== Description (safe fallback via ctx guards) ===== -->
-        <ctx :if="$page.description.len().gt(0)">
-            <meta name="description" content="$page.description">
-        </ctx>
-        <ctx :if="$page.description.len().gt(0).not()">
-            <meta name="description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
-        </ctx>
+        <meta name="description" content="$page.custom.getOr('resolved_description', $page.description)">
+        <meta name="author" content="$page.author">
 
         <!-- Canonical -->
         <link rel="canonical" href="$site.host_url.addPath($page.custom.getOr('canonical', $page.link()))">
 
-        <!-- Minimal hreflang -->
-        <link rel="alternate" hreflang="$site.localeCode()" href="$page.link()">
-        <link rel="alternate" hreflang="x-default" href="$site.link()">
+        <ctx :html="$page.custom.getOr('hreflang_links_html', '')"></ctx>
 
         <!-- Favicons -->
         <link rel="icon" type="image/png" sizes="32x32" href="$site.asset('img/favicon-32x32.png').link()">
@@ -24,13 +17,11 @@
 
         <!-- Open Graph -->
         <meta property="og:type" content="website">
+        <meta property="og:site_name" content="$site.title">
+        <meta property="og:locale" content="$page.custom.getOr('og_locale', $site.localeCode())">
+        <ctx :html="$page.custom.getOr('og_locale_alternate_html', '')"></ctx>
         <meta property="og:title" content="$page.title">
-        <ctx :if="$page.description.len().gt(0)">
-            <meta property="og:description" content="$page.description">
-        </ctx>
-        <ctx :if="$page.description.len().gt(0).not()">
-            <meta property="og:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
-        </ctx>
+        <meta property="og:description" content="$page.custom.getOr('resolved_description', $page.description)">
         <meta property="og:url" content="$site.host_url.addPath($page.custom.getOr('canonical', $page.link()))">
         <ctx :if="$page.custom.has('og_image_asset')">
             <meta property="og:image" content="$site.host_url.addPath($page.asset($page.custom.get('og_image_asset')).link())">
@@ -43,16 +34,21 @@
             <meta property="og:image" content="$site.host_url.addPath($site.asset('img/embed.png').link())">
         </ctx>
         </ctx>
+        <meta property="og:image:alt" content="$page.custom.getOr('og_image_alt', $page.title)">
+        <ctx :if="$page.custom.has('og_image_type')">
+            <meta property="og:image:type" content="$page.custom.get('og_image_type')">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image_width')">
+            <meta property="og:image:width" content="$page.custom.get('og_image_width')">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image_height')">
+            <meta property="og:image:height" content="$page.custom.get('og_image_height')">
+        </ctx>
 
         <!-- Twitter -->
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="$page.title">
-        <ctx :if="$page.description.len().gt(0)">
-            <meta name="twitter:description" content="$page.description">
-        </ctx>
-        <ctx :if="$page.description.len().gt(0).not()">
-            <meta name="twitter:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
-        </ctx>
+        <meta name="twitter:description" content="$page.custom.getOr('resolved_description', $page.description)">
         <ctx :if="$page.custom.has('og_image_asset')">
             <meta name="twitter:image" content="$site.host_url.addPath($page.asset($page.custom.get('og_image_asset')).link())">
         </ctx>
@@ -64,10 +60,14 @@
             <meta name="twitter:image" content="$site.host_url.addPath($site.asset('img/embed.png').link())">
         </ctx>
         </ctx>
+        <meta name="twitter:image:alt" content="$page.custom.getOr('og_image_alt', $page.title)">
 
-        <!-- Robots (optional) -->
+        <!-- Robots -->
         <ctx :if="$page.custom.getOr('noindex', false)">
-            <meta name="robots" content="noindex,follow">
+            <meta name="robots" content="noindex,follow,max-image-preview:large">
+        </ctx>
+        <ctx :if="$page.custom.getOr('noindex', false).not()">
+            <meta name="robots" content="index,follow,max-image-preview:large">
         </ctx>
 
         <!-- Article dates -->
@@ -428,5 +428,5 @@
 
     <!-- JSON-LD: generic WebPage -->
     <script type="application/ld+json"
-            :html="$site.asset('jsonld/webpage.json').bytes().fmt($site.host_url.addPath($page.custom.getOr('canonical', $page.link())),$page.title,$page.description)"></script>
+            :html="$site.asset('jsonld/webpage.json').bytes().fmt($site.host_url.addPath($page.custom.getOr('canonical', $page.link())),$site.host_url.addPath($page.custom.getOr('canonical', $page.link())),$page.title,$page.custom.getOr('resolved_description', $page.description),$site.localeCode(),$site.title,$site.host_url.addPath('/'))"></script>
     </body>
