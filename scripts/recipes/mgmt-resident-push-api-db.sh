@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 cd "$RECIPE_REPO_ROOT"
+
+exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$@"
 
 target=""
 host="beta-nbg1-api-db"
@@ -176,38 +179,37 @@ jq -n \
     }
   }' > "$deploy_dir/files/resident-manifest.json"
 
-secretspec run --profile beta-deploy -- \
-  bash -lc '
-    set -euo pipefail
-    source "$1/scripts/recipes/lib/common.sh"
-    ssh_target="${2:?}"
-    deploy_dir="${3:?}"
-    deploy_timeout="${4:?}"
-    remote_mgmt_bin="${5:-/usr/local/bin/mgmt}"
-    if [[ "$remote_mgmt_bin" != /* ]]; then
-      remote_mgmt_bin=/usr/local/bin/mgmt
-    fi
-    remote_nix_max_jobs="${6:?}"
-    shift 6
-    tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-mgmt-ssh.XXXXXX)"
-    trap '\''rm -f "$tmp_key"'\'' EXIT
-    remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
-    if [[ -z "$remote_nix_daemon_path" ]]; then
-      echo "could not detect remote nix-daemon path on $ssh_target" >&2
-      exit 1
-    fi
-    SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-    NIX_SSH_KEY_PATH="$tmp_key" \
-    NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
-    FISHYSTUFF_REMOTE_NIX_MAX_JOBS="$remote_nix_max_jobs" \
-    bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
-        "$ssh_target" \
-        "$@"
-    SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-    bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
-        "$deploy_dir" \
-        "$ssh_target" \
-        "$deploy_timeout" \
-        "$remote_mgmt_bin"
-  ' \
-  -- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$api_bundle" "$dolt_bundle"
+bash -lc '
+  set -euo pipefail
+  source "$1/scripts/recipes/lib/common.sh"
+  ssh_target="${2:?}"
+  deploy_dir="${3:?}"
+  deploy_timeout="${4:?}"
+  remote_mgmt_bin="${5:-/usr/local/bin/mgmt}"
+  if [[ "$remote_mgmt_bin" != /* ]]; then
+    remote_mgmt_bin=/usr/local/bin/mgmt
+  fi
+  remote_nix_max_jobs="${6:?}"
+  shift 6
+  tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-mgmt-ssh.XXXXXX)"
+  trap '\''rm -f "$tmp_key"'\'' EXIT
+  remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
+  if [[ -z "$remote_nix_daemon_path" ]]; then
+    echo "could not detect remote nix-daemon path on $ssh_target" >&2
+    exit 1
+  fi
+  SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+  NIX_SSH_KEY_PATH="$tmp_key" \
+  NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
+  FISHYSTUFF_REMOTE_NIX_MAX_JOBS="$remote_nix_max_jobs" \
+  bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
+      "$ssh_target" \
+      "$@"
+  SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+  bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+      "$deploy_dir" \
+      "$ssh_target" \
+      "$deploy_timeout" \
+      "$remote_mgmt_bin"
+' \
+-- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$api_bundle" "$dolt_bundle"

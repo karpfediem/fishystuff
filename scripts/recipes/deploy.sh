@@ -20,9 +20,7 @@ case "$deployment" in
 esac
 
 profile="$(deployment_secretspec_profile "$deployment")"
-if [[ -n "$profile" && -z "${HETZNER_SSH_PRIVATE_KEY:-}" ]]; then
-  exec secretspec run --profile "$profile" -- bash "$SCRIPT_PATH" "$deployment" "$@"
-fi
+exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "$@"
 
 resident_target="$(deployment_resident_target "$deployment")"
 resident_host="$(deployment_resident_hostname "$deployment")"

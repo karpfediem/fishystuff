@@ -57,6 +57,18 @@ require_value() {
   fi
 }
 
+operator_secretspec_profile() {
+  printf '%s' "${FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE:-beta-deploy}"
+}
+
+exec_with_secretspec_profile_if_needed() {
+  local profile="${1-}"
+  shift
+  if [[ -n "$profile" && -z "${HETZNER_SSH_PRIVATE_KEY:-}" ]]; then
+    exec env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE="$profile" secretspec run --profile "$profile" -- "$@"
+  fi
+}
+
 deployment_env_var_name() {
   local deployment="$1"
   local key="$2"

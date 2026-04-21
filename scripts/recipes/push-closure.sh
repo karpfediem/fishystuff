@@ -15,9 +15,7 @@ fi
 ssh_target="${1:?missing ssh target}"
 shift
 
-if [[ -z "${HETZNER_SSH_PRIVATE_KEY:-}" ]]; then
-  exec secretspec run --profile beta-deploy -- bash "$SCRIPT_PATH" "$ssh_target" "$@"
-fi
+exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$ssh_target" "$@"
 
 tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-push-closure.XXXXXX)"
 trap 'rm -f "$tmp_key"' EXIT

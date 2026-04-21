@@ -186,18 +186,30 @@ remote closure small enough for weak Hetzner VPS targets. Override
 `mgmt_flake=` or `mgmt_package=` if you need a different checkout or package
 output.
 
-Resident graph deploy over SSH:
+Routine operator entrypoints:
 
 ```bash
-just mgmt-resident-deploy-remote \
-  target=root@<host-ip> \
-  dir=mgmt/resident-deploy-probe
+just deploy beta
 ```
 
-Resident bundle-backed systemd probe:
+Deploy only a selected service while reusing the currently rooted remote store
+paths for the rest of the resident manifest:
 
 ```bash
-just mgmt-resident-dolt-bundle-probe target=root@<host-ip>
+just deploy beta api
+```
+
+Open a public or tunneled service view:
+
+```bash
+just open beta api
+just open beta grafana
+```
+
+Copy one or more closures to a host explicitly:
+
+```bash
+just push-closure root@<host-ip> .#minimal
 ```
 
 The resident `beta` graph now treats the Nix bundle as the source of truth for
@@ -226,9 +238,9 @@ Bundle push behavior:
 - resident mgmt now owns bundle liveness and selection through
   `nix:closure` plus `nix:gcroot`; the push helper no longer mutates GC roots
   itself
-- override `remote_nix_max_jobs=` in `just mgmt-resident-push-api-db` or
-  `just mgmt-resident-push-full-stack` if you want target-side builds for the
-  `substitute-or-build` class; `0` means fetch-only
+- override `remote_nix_max_jobs=` in the resident push helpers when calling
+  them directly if you want target-side builds for the `substitute-or-build`
+  class; `0` means fetch-only
 
 Default topology inputs:
 

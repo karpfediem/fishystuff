@@ -31,8 +31,8 @@ for service in "$@"; do
 done
 
 profile="$(deployment_secretspec_profile "$deployment")"
-if (( needs_tunnel )) && [[ -n "$profile" && -z "${HETZNER_SSH_PRIVATE_KEY:-}" ]]; then
-  exec secretspec run --profile "$profile" -- bash "$SCRIPT_PATH" "$deployment" "${services[@]}"
+if (( needs_tunnel )); then
+  exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "${services[@]}"
 fi
 
 tmp_key=""

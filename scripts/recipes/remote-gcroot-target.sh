@@ -13,9 +13,7 @@ gcroot_path="${2-}"
 require_value "$ssh_target" "usage: remote-gcroot-target.sh <ssh-target> <gcroot-path>"
 require_value "$gcroot_path" "usage: remote-gcroot-target.sh <ssh-target> <gcroot-path>"
 
-if [[ -z "${HETZNER_SSH_PRIVATE_KEY:-}" ]]; then
-  exec secretspec run --profile beta-deploy -- bash "$SCRIPT_PATH" "$@"
-fi
+exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$@"
 
 tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-remote-gcroot.XXXXXX)"
 trap 'rm -f "$tmp_key"' EXIT
