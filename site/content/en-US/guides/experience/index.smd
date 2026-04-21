@@ -1,5 +1,6 @@
 ---
 .title = "Fishing for Experience",
+.description = "Optimize Black Desert fishing XP with bottle turn-ins, artifact sets, AFR breakpoints, and the best zones.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Paghur",
 .layout = "guide_page.shtml",

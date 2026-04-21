@@ -1,5 +1,6 @@
 ---
 .title = "Guides",
+.description = "Browse fishing guides for Black Desert, from mastery and zones to money, XP, theory and the mystical fish.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_index.shtml",

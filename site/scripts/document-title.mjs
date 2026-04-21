@@ -1,4 +1,4 @@
-const DEFAULT_DOCUMENT_TITLE_SUFFIX = "FishyStuff";
+const DEFAULT_DOCUMENT_TITLE_SUFFIX = "Fishy Stuff";
 
 function trimString(value) {
   return String(value ?? "").trim();

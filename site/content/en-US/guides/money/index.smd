@@ -1,5 +1,6 @@
 ---
 .title = "Fishing for Money",
+.description = "General AFK fishing guide for maximizing silver in Black Desert with AFR, DRR, and practical setup recommendations.",
 .date = @date("2025-04-05T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_page.shtml",
@@ -100,6 +101,8 @@ You should aim for decent mastery (>1500-2000).
 
 The current **softcap** is considered **2000 Mastery**, and your chance at prize fish does not increase as much anymore
 after this cap.
+
+Here is a neat tool made by Bairog that helps you determine efficient upgrade paths regarding your own current mastery: https://bdoworkshop.com/mastery-upgrade-path
 
 #### Quick Recommendations:
 

@@ -21,7 +21,7 @@ calculator.timeline.time_saved = Time Saved
 
 calculator.share.active_lead = Active | 
 calculator.share.afr_lead = {$afr} AFR | 
-calculator.share.link = [FishyStuff Calculator Preset | {$lead}{$item_drr} Item DRR | {$zone}]({$url})
+calculator.share.link = [Fishy Stuff Calculator Preset | {$lead}{$item_drr} Item DRR | {$zone}]({$url})
 
 calculator.toast.preset_url_copied = Preset URL copied.
 calculator.toast.share_copied = Share text copied.

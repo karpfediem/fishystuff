@@ -78,7 +78,7 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     const deProfileSource = fs.readFileSync(path.join(outRoot, "de-DE", "profil.smd"), "utf8");
 
     assert.match(communitySource, /\.title = "Community",/);
-    assert.match(communitySource, /\.document_title = "Community \| FishyStuff",/);
+    assert.match(communitySource, /\.document_title = "Community \| Fishy Stuff",/);
     assert.match(communitySource, /\.resolved_description = "Fishy Stuff: Fishing Guides and Tools for Black Desert",/);
     assert.match(communitySource, /\.hreflang_links_html = "<link rel=\\"alternate\\" hreflang=\\"en-US\\" href=\\"https:\/\/fishystuff\.fish\/community\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"de-DE\\" href=\\"https:\/\/fishystuff\.fish\/de-DE\/community\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"x-default\\" href=\\"https:\/\/fishystuff\.fish\/community\/\\">",/);
     assert.match(communitySource, /\.og_locale = "en_US",/);
@@ -89,16 +89,16 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     assert.match(communitySource, /\.og_image_height = "300",/);
     assert.match(communitySource, /\.og_image = "\/img\/embed\.png",/);
     assert.match(deLogSource, /\.title = "Fanglog",/);
-    assert.match(deLogSource, /\.document_title = "Fanglog \| FishyStuff",/);
+    assert.match(deLogSource, /\.document_title = "Fanglog \| Fishy Stuff",/);
     assert.match(deLogSource, /\.og_locale = "de_DE",/);
     assert.match(deLogSource, /\.og_locale_alternate_html = "",/);
     assert.match(deLogSource, /\.og_image_type = "image\/png",/);
     assert.match(deLogSource, /\.og_image = "\/de-DE\/embed\.png",/);
     assert.match(enIndexSource, /\.layout = "frontpage\.shtml"/);
-    assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff",/);
+    assert.match(enIndexSource, /\.document_title = "Home \| Fishy Stuff",/);
     assert.match(enIndexSource, /\.og_image = "\/img\/embed\.png",/);
     assert.match(deProfileSource, /\.translation_key = "profile"/);
-    assert.match(deProfileSource, /\.document_title = "Profil \| FishyStuff",/);
+    assert.match(deProfileSource, /\.document_title = "Profil \| Fishy Stuff",/);
     assert.match(deProfileSource, /\.og_locale = "de_DE",/);
     assert.match(deProfileSource, /\.og_locale_alternate_html = "<meta property=\\"og:locale:alternate\\" content=\\"en_US\\">",/);
     assert.match(deProfileSource, /\.og_image_type = "image\/png",/);
@@ -159,7 +159,7 @@ test("buildShellContentTree injects the sourced betta icon for beta builds", () 
       enIndexSource,
       /\.brand_logo_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,
     );
-    assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff \(Beta\)",/);
+    assert.match(enIndexSource, /\.document_title = "Home \| Fishy Stuff \(Beta\)",/);
     assert.match(enIndexSource, /\.hreflang_links_html = "<link rel=\\"alternate\\" hreflang=\\"en-US\\" href=\\"https:\/\/beta\.fishystuff\.fish\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"de-DE\\" href=\\"https:\/\/beta\.fishystuff\.fish\/de-DE\/\\">\\n<link rel=\\"alternate\\" hreflang=\\"x-default\\" href=\\"https:\/\/beta\.fishystuff\.fish\/\\">",/);
     assert.match(
       enIndexSource,
@@ -202,7 +202,7 @@ test("buildShellContentTree derives document titles from the deployment name", (
     });
 
     const enIndexSource = fs.readFileSync(path.join(outRoot, "en-US", "index.smd"), "utf8");
-    assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff \(Preview East\)",/);
+    assert.match(enIndexSource, /\.document_title = "Home \| Fishy Stuff \(Preview East\)",/);
   } finally {
     fs.rmSync(rootDir, { recursive: true, force: true });
   }

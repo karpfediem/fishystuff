@@ -1,9 +1,10 @@
 ---
 .title = "Fishing Mastery",
+.description = "Draft guide to Black Desert fishing mastery, gear choices, and when expensive upgrades actually pay off.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_page.shtml",
 .draft = true,
 ---
 
-Expensive stuff
+Please see this external tool for recommended upgrade paths: https://bdoworkshop.com/mastery-upgrade-path

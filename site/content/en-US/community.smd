@@ -1,5 +1,6 @@
 ---
 .title = "Community",
+.description = "Meet the fishing community, join adjacent Discord servers, and find ways to contribute guides or feedback.",
 .date = @date("2025-03-24T00:00:00"),
 .author = "Karpfen",
 .layout = "index.shtml",
@@ -48,3 +49,4 @@ Here is a list of helpful resources you might find useful:
 - Fishing Setup - [Sheet](https://docs.google.com/spreadsheets/d/1o1FJzPSuGzbuCajvBpdqAq7JDHzbfwRMKFDPfOreO2A/edit) by Minnie
 - Fish rates and haul calculator - [Sheet](https://docs.google.com/spreadsheets/d/1h1yFaoCx11Ana-jyPlMXsQppVL4GZS2UB5uz08VU5-A/edit) by Baklow
 - Fishing Time/Durability Calculator - [Sheet](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit) by Karpfen
+- Mastery Upgrade Path [Website](https://bdoworkshop.com/mastery-upgrade-path) by Bairog

@@ -1,5 +1,6 @@
 ---
 .title = "Devlog",
+.description = "Follow for release milestones and general site updates. You can also subscribe via RSS.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
 .layout = "log.shtml",

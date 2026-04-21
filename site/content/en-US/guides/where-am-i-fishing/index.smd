@@ -1,5 +1,6 @@
 ---
 .title = "Where am I fishing?",
+.description = "Short video guide showing how to identify your current fishing zone in Black Desert.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "flock",
 .layout = "guide_page.shtml",

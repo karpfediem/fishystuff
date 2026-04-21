@@ -10,11 +10,13 @@
       "locales": {
         "en-US": {
           "slug": "",
-          "title": "Home"
+          "title": "Home",
+          "description": "Fishy Stuff offers fishing guides, an interactive map, calculators, and trackers for Black Desert."
         },
         "de-DE": {
           "slug": "",
-          "title": "Startseite"
+          "title": "Startseite",
+          "description": "Fishy Stuff bietet Angelguides, eine interaktive Karte, Rechner und Tracker für Black Desert."
         }
       }
     },
@@ -28,11 +30,13 @@
       "locales": {
         "en-US": {
           "slug": "map",
-          "title": "Map"
+          "title": "Map",
+          "description": "Explore Black Desert fishing zones, hotspots, region groups, and verified evidence points on the interactive Fishy Stuff map."
         },
         "de-DE": {
           "slug": "karte",
-          "title": "Karte"
+          "title": "Karte",
+          "description": "Erkunde Angelzonen, Hotspots, Regionen und nachgewiesene Fundpunkte auf der interaktiven Fishy Stuff Karte für Black Desert."
         }
       }
     },
@@ -46,11 +50,13 @@
       "locales": {
         "en-US": {
           "slug": "dex",
-          "title": "Fishydex"
+          "title": "Fishydex",
+          "description": "Track your Black Desert fishing progress and collect all prize fish with the Fishy Stuff Fishydex."
         },
         "de-DE": {
           "slug": "dex",
-          "title": "Fishydex"
+          "title": "Fishydex",
+          "description": "Verfolge deinen Angel-Fortschritt und sammle alle außergewöhnlichen Fische in Black Desert mit dem Fishydex von Fishy Stuff."
         }
       }
     },
@@ -64,11 +70,13 @@
       "locales": {
         "en-US": {
           "slug": "calculator",
-          "title": "Fishing Calculator"
+          "title": "Fishing Calculator",
+          "description": "Calculate bite times, AFK sessions, AFR, and DRR setups for Black Desert fishing."
         },
         "de-DE": {
           "slug": "rechner",
-          "title": "Fischrechner"
+          "title": "Fischrechner",
+          "description": "Berechne Beisszeiten, AFK-Sessions, AFR- und DRR-Setups zum Angeln in Black Desert."
         }
       }
     },

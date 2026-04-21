@@ -1,5 +1,6 @@
 ---
 .title = "Fishing Zones Explained",
+.description = "Learn how fishing zones and depth levels work in Black Desert, and how shared loot tables are organized.",
 .date = @date("2025-03-25T00:00:00"),
 .author = "Karpfen and Paghur",
 .layout = "guide_page.shtml",

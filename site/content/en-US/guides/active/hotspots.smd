@@ -1,5 +1,6 @@
 ---
 .title = "Hotspot Fishing",
+.description = "Draft guide to hotspot fishing in Black Desert.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_page.shtml",

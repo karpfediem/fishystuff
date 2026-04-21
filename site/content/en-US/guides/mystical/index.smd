@@ -1,5 +1,6 @@
 ---
 .title = "Mystical Fish",
+.description = "Catch all five Mystical Fish, learn the best locations, and complete the God of Fishing journey.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Paghur",
 .layout = "guide_page.shtml",

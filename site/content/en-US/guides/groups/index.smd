@@ -1,5 +1,6 @@
 ---
 .title = "Fish Groups Explained",
+.description = "Understand fish groups in Black Desert, from General and Rare fish to Prize fish and group rate theory.",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_page.shtml",

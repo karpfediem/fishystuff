@@ -1,5 +1,6 @@
 ---
 .title = "Optimizing Durability Reduction Resistance (DRR)",
+.description = "Learn how Durability Reduction Resistance works in Black Desert and how to build a 91% DRR fishing setup.",
 .date = @date("2025-04-05T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_page.shtml",
