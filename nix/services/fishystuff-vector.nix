@@ -21,7 +21,7 @@ let
     sources:
       systemd_journal:
         type: journald
-        current_boot_only: false
+        current_boot_only: true
         include_units:
     ${journalUnitsYaml}
         data_dir: "${cfg.dataDir}/journal"
