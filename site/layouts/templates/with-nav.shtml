@@ -84,8 +84,8 @@
         <div class="grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
         <div class="site-nav-frame col-start-2 px-4 py-3">
             <div class="p-2">
-                <div class="navbar min-h-0 flex-wrap justify-between gap-2 px-2 lg:flex-nowrap">
-                    <div class="flex min-w-0 flex-1 items-center gap-2">
+                <div class="navbar min-h-0 flex-wrap items-center justify-between gap-2 px-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
+                    <div class="flex min-w-0 flex-1 items-center gap-2 lg:justify-self-start">
                         <div class="dropdown lg:hidden">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Open navigation menu">
                                 <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-menu"></use></svg>
@@ -137,17 +137,17 @@
                             </ctx>
                         </a>
                         </div>
-
-                        <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
-                        </div>
                     </div>
 
-                    <div class="navbar-end w-auto flex-none gap-1">
+                    <div class="hidden min-w-0 flex-wrap justify-center gap-1 lg:flex lg:justify-self-center">
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
+                    </div>
+
+                    <div class="navbar-end w-auto flex-none gap-1 lg:justify-self-end">
                         <div id="nav-page-controls" class="hidden items-center gap-1"></div>
 
                         <div id="client-session-switcher"
