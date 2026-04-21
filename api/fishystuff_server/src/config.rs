@@ -114,6 +114,7 @@ impl AppConfig {
             dolt_ref_id: resolve_default_dolt_ref(
                 parse_env_string("FISHYSTUFF_DEFAULT_DOLT_REF"),
                 fs_config.defaults.dolt_ref.as_deref(),
+                parse_env_string("DOLT_REMOTE_BRANCH"),
             ),
             map_version_id: fs_config.defaults.map_version.clone().map(MapVersionId),
         };
@@ -357,8 +358,11 @@ fn parse_env_string(name: &str) -> Option<String> {
 fn resolve_default_dolt_ref(
     explicit_default_ref: Option<String>,
     config_default_ref: Option<&str>,
+    deployment_branch_ref: Option<String>,
 ) -> Option<String> {
-    explicit_default_ref.or_else(|| normalize_non_empty(config_default_ref))
+    explicit_default_ref
+        .or_else(|| normalize_non_empty(config_default_ref))
+        .or(deployment_branch_ref)
 }
 
 fn normalize_non_empty(value: Option<&str>) -> Option<String> {
@@ -417,13 +421,28 @@ mod tests {
     #[test]
     fn default_dolt_ref_uses_explicit_api_override_before_config() {
         assert_eq!(
-            resolve_default_dolt_ref(Some("beta".to_string()), Some("main")),
+            resolve_default_dolt_ref(
+                Some("beta".to_string()),
+                Some("main"),
+                Some("prod".to_string())
+            ),
             Some("beta".to_string())
         );
     }
 
     #[test]
-    fn default_dolt_ref_does_not_infer_from_clone_branch() {
-        assert_eq!(resolve_default_dolt_ref(None, None), None);
+    fn default_dolt_ref_uses_config_before_deployment_branch() {
+        assert_eq!(
+            resolve_default_dolt_ref(None, Some("main"), Some("beta".to_string())),
+            Some("main".to_string())
+        );
+    }
+
+    #[test]
+    fn default_dolt_ref_falls_back_to_deployment_branch() {
+        assert_eq!(
+            resolve_default_dolt_ref(None, None, Some("beta".to_string())),
+            Some("beta".to_string())
+        );
     }
 }
