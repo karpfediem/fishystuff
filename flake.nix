@@ -23,6 +23,14 @@
 
       perSystem = { config, self', inputs', pkgs, system, waypoints, ... }:
         let
+          operatorRepoRoot =
+            let
+              root = builtins.getEnv "FISHYSTUFF_OPERATOR_ROOT";
+            in
+            if root != "" then
+              root
+            else
+              throw "FISHYSTUFF_OPERATOR_ROOT must be set for operator-local CDN data packages";
           filteredWaypointsSrc = pkgs.lib.cleanSourceWith {
             name = "waypoints-no-webp";
             src = inputs.waypoints;
@@ -32,11 +40,27 @@
           };
           craneLib = crane.mkLib pkgs;
           apiWorkspaceCargoToml = pkgs.callPackage ./nix/packages/api-workspace-cargo-toml.nix { };
+          tilegenWorkspaceCargoToml = pkgs.callPackage ./nix/packages/tilegen-workspace-cargo-toml.nix { };
           apiWorkspaceSrc = pkgs.callPackage ./nix/packages/api-workspace-src.nix {
             inherit apiWorkspaceCargoToml;
             apiWorkspaceCargoLock = ./nix/locks/api/Cargo.lock;
           };
           apiCargoSrc = craneLib.cleanCargoSource apiWorkspaceSrc;
+          tilegenWorkspaceSrc = pkgs.callPackage ./nix/packages/tilegen-workspace-src.nix {
+            inherit tilegenWorkspaceCargoToml;
+          };
+          minimapDisplayTiles = pkgs.callPackage ./nix/packages/minimap-display-tiles.nix {
+            inherit craneLib tilegenWorkspaceSrc;
+          };
+          minimapSourceTiles = pkgs.callPackage ./nix/packages/minimap-source-tiles.nix {
+            repoRoot = operatorRepoRoot;
+          };
+          cdnBaseContent = pkgs.callPackage ./nix/packages/cdn-base-content.nix {
+            repoRoot = operatorRepoRoot;
+          };
+          cdnMinimapVisual = pkgs.callPackage ./nix/packages/cdn-minimap-visual.nix {
+            inherit minimapDisplayTiles minimapSourceTiles;
+          };
           botWaypoints = pkgs.callPackage ./nix/packages/bot-waypoints.nix {
             inherit filteredWaypointsSrc;
           };
@@ -63,6 +87,9 @@
           apiConfig = pkgs.callPackage ./nix/packages/api-config.nix { };
           apiEntrypoint = pkgs.callPackage ./nix/packages/api-entrypoint.nix {
             inherit api;
+          };
+          cdnContent = pkgs.callPackage ./nix/packages/cdn-content.nix {
+            inherit cdnBaseContent cdnMinimapVisual;
           };
           apiServiceBaseConfig = pkgs.callPackage ./nix/packages/api-service-base-config.nix { };
           serviceModules = import ./nix/services {
@@ -155,12 +182,16 @@
             default = api;
             api-service-base-config = apiServiceBaseConfig;
             api-service-bundle = apiServiceBundle;
+            cdn-base-content = cdnBaseContent;
+            cdn-content = cdnContent;
             dolt-service-bundle = doltServiceBundle;
             edge-service-bundle = edgeServiceBundle;
             grafana-service-bundle = grafanaServiceBundle;
             jaeger-service-bundle = jaegerServiceBundle;
             loki-service-bundle = lokiServiceBundle;
             otel-collector-service-bundle = otelCollectorServiceBundle;
+            minimap-display-tiles = minimapDisplayTiles;
+            minimap-source-tiles = minimapSourceTiles;
             prometheus-service-bundle = prometheusServiceBundle;
             vector-service-bundle = vectorServiceBundle;
           };
