@@ -1,6 +1,6 @@
 <extend template="base.shtml">
     <head id="head"></head>
-    <title id="title" :text="$page.title"></title>
+    <title id="title" :text="$page.custom.getOr('document_title', $page.title)"></title>
 
     <body id="body">
         <main class="mx-auto grid max-w-5xl gap-6 px-4 py-8 md:px-6 md:py-10">

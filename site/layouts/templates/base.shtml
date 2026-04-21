@@ -3,7 +3,7 @@
 <head id="head">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title id="title"><super> | FishyStuff</title>
+  <title id="title"><super></title>
 
   <!-- Early load to prevent flashbang / layout shift due to scrollbar gutter -->
   <style>

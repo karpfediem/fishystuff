@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveBrandAssets } from "./brand-assets.mjs";
 import { buildPageManifest } from "./build-i18n.mjs";
+import { buildDocumentTitle, resolveDocumentTitleSuffix } from "./document-title.mjs";
 import { LANGUAGE_CONFIG } from "./language-config.mjs";
 import { buildShellPageEntries, buildShellPagePathSet, renderShellPageSource } from "./shell-pages.mjs";
 
@@ -128,6 +129,19 @@ function parseTranslationKey(source) {
   return match ? match[1].trim() : "";
 }
 
+function parseTitle(source) {
+  const { frontmatter } = parseFrontmatterParts(source);
+  const match = frontmatter.match(/^\s*\.title\s*=\s*("(?:\\.|[^"])*")\s*,?\s*$/m);
+  if (!match) {
+    return "";
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return trimString(match[1].slice(1, -1));
+  }
+}
+
 function renderCustomField(field) {
   if (typeof field.value === "boolean") {
     return `${field.key} = ${field.value ? "true" : "false"},`;
@@ -202,6 +216,22 @@ function applyDefaultBrandAssets(source, brandAssets) {
 
   const { frontmatter, body } = parseFrontmatterParts(source);
   return `---\n${mergeCustomFields(frontmatter, fields)}\n---\n${body}`;
+}
+
+function applyDefaultDocumentTitle(source, documentTitleSuffix) {
+  if (pageSourceHasFrontmatterField(source, "document_title")) {
+    return source;
+  }
+
+  const pageTitle = parseTitle(source);
+  if (!pageTitle) {
+    return source;
+  }
+
+  const { frontmatter, body } = parseFrontmatterParts(source);
+  return `---\n${mergeCustomFields(frontmatter, [
+    { key: ".document_title", value: buildDocumentTitle(pageTitle, documentTitleSuffix) },
+  ])}\n---\n${body}`;
 }
 
 function renderFallbackPageSource(source, metadata) {
@@ -359,6 +389,7 @@ export function buildShellContentTree({
   const shellPathsByLocale = buildShellPagePathSet({ config, rootDir });
   const pageManifest = buildPageManifest(config, rootDir);
   const brandAssets = resolveBrandAssets(env);
+  const documentTitleSuffix = resolveDocumentTitleSuffix(env);
   const canonicalLanguage = config.defaultContentLang;
   const canonicalContentDir = path.join(rootDir, "content", canonicalLanguage);
   fs.rmSync(outRoot, { recursive: true, force: true });
@@ -421,7 +452,8 @@ export function buildShellContentTree({
       }
       const source = fs.readFileSync(filePath, "utf8");
       const branded = applyDefaultBrandAssets(source, brandAssets);
-      fs.writeFileSync(filePath, applyDefaultOgImage(branded, ogImageHref), "utf8");
+      const titled = applyDefaultDocumentTitle(branded, documentTitleSuffix);
+      fs.writeFileSync(filePath, applyDefaultOgImage(titled, ogImageHref), "utf8");
     }
   }
   return { outRoot, entries: shellEntries, fallbackGroups: contentGroups.size };

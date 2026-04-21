@@ -57,7 +57,7 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     fs.writeFileSync(path.join(rootDir, "content", "en-US", "profile.smd"), "tracked profile");
     fs.writeFileSync(path.join(rootDir, "content", "de-DE", "log.smd"), "---\n.title = \"Fanglog\",\n---\n");
 
-    buildShellContentTree({ config: LANGUAGE_CONFIG, rootDir, outRoot });
+    buildShellContentTree({ config: LANGUAGE_CONFIG, rootDir, outRoot, env: {} });
 
     const communitySource = fs.readFileSync(path.join(outRoot, "en-US", "community.smd"), "utf8");
     const deLogSource = fs.readFileSync(path.join(outRoot, "de-DE", "log.smd"), "utf8");
@@ -65,12 +65,16 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     const deProfileSource = fs.readFileSync(path.join(outRoot, "de-DE", "profil.smd"), "utf8");
 
     assert.match(communitySource, /\.title = "Community",/);
+    assert.match(communitySource, /\.document_title = "Community \| FishyStuff",/);
     assert.match(communitySource, /\.og_image = "\/img\/embed\.png",/);
     assert.match(deLogSource, /\.title = "Fanglog",/);
+    assert.match(deLogSource, /\.document_title = "Fanglog \| FishyStuff",/);
     assert.match(deLogSource, /\.og_image = "\/de-DE\/embed\.png",/);
     assert.match(enIndexSource, /\.layout = "frontpage\.shtml"/);
+    assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff",/);
     assert.match(enIndexSource, /\.og_image = "\/img\/embed\.png",/);
     assert.match(deProfileSource, /\.translation_key = "profile"/);
+    assert.match(deProfileSource, /\.document_title = "Profil \| FishyStuff",/);
     assert.match(deProfileSource, /\.og_image = "\/de-DE\/embed\.png",/);
     const generatedFallback = fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "index.smd"), "utf8");
     assert.match(generatedFallback, /\.translation_fallback = true,/);
@@ -117,6 +121,7 @@ test("buildShellContentTree injects the sourced betta icon for beta builds", () 
       rootDir,
       outRoot,
       env: {
+        FISHYSTUFF_DEPLOYMENT_ENVIRONMENT: "beta",
         FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
       },
     });
@@ -126,11 +131,49 @@ test("buildShellContentTree injects the sourced betta icon for beta builds", () 
       enIndexSource,
       /\.brand_logo_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,
     );
+    assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff \(Beta\)",/);
     assert.match(
       enIndexSource,
       /\.brand_logo_nav_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,
     );
     assert.match(enIndexSource, /\.brand_logo_nav_srcset = "",/);
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
+
+test("buildShellContentTree derives document titles from the deployment name", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "fishystuff-shell-pages-preview-"));
+  const outRoot = path.join(rootDir, ".generated", "content");
+  try {
+    fs.mkdirSync(path.join(rootDir, "i18n"), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, "i18n", "shell-pages.json"), JSON.stringify({
+      pages: [
+        {
+          id: "home",
+          layout: "frontpage.shtml",
+          author: "Karpfen",
+          date: "2025-03-23T00:00:00",
+          locales: {
+            "en-US": { slug: "", title: "Home" },
+          },
+        },
+      ],
+    }, null, 2));
+    fs.mkdirSync(path.join(rootDir, "content", "en-US"), { recursive: true });
+    fs.mkdirSync(path.join(rootDir, "content", "de-DE"), { recursive: true });
+
+    buildShellContentTree({
+      config: LANGUAGE_CONFIG,
+      rootDir,
+      outRoot,
+      env: {
+        FISHYSTUFF_DEPLOYMENT_ENVIRONMENT: "preview-east",
+      },
+    });
+
+    const enIndexSource = fs.readFileSync(path.join(outRoot, "en-US", "index.smd"), "utf8");
+    assert.match(enIndexSource, /\.document_title = "Home \| FishyStuff \(Preview East\)",/);
   } finally {
     fs.rmSync(rootDir, { recursive: true, force: true });
   }

@@ -1,5 +1,5 @@
 <extend template="with-nav.shtml">
-  <title id="title" :text="$page.title"></title>
+  <title id="title" :text="$page.custom.getOr('document_title', $page.title)"></title>
   <head id="head"></head>
 
   <div id="content">
