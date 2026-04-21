@@ -24,6 +24,13 @@
     "site_root_dir": "/srv/fishystuff/site",
     "cdn_root_dir": "/srv/fishystuff/cdn"
   },
+  "content": {
+    "cdn": {
+      "store_path": "",
+      "drv_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/cdn-content-current"
+    }
+  },
   "tls": {
     "enabled": false,
     "certificate_name": "beta-nbg1-api-db-edge-tls",

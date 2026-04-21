@@ -278,41 +278,53 @@ mgmt-resident-deploy-remote target="" dir="mgmt/resident-deploy-probe" timeout="
 # Build the API and Dolt service bundles locally, push both closures to a
 # remote host, and deploy the resident beta graph for the current API/DB host
 # shape. The resident graph owns GC-root selection via nix:gcroot.
-mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="false" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory" tls_domains_json="[]":
+mgmt-resident-push-api-db *args:
   #!/usr/bin/env bash
   set -euo pipefail
-  target='{{target}}'
-  target="${target#target=}"
-  host='{{host}}'
-  host="${host#host=}"
-  timeout='{{timeout}}'
-  timeout="${timeout#timeout=}"
-  remote_mgmt_bin='{{remote_mgmt_bin}}'
-  remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
-  api_gcroot='{{api_gcroot}}'
-  api_gcroot="${api_gcroot#api_gcroot=}"
-  dolt_gcroot='{{dolt_gcroot}}'
-  dolt_gcroot="${dolt_gcroot#dolt_gcroot=}"
-  mgmt_modules_dir='{{mgmt_modules_dir}}'
-  mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
-  remote_nix_max_jobs='{{remote_nix_max_jobs}}'
-  remote_nix_max_jobs="${remote_nix_max_jobs#remote_nix_max_jobs=}"
-  tls_enabled='{{tls_enabled}}'
-  tls_enabled="${tls_enabled#tls_enabled=}"
-  tls_certificate_name='{{tls_certificate_name}}'
-  tls_certificate_name="${tls_certificate_name#tls_certificate_name=}"
-  tls_acme_email='{{tls_acme_email}}'
-  tls_acme_email="${tls_acme_email#tls_acme_email=}"
-  tls_challenge='{{tls_challenge}}'
-  tls_challenge="${tls_challenge#tls_challenge=}"
-  tls_dns_provider='{{tls_dns_provider}}'
-  tls_dns_provider="${tls_dns_provider#tls_dns_provider=}"
-  tls_dns_env_json='{{tls_dns_env_json}}'
-  tls_dns_env_json="${tls_dns_env_json#tls_dns_env_json=}"
-  tls_directory_url='{{tls_directory_url}}'
-  tls_directory_url="${tls_directory_url#tls_directory_url=}"
-  tls_domains_json='{{tls_domains_json}}'
-  tls_domains_json="${tls_domains_json#tls_domains_json=}"
+  target=""
+  host="beta-nbg1-api-db"
+  timeout="120"
+  remote_mgmt_bin="/usr/local/bin/mgmt"
+  api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
+  dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current"
+  mgmt_modules_dir="/home/carp/code/mgmt/modules"
+  remote_nix_max_jobs="0"
+  tls_enabled="false"
+  tls_certificate_name=""
+  tls_acme_email="acme@karpfen.dev"
+  tls_challenge="http-01"
+  tls_dns_provider=""
+  tls_dns_env_json="{}"
+  tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory"
+  tls_domains_json="[]"
+
+  raw_args='{{args}}'
+  IFS=" " read -r -a overrides <<< "$raw_args"
+  for arg in "${overrides[@]}"; do
+    [[ -n "$arg" ]] || continue
+    case "$arg" in
+      target=*) target="${arg#target=}" ;;
+      host=*) host="${arg#host=}" ;;
+      timeout=*) timeout="${arg#timeout=}" ;;
+      remote_mgmt_bin=*) remote_mgmt_bin="${arg#remote_mgmt_bin=}" ;;
+      api_gcroot=*) api_gcroot="${arg#api_gcroot=}" ;;
+      dolt_gcroot=*) dolt_gcroot="${arg#dolt_gcroot=}" ;;
+      mgmt_modules_dir=*) mgmt_modules_dir="${arg#mgmt_modules_dir=}" ;;
+      remote_nix_max_jobs=*) remote_nix_max_jobs="${arg#remote_nix_max_jobs=}" ;;
+      tls_enabled=*) tls_enabled="${arg#tls_enabled=}" ;;
+      tls_certificate_name=*) tls_certificate_name="${arg#tls_certificate_name=}" ;;
+      tls_acme_email=*) tls_acme_email="${arg#tls_acme_email=}" ;;
+      tls_challenge=*) tls_challenge="${arg#tls_challenge=}" ;;
+      tls_dns_provider=*) tls_dns_provider="${arg#tls_dns_provider=}" ;;
+      tls_dns_env_json=*) tls_dns_env_json="${arg#tls_dns_env_json=}" ;;
+      tls_directory_url=*) tls_directory_url="${arg#tls_directory_url=}" ;;
+      tls_domains_json=*) tls_domains_json="${arg#tls_domains_json=}" ;;
+      *)
+        echo "unknown override for mgmt-resident-push-api-db: $arg" >&2
+        exit 2
+        ;;
+    esac
+  done
   if [[ -z "$target" ]]; then
     echo "missing target=... for mgmt-resident-push-api-db" >&2
     exit 2
@@ -465,69 +477,274 @@ mgmt-resident-push-api-db target="" host="beta-nbg1-api-db" timeout="120" remote
 # Build the current pure service bundles for the single-host beta stack, push
 # them to a remote host, and deploy the resident graph with API, Dolt, edge,
 # and observability daemons. The resident graph owns GC-root selection via
-# nix:gcroot.
-mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" remote_mgmt_bin="/usr/local/bin/mgmt" api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current" dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current" edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current" loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current" otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current" vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current" prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current" jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current" grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current" mgmt_modules_dir="/home/carp/code/mgmt/modules" remote_nix_max_jobs="0" tls_enabled="true" tls_certificate_name="" tls_acme_email="" tls_challenge="http-01" tls_dns_provider="" tls_dns_env_json="{}" tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory" tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]":
+# nix:gcroot. Set `services_csv=` to a comma-separated subset when you only
+# want to rebuild and push specific optional services.
+mgmt-resident-push-full-stack *args:
   #!/usr/bin/env bash
   set -euo pipefail
-  target='{{target}}'
-  target="${target#target=}"
-  host='{{host}}'
-  host="${host#host=}"
-  timeout='{{timeout}}'
-  timeout="${timeout#timeout=}"
-  remote_mgmt_bin='{{remote_mgmt_bin}}'
-  remote_mgmt_bin="${remote_mgmt_bin#remote_mgmt_bin=}"
-  api_gcroot='{{api_gcroot}}'
-  api_gcroot="${api_gcroot#api_gcroot=}"
-  dolt_gcroot='{{dolt_gcroot}}'
-  dolt_gcroot="${dolt_gcroot#dolt_gcroot=}"
-  edge_gcroot='{{edge_gcroot}}'
-  edge_gcroot="${edge_gcroot#edge_gcroot=}"
-  loki_gcroot='{{loki_gcroot}}'
-  loki_gcroot="${loki_gcroot#loki_gcroot=}"
-  otel_collector_gcroot='{{otel_collector_gcroot}}'
-  otel_collector_gcroot="${otel_collector_gcroot#otel_collector_gcroot=}"
-  vector_gcroot='{{vector_gcroot}}'
-  vector_gcroot="${vector_gcroot#vector_gcroot=}"
-  prometheus_gcroot='{{prometheus_gcroot}}'
-  prometheus_gcroot="${prometheus_gcroot#prometheus_gcroot=}"
-  jaeger_gcroot='{{jaeger_gcroot}}'
-  jaeger_gcroot="${jaeger_gcroot#jaeger_gcroot=}"
-  grafana_gcroot='{{grafana_gcroot}}'
-  grafana_gcroot="${grafana_gcroot#grafana_gcroot=}"
-  mgmt_modules_dir='{{mgmt_modules_dir}}'
-  mgmt_modules_dir="${mgmt_modules_dir#mgmt_modules_dir=}"
-  remote_nix_max_jobs='{{remote_nix_max_jobs}}'
-  remote_nix_max_jobs="${remote_nix_max_jobs#remote_nix_max_jobs=}"
-  tls_enabled='{{tls_enabled}}'
-  tls_enabled="${tls_enabled#tls_enabled=}"
-  tls_certificate_name='{{tls_certificate_name}}'
-  tls_certificate_name="${tls_certificate_name#tls_certificate_name=}"
-  tls_acme_email='{{tls_acme_email}}'
-  tls_acme_email="${tls_acme_email#tls_acme_email=}"
-  tls_challenge='{{tls_challenge}}'
-  tls_challenge="${tls_challenge#tls_challenge=}"
-  tls_dns_provider='{{tls_dns_provider}}'
-  tls_dns_provider="${tls_dns_provider#tls_dns_provider=}"
-  tls_dns_env_json='{{tls_dns_env_json}}'
-  tls_dns_env_json="${tls_dns_env_json#tls_dns_env_json=}"
-  tls_directory_url='{{tls_directory_url}}'
-  tls_directory_url="${tls_directory_url#tls_directory_url=}"
-  tls_domains_json='{{tls_domains_json}}'
-  tls_domains_json="${tls_domains_json#tls_domains_json=}"
+  target=""
+  host="beta-nbg1-api-db"
+  timeout="180"
+  remote_mgmt_bin="/usr/local/bin/mgmt"
+  api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
+  dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current"
+  edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current"
+  loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current"
+  otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current"
+  vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current"
+  prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current"
+  jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current"
+  grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current"
+  cdn_content_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/cdn-content-current"
+  cdn_content_mode="local"
+  mgmt_modules_dir="/home/carp/code/mgmt/modules"
+  remote_nix_max_jobs="0"
+  services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana"
+  api_bundle_override=""
+  dolt_bundle_override=""
+  edge_bundle_override=""
+  loki_bundle_override=""
+  otel_collector_bundle_override=""
+  vector_bundle_override=""
+  prometheus_bundle_override=""
+  jaeger_bundle_override=""
+  grafana_bundle_override=""
+  tls_enabled="true"
+  tls_certificate_name=""
+  tls_acme_email="acme@karpfen.dev"
+  tls_challenge="http-01"
+  tls_dns_provider=""
+  tls_dns_env_json="{}"
+  tls_directory_url="https://acme-staging-v02.api.letsencrypt.org/directory"
+  tls_domains_json="[\"beta.fishystuff.fish\",\"api.beta.fishystuff.fish\",\"telemetry.beta.fishystuff.fish\"]"
+
+  raw_args='{{args}}'
+  IFS=" " read -r -a overrides <<< "$raw_args"
+  for arg in "${overrides[@]}"; do
+    [[ -n "$arg" ]] || continue
+    case "$arg" in
+      target=*) target="${arg#target=}" ;;
+      host=*) host="${arg#host=}" ;;
+      timeout=*) timeout="${arg#timeout=}" ;;
+      remote_mgmt_bin=*) remote_mgmt_bin="${arg#remote_mgmt_bin=}" ;;
+      api_gcroot=*) api_gcroot="${arg#api_gcroot=}" ;;
+      dolt_gcroot=*) dolt_gcroot="${arg#dolt_gcroot=}" ;;
+      edge_gcroot=*) edge_gcroot="${arg#edge_gcroot=}" ;;
+      loki_gcroot=*) loki_gcroot="${arg#loki_gcroot=}" ;;
+      otel_collector_gcroot=*) otel_collector_gcroot="${arg#otel_collector_gcroot=}" ;;
+      vector_gcroot=*) vector_gcroot="${arg#vector_gcroot=}" ;;
+      prometheus_gcroot=*) prometheus_gcroot="${arg#prometheus_gcroot=}" ;;
+      jaeger_gcroot=*) jaeger_gcroot="${arg#jaeger_gcroot=}" ;;
+      grafana_gcroot=*) grafana_gcroot="${arg#grafana_gcroot=}" ;;
+      cdn_content_gcroot=*) cdn_content_gcroot="${arg#cdn_content_gcroot=}" ;;
+      cdn_content_mode=*) cdn_content_mode="${arg#cdn_content_mode=}" ;;
+      mgmt_modules_dir=*) mgmt_modules_dir="${arg#mgmt_modules_dir=}" ;;
+      remote_nix_max_jobs=*) remote_nix_max_jobs="${arg#remote_nix_max_jobs=}" ;;
+      services_csv=*) services_csv="${arg#services_csv=}" ;;
+      api_bundle=*) api_bundle_override="${arg#api_bundle=}" ;;
+      dolt_bundle=*) dolt_bundle_override="${arg#dolt_bundle=}" ;;
+      edge_bundle=*) edge_bundle_override="${arg#edge_bundle=}" ;;
+      loki_bundle=*) loki_bundle_override="${arg#loki_bundle=}" ;;
+      otel_collector_bundle=*) otel_collector_bundle_override="${arg#otel_collector_bundle=}" ;;
+      vector_bundle=*) vector_bundle_override="${arg#vector_bundle=}" ;;
+      prometheus_bundle=*) prometheus_bundle_override="${arg#prometheus_bundle=}" ;;
+      jaeger_bundle=*) jaeger_bundle_override="${arg#jaeger_bundle=}" ;;
+      grafana_bundle=*) grafana_bundle_override="${arg#grafana_bundle=}" ;;
+      tls_enabled=*) tls_enabled="${arg#tls_enabled=}" ;;
+      tls_certificate_name=*) tls_certificate_name="${arg#tls_certificate_name=}" ;;
+      tls_acme_email=*) tls_acme_email="${arg#tls_acme_email=}" ;;
+      tls_challenge=*) tls_challenge="${arg#tls_challenge=}" ;;
+      tls_dns_provider=*) tls_dns_provider="${arg#tls_dns_provider=}" ;;
+      tls_dns_env_json=*) tls_dns_env_json="${arg#tls_dns_env_json=}" ;;
+      tls_directory_url=*) tls_directory_url="${arg#tls_directory_url=}" ;;
+      tls_domains_json=*) tls_domains_json="${arg#tls_domains_json=}" ;;
+      *)
+        echo "unknown override for mgmt-resident-push-full-stack: $arg" >&2
+        exit 2
+        ;;
+    esac
+  done
+  services_csv="${services_csv//[[:space:]]/}"
   if [[ -z "$target" ]]; then
     echo "missing target=... for mgmt-resident-push-full-stack" >&2
     exit 2
   fi
-  api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
-  dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
-  edge_bundle="$(nix build .#edge-service-bundle --no-link --print-out-paths)"
-  loki_bundle="$(nix build .#loki-service-bundle --no-link --print-out-paths)"
-  otel_collector_bundle="$(nix build .#otel-collector-service-bundle --no-link --print-out-paths)"
-  vector_bundle="$(nix build .#vector-service-bundle --no-link --print-out-paths)"
-  prometheus_bundle="$(nix build .#prometheus-service-bundle --no-link --print-out-paths)"
-  jaeger_bundle="$(nix build .#jaeger-service-bundle --no-link --print-out-paths)"
-  grafana_bundle="$(nix build .#grafana-service-bundle --no-link --print-out-paths)"
+  operator_repo_root="$PWD"
+  declare -A selected_services=()
+  IFS=',' read -r -a requested_services <<< "$services_csv"
+  for service_name in "${requested_services[@]}"; do
+    [[ -n "$service_name" ]] || continue
+    case "$service_name" in
+      api|dolt|edge|loki|otel_collector|vector|prometheus|jaeger|grafana)
+        selected_services["$service_name"]=1
+        ;;
+      *)
+        echo "unknown service name in services_csv: $service_name" >&2
+        exit 2
+        ;;
+    esac
+  done
+  service_selected() {
+    [[ -n "${selected_services[$1]:-}" ]]
+  }
+  bundle_is_remote_only() {
+    local bundle_path="$1"
+    local override_path=""
+    for override_path in \
+      "$api_bundle_override" \
+      "$dolt_bundle_override" \
+      "$edge_bundle_override" \
+      "$loki_bundle_override" \
+      "$otel_collector_bundle_override" \
+      "$vector_bundle_override" \
+      "$prometheus_bundle_override" \
+      "$jaeger_bundle_override" \
+      "$grafana_bundle_override"; do
+      if [[ -n "$override_path" && "$bundle_path" == "$override_path" ]]; then
+        return 0
+      fi
+    done
+    return 1
+  }
+  if ! service_selected api || ! service_selected dolt; then
+    echo "services_csv must include both api and dolt for mgmt-resident-push-full-stack" >&2
+    exit 2
+  fi
+
+  api_bundle=""
+  dolt_bundle=""
+  edge_bundle=""
+  loki_bundle=""
+  otel_collector_bundle=""
+  vector_bundle=""
+  prometheus_bundle=""
+  jaeger_bundle=""
+  grafana_bundle=""
+  cdn_base_content=""
+  cdn_content=""
+  cdn_content_drv=""
+  minimap_display_tiles=""
+  minimap_source_tiles=""
+
+  api_bundle="${api_bundle_override}"
+  dolt_bundle="${dolt_bundle_override}"
+  edge_bundle="${edge_bundle_override}"
+  loki_bundle="${loki_bundle_override}"
+  otel_collector_bundle="${otel_collector_bundle_override}"
+  vector_bundle="${vector_bundle_override}"
+  prometheus_bundle="${prometheus_bundle_override}"
+  jaeger_bundle="${jaeger_bundle_override}"
+  grafana_bundle="${grafana_bundle_override}"
+
+  if service_selected api; then
+    if [[ -z "$api_bundle" ]]; then
+      api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected dolt; then
+    if [[ -z "$dolt_bundle" ]]; then
+      dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected edge; then
+    if [[ -z "$edge_bundle" ]]; then
+      edge_bundle="$(nix build .#edge-service-bundle --no-link --print-out-paths)"
+    fi
+    case "$cdn_content_mode" in
+      local|substitute)
+        cdn_content="$(
+          FISHYSTUFF_OPERATOR_ROOT="$operator_repo_root" \
+            nix build --impure .#cdn-content --no-link --print-out-paths
+        )"
+        cdn_content_drv=""
+        ;;
+      realise)
+        minimap_display_tiles="$(nix build .#minimap-display-tiles --no-link --print-out-paths)"
+        readarray -t cdn_operator_paths < <(
+          FISHYSTUFF_OPERATOR_ROOT="$operator_repo_root" \
+            nix build --impure \
+              .#cdn-base-content \
+              .#minimap-source-tiles \
+              --no-link \
+              --print-out-paths
+        )
+        cdn_base_content="${cdn_operator_paths[0]:-}"
+        minimap_source_tiles="${cdn_operator_paths[1]:-}"
+        cdn_content_drv="$(
+          FISHYSTUFF_OPERATOR_ROOT="$operator_repo_root" \
+            nix path-info --impure .#cdn-content --derivation
+        )"
+        cdn_content="$(nix derivation show "$cdn_content_drv" | jq -r 'to_entries[0].value.outputs.out.path')"
+        ;;
+      *)
+        echo "unknown cdn_content_mode for mgmt-resident-push-full-stack: $cdn_content_mode" >&2
+        exit 2
+        ;;
+    esac
+  fi
+  if service_selected loki; then
+    if [[ -z "$loki_bundle" ]]; then
+      loki_bundle="$(nix build .#loki-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected otel_collector; then
+    if [[ -z "$otel_collector_bundle" ]]; then
+      otel_collector_bundle="$(nix build .#otel-collector-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected vector; then
+    if [[ -z "$vector_bundle" ]]; then
+      vector_bundle="$(nix build .#vector-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected prometheus; then
+    if [[ -z "$prometheus_bundle" ]]; then
+      prometheus_bundle="$(nix build .#prometheus-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected jaeger; then
+    if [[ -z "$jaeger_bundle" ]]; then
+      jaeger_bundle="$(nix build .#jaeger-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+  if service_selected grafana; then
+    if [[ -z "$grafana_bundle" ]]; then
+      grafana_bundle="$(nix build .#grafana-service-bundle --no-link --print-out-paths)"
+    fi
+  fi
+
+  push_paths=()
+  for bundle_path in \
+    "$api_bundle" \
+    "$dolt_bundle" \
+    "$edge_bundle" \
+    "$loki_bundle" \
+    "$otel_collector_bundle" \
+    "$vector_bundle" \
+    "$prometheus_bundle" \
+    "$jaeger_bundle" \
+    "$grafana_bundle"; do
+    [[ -n "$bundle_path" ]] || continue
+    if bundle_is_remote_only "$bundle_path"; then
+      echo "[resident-push] reusing existing remote bundle path without local push: $bundle_path"
+      continue
+    fi
+    if [[ -e "$bundle_path" ]]; then
+      push_paths+=("$bundle_path")
+      continue
+    fi
+    echo "bundle path does not exist locally: $bundle_path" >&2
+    exit 2
+  done
+  for path_to_push in \
+    "$cdn_content" \
+    "$cdn_base_content" \
+    "$minimap_display_tiles" \
+    "$minimap_source_tiles" \
+    "$cdn_content_drv"; do
+    [[ -n "$path_to_push" ]] || continue
+    push_paths+=("$path_to_push")
+  done
   deploy_dir="$(mktemp -d /tmp/fishystuff-resident-full-stack.XXXXXX)"
   trap 'rm -rf "$deploy_dir"' EXIT
   cp -a mgmt/resident-beta/. "$deploy_dir/"
@@ -585,6 +802,9 @@ mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" re
     --arg jaeger_gcroot "$jaeger_gcroot" \
     --arg grafana_bundle "$grafana_bundle" \
     --arg grafana_gcroot "$grafana_gcroot" \
+    --arg cdn_content "$cdn_content" \
+    --arg cdn_content_drv "$cdn_content_drv" \
+    --arg cdn_content_gcroot "$cdn_content_gcroot" \
     '{
       cluster: $cluster,
       hostname: $hostname,
@@ -610,6 +830,13 @@ mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" re
       content_roots: {
         site_root_dir: $site_root_dir,
         cdn_root_dir: $cdn_root_dir
+      },
+      content: {
+        cdn: {
+          store_path: $cdn_content,
+          drv_path: $cdn_content_drv,
+          gcroot_path: $cdn_content_gcroot
+        }
       },
       tls: {
         enabled: $tls_enabled,
@@ -669,7 +896,7 @@ mgmt-resident-push-full-stack target="" host="beta-nbg1-api-db" timeout="180" re
           "$deploy_timeout" \
           "$remote_mgmt_bin"
     ' \
-    -- "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$api_bundle" "$dolt_bundle" "$edge_bundle" "$loki_bundle" "$otel_collector_bundle" "$vector_bundle" "$prometheus_bundle" "$jaeger_bundle" "$grafana_bundle"
+    -- "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "${push_paths[@]}"
 
 # Build a temporary resident graph that installs a bundle-backed systemd unit
 # from a local Nix bundle root, validate it, and deploy it to a resident mgmt

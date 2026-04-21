@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if (( $# < 2 )); then
-	echo "usage: push-fishystuff-bundles-remote.sh SSH_TARGET BUNDLE_PATH [BUNDLE_PATH ...]" >&2
+	echo "usage: push-fishystuff-bundles-remote.sh SSH_TARGET PATH [PATH ...]" >&2
 	exit 1
 fi
 
@@ -34,45 +34,53 @@ if [[ -n "${NIX_REMOTE_PROGRAM_PATH:-}" ]]; then
 fi
 
 bundle_paths=()
+copy_paths=()
 substitute_roots=()
 realise_inputs=()
 declare -A seen_substitute=()
 declare -A seen_realise=()
 while (( $# > 0 )); do
-	bundle_path="${1:?missing bundle path}"
+	input_path="${1:?missing path}"
 	shift
 
-	bundle_path="$(readlink -f "$bundle_path")"
-	if [[ ! -f "${bundle_path}/bundle.json" ]]; then
-		echo "missing bundle.json under ${bundle_path}" >&2
+	input_path="$(readlink -f "$input_path")"
+	if [[ -f "${input_path}/bundle.json" ]]; then
+		if [[ ! -f "${input_path}/store-paths" ]]; then
+			echo "missing store-paths under ${input_path}" >&2
+			exit 1
+		fi
+
+		if [[ -f "${input_path}/mode-substitute.txt" ]]; then
+			while IFS= read -r root; do
+				[[ -n "$root" ]] || continue
+				if [[ -z "${seen_substitute[$root]+x}" ]]; then
+					seen_substitute["$root"]=1
+					substitute_roots+=("$root")
+				fi
+			done < "${input_path}/mode-substitute.txt"
+		fi
+
+		if [[ -f "${input_path}/mode-realise.txt" ]]; then
+			while IFS= read -r input; do
+				[[ -n "$input" ]] || continue
+				if [[ -z "${seen_realise[$input]+x}" ]]; then
+					seen_realise["$input"]=1
+					realise_inputs+=("$input")
+				fi
+			done < "${input_path}/mode-realise.txt"
+		fi
+
+		bundle_paths+=("$input_path")
+		copy_paths+=("$input_path")
+		continue
+	fi
+
+	if [[ "${input_path}" != /nix/store/* ]]; then
+		echo "path is neither a bundle directory nor a Nix store path: ${input_path}" >&2
 		exit 1
 	fi
-	if [[ ! -f "${bundle_path}/store-paths" ]]; then
-		echo "missing store-paths under ${bundle_path}" >&2
-		exit 1
-	fi
 
-	if [[ -f "${bundle_path}/mode-substitute.txt" ]]; then
-		while IFS= read -r root; do
-			[[ -n "$root" ]] || continue
-			if [[ -z "${seen_substitute[$root]+x}" ]]; then
-				seen_substitute["$root"]=1
-				substitute_roots+=("$root")
-			fi
-		done < "${bundle_path}/mode-substitute.txt"
-	fi
-
-	if [[ -f "${bundle_path}/mode-realise.txt" ]]; then
-		while IFS= read -r input; do
-			[[ -n "$input" ]] || continue
-			if [[ -z "${seen_realise[$input]+x}" ]]; then
-				seen_realise["$input"]=1
-				realise_inputs+=("$input")
-			fi
-		done < "${bundle_path}/mode-realise.txt"
-	fi
-
-	bundle_paths+=("$bundle_path")
+	copy_paths+=("$input_path")
 done
 
 remote_preamble=(
@@ -132,5 +140,5 @@ if (( ${#realise_inputs[@]} > 0 )); then
 fi
 EOF
 
-echo "[bundle-push] copying ${#bundle_paths[@]} bundle closure(s) to ${ssh_target}"
-nix copy --no-check-sigs --substitute-on-destination --to "$nix_copy_target" "${bundle_paths[@]}"
+echo "[bundle-push] copying ${#copy_paths[@]} path closure(s) to ${ssh_target}"
+nix copy --no-check-sigs --substitute-on-destination --to "$nix_copy_target" "${copy_paths[@]}"

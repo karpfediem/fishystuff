@@ -11,6 +11,7 @@ class host($st) {
 		startup_mode str;
 		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
+		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
 		services map{str: struct{bundle_path str; gcroot_path str}}
 	} = $st->manifest
