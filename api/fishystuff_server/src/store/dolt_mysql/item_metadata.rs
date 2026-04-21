@@ -74,14 +74,7 @@ impl DoltMySqlStore {
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
                 it.`ItemName`, \
-                MAX( \
-                    CASE \
-                        WHEN COALESCE(l.`format`, '') = 'A' \
-                         AND COALESCE(l.`unk`, '') = '' \
-                        THEN NULLIF(TRIM(l.`text`), '') \
-                        ELSE NULL \
-                    END \
-                ) AS item_name_en, \
+                l.item_name_en, \
                 it.`EquipType`, \
                 it.`IconImageFile`, \
                 it.`GradeType`, \
@@ -91,19 +84,18 @@ impl DoltMySqlStore {
                     ELSE NULL \
                 END AS endurance_limit \
              FROM item_table{as_of} it \
-             LEFT JOIN languagedata_en{as_of} l \
-               ON l.`id` = CAST(it.`Index` AS SIGNED) \
-             WHERE it.`Index` IN ({id_list}) \
-             GROUP BY CAST(it.`Index` AS SIGNED), \
-                      it.`ItemName`, \
-                      it.`EquipType`, \
-                      it.`IconImageFile`, \
-                      it.`GradeType`, \
-                      CASE \
-                          WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
-                          THEN CAST(it.`EnduranceLimit` AS SIGNED) \
-                          ELSE NULL \
-                      END"
+             LEFT JOIN ( \
+                 SELECT \
+                     CAST(l.`id` AS SIGNED) AS item_id, \
+                     MAX(NULLIF(TRIM(l.`text`), '')) AS item_name_en \
+                 FROM languagedata_en{as_of} l \
+                 WHERE l.`id` IN ({id_list}) \
+                   AND COALESCE(l.`format`, '') = 'A' \
+                   AND COALESCE(l.`unk`, '') = '' \
+                 GROUP BY CAST(l.`id` AS SIGNED) \
+             ) l \
+               ON l.item_id = CAST(it.`Index` AS SIGNED) \
+             WHERE it.`Index` IN ({id_list})"
         );
 
         self.query_item_table_metadata_from_query(query)

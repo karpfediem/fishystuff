@@ -6,8 +6,11 @@ mod state;
 mod store;
 
 use anyhow::{Context, Result};
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
+
+use crate::store::Store;
 
 mod telemetry {
     use std::time::Duration;
@@ -127,31 +130,36 @@ mod telemetry {
     }
 }
 
+fn spawn_startup_cache_prewarm(store: Arc<dyn Store>) {
+    tokio::spawn(async move {
+        let mut last_err = None;
+        for attempt in 0..5 {
+            match store.prime_startup_caches().await {
+                Ok(()) => {
+                    last_err = None;
+                    break;
+                }
+                Err(err) => {
+                    last_err = Some(err);
+                    if attempt < 4 {
+                        tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
+                    }
+                }
+            }
+        }
+        if let Some(err) = last_err {
+            warn!(error = ?err, "startup cache prewarm failed after retries");
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = config::AppConfig::parse()?;
     let telemetry = telemetry::init(&config.telemetry)?;
     let bind = config.bind.clone();
     let state = state::AppState::new(config)?;
-    let startup_store = state.store.clone();
-    let mut last_err = None;
-    for attempt in 0..5 {
-        match startup_store.prime_startup_caches().await {
-            Ok(()) => {
-                last_err = None;
-                break;
-            }
-            Err(err) => {
-                last_err = Some(err);
-                if attempt < 4 {
-                    tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
-                }
-            }
-        }
-    }
-    if let Some(err) = last_err {
-        warn!(error = ?err, "startup cache prewarm failed after retries");
-    }
+    spawn_startup_cache_prewarm(state.store.clone());
     let app = app::build_router(state);
 
     let addr = bind

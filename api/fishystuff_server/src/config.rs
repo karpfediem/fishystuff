@@ -111,9 +111,10 @@ impl AppConfig {
             half_life_days: fs_config.defaults.half_life_days,
             alpha0: fs_config.defaults.alpha0.unwrap_or(1.0),
             top_k: fs_config.defaults.top_k.unwrap_or(30),
-            dolt_ref_id: parse_env_string("FISHYSTUFF_DEFAULT_DOLT_REF")
-                .or_else(|| parse_env_string("DOLT_REMOTE_BRANCH"))
-                .or_else(|| normalize_non_empty(fs_config.defaults.dolt_ref.as_deref())),
+            dolt_ref_id: resolve_default_dolt_ref(
+                parse_env_string("FISHYSTUFF_DEFAULT_DOLT_REF"),
+                fs_config.defaults.dolt_ref.as_deref(),
+            ),
             map_version_id: fs_config.defaults.map_version.clone().map(MapVersionId),
         };
 
@@ -353,6 +354,13 @@ fn parse_env_string(name: &str) -> Option<String> {
         .and_then(|value| normalize_non_empty(Some(value.as_str())))
 }
 
+fn resolve_default_dolt_ref(
+    explicit_default_ref: Option<String>,
+    config_default_ref: Option<&str>,
+) -> Option<String> {
+    explicit_default_ref.or_else(|| normalize_non_empty(config_default_ref))
+}
+
 fn normalize_non_empty(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
@@ -362,7 +370,7 @@ fn normalize_non_empty(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_cors_allowed_origins, TelemetryConfig};
+    use super::{parse_cors_allowed_origins, resolve_default_dolt_ref, TelemetryConfig};
     use fishystuff_core::public_endpoints::derive_sibling_public_base_url;
 
     #[test]
@@ -404,5 +412,18 @@ mod tests {
         assert_eq!(telemetry.service_name, "fishystuff-api");
         assert_eq!(telemetry.deployment_environment, "unknown");
         assert_eq!(telemetry.sample_ratio, 0.25);
+    }
+
+    #[test]
+    fn default_dolt_ref_uses_explicit_api_override_before_config() {
+        assert_eq!(
+            resolve_default_dolt_ref(Some("beta".to_string()), Some("main")),
+            Some("beta".to_string())
+        );
+    }
+
+    #[test]
+    fn default_dolt_ref_does_not_infer_from_clone_branch() {
+        assert_eq!(resolve_default_dolt_ref(None, None), None);
     }
 }
