@@ -36,12 +36,6 @@ class unit($st) {
 		"running"
 	}
 	$reload_name str = fmt.printf("systemd-daemon-reload-%s", $bundle->id)
-	$restart_name str = fmt.printf("systemd-reload-or-restart-%s", $bundle->id)
-	$listen_exec_name str = if $desired_state == "running" {
-		$restart_name
-	} else {
-		$reload_name
-	}
 
 	panic($bundle_path == "", "missing bundle_path for fishystuff bundle-backed systemd unit")
 	panic($systemd->service_manager != "systemd", fmt.printf("bundle %s does not declare a systemd backend", $bundle->id))
@@ -60,7 +54,7 @@ class unit($st) {
 			mode => "u=rw,go=r",
 			owner => "root",
 			group => "root",
-			Notify => Exec["${restart_name}"],
+			Notify => Svc["${service_name}"],
 		}
 	}
 
@@ -77,30 +71,13 @@ class unit($st) {
 
 	include systemd_daemon_reload.reload($reload_name)
 
-	if $desired_state == "running" {
-		exec "${restart_name}" {
-			cmd => "/usr/bin/systemctl",
-			args => [
-				"reload-or-restart",
-				$unit_name,
-			],
-		}
-	}
-
 	include fishystuff_systemd.service(struct {
 		name => $service_name,
 		state => $desired_state,
 		startup_mode => $resolved_startup_mode,
-		listen_exec_name => $listen_exec_name,
+		listen_exec_name => $reload_name,
 	})
 
 	File["${install_path}"] -> Exec["${reload_name}"]
-
-	if $desired_state == "running" {
-		Exec["${reload_name}"] -> Exec["${restart_name}"] -> Svc["${service_name}"]
-	}
-
-	if $desired_state != "running" {
-		Exec["${reload_name}"] -> Svc["${service_name}"]
-	}
+	Exec["${reload_name}"] -> Svc["${service_name}"]
 }

@@ -260,6 +260,7 @@ class api_db_host($st) {
 		mode => "u=rw,go=",
 		owner => "root",
 		group => "root",
+		Notify => Svc["${api_service_name}"],
 	}
 
 	forkv $service_name, $service in $services {
