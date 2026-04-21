@@ -48,6 +48,12 @@ run_query() {
   dolt sql -r json -q "$sql" > "$tmpdir/$name.json"
 }
 
+run_query_file() {
+  local name="$1"
+  local file_path="$2"
+  dolt sql -r json -q "$(cat "$file_path")" > "$tmpdir/$name.json"
+}
+
 run_query "legacy-icons" "
 SELECT DISTINCT
   CAST(i.icon_id AS SIGNED) AS icon_id,
@@ -57,19 +63,12 @@ SELECT DISTINCT
 FROM items i
 LEFT JOIN item_table it
   ON CAST(it.Index AS SIGNED) = CAST(i.id AS SIGNED)
-WHERE i.icon_id IS NOT NULL
-ORDER BY CAST(i.icon_id AS SIGNED)
+WHERE i.id IS NOT NULL
+ORDER BY CAST(i.id AS SIGNED)
 "
 
-run_query "consumable-icons" "
-SELECT DISTINCT
-  CAST(item_id AS SIGNED) AS item_id,
-  NULLIF(TRIM(item_name_ko), '') AS display_name,
-  NULLIF(TRIM(item_icon_file), '') AS item_icon_file
-FROM calculator_consumable_effect_sources
-WHERE item_id IS NOT NULL
-ORDER BY CAST(item_id AS SIGNED)
-"
+run_query_file "consumable-icons" \
+  "$ROOT_DIR/tools/scripts/sql/calculator_consumable_icon_targets.sql"
 
 run_query "enchant-icons" "
 SELECT DISTINCT

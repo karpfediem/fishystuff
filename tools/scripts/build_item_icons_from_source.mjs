@@ -12,13 +12,15 @@ const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
 const defaultOutputDir = path.join(repoRoot, "data/cdn/public/images/items");
-const defaultCalculatorApiUrl = process.env.FISHYSTUFF_CALCULATOR_API_URL?.trim() || "";
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
 const buildStateVersion = 1;
-const targetCacheVersion = 4;
+const targetCacheVersion = 6;
 const sourceResolutionCacheVersion = 2;
+const consumableIconTargetsSqlPath = path.join(scriptDir, "sql", "calculator_consumable_icon_targets.sql");
+const consumableIconTargetsSqlStat = statSync(consumableIconTargetsSqlPath);
+const consumableIconTargetsSql = readFileSync(consumableIconTargetsSqlPath, "utf8");
 const defaultConvertConcurrency = Math.max(
   2,
   Math.min(
@@ -64,7 +66,6 @@ function parseArgs(argv) {
     quiet: false,
     outputDir: defaultOutputDir,
     sourceArchive: defaultSourceArchive,
-    calculatorApiUrl: defaultCalculatorApiUrl,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -87,11 +88,6 @@ function parseArgs(argv) {
       options.sourceArchive = argv[index] ? path.resolve(argv[index]) : null;
       continue;
     }
-    if (arg === "--calculator-api-url") {
-      index += 1;
-      options.calculatorApiUrl = argv[index] ? String(argv[index]).trim() : null;
-      continue;
-    }
     fail(`unknown argument: ${arg}`);
   }
 
@@ -101,10 +97,6 @@ function parseArgs(argv) {
   if (!options.sourceArchive) {
     fail("--source-archive requires a value");
   }
-  if (!options.calculatorApiUrl) {
-    options.calculatorApiUrl = "";
-  }
-
   return options;
 }
 
@@ -600,143 +592,13 @@ function queryLegacyIconRows() {
     FROM items i
     LEFT JOIN item_table it
       ON CAST(it.Index AS SIGNED) = CAST(i.id AS SIGNED)
-    WHERE i.icon_id IS NOT NULL
-    ORDER BY CAST(i.icon_id AS SIGNED)
+    WHERE i.id IS NOT NULL
+    ORDER BY CAST(i.id AS SIGNED)
   `);
-}
-
-function queryItemMetadataRowsByIds(itemIds) {
-  if (itemIds.length === 0) {
-    return [];
-  }
-  const idList = [...new Set(itemIds.filter((value) => Number.isFinite(value) && value > 0))]
-    .sort((left, right) => left - right)
-    .join(",");
-  if (!idList) {
-    return [];
-  }
-  return doltQueryJson(`
-    SELECT DISTINCT
-      CAST(it.Index AS SIGNED) AS item_id,
-      NULLIF(TRIM(it.ItemName), '') AS display_name,
-      NULLIF(TRIM(it.IconImageFile), '') AS item_icon_file
-    FROM item_table it
-    WHERE CAST(it.Index AS SIGNED) IN (${idList})
-    ORDER BY CAST(it.Index AS SIGNED)
-  `);
-}
-
-function collectNumericItemIconIds(value, itemIds = new Set()) {
-  if (typeof value === "string") {
-    const match = value.match(/\/images\/items\/(\d{1,8})\.webp(?:[?#].*)?$/i);
-    if (match) {
-      itemIds.add(Number(match[1]));
-    }
-    return itemIds;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      collectNumericItemIconIds(entry, itemIds);
-    }
-    return itemIds;
-  }
-  if (!value || typeof value !== "object") {
-    return itemIds;
-  }
-  for (const entry of Object.values(value)) {
-    collectNumericItemIconIds(entry, itemIds);
-  }
-  return itemIds;
-}
-
-function queryCalculatorApiIconRows(calculatorApiUrl) {
-  if (!calculatorApiUrl) {
-    return [];
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(runCommand("curl", ["-sS", calculatorApiUrl]));
-  } catch {
-    return [];
-  }
-
-  const apiItems = Array.isArray(parsed?.items) ? parsed.items : [];
-  const referencedItemIds = [...collectNumericItemIconIds(parsed)];
-  const requestedMetadataIds = [
-    ...apiItems
-      .map((item) => Number(item?.item_id))
-      .filter((itemId) => Number.isFinite(itemId) && itemId > 0),
-    ...referencedItemIds,
-  ];
-  const metadataByItemId = new Map(
-    queryItemMetadataRowsByIds(requestedMetadataIds).map((row) => [Number(row.item_id), row]),
-  );
-
-  const apiRows = apiItems
-    .map((item) => {
-      const itemId = Number(item?.item_id);
-      const metadata = Number.isFinite(itemId) ? metadataByItemId.get(itemId) : null;
-      return {
-        icon: item?.icon ?? null,
-        icon_id: item?.icon_id ?? null,
-        item_id: Number.isFinite(itemId) ? itemId : null,
-        display_name: item?.name ?? metadata?.display_name ?? null,
-        item_icon_file: metadata?.item_icon_file ?? null,
-      };
-    })
-    .filter((row) => row.icon || row.icon_id != null || row.item_icon_file || row.item_id != null);
-  const coveredTargetIds = new Set(
-    apiRows
-      .map((row) => {
-        const rawIconPath = row.icon ?? null;
-        const rawSourcePath = row.item_icon_file ?? row.skill_icon_file ?? null;
-        const itemId = Number(row.item_id);
-        const iconId =
-          Number(row.icon_id) ||
-          parseIconIdFromAssetName(rawIconPath) ||
-          (Number.isFinite(itemId) && itemId > 0 ? itemId : null) ||
-          parseIconIdFromAssetName(rawSourcePath) ||
-          null;
-        return Number.isFinite(iconId) && iconId > 0 ? iconId : null;
-      })
-      .filter((iconId) => iconId != null),
-  );
-
-  const referencedRows = referencedItemIds
-    .filter((itemId) => !coveredTargetIds.has(itemId))
-    .map((itemId) => {
-    const metadata = metadataByItemId.get(itemId);
-    if (metadata) {
-      return {
-        icon: null,
-        icon_id: null,
-        item_id: itemId,
-        display_name: metadata.display_name ?? null,
-        item_icon_file: metadata.item_icon_file ?? null,
-      };
-    }
-    return {
-      icon: null,
-      icon_id: itemId,
-      item_id: null,
-      display_name: null,
-      item_icon_file: null,
-    };
-    });
-
-  return [...apiRows, ...referencedRows];
 }
 
 function queryConsumableIconRows() {
-  return doltQueryJson(`
-    SELECT DISTINCT
-      CAST(item_id AS SIGNED) AS item_id,
-      NULLIF(TRIM(item_name_ko), '') AS display_name,
-      NULLIF(TRIM(item_icon_file), '') AS item_icon_file
-    FROM calculator_consumable_effect_sources
-    WHERE item_id IS NOT NULL
-    ORDER BY CAST(item_id AS SIGNED)
-  `);
+  return doltQueryJson(consumableIconTargetsSql);
 }
 
 function queryEnchantItemIconRows() {
@@ -825,12 +687,8 @@ function queryFishTableIconRows() {
   `);
 }
 
-function queryCalculatorIconTargets(calculatorApiUrl) {
+function queryCalculatorIconTargets() {
   const targets = new Map();
-  const apiRows = queryCalculatorApiIconRows(calculatorApiUrl);
-  for (const row of apiRows) {
-    addIconTarget(targets, row);
-  }
   for (const row of queryLegacyIconRows()) {
     addIconTarget(targets, row);
   }
@@ -881,15 +739,18 @@ function queryCalculatorIconTargets(calculatorApiUrl) {
   return [...targets.values()];
 }
 
-function loadCachedTargets(outputDir, doltWorkingHash, calculatorApiUrl) {
-  if (calculatorApiUrl) {
-    return null;
-  }
+function loadCachedTargets(outputDir, doltWorkingHash) {
   const cached = readJsonFile(targetCachePath(outputDir));
   if (!cached || cached.version !== targetCacheVersion) {
     return null;
   }
-  if (cached.scriptMtimeMs !== scriptMtimeMs || cached.doltWorkingHash !== doltWorkingHash) {
+  if (
+    cached.scriptMtimeMs !== scriptMtimeMs ||
+    cached.doltWorkingHash !== doltWorkingHash ||
+    cached.consumableIconTargetsSqlPath !== consumableIconTargetsSqlPath ||
+    cached.consumableIconTargetsSqlMtimeMs !== consumableIconTargetsSqlStat.mtimeMs ||
+    cached.consumableIconTargetsSqlSize !== consumableIconTargetsSqlStat.size
+  ) {
     return null;
   }
   return Array.isArray(cached.targets) ? cached.targets : null;
@@ -900,6 +761,9 @@ function writeCachedTargets(outputDir, doltWorkingHash, targets) {
     version: targetCacheVersion,
     scriptMtimeMs,
     doltWorkingHash,
+    consumableIconTargetsSqlPath,
+    consumableIconTargetsSqlMtimeMs: consumableIconTargetsSqlStat.mtimeMs,
+    consumableIconTargetsSqlSize: consumableIconTargetsSqlStat.size,
     generatedAtUtc: new Date().toISOString(),
     targets,
   });
@@ -1153,10 +1017,10 @@ async function main() {
     console.log(`resolving source-backed item icon targets into ${path.relative(repoRoot, options.outputDir)}`);
   }
 
-  const doltWorkingHash = options.calculatorApiUrl ? "" : queryDoltWorkingHash();
-  let targets = loadCachedTargets(options.outputDir, doltWorkingHash, options.calculatorApiUrl);
+  const doltWorkingHash = queryDoltWorkingHash();
+  let targets = loadCachedTargets(options.outputDir, doltWorkingHash);
   if (!targets) {
-    targets = queryCalculatorIconTargets(options.calculatorApiUrl);
+    targets = queryCalculatorIconTargets();
   } else if (!options.quiet) {
     console.log(`using cached source-backed item icon targets (${targets.length} targets)`);
   }
@@ -1168,9 +1032,7 @@ async function main() {
       `collapsed ${dedupedTargets.duplicateCount} duplicate source-backed icon targets into ${targets.length} output files`,
     );
   }
-  if (!options.calculatorApiUrl) {
-    writeCachedTargets(options.outputDir, doltWorkingHash, targets);
-  }
+  writeCachedTargets(options.outputDir, doltWorkingHash, targets);
 
   const buildState = loadBuildState(options.outputDir);
   pruneStaleOutputs(options.outputDir, targets, options.quiet);
