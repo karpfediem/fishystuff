@@ -1,0 +1,103 @@
+import "fmt"
+import "local"
+import "../fishystuff-systemd/" as fishystuff_systemd
+
+class hardening($st) {
+	$service_name str = $st->service_name || "ssh"
+	$startup_mode str = $st->startup_mode || "enabled"
+	$sshd_exec str = $st->sshd_exec || "/usr/sbin/sshd"
+	$bash_exec str = $st->bash_exec || "/usr/bin/bash"
+	$config_dir str = $st->config_dir || "/etc/ssh/sshd_config.d"
+	$config_file str = $st->config_file || fmt.printf("%s/60-fishystuff-auth.conf", $config_dir)
+	$base_config_file str = $st->base_config_file || "/etc/ssh/sshd_config"
+	$password_authentication str = $st->password_authentication || "no"
+	$kbd_interactive_authentication str = $st->kbd_interactive_authentication || "no"
+	$pubkey_authentication str = $st->pubkey_authentication || "yes"
+	$permit_root_login str = $st->permit_root_login || "prohibit-password"
+	$validate_exec_name str = $st->validate_exec_name || fmt.printf("%s-sshd-config-validate", $service_name)
+	$config_dir_path str = fmt.printf("%s/", $config_dir)
+	$vardir = local.vardir(fmt.printf("fishystuff-host-ssh-%s/", $service_name))
+	$mtime_file str = fmt.printf("%ssshd-config-valid.stamp", $vardir)
+	$config_content str = fmt.printf(
+		"# Managed by Fishystuff resident mgmt.\nPasswordAuthentication %s\nKbdInteractiveAuthentication %s\nPubkeyAuthentication %s\nPermitRootLogin %s\n",
+		$password_authentication,
+		$kbd_interactive_authentication,
+		$pubkey_authentication,
+		$permit_root_login
+	)
+
+	panic($service_name == "", "fishystuff host SSH hardening requires service_name")
+	panic($sshd_exec == "", fmt.printf("fishystuff host SSH hardening requires sshd_exec for service %s", $service_name))
+	panic($config_dir == "", fmt.printf("fishystuff host SSH hardening requires config_dir for service %s", $service_name))
+	panic($config_file == "", fmt.printf("fishystuff host SSH hardening requires config_file for service %s", $service_name))
+	panic($base_config_file == "", fmt.printf("fishystuff host SSH hardening requires base_config_file for service %s", $service_name))
+	panic(
+		($password_authentication != "yes") and ($password_authentication != "no"),
+		fmt.printf("unsupported PasswordAuthentication value %s for %s", $password_authentication, $service_name)
+	)
+	panic(
+		($kbd_interactive_authentication != "yes") and ($kbd_interactive_authentication != "no"),
+		fmt.printf("unsupported KbdInteractiveAuthentication value %s for %s", $kbd_interactive_authentication, $service_name)
+	)
+	panic(
+		($pubkey_authentication != "yes") and ($pubkey_authentication != "no"),
+		fmt.printf("unsupported PubkeyAuthentication value %s for %s", $pubkey_authentication, $service_name)
+	)
+	panic(
+		($permit_root_login != "yes")
+		and ($permit_root_login != "no")
+		and ($permit_root_login != "prohibit-password")
+		and ($permit_root_login != "forced-commands-only"),
+		fmt.printf("unsupported PermitRootLogin value %s for %s", $permit_root_login, $service_name)
+	)
+
+	file "${config_dir_path}" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "${config_file}" {
+		state => "exists",
+		content => $config_content,
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+	}
+
+	exec "${validate_exec_name}" {
+		cmd => $sshd_exec,
+		args => [
+			"-t",
+		],
+		donecmd => fmt.printf("/usr/bin/date --utc > '%s'", $mtime_file),
+		doneshell => $bash_exec,
+		watchfiles => [
+			$base_config_file,
+			$config_dir_path,
+			$mtime_file,
+		],
+		ifcmd => fmt.printf(
+			"/usr/bin/test ! -e '%s' || /usr/bin/find '%s' '%s' -type f -newer '%s' | /usr/bin/grep -q .",
+			$mtime_file,
+			$base_config_file,
+			$config_dir,
+			$mtime_file
+		),
+		ifshell => $bash_exec,
+	}
+
+	include fishystuff_systemd.service(struct {
+		name => $service_name,
+		state => "running",
+		startup_mode => $startup_mode,
+		refresh_action => "reload-or-try-restart",
+		listen_exec_name => $validate_exec_name,
+	})
+
+	File["${config_dir_path}"] -> File["${config_file}"]
+	File["${config_dir_path}"] -> Exec["${validate_exec_name}"]
+	File["${config_file}"] -> Exec["${validate_exec_name}"]
+	Exec["${validate_exec_name}"] -> Svc["${service_name}"]
+}

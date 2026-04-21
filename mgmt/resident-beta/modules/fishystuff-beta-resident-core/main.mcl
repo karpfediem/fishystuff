@@ -9,6 +9,7 @@ import "os"
 import "sys"
 import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
 import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
+import "../lib/fishystuff-host-ssh/" as fishystuff_host_ssh
 
 class api_db_host($st) {
 	$hostname str = $st->hostname
@@ -155,6 +156,15 @@ class api_db_host($st) {
 		owner => "root",
 		group => "root",
 	}
+
+	include fishystuff_host_ssh.hardening(struct {
+		service_name => "ssh",
+		startup_mode => "enabled",
+		password_authentication => "no",
+		kbd_interactive_authentication => "no",
+		pubkey_authentication => "yes",
+		permit_root_login => "prohibit-password",
+	})
 
 	include access.https($hostname) as https_firewall
 
