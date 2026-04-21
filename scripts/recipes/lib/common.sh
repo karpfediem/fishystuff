@@ -413,6 +413,116 @@ deploy_service_override_arg_name() {
   esac
 }
 
+status_service_backing_gcroot_service() {
+  local service
+  service="$(canonical_public_service_name "$1")"
+  case "$service" in
+    api | dolt | edge | loki | otel-collector | vector | prometheus | jaeger | grafana)
+      printf '%s' "$service"
+      ;;
+    site | cdn | map | telemetry)
+      printf '%s' "edge"
+      ;;
+    dashboard)
+      printf '%s' "grafana"
+      ;;
+    logs | loki-status)
+      printf '%s' "loki"
+      ;;
+    *)
+      printf '%s' ""
+      ;;
+  esac
+}
+
+status_service_bundle_gcroot_path() {
+  local backing_service
+  backing_service="$(status_service_backing_gcroot_service "$1")"
+  if [[ -z "$backing_service" ]]; then
+    printf '%s' ""
+    return
+  fi
+  deploy_service_gcroot_path "$backing_service"
+}
+
+status_service_content_gcroot_path() {
+  local service
+  service="$(canonical_public_service_name "$1")"
+  case "$service" in
+    site) deploy_service_gcroot_path site ;;
+    cdn) deploy_service_gcroot_path cdn ;;
+    *)
+      printf '%s' ""
+      ;;
+  esac
+}
+
+status_service_remote_unit_name() {
+  local service
+  service="$(canonical_public_service_name "$1")"
+  case "$service" in
+    api) printf '%s' "fishystuff-api.service" ;;
+    dolt) printf '%s' "fishystuff-dolt.service" ;;
+    edge | site | cdn | map | telemetry) printf '%s' "fishystuff-edge.service" ;;
+    loki | logs | loki-status) printf '%s' "fishystuff-loki.service" ;;
+    otel-collector) printf '%s' "fishystuff-otel-collector.service" ;;
+    vector) printf '%s' "fishystuff-vector.service" ;;
+    prometheus) printf '%s' "fishystuff-prometheus.service" ;;
+    jaeger) printf '%s' "fishystuff-jaeger.service" ;;
+    grafana | dashboard) printf '%s' "fishystuff-grafana.service" ;;
+    *)
+      printf '%s' ""
+      ;;
+  esac
+}
+
+status_service_direct_url() {
+  local deployment
+  local service
+
+  deployment="$(canonical_deployment_name "$1")"
+  service="$(canonical_public_service_name "$2")"
+  if [[ "$deployment" == "local" ]]; then
+    case "$service" in
+      site | map | api | cdn | telemetry | grafana | dashboard | loki | logs | loki-status | prometheus | vector | jaeger)
+        deployment_open_url "$deployment" "$service"
+        ;;
+      *)
+        printf '%s' ""
+        ;;
+    esac
+    return
+  fi
+
+  case "$service" in
+    site | map | api | cdn | telemetry)
+      deployment_open_url "$deployment" "$service"
+      ;;
+    *)
+      printf '%s' ""
+      ;;
+  esac
+}
+
+status_service_local_probe_port() {
+  local service
+  service="$(canonical_public_service_name "$1")"
+  case "$service" in
+    site | map | telemetry | edge) printf '%s' "1990" ;;
+    api) printf '%s' "8080" ;;
+    cdn) printf '%s' "4040" ;;
+    dolt) printf '%s' "3306" ;;
+    grafana | dashboard | loki | logs) printf '%s' "3000" ;;
+    loki-status) printf '%s' "3100" ;;
+    prometheus) printf '%s' "9090" ;;
+    vector) printf '%s' "8686" ;;
+    jaeger) printf '%s' "16686" ;;
+    *)
+      printf '%s' ""
+      ;;
+  esac
+}
+
 deployment_open_tunnel_remote_port() {
   local service
   service="$(canonical_public_service_name "$1")"

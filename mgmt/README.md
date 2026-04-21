@@ -190,6 +190,7 @@ Routine operator entrypoints:
 
 ```bash
 just deploy beta
+just status beta
 ```
 
 Deploy only a selected service while reusing the currently rooted remote store

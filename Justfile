@@ -11,6 +11,10 @@ watch:
 open deployment *services:
   bash scripts/recipes/open.sh "{{deployment}}" {{services}}
 
+# Report deployment service state, rooted store paths, and public/open URLs.
+status deployment *services:
+  bash scripts/recipes/status.sh "{{deployment}}" {{services}}
+
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
     dolt clone fishystuff/fishystuff .
