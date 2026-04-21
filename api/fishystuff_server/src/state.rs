@@ -20,8 +20,12 @@ pub struct AppState {
 impl AppState {
     pub fn new(config: AppConfig) -> Result<SharedState> {
         let store = Arc::new(
-            DoltMySqlStore::new(config.database_url.clone(), config.defaults.clone())
-                .map_err(|err| anyhow!(err.0.message.clone()))?,
+            DoltMySqlStore::new(
+                config.database_url.clone(),
+                config.defaults.clone(),
+                config.request_timeout_secs,
+            )
+            .map_err(|err| anyhow!(err.0.message.clone()))?,
         );
         let cache = CacheStore::new(
             config.cache_zone_stats_max,

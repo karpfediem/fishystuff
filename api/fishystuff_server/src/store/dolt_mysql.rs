@@ -80,8 +80,8 @@ const ZONE_MASK_LAYER_ID: &str = "zone_mask";
 const DOLT_POOL_MIN_CONNECTIONS: usize = 0;
 const DOLT_POOL_MAX_CONNECTIONS: usize = 16;
 const DOLT_TCP_CONNECT_TIMEOUT_SECS: u64 = 3;
-const DOLT_SOCKET_READ_TIMEOUT_SECS: u64 = 10;
-const DOLT_SOCKET_WRITE_TIMEOUT_SECS: u64 = 10;
+const DOLT_SOCKET_TIMEOUT_FLOOR_SECS: u64 = 60;
+const DOLT_SOCKET_TIMEOUT_EXTRA_SECS: u64 = 30;
 const DOLT_TCP_KEEPALIVE_TIME_MS: u32 = 5_000;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 const DOLT_TCP_KEEPALIVE_PROBE_INTERVAL_SECS: u32 = 5;
@@ -342,8 +342,18 @@ fn revision_database_name(database_name: &str, ref_id: &str) -> String {
     format!("{base_database_name}/{ref_id}")
 }
 
+fn dolt_socket_timeout_secs(request_timeout_secs: u64) -> u64 {
+    request_timeout_secs
+        .saturating_add(DOLT_SOCKET_TIMEOUT_EXTRA_SECS)
+        .max(DOLT_SOCKET_TIMEOUT_FLOOR_SECS)
+}
+
 impl DoltMySqlStore {
-    pub fn new(database_url: String, defaults: MetaDefaults) -> AppResult<Self> {
+    pub fn new(
+        database_url: String,
+        defaults: MetaDefaults,
+        request_timeout_secs: u64,
+    ) -> AppResult<Self> {
         let opts = Opts::from_url(&database_url).map_err(db_unavailable)?;
         let mut builder = OptsBuilder::from_opts(opts.clone());
         if let Some(default_ref_id) = defaults.dolt_ref_id.as_deref() {
@@ -364,11 +374,12 @@ impl DoltMySqlStore {
             PoolConstraints::new(DOLT_POOL_MIN_CONNECTIONS, DOLT_POOL_MAX_CONNECTIONS)
                 .ok_or_else(|| AppError::internal("invalid Dolt pool constraints"))?;
         let pool_opts = PoolOpts::default().with_constraints(constraints);
+        let socket_timeout = Duration::from_secs(dolt_socket_timeout_secs(request_timeout_secs));
         builder = builder
             .pool_opts(pool_opts)
             .tcp_connect_timeout(Some(Duration::from_secs(DOLT_TCP_CONNECT_TIMEOUT_SECS)))
-            .read_timeout(Some(Duration::from_secs(DOLT_SOCKET_READ_TIMEOUT_SECS)))
-            .write_timeout(Some(Duration::from_secs(DOLT_SOCKET_WRITE_TIMEOUT_SECS)))
+            .read_timeout(Some(socket_timeout))
+            .write_timeout(Some(socket_timeout))
             .tcp_keepalive_time_ms(Some(DOLT_TCP_KEEPALIVE_TIME_MS));
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
@@ -2299,13 +2310,13 @@ mod tests {
 
     use super::{
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
-        compute_status, event_source_kind_from_db, event_zone_assignment_map,
-        fish_catch_methods_from_description, fish_is_dried, group_event_zone_membership_rows,
-        group_event_zone_support_rows, merge_fish_catalog_row, parse_layer_kind,
-        parse_positive_i64, parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
-        revision_database_name, synthetic_events_snapshot_revision, zone_distribution_fish_ids,
-        DoltMySqlStore, EventZoneSupportRow, FishCatalogRow, FishIdentityEntry, FishIdentityIndex,
-        VectorSourceFields, WindowSummary,
+        compute_status, dolt_socket_timeout_secs, event_source_kind_from_db,
+        event_zone_assignment_map, fish_catch_methods_from_description, fish_is_dried,
+        group_event_zone_membership_rows, group_event_zone_support_rows, merge_fish_catalog_row,
+        parse_layer_kind, parse_positive_i64, parse_vector_source, pixel_to_tile_index,
+        resolve_layer_asset_url, revision_database_name, synthetic_events_snapshot_revision,
+        zone_distribution_fish_ids, DoltMySqlStore, EventZoneSupportRow, FishCatalogRow,
+        FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
     };
 
     fn vector_source_fields(
@@ -2324,6 +2335,14 @@ mod tests {
             feature_id_property: feature_id_property.map(str::to_string),
             color_property: color_property.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn dolt_socket_timeout_tracks_request_budget_with_floor() {
+        assert_eq!(dolt_socket_timeout_secs(5), 60);
+        assert_eq!(dolt_socket_timeout_secs(15), 60);
+        assert_eq!(dolt_socket_timeout_secs(45), 75);
+        assert_eq!(dolt_socket_timeout_secs(90), 120);
     }
 
     #[test]
