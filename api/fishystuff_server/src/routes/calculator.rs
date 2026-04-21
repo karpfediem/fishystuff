@@ -423,9 +423,7 @@ struct TargetFishSummary {
     selected_label: String,
     target_amount: u32,
     target_amount_text: String,
-    pmf_count_effective_text: String,
     pmf_count_hint_text: String,
-    expected_count_raw: f64,
     expected_count_text: String,
     per_day_text: String,
     time_to_target_text: String,
@@ -6257,12 +6255,10 @@ fn derive_target_fish_summary(
             selected_label: String::new(),
             target_amount,
             target_amount_text: trim_float(f64::from(target_amount)),
-            pmf_count_effective_text: "—".to_string(),
             pmf_count_hint_text: calculator_route_text(
                 data.lang,
                 "calculator.server.helper.target_pmf_auto_short",
             ),
-            expected_count_raw: 0.0,
             expected_count_text: "—".to_string(),
             per_day_text: "—".to_string(),
             time_to_target_text: "—".to_string(),
@@ -6329,7 +6325,6 @@ fn derive_target_fish_summary(
         selected_label,
         target_amount,
         target_amount_text: trim_float(f64::from(target_amount)),
-        pmf_count_effective_text: pmf_tail_count.to_string(),
         pmf_count_hint_text: if pmf_is_auto {
             calculator_route_text_with_vars(
                 data.lang,
@@ -6343,7 +6338,6 @@ fn derive_target_fish_summary(
                 &[("count", &pmf_tail_count.to_string())],
             )
         },
-        expected_count_raw,
         expected_count_text: trim_float(expected_count_raw),
         per_day_text: trim_float(per_day_raw),
         time_to_target_text,
@@ -11706,10 +11700,10 @@ mod tests {
     use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang, Store};
 
     use super::{
-        base_price_for_species, buff_category_label, build_pet_value_aliases,
-        default_reset_signals_patch_map, derive_fish_group_chart, derive_loot_chart,
-        derive_target_fish_summary, derive_zone_loot_summary_response, discard_grade_enabled,
-        filtered_loot_flow_rows, get_calculator_datastar_init,
+        auto_target_fish_pmf_tail_count, base_price_for_species, buff_category_label,
+        build_pet_value_aliases, default_reset_signals_patch_map, derive_fish_group_chart,
+        derive_loot_chart, derive_target_fish_summary, derive_zone_loot_summary_response,
+        discard_grade_enabled, filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         init_signals_patch_map, load_calculator_runtime_data, loot_species_evidence_text,
         loot_species_presence_source_kind, loot_species_presence_text,
@@ -14231,8 +14225,6 @@ mod tests {
 
         assert_eq!(summary.selected_label, "Laila's Petal");
         assert_eq!(summary.target_amount_text, "1");
-        assert_eq!(summary.pmf_count_effective_text, "1");
-        assert_eq!(summary.expected_count_raw, 4.0);
         assert_eq!(summary.expected_count_text, "4");
         assert_eq!(summary.per_day_text, "48");
         assert_eq!(summary.time_to_target_text, "30m");
@@ -14292,7 +14284,6 @@ mod tests {
         let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 7200.0);
 
         assert_eq!(summary.target_amount_text, "8");
-        assert_eq!(summary.pmf_count_effective_text, "8");
         assert_eq!(
             summary
                 .session_distribution
@@ -14408,7 +14399,7 @@ mod tests {
 
         let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 3600.0);
 
-        let effective = summary.pmf_count_effective_text.parse::<u32>().unwrap();
+        let effective = auto_target_fish_pmf_tail_count(11.18);
         assert!(poisson_probability_at_least(11.18, effective) * 100.0 <= 0.5);
         assert!(effective <= 1 || poisson_probability_at_least(11.18, effective - 1) * 100.0 > 0.5);
         assert!(summary.pmf_count_hint_text.contains("0.5% tail cutoff"));

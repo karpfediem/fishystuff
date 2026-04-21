@@ -197,7 +197,8 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
     }
 }
 
-pub(super) fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValues, text: &str) {
+#[cfg(test)]
+fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValues, text: &str) {
     let normalized = normalize_effect_text(text);
     for line in normalized.lines() {
         parse_calculator_effect_line(values, line);

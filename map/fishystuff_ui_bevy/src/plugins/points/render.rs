@@ -92,6 +92,7 @@ pub(crate) struct PointIconCache {
     visible_fish_ids_sample: Vec<i32>,
 }
 
+#[cfg(target_arch = "wasm32")]
 impl PointIconCache {
     pub(crate) fn requested_count(&self) -> usize {
         self.requested_urls.len()
@@ -113,7 +114,6 @@ impl PointIconCache {
         self.missing_catalog_ids.len()
     }
 
-    #[cfg(target_arch = "wasm32")]
     pub(crate) fn missing_catalog_sample(&self) -> Vec<i32> {
         let mut ids = self.missing_catalog_ids.iter().copied().collect::<Vec<_>>();
         ids.sort_unstable();
@@ -142,6 +142,7 @@ impl PointIconCache {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 fn icon_sample<T>(values: impl Iterator<Item = T>) -> Vec<T>
 where
     T: Ord,
