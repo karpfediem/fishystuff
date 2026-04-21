@@ -41,12 +41,26 @@ let
     text = ''
       set -euo pipefail
 
+      resolve_remote_branch() {
+        local deployment_environment="''${FISHYSTUFF_DEPLOYMENT_ENVIRONMENT:-beta}"
+        deployment_environment="$(printf '%s' "$deployment_environment" | tr '[:upper:]' '[:lower:]')"
+        if [ "$deployment_environment" = "production" ]; then
+          printf '%s' "main"
+          return
+        fi
+        if [ -n "$deployment_environment" ]; then
+          printf '%s' "$deployment_environment"
+          return
+        fi
+        printf '%s' "beta"
+      }
+
       data_dir=${lib.escapeShellArg cfg.dataDir}
       cfg_dir=${lib.escapeShellArg cfg.cfgDir}
       repo_name=${lib.escapeShellArg cfg.databaseName}
       repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
       remote_url=${lib.escapeShellArg cfg.remoteUrl}
-      remote_branch=${lib.escapeShellArg cfg.remoteBranch}
+      remote_branch="$(resolve_remote_branch)"
       privilege_file=${lib.escapeShellArg cfg.privilegeFile}
       branch_control_file=${lib.escapeShellArg cfg.branchControlFile}
       repo_user_name=${lib.escapeShellArg cfg.repoUserName}
@@ -56,7 +70,8 @@ let
 
       mkdir -p "$data_dir" "$cfg_dir"
 
-      if [ ! -d "$repo_dir/.dolt" ]; then
+      clone_remote_repo() {
+        rm -rf "$repo_dir"
         clone_cmd=(dolt clone --branch "$remote_branch" --single-branch)
         ${lib.optionalString (cfg.cloneDepth != null) "clone_cmd+=(--depth ${lib.escapeShellArg (toString cfg.cloneDepth)})"}
         clone_cmd+=("$remote_url" "$repo_name")
@@ -65,6 +80,18 @@ let
           cd "$data_dir"
           "''${clone_cmd[@]}"
         )
+      }
+
+      current_branch=""
+      if [ -d "$repo_dir/.dolt" ]; then
+        current_branch="$(
+          cd "$repo_dir"
+          dolt branch --show-current 2>/dev/null || true
+        )"
+      fi
+
+      if [ ! -d "$repo_dir/.dolt" ] || [ "$current_branch" != "$remote_branch" ]; then
+        clone_remote_repo
       fi
 
       (
@@ -79,8 +106,7 @@ let
         fi
       )
 
-      # Keep SQL auth state deterministic across restarts for the initial
-      # read-only beta topology.
+      # Keep SQL auth state deterministic across restarts.
       rm -f "$privilege_file" "$branch_control_file"
 
       exec dolt sql-server --config ${lib.escapeShellArg sqlServerConfig} ${lib.escapeShellArgs cfg.extraArgs}
@@ -185,12 +211,6 @@ in
       type = types.str;
       default = "fishystuff/fishystuff";
       description = "Upstream Dolt remote to clone when bootstrapping local state.";
-    };
-
-    remoteBranch = mkOption {
-      type = types.str;
-      default = "main";
-      description = "Upstream Dolt branch to clone.";
     };
 
     cloneDepth = mkOption {
