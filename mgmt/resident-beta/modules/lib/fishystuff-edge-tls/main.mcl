@@ -95,28 +95,27 @@ class certificate($st) {
 				domains => $domains,
 				challenge => $challenge,
 				solver => $solver_name,
-				http01_ready => $http01_firewall_ready->ready and $http01_firewall_ready->value,
+				ready => $http01_firewall_ready->ready and $http01_firewall_ready->value,
 			}
 
-			Acme:Account["${account_name}"].ready -> Acme:Request["${certificate_name}"].account_ready
-			Acme:Account["${account_name}"].data -> Acme:Request["${certificate_name}"].account_data
 			Acme:Request["${certificate_name}"].http01_pending -> Value["${http01_firewall_gate.pending_value_name}"].any
-			Http:Server["${http01_server_name}"] -> Acme:Request["${certificate_name}"]
-			Acme:Solver:Http01["${solver_name}"] -> Acme:Request["${certificate_name}"]
-			Hetzner:Firewall["${http01_firewall_gate.firewall_name}"] -> Acme:Request["${certificate_name}"]
 		}
 
 		if $challenge == "dns-01" {
+			$solver_name str = fmt.printf("%s-dns01", $certificate_name)
+
+			acme:solver:dns01 "${solver_name}" {
+				provider => $dns_provider,
+				env => $dns_env,
+			}
+
 			acme:request "${certificate_name}" {
 				account => $account_name,
 				domains => $domains,
 				challenge => $challenge,
-				dns_provider => $dns_provider,
-				dns_env => $dns_env,
+				solver => $solver_name,
+				ready => true,
 			}
-
-			Acme:Account["${account_name}"].ready -> Acme:Request["${certificate_name}"].account_ready
-			Acme:Account["${account_name}"].data -> Acme:Request["${certificate_name}"].account_data
 		}
 
 		file "${fullchain_path}" {
