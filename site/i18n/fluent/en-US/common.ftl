@@ -37,3 +37,11 @@ language.option.locale.de-DE = Deutsch
 language.option.locale.ko-KR = Korean
 language.option.api.en = English names
 language.option.api.ko = Korean names
+
+translation_notice.title = Translation help wanted
+translation_notice.body = This page has not been translated yet. You are currently viewing the English source content.
+translation_notice.help = Want to help?
+translation_notice.community_link = Community page
+translation_notice.repository_link = GitHub repository
+translation_notice.source_link = Source page
+translation_notice.target_path_label = Target file:

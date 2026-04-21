@@ -38,6 +38,14 @@ test("buildPageManifest maps locale variants and keeps english root paths", () =
     "en-US": "/log/",
     "de-DE": "/de-DE/log/",
   });
+  assert.deepEqual(manifest["/community/"], {
+    "en-US": "/community/",
+    "de-DE": "/de-DE/community/",
+  });
+  assert.deepEqual(manifest["/guides/money/"], {
+    "en-US": "/guides/money/",
+    "de-DE": "/de-DE/guides/money/",
+  });
   assert.deepEqual(manifest["/map/"], {
     "en-US": "/map/",
     "de-DE": "/de-DE/karte/",

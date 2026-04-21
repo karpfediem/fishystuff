@@ -699,6 +699,13 @@
       "language.option.locale.ko-KR": "Korean",
       "language.option.api.en": "English names",
       "language.option.api.ko": "Korean names",
+      "translation_notice.title": "Translation help wanted",
+      "translation_notice.body": "This page has not been translated yet. You are currently viewing the English source content.",
+      "translation_notice.help": "Want to help?",
+      "translation_notice.community_link": "Community page",
+      "translation_notice.repository_link": "GitHub repository",
+      "translation_notice.source_link": "Source page",
+      "translation_notice.target_path_label": "Target file:",
       "fishydex.progress.panel": "Progress",
       "fishydex.progress.expand": "Expand progress panel",
       "fishydex.progress.collapse": "Collapse progress panel",
@@ -1682,6 +1689,13 @@
       "language.option.locale.ko-KR": "Korean",
       "language.option.api.en": "English names",
       "language.option.api.ko": "Korean names",
+      "translation_notice.title": "Translation help wanted",
+      "translation_notice.body": "This page has not been translated yet. You are currently viewing the English source content.",
+      "translation_notice.help": "Want to help?",
+      "translation_notice.community_link": "Community page",
+      "translation_notice.repository_link": "GitHub repository",
+      "translation_notice.source_link": "Source page",
+      "translation_notice.target_path_label": "Target file:",
       "fishydex.progress.panel": "Progress",
       "fishydex.progress.expand": "Expand progress panel",
       "fishydex.progress.collapse": "Collapse progress panel",
@@ -2665,6 +2679,13 @@
       "language.option.locale.ko-KR": "Koreanisch",
       "language.option.api.en": "Englische Namen",
       "language.option.api.ko": "Koreanische Namen",
+      "translation_notice.title": "Übersetzung gesucht",
+      "translation_notice.body": "Diese Seite wurde noch nicht übersetzt. Du siehst gerade den englischen Quellinhalt.",
+      "translation_notice.help": "Du möchtest helfen?",
+      "translation_notice.community_link": "Community-Seite",
+      "translation_notice.repository_link": "GitHub-Repository",
+      "translation_notice.source_link": "Quellseite",
+      "translation_notice.target_path_label": "Zieldatei:",
       "fishydex.progress.panel": "Fortschritt",
       "fishydex.progress.expand": "Fortschrittsbereich erweitern",
       "fishydex.progress.collapse": "Fortschrittsbereich einklappen",
@@ -2977,49 +2998,64 @@
   },
   "pageManifest": {
     "/community/": {
-      "en-US": "/community/"
+      "en-US": "/community/",
+      "de-DE": "/de-DE/community/"
     },
     "/devlog/": {
-      "en-US": "/devlog/"
+      "en-US": "/devlog/",
+      "de-DE": "/de-DE/devlog/"
     },
     "/guides/active/harpooning/": {
-      "en-US": "/guides/active/harpooning/"
+      "en-US": "/guides/active/harpooning/",
+      "de-DE": "/de-DE/guides/active/harpooning/"
     },
     "/guides/active/hotspots/": {
-      "en-US": "/guides/active/hotspots/"
+      "en-US": "/guides/active/hotspots/",
+      "de-DE": "/de-DE/guides/active/hotspots/"
     },
     "/guides/active/": {
-      "en-US": "/guides/active/"
+      "en-US": "/guides/active/",
+      "de-DE": "/de-DE/guides/active/"
     },
     "/guides/drr/": {
-      "en-US": "/guides/drr/"
+      "en-US": "/guides/drr/",
+      "de-DE": "/de-DE/guides/drr/"
     },
     "/guides/experience/": {
-      "en-US": "/guides/experience/"
+      "en-US": "/guides/experience/",
+      "de-DE": "/de-DE/guides/experience/"
     },
     "/guides/frequent/": {
-      "en-US": "/guides/frequent/"
+      "en-US": "/guides/frequent/",
+      "de-DE": "/de-DE/guides/frequent/"
     },
     "/guides/groups/": {
-      "en-US": "/guides/groups/"
+      "en-US": "/guides/groups/",
+      "de-DE": "/de-DE/guides/groups/"
     },
     "/guides/": {
-      "en-US": "/guides/"
+      "en-US": "/guides/",
+      "de-DE": "/de-DE/guides/"
     },
     "/guides/mastery/": {
-      "en-US": "/guides/mastery/"
+      "en-US": "/guides/mastery/",
+      "de-DE": "/de-DE/guides/mastery/"
     },
     "/guides/money/": {
-      "en-US": "/guides/money/"
+      "en-US": "/guides/money/",
+      "de-DE": "/de-DE/guides/money/"
     },
     "/guides/mystical/": {
-      "en-US": "/guides/mystical/"
+      "en-US": "/guides/mystical/",
+      "de-DE": "/de-DE/guides/mystical/"
     },
     "/guides/where-am-i-fishing/": {
-      "en-US": "/guides/where-am-i-fishing/"
+      "en-US": "/guides/where-am-i-fishing/",
+      "de-DE": "/de-DE/guides/where-am-i-fishing/"
     },
     "/guides/zones/": {
-      "en-US": "/guides/zones/"
+      "en-US": "/guides/zones/",
+      "de-DE": "/de-DE/guides/zones/"
     },
     "/log/": {
       "en-US": "/log/",

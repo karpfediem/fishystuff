@@ -130,6 +130,7 @@ function addManifestVariant(groups, {
     group = {
       routeKeys: new Set(),
       variants: {},
+      variantRouteKeys: {},
     };
     groups.set(groupKey, group);
   }
@@ -139,6 +140,7 @@ function addManifestVariant(groups, {
   }
   group.routeKeys.add(routeKey);
   group.variants[contentLanguage] = targetPath;
+  group.variantRouteKeys[contentLanguage] = routeKey;
 }
 
 function joinPath(prefix, routeKey) {
@@ -191,6 +193,23 @@ export function buildPageManifest(config = LANGUAGE_CONFIG, rootDir = siteDir) {
       contentLanguage: entry.locale,
       targetPath: joinPath(contentLanguage.pathPrefix, entry.routeKey),
     });
+  }
+  for (const [groupKey, group] of groups.entries()) {
+    const sourceRouteKey = group.variantRouteKeys[config.defaultContentLang];
+    if (!sourceRouteKey) {
+      continue;
+    }
+    for (const contentLanguage of config.contentLanguages) {
+      if (group.variants[contentLanguage.code]) {
+        continue;
+      }
+      addManifestVariant(groups, {
+        groupKey,
+        routeKey: sourceRouteKey,
+        contentLanguage: contentLanguage.code,
+        targetPath: joinPath(contentLanguage.pathPrefix, sourceRouteKey),
+      });
+    }
   }
   const manifest = {};
   for (const group of groups.values()) {

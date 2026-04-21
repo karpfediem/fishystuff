@@ -40,6 +40,20 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     fs.mkdirSync(path.join(rootDir, "content", "en-US"), { recursive: true });
     fs.mkdirSync(path.join(rootDir, "content", "de-DE"), { recursive: true });
     fs.writeFileSync(path.join(rootDir, "content", "en-US", "community.smd"), "---\n.title = \"Community\",\n---\n");
+    fs.mkdirSync(path.join(rootDir, "content", "en-US", "guides", "money"), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, "content", "en-US", "guides", "money", "index.smd"), [
+      "---",
+      '.title = "Fishing for Money",',
+      '.layout = "guide_page.shtml",',
+      '.custom = {',
+      '  .og_image_asset = "money.png",',
+      '},',
+      "---",
+      "",
+      "Read the [Profile](/profile) page or join the [Community](/community).",
+      "",
+    ].join("\n"));
+    fs.writeFileSync(path.join(rootDir, "content", "en-US", "guides", "money", "money.png"), "png");
     fs.writeFileSync(path.join(rootDir, "content", "en-US", "profile.smd"), "tracked profile");
     fs.writeFileSync(path.join(rootDir, "content", "de-DE", "log.smd"), "---\n.title = \"Fanglog\",\n---\n");
 
@@ -49,6 +63,14 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     assert.equal(fs.readFileSync(path.join(outRoot, "de-DE", "log.smd"), "utf8"), "---\n.title = \"Fanglog\",\n---\n");
     assert.match(fs.readFileSync(path.join(outRoot, "en-US", "index.smd"), "utf8"), /\.layout = "frontpage\.shtml"/);
     assert.match(fs.readFileSync(path.join(outRoot, "de-DE", "profil.smd"), "utf8"), /\.translation_key = "profile"/);
+    const generatedFallback = fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "index.smd"), "utf8");
+    assert.match(generatedFallback, /\.translation_fallback = true,/);
+    assert.match(generatedFallback, /\.canonical = "\/guides\/money\/",/);
+    assert.match(generatedFallback, /\.translation_target_path = "site\/content\/de-DE\/guides\/money\/index\.smd",/);
+    assert.match(generatedFallback, /\.translation_help_url = "\/de-DE\/community\/",/);
+    assert.match(generatedFallback, /\[Profile\]\(\/profil\/\)/);
+    assert.match(generatedFallback, /\[Community\]\(\/community\/\)/);
+    assert.equal(fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "money.png"), "utf8"), "png");
     assert.ok(!fs.existsSync(path.join(outRoot, "en-US", "profile.smd", "index.smd")));
     assert.notEqual(fs.readFileSync(path.join(outRoot, "en-US", "profile.smd"), "utf8"), "tracked profile");
   } finally {

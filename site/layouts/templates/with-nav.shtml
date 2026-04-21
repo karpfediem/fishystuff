@@ -12,7 +12,7 @@
         </ctx>
 
         <!-- Canonical -->
-        <link rel="canonical" href="$site.host_url.addPath($page.link())">
+        <link rel="canonical" href="$site.host_url.addPath($page.custom.getOr('canonical', $page.link()))">
 
         <!-- Minimal hreflang -->
         <link rel="alternate" hreflang="$site.localeCode()" href="$page.link()">
@@ -31,7 +31,7 @@
         <ctx :if="$page.description.len().gt(0).not()">
             <meta property="og:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
         </ctx>
-        <meta property="og:url" content="$site.host_url.addPath($page.link())">
+        <meta property="og:url" content="$site.host_url.addPath($page.custom.getOr('canonical', $page.link()))">
         <ctx :if="$page.custom.has('og_image_asset')">
             <meta property="og:image" content="$site.host_url.addPath($page.asset($page.custom.get('og_image_asset')).link())">
         </ctx>
@@ -94,11 +94,11 @@
                             <ul tabindex="0"
                                 role="menu"
                                 class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-56">
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/guides/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a></li>
                                 <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a></li>
                                 <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a></li>
                                 <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a></li>
                             </ul>
                         </div>
 
@@ -118,11 +118,11 @@
                         </div>
 
                         <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/guides/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
                             <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a>
                             <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a>
                             <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="/log/"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
                         </div>
                     </div>
 
@@ -372,12 +372,12 @@
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45" data-i18n-text="footer.about" :text="$i18n.getOr('footer.about','')"></span>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
-                   href="/community/">
+                   href="$site.page('community').link()">
                     <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-community"></use></svg>
                     <span data-i18n-text="nav.community" :text="$i18n.getOr('nav.community','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
-                   href="/log/">
+                   href="$site.page('log').link()">
                     <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg>
                     <span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span>
                 </a>
