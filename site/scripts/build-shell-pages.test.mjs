@@ -59,10 +59,19 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
 
     buildShellContentTree({ config: LANGUAGE_CONFIG, rootDir, outRoot });
 
-    assert.equal(fs.readFileSync(path.join(outRoot, "en-US", "community.smd"), "utf8"), "---\n.title = \"Community\",\n---\n");
-    assert.equal(fs.readFileSync(path.join(outRoot, "de-DE", "log.smd"), "utf8"), "---\n.title = \"Fanglog\",\n---\n");
-    assert.match(fs.readFileSync(path.join(outRoot, "en-US", "index.smd"), "utf8"), /\.layout = "frontpage\.shtml"/);
-    assert.match(fs.readFileSync(path.join(outRoot, "de-DE", "profil.smd"), "utf8"), /\.translation_key = "profile"/);
+    const communitySource = fs.readFileSync(path.join(outRoot, "en-US", "community.smd"), "utf8");
+    const deLogSource = fs.readFileSync(path.join(outRoot, "de-DE", "log.smd"), "utf8");
+    const enIndexSource = fs.readFileSync(path.join(outRoot, "en-US", "index.smd"), "utf8");
+    const deProfileSource = fs.readFileSync(path.join(outRoot, "de-DE", "profil.smd"), "utf8");
+
+    assert.match(communitySource, /\.title = "Community",/);
+    assert.match(communitySource, /\.og_image = "\/img\/embed\.png",/);
+    assert.match(deLogSource, /\.title = "Fanglog",/);
+    assert.match(deLogSource, /\.og_image = "\/de-DE\/embed\.png",/);
+    assert.match(enIndexSource, /\.layout = "frontpage\.shtml"/);
+    assert.match(enIndexSource, /\.og_image = "\/img\/embed\.png",/);
+    assert.match(deProfileSource, /\.translation_key = "profile"/);
+    assert.match(deProfileSource, /\.og_image = "\/de-DE\/embed\.png",/);
     const generatedFallback = fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "index.smd"), "utf8");
     assert.match(generatedFallback, /\.translation_fallback = true,/);
     assert.match(generatedFallback, /\.canonical = "\/guides\/money\/",/);
@@ -70,6 +79,7 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     assert.match(generatedFallback, /\.translation_help_url = "\/de-DE\/community\/",/);
     assert.match(generatedFallback, /\.translation_source_file_url = "https:\/\/github\.com\/karpfediem\/fishystuff\/blob\/main\/site\/content\/en-US\/guides\/money\/index\.smd",/);
     assert.match(generatedFallback, /\.translation_create_file_url = "https:\/\/github\.com\/karpfediem\/fishystuff\/new\/main\?filename=site%2Fcontent%2Fde-DE%2Fguides%2Fmoney%2Findex\.smd",/);
+    assert.doesNotMatch(generatedFallback, /\.og_image =/);
     assert.match(generatedFallback, /\[Profile\]\(\/profil\/\)/);
     assert.match(generatedFallback, /\[Community\]\(\/community\/\)/);
     assert.equal(fs.readFileSync(path.join(outRoot, "de-DE", "guides", "money", "money.png"), "utf8"), "png");

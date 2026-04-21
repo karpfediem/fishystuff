@@ -116,6 +116,11 @@ function parseFrontmatterParts(source) {
   };
 }
 
+function pageSourceHasFrontmatterField(source, fieldName) {
+  const { frontmatter } = parseFrontmatterParts(source);
+  return new RegExp(`(^|\\n)\\s*\\.${fieldName}\\s*=`, "m").test(frontmatter);
+}
+
 function parseTranslationKey(source) {
   const { frontmatter } = parseFrontmatterParts(source);
   const match = frontmatter.match(/^\s*\.translation_key\s*=\s*"([^"]+)"\s*,?\s*$/m);
@@ -163,6 +168,16 @@ function mergeCustomFields(frontmatter, fields) {
   ];
   lines.splice(insertAt, 0, ...customLines);
   return lines.join("\n");
+}
+
+function applyDefaultOgImage(source, ogImageHref) {
+  if (pageSourceHasFrontmatterField(source, "og_image_asset") || pageSourceHasFrontmatterField(source, "og_image")) {
+    return source;
+  }
+  const { frontmatter, body } = parseFrontmatterParts(source);
+  return `---\n${mergeCustomFields(frontmatter, [
+    { key: ".og_image", value: ogImageHref },
+  ])}\n---\n${body}`;
 }
 
 function renderFallbackPageSource(source, metadata) {
@@ -367,6 +382,19 @@ export function buildShellContentTree({
           ?? joinPath(sourceLanguage.pathPrefix, sourceEntry.routeKey),
         pageManifest,
       }), "utf8");
+    }
+  }
+  for (const contentLanguage of config.contentLanguages) {
+    const localeDir = path.join(outRoot, contentLanguage.code);
+    const ogImageHref = contentLanguage.code === config.defaultContentLang
+      ? "/img/embed.png"
+      : joinPath(contentLanguage.pathPrefix, "/embed.png");
+    for (const filePath of listFiles(localeDir)) {
+      if (!filePath.endsWith(".smd")) {
+        continue;
+      }
+      const source = fs.readFileSync(filePath, "utf8");
+      fs.writeFileSync(filePath, applyDefaultOgImage(source, ogImageHref), "utf8");
     }
   }
   return { outRoot, entries: shellEntries, fallbackGroups: contentGroups.size };
