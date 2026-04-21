@@ -242,6 +242,33 @@ function writeGeneratedScript(targetPath, payload) {
   );
 }
 
+function orderGeneratedCatalogs(catalogs, config = LANGUAGE_CONFIG) {
+  const entries = Object.entries(catalogs);
+  const byLocale = new Map(entries);
+  const contentLocales = new Set(config.contentLanguages.map((language) => language.code));
+  const orderedLocales = [];
+  const pushLocale = (locale) => {
+    if (byLocale.has(locale) && !orderedLocales.includes(locale)) {
+      orderedLocales.push(locale);
+    }
+  };
+
+  pushLocale(config.defaultLocale);
+  for (const locale of Object.keys(catalogs).sort()) {
+    if (!contentLocales.has(locale)) {
+      pushLocale(locale);
+    }
+  }
+  for (const language of config.contentLanguages) {
+    pushLocale(language.code);
+  }
+  for (const locale of Object.keys(catalogs).sort()) {
+    pushLocale(locale);
+  }
+
+  return Object.fromEntries(orderedLocales.map((locale) => [locale, byLocale.get(locale)]));
+}
+
 export function buildI18nArtifacts({
   config = LANGUAGE_CONFIG,
   rootDir = siteDir,
@@ -256,7 +283,7 @@ export function buildI18nArtifacts({
   }
   writeGeneratedScript(path.join(rootDir, "assets", "js", "generated", "site-i18n.js"), {
     config,
-    catalogs,
+    catalogs: orderGeneratedCatalogs(catalogs, config),
     pageManifest,
   });
   return { catalogs, pageManifest };

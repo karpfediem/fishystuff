@@ -44,8 +44,8 @@ function mapKey(key) {
   return normalized.startsWith("map.") ? normalized : `map.${normalized}`;
 }
 
-export function mapText(key, vars = {}, options = {}) {
-  const resolvedKey = mapKey(key);
+function translatedText(key, vars = {}, options = {}) {
+  const resolvedKey = trimString(key);
   if (!resolvedKey) {
     return "";
   }
@@ -60,6 +60,14 @@ export function mapText(key, vars = {}, options = {}) {
   }
   const raw = catalogForLocale(locale)?.[resolvedKey];
   return raw === undefined ? resolvedKey : replaceVars(raw, normalizedVars);
+}
+
+export function siteText(key, vars = {}, options = {}) {
+  return translatedText(key, vars, options);
+}
+
+export function mapText(key, vars = {}, options = {}) {
+  return translatedText(mapKey(key), vars, options);
 }
 
 export function mapCountText(key, count, vars = {}, options = {}) {

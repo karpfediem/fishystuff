@@ -33,7 +33,7 @@
       </header>
 
       <ctx :if="$page.custom.getOr('translation_fallback', false)">
-        <fishy-notice-disclosure class="not-prose mb-6 mt-6" title="Notice" icon="alert-triangle" open>
+        <fishy-notice-disclosure class="not-prose mb-6 mt-6" title="Notice" icon="alert-triangle" settings-path="guides.noticeOpen" open>
           <div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-sm text-base-content/80">
             <div class="text-sm font-semibold text-base-content/85" :text="$i18n.getOr('translation_notice.title','')"></div>
             <p class="mt-2 text-sm text-base-content/80" :text="$i18n.getOr('translation_notice.body','')"></p>

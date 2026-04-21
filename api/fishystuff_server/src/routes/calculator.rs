@@ -10360,23 +10360,25 @@ fn render_loot_window(
 
 fn render_calculator_data_disclaimer(lang: CalculatorLocale) -> String {
     format!(
-        "<div class=\"rounded-box border px-4 py-4\" style=\"border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--color-base-300, #d4d4d8) 44%); background: color-mix(in oklab, var(--color-warning, #c77d19) 14%, var(--color-base-100, #ffffff) 86%);\">\
-            <div class=\"flex items-start gap-3\">\
-                <div class=\"shrink-0 pt-0.5\" style=\"color: var(--color-warning, #f59e0b);\">\
-                    <svg class=\"fishy-icon size-6\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{}#fishy-alert-fill\"></use></svg>\
-                </div>\
-                <div class=\"min-w-0\">\
-                    <div class=\"text-sm font-semibold uppercase tracking-widest\" style=\"color: color-mix(in oklab, var(--color-warning, #c77d19) 78%, var(--color-base-content, #1f2937) 22%);\">{}</div>\
-                    <div class=\"mt-2 space-y-2 text-sm leading-relaxed text-base-content/85\">\
-                        <p>{}</p>\
-                        <p>{}</p>\
-                        <p>{}</p>\
-                        <p>{}</p>\
-                        <p>{}</p>\
+        "<fishy-notice-disclosure class=\"not-prose\" title=\"Notice\" icon=\"alert-triangle\" settings-path=\"calculator.noticeOpen\" open>\
+            <div class=\"rounded-box border px-4 py-4\" style=\"border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--color-base-300, #d4d4d8) 44%); background: color-mix(in oklab, var(--color-warning, #c77d19) 14%, var(--color-base-100, #ffffff) 86%);\">\
+                <div class=\"flex items-start gap-3\">\
+                    <div class=\"shrink-0 pt-0.5\" style=\"color: var(--color-warning, #f59e0b);\">\
+                        <svg class=\"fishy-icon size-6\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{}#fishy-alert-fill\"></use></svg>\
+                    </div>\
+                    <div class=\"min-w-0\">\
+                        <div class=\"text-sm font-semibold uppercase tracking-widest\" style=\"color: color-mix(in oklab, var(--color-warning, #c77d19) 78%, var(--color-base-content, #1f2937) 22%);\">{}</div>\
+                        <div class=\"mt-2 space-y-2 text-sm leading-relaxed text-base-content/85\">\
+                            <p>{}</p>\
+                            <p>{}</p>\
+                            <p>{}</p>\
+                            <p>{}</p>\
+                            <p>{}</p>\
+                        </div>\
                     </div>\
                 </div>\
             </div>\
-        </div>",
+        </fishy-notice-disclosure>",
         CALCULATOR_ICON_SPRITE_URL,
         escape_html(&calculator_route_text(
             lang,
@@ -13816,6 +13818,17 @@ mod tests {
         assert!(html.contains("Conditions:</span> Mastery 1200+"));
         assert!(html.contains(">Croaker<"));
         assert!(html.contains(">Mako Shark<"));
+    }
+
+    #[test]
+    fn render_calculator_data_disclaimer_uses_persistent_notice_disclosure() {
+        let html = super::render_calculator_data_disclaimer(CalculatorLocale::EnUs);
+
+        assert!(html.contains("<fishy-notice-disclosure"));
+        assert!(html.contains("title=\"Notice\""));
+        assert!(html.contains("settings-path=\"calculator.noticeOpen\""));
+        assert!(html.contains("open"));
+        assert!(html.contains(">Data Quality Warning<"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
-import { mapText } from "./map-i18n.js";
+import { mapText, siteText } from "./map-i18n.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
@@ -261,26 +261,115 @@ function zoneLootProfileMarkup(profile) {
   `;
 }
 
-function zoneLootNoticeMarkup(note) {
-  const content = trimString(note);
-  if (!content) {
+function zoneLootNoticeToneStyles(tone = "info") {
+  if (tone === "warning") {
+    return {
+      card:
+        "border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--color-base-300, #d4d4d8) 44%); background: color-mix(in oklab, var(--color-warning, #c77d19) 14%, var(--color-base-100, #ffffff) 86%);",
+      icon: "color: var(--color-warning, #f59e0b);",
+      title:
+        "color: color-mix(in oklab, var(--color-warning, #c77d19) 78%, var(--color-base-content, #1f2937) 22%);",
+    };
+  }
+  return {
+    card:
+      "border-color: color-mix(in oklab, var(--color-info, #0ea5e9) 42%, var(--color-base-300, #d4d4d8) 58%); background: color-mix(in oklab, var(--color-info, #0ea5e9) 10%, var(--color-base-100, #ffffff) 90%);",
+    icon: "color: var(--color-info, #0ea5e9);",
+    title:
+      "color: color-mix(in oklab, var(--color-info, #0ea5e9) 72%, var(--color-base-content, #1f2937) 28%);",
+  };
+}
+
+function zoneLootNoticeCardMarkup({
+  tone = "info",
+  iconName = "information-circle",
+  title = "",
+  paragraphs = [],
+} = {}) {
+  const content = Array.from(
+    new Set(
+      (Array.isArray(paragraphs) ? paragraphs : [])
+        .map((paragraph) => trimString(paragraph))
+        .filter(Boolean),
+    ),
+  );
+  const heading = trimString(title);
+  if (!heading && !content.length) {
     return "";
   }
-  return `<div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-base-content/80">${escapeHtml(content)}</div>`;
+  const styles = zoneLootNoticeToneStyles(tone);
+  return `
+    <div class="rounded-box border px-4 py-4" style="${styles.card}">
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 pt-0.5" style="${styles.icon}">
+          ${spriteIcon(iconName, "size-6")}
+        </div>
+        <div class="min-w-0">
+          ${
+            heading
+              ? `<div class="text-sm font-semibold uppercase tracking-widest" style="${styles.title}">${escapeHtml(heading)}</div>`
+              : ""
+          }
+          ${
+            content.length
+              ? `<div class="mt-2 space-y-2 text-sm leading-relaxed text-base-content/85">${content.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div>`
+              : ""
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function zoneLootDataQualityWarningMarkup(section) {
+  if (section?.available !== true) {
+    return "";
+  }
+  return zoneLootNoticeCardMarkup({
+    tone: "warning",
+    iconName: "alert-fill",
+    title: siteText("calculator.server.disclaimer.title"),
+    paragraphs: [
+      siteText("calculator.server.disclaimer.p1"),
+      siteText("calculator.server.disclaimer.p2"),
+      siteText("calculator.server.disclaimer.p3"),
+      siteText("calculator.server.disclaimer.p4"),
+      siteText("calculator.server.disclaimer.p5"),
+    ],
+  });
+}
+
+function zoneLootCalculatorNoticeMarkup(section) {
+  const available = section?.available === true;
+  return zoneLootNoticeCardMarkup({
+    tone: "info",
+    iconName: "information-circle",
+    title: available
+      ? mapText("info.zone_loot.notice.calculator_title")
+      : mapText("info.zone_loot.notice.status_title"),
+    paragraphs: available
+      ? [trimString(section?.dataQualityNote), trimString(section?.note)]
+      : [trimString(section?.note)],
+  });
 }
 
 function zoneLootNoticeDisclosureMarkup(section) {
-  const notices = [trimString(section?.dataQualityNote), trimString(section?.note)].filter(Boolean);
+  const notices = [
+    zoneLootDataQualityWarningMarkup(section),
+    zoneLootCalculatorNoticeMarkup(section),
+  ].filter(Boolean);
   if (!notices.length) {
-    return trimString(section?.summary)
-      ? `<p class="text-xs text-base-content/70">${escapeHtml(section.summary)}</p>`
-      : "";
+    return "";
   }
-  const profileLabel = trimString(section?.summary) || mapText("info.zone_loot.summary.default");
   return `
-    <fishy-notice-disclosure title="Notice" icon="alert-triangle" body-class="space-y-2 px-1 pb-1 pt-3" open>
-      <div class="badge badge-outline badge-sm">${escapeHtml(profileLabel)}</div>
-      ${notices.map((note) => zoneLootNoticeMarkup(note)).join("")}
+    <fishy-notice-disclosure
+      title="${escapeHtml(mapText("info.notice.title"))}"
+      icon="alert-triangle"
+      settings-path="map.zonePane.noticeOpen"
+      body-class="space-y-3 px-1 pb-1 pt-3"
+      open
+    >
+      ${notices.join("")}
     </fishy-notice-disclosure>
   `;
 }
