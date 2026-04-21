@@ -163,6 +163,7 @@ in {
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
+    DOLT_REMOTE_BRANCH = "beta";
     FISHYSTUFF_LOKI_DATA_DIR = "${config.devenv.root}/data/loki";
     FISHYSTUFF_VECTOR_DATA_DIR = "${config.devenv.root}/data/vector";
     FISHYSTUFF_RUNTIME_OTEL_ENABLED = "true";

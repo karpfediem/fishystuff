@@ -188,6 +188,7 @@ mod tests {
                 half_life_days: None,
                 alpha0: 1.0,
                 top_k: 30,
+                dolt_ref_id: None,
                 map_version_id: Some(MapVersionId("v1".to_string())),
             },
             status_cfg: ZoneStatusConfig::default(),

@@ -39,6 +39,8 @@ pub struct MetaDefaults {
     pub half_life_days: Option<f64>,
     pub alpha0: f64,
     pub top_k: usize,
+    #[serde(default)]
+    pub dolt_ref_id: Option<String>,
     pub map_version_id: Option<MapVersionId>,
 }
 
@@ -50,6 +52,7 @@ impl Default for MetaDefaults {
             half_life_days: None,
             alpha0: 1.0,
             top_k: 30,
+            dolt_ref_id: None,
             map_version_id: None,
         }
     }

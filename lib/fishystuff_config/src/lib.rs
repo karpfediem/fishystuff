@@ -61,6 +61,7 @@ pub struct Defaults {
     pub half_life_days: Option<f64>,
     pub alpha0: Option<f64>,
     pub top_k: Option<usize>,
+    pub dolt_ref: Option<String>,
     pub map_version: Option<String>,
 }
 
@@ -331,6 +332,7 @@ fn assign_default(defaults: &mut Defaults, key: &str, value: &str) -> Result<()>
         "half_life_days" => defaults.half_life_days = Some(parse_f64(value, key)?),
         "alpha0" => defaults.alpha0 = Some(parse_f64(value, key)?),
         "top_k" => defaults.top_k = Some(parse_usize(value, key)?),
+        "dolt_ref" => defaults.dolt_ref = Some(value.to_string()),
         "map_version" => defaults.map_version = Some(value.to_string()),
         _ => {}
     }
@@ -415,7 +417,7 @@ fn parse_usize(value: &str, key: &str) -> Result<usize> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::load_api_database_url_from_secretspec_with_overrides;
+    use super::{load_api_database_url_from_secretspec_with_overrides, parse_config};
 
     #[test]
     fn secretspec_api_profile_exposes_default_database_url() {
@@ -432,5 +434,18 @@ mod tests {
             Some(value) => std::env::set_var("FISHYSTUFF_DATABASE_URL", value),
             None => std::env::remove_var("FISHYSTUFF_DATABASE_URL"),
         }
+    }
+
+    #[test]
+    fn parse_config_reads_default_dolt_ref() {
+        let config = parse_config(
+            r#"
+[defaults]
+dolt_ref = "beta"
+"#,
+        )
+        .expect("parse config");
+
+        assert_eq!(config.defaults.dolt_ref.as_deref(), Some("beta"));
     }
 }

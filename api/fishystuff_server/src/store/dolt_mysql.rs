@@ -303,14 +303,37 @@ fn event_zone_assignment_map(rows: &[EventZoneMembershipDbRow]) -> AppResult<Has
     Ok(out)
 }
 
+fn revision_database_name(database_name: &str, ref_id: &str) -> String {
+    let base_database_name = database_name
+        .split_once('/')
+        .map(|(base, _)| base)
+        .unwrap_or(database_name);
+    format!("{base_database_name}/{ref_id}")
+}
+
 impl DoltMySqlStore {
     pub fn new(database_url: String, defaults: MetaDefaults) -> AppResult<Self> {
         let opts = Opts::from_url(&database_url).map_err(db_unavailable)?;
+        let mut builder = OptsBuilder::from_opts(opts.clone());
+        if let Some(default_ref_id) = defaults.dolt_ref_id.as_deref() {
+            validate_dolt_ref(default_ref_id)?;
+            let database_name = opts.get_db_name().ok_or_else(|| {
+                AppError::internal(
+                    "database_url must include a database name when defaults.dolt_ref_id is set",
+                )
+            })?;
+            if database_name.is_empty() {
+                return Err(AppError::internal(
+                    "database_url must include a non-empty database name when defaults.dolt_ref_id is set",
+                ));
+            }
+            builder = builder.db_name(Some(revision_database_name(database_name, default_ref_id)));
+        }
         let constraints =
             PoolConstraints::new(DOLT_POOL_MIN_CONNECTIONS, DOLT_POOL_MAX_CONNECTIONS)
                 .ok_or_else(|| AppError::internal("invalid Dolt pool constraints"))?;
         let pool_opts = PoolOpts::default().with_constraints(constraints);
-        let mut builder = OptsBuilder::from_opts(opts)
+        builder = builder
             .pool_opts(pool_opts)
             .tcp_connect_timeout(Some(Duration::from_secs(DOLT_TCP_CONNECT_TIMEOUT_SECS)))
             .read_timeout(Some(Duration::from_secs(DOLT_SOCKET_READ_TIMEOUT_SECS)))
@@ -1992,8 +2015,8 @@ mod tests {
         fish_catch_methods_from_description, fish_is_dried, group_event_zone_membership_rows,
         group_event_zone_support_rows, merge_fish_catalog_row, parse_layer_kind,
         parse_positive_i64, parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
-        synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
-        EventZoneSupportRow, FishCatalogRow, FishIdentityEntry, FishIdentityIndex,
+        revision_database_name, synthetic_events_snapshot_revision, zone_distribution_fish_ids,
+        DoltMySqlStore, EventZoneSupportRow, FishCatalogRow, FishIdentityEntry, FishIdentityIndex,
         VectorSourceFields, WindowSummary,
     };
 
@@ -2033,6 +2056,18 @@ mod tests {
         .expect_err("expected invalid vector source");
         assert_eq!(err.0.code, ApiErrorCode::InvalidArgument);
         assert!(err.0.message.contains("vector_source_url"));
+    }
+
+    #[test]
+    fn revision_database_name_appends_ref_to_base_database() {
+        assert_eq!(
+            revision_database_name("fishystuff", "beta"),
+            "fishystuff/beta"
+        );
+        assert_eq!(
+            revision_database_name("fishystuff/main", "beta"),
+            "fishystuff/beta"
+        );
     }
 
     #[test]

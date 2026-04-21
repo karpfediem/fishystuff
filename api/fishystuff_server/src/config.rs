@@ -111,6 +111,9 @@ impl AppConfig {
             half_life_days: fs_config.defaults.half_life_days,
             alpha0: fs_config.defaults.alpha0.unwrap_or(1.0),
             top_k: fs_config.defaults.top_k.unwrap_or(30),
+            dolt_ref_id: parse_env_string("FISHYSTUFF_DEFAULT_DOLT_REF")
+                .or_else(|| parse_env_string("DOLT_REMOTE_BRANCH"))
+                .or_else(|| normalize_non_empty(fs_config.defaults.dolt_ref.as_deref())),
             map_version_id: fs_config.defaults.map_version.clone().map(MapVersionId),
         };
 
@@ -227,6 +230,16 @@ impl AppConfig {
                         .context("parse --default-top-k")?;
                     i += 2;
                 }
+                "--default-dolt-ref" => {
+                    defaults.dolt_ref_id = Some(
+                        args.get(i + 1)
+                            .ok_or_else(|| anyhow!("--default-dolt-ref requires value"))?
+                            .trim()
+                            .to_string(),
+                    )
+                    .filter(|value| !value.is_empty());
+                    i += 2;
+                }
                 "--cache-zone-stats-max" => {
                     cache_zone_stats_max = args
                         .get(i + 1)
@@ -332,6 +345,19 @@ fn parse_env_f64(name: &str, fallback: f64) -> f64 {
         .ok()
         .and_then(|value| value.trim().parse::<f64>().ok())
         .unwrap_or(fallback)
+}
+
+fn parse_env_string(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| normalize_non_empty(Some(value.as_str())))
+}
+
+fn normalize_non_empty(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 #[cfg(test)]
