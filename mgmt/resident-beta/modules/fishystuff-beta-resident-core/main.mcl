@@ -29,6 +29,12 @@ class api_db_host($st) {
 	$api_service struct{bundle_path str; gcroot_path str} = $services["api"]
 	$dolt_service struct{bundle_path str; gcroot_path str} = $services["dolt"]
 	$edge_service struct{bundle_path str; gcroot_path str} = $services["edge"]
+	$loki_service struct{bundle_path str; gcroot_path str} = $services["loki"]
+	$otel_collector_service struct{bundle_path str; gcroot_path str} = $services["otel_collector"]
+	$vector_service struct{bundle_path str; gcroot_path str} = $services["vector"]
+	$prometheus_service struct{bundle_path str; gcroot_path str} = $services["prometheus"]
+	$jaeger_service struct{bundle_path str; gcroot_path str} = $services["jaeger"]
+	$grafana_service struct{bundle_path str; gcroot_path str} = $services["grafana"]
 	$site_content struct{store_path str; drv_path str; gcroot_path str} = $content["site"]
 	$cdn_content struct{store_path str; drv_path str; gcroot_path str} = $content["cdn"]
 	$cluster str = $manifest->cluster || "beta"
@@ -36,6 +42,12 @@ class api_db_host($st) {
 	$api_bundle_path str = $api_service->bundle_path || ""
 	$dolt_bundle_path str = $dolt_service->bundle_path || ""
 	$edge_bundle_path str = $edge_service->bundle_path || ""
+	$loki_bundle_path str = $loki_service->bundle_path || ""
+	$otel_collector_bundle_path str = $otel_collector_service->bundle_path || ""
+	$vector_bundle_path str = $vector_service->bundle_path || ""
+	$prometheus_bundle_path str = $prometheus_service->bundle_path || ""
+	$jaeger_bundle_path str = $jaeger_service->bundle_path || ""
+	$grafana_bundle_path str = $grafana_service->bundle_path || ""
 	$site_content_store_path str = $site_content->store_path || ""
 	$site_content_drv_path str = $site_content->drv_path || ""
 	$site_content_gcroot_path str = $site_content->gcroot_path || ""
@@ -108,6 +120,18 @@ class api_db_host($st) {
 	panic($hostname == "", "resident core host requires hostname")
 	panic($api_bundle_path == "", fmt.printf("host %s requires services.api.bundle_path in resident manifest", $hostname))
 	panic($dolt_bundle_path == "", fmt.printf("host %s requires services.dolt.bundle_path in resident manifest", $hostname))
+	panic($edge_bundle_path == "", fmt.printf("host %s requires services.edge.bundle_path in resident manifest", $hostname))
+	panic($loki_bundle_path == "", fmt.printf("host %s requires services.loki.bundle_path in resident manifest", $hostname))
+	panic($otel_collector_bundle_path == "", fmt.printf("host %s requires services.otel_collector.bundle_path in resident manifest", $hostname))
+	panic($vector_bundle_path == "", fmt.printf("host %s requires services.vector.bundle_path in resident manifest", $hostname))
+	panic($prometheus_bundle_path == "", fmt.printf("host %s requires services.prometheus.bundle_path in resident manifest", $hostname))
+	panic($jaeger_bundle_path == "", fmt.printf("host %s requires services.jaeger.bundle_path in resident manifest", $hostname))
+	panic($grafana_bundle_path == "", fmt.printf("host %s requires services.grafana.bundle_path in resident manifest", $hostname))
+	panic(not $tls_enabled, fmt.printf("host %s requires tls.enabled in resident manifest", $hostname))
+	panic($site_content_store_path == "", fmt.printf("host %s requires content.site.store_path in resident manifest", $hostname))
+	panic($site_content_gcroot_path == "", fmt.printf("host %s requires content.site.gcroot_path in resident manifest", $hostname))
+	panic($cdn_content_store_path == "", fmt.printf("host %s requires content.cdn.store_path in resident manifest", $hostname))
+	panic($cdn_content_gcroot_path == "", fmt.printf("host %s requires content.cdn.gcroot_path in resident manifest", $hostname))
 	panic(($site_content_drv_path != "") and ($site_content_store_path == ""), fmt.printf("host %s requires content.site.store_path when content.site.drv_path is set", $hostname))
 	panic(($cdn_content_drv_path != "") and ($cdn_content_store_path == ""), fmt.printf("host %s requires content.cdn.store_path when content.cdn.drv_path is set", $hostname))
 
@@ -132,112 +156,81 @@ class api_db_host($st) {
 		group => "root",
 	}
 
-	if $edge_bundle_path != "" {
-		if $tls_enabled {
-			include access.https($hostname) as https_firewall
+	include access.https($hostname) as https_firewall
 
-			include hetzner_firewall.firewall(struct {
-				name => $https_firewall.name,
-				apitoken => $api_token,
-				rules => $https_firewall.rules,
-				applyto => $https_firewall.applyto,
-				labels => $https_firewall.labels,
-			})
-		}
+	include hetzner_firewall.firewall(struct {
+		name => $https_firewall.name,
+		apitoken => $api_token,
+		rules => $https_firewall.rules,
+		applyto => $https_firewall.applyto,
+		labels => $https_firewall.labels,
+	})
 
-		file "/srv/fishystuff/" {
-			state => "exists",
-			mode => "u=rwx,go=rx",
-			owner => "root",
-			group => "root",
-		}
-
-		if $site_content_store_path != "" {
-			nix:closure "${site_closure_name}" {
-				paths => if $site_content_drv_path == "" { [$site_content_store_path,] } else { [] },
-				drvs => if $site_content_drv_path != "" { [$site_content_drv_path,] } else { [] },
-				mode => $site_closure_mode,
-			}
-
-			if $site_content_gcroot_path != "" {
-				nix:gcroot "${site_content_gcroot_path}" {
-					target => $site_content_store_path,
-					state => "exists",
-					force => true,
-				}
-			}
-
-			file "${site_root_dir}" {
-				state => "exists",
-				source => $site_content_store_path,
-				symlink => true,
-				force => true,
-			}
-		}
-
-		if $site_content_store_path == "" {
-			file "${site_root_dir}/" {
-				state => "exists",
-				mode => "u=rwx,go=rx",
-				owner => "root",
-				group => "root",
-			}
-		}
-
-		if $cdn_content_store_path != "" {
-			nix:closure "${cdn_closure_name}" {
-				paths => if $cdn_content_drv_path == "" { [$cdn_content_store_path,] } else { [] },
-				drvs => if $cdn_content_drv_path != "" { [$cdn_content_drv_path,] } else { [] },
-				mode => $cdn_closure_mode,
-			}
-
-			if $cdn_content_gcroot_path != "" {
-				nix:gcroot "${cdn_content_gcroot_path}" {
-					target => $cdn_content_store_path,
-					state => "exists",
-					force => true,
-				}
-			}
-
-			file "${cdn_root_dir}" {
-				state => "exists",
-				source => $cdn_content_store_path,
-				symlink => true,
-				force => true,
-			}
-		}
-
-		if $cdn_content_store_path == "" {
-			file "${cdn_root_dir}/" {
-				state => "exists",
-				mode => "u=rwx,go=rx",
-				owner => "root",
-				group => "root",
-			}
-		}
-
-		if $tls_enabled and ($tls_challenge == "http-01") {
-			http:server "${http01_server_name}" {
-				address => ":80",
-			}
-		}
-
-		include fishystuff_edge_tls.certificate(struct {
-			enabled => $tls_enabled,
-			cluster => $manifest->cluster,
-			hostname => $hostname,
-			bundle_path => $edge_bundle_path,
-			service_name => "fishystuff-edge",
-			certificate_name => $tls_certificate_name,
-			acme_email => $tls_acme_email,
-			challenge => $tls_challenge,
-			dns_provider => $tls_dns_provider,
-			dns_env => $tls_dns_env,
-			directory_url => $tls_directory_url,
-			http01_server_name => $http01_server_name,
-			domains => $tls_domains,
-		})
+	file "/srv/fishystuff/" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
 	}
+
+nix:closure "${site_closure_name}" {
+		paths => if $site_content_drv_path == "" { [$site_content_store_path,] } else { [] },
+		drvs => if $site_content_drv_path != "" { [$site_content_drv_path,] } else { [] },
+		mode => $site_closure_mode,
+	}
+
+	nix:gcroot "${site_content_gcroot_path}" {
+		target => $site_content_store_path,
+		state => "exists",
+		force => true,
+	}
+
+	file "${site_root_dir}" {
+		state => "exists",
+		source => $site_content_store_path,
+		symlink => true,
+		force => true,
+	}
+
+nix:closure "${cdn_closure_name}" {
+		paths => if $cdn_content_drv_path == "" { [$cdn_content_store_path,] } else { [] },
+		drvs => if $cdn_content_drv_path != "" { [$cdn_content_drv_path,] } else { [] },
+		mode => $cdn_closure_mode,
+	}
+
+	if $tls_enabled and ($tls_challenge == "http-01") {
+		http:server "${http01_server_name}" {
+			address => ":80",
+		}
+	}
+
+nix:gcroot "${cdn_content_gcroot_path}" {
+		target => $cdn_content_store_path,
+		state => "exists",
+		force => true,
+	}
+
+	file "${cdn_root_dir}" {
+		state => "exists",
+		source => $cdn_content_store_path,
+		symlink => true,
+		force => true,
+	}
+
+	include fishystuff_edge_tls.certificate(struct {
+		cluster => $manifest->cluster,
+		hostname => $hostname,
+		bundle_path => $edge_bundle_path,
+		service_name => "fishystuff-edge",
+		certificate_name => $tls_certificate_name,
+		acme_email => $tls_acme_email,
+		challenge => $tls_challenge,
+		dns_provider => $tls_dns_provider,
+		dns_env => $tls_dns_env,
+		directory_url => $tls_directory_url,
+		http01_server_name => $http01_server_name,
+		domains => $tls_domains,
+	})
 
 	if $dolt_volume_device != "" {
 		file "${dolt_data_dir}/" {
@@ -263,44 +256,71 @@ class api_db_host($st) {
 		Notify => Svc["${api_service_name}"],
 	}
 
-	forkv $service_name, $service in $services {
-		$service_def struct{bundle_path str; gcroot_path str} = $service
-		if ($service_def->bundle_path || "") != "" {
-			include fishystuff_bundle_systemd.unit(struct {
-				bundle_path => $service_def->bundle_path,
-				gcroot_path => $service_def->gcroot_path || "",
-				startup_mode => $startup_mode,
-			})
-		}
-	}
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $api_bundle_path,
+		gcroot_path => $api_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $dolt_bundle_path,
+		gcroot_path => $dolt_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $edge_bundle_path,
+		gcroot_path => $edge_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $loki_bundle_path,
+		gcroot_path => $loki_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $otel_collector_bundle_path,
+		gcroot_path => $otel_collector_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $vector_bundle_path,
+		gcroot_path => $vector_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $prometheus_bundle_path,
+		gcroot_path => $prometheus_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $jaeger_bundle_path,
+		gcroot_path => $jaeger_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $grafana_bundle_path,
+		gcroot_path => $grafana_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
 
 	File["/run/fishystuff/"] -> File["/run/fishystuff/api/"]
 	File["/run/fishystuff/api/"] -> File["${api_env_file}"]
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
 
-	if $edge_bundle_path != "" {
-		if $site_content_store_path != "" {
-			Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
-			if $site_content_gcroot_path != "" {
-				Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
-			}
-			File["/srv/fishystuff/"] -> File["${site_root_dir}"]
-		}
-		if $site_content_store_path == "" {
-			File["/srv/fishystuff/"] -> File["${site_root_dir}/"] -> Svc["fishystuff-edge"]
-		}
-		if $cdn_content_store_path != "" {
-			Nix:Closure["${cdn_closure_name}"] -> File["${cdn_root_dir}"] -> Svc["fishystuff-edge"]
-			if $cdn_content_gcroot_path != "" {
-				Nix:Closure["${cdn_closure_name}"] -> Nix:Gcroot["${cdn_content_gcroot_path}"] -> File["${cdn_root_dir}"]
-			}
-			File["/srv/fishystuff/"] -> File["${cdn_root_dir}"]
-		}
-		if $cdn_content_store_path == "" {
-			File["/srv/fishystuff/"] -> File["${cdn_root_dir}/"] -> Svc["fishystuff-edge"]
-		}
-	}
+	Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
+	Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
+	File["/srv/fishystuff/"] -> File["${site_root_dir}"]
+	Nix:Closure["${cdn_closure_name}"] -> File["${cdn_root_dir}"] -> Svc["fishystuff-edge"]
+	Nix:Closure["${cdn_closure_name}"] -> Nix:Gcroot["${cdn_content_gcroot_path}"] -> File["${cdn_root_dir}"]
+	File["/srv/fishystuff/"] -> File["${cdn_root_dir}"]
 
 	if $dolt_volume_device != "" {
 		File["/var/lib/fishystuff/"] -> File["${dolt_data_dir}/"] -> Mount["${dolt_data_dir}"] -> Svc["${dolt_service_name}"]

@@ -23,34 +23,33 @@ class host($st) {
 		cluster => $cluster,
 	}) as layout
 	include layout.host($hostname) as host_layout
+	$api_db_host bool = $host_layout.api_enabled or $host_layout.dolt_enabled
 
-	if $host_layout.api_enabled or $host_layout.dolt_enabled {
-		include fishystuff_beta_resident_core.api_db_host(struct {
-			manifest => $manifest,
-			hostname => $hostname,
-			site_base_url => $manifest->public_urls->site_base_url || $host_layout.site_base_url,
-			api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
-			cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
-			telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
-			deployment_environment => $deployment_environment,
-			startup_mode => $manifest->startup_mode || "enabled",
-			dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
-			dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
-			dolt_database_name => $manifest->dolt->database_name || "fishystuff",
-			dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
-			dolt_clone_depth => $manifest->dolt->clone_depth || "1",
-			dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
-			dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",
-			dolt_port => $manifest->dolt->port || "3306",
-			site_root_dir => $manifest->content_roots->site_root_dir || "/srv/fishystuff/site",
-			cdn_root_dir => $manifest->content_roots->cdn_root_dir || "/srv/fishystuff/cdn",
-		})
-	}
+	panic(not $api_db_host, fmt.printf("host %s is not an api-db resident host in the current beta topology", $hostname))
+
+	include fishystuff_beta_resident_core.api_db_host(struct {
+		manifest => $manifest,
+		hostname => $hostname,
+		site_base_url => $manifest->public_urls->site_base_url || $host_layout.site_base_url,
+		api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
+		cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
+		telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
+		deployment_environment => $deployment_environment,
+		startup_mode => $manifest->startup_mode || "enabled",
+		dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
+		dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
+		dolt_database_name => $manifest->dolt->database_name || "fishystuff",
+		dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
+		dolt_clone_depth => $manifest->dolt->clone_depth || "1",
+		dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
+		dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",
+		dolt_port => $manifest->dolt->port || "3306",
+		site_root_dir => $manifest->content_roots->site_root_dir || "/srv/fishystuff/site",
+		cdn_root_dir => $manifest->content_roots->cdn_root_dir || "/srv/fishystuff/cdn",
+	})
 
 	panic(
-		(not $host_layout.api_enabled)
-		and (not $host_layout.dolt_enabled)
-		and $host_layout.cdn_expected,
+		(not $api_db_host) and $host_layout.cdn_expected,
 		fmt.printf(
 			"host %s is a CDN edge in the current beta topology, but fishystuff-cdn resident bundle activation is not implemented yet",
 			$hostname
@@ -58,9 +57,7 @@ class host($st) {
 	)
 
 	panic(
-		(not $host_layout.api_enabled)
-		and (not $host_layout.dolt_enabled)
-		and $host_layout.telemetry_expected,
+		(not $api_db_host) and $host_layout.telemetry_expected,
 		fmt.printf(
 			"host %s is a telemetry host in the current beta topology, but resident telemetry bundle activation is not implemented yet",
 			$hostname
