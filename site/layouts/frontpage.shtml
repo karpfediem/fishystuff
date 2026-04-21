@@ -65,7 +65,12 @@
         <div class="max-w-3xl">
           <a href="$site.link()" class="home-wordmark mx-auto mb-5 font-brand font-bold no-underline hover:no-underline focus:no-underline">
             <span :text="$site.title"></span>
-            <img src="$page.custom.getOr('brand_logo_url','/img/logo.png')" alt="" decoding="async">
+            <ctx :if="$page.custom.has('brand_logo_url')">
+              <img src="$page.custom.get('brand_logo_url')" alt="" decoding="async">
+            </ctx>
+            <ctx :if="$page.custom.has('brand_logo_url').not()">
+              <img src="$site.asset('img/logo.png').link()" alt="" decoding="async">
+            </ctx>
           </a>
 
           <h1 class="m-0 text-xl font-black leading-tight sm:text-2xl lg:text-3xl"

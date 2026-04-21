@@ -107,17 +107,28 @@
                            href="$site.link()"
                            class="relative inline-flex w-auto min-w-max items-center gap-2 overflow-visible whitespace-nowrap px-2 text-[1.2rem] font-brand font-bold no-underline hover:underline focus:underline">
                             <span :text="$site.title"></span>
-                            <ctx :if="$page.custom.getOr('brand_logo_nav_srcset','/img/logo-32.png 1x, /img/logo-64.png 2x').len().gt(0)">
-                            <img src="$page.custom.getOr('brand_logo_nav_url','/img/logo-32.png')"
-                                 srcset="$page.custom.getOr('brand_logo_nav_srcset','/img/logo-32.png 1x, /img/logo-64.png 2x')"
+                            <ctx :if="$page.custom.has('brand_logo_nav_url')">
+                            <ctx :if="$page.custom.getOr('brand_logo_nav_srcset','').len().gt(0)">
+                            <img src="$page.custom.get('brand_logo_nav_url')"
+                                 srcset="$page.custom.get('brand_logo_nav_srcset')"
                                  width="32"
                                  height="32"
                                  alt=""
                                  decoding="async"
                                  class="h-8 w-8 shrink-0">
                             </ctx>
-                            <ctx :if="$page.custom.getOr('brand_logo_nav_srcset','/img/logo-32.png 1x, /img/logo-64.png 2x').len().gt(0).not()">
-                            <img src="$page.custom.getOr('brand_logo_nav_url','/img/logo-32.png')"
+                            <ctx :if="$page.custom.getOr('brand_logo_nav_srcset','').len().gt(0).not()">
+                            <img src="$page.custom.get('brand_logo_nav_url')"
+                                 width="32"
+                                 height="32"
+                                 alt=""
+                                 decoding="async"
+                                 class="h-8 w-8 shrink-0">
+                            </ctx>
+                            </ctx>
+                            <ctx :if="$page.custom.has('brand_logo_nav_url').not()">
+                            <img src="$site.asset('img/logo-32.png').link()"
+                                 srcset="/img/logo-32.png 1x, /img/logo-64.png 2x"
                                  width="32"
                                  height="32"
                                  alt=""
