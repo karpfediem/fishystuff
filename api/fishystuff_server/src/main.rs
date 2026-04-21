@@ -133,7 +133,7 @@ mod telemetry {
 fn spawn_startup_cache_prewarm(store: Arc<dyn Store>) {
     tokio::spawn(async move {
         let mut last_err = None;
-        for attempt in 0..5 {
+        for attempt in 0..60 {
             match store.prime_startup_caches().await {
                 Ok(()) => {
                     last_err = None;
@@ -141,8 +141,8 @@ fn spawn_startup_cache_prewarm(store: Arc<dyn Store>) {
                 }
                 Err(err) => {
                     last_err = Some(err);
-                    if attempt < 4 {
-                        tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
+                    if attempt < 59 {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }
             }

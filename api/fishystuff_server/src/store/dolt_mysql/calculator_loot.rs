@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use fishystuff_api::error::ApiErrorCode;
 use fishystuff_api::ids::RgbKey;
@@ -36,6 +37,8 @@ const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess
 const GROUP_RATE_SCALE: f64 = 1_000_000.0;
 const COMBINED_GROUP_RATE_SCALE: f64 = GROUP_RATE_SCALE * GROUP_RATE_SCALE;
 const HARPOON_SLOT_IDX: u8 = 6;
+const CALCULATOR_ZONE_LOOT_RETRY_BASE_DELAY: Duration = Duration::from_millis(250);
+const CALCULATOR_ZONE_LOOT_RETRY_MAX_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 struct CommunityPrizeGuessMeta {
@@ -253,6 +256,20 @@ fn zone_loot_slot_sort_key(slot_idx: u8) -> u8 {
     }
 }
 
+fn should_retry_calculator_zone_loot_error(err: &AppError) -> bool {
+    matches!(err.0.code, ApiErrorCode::Unavailable)
+}
+
+fn calculator_zone_loot_retry_delay(failures: u32) -> Duration {
+    let multiplier = 1u32
+        .checked_shl(failures.saturating_sub(1).min(31))
+        .unwrap_or(u32::MAX);
+    CALCULATOR_ZONE_LOOT_RETRY_BASE_DELAY
+        .checked_mul(multiplier)
+        .unwrap_or(CALCULATOR_ZONE_LOOT_RETRY_MAX_DELAY)
+        .min(CALCULATOR_ZONE_LOOT_RETRY_MAX_DELAY)
+}
+
 fn apply_community_guess_weights(
     aggregate_weights: &HashMap<(u8, i32), f64>,
     community_guess_by_key: &HashMap<(u8, i32), CommunityPrizeGuessMeta>,
@@ -323,36 +340,81 @@ impl DoltMySqlStore {
                 }
             }
 
-            let (inflight_lock, inflight_cvar) = &*self.calculator_zone_loot_inflight;
-            let mut inflight = inflight_lock
+            let (load_state_lock, load_state_cvar) = &*self.calculator_zone_loot_load_state;
+            let mut load_state = load_state_lock
                 .lock()
-                .expect("calculator zone loot inflight lock poisoned");
-            if !inflight.contains(&cache_key) {
-                inflight.insert(cache_key.clone());
-                drop(inflight);
+                .expect("calculator zone loot load state lock poisoned");
+            if load_state.inflight.contains(&cache_key) {
+                load_state = load_state_cvar
+                    .wait(load_state)
+                    .expect("calculator zone loot load state wait poisoned");
+                drop(load_state);
+                continue;
+            }
+            if let Some(retry_backoff) = load_state.retry_backoff.get(&cache_key) {
+                let now = Instant::now();
+                if now < retry_backoff.retry_at {
+                    let wait = retry_backoff.retry_at.saturating_duration_since(now);
+                    let (guard, _) = load_state_cvar
+                        .wait_timeout(load_state, wait)
+                        .expect("calculator zone loot backoff wait poisoned");
+                    drop(guard);
+                    continue;
+                }
+            }
+            if !load_state.inflight.contains(&cache_key) {
+                load_state.inflight.insert(cache_key.clone());
+                drop(load_state);
                 break;
             }
-            inflight = inflight_cvar
-                .wait(inflight)
-                .expect("calculator zone loot inflight wait poisoned");
-            drop(inflight);
         }
 
         let result = self.query_calculator_zone_loot(lang, ref_id, zone_rgb_key);
 
-        let (inflight_lock, inflight_cvar) = &*self.calculator_zone_loot_inflight;
-        let mut inflight = inflight_lock
-            .lock()
-            .expect("calculator zone loot inflight lock poisoned");
-        inflight.remove(&cache_key);
-        inflight_cvar.notify_all();
-        drop(inflight);
-
-        let rows = result?;
-        if let Ok(mut cache) = self.calculator_zone_loot_cache.lock() {
-            cache.insert(cache_key, rows.clone());
+        if let Ok(rows) = &result {
+            if let Ok(mut cache) = self.calculator_zone_loot_cache.lock() {
+                cache.insert(cache_key.clone(), rows.clone());
+            }
         }
-        Ok(rows)
+
+        let (load_state_lock, load_state_cvar) = &*self.calculator_zone_loot_load_state;
+        let mut load_state = load_state_lock
+            .lock()
+            .expect("calculator zone loot load state lock poisoned");
+        load_state.inflight.remove(&cache_key);
+        match &result {
+            Ok(_) => {
+                load_state.retry_backoff.remove(&cache_key);
+            }
+            Err(err) if should_retry_calculator_zone_loot_error(err) => {
+                let failures = load_state
+                    .retry_backoff
+                    .get(&cache_key)
+                    .map_or(1, |retry_backoff| retry_backoff.failures.saturating_add(1));
+                let delay = calculator_zone_loot_retry_delay(failures);
+                load_state.retry_backoff.insert(
+                    cache_key.clone(),
+                    super::CalculatorZoneLootRetryBackoff {
+                        failures,
+                        retry_at: Instant::now() + delay,
+                    },
+                );
+                tracing::warn!(
+                    cache.key = %cache_key,
+                    retry.failures = failures,
+                    retry.delay.ms = delay.as_millis() as u64,
+                    error.message = %err.0.message,
+                    "calculator zone loot cache fill failed; backing off before retry"
+                );
+            }
+            Err(_) => {
+                load_state.retry_backoff.remove(&cache_key);
+            }
+        }
+        load_state_cvar.notify_all();
+        drop(load_state);
+
+        result
     }
 
     fn query_calculator_zone_loot(
@@ -979,6 +1041,9 @@ impl DoltMySqlStore {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::time::Duration;
+
+    use crate::error::AppError;
 
     use super::{
         apply_community_guess_weights, community_presence_matches_row, community_presence_scope,
@@ -1201,5 +1266,53 @@ mod tests {
         assert!((yellow_weight / super::COMBINED_GROUP_RATE_SCALE - 0.30_f64).abs() < 1e-9);
         assert!((blue_weight / super::COMBINED_GROUP_RATE_SCALE - 0.10_f64).abs() < 1e-9);
         assert!((mud_weight / super::COMBINED_GROUP_RATE_SCALE - 0.01_f64).abs() < 1e-9);
+    }
+
+    #[test]
+    fn calculator_zone_loot_retry_delay_exponentially_backs_off_with_cap() {
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(1),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(2),
+            Duration::from_millis(500)
+        );
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(3),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(4),
+            Duration::from_secs(2)
+        );
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(5),
+            Duration::from_secs(4)
+        );
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(6),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            super::calculator_zone_loot_retry_delay(12),
+            Duration::from_secs(5)
+        );
+    }
+
+    #[test]
+    fn calculator_zone_loot_retry_policy_only_retries_transient_db_failures() {
+        assert!(super::should_retry_calculator_zone_loot_error(
+            &AppError::unavailable("database unavailable")
+        ));
+        assert!(!super::should_retry_calculator_zone_loot_error(
+            &AppError::invalid_argument("bad zone")
+        ));
+        assert!(!super::should_retry_calculator_zone_loot_error(
+            &AppError::not_found("not found")
+        ));
+        assert!(!super::should_retry_calculator_zone_loot_error(
+            &AppError::internal("bug")
+        ));
     }
 }

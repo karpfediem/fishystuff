@@ -18,7 +18,7 @@ mod layers;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use fishystuff_api::error::ApiError;
@@ -104,7 +104,7 @@ pub struct DoltMySqlStore {
     calculator_source_data_cache: Arc<Mutex<HashMap<String, CalculatorCatalogSourceData>>>,
     calculator_source_data_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     calculator_zone_loot_cache: Arc<Mutex<HashMap<String, Vec<CalculatorZoneLootEntry>>>>,
-    calculator_zone_loot_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    calculator_zone_loot_load_state: Arc<(Mutex<CalculatorZoneLootLoadState>, Condvar)>,
     fish_list_cache: Arc<Mutex<HashMap<String, FishListResponse>>>,
     fish_list_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     fish_best_spots_cache: Arc<Mutex<HashMap<String, FishBestSpotsResponse>>>,
@@ -118,6 +118,18 @@ pub struct DoltMySqlStore {
     zones_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     fish_identity_cache: Arc<Mutex<HashMap<String, FishIdentityIndex>>>,
     fish_identity_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+}
+
+#[derive(Debug, Default)]
+struct CalculatorZoneLootLoadState {
+    inflight: HashSet<String>,
+    retry_backoff: HashMap<String, CalculatorZoneLootRetryBackoff>,
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorZoneLootRetryBackoff {
+    failures: u32,
+    retry_at: Instant,
 }
 
 #[derive(Debug, Clone)]
@@ -382,7 +394,10 @@ impl DoltMySqlStore {
             calculator_source_data_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_source_data_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             calculator_zone_loot_cache: Arc::new(Mutex::new(HashMap::new())),
-            calculator_zone_loot_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            calculator_zone_loot_load_state: Arc::new((
+                Mutex::new(CalculatorZoneLootLoadState::default()),
+                Condvar::new(),
+            )),
             fish_list_cache: Arc::new(Mutex::new(HashMap::new())),
             fish_list_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             fish_best_spots_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -1980,6 +1995,7 @@ impl Store for DoltMySqlStore {
     async fn prime_startup_caches(&self) -> AppResult<()> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
+            let default_zone_rgb_key = calculator_defaults::build_calculator_default_signals().zone;
             let _ = this.query_dolt_head_revision();
             this.query_zones(None)?;
             this.query_fish_identities(None)?;
@@ -1999,6 +2015,7 @@ impl Store for DoltMySqlStore {
             for lang in [FishLang::En, FishLang::Ko] {
                 this.query_fish_list_cached(lang, None)?;
                 this.query_calculator_catalog(lang, None)?;
+                this.query_calculator_zone_loot_cached(lang, None, &default_zone_rgb_key)?;
             }
             Ok(())
         })

@@ -150,6 +150,7 @@
             configuration.fishystuff.api = {
               package = api;
               baseConfigSource = apiServiceBaseConfig;
+              requestTimeoutSecs = 90;
               runtimeEnvFile = "/run/fishystuff/api/env";
               environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
               environment.FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
