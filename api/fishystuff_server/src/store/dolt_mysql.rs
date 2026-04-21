@@ -99,6 +99,17 @@ pub struct DoltMySqlStore {
     calculator_source_data_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     calculator_zone_loot_cache: Arc<Mutex<HashMap<String, Vec<CalculatorZoneLootEntry>>>>,
     calculator_zone_loot_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    fish_list_cache: Arc<Mutex<HashMap<String, FishListResponse>>>,
+    fish_list_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    fish_best_spots_cache: Arc<Mutex<HashMap<String, FishBestSpotsResponse>>>,
+    fish_best_spots_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    community_fish_zone_support_cache:
+        Arc<Mutex<HashMap<String, CommunityFishZoneSupportResponse>>>,
+    community_fish_zone_support_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    zones_cache: Arc<Mutex<HashMap<String, Vec<ZoneEntry>>>>,
+    zones_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    fish_identity_cache: Arc<Mutex<HashMap<String, FishIdentityIndex>>>,
+    fish_identity_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
 }
 
 #[derive(Debug, Clone)]
@@ -359,6 +370,19 @@ impl DoltMySqlStore {
             calculator_source_data_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             calculator_zone_loot_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_zone_loot_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            fish_list_cache: Arc::new(Mutex::new(HashMap::new())),
+            fish_list_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            fish_best_spots_cache: Arc::new(Mutex::new(HashMap::new())),
+            fish_best_spots_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            community_fish_zone_support_cache: Arc::new(Mutex::new(HashMap::new())),
+            community_fish_zone_support_inflight: Arc::new((
+                Mutex::new(HashSet::new()),
+                Condvar::new(),
+            )),
+            zones_cache: Arc::new(Mutex::new(HashMap::new())),
+            zones_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            fish_identity_cache: Arc::new(Mutex::new(HashMap::new())),
+            fish_identity_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
         };
         Ok(store)
     }
@@ -793,7 +817,149 @@ impl DoltMySqlStore {
         Ok(out.into_values().collect())
     }
 
+    fn fish_list_cache_key(lang: FishLang, ref_id: Option<&str>) -> String {
+        let lang = match lang {
+            FishLang::En => "en",
+            FishLang::Ko => "ko",
+        };
+        match ref_id {
+            Some(ref_id) => format!("{lang}:{ref_id}"),
+            None => format!("{lang}:head"),
+        }
+    }
+
+    fn query_fish_list_cached(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<FishListResponse> {
+        let cache_key = Self::fish_list_cache_key(lang, ref_id);
+        loop {
+            if let Ok(cache) = self.fish_list_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.fish_list_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("fish list inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("fish list inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result: AppResult<FishListResponse> = (|| {
+            let mut fish = self.query_fish_catalog(lang, ref_id)?;
+            fish.sort_by(|left, right| {
+                right
+                    .is_prize
+                    .unwrap_or(false)
+                    .cmp(&left.is_prize.unwrap_or(false))
+                    .then_with(|| {
+                        right
+                            .grade_rank
+                            .unwrap_or_default()
+                            .cmp(&left.grade_rank.unwrap_or_default())
+                    })
+                    .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                    .then_with(|| left.item_id.cmp(&right.item_id))
+            });
+            let revision = self
+                .query_dolt_revision(ref_id)
+                .unwrap_or_else(|| synthetic_fish_revision(ref_id, &fish));
+            let entries = fish
+                .into_iter()
+                .map(|entry| FishEntry {
+                    item_id: entry.item_id,
+                    encyclopedia_key: entry.encyclopedia_key,
+                    encyclopedia_id: entry.encyclopedia_id,
+                    name: entry.name,
+                    grade: entry.grade,
+                    is_prize: entry.is_prize,
+                    is_dried: entry.is_dried,
+                    catch_methods: entry.catch_methods,
+                    vendor_price: entry.vendor_price,
+                })
+                .collect::<Vec<_>>();
+            Ok(FishListResponse {
+                revision,
+                count: entries.len(),
+                fish: entries,
+            })
+        })();
+
+        let (inflight_lock, inflight_cvar) = &*self.fish_list_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("fish list inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let response = result?;
+
+        if let Ok(mut cache) = self.fish_list_cache.lock() {
+            cache.insert(cache_key, response.clone());
+        }
+
+        Ok(response)
+    }
+
+    fn revision_cache_key(ref_id: Option<&str>) -> String {
+        match ref_id {
+            Some(ref_id) => ref_id.to_string(),
+            None => "head".to_string(),
+        }
+    }
+
     fn query_zones(&self, ref_id: Option<&str>) -> AppResult<Vec<ZoneEntry>> {
+        let cache_key = Self::revision_cache_key(ref_id);
+        loop {
+            if let Ok(cache) = self.zones_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.zones_inflight;
+            let mut inflight = inflight_lock.lock().expect("zones inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("zones inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.query_zones_uncached(ref_id);
+
+        let (inflight_lock, inflight_cvar) = &*self.zones_inflight;
+        let mut inflight = inflight_lock.lock().expect("zones inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let zones = result?;
+
+        if let Ok(mut cache) = self.zones_cache.lock() {
+            cache.insert(cache_key, zones.clone());
+        }
+
+        Ok(zones)
+    }
+
+    fn query_zones_uncached(&self, ref_id: Option<&str>) -> AppResult<Vec<ZoneEntry>> {
         let mut query = queries::ZONES_SQL.to_string();
         if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
@@ -856,6 +1022,49 @@ impl DoltMySqlStore {
     }
 
     fn query_fish_identities(&self, ref_id: Option<&str>) -> AppResult<FishIdentityIndex> {
+        let cache_key = Self::revision_cache_key(ref_id);
+        loop {
+            if let Ok(cache) = self.fish_identity_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.fish_identity_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("fish identity inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("fish identity inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.query_fish_identities_uncached(ref_id);
+
+        let (inflight_lock, inflight_cvar) = &*self.fish_identity_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("fish identity inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let identities = result?;
+
+        if let Ok(mut cache) = self.fish_identity_cache.lock() {
+            cache.insert(cache_key, identities.clone());
+        }
+
+        Ok(identities)
+    }
+
+    fn query_fish_identities_uncached(&self, ref_id: Option<&str>) -> AppResult<FishIdentityIndex> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -1688,7 +1897,11 @@ impl Store for DoltMySqlStore {
     async fn prime_startup_caches(&self) -> AppResult<()> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
+            this.query_zones(None)?;
+            this.query_fish_identities(None)?;
+            this.query_community_fish_zone_support_cached(None)?;
             for lang in [FishLang::En, FishLang::Ko] {
+                this.query_fish_list_cached(lang, None)?;
                 this.query_calculator_catalog(lang, None)?;
             }
             Ok(())
@@ -1752,47 +1965,9 @@ impl Store for DoltMySqlStore {
         ref_id: Option<String>,
     ) -> AppResult<FishListResponse> {
         let this = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut fish = this.query_fish_catalog(lang, ref_id.as_deref())?;
-            fish.sort_by(|left, right| {
-                right
-                    .is_prize
-                    .unwrap_or(false)
-                    .cmp(&left.is_prize.unwrap_or(false))
-                    .then_with(|| {
-                        right
-                            .grade_rank
-                            .unwrap_or_default()
-                            .cmp(&left.grade_rank.unwrap_or_default())
-                    })
-                    .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-                    .then_with(|| left.item_id.cmp(&right.item_id))
-            });
-            let revision = this
-                .query_dolt_revision(ref_id.as_deref())
-                .unwrap_or_else(|| synthetic_fish_revision(ref_id.as_deref(), &fish));
-            let entries: Vec<FishEntry> = fish
-                .into_iter()
-                .map(|entry| FishEntry {
-                    item_id: entry.item_id,
-                    encyclopedia_key: entry.encyclopedia_key,
-                    encyclopedia_id: entry.encyclopedia_id,
-                    name: entry.name,
-                    grade: entry.grade,
-                    is_prize: entry.is_prize,
-                    is_dried: entry.is_dried,
-                    catch_methods: entry.catch_methods,
-                    vendor_price: entry.vendor_price,
-                })
-                .collect();
-            Ok(FishListResponse {
-                revision,
-                count: entries.len(),
-                fish: entries,
-            })
-        })
-        .await
-        .map_err(|err| AppError::internal(err.to_string()))?
+        tokio::task::spawn_blocking(move || this.query_fish_list_cached(lang, ref_id.as_deref()))
+            .await
+            .map_err(|err| AppError::internal(err.to_string()))?
     }
 
     #[instrument(name = "store.fish_best_spots", skip_all)]
@@ -1804,7 +1979,7 @@ impl Store for DoltMySqlStore {
     ) -> AppResult<FishBestSpotsResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
-            this.query_fish_best_spots(lang, ref_id.as_deref(), item_id)
+            this.query_fish_best_spots_cached(lang, ref_id.as_deref(), item_id)
         })
         .await
         .map_err(|err| AppError::internal(err.to_string()))?
@@ -1817,7 +1992,7 @@ impl Store for DoltMySqlStore {
     ) -> AppResult<CommunityFishZoneSupportResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
-            this.query_community_fish_zone_support(ref_id.as_deref())
+            this.query_community_fish_zone_support_cached(ref_id.as_deref())
         })
         .await
         .map_err(|err| AppError::internal(err.to_string()))?

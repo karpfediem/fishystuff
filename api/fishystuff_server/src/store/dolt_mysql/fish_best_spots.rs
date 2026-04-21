@@ -83,6 +83,59 @@ fn support_status_implies_presence(value: &str) -> bool {
 }
 
 impl DoltMySqlStore {
+    fn community_fish_zone_support_cache_key(ref_id: Option<&str>) -> String {
+        match ref_id {
+            Some(ref_id) => ref_id.to_string(),
+            None => "head".to_string(),
+        }
+    }
+
+    pub(super) fn query_community_fish_zone_support_cached(
+        &self,
+        ref_id: Option<&str>,
+    ) -> AppResult<CommunityFishZoneSupportResponse> {
+        let cache_key = Self::community_fish_zone_support_cache_key(ref_id);
+        loop {
+            if let Ok(cache) = self.community_fish_zone_support_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.community_fish_zone_support_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("community fish zone support inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("community fish zone support inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.query_community_fish_zone_support(ref_id);
+
+        let (inflight_lock, inflight_cvar) = &*self.community_fish_zone_support_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("community fish zone support inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let response = result?;
+
+        if let Ok(mut cache) = self.community_fish_zone_support_cache.lock() {
+            cache.insert(cache_key, response.clone());
+        }
+
+        Ok(response)
+    }
+
     pub(super) fn query_community_fish_zone_support(
         &self,
         ref_id: Option<&str>,
@@ -138,6 +191,65 @@ impl DoltMySqlStore {
             count: fish.len(),
             fish,
         })
+    }
+
+    fn fish_best_spots_cache_key(lang: FishLang, ref_id: Option<&str>, item_id: i32) -> String {
+        let lang = match lang {
+            FishLang::En => "en",
+            FishLang::Ko => "ko",
+        };
+        match ref_id {
+            Some(ref_id) => format!("{lang}:{ref_id}:{item_id}"),
+            None => format!("{lang}:head:{item_id}"),
+        }
+    }
+
+    pub(super) fn query_fish_best_spots_cached(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+        item_id: i32,
+    ) -> AppResult<FishBestSpotsResponse> {
+        let cache_key = Self::fish_best_spots_cache_key(lang, ref_id, item_id);
+        loop {
+            if let Ok(cache) = self.fish_best_spots_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.fish_best_spots_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("fish best spots inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("fish best spots inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.query_fish_best_spots(lang, ref_id, item_id);
+
+        let (inflight_lock, inflight_cvar) = &*self.fish_best_spots_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("fish best spots inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let response = result?;
+
+        if let Ok(mut cache) = self.fish_best_spots_cache.lock() {
+            cache.insert(cache_key, response.clone());
+        }
+
+        Ok(response)
     }
 
     pub(super) fn query_fish_best_spots(
