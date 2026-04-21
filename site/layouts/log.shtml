@@ -69,28 +69,23 @@
       </header>
 
       <ctx :if="$page.custom.getOr('translation_fallback', false)">
-        <aside class="card card-border not-prose bg-base-100 shadow-sm">
-          <div class="card-body gap-3 p-4 sm:p-5">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="badge badge-ghost badge-sm">
-                <svg class="fishy-icon size-3.5 opacity-65" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-alert-triangle"></use></svg>
-                <span :text="$i18n.getOr('translation_notice.title','')"></span>
-              </span>
-            </div>
-            <p class="m-0 text-sm text-base-content/80" :text="$i18n.getOr('translation_notice.body','')"></p>
-            <p class="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/70">
-              <span :text="$i18n.getOr('translation_notice.help','')"></span>
-              <a class="link link-hover link-neutral font-medium" href="$page.custom.getOr('translation_help_url','/community/')" :text="$i18n.getOr('translation_notice.community_link','')"></a>
-              <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_source_file_url')" href="$page.custom.get('translation_source_file_url')" :text="$i18n.getOr('translation_notice.source_file_link','')"></a>
-              <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_create_file_url')" href="$page.custom.get('translation_create_file_url')" :text="$i18n.getOr('translation_notice.create_file_link','')"></a>
-            </p>
-            <p class="m-0 break-all text-xs font-mono text-base-content/55" :if="$page.custom.has('translation_target_path')">
-              <span :text="$i18n.getOr('translation_notice.target_path_label','')"></span>
-              <span> </span>
-              <span :text="$page.custom.get('translation_target_path')"></span>
-            </p>
+        <fishy-notice-disclosure class="not-prose" title="Notice" icon="alert-triangle" open>
+          <div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-sm text-base-content/80">
+            <div class="text-sm font-semibold text-base-content/85" :text="$i18n.getOr('translation_notice.title','')"></div>
+            <p class="mt-2 text-sm text-base-content/80" :text="$i18n.getOr('translation_notice.body','')"></p>
           </div>
-        </aside>
+          <p class="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/70">
+            <span :text="$i18n.getOr('translation_notice.help','')"></span>
+            <a class="link link-hover link-neutral font-medium" href="$page.custom.getOr('translation_help_url','/community/')" :text="$i18n.getOr('translation_notice.community_link','')"></a>
+            <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_source_file_url')" href="$page.custom.get('translation_source_file_url')" :text="$i18n.getOr('translation_notice.source_file_link','')"></a>
+            <a class="link link-hover link-neutral font-medium" :if="$page.custom.has('translation_create_file_url')" href="$page.custom.get('translation_create_file_url')" :text="$i18n.getOr('translation_notice.create_file_link','')"></a>
+          </p>
+          <p class="m-0 break-all text-xs font-mono text-base-content/55" :if="$page.custom.has('translation_target_path')">
+            <span :text="$i18n.getOr('translation_notice.target_path_label','')"></span>
+            <span> </span>
+            <span :text="$page.custom.get('translation_target_path')"></span>
+          </p>
+        </fishy-notice-disclosure>
       </ctx>
 
       <ctx :loop="$page.contentSections()">

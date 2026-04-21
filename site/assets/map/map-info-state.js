@@ -213,6 +213,7 @@ function buildZoneLootSection(summary, status) {
     title: mapText("info.zone_loot.title"),
     statusText,
     summary: trimString(summary?.profileLabel) || mapText("info.zone_loot.summary.default"),
+    dataQualityNote: trimString(summary?.dataQualityNote),
     note: trimString(summary?.note),
     groups,
     profiles,

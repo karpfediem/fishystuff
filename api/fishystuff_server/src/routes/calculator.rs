@@ -6210,6 +6210,11 @@ fn derive_zone_loot_summary_response(
     ZoneLootSummaryResponse {
         available,
         zone_name: zone.name.clone(),
+        data_quality_note: if available {
+            text("calculator.server.loot.note.available")
+        } else {
+            String::new()
+        },
         note: if available {
             if overlay_active && has_presence_only_rows && !fish_group_chart.available {
                 text("calculator.server.zone_loot_summary.note.overlay_presence_without_groups")
@@ -13561,6 +13566,9 @@ mod tests {
             vec!["rod".to_string()]
         );
         assert!(summary.species_rows[0].presence_text.is_some());
+        assert!(summary
+            .data_quality_note
+            .contains("Expected loot uses average session casts"));
         assert!(summary.note.contains("Unassigned"));
     }
 
@@ -13756,6 +13764,8 @@ mod tests {
         let summary = ZoneLootSummaryResponse {
             available: true,
             zone_name: Some("Margoria".to_string()),
+            data_quality_note:
+                "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices.".to_string(),
             note: "Zone catch profile uses calculator default session settings.".to_string(),
             profile_label: "Calculator defaults".to_string(),
             groups: vec![

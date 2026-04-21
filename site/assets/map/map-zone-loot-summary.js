@@ -65,6 +65,7 @@ export function normalizeZoneLootSummary(raw) {
   return {
     available: source.available === true,
     zoneName: trimString(source.zoneName),
+    dataQualityNote: trimString(source.dataQualityNote),
     note: trimString(source.note),
     profileLabel: trimString(source.profileLabel),
     groups: Array.isArray(source.groups)

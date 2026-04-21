@@ -42,6 +42,7 @@ Multilingual {
     "js/components/distribution-chart.js",
     "js/components/stat-breakdown-tooltip.js",
     "js/components/loot-sankey.js",
+    "js/components/notice-disclosure.js",
     "js/components/pmf-chart.js",
     "js/components/provenance-indicator.js",
     "js/components/searchable-dropdown.js",

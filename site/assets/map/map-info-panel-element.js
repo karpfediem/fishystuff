@@ -261,6 +261,30 @@ function zoneLootProfileMarkup(profile) {
   `;
 }
 
+function zoneLootNoticeMarkup(note) {
+  const content = trimString(note);
+  if (!content) {
+    return "";
+  }
+  return `<div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-base-content/80">${escapeHtml(content)}</div>`;
+}
+
+function zoneLootNoticeDisclosureMarkup(section) {
+  const notices = [trimString(section?.dataQualityNote), trimString(section?.note)].filter(Boolean);
+  if (!notices.length) {
+    return trimString(section?.summary)
+      ? `<p class="text-xs text-base-content/70">${escapeHtml(section.summary)}</p>`
+      : "";
+  }
+  const profileLabel = trimString(section?.summary) || mapText("info.zone_loot.summary.default");
+  return `
+    <fishy-notice-disclosure title="Notice" icon="alert-triangle" body-class="space-y-2 px-1 pb-1 pt-3" open>
+      <div class="badge badge-outline badge-sm">${escapeHtml(profileLabel)}</div>
+      ${notices.map((note) => zoneLootNoticeMarkup(note)).join("")}
+    </fishy-notice-disclosure>
+  `;
+}
+
 function zoneLootSectionMarkup(section) {
   const profiles = Array.isArray(section?.profiles) ? section.profiles : [];
   const groups = Array.isArray(section?.groups) ? section.groups : [];
@@ -273,12 +297,7 @@ function zoneLootSectionMarkup(section) {
         <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title || mapText("info.section.fish"))}</p>
         <span class="text-[11px] text-base-content/55">${escapeHtml(section.statusText || mapText("info.zone_loot.status.idle"))}</span>
       </div>
-      <p class="text-xs text-base-content/70">${escapeHtml(section.summary || "")}</p>
-      ${
-        trimString(section.note)
-          ? `<div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-base-content/80">${escapeHtml(section.note)}</div>`
-          : ""
-      }
+      ${zoneLootNoticeDisclosureMarkup(section)}
       <div class="fishymap-zone-loot-profiles">${profileMarkup}</div>
     </section>
   `;

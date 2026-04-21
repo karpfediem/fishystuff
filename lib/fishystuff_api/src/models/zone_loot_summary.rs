@@ -16,6 +16,7 @@ pub struct ZoneLootSummaryRequest {
 pub struct ZoneLootSummaryResponse {
     pub available: bool,
     pub zone_name: Option<String>,
+    pub data_quality_note: String,
     pub note: String,
     pub profile_label: String,
     pub groups: Vec<ZoneLootSummaryGroupRow>,

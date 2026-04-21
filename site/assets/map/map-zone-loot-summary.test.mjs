@@ -23,6 +23,8 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   const summary = normalizeZoneLootSummary({
     available: true,
     zoneName: "Valencia Sea - Depth 5",
+    dataQualityNote:
+      "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices.",
     note: "Zone loot uses calculator defaults.",
     profileLabel: "Calculator defaults",
     groups: [
@@ -52,6 +54,7 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   });
 
   assert.equal(summary.available, true);
+  assert.match(summary.dataQualityNote, /Expected loot uses average session casts/);
   assert.equal(summary.groups[0].slotIdx, 4);
   assert.equal(summary.groups[0].dropRateText, "80%");
   assert.equal(summary.groups[0].dropRateSourceKind, "database");

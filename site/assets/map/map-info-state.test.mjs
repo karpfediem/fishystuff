@@ -65,6 +65,8 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
       zoneLootSummary: {
         available: true,
         profileLabel: "Calculator defaults",
+        dataQualityNote:
+          "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices.",
         note: "Zone loot uses calculator default session settings.",
         groups: [
           {
@@ -143,6 +145,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.title,
     "Catch Profile",
+  );
+  assert.match(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.dataQualityNote || "",
+    /Expected loot uses average session casts/,
   );
   assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.rows?.[0]?.label,
