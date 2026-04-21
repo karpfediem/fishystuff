@@ -2,12 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { LANGUAGE_CONFIG } from "./language-config.mjs";
 import { resolvePublicBaseUrls } from "./write-runtime-config.mjs";
 
 function parseArgs(argv) {
   const args = {
     template: "zine.ziggy",
     out: "zine.ziggy",
+    generatedContentRoot: "",
     help: false,
   };
 
@@ -25,6 +27,10 @@ function parseArgs(argv) {
       args.out = argv[++i];
       continue;
     }
+    if (arg === "--generated-content-root" && i + 1 < argv.length) {
+      args.generatedContentRoot = argv[++i];
+      continue;
+    }
     throw new Error(`unknown arg: ${arg}`);
   }
 
@@ -40,6 +46,8 @@ FISHYSTUFF_PUBLIC_* environment layer.
 Options:
   --template <path>  Input template file (default: zine.ziggy)
   --out <path>       Output file (default: zine.ziggy)
+  --generated-content-root <path>
+                     Rewrite locale content_dir_path values to this root
   --help             Show this message
 `);
 }
@@ -60,6 +68,28 @@ export function rewriteZineHostUrl(templateSource, siteBaseUrl) {
   );
 }
 
+export function rewriteZineContentDirPaths(templateSource, generatedContentRoot, config = LANGUAGE_CONFIG) {
+  const normalizedRoot = String(generatedContentRoot ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalizedRoot) {
+    return String(templateSource ?? "");
+  }
+  const matches = Array.from(String(templateSource ?? "").matchAll(/^(\s*\.content_dir_path\s*=\s*)"([^"]*)"(\s*,?)$/gm));
+  if (matches.length < config.contentLanguages.length) {
+    throw new Error("failed to find locale content_dir_path entries in zine config template");
+  }
+  let index = 0;
+  return String(templateSource ?? "").replace(
+    /^(\s*\.content_dir_path\s*=\s*)"([^"]*)"(\s*,?)$/gm,
+    (_match, prefix, _currentValue, suffix) => {
+      const language = config.contentLanguages[index++];
+      if (!language) {
+        return _match;
+      }
+      return `${prefix}"${normalizedRoot}/${language.code}"${suffix}`;
+    },
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -71,7 +101,10 @@ async function main() {
   const templatePath = path.resolve(process.cwd(), args.template);
   const outPath = path.resolve(process.cwd(), args.out);
   const templateSource = await fs.readFile(templatePath, "utf8");
-  const nextConfig = rewriteZineHostUrl(templateSource, publicSiteBaseUrl);
+  const nextConfig = rewriteZineContentDirPaths(
+    rewriteZineHostUrl(templateSource, publicSiteBaseUrl),
+    args.generatedContentRoot,
+  );
   await fs.mkdir(path.dirname(outPath), { recursive: true });
   await fs.writeFile(outPath, nextConfig, "utf8");
 }

@@ -2,20 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { LANGUAGE_CONFIG } from "./language-config.mjs";
+import { buildShellPageEntries, buildShellPagePathSet } from "./shell-pages.mjs";
+
 const scriptPath = fileURLToPath(import.meta.url);
 const siteDir = path.resolve(path.dirname(scriptPath), "..");
-
-export const LANGUAGE_CONFIG = Object.freeze({
-  defaultContentLang: "en-US",
-  defaultLocale: "en-US",
-  defaultApiLang: "en",
-  contentLanguages: Object.freeze([
-    Object.freeze({ code: "en-US", pathPrefix: "/" }),
-    Object.freeze({ code: "de-DE", pathPrefix: "/de-DE/" }),
-  ]),
-  localeLanguages: Object.freeze(["en-US", "de-DE", "ko-KR"]),
-  apiLanguages: Object.freeze(["en", "ko"]),
-});
+const fluentDir = path.join(siteDir, "i18n", "fluent");
 
 function listFiles(rootDir) {
   if (!fs.existsSync(rootDir)) {
@@ -113,6 +105,42 @@ function normalizeRouteKey(relativePath) {
   return `/${normalized.slice(0, -".smd".length)}/`;
 }
 
+function parseFrontmatter(source) {
+  const match = String(source || "").match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  return match ? match[1] : "";
+}
+
+function parseTranslationKey(source) {
+  const frontmatter = parseFrontmatter(source);
+  if (!frontmatter) {
+    return "";
+  }
+  const match = frontmatter.match(/^\s*\.translation_key\s*=\s*"([^"]+)"\s*,?\s*$/m);
+  return match ? match[1].trim() : "";
+}
+
+function addManifestVariant(groups, {
+  groupKey,
+  routeKey,
+  contentLanguage,
+  targetPath,
+}) {
+  let group = groups.get(groupKey);
+  if (!group) {
+    group = {
+      routeKeys: new Set(),
+      variants: {},
+    };
+    groups.set(groupKey, group);
+  }
+  const existingTarget = group.variants[contentLanguage];
+  if (existingTarget && existingTarget !== targetPath) {
+    throw new Error(`Duplicate localized page mapping for ${groupKey} in ${contentLanguage}`);
+  }
+  group.routeKeys.add(routeKey);
+  group.variants[contentLanguage] = targetPath;
+}
+
 function joinPath(prefix, routeKey) {
   const normalizedPrefix = String(prefix || "/").replace(/\/+$/, "");
   const normalizedRoute = routeKey === "/" ? "/" : routeKey.replace(/^\/+/, "/");
@@ -123,7 +151,8 @@ function joinPath(prefix, routeKey) {
 }
 
 export function buildPageManifest(config = LANGUAGE_CONFIG, rootDir = siteDir) {
-  const manifest = {};
+  const groups = new Map();
+  const shellPathsByLocale = buildShellPagePathSet({ config, rootDir });
   for (const contentLanguage of config.contentLanguages) {
     const contentDir = path.join(rootDir, "content", contentLanguage.code);
     for (const filePath of listFiles(contentDir)) {
@@ -131,11 +160,42 @@ export function buildPageManifest(config = LANGUAGE_CONFIG, rootDir = siteDir) {
         continue;
       }
       const relativePath = path.relative(contentDir, filePath);
-      const routeKey = normalizeRouteKey(relativePath);
-      if (!manifest[routeKey]) {
-        manifest[routeKey] = {};
+      const normalizedRelativePath = relativePath.replace(/\\/g, "/");
+      if (shellPathsByLocale.get(contentLanguage.code)?.has(normalizedRelativePath)) {
+        continue;
       }
-      manifest[routeKey][contentLanguage.code] = joinPath(contentLanguage.pathPrefix, routeKey);
+      const routeKey = normalizeRouteKey(relativePath);
+      const source = fs.readFileSync(filePath, "utf8");
+      const translationKey = parseTranslationKey(source);
+      const groupKey = translationKey
+        ? `translation:${translationKey}`
+        : `path:${normalizedRelativePath}`;
+      addManifestVariant(groups, {
+        groupKey,
+        routeKey,
+        contentLanguage: contentLanguage.code,
+        targetPath: joinPath(contentLanguage.pathPrefix, routeKey),
+      });
+    }
+  }
+  for (const entry of buildShellPageEntries({ config, rootDir })) {
+    const contentLanguage = config.contentLanguages.find((language) => language.code === entry.locale);
+    if (!contentLanguage) {
+      continue;
+    }
+    addManifestVariant(groups, {
+      groupKey: entry.translationKey
+        ? `translation:${entry.translationKey}`
+        : `path:${entry.relativePath}`,
+      routeKey: entry.routeKey,
+      contentLanguage: entry.locale,
+      targetPath: joinPath(contentLanguage.pathPrefix, entry.routeKey),
+    });
+  }
+  const manifest = {};
+  for (const group of groups.values()) {
+    for (const routeKey of group.routeKeys) {
+      manifest[routeKey] = { ...group.variants };
     }
   }
   return manifest;
@@ -186,3 +246,5 @@ export function buildI18nArtifacts({
 if (process.argv[1] === scriptPath) {
   buildI18nArtifacts();
 }
+
+export { LANGUAGE_CONFIG };

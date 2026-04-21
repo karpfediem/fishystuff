@@ -808,6 +808,18 @@
       "fishydex.api.retrying": "Fish API request is retrying.",
       "fishydex.api.cors_hint": "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
       "fishydex.api.retry_hint": "The request could not be completed cleanly.",
+      "frontpage.hero.title": "Everything you need to get fishing",
+      "frontpage.guides.title": "Guides",
+      "frontpage.guides.body": "Community contributed guides to help you learn fishing.",
+      "frontpage.guides.cta": "Open Guides",
+      "frontpage.map.title": "Map",
+      "frontpage.map.body_intro": "Searching for a specific fish?",
+      "frontpage.map.body_detail": "Browse and compare zones, regions and fish evidence.",
+      "frontpage.map.cta": "Open Map",
+      "frontpage.dex.title": "Dex",
+      "frontpage.dex.body_intro": "Gotta Catch 'Em All",
+      "frontpage.dex.body_detail": "Browse fish and track your progress.",
+      "frontpage.dex.cta": "Browse Dex",
       "map.toolbar.map_windows": "Map windows",
       "map.toolbar.search": "Search",
       "map.toolbar.bookmarks": "Bookmarks",
@@ -1779,6 +1791,18 @@
       "fishydex.api.retrying": "Fish API request is retrying.",
       "fishydex.api.cors_hint": "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
       "fishydex.api.retry_hint": "The request could not be completed cleanly.",
+      "frontpage.hero.title": "Everything you need to get fishing",
+      "frontpage.guides.title": "Guides",
+      "frontpage.guides.body": "Community contributed guides to help you learn fishing.",
+      "frontpage.guides.cta": "Open Guides",
+      "frontpage.map.title": "Map",
+      "frontpage.map.body_intro": "Searching for a specific fish?",
+      "frontpage.map.body_detail": "Browse and compare zones, regions and fish evidence.",
+      "frontpage.map.cta": "Open Map",
+      "frontpage.dex.title": "Dex",
+      "frontpage.dex.body_intro": "Gotta Catch 'Em All",
+      "frontpage.dex.body_detail": "Browse fish and track your progress.",
+      "frontpage.dex.cta": "Browse Dex",
       "map.toolbar.map_windows": "Map windows",
       "map.toolbar.search": "Search",
       "map.toolbar.bookmarks": "Bookmarks",
@@ -2750,6 +2774,18 @@
       "fishydex.api.retrying": "Fish-API-Anfrage wird erneut versucht.",
       "fishydex.api.cors_hint": "Wenn diese Seite auf einer anderen Origin als die API läuft, prüfe, ob die API-CORS-Liste diese Site enthält.",
       "fishydex.api.retry_hint": "Die Anfrage konnte nicht sauber abgeschlossen werden.",
+      "frontpage.hero.title": "Alles, was du zum Angeln brauchst",
+      "frontpage.guides.title": "Anleitungen",
+      "frontpage.guides.body": "Von der Community beigetragene Anleitungen helfen dir beim Einstieg ins Angeln.",
+      "frontpage.guides.cta": "Anleitungen öffnen",
+      "frontpage.map.title": "Karte",
+      "frontpage.map.body_intro": "Du suchst nach einem bestimmten Fisch?",
+      "frontpage.map.body_detail": "Vergleiche Zonen, Regionen und Fischhinweise.",
+      "frontpage.map.cta": "Karte öffnen",
+      "frontpage.dex.title": "Dex",
+      "frontpage.dex.body_intro": "Gotta Catch 'Em All",
+      "frontpage.dex.body_detail": "Durchstöbere Fische und verfolge deinen Fortschritt.",
+      "frontpage.dex.cta": "Dex öffnen",
       "map.toolbar.map_windows": "Kartenfenster",
       "map.toolbar.search": "Suche",
       "map.toolbar.bookmarks": "Lesezeichen",
@@ -2940,17 +2976,11 @@
     }
   },
   "pageManifest": {
-    "/calculator/": {
-      "en-US": "/calculator/"
-    },
     "/community/": {
       "en-US": "/community/"
     },
     "/devlog/": {
       "en-US": "/devlog/"
-    },
-    "/dex/": {
-      "en-US": "/dex/"
     },
     "/guides/active/harpooning/": {
       "en-US": "/guides/active/harpooning/"
@@ -2991,24 +3021,13 @@
     "/guides/zones/": {
       "en-US": "/guides/zones/"
     },
-    "/": {
-      "en-US": "/",
-      "de-DE": "/de-DE/"
-    },
     "/log/": {
       "en-US": "/log/",
       "de-DE": "/de-DE/log/"
     },
-    "/map/": {
-      "en-US": "/map/"
-    },
     "/privacy/": {
       "en-US": "/privacy/",
       "de-DE": "/de-DE/privacy/"
-    },
-    "/profile/": {
-      "en-US": "/profile/",
-      "de-DE": "/de-DE/profile/"
     },
     "/report/": {
       "en-US": "/report/",
@@ -3017,6 +3036,38 @@
     "/terms-of-service/": {
       "en-US": "/terms-of-service/",
       "de-DE": "/de-DE/terms-of-service/"
+    },
+    "/dex/": {
+      "de-DE": "/de-DE/dex/",
+      "en-US": "/dex/"
+    },
+    "/": {
+      "de-DE": "/de-DE/",
+      "en-US": "/"
+    },
+    "/karte/": {
+      "de-DE": "/de-DE/karte/",
+      "en-US": "/map/"
+    },
+    "/map/": {
+      "de-DE": "/de-DE/karte/",
+      "en-US": "/map/"
+    },
+    "/profil/": {
+      "de-DE": "/de-DE/profil/",
+      "en-US": "/profile/"
+    },
+    "/profile/": {
+      "de-DE": "/de-DE/profil/",
+      "en-US": "/profile/"
+    },
+    "/rechner/": {
+      "de-DE": "/de-DE/rechner/",
+      "en-US": "/calculator/"
+    },
+    "/calculator/": {
+      "de-DE": "/de-DE/rechner/",
+      "en-US": "/calculator/"
     }
   }
 });

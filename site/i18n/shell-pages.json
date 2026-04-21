@@ -1,0 +1,95 @@
+{
+  "pages": [
+    {
+      "id": "home",
+      "layout": "frontpage.shtml",
+      "author": "Karpfen",
+      "date": "2025-03-23T00:00:00",
+      "tags": ["fishy", "stuff", "fish"],
+      "updated": "2025-10-01T12:34:56",
+      "locales": {
+        "en-US": {
+          "slug": "",
+          "title": "Home"
+        },
+        "de-DE": {
+          "slug": "",
+          "title": "Startseite"
+        }
+      }
+    },
+    {
+      "id": "map",
+      "layout": "map.shtml",
+      "author": "Karpfen",
+      "date": "2025-03-23T00:00:00",
+      "translationKey": "map",
+      "tags": ["map", "waypoints"],
+      "locales": {
+        "en-US": {
+          "slug": "map",
+          "title": "Map"
+        },
+        "de-DE": {
+          "slug": "karte",
+          "title": "Karte"
+        }
+      }
+    },
+    {
+      "id": "dex",
+      "layout": "fishydex.shtml",
+      "author": "Karpfen",
+      "date": "2026-03-09T00:00:00",
+      "translationKey": "dex",
+      "tags": ["fish", "fishydex", "tracker", "prize-fish"],
+      "locales": {
+        "en-US": {
+          "slug": "dex",
+          "title": "Fishydex"
+        },
+        "de-DE": {
+          "slug": "dex",
+          "title": "Fishydex"
+        }
+      }
+    },
+    {
+      "id": "calculator",
+      "layout": "calculator.shtml",
+      "author": "Karpfen",
+      "date": "2025-03-23T00:00:00",
+      "translationKey": "calculator",
+      "tags": ["calculator", "AFR", "DRR"],
+      "locales": {
+        "en-US": {
+          "slug": "calculator",
+          "title": "Fishing Calculator"
+        },
+        "de-DE": {
+          "slug": "rechner",
+          "title": "Fischrechner"
+        }
+      }
+    },
+    {
+      "id": "profile",
+      "layout": "profile.shtml",
+      "author": "Karpfen",
+      "date": "2026-04-19T00:00:00",
+      "translationKey": "profile",
+      "locales": {
+        "en-US": {
+          "slug": "profile",
+          "title": "Profile",
+          "description": "Manage your profile and preferences for Fishy Stuff."
+        },
+        "de-DE": {
+          "slug": "profil",
+          "title": "Profil",
+          "description": "Verwalte dein Profil und deine Einstellungen für Fishy Stuff."
+        }
+      }
+    }
+  ]
+}

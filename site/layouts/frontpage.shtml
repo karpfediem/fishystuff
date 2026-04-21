@@ -58,9 +58,6 @@
         transform: translateY(0);
       }
 
-      .home-community #page p {
-        margin: 0;
-      }
     </style>
 
     <section class="home-hero hero not-prose mb-6 rounded-box">
@@ -71,48 +68,68 @@
             <img src="$site.asset('img/logo.png').link()" alt="" decoding="async">
           </a>
 
-          <h1 class="m-0 text-xl font-black leading-tight sm:text-2xl lg:text-3xl">
-            Everything you need to get fishing
-          </h1>
+          <h1 class="m-0 text-xl font-black leading-tight sm:text-2xl lg:text-3xl"
+              data-i18n-text="frontpage.hero.title"
+              :text="$i18n.getOr('frontpage.hero.title','')"></h1>
         </div>
 
         <div class="grid w-full gap-4 md:grid-cols-3">
-          <a href="$site.page('guides').link()"
+          <a href="$site.locale('en-US').page('guides').link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
                 <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-guides"></use></svg>
-                <h2 class="card-title justify-center text-2xl">Guides</h2>
-              <p class="text-sm text-base-content/75">
-                Community contributed guides to help you learn fishing.
-              </p>
+                <h2 class="card-title justify-center text-2xl"
+                    data-i18n-text="frontpage.guides.title"
+                    :text="$i18n.getOr('frontpage.guides.title','')"></h2>
+              <p class="text-sm text-base-content/75"
+                 data-i18n-text="frontpage.guides.body"
+                 :text="$i18n.getOr('frontpage.guides.body','')"></p>
               <div class="card-actions mt-2">
-                <span class="btn btn-outline btn-sm">Open Guides</span>
+                <span class="btn btn-outline btn-sm"
+                      data-i18n-text="frontpage.guides.cta"
+                      :text="$i18n.getOr('frontpage.guides.cta','')"></span>
               </div>
             </div>
           </a>
 
-          <a href="$site.page('map').link()"
+          <a href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
               <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-map-pin"></use></svg>
-              <h2 class="card-title justify-center text-2xl">Map</h2>
-              <p class="text-sm text-base-content/75">Searching for a specific fish?</p>
-              <p class="text-sm text-base-content/75">Browse and compare zones, regions and fish evidence.</p>
+              <h2 class="card-title justify-center text-2xl"
+                  data-i18n-text="frontpage.map.title"
+                  :text="$i18n.getOr('frontpage.map.title','')"></h2>
+              <p class="text-sm text-base-content/75"
+                 data-i18n-text="frontpage.map.body_intro"
+                 :text="$i18n.getOr('frontpage.map.body_intro','')"></p>
+              <p class="text-sm text-base-content/75"
+                 data-i18n-text="frontpage.map.body_detail"
+                 :text="$i18n.getOr('frontpage.map.body_detail','')"></p>
               <div class="card-actions mt-2">
-                <span class="btn btn-outline btn-sm">Open Map</span>
+                <span class="btn btn-outline btn-sm"
+                      data-i18n-text="frontpage.map.cta"
+                      :text="$i18n.getOr('frontpage.map.cta','')"></span>
               </div>
             </div>
           </a>
 
-          <a href="$site.page('dex').link()"
+          <a href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
                 <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-dex"></use></svg>
-                <h2 class="card-title justify-center text-2xl">Dex</h2>
-              <p class="text-sm text-base-content/75">Gotta Catch 'Em All</p>
-              <p class="text-sm text-base-content/75">Browse fish and track your progress.</p>
+                <h2 class="card-title justify-center text-2xl"
+                    data-i18n-text="frontpage.dex.title"
+                    :text="$i18n.getOr('frontpage.dex.title','')"></h2>
+              <p class="text-sm text-base-content/75"
+                 data-i18n-text="frontpage.dex.body_intro"
+                 :text="$i18n.getOr('frontpage.dex.body_intro','')"></p>
+              <p class="text-sm text-base-content/75"
+                 data-i18n-text="frontpage.dex.body_detail"
+                 :text="$i18n.getOr('frontpage.dex.body_detail','')"></p>
               <div class="card-actions mt-2">
-                <span class="btn btn-outline btn-sm">Browse Dex</span>
+                <span class="btn btn-outline btn-sm"
+                      data-i18n-text="frontpage.dex.cta"
+                      :text="$i18n.getOr('frontpage.dex.cta','')"></span>
               </div>
             </div>
           </a>
@@ -120,7 +137,4 @@
       </div>
     </section>
 
-    <section class="home-community mt-10 text-center text-sm text-base-content/70">
-      <div id="page" :html="$page.content()"></div>
-    </section>
   </div>

@@ -1,8 +1,0 @@
----
-.title = "Fishydex",
-.date = @date("2026-03-09T00:00:00"),
-.author = "Karpfen",
-.layout = "fishydex.shtml",
-.draft = false,
-.tags = ["fish", "fishydex", "tracker", "prize-fish"],
----

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { rewriteZineHostUrl } from "./write-zine-config.mjs";
+import { rewriteZineContentDirPaths, rewriteZineHostUrl } from "./write-zine-config.mjs";
 import { resolvePublicBaseUrls } from "./write-runtime-config.mjs";
 
 test("zine config host uses the resolved public site base", () => {
@@ -14,4 +14,28 @@ test("zine config host uses the resolved public site base", () => {
   );
 
   assert.match(next, /\.host_url = "https:\/\/beta\.fishystuff\.fish",/);
+});
+
+test("zine config content dirs can be redirected to generated shells", () => {
+  const next = rewriteZineContentDirPaths(
+    [
+      "Multilingual {",
+      '  .locales = [',
+      "    {",
+      '      .code = "en-US",',
+      '      .content_dir_path = "content/en-US",',
+      "    },",
+      "    {",
+      '      .code = "de-DE",',
+      '      .content_dir_path = "content/de-DE",',
+      "    },",
+      "  ],",
+      "}",
+      "",
+    ].join("\n"),
+    ".generated/content",
+  );
+
+  assert.match(next, /\.content_dir_path = "\.generated\/content\/en-US",/);
+  assert.match(next, /\.content_dir_path = "\.generated\/content\/de-DE",/);
 });

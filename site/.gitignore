@@ -1,4 +1,5 @@
 node_modules
+.generated
 .out
 .out-builds
 .tmp-d3-build

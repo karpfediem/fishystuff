@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import {
   buildPageManifest,
@@ -37,7 +40,63 @@ test("buildPageManifest maps locale variants and keeps english root paths", () =
   });
   assert.deepEqual(manifest["/map/"], {
     "en-US": "/map/",
+    "de-DE": "/de-DE/karte/",
   });
+  assert.deepEqual(manifest["/karte/"], {
+    "en-US": "/map/",
+    "de-DE": "/de-DE/karte/",
+  });
+  assert.deepEqual(manifest["/calculator/"], {
+    "en-US": "/calculator/",
+    "de-DE": "/de-DE/rechner/",
+  });
+  assert.deepEqual(manifest["/rechner/"], {
+    "en-US": "/calculator/",
+    "de-DE": "/de-DE/rechner/",
+  });
+  assert.deepEqual(manifest["/dex/"], {
+    "en-US": "/dex/",
+    "de-DE": "/de-DE/dex/",
+  });
+  assert.deepEqual(manifest["/profile/"], {
+    "en-US": "/profile/",
+    "de-DE": "/de-DE/profil/",
+  });
+  assert.deepEqual(manifest["/profil/"], {
+    "en-US": "/profile/",
+    "de-DE": "/de-DE/profil/",
+  });
+});
+
+test("buildPageManifest groups localized slug variants by translation_key", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "fishystuff-build-i18n-"));
+  try {
+    fs.mkdirSync(path.join(rootDir, "content", "en-US"), { recursive: true });
+    fs.mkdirSync(path.join(rootDir, "content", "de-DE"), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, "content", "en-US", "profile.smd"), `---
+.title = "Profile",
+.translation_key = "profile",
+---
+`);
+    fs.writeFileSync(path.join(rootDir, "content", "de-DE", "profil.smd"), `---
+.title = "Profil",
+.translation_key = "profile",
+---
+`);
+
+    const manifest = buildPageManifest(LANGUAGE_CONFIG, rootDir);
+
+    assert.deepEqual(manifest["/profile/"], {
+      "en-US": "/profile/",
+      "de-DE": "/de-DE/profil/",
+    });
+    assert.deepEqual(manifest["/profil/"], {
+      "en-US": "/profile/",
+      "de-DE": "/de-DE/profil/",
+    });
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
 });
 
 test("resolveLocaleCatalogs fills missing locale keys from the default locale", () => {
