@@ -38,12 +38,13 @@ hostname.
 The runtime resolves its local development database URL from the SecretSpec
 `api` profile declared in `/home/carp/code/fishystuff/secretspec.toml`, so the
 server no longer depends on a `secretspec run` wrapper just to reach Dolt.
-The API's default Dolt ref now follows the deployment branch setting first:
-`DOLT_REMOTE_BRANCH` is the normal single deployment knob, while
-`FISHYSTUFF_DEFAULT_DOLT_REF`, `[defaults].dolt_ref`, or
-`--default-dolt-ref <ref>` remain available as explicit overrides. The server
-resolves that default as a Dolt revision database such as `fishystuff/beta`,
-while routes that already accept `ref_id` can still override it per request.
+The API's default Dolt ref now follows the deployment environment first.
+`FISHYSTUFF_DEPLOYMENT_ENVIRONMENT` is the normal deployment input, where
+`beta` resolves to `fishystuff/beta` and `production` resolves to
+`fishystuff/main`. `DOLT_REMOTE_BRANCH`, `FISHYSTUFF_DEFAULT_DOLT_REF`,
+`[defaults].dolt_ref`, or `--default-dolt-ref <ref>` remain available as
+explicit overrides, and routes that already accept `ref_id` can still override
+the default per request.
 
 ## Fly deployment
 

@@ -14,7 +14,6 @@
     "cfg_dir": "/var/lib/fishystuff/dolt/.doltcfg",
     "database_name": "fishystuff",
     "remote_url": "fishystuff/fishystuff",
-    "remote_branch": "beta",
     "clone_depth": "1",
     "volume_device": "__auto__",
     "volume_fs_type": "ext4",
@@ -25,6 +24,11 @@
     "cdn_root_dir": "/srv/fishystuff/cdn"
   },
   "content": {
+    "site": {
+      "store_path": "",
+      "drv_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/site-content-current"
+    },
     "cdn": {
       "store_path": "",
       "drv_path": "",
@@ -34,7 +38,7 @@
   "tls": {
     "enabled": false,
     "certificate_name": "beta-nbg1-api-db-edge-tls",
-    "acme_email": "",
+    "acme_email": "acme@karpfen.dev",
     "challenge": "http-01",
     "dns_provider": "",
     "dns_env": {},
@@ -42,6 +46,7 @@
     "domains": [
       "beta.fishystuff.fish",
       "api.beta.fishystuff.fish",
+      "cdn.beta.fishystuff.fish",
       "telemetry.beta.fishystuff.fish"
     ]
   },

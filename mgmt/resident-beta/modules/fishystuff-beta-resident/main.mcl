@@ -9,7 +9,7 @@ class host($st) {
 		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
@@ -17,6 +17,7 @@ class host($st) {
 	} = $st->manifest
 	$hostname str = $manifest->hostname
 	$cluster str = $manifest->cluster || "beta"
+	$deployment_environment str = $manifest->deployment_environment || "beta"
 
 	include fishystuff_beta_resident_layout.catalog(struct {
 		cluster => $cluster,
@@ -31,13 +32,12 @@ class host($st) {
 			api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
 			cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
 			telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
-			deployment_environment => $manifest->deployment_environment || "beta",
+			deployment_environment => $deployment_environment,
 			startup_mode => $manifest->startup_mode || "enabled",
 			dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
 			dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
 			dolt_database_name => $manifest->dolt->database_name || "fishystuff",
 			dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
-			dolt_remote_branch => $manifest->dolt->remote_branch || "beta",
 			dolt_clone_depth => $manifest->dolt->clone_depth || "1",
 			dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
 			dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",

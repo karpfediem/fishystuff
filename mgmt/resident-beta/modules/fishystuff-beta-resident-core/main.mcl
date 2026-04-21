@@ -18,7 +18,7 @@ class api_db_host($st) {
 		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
@@ -29,12 +29,22 @@ class api_db_host($st) {
 	$api_service struct{bundle_path str; gcroot_path str} = $services["api"]
 	$dolt_service struct{bundle_path str; gcroot_path str} = $services["dolt"]
 	$edge_service struct{bundle_path str; gcroot_path str} = $services["edge"]
+	$site_content struct{store_path str; drv_path str; gcroot_path str} = $content["site"]
 	$cdn_content struct{store_path str; drv_path str; gcroot_path str} = $content["cdn"]
 	$cluster str = $manifest->cluster || "beta"
 	$api_token str = sys.getenv("HETZNER_API_TOKEN")
 	$api_bundle_path str = $api_service->bundle_path || ""
 	$dolt_bundle_path str = $dolt_service->bundle_path || ""
 	$edge_bundle_path str = $edge_service->bundle_path || ""
+	$site_content_store_path str = $site_content->store_path || ""
+	$site_content_drv_path str = $site_content->drv_path || ""
+	$site_content_gcroot_path str = $site_content->gcroot_path || ""
+	$site_closure_name str = fmt.printf("fishystuff-site-content-%s", $hostname)
+	$site_closure_mode str = if $site_content_drv_path != "" {
+		"realise"
+	} else {
+		"verify"
+	}
 	$cdn_content_store_path str = $cdn_content->store_path || ""
 	$cdn_content_drv_path str = $cdn_content->drv_path || ""
 	$cdn_content_gcroot_path str = $cdn_content->gcroot_path || ""
@@ -68,7 +78,6 @@ class api_db_host($st) {
 	$dolt_volume_device str = $st->dolt_volume_device || ""
 	$dolt_volume_fs_type str = $st->dolt_volume_fs_type || "ext4"
 	$dolt_port str = $st->dolt_port || "3306"
-	$dolt_remote_branch str = $st->dolt_remote_branch || $manifest->dolt->remote_branch || "beta"
 	$site_root_dir str = $st->site_root_dir || "/srv/fishystuff/site"
 	$cdn_root_dir str = $st->cdn_root_dir || "/srv/fishystuff/cdn"
 	$api_bundle struct{id str; runtime_overlays []struct{target_path str}; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $api_bundle_path)))
@@ -87,7 +96,6 @@ class api_db_host($st) {
 	$api_runtime_env = golang.template(deploy.readfile("/files/api-runtime.env.tmpl"), struct {
 		dolt_port => $dolt_port,
 		dolt_database_name => $dolt_database_name,
-		dolt_remote_branch => $dolt_remote_branch,
 		site_base_url => $site_base_url,
 		cdn_base_url => $cdn_base_url,
 		deployment_environment => $deployment_environment,
@@ -100,6 +108,7 @@ class api_db_host($st) {
 	panic($hostname == "", "resident core host requires hostname")
 	panic($api_bundle_path == "", fmt.printf("host %s requires services.api.bundle_path in resident manifest", $hostname))
 	panic($dolt_bundle_path == "", fmt.printf("host %s requires services.dolt.bundle_path in resident manifest", $hostname))
+	panic(($site_content_drv_path != "") and ($site_content_store_path == ""), fmt.printf("host %s requires content.site.store_path when content.site.drv_path is set", $hostname))
 	panic(($cdn_content_drv_path != "") and ($cdn_content_store_path == ""), fmt.printf("host %s requires content.cdn.store_path when content.cdn.drv_path is set", $hostname))
 
 	file "/var/lib/fishystuff/" {
@@ -143,11 +152,36 @@ class api_db_host($st) {
 			group => "root",
 		}
 
-		file "${site_root_dir}/" {
-			state => "exists",
-			mode => "u=rwx,go=rx",
-			owner => "root",
-			group => "root",
+		if $site_content_store_path != "" {
+			nix:closure "${site_closure_name}" {
+				paths => if $site_content_drv_path == "" { [$site_content_store_path,] } else { [] },
+				drvs => if $site_content_drv_path != "" { [$site_content_drv_path,] } else { [] },
+				mode => $site_closure_mode,
+			}
+
+			if $site_content_gcroot_path != "" {
+				nix:gcroot "${site_content_gcroot_path}" {
+					target => $site_content_store_path,
+					state => "exists",
+					force => true,
+				}
+			}
+
+			file "${site_root_dir}" {
+				state => "exists",
+				source => $site_content_store_path,
+				symlink => true,
+				force => true,
+			}
+		}
+
+		if $site_content_store_path == "" {
+			file "${site_root_dir}/" {
+				state => "exists",
+				mode => "u=rwx,go=rx",
+				owner => "root",
+				group => "root",
+			}
 		}
 
 		if $cdn_content_store_path != "" {
@@ -245,8 +279,16 @@ class api_db_host($st) {
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
 
 	if $edge_bundle_path != "" {
-		File["/srv/fishystuff/"] -> File["${site_root_dir}/"]
-		File["${site_root_dir}/"] -> Svc["fishystuff-edge"]
+		if $site_content_store_path != "" {
+			Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
+			if $site_content_gcroot_path != "" {
+				Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
+			}
+			File["/srv/fishystuff/"] -> File["${site_root_dir}"]
+		}
+		if $site_content_store_path == "" {
+			File["/srv/fishystuff/"] -> File["${site_root_dir}/"] -> Svc["fishystuff-edge"]
+		}
 		if $cdn_content_store_path != "" {
 			Nix:Closure["${cdn_closure_name}"] -> File["${cdn_root_dir}"] -> Svc["fishystuff-edge"]
 			if $cdn_content_gcroot_path != "" {

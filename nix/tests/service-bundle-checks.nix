@@ -180,6 +180,7 @@ in
     bundle = doltServiceBundle;
     serviceId = "fishystuff-dolt";
     configDestination = "sql-server.yaml";
+    runtimeEnvTarget = "/run/fishystuff/api/env";
     unitName = "fishystuff-dolt.service";
     workingDirectory = "/var/lib/fishystuff/dolt";
     requiredEnvironment = {

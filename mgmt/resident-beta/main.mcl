@@ -8,7 +8,7 @@ $manifest struct{
 	public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
 	deployment_environment str;
 	startup_mode str;
-	dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+	dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
 	content_roots struct{site_root_dir str; cdn_root_dir str};
 	content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 	tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};

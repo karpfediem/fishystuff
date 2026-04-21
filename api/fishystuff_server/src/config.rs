@@ -115,6 +115,8 @@ impl AppConfig {
                 parse_env_string("FISHYSTUFF_DEFAULT_DOLT_REF"),
                 fs_config.defaults.dolt_ref.as_deref(),
                 parse_env_string("DOLT_REMOTE_BRANCH"),
+                parse_env_string("FISHYSTUFF_DEPLOYMENT_ENVIRONMENT")
+                    .and_then(|value| deployment_branch_for_environment(Some(value.as_str()))),
             ),
             map_version_id: fs_config.defaults.map_version.clone().map(MapVersionId),
         };
@@ -150,10 +152,8 @@ impl AppConfig {
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| "fishystuff-api".to_string()),
-            deployment_environment: std::env::var("FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT")
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
+            deployment_environment: parse_env_string("FISHYSTUFF_DEPLOYMENT_ENVIRONMENT")
+                .or_else(|| parse_env_string("FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT"))
                 .unwrap_or_else(|| "unknown".to_string()),
             otlp_traces_endpoint: std::env::var("FISHYSTUFF_OTEL_TRACES_ENDPOINT")
                 .ok()
@@ -274,8 +274,13 @@ impl AppConfig {
             }
         }
 
-        let database_url = load_api_database_url_from_secretspec()
-            .context("resolve database URL from SecretSpec `api` profile")?;
+        let database_url = parse_env_string("FISHYSTUFF_DATABASE_URL")
+            .or_else(|| parse_env_string("DATABASE_URL"))
+            .map(Ok)
+            .unwrap_or_else(|| {
+                load_api_database_url_from_secretspec()
+                    .context("resolve database URL from SecretSpec `api` profile")
+            })?;
 
         Ok(Self {
             bind,
@@ -359,10 +364,20 @@ fn resolve_default_dolt_ref(
     explicit_default_ref: Option<String>,
     config_default_ref: Option<&str>,
     deployment_branch_ref: Option<String>,
+    deployment_environment: Option<String>,
 ) -> Option<String> {
     explicit_default_ref
         .or_else(|| normalize_non_empty(config_default_ref))
         .or(deployment_branch_ref)
+        .or_else(|| deployment_branch_for_environment(deployment_environment.as_deref()))
+}
+
+fn deployment_branch_for_environment(value: Option<&str>) -> Option<String> {
+    let environment = normalize_non_empty(value)?;
+    if environment.eq_ignore_ascii_case("production") {
+        return Some("main".to_string());
+    }
+    Some(environment)
 }
 
 fn normalize_non_empty(value: Option<&str>) -> Option<String> {
@@ -374,7 +389,10 @@ fn normalize_non_empty(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_cors_allowed_origins, resolve_default_dolt_ref, TelemetryConfig};
+    use super::{
+        deployment_branch_for_environment, parse_cors_allowed_origins, resolve_default_dolt_ref,
+        TelemetryConfig,
+    };
     use fishystuff_core::public_endpoints::derive_sibling_public_base_url;
 
     #[test]
@@ -424,7 +442,8 @@ mod tests {
             resolve_default_dolt_ref(
                 Some("beta".to_string()),
                 Some("main"),
-                Some("prod".to_string())
+                Some("prod".to_string()),
+                Some("production".to_string()),
             ),
             Some("beta".to_string())
         );
@@ -433,7 +452,12 @@ mod tests {
     #[test]
     fn default_dolt_ref_uses_config_before_deployment_branch() {
         assert_eq!(
-            resolve_default_dolt_ref(None, Some("main"), Some("beta".to_string())),
+            resolve_default_dolt_ref(
+                None,
+                Some("main"),
+                Some("beta".to_string()),
+                Some("production".to_string())
+            ),
             Some("main".to_string())
         );
     }
@@ -441,7 +465,31 @@ mod tests {
     #[test]
     fn default_dolt_ref_falls_back_to_deployment_branch() {
         assert_eq!(
-            resolve_default_dolt_ref(None, None, Some("beta".to_string())),
+            resolve_default_dolt_ref(None, None, Some("beta".to_string()), None),
+            Some("beta".to_string())
+        );
+    }
+
+    #[test]
+    fn default_dolt_ref_falls_back_to_deployment_environment() {
+        assert_eq!(
+            resolve_default_dolt_ref(None, None, None, Some("beta".to_string())),
+            Some("beta".to_string())
+        );
+        assert_eq!(
+            resolve_default_dolt_ref(None, None, None, Some("production".to_string())),
+            Some("main".to_string())
+        );
+    }
+
+    #[test]
+    fn deployment_environment_maps_production_to_main() {
+        assert_eq!(
+            deployment_branch_for_environment(Some("production")),
+            Some("main".to_string())
+        );
+        assert_eq!(
+            deployment_branch_for_environment(Some("beta")),
             Some("beta".to_string())
         );
     }
