@@ -34,6 +34,14 @@ remote_tmp="$(mktemp -d /tmp/fishystuff-mgmt-deploy.XXXXXX)"
 remote_module_path="$remote_tmp/modules/"
 trap 'rm -rf "$remote_tmp"; rm -f "$remote_tar"' EXIT
 
+as_root() {
+	if [[ "$(id -u)" == "0" ]]; then
+		"$@"
+		return
+	fi
+	sudo "$@"
+}
+
 tar -C "$remote_tmp" -xf "$remote_tar"
-sudo HETZNER_API_TOKEN="$hetzner_api_token" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang --module-path "$remote_module_path" "$remote_tmp/"
+as_root env HETZNER_API_TOKEN="$hetzner_api_token" "$remote_mgmt_bin" deploy --no-git --seeds=http://127.0.0.1:2379 lang --module-path "$remote_module_path" "$remote_tmp/"
 EOF
