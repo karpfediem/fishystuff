@@ -272,6 +272,16 @@
     return option;
   }
 
+  function translatedOptionLabel(prefix, code) {
+    const normalizedCode = trimString(code);
+    if (!normalizedCode) {
+      return "";
+    }
+    const key = `${prefix}.${normalizedCode}`;
+    const translated = t(key);
+    return translated === key ? normalizedCode : translated;
+  }
+
   function renderSelectField({ id, label, help, value, options, onChange }) {
     const fieldset = document.createElement("fieldset");
     fieldset.className = "fieldset rounded-box border border-base-300 bg-base-100 p-3";
@@ -299,81 +309,96 @@
     return fieldset;
   }
 
-  function renderLanguageMenu() {
-    const root = document.getElementById("language-switcher");
-    const panel = document.getElementById("language-switcher-panel");
-    if (!(root instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+  function updateLanguageLabels(root, state) {
+    const current = state || snapshot();
+    const localeLabel = translatedOptionLabel("language.option.locale", current.locale);
+    const contentLabel = translatedOptionLabel("language.option.content", current.contentLang);
+    const apiLabel = translatedOptionLabel("language.option.api", current.apiLang);
+    for (const element of root.querySelectorAll("[data-language-current-label]")) {
+      element.textContent = localeLabel;
+    }
+    for (const element of root.querySelectorAll("[data-language-content-label]")) {
+      element.textContent = contentLabel;
+    }
+    for (const element of root.querySelectorAll("[data-language-api-label]")) {
+      element.textContent = apiLabel;
+    }
+  }
+
+  function renderLanguagePanels(root = document) {
+    const panels = Array.from(root.querySelectorAll("[data-language-panel]"))
+      .filter((panel) => panel instanceof HTMLElement);
+    if (!panels.length) {
       return;
     }
     const state = snapshot();
-    panel.replaceChildren();
-    panel.className = "dropdown-content rounded-box border border-base-300 bg-base-100 p-3 shadow-xl z-10 mt-2 w-80 max-w-[calc(100vw-1rem)]";
+    panels.forEach((panel, index) => {
+      const instanceId = trimString(panel.getAttribute("data-language-panel-id")) || String(index + 1);
+      panel.replaceChildren();
 
-    const stack = document.createElement("div");
-    stack.className = "grid gap-3";
-
-    stack.appendChild(renderSelectField({
-      id: "content-language-select",
-      label: t("language.menu.content"),
-      help: t("language.menu.content_help"),
-      value: state.contentLang,
-      options: contentLanguages().map((language) => ({
-        value: trimString(language.code),
-        label: t(`language.option.content.${trimString(language.code)}`),
-      })),
-      onChange(event) {
-        const next = trimString(event.target.value);
-        if (next && next !== state.contentLang) {
-          window.location.assign(resolveContentUrl(next));
-        }
-      },
-    }));
-
-    stack.appendChild(renderSelectField({
-      id: "locale-language-select",
-      label: t("language.menu.locale"),
-      help: t("language.menu.locale_help"),
-      value: state.localeSetting || AUTO_VALUE,
-      options: [
-        { value: AUTO_VALUE, label: t("language.option.auto.locale") },
-        ...localeLanguages().map((code) => ({
-          value: code,
-          label: t(`language.option.locale.${code}`),
+      panel.appendChild(renderSelectField({
+        id: `content-language-select-${instanceId}`,
+        label: t("language.menu.content"),
+        help: t("language.menu.content_help"),
+        value: state.contentLang,
+        options: contentLanguages().map((language) => ({
+          value: trimString(language.code),
+          label: translatedOptionLabel("language.option.content", language.code),
         })),
-      ],
-      onChange(event) {
-        const next = trimString(event.target.value);
-        writeStoredPath(LOCALE_PATH, next === AUTO_VALUE ? "" : next);
-        window.location.reload();
-      },
-    }));
+        onChange(event) {
+          const next = trimString(event.target.value);
+          if (next && next !== state.contentLang) {
+            window.location.assign(resolveContentUrl(next));
+          }
+        },
+      }));
 
-    stack.appendChild(renderSelectField({
-      id: "api-language-select",
-      label: t("language.menu.api"),
-      help: t("language.menu.api_help"),
-      value: state.apiLangSetting || AUTO_VALUE,
-      options: [
-        { value: AUTO_VALUE, label: t("language.option.auto.api") },
-        ...apiLanguages().map((code) => ({
-          value: code,
-          label: t(`language.option.api.${code}`),
-        })),
-      ],
-      onChange(event) {
-        const next = trimString(event.target.value);
-        writeStoredPath(API_LANG_PATH, next === AUTO_VALUE ? "" : next);
-        window.location.reload();
-      },
-    }));
+      panel.appendChild(renderSelectField({
+        id: `locale-language-select-${instanceId}`,
+        label: t("language.menu.locale"),
+        help: t("language.menu.locale_help"),
+        value: state.localeSetting || AUTO_VALUE,
+        options: [
+          { value: AUTO_VALUE, label: t("language.option.auto.locale") },
+          ...localeLanguages().map((code) => ({
+            value: code,
+            label: translatedOptionLabel("language.option.locale", code),
+          })),
+        ],
+        onChange(event) {
+          const next = trimString(event.target.value);
+          writeStoredPath(LOCALE_PATH, next === AUTO_VALUE ? "" : next);
+          window.location.reload();
+        },
+      }));
 
-    panel.appendChild(stack);
+      panel.appendChild(renderSelectField({
+        id: `api-language-select-${instanceId}`,
+        label: t("language.menu.api"),
+        help: t("language.menu.api_help"),
+        value: state.apiLangSetting || AUTO_VALUE,
+        options: [
+          { value: AUTO_VALUE, label: t("language.option.auto.api") },
+          ...apiLanguages().map((code) => ({
+            value: code,
+            label: translatedOptionLabel("language.option.api", code),
+          })),
+        ],
+        onChange(event) {
+          const next = trimString(event.target.value);
+          writeStoredPath(API_LANG_PATH, next === AUTO_VALUE ? "" : next);
+          window.location.reload();
+        },
+      }));
+    });
+
+    updateLanguageLabels(root, state);
   }
 
   function init() {
     const current = snapshot();
     apply(document);
-    renderLanguageMenu();
+    renderLanguagePanels(document);
     dispatchChange(current);
   }
 
@@ -382,6 +407,7 @@
     event: CHANGE_EVENT,
     apply,
     current: snapshot,
+    renderPanels: renderLanguagePanels,
     resolveContentUrl,
     t,
   });
