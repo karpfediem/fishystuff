@@ -12,8 +12,6 @@
     crane.url = "github:ipetkov/crane";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs = { nixpkgs.follows = "nixpkgs"; };
-    zine.url = "github:trevorriles/zine/fix-nix-flake";
-    zine.inputs = { nixpkgs.follows = "nixpkgs"; };
 
     waypoints.url = "github:flockenberger/bdo-fish-waypoints";
     waypoints.flake = false;
@@ -23,7 +21,7 @@
     flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, ... }: {
       systems = [ "x86_64-linux" ];
 
-      perSystem = { config, self', inputs', pkgs, system, waypoints, ... }:
+      perSystem = { config, pkgs, system, waypoints, ... }:
         let
           operatorRepoRoot =
             let
@@ -80,9 +78,7 @@
           botWaypoints = pkgs.callPackage ./nix/packages/bot-waypoints.nix {
             inherit filteredWaypointsSrc;
           };
-          zineCli = inputs'.zine.packages.default.override {
-            zigPreferMusl = true;
-          };
+          zineCli = pkgs.callPackage ./nix/packages/zine-prebuilt.nix { };
           botSrc = pkgs.callPackage ./nix/packages/bot-src.nix {
             inherit botWaypoints;
           };
@@ -129,7 +125,8 @@
           siteContentFor =
             deploymentEnvironment:
             pkgs.callPackage ./nix/packages/site-content.nix {
-              inherit siteSrc zineCli deploymentEnvironment;
+              inherit siteSrc deploymentEnvironment;
+              zine = zineCli;
               mapAssetCacheKey = siteMapRuntimeCacheKey;
               publicSiteBaseUrl = deploymentBaseUrl "" deploymentEnvironment;
               publicApiBaseUrl = deploymentBaseUrl "api" deploymentEnvironment;
@@ -250,6 +247,7 @@
             site-content = siteContent;
             site-content-beta = siteContentBeta;
             vector-service-bundle = vectorServiceBundle;
+            zine = zineCli;
           };
           checks =
             serviceBundleChecks

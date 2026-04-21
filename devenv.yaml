@@ -11,8 +11,3 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
-  zine:
-    url: github:trevorriles/zine/fix-nix-flake
-    inputs:
-      nixpkgs:
-        follows: nixpkgs

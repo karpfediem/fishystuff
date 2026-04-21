@@ -124,7 +124,7 @@ stdenvNoCC.mkDerivation {
       --out "$generated_path" \
       --generated-content-root ".generated/content"
     cp "$generated_path" zine.ziggy
-    zine build "$PWD" "$PWD/.release-out"
+    zine release --output "$PWD/.release-out"
     mv "$backup_path" zine.ziggy
     rm -f "$generated_path"
 

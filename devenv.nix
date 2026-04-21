@@ -88,7 +88,7 @@ in {
       xvfb-run
       xxd
       perf
-      (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
+      (pkgs.callPackage ./nix/packages/zine-prebuilt.nix { })
       prometheusLocal
     ];
 
