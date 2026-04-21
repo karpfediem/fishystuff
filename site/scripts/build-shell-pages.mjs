@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveBrandAssets } from "./brand-assets.mjs";
 import { buildPageManifest } from "./build-i18n.mjs";
 import { LANGUAGE_CONFIG } from "./language-config.mjs";
 import { buildShellPageEntries, buildShellPagePathSet, renderShellPageSource } from "./shell-pages.mjs";
@@ -180,6 +181,29 @@ function applyDefaultOgImage(source, ogImageHref) {
   ])}\n---\n${body}`;
 }
 
+function applyDefaultBrandAssets(source, brandAssets) {
+  if (!brandAssets || brandAssets.variant === "default") {
+    return source;
+  }
+
+  const fields = [];
+  if (!pageSourceHasFrontmatterField(source, "brand_logo_url")) {
+    fields.push({ key: ".brand_logo_url", value: brandAssets.heroLogoUrl });
+  }
+  if (!pageSourceHasFrontmatterField(source, "brand_logo_nav_url")) {
+    fields.push({ key: ".brand_logo_nav_url", value: brandAssets.navLogoUrl });
+  }
+  if (!pageSourceHasFrontmatterField(source, "brand_logo_nav_srcset")) {
+    fields.push({ key: ".brand_logo_nav_srcset", value: brandAssets.navLogoSrcset });
+  }
+  if (fields.length === 0) {
+    return source;
+  }
+
+  const { frontmatter, body } = parseFrontmatterParts(source);
+  return `---\n${mergeCustomFields(frontmatter, fields)}\n---\n${body}`;
+}
+
 function renderFallbackPageSource(source, metadata) {
   const { frontmatter, body } = parseFrontmatterParts(source);
   const nextFrontmatter = mergeCustomFields(frontmatter, [
@@ -329,10 +353,12 @@ export function buildShellContentTree({
   config = LANGUAGE_CONFIG,
   rootDir = siteDir,
   outRoot = path.join(rootDir, ".generated", "content"),
+  env = process.env,
 } = {}) {
   const shellEntries = buildShellPageEntries({ config, rootDir });
   const shellPathsByLocale = buildShellPagePathSet({ config, rootDir });
   const pageManifest = buildPageManifest(config, rootDir);
+  const brandAssets = resolveBrandAssets(env);
   const canonicalLanguage = config.defaultContentLang;
   const canonicalContentDir = path.join(rootDir, "content", canonicalLanguage);
   fs.rmSync(outRoot, { recursive: true, force: true });
@@ -394,7 +420,8 @@ export function buildShellContentTree({
         continue;
       }
       const source = fs.readFileSync(filePath, "utf8");
-      fs.writeFileSync(filePath, applyDefaultOgImage(source, ogImageHref), "utf8");
+      const branded = applyDefaultBrandAssets(source, brandAssets);
+      fs.writeFileSync(filePath, applyDefaultOgImage(branded, ogImageHref), "utf8");
     }
   }
   return { outRoot, entries: shellEntries, fallbackGroups: contentGroups.size };

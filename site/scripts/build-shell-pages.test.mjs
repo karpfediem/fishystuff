@@ -89,3 +89,49 @@ test("buildShellContentTree copies tracked pages and generates shell pages", () 
     fs.rmSync(rootDir, { recursive: true, force: true });
   }
 });
+
+test("buildShellContentTree injects the sourced betta icon for beta builds", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "fishystuff-shell-pages-beta-"));
+  const outRoot = path.join(rootDir, ".generated", "content");
+  try {
+    fs.mkdirSync(path.join(rootDir, "i18n"), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, "i18n", "shell-pages.json"), JSON.stringify({
+      pages: [
+        {
+          id: "home",
+          layout: "frontpage.shtml",
+          author: "Karpfen",
+          date: "2025-03-23T00:00:00",
+          locales: {
+            "en-US": { slug: "", title: "Home" },
+            "de-DE": { slug: "", title: "Startseite" },
+          },
+        },
+      ],
+    }, null, 2));
+    fs.mkdirSync(path.join(rootDir, "content", "en-US"), { recursive: true });
+    fs.mkdirSync(path.join(rootDir, "content", "de-DE"), { recursive: true });
+
+    buildShellContentTree({
+      config: LANGUAGE_CONFIG,
+      rootDir,
+      outRoot,
+      env: {
+        FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
+      },
+    });
+
+    const enIndexSource = fs.readFileSync(path.join(outRoot, "en-US", "index.smd"), "utf8");
+    assert.match(
+      enIndexSource,
+      /\.brand_logo_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,
+    );
+    assert.match(
+      enIndexSource,
+      /\.brand_logo_nav_url = "https:\/\/cdn\.beta\.fishystuff\.fish\/images\/items\/00820996\.webp",/,
+    );
+    assert.match(enIndexSource, /\.brand_logo_nav_srcset = "",/);
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});

@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { resolveBrandAssets } from "./brand-assets.mjs";
 import { loadLocaleCatalogs, resolveLocaleCatalogs } from "./build-i18n.mjs";
 import { LANGUAGE_CONFIG } from "./language-config.mjs";
 
@@ -18,7 +19,6 @@ const DEFAULT_TAGLINE = "Everything you need to get fishing";
 const assetsDir = path.join(siteDir, "assets");
 const fontsCssPath = path.join(assetsDir, "css", "fonts.css");
 const siteCssPath = path.join(assetsDir, "css", "site.css");
-const logoPath = path.join(assetsDir, "img", "logo.png");
 const templatePath = path.join(siteDir, "scripts", "embed-image-template.html");
 
 function runChromium(args, label) {
@@ -34,7 +34,7 @@ function runChromium(args, label) {
   }
 }
 
-function ensureInputs() {
+function ensureInputs(logoPath) {
   for (const inputPath of [fontsCssPath, siteCssPath, logoPath, templatePath]) {
     if (!fs.existsSync(inputPath)) {
       throw new Error(`Missing embed build input: ${path.relative(siteDir, inputPath)}`);
@@ -94,7 +94,7 @@ function cleanupObsoleteFiles() {
   }
 }
 
-function buildHtmlDocument({ locale, tagline }) {
+function buildHtmlDocument({ locale, tagline, logoPath }) {
   const templateSource = fs.readFileSync(templatePath, "utf8");
   const fontsCssHref = pathToFileURL(fontsCssPath).href;
   const siteCssHref = pathToFileURL(siteCssPath).href;
@@ -111,12 +111,12 @@ function buildHtmlDocument({ locale, tagline }) {
     .replace("Fishy Stuff", BRAND_TEXT);
 }
 
-function renderLocaleEmbed({ locale, tagline, outputPaths }) {
+function renderLocaleEmbed({ locale, tagline, outputPaths, logoPath }) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `fishystuff-embed-${locale}-`));
   try {
     const htmlPath = path.join(tempDir, "embed.html");
     const screenshotPath = path.join(tempDir, "embed.png");
-    fs.writeFileSync(htmlPath, buildHtmlDocument({ locale, tagline }), "utf8");
+    fs.writeFileSync(htmlPath, buildHtmlDocument({ locale, tagline, logoPath }), "utf8");
     runChromium([
       "--headless=new",
       "--disable-gpu",
@@ -140,8 +140,10 @@ function renderLocaleEmbed({ locale, tagline, outputPaths }) {
 export function buildEmbedImages({
   rootDir = siteDir,
   config = LANGUAGE_CONFIG,
+  env = process.env,
 } = {}) {
-  ensureInputs();
+  const brandAssets = resolveBrandAssets(env);
+  ensureInputs(brandAssets.embedLogoPath);
   cleanupObsoleteFiles();
   const catalogs = loadCatalogs(rootDir);
   for (const language of config.contentLanguages) {
@@ -149,6 +151,7 @@ export function buildEmbedImages({
       locale: language.code,
       tagline: normalizeTagline(catalogs[language.code]?.["frontpage.hero.title"]),
       outputPaths: resolveOutputPaths(language.code),
+      logoPath: brandAssets.embedLogoPath,
     });
   }
 }
