@@ -35,6 +35,7 @@ const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_work
 const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess";
 const GROUP_RATE_SCALE: f64 = 1_000_000.0;
 const COMBINED_GROUP_RATE_SCALE: f64 = GROUP_RATE_SCALE * GROUP_RATE_SCALE;
+const HARPOON_SLOT_IDX: u8 = 6;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 struct CommunityPrizeGuessMeta {
@@ -385,76 +386,83 @@ impl DoltMySqlStore {
         let zone_rows: Vec<(i64, i64)> = conn
             .exec(zone_query, (zone_rgb.to_u32(),))
             .map_err(db_unavailable)?;
-        let slot_rows = zone_rows
+        let mut slot_rows = zone_rows
             .into_iter()
             .filter_map(|(slot_idx, item_main_group_key)| {
                 let slot_idx = u8::try_from(slot_idx).ok()?;
-                (item_main_group_key > 0).then_some((slot_idx, item_main_group_key))
+                (item_main_group_key > 0).then_some((slot_idx, item_main_group_key, "rod"))
             })
             .collect::<Vec<_>>();
-        let slot_main_group_by_idx = slot_rows.iter().copied().collect::<HashMap<u8, i64>>();
+        let harpoon_query = format!(
+            "SELECT CAST(DropIDHarpoon AS SIGNED) \
+             FROM fishing_table{as_of} \
+             WHERE R = ? AND G = ? AND B = ? \
+               AND DropIDHarpoon IS NOT NULL \
+             LIMIT 1"
+        );
+        let harpoon_main_group_key: Option<i64> = conn
+            .exec_first(harpoon_query, (zone_rgb.r, zone_rgb.g, zone_rgb.b))
+            .map_err(db_unavailable)?;
+        if let Some(item_main_group_key) = harpoon_main_group_key.filter(|value| *value > 0) {
+            slot_rows.push((HARPOON_SLOT_IDX, item_main_group_key, "harpoon"));
+        }
+        slot_rows.sort_by_key(|(slot_idx, _, _)| *slot_idx);
+        let slot_main_group_by_idx = slot_rows
+            .iter()
+            .map(|(slot_idx, item_main_group_key, _)| (*slot_idx, *item_main_group_key))
+            .collect::<HashMap<u8, i64>>();
+        let slot_method_by_idx = slot_rows
+            .iter()
+            .map(|(slot_idx, _, method)| (*slot_idx, (*method).to_string()))
+            .collect::<HashMap<u8, String>>();
 
         let mut subgroup_options = HashMap::<i64, Vec<(i64, i64)>>::new();
+        let mut group_conditions_raw = HashMap::<i64, Vec<String>>::new();
         if !slot_rows.is_empty() {
-            let main_group_id_csv = slot_rows
+            let main_group_ids = slot_rows
                 .iter()
-                .map(|(_, item_main_group_key)| item_main_group_key.to_string())
+                .map(|(_, item_main_group_key, _)| *item_main_group_key)
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let main_group_id_csv = main_group_ids
+                .iter()
+                .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(",");
             let main_group_query = format!(
                 "SELECT \
-                    CAST(ItemMainGroupKey AS SIGNED), \
-                    CAST(SelectRate0 AS SIGNED), CAST(ItemSubGroupKey0 AS SIGNED), \
-                    CAST(SelectRate1 AS SIGNED), CAST(ItemSubGroupKey1 AS SIGNED), \
-                    CAST(SelectRate2 AS SIGNED), CAST(ItemSubGroupKey2 AS SIGNED), \
-                    CAST(SelectRate3 AS SIGNED), CAST(ItemSubGroupKey3 AS SIGNED) \
-                 FROM item_main_group_table{as_of} \
-                 WHERE ItemMainGroupKey IN ({main_group_id_csv})"
+                    CAST(item_main_group_key AS SIGNED), \
+                    CAST(select_rate AS SIGNED), \
+                    NULLIF(TRIM(condition_raw), '') AS condition_raw, \
+                    CAST(item_sub_group_key AS SIGNED) \
+                 FROM item_main_group_options{as_of} \
+                 WHERE item_main_group_key IN ({main_group_id_csv}) \
+                 ORDER BY item_main_group_key, option_idx"
             );
-            let main_group_rows: Vec<(
-                i64,
-                Option<i64>,
-                Option<i64>,
-                Option<i64>,
-                Option<i64>,
-                Option<i64>,
-                Option<i64>,
-                Option<i64>,
-                Option<i64>,
-            )> = conn.query(main_group_query).map_err(db_unavailable)?;
+            let main_group_rows: Vec<(i64, Option<i64>, Option<String>, Option<i64>)> =
+                conn.query(main_group_query).map_err(db_unavailable)?;
 
-            for (
-                item_main_group_key,
-                select_rate0,
-                subgroup0,
-                select_rate1,
-                subgroup1,
-                select_rate2,
-                subgroup2,
-                select_rate3,
-                subgroup3,
-            ) in main_group_rows
-            {
-                for (select_rate, subgroup_key) in [
-                    (select_rate0, subgroup0),
-                    (select_rate1, subgroup1),
-                    (select_rate2, subgroup2),
-                    (select_rate3, subgroup3),
-                ] {
-                    let Some(select_rate) = select_rate else {
-                        continue;
-                    };
-                    let Some(subgroup_key) = subgroup_key else {
-                        continue;
-                    };
-                    if select_rate <= 0 || subgroup_key <= 0 {
-                        continue;
+            for (item_main_group_key, select_rate, condition_raw, subgroup_key) in main_group_rows {
+                if let Some(condition_raw) = normalize_optional_string(condition_raw) {
+                    let conditions = group_conditions_raw.entry(item_main_group_key).or_default();
+                    if !conditions.contains(&condition_raw) {
+                        conditions.push(condition_raw);
                     }
-                    subgroup_options
-                        .entry(item_main_group_key)
-                        .or_default()
-                        .push((select_rate, subgroup_key));
                 }
+                let Some(select_rate) = select_rate else {
+                    continue;
+                };
+                let Some(subgroup_key) = subgroup_key else {
+                    continue;
+                };
+                if select_rate <= 0 || subgroup_key <= 0 {
+                    continue;
+                }
+                subgroup_options
+                    .entry(item_main_group_key)
+                    .or_default()
+                    .push((select_rate, subgroup_key));
             }
         }
 
@@ -471,42 +479,35 @@ impl DoltMySqlStore {
                 .join(",");
             let subgroup_query = format!(
                 "SELECT \
-                    CAST(ItemSubGroupKey AS SIGNED), \
-                    CAST(ItemKey AS SIGNED), \
-                    CAST(SelectRate_0 AS SIGNED), \
-                    CAST(SelectRate_1 AS SIGNED), \
-                    CAST(SelectRate_2 AS SIGNED) \
-                 FROM item_sub_group_table{as_of} \
-                 WHERE ItemSubGroupKey IN ({subgroup_id_csv})"
+                    CAST(item_sub_group_key AS SIGNED), \
+                    CAST(item_key AS SIGNED), \
+                    CAST(select_rate AS SIGNED) \
+                 FROM item_sub_group_item_variants{as_of} \
+                 WHERE item_sub_group_key IN ({subgroup_id_csv})"
             );
-            let subgroup_rows: Vec<(i64, i64, Option<i64>, Option<i64>, Option<i64>)> =
+            let subgroup_rows: Vec<(i64, i64, Option<i64>)> =
                 conn.query(subgroup_query).map_err(db_unavailable)?;
 
-            for (item_sub_group_key, item_key, select_rate_0, select_rate_1, select_rate_2) in
-                subgroup_rows
-            {
+            for (item_sub_group_key, item_key, select_rate) in subgroup_rows {
                 let Ok(item_id) = i32::try_from(item_key) else {
                     continue;
                 };
                 if item_id <= 0 {
                     continue;
                 }
-                let select_rate = [select_rate_0, select_rate_1, select_rate_2]
-                    .into_iter()
-                    .flatten()
-                    .find(|select_rate| *select_rate > 0);
-                if let Some(select_rate) = select_rate {
-                    subgroup_variants
-                        .entry(item_sub_group_key)
-                        .or_default()
-                        .push((item_id, select_rate));
-                }
+                let Some(select_rate) = select_rate.filter(|value| *value > 0) else {
+                    continue;
+                };
+                subgroup_variants
+                    .entry(item_sub_group_key)
+                    .or_default()
+                    .push((item_id, select_rate));
             }
         }
 
         let mut aggregate_weights = HashMap::<(u8, i32), f64>::new();
         let mut slot_item_subgroups = HashMap::<(u8, i32), Vec<i64>>::new();
-        for (slot_idx, item_main_group_key) in &slot_rows {
+        for (slot_idx, item_main_group_key, _) in &slot_rows {
             let Some(options) = subgroup_options.get(item_main_group_key) else {
                 continue;
             };
@@ -528,7 +529,7 @@ impl DoltMySqlStore {
         }
         let mut slot_subgroup_select_rate = HashMap::<(u8, i64), i64>::new();
         let mut slot_option_count = HashMap::<u8, usize>::new();
-        for (slot_idx, item_main_group_key) in &slot_rows {
+        for (slot_idx, item_main_group_key, _) in &slot_rows {
             let Some(options) = subgroup_options.get(item_main_group_key) else {
                 continue;
             };
@@ -747,6 +748,11 @@ impl DoltMySqlStore {
                             false,
                         )
                     });
+                let catch_methods = slot_method_by_idx
+                    .get(&slot_idx)
+                    .cloned()
+                    .map(|method| vec![method])
+                    .unwrap_or_else(|| vec!["rod".to_string()]);
                 let mut evidence = Vec::new();
                 if let Some(db_weight) = aggregate_weights.get(&(slot_idx, item_id)).copied() {
                     evidence.push(CalculatorZoneLootEvidence {
@@ -810,6 +816,10 @@ impl DoltMySqlStore {
                     .get(&slot_idx)
                     .copied()
                     .unwrap_or_default();
+                let group_conditions_raw = group_conditions_raw
+                    .get(&item_main_group_key)
+                    .cloned()
+                    .unwrap_or_default();
                 let subgroup_keys = slot_item_subgroups
                     .get(&(slot_idx, item_id))
                     .map(Vec::as_slice)
@@ -855,6 +865,8 @@ impl DoltMySqlStore {
                     vendor_price,
                     grade,
                     is_fish,
+                    catch_methods,
+                    group_conditions_raw,
                     within_group_rate,
                     evidence,
                     overlay: CalculatorZoneLootOverlayMeta::default(),
@@ -916,6 +928,20 @@ impl DoltMySqlStore {
                         false,
                     )
                 });
+            let item_main_group_key = slot_main_group_by_idx
+                .get(&slot_idx)
+                .copied()
+                .or_else(|| {
+                    evidence
+                        .iter()
+                        .find_map(|row| row.item_main_group_key.filter(|value| *value > 0))
+                })
+                .unwrap_or_default();
+            let catch_methods = slot_method_by_idx
+                .get(&slot_idx)
+                .cloned()
+                .map(|method| vec![method])
+                .unwrap_or_else(|| vec!["rod".to_string()]);
             entries.push(CalculatorZoneLootEntry {
                 slot_idx,
                 item_id,
@@ -924,6 +950,11 @@ impl DoltMySqlStore {
                 vendor_price,
                 grade,
                 is_fish,
+                catch_methods,
+                group_conditions_raw: group_conditions_raw
+                    .get(&item_main_group_key)
+                    .cloned()
+                    .unwrap_or_default(),
                 within_group_rate: 0.0,
                 evidence,
                 overlay: CalculatorZoneLootOverlayMeta::default(),

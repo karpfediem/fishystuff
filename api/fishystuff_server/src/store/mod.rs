@@ -51,6 +51,8 @@ pub struct CalculatorZoneLootEntry {
     pub vendor_price: Option<i64>,
     pub grade: Option<String>,
     pub is_fish: bool,
+    pub catch_methods: Vec<String>,
+    pub group_conditions_raw: Vec<String>,
     pub within_group_rate: f64,
     pub evidence: Vec<CalculatorZoneLootEvidence>,
     pub overlay: CalculatorZoneLootOverlayMeta,

@@ -33,6 +33,10 @@ pub struct ZoneLootSummaryGroupRow {
     pub drop_rate_text: String,
     pub drop_rate_source_kind: String,
     pub drop_rate_tooltip: String,
+    pub condition_text: String,
+    pub condition_tooltip: String,
+    #[serde(default)]
+    pub catch_methods: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -52,4 +56,6 @@ pub struct ZoneLootSummarySpeciesRow {
     pub presence_text: Option<String>,
     pub presence_source_kind: String,
     pub presence_tooltip: String,
+    #[serde(default)]
+    pub catch_methods: Vec<String>,
 }

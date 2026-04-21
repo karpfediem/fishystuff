@@ -338,6 +338,7 @@ struct LootChart {
 #[derive(Debug, Clone, serde::Serialize)]
 struct LootSpeciesRow {
     slot_idx: u8,
+    item_id: i32,
     group_label: &'static str,
     label: String,
     icon_url: Option<String>,
@@ -361,6 +362,8 @@ struct LootSpeciesRow {
     presence_source_kind: String,
     presence_tooltip: Option<String>,
     evidence_text: String,
+    #[serde(skip_serializing)]
+    catch_methods: Vec<String>,
     #[serde(skip_serializing_if = "String::is_empty")]
     count_breakdown: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -1615,6 +1618,7 @@ fn calculator_group_label_key(slot_idx: u8) -> Option<&'static str> {
         3 => Some("calculator.server.group.high_quality"),
         4 => Some("calculator.server.group.general"),
         5 => Some("calculator.server.group.trash"),
+        6 => Some("calculator.server.group.harpoon"),
         0 => Some("calculator.breakdown.label.unassigned"),
         _ => None,
     }
@@ -2391,6 +2395,8 @@ fn apply_zone_overlay_to_loot_entries(
                 .filter(|value| !value.is_empty())
                 .map(ToOwned::to_owned),
             is_fish: overlay_item.is_fish.unwrap_or(true),
+            catch_methods: vec!["rod".to_string()],
+            group_conditions_raw: Vec::new(),
             within_group_rate: 0.0,
             evidence: Vec::new(),
             overlay: CalculatorZoneLootOverlayMeta {
@@ -4452,6 +4458,7 @@ fn fish_group_label(slot_idx: u8) -> Option<&'static str> {
         3 => Some("High-Quality"),
         4 => Some("General"),
         5 => Some("Trash"),
+        6 => Some("Harpoon"),
         _ => None,
     }
 }
@@ -4463,6 +4470,7 @@ fn fish_group_slot_idx(label: &str) -> Option<u8> {
         "High-Quality" => Some(3),
         "General" => Some(4),
         "Trash" => Some(5),
+        "Harpoon" => Some(6),
         _ => None,
     }
 }
@@ -4489,6 +4497,7 @@ fn default_zone_loot_group_values(
             "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
             "var(--color-base-content)",
         )),
+        6 => Some(("Harpoon", "#c7f9f1", "#2dd4bf", "#083344")),
         0 => Some((
             "Unassigned",
             "var(--color-base-200)",
@@ -5010,6 +5019,168 @@ fn zone_loot_group_drop_rate_fields(
     )
 }
 
+fn zone_loot_catch_methods(methods: &[String]) -> Vec<String> {
+    let mut has_rod = false;
+    let mut has_harpoon = false;
+    for method in methods {
+        match method.trim().to_ascii_lowercase().as_str() {
+            "rod" => has_rod = true,
+            "harpoon" => has_harpoon = true,
+            _ => {}
+        }
+    }
+
+    let mut normalized = Vec::with_capacity(2);
+    if has_rod {
+        normalized.push("rod".to_string());
+    }
+    if has_harpoon {
+        normalized.push("harpoon".to_string());
+    }
+    if normalized.is_empty() {
+        normalized.push("rod".to_string());
+    }
+    normalized
+}
+
+fn zone_loot_chart_condition_fields(
+    row: &FishGroupChartRow,
+    lang: CalculatorLocale,
+) -> (String, String) {
+    let fallback_text = if row.base_share_pct > 0.0 {
+        format!(
+            "{} {}",
+            calculator_route_text(lang, "calculator.server.group.zone_base_rate"),
+            percent_value_text(row.base_share_pct),
+        )
+    } else {
+        row.bonus_text.clone()
+    };
+
+    let condition_text = row
+        .rate_inputs
+        .iter()
+        .filter(|input| !input.label.trim().is_empty() && !input.value_text.trim().is_empty())
+        .take(2)
+        .map(|input| format!("{} {}", input.label, input.value_text))
+        .collect::<Vec<_>>()
+        .join(" · ");
+
+    let condition_tooltip = row
+        .rate_inputs
+        .iter()
+        .filter(|input| !input.label.trim().is_empty() && !input.value_text.trim().is_empty())
+        .map(|input| format!("{}: {}", input.label, input.value_text))
+        .collect::<Vec<_>>()
+        .join(" | ");
+
+    (
+        if condition_text.is_empty() {
+            fallback_text
+        } else {
+            condition_text
+        },
+        condition_tooltip,
+    )
+}
+
+fn zone_loot_parse_condition_value(predicate: &str, prefix: &str) -> Option<i64> {
+    predicate
+        .strip_prefix(prefix)
+        .and_then(|value| value.trim().parse::<i64>().ok())
+}
+
+fn zone_loot_lifeskill_label(order: i64, catalog: &CalculatorCatalogResponse) -> Option<String> {
+    catalog
+        .lifeskill_levels
+        .iter()
+        .find(|entry| i64::from(entry.order) == order)
+        .map(|entry| entry.name.clone())
+}
+
+fn zone_loot_humanize_condition(
+    raw: &str,
+    lang: CalculatorLocale,
+    catalog: &CalculatorCatalogResponse,
+) -> Vec<String> {
+    let predicates = raw
+        .split(';')
+        .map(str::trim)
+        .filter(|predicate| !predicate.is_empty())
+        .collect::<Vec<_>>();
+    if predicates.is_empty() {
+        return Vec::new();
+    }
+
+    let mut labels = Vec::new();
+    let mastery_min = predicates.iter().find_map(|predicate| {
+        zone_loot_parse_condition_value(predicate, "lifestat(1,1)>").map(|value| value + 1)
+    });
+    let mastery_max = predicates.iter().find_map(|predicate| {
+        zone_loot_parse_condition_value(predicate, "lifestat(1,1)<").map(|value| value - 1)
+    });
+    if mastery_min.is_some() || mastery_max.is_some() {
+        let label = calculator_route_text(lang, "calculator.server.field.mastery");
+        labels.push(match (mastery_min, mastery_max) {
+            (Some(min), Some(max)) if min <= max => format!("{label} {min}-{max}"),
+            (Some(min), _) => format!("{label} {min}+"),
+            (_, Some(max)) => format!("{label} <= {max}"),
+            _ => label,
+        });
+    }
+
+    if let Some(level_threshold) = predicates.iter().find_map(|predicate| {
+        zone_loot_parse_condition_value(predicate, "getLifeLevel(1)>").map(|value| value + 1)
+    }) {
+        let label = calculator_route_text(lang, "calculator.server.field.fishing_level");
+        let level_name = zone_loot_lifeskill_label(level_threshold, catalog)
+            .unwrap_or_else(|| level_threshold.to_string());
+        labels.push(format!("{label} {level_name}+"));
+    }
+
+    if labels.is_empty() {
+        labels.push(raw.trim().to_string());
+    }
+    labels
+}
+
+fn zone_loot_raw_condition_fields(
+    conditions: &[String],
+    lang: CalculatorLocale,
+    catalog: &CalculatorCatalogResponse,
+) -> Option<(String, String)> {
+    if conditions.is_empty() {
+        return None;
+    }
+
+    let mut labels = Vec::<String>::new();
+    for condition in conditions {
+        for label in zone_loot_humanize_condition(condition, lang, catalog) {
+            if !label.trim().is_empty() && !labels.contains(&label) {
+                labels.push(label);
+            }
+        }
+    }
+    if labels.is_empty() {
+        return None;
+    }
+
+    Some((labels.join(" · "), labels.join(" | ")))
+}
+
+fn zone_loot_group_condition_fields(
+    chart_row: Option<&FishGroupChartRow>,
+    conditions: &[String],
+    data: &CalculatorData,
+) -> (String, String) {
+    if let Some(fields) = zone_loot_raw_condition_fields(conditions, data.lang, &data.catalog) {
+        return fields;
+    }
+    chart_row
+        .map(|chart_row| zone_loot_chart_condition_fields(chart_row, data.lang))
+        .unwrap_or_else(|| (String::new(), String::new()))
+}
+
 fn loot_species_presence_scope_text(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
@@ -5490,6 +5661,7 @@ fn derive_loot_chart(
         *group_profit_by_slot.entry(entry.slot_idx).or_default() += expected_profit_raw;
         species_rows.push(LootSpeciesRow {
             slot_idx: entry.slot_idx,
+            item_id: entry.item_id,
             group_label: group_row.label,
             label: entry.name.clone(),
             icon_url: entry
@@ -5516,6 +5688,7 @@ fn derive_loot_chart(
             presence_source_kind: loot_species_presence_source_kind(entry),
             presence_tooltip,
             evidence_text: loot_species_evidence_text(signals, entry, data.lang),
+            catch_methods: zone_loot_catch_methods(&entry.catch_methods),
             count_breakdown: String::new(),
             silver_breakdown: String::new(),
             within_group_rate_raw: entry.within_group_rate,
@@ -5680,14 +5853,58 @@ fn derive_zone_loot_summary_response(
         .enumerate()
         .map(|(index, row)| ((index + 1) as u8, row))
         .collect::<HashMap<_, _>>();
+    let mut group_conditions_by_slot = HashMap::<u8, Vec<String>>::new();
+    let mut group_methods_by_slot = HashMap::<u8, Vec<String>>::new();
+    let mut rod_entries = Vec::<&CalculatorZoneLootEntry>::new();
+    let mut harpoon_entries = Vec::<&CalculatorZoneLootEntry>::new();
+    for entry in &data.zone_loot_entries {
+        for condition in &entry.group_conditions_raw {
+            let conditions = group_conditions_by_slot.entry(entry.slot_idx).or_default();
+            if !conditions.contains(condition) {
+                conditions.push(condition.clone());
+            }
+        }
+
+        let methods = zone_loot_catch_methods(&entry.catch_methods);
+        if !methods.is_empty() {
+            let group_methods = group_methods_by_slot.entry(entry.slot_idx).or_default();
+            for method in &methods {
+                if !group_methods.contains(method) {
+                    group_methods.push(method.clone());
+                }
+            }
+        }
+
+        if methods.iter().any(|method| method == "rod") {
+            rod_entries.push(entry);
+        }
+        if methods.iter().any(|method| method == "harpoon") {
+            harpoon_entries.push(entry);
+        }
+    }
     let zone_overlay = zone_overlay_for_signals(signals, &signals.zone);
     let overlay_active = zone_overlay_has_changes(zone_overlay);
     let rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
     let visible_group_labels = rows.iter().map(|row| row.label).collect::<HashSet<_>>();
+    let default_group_methods = |slot_idx: u8| {
+        if slot_idx == 6 {
+            vec!["harpoon".to_string()]
+        } else {
+            vec!["rod".to_string()]
+        }
+    };
     let mut summary_groups = rows
         .iter()
         .map(|row| {
             let slot_idx = fish_group_slot_idx(row.label).unwrap_or(0);
+            let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
+                group_row_by_slot.get(&slot_idx).copied(),
+                group_conditions_by_slot
+                    .get(&slot_idx)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
+                data,
+            );
             ZoneLootSummaryGroupRow {
                 slot_idx,
                 label: calculator_group_display_label(data.lang, row.label),
@@ -5697,6 +5914,12 @@ fn derive_zone_loot_summary_response(
                 drop_rate_text: row.count_share_text.clone(),
                 drop_rate_source_kind: row.drop_rate_source_kind.clone(),
                 drop_rate_tooltip: row.drop_rate_tooltip.clone(),
+                condition_text,
+                condition_tooltip,
+                catch_methods: group_methods_by_slot
+                    .get(&slot_idx)
+                    .cloned()
+                    .unwrap_or_else(|| default_group_methods(slot_idx)),
             }
         })
         .collect::<Vec<_>>();
@@ -5715,6 +5938,14 @@ fn derive_zone_loot_summary_response(
             if !keep_visible || !seen_group_slots.insert(*slot_idx) {
                 continue;
             }
+            let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
+                Some(chart_row),
+                group_conditions_by_slot
+                    .get(slot_idx)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
+                data,
+            );
             summary_groups.push(ZoneLootSummaryGroupRow {
                 slot_idx: *slot_idx,
                 label: calculator_group_display_label(data.lang, &chart_row.label),
@@ -5728,6 +5959,12 @@ fn derive_zone_loot_summary_response(
                 },
                 drop_rate_source_kind: fish_group_drop_rate_source_kind(chart_row),
                 drop_rate_tooltip: fish_group_drop_rate_tooltip(chart_row),
+                condition_text,
+                condition_tooltip,
+                catch_methods: group_methods_by_slot
+                    .get(slot_idx)
+                    .cloned()
+                    .unwrap_or_else(|| default_group_methods(*slot_idx)),
             });
         }
     }
@@ -5750,11 +5987,83 @@ fn derive_zone_loot_summary_response(
             presence_text: row.presence_text.clone(),
             presence_source_kind: row.presence_source_kind.clone(),
             presence_tooltip: row.presence_tooltip.clone().unwrap_or_default(),
+            catch_methods: row.catch_methods.clone(),
         })
         .collect::<Vec<_>>();
-    let mut presence_only_species_rows = data
-        .zone_loot_entries
+    let mut weighted_harpoon_entries = harpoon_entries
         .iter()
+        .copied()
+        .filter(|entry| entry.within_group_rate > 0.0)
+        .collect::<Vec<_>>();
+    weighted_harpoon_entries.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| {
+                right
+                    .within_group_rate
+                    .partial_cmp(&left.within_group_rate)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+    let mut weighted_harpoon_species_rows = weighted_harpoon_entries
+        .into_iter()
+        .map(|entry| {
+            let chart_row = group_row_by_slot.get(&entry.slot_idx).copied();
+            let (group_label, fill_color, stroke_color, text_color) =
+                zone_loot_group_values(data.lang, entry.slot_idx, chart_row);
+            if seen_group_slots.insert(entry.slot_idx) {
+                let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
+                    chart_row,
+                    group_conditions_by_slot
+                        .get(&entry.slot_idx)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]),
+                    data,
+                );
+                summary_groups.push(ZoneLootSummaryGroupRow {
+                    slot_idx: entry.slot_idx,
+                    label: group_label.clone(),
+                    fill_color: fill_color.clone(),
+                    stroke_color: stroke_color.clone(),
+                    text_color: text_color.clone(),
+                    drop_rate_text: percent_value_text(100.0),
+                    drop_rate_source_kind: "database".to_string(),
+                    drop_rate_tooltip: String::new(),
+                    condition_text,
+                    condition_tooltip,
+                    catch_methods: group_methods_by_slot
+                        .get(&entry.slot_idx)
+                        .cloned()
+                        .unwrap_or_else(|| default_group_methods(entry.slot_idx)),
+                });
+            }
+            ZoneLootSummarySpeciesRow {
+                slot_idx: entry.slot_idx,
+                group_label,
+                label: entry.name.clone(),
+                icon_url: entry
+                    .icon
+                    .as_deref()
+                    .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
+                icon_grade_tone: item_grade_tone(entry.grade.as_deref()).to_string(),
+                fill_color,
+                stroke_color,
+                text_color,
+                drop_rate_text: loot_species_drop_rate_text(signals, entry),
+                drop_rate_source_kind: loot_species_drop_rate_source_kind(entry).to_string(),
+                drop_rate_tooltip: loot_species_drop_rate_tooltip(signals, entry, data.lang),
+                presence_text: loot_species_presence_text(entry, data.lang),
+                presence_source_kind: loot_species_presence_source_kind(entry),
+                presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
+                    .unwrap_or_default(),
+                catch_methods: zone_loot_catch_methods(&entry.catch_methods),
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut presence_only_species_rows = rod_entries
+        .iter()
+        .copied()
         .filter(|entry| entry.within_group_rate <= 0.0)
         .filter_map(|entry| {
             let presence_text = loot_species_presence_text(entry, data.lang)?;
@@ -5764,6 +6073,14 @@ fn derive_zone_loot_summary_response(
             let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
                 zone_loot_group_drop_rate_fields(chart_row);
             if seen_group_slots.insert(entry.slot_idx) {
+                let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
+                    chart_row,
+                    group_conditions_by_slot
+                        .get(&entry.slot_idx)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]),
+                    data,
+                );
                 summary_groups.push(ZoneLootSummaryGroupRow {
                     slot_idx: entry.slot_idx,
                     label: group_label.clone(),
@@ -5773,6 +6090,12 @@ fn derive_zone_loot_summary_response(
                     drop_rate_text: drop_rate_text.clone(),
                     drop_rate_source_kind: drop_rate_source_kind.clone(),
                     drop_rate_tooltip: drop_rate_tooltip.clone(),
+                    condition_text,
+                    condition_tooltip,
+                    catch_methods: group_methods_by_slot
+                        .get(&entry.slot_idx)
+                        .cloned()
+                        .unwrap_or_else(|| default_group_methods(entry.slot_idx)),
                 });
             }
             Some(ZoneLootSummarySpeciesRow {
@@ -5794,6 +6117,65 @@ fn derive_zone_loot_summary_response(
                 presence_source_kind: loot_species_presence_source_kind(entry),
                 presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
                     .unwrap_or_default(),
+                catch_methods: zone_loot_catch_methods(&entry.catch_methods),
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut harpoon_presence_only_species_rows = harpoon_entries
+        .iter()
+        .copied()
+        .filter(|entry| entry.within_group_rate <= 0.0)
+        .filter_map(|entry| {
+            let presence_text = loot_species_presence_text(entry, data.lang)?;
+            let chart_row = group_row_by_slot.get(&entry.slot_idx).copied();
+            let (group_label, fill_color, stroke_color, text_color) =
+                zone_loot_group_values(data.lang, entry.slot_idx, chart_row);
+            if seen_group_slots.insert(entry.slot_idx) {
+                let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
+                    chart_row,
+                    group_conditions_by_slot
+                        .get(&entry.slot_idx)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]),
+                    data,
+                );
+                summary_groups.push(ZoneLootSummaryGroupRow {
+                    slot_idx: entry.slot_idx,
+                    label: group_label.clone(),
+                    fill_color: fill_color.clone(),
+                    stroke_color: stroke_color.clone(),
+                    text_color: text_color.clone(),
+                    drop_rate_text: String::new(),
+                    drop_rate_source_kind: String::new(),
+                    drop_rate_tooltip: String::new(),
+                    condition_text,
+                    condition_tooltip,
+                    catch_methods: group_methods_by_slot
+                        .get(&entry.slot_idx)
+                        .cloned()
+                        .unwrap_or_else(|| default_group_methods(entry.slot_idx)),
+                });
+            }
+            Some(ZoneLootSummarySpeciesRow {
+                slot_idx: entry.slot_idx,
+                group_label,
+                label: entry.name.clone(),
+                icon_url: entry
+                    .icon
+                    .as_deref()
+                    .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
+                icon_grade_tone: item_grade_tone(entry.grade.as_deref()).to_string(),
+                fill_color,
+                stroke_color,
+                text_color,
+                drop_rate_text: String::new(),
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
+                presence_text: Some(presence_text),
+                presence_source_kind: loot_species_presence_source_kind(entry),
+                presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
+                    .unwrap_or_default(),
+                catch_methods: zone_loot_catch_methods(&entry.catch_methods),
             })
         })
         .collect::<Vec<_>>();
@@ -5802,16 +6184,30 @@ fn derive_zone_loot_summary_response(
             .cmp(&zone_loot_slot_sort_key(right.slot_idx))
             .then_with(|| left.label.cmp(&right.label))
     });
+    weighted_harpoon_species_rows.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
     presence_only_species_rows.sort_by(|left, right| {
         zone_loot_slot_sort_key(left.slot_idx)
             .cmp(&zone_loot_slot_sort_key(right.slot_idx))
             .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
     });
-    let has_weighted_rows = !weighted_species_rows.is_empty();
-    let has_presence_only_rows = !presence_only_species_rows.is_empty();
+    harpoon_presence_only_species_rows.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
+    let has_weighted_rows =
+        !weighted_species_rows.is_empty() || !weighted_harpoon_species_rows.is_empty();
+    let has_presence_only_rows =
+        !presence_only_species_rows.is_empty() || !harpoon_presence_only_species_rows.is_empty();
     let available = has_weighted_rows || has_presence_only_rows;
     let mut species_rows = weighted_species_rows;
+    species_rows.extend(weighted_harpoon_species_rows);
     species_rows.extend(presence_only_species_rows);
+    species_rows.extend(harpoon_presence_only_species_rows);
 
     ZoneLootSummaryResponse {
         available,
@@ -12943,9 +13339,14 @@ mod tests {
         assert_eq!(summary.groups[0].label, "Unassigned");
         assert_eq!(summary.groups[0].drop_rate_text, "");
         assert_eq!(summary.groups[0].drop_rate_source_kind, "");
+        assert_eq!(summary.groups[0].condition_text, "");
         assert_eq!(summary.species_rows.len(), 1);
         assert_eq!(summary.species_rows[0].group_label, "Unassigned");
         assert_eq!(summary.species_rows[0].drop_rate_text, "");
+        assert_eq!(
+            summary.species_rows[0].catch_methods,
+            vec!["rod".to_string()]
+        );
         assert!(summary.species_rows[0].presence_text.is_some());
         assert!(summary.note.contains("Unassigned"));
     }
@@ -13003,10 +13404,138 @@ mod tests {
         assert_eq!(summary.groups[0].label, "General");
         assert_eq!(summary.groups[0].drop_rate_text, "100%");
         assert_eq!(summary.groups[0].drop_rate_source_kind, "database");
+        assert_eq!(summary.groups[0].condition_text, "Zone base rate 100%");
         assert_eq!(summary.species_rows.len(), 1);
         assert_eq!(summary.species_rows[0].group_label, "General");
         assert_eq!(summary.species_rows[0].drop_rate_text, "");
+        assert_eq!(
+            summary.species_rows[0].catch_methods,
+            vec!["rod".to_string()]
+        );
         assert!(summary.note.contains("stay visible"));
+    }
+
+    #[test]
+    fn zone_loot_summary_preserves_harpoon_methods_for_species_rows() {
+        let signals = CalculatorSignals {
+            zone: "valencia_depth_5".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "valencia_depth_5".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "0,0,0".to_string(),
+                    prize_main_group_key: None,
+                    rare_rate_raw: 0,
+                    high_quality_rate_raw: 0,
+                    general_rate_raw: 1_000_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 820115,
+                name: "Mako Shark".to_string(),
+                catch_methods: vec!["harpoon".to_string()],
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "group".to_string(),
+                    status: Some("confirmed".to_string()),
+                    claim_count: Some(1),
+                    slot_idx: Some(4),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+        let zone = ZoneEntry {
+            name: Some("Valencia Sea - Depth 5".to_string()),
+            ..ZoneEntry::default()
+        };
+
+        let summary = derive_zone_loot_summary_response(&signals, &data, &zone);
+
+        assert_eq!(
+            summary.species_rows[0].catch_methods,
+            vec!["harpoon".to_string()]
+        );
+    }
+
+    #[test]
+    fn zone_loot_summary_humanizes_database_group_conditions() {
+        let signals = CalculatorSignals {
+            zone: "margoria_harpoon".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                lifeskill_levels: vec![
+                    CalculatorLifeskillLevelEntry {
+                        key: "35".to_string(),
+                        name: "Professional 5".to_string(),
+                        index: 35,
+                        order: 35,
+                        lifeskill_level_drr: 0.0,
+                    },
+                    CalculatorLifeskillLevelEntry {
+                        key: "81".to_string(),
+                        name: "Guru 1".to_string(),
+                        index: 81,
+                        order: 81,
+                        lifeskill_level_drr: 0.0,
+                    },
+                ],
+                ..CalculatorCatalogResponse::default()
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 6,
+                item_id: 820115,
+                name: "Mako Shark".to_string(),
+                catch_methods: vec!["harpoon".to_string()],
+                group_conditions_raw: vec![
+                    "lifestat(1,1)>199;lifestat(1,1)<700;".to_string(),
+                    "lifestat(1,1)>699;lifestat(1,1)<1200;".to_string(),
+                    "lifestat(1,1)>1199;".to_string(),
+                    "getLifeLevel(1)>80;".to_string(),
+                ],
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "group".to_string(),
+                    status: Some("confirmed".to_string()),
+                    claim_count: Some(1),
+                    slot_idx: Some(6),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+        let zone = ZoneEntry {
+            name: Some("Margoria Harpoon".to_string()),
+            ..ZoneEntry::default()
+        };
+
+        let summary = derive_zone_loot_summary_response(&signals, &data, &zone);
+
+        assert_eq!(summary.groups.len(), 1);
+        assert_eq!(summary.groups[0].label, "Harpoon");
+        assert_eq!(
+            summary.groups[0].condition_text,
+            "Mastery 200-699 · Mastery 700-1199 · Mastery 1200+ · Fishing Level Guru 1+"
+        );
+        assert_eq!(summary.groups[0].catch_methods, vec!["harpoon".to_string()]);
     }
 
     #[test]
@@ -13118,6 +13647,7 @@ mod tests {
         let species_rows = vec![
             LootSpeciesRow {
                 slot_idx: 1,
+                item_id: 820001,
                 group_label: "Prize",
                 label: "Golden Coelacanth".to_string(),
                 icon_url: Some("http://127.0.0.1:4040/items/golden-coelacanth.webp".to_string()),
@@ -13141,6 +13671,7 @@ mod tests {
                 presence_source_kind: "database".to_string(),
                 presence_tooltip: None,
                 evidence_text: String::new(),
+                catch_methods: vec!["rod".to_string()],
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
                 within_group_rate_raw: 0.60,
@@ -13150,6 +13681,7 @@ mod tests {
             },
             LootSpeciesRow {
                 slot_idx: 1,
+                item_id: 820002,
                 group_label: "Prize",
                 label: "Silver Pomfret".to_string(),
                 icon_url: Some("http://127.0.0.1:4040/items/silver-pomfret.webp".to_string()),
@@ -13173,6 +13705,7 @@ mod tests {
                 presence_source_kind: "database".to_string(),
                 presence_tooltip: None,
                 evidence_text: String::new(),
+                catch_methods: vec!["rod".to_string()],
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
                 within_group_rate_raw: 0.40,
@@ -13182,6 +13715,7 @@ mod tests {
             },
             LootSpeciesRow {
                 slot_idx: 4,
+                item_id: 820003,
                 group_label: "General",
                 label: "Trout".to_string(),
                 icon_url: None,
@@ -13205,6 +13739,7 @@ mod tests {
                 presence_source_kind: "database".to_string(),
                 presence_tooltip: None,
                 evidence_text: String::new(),
+                catch_methods: vec!["rod".to_string()],
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
                 within_group_rate_raw: 1.0,
