@@ -296,18 +296,28 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         if (!dropzone || !dropzoneBody) {
             return null;
         }
+        const pinnedCards = this.pinnedCardsForDrag();
+        const placeholder = this._drag.placeholder;
         const stackRect = this.getBoundingClientRect();
         const bodyRect = dropzoneBody.getBoundingClientRect();
         const headerHeight = Math.max(0, Math.ceil(bodyRect.height));
         const contentTopOffset = headerHeight + DROPZONE_HEADER_GAP_PX;
         let pinnedBottomOffset = contentTopOffset;
-        for (const card of this.pinnedCardsForDrag()) {
+        for (const card of pinnedCards) {
             const rect = card.getBoundingClientRect();
             pinnedBottomOffset = Math.max(pinnedBottomOffset, rect.bottom - stackRect.top);
         }
+        const placeholderBottomOffset = placeholder?.parentNode === this
+            ? placeholder.getBoundingClientRect().bottom - stackRect.top
+            : Number.NEGATIVE_INFINITY;
+        const placeholderExtendsTail = Boolean(
+            this._drag.engaged
+            && placeholder?.parentNode === this
+            && this._drag.insertionIndex >= pinnedCards.length,
+        );
         const frameBottomOffset = Math.max(
-            contentTopOffset + this.dragPlaceholderHeight(),
-            pinnedBottomOffset + this.dragPlaceholderHeight(),
+            pinnedCards.length ? pinnedBottomOffset : (contentTopOffset + this.dragPlaceholderHeight()),
+            placeholderExtendsTail ? placeholderBottomOffset : Number.NEGATIVE_INFINITY,
         );
         return {
             left: stackRect.left,
