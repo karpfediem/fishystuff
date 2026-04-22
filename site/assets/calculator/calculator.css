@@ -868,16 +868,22 @@
 .fishy-calculator-section-card {
     position: relative;
     z-index: 1;
-    transition: opacity 120ms ease, box-shadow 120ms ease;
+    transition: opacity 120ms ease;
 }
 
-.fishy-calculator-section-stack--dragging .fishy-calculator-section-card--pinned {
+.fishy-calculator-section-card > .card {
+    transition: box-shadow 120ms ease;
+}
+
+.fishy-calculator-section-stack--dragging .fishy-calculator-section-card--pinned > .card {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent);
-    border-radius: calc(var(--radius-box) * 1.05);
 }
 
 .fishy-calculator-section-card--dragging {
     opacity: 0.98;
+}
+
+.fishy-calculator-section-card--dragging > .card {
     box-shadow:
         0 18px 40px color-mix(in srgb, var(--color-base-content) 20%, transparent),
         0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
