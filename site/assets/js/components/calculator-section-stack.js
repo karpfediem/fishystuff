@@ -7,6 +7,9 @@ const HANDLE_SELECTOR = "[data-calculator-section-drag]";
 const DROPZONE_SELECTOR = "[data-calculator-pin-dropzone]";
 const DRAG_THRESHOLD_PX = 4;
 const DRAG_Z_INDEX = 80;
+const DROPZONE_HEADER_GAP_PX = 16;
+const DROPZONE_FRAME_PADDING_PX = 16;
+const DROPZONE_SLOT_HEIGHT_PX = 88;
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function trimString(value) {
@@ -272,6 +275,65 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         return this.querySelector(DROPZONE_SELECTOR);
     }
 
+    dropzoneBodyElement() {
+        return this.querySelector(".fishy-calculator-pin-dropzone__body");
+    }
+
+    dragPlaceholderHeight() {
+        return DROPZONE_SLOT_HEIGHT_PX;
+    }
+
+    pinnedCardsForDrag() {
+        return this.pinnedSectionIds()
+            .filter((sectionId) => sectionId !== this._drag.sectionId)
+            .map((sectionId) => this.sectionCardById(sectionId))
+            .filter((card) => card && isElementVisible(card));
+    }
+
+    dropzoneMetrics() {
+        const dropzone = this.dropzoneElement();
+        const dropzoneBody = this.dropzoneBodyElement();
+        if (!dropzone || !dropzoneBody) {
+            return null;
+        }
+        const stackRect = this.getBoundingClientRect();
+        const bodyRect = dropzoneBody.getBoundingClientRect();
+        const headerHeight = Math.max(0, Math.ceil(bodyRect.height));
+        const contentTopOffset = headerHeight + DROPZONE_HEADER_GAP_PX;
+        let pinnedBottomOffset = contentTopOffset;
+        for (const card of this.pinnedCardsForDrag()) {
+            const rect = card.getBoundingClientRect();
+            pinnedBottomOffset = Math.max(pinnedBottomOffset, rect.bottom - stackRect.top);
+        }
+        const frameBottomOffset = Math.max(
+            contentTopOffset + this.dragPlaceholderHeight(),
+            pinnedBottomOffset + this.dragPlaceholderHeight(),
+        );
+        return {
+            left: stackRect.left,
+            right: stackRect.right,
+            top: stackRect.top,
+            bottom: stackRect.top + frameBottomOffset,
+            contentTopOffset,
+            height: Math.ceil(frameBottomOffset + DROPZONE_FRAME_PADDING_PX),
+        };
+    }
+
+    updateDropzoneFrame() {
+        const dropzone = this.dropzoneElement();
+        if (!this._drag.active) {
+            this.style.removeProperty("padding-top");
+            dropzone?.style.removeProperty("height");
+            return;
+        }
+        const metrics = this.dropzoneMetrics();
+        if (!dropzone || !metrics) {
+            return;
+        }
+        this.style.setProperty("padding-top", `${metrics.contentTopOffset}px`);
+        dropzone.style.setProperty("height", `${metrics.height}px`);
+    }
+
     syncOrderFromSignals() {
         this._isSyncing = true;
         const dropzone = this.dropzoneElement();
@@ -301,6 +363,7 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
                 }
                 reference = card.nextElementSibling;
             }
+            this.updateDropzoneFrame();
         } finally {
             this._isSyncing = false;
         }
@@ -344,8 +407,8 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         if (!placeholder) {
             return;
         }
-        placeholder.className = "fishy-calculator-section-slot-placeholder rounded-box border border-dashed border-primary/35 bg-primary/5";
-        placeholder.style.height = `${Math.max(1, Math.round(rect.height))}px`;
+        placeholder.className = "fishy-calculator-section-slot-placeholder";
+        placeholder.style.height = `${this.dragPlaceholderHeight()}px`;
         placeholder.setAttribute("aria-hidden", "true");
         this._drag.item.before(placeholder);
         this.appendChild(this._drag.item);
@@ -364,6 +427,7 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._drag.placeholder = placeholder;
         this._drag.active = true;
         this.classList.add("fishy-calculator-section-stack--dragging");
+        this.updateDropzoneFrame();
         this.projectDrag(event);
     }
 
@@ -395,35 +459,27 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         const nextTop = event.clientY - this._drag.offsetY;
         item.style.left = `${nextLeft}px`;
         item.style.top = `${nextTop}px`;
-        const centerY = nextTop + (this._drag.height / 2);
+        const probeY = event.clientY;
+        const probeX = event.clientX;
         const dropzone = this.dropzoneElement();
-        const dropzoneRect = dropzone?.getBoundingClientRect?.() ?? null;
-        const pinnedCards = this.pinnedSectionIds()
-            .filter((sectionId) => sectionId !== this._drag.sectionId)
-            .map((sectionId) => this.sectionCardById(sectionId))
-            .filter((card) => card && isElementVisible(card));
+        const dropzoneMetrics = this.dropzoneMetrics();
+        const pinnedCards = this.pinnedCardsForDrag();
         const pinnedSlots = buildPinnedSlots(
             pinnedCards.map((card) => card.getBoundingClientRect()),
         );
-        const pinBoundaryBottom = pinnedCards.length
-            ? pinnedCards[pinnedCards.length - 1].getBoundingClientRect().bottom
-            : (dropzoneRect?.bottom ?? Number.NEGATIVE_INFINITY);
         const dropzoneActive = Boolean(
-            dropzoneRect
-            && centerY >= dropzoneRect.top
-            && centerY <= dropzoneRect.bottom,
+            dropzoneMetrics
+            && probeX >= dropzoneMetrics.left
+            && probeX <= dropzoneMetrics.right
+            && probeY >= dropzoneMetrics.top
+            && probeY <= dropzoneMetrics.bottom,
         );
-        let engaged = this._drag.wasPinned;
-        if (!engaged) {
-            engaged = centerY <= pinBoundaryBottom;
-        }
-        this._drag.engaged = engaged;
-        if (engaged) {
-            this._drag.insertionIndex = dropzoneActive
-                ? 0
-                : projectPinnedSlotIndex(pinnedSlots, centerY);
+        this._drag.engaged = dropzoneActive;
+        if (dropzoneActive) {
+            this._drag.insertionIndex = projectPinnedSlotIndex(pinnedSlots, probeY);
             this.movePlaceholderToPinnedIndex(pinnedCards, this._drag.insertionIndex);
         }
+        this.updateDropzoneFrame();
         dropzone?.classList.toggle("fishy-calculator-pin-dropzone--active", dropzoneActive);
     }
 
@@ -533,6 +589,8 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._drag.width = 0;
         this._drag.height = 0;
         this._drag.placeholder = null;
+        this.style.removeProperty("padding-top");
+        this.dropzoneElement()?.style.removeProperty("height");
         if (shouldPatch && nextPinnedSections) {
             patchPinnedSections(nextPinnedSections);
             return;
