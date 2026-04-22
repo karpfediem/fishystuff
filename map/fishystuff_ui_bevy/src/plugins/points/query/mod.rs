@@ -2,6 +2,7 @@ mod evidence;
 mod refresh;
 mod state;
 
+pub(in crate::plugins::points) use state::PointRenderState;
 pub use state::{PointsState, RenderPoint};
 
 pub(crate) use evidence::sync_layer_effective_filters;

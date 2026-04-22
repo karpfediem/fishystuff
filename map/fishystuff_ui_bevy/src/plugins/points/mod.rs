@@ -18,6 +18,7 @@ pub struct PointsPlugin;
 impl Plugin for PointsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PointsState>()
+            .init_resource::<query::PointRenderState>()
             .init_resource::<EventsSnapshotState>()
             .init_resource::<LayerEffectiveFilterState>()
             .init_resource::<render::PointRingAssets>()

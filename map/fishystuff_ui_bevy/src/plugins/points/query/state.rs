@@ -15,9 +15,6 @@ pub struct PointsState {
     pub rendered_cluster_count: usize,
     pub spatial_bucket_px: i32,
     pub(in crate::plugins::points::query) request_sig: Option<PointsQuerySignature>,
-    pub(in crate::plugins::points) dirty: bool,
-    pub(in crate::plugins::points) icons_enabled: bool,
-    pub(in crate::plugins::points) icon_size_world_units: f32,
 }
 
 impl Default for PointsState {
@@ -35,9 +32,25 @@ impl Default for PointsState {
             rendered_cluster_count: 0,
             spatial_bucket_px: 0,
             request_sig: None,
+        }
+    }
+}
+
+#[derive(Resource, Debug, Clone)]
+pub(in crate::plugins::points) struct PointRenderState {
+    pub dirty: bool,
+    pub icons_enabled: bool,
+    pub icon_size_world_units: f32,
+    pub layer_opacity: f32,
+}
+
+impl Default for PointRenderState {
+    fn default() -> Self {
+        Self {
             dirty: false,
             icons_enabled: false,
             icon_size_world_units: 0.0,
+            layer_opacity: 1.0,
         }
     }
 }

@@ -24,7 +24,7 @@ use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
-use super::query::{PointsState, RenderPoint};
+use super::query::{PointRenderState, PointsState, RenderPoint};
 
 type PointRingQuery<'w, 's> = Query<
     'w,
@@ -172,6 +172,9 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     {
         context.icon_cache.visible_icon_count = 0;
         context.icon_cache.visible_fish_ids_sample.clear();
+        context.render_state.icons_enabled = false;
+        context.render_state.layer_opacity = 1.0;
+        context.render_state.dirty = false;
         if !context.pool.markers.is_empty() {
             for pair in context.pool.markers.drain(..) {
                 context.commands.entity(pair.ring).despawn();
@@ -191,22 +194,29 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
 
     let effective_show_point_icons =
         context.display_state.show_point_icons && fish_evidence_icons_visible;
-    let icons_mode_changed = context.points.icons_enabled != effective_show_point_icons;
-    context.points.icons_enabled = effective_show_point_icons;
+    let icons_mode_changed = context.render_state.icons_enabled != effective_show_point_icons;
+    context.render_state.icons_enabled = effective_show_point_icons;
     let icon_size_world_units = point_icon_world_size(&context.display_state, &context.camera_q);
     let icon_size_changed =
-        (context.points.icon_size_world_units - icon_size_world_units).abs() > 0.01;
-    context.points.icon_size_world_units = icon_size_world_units;
+        (context.render_state.icon_size_world_units - icon_size_world_units).abs() > 0.01;
+    context.render_state.icon_size_world_units = icon_size_world_units;
+    let point_opacity = fish_evidence_layer_id
+        .map(|layer_id| context.layer_runtime.opacity(layer_id))
+        .unwrap_or(1.0)
+        .clamp(0.0, 1.0);
+    let opacity_changed = (context.render_state.layer_opacity - point_opacity).abs() > 1e-4;
 
-    if context.pool.markers.is_empty() && !context.points.points.is_empty() && !context.points.dirty
+    if context.pool.markers.is_empty()
+        && !context.points.points.is_empty()
+        && !context.render_state.dirty
     {
-        context.points.dirty = true;
+        context.render_state.dirty = true;
     }
 
-    let needs_refresh = context.points.dirty
-        || context.layer_runtime.is_changed()
+    let needs_refresh = context.render_state.dirty
+        || opacity_changed
         || icons_mode_changed
-        || (context.points.icons_enabled
+        || (context.render_state.icons_enabled
             && (context.fish.is_changed()
                 || icon_size_changed
                 || context.remote_image_epoch.is_changed()));
@@ -258,10 +268,6 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
 
     let mut visible_icon_count = 0usize;
     let mut visible_fish_ids = Vec::new();
-    let point_opacity = fish_evidence_layer_id
-        .map(|layer_id| context.layer_runtime.opacity(layer_id))
-        .unwrap_or(1.0)
-        .clamp(0.0, 1.0);
     let ring_z = context.display_state.point_z_base + RING_Z_OFFSET;
     let icon_z = context.display_state.point_z_base + ICON_Z_OFFSET;
     let inactive_filter = ZoneMembershipFilter::default();
@@ -312,7 +318,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
             transform.translation.y = world.z as f32;
             transform.translation.z = icon_z;
 
-            if point_visible_here && context.points.icons_enabled {
+            if point_visible_here && context.render_state.icons_enabled {
                 if let Some(handle) = icon_handle_for_point(
                     point,
                     &mut context.icon_cache,
@@ -368,35 +374,36 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     visible_fish_ids.truncate(5);
     context.icon_cache.visible_icon_count = visible_icon_count;
     context.icon_cache.visible_fish_ids_sample = visible_fish_ids;
+    context.render_state.layer_opacity = point_opacity;
 
     // New markers spawned through `Commands` do not appear in the query world until the
     // next frame. Keep the points dirty so the following frame positions and shows them
     // without needing an unrelated camera movement to retrigger the render pass.
-    context.points.dirty = spawned_markers;
+    context.render_state.dirty = spawned_markers;
 }
 
 pub(super) fn request_redraw_for_point_updates(
     points: Res<'_, PointsState>,
+    render_state: Res<'_, PointRenderState>,
     snapshot: Res<'_, EventsSnapshotState>,
     remote_image_epoch: Res<'_, RemoteImageEpoch>,
-    layer_runtime: Res<'_, LayerRuntime>,
     mut request_redraw: MessageWriter<'_, RequestRedraw>,
 ) {
-    if points.is_changed() || snapshot.is_changed() || remote_image_epoch.is_changed() {
-        request_redraw.write(RequestRedraw);
-        return;
-    }
-    if layer_runtime.is_changed() {
+    if points.is_changed()
+        || snapshot.is_changed()
+        || remote_image_epoch.is_changed()
+        || render_state.dirty
+    {
         request_redraw.write(RequestRedraw);
     }
 }
 
 pub(super) fn mark_points_dirty_on_remote_image_update(
     remote_image_epoch: Res<RemoteImageEpoch>,
-    mut points: ResMut<PointsState>,
+    mut render_state: ResMut<PointRenderState>,
 ) {
     if remote_image_epoch.is_changed() {
-        points.dirty = true;
+        render_state.dirty = true;
     }
 }
 
@@ -412,7 +419,8 @@ pub(super) struct PointMarkerSync<'w, 's> {
     tile_cache: Res<'w, RasterTileCache>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     fish: Res<'w, FishCatalog>,
-    points: ResMut<'w, PointsState>,
+    points: Res<'w, PointsState>,
+    render_state: ResMut<'w, PointRenderState>,
     ring_assets: Res<'w, PointRingAssets>,
     pool: ResMut<'w, PointMarkerPool>,
     icon_cache: ResMut<'w, PointIconCache>,

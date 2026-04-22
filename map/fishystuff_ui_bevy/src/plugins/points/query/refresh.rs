@@ -24,7 +24,7 @@ use crate::plugins::points::query::evidence::zone_membership_binding_support;
 
 use super::super::render::view_bbox_map_px;
 use super::state::PointsQuerySignature;
-use super::{PointsState, RenderPoint};
+use super::{PointRenderState, PointsState, RenderPoint};
 
 pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     mut refresh: LocalSnapshotRefresh<'_, '_>,
@@ -46,7 +46,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
 
     if refresh.snapshot.loading && !refresh.snapshot.loaded {
         refresh.points.status = "points: snapshot loading".to_string();
-        clear_render_points(&mut refresh.points);
+        clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
     }
     if refresh.snapshot.failed && !refresh.snapshot.loaded {
@@ -58,24 +58,24 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
                 .as_deref()
                 .unwrap_or("unknown snapshot error")
         );
-        clear_render_points(&mut refresh.points);
+        clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
     }
     if !refresh.snapshot.loaded {
         refresh.points.status = "points: snapshot pending".to_string();
-        clear_render_points(&mut refresh.points);
+        clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
     }
 
     let Some(viewport_bbox) = view_bbox_map_px(&refresh.windows, &refresh.camera_q) else {
         refresh.points.status = "points: missing viewport".to_string();
-        clear_render_points(&mut refresh.points);
+        clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
     };
 
     let Some((from_ts_utc, to_ts_utc)) = normalized_time_bounds(&refresh.patch_filter) else {
         refresh.points.status = "points: missing range".to_string();
-        clear_render_points(&mut refresh.points);
+        clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
     };
     let expression = effective_search_expression(
@@ -205,12 +205,13 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         refresh.points.rendered_point_count
     );
     refresh.points.status = points_status_line(&refresh.points, &refresh.snapshot);
-    refresh.points.dirty = true;
+    refresh.render_state.dirty = true;
 }
 
 #[derive(SystemParam)]
 pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     points: ResMut<'w, PointsState>,
+    render_state: ResMut<'w, PointRenderState>,
     patch_filter: Res<'w, PatchFilterState>,
     fish_filter: Res<'w, FishFilterState>,
     semantic_filter: Res<'w, SemanticFieldFilterState>,
@@ -493,11 +494,11 @@ mod tests {
     }
 }
 
-fn clear_render_points(points: &mut PointsState) {
+fn clear_render_points(points: &mut PointsState, render_state: &mut PointRenderState) {
     points.request_sig = None;
     if !points.points.is_empty() {
         points.points.clear();
-        points.dirty = true;
+        render_state.dirty = true;
     }
     points.total = 0;
     points.represented_sample_count = 0;
