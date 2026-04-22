@@ -142,6 +142,9 @@ function createContext(localStorageInitial = {}, options = {}) {
     __fishystuffResolveApiUrl(path) {
       return `https://api.fishystuff.fish${path}`;
     },
+    __fishystuffResolveCdnUrl(path) {
+      return `https://cdn.fishystuff.fish${path}`;
+    },
     __fishystuffToast: {
       copyText(text, options = {}) {
         toastCalls.push({ type: "copyText", text, options });

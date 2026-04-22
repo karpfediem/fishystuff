@@ -59,6 +59,42 @@
     element.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
+  const replacePetImageWithFallback = (image) => {
+    if (!(image instanceof HTMLImageElement)) {
+      return;
+    }
+    const frame = image.closest(".fishy-calculator-pet-option__frame");
+    if (!(frame instanceof HTMLElement)) {
+      return;
+    }
+    const fallback = document.createElement("span");
+    fallback.className = "fishy-calculator-pet-option__fallback fishy-item-icon-fallback";
+    fallback.textContent = String(
+      image.dataset.fallbackLabel || image.getAttribute("data-fallback-label") || image.alt || "?",
+    )
+      .trim()
+      .charAt(0)
+      .toUpperCase() || "?";
+    frame.replaceChildren(fallback);
+  };
+
+  const resolveCdnAssetUrl = (rawUrl) => {
+    const normalized = String(rawUrl ?? "").trim();
+    if (!normalized) {
+      return "";
+    }
+    if (
+      normalized.startsWith("http://")
+      || normalized.startsWith("https://")
+      || normalized.startsWith("data:")
+    ) {
+      return normalized;
+    }
+    return typeof window.__fishystuffResolveCdnUrl === "function"
+      ? window.__fishystuffResolveCdnUrl(normalized)
+      : normalized;
+  };
+
   const calculatorPetCatalog = () => {
     if (calculatorPetCatalogState.catalog) {
       return calculatorPetCatalogState.catalog;
@@ -99,7 +135,7 @@
     }
   };
 
-  const petDropdownTemplate = (option) => {
+  const textDropdownTemplate = (option) => {
     const template = document.createElement("template");
     template.dataset.role = "selected-content";
     template.dataset.value = String(option?.key ?? "");
@@ -112,7 +148,52 @@
     return template;
   };
 
-  const replaceLocalDropdownOptions = (dropdown, options, boundInput, allowNone) => {
+  const petDropdownTemplates = (option) => {
+    const selectedTemplate = textDropdownTemplate(option);
+    const key = String(option?.key ?? "");
+    if (!key) {
+      return [selectedTemplate];
+    }
+
+    const optionTemplate = document.createElement("template");
+    optionTemplate.dataset.role = "option-content";
+    optionTemplate.dataset.value = key;
+
+    const card = document.createElement("span");
+    card.className = "fishy-calculator-pet-option";
+    card.dataset.petOptionCard = "";
+
+    const frame = document.createElement("span");
+    frame.className = "fishy-calculator-pet-option__frame";
+    const imageUrl = String(option?.image_url ?? option?.imageUrl ?? option?.icon ?? "").trim();
+    if (imageUrl) {
+      const image = document.createElement("img");
+      image.className = "fishy-calculator-pet-option__image item-icon";
+      image.src = resolveCdnAssetUrl(imageUrl);
+      image.alt = "";
+      image.dataset.fallbackLabel = String(option?.label ?? "");
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.setAttribute("aria-hidden", "true");
+      image.addEventListener("error", () => replacePetImageWithFallback(image), { once: true });
+      frame.append(image);
+    } else {
+      const fallback = document.createElement("span");
+      fallback.className = "fishy-calculator-pet-option__fallback fishy-item-icon-fallback";
+      fallback.textContent = String(option?.label ?? "?").trim().charAt(0).toUpperCase() || "?";
+      frame.append(fallback);
+    }
+
+    const label = document.createElement("span");
+    label.className = "fishy-calculator-pet-option__label";
+    label.textContent = String(option?.label ?? "");
+
+    card.append(frame, label);
+    optionTemplate.content.append(card);
+    return [selectedTemplate, optionTemplate];
+  };
+
+  const replaceLocalDropdownOptions = (dropdown, options, boundInput, allowNone, presentation = "default") => {
     if (!(dropdown instanceof HTMLElement)) {
       return;
     }
@@ -135,6 +216,7 @@
         .map((option) => ({
           key: String(option.key || ""),
           label: String(option.label || option.key || ""),
+          image_url: String(option.image_url ?? option.imageUrl ?? option.icon ?? "").trim(),
         }))
       : [];
     const nextOptions = [];
@@ -147,7 +229,11 @@
       }
       nextOptions.push(option);
     }
-    catalog.replaceChildren(...nextOptions.map(petDropdownTemplate));
+    catalog.replaceChildren(
+      ...nextOptions.flatMap((option) => (
+        presentation === "pet" ? petDropdownTemplates(option) : [textDropdownTemplate(option)]
+      )),
+    );
     if (typeof dropdown.refreshResults === "function") {
       dropdown.refreshResults();
     }
@@ -223,26 +309,36 @@
       return;
     }
 
-    const selectedPet = catalog.petByKey.get(String(elements.petInput.value || "").trim()) || null;
-    const tierOptions = selectedPet
-      ? (Array.isArray(selectedPet.tiers) ? selectedPet.tiers : []).map((tier) => ({
-        key: String(tier.key || ""),
-        label: String(tier.label || tier.key || ""),
-      }))
-      : catalog.tiers;
+    const tierOptions = Array.isArray(catalog.tiers) ? catalog.tiers : [];
     let selectedTier = String(elements.tierInput.value || "").trim();
-    if (selectedPet) {
-      const allowedTiers = new Set(tierOptions.map((tier) => tier.key));
-      if (!allowedTiers.has(selectedTier)) {
-        const fallbackTier = highestTierKey(tierOptions);
-        if (selectedTier !== fallbackTier) {
-          elements.tierInput.value = fallbackTier;
-          selectedTier = fallbackTier;
-          emitInputChangeEvents(elements.tierInput);
-        }
+    const allowedTierKeys = new Set(tierOptions.map((tier) => String(tier?.key || "")));
+    if (!allowedTierKeys.has(selectedTier)) {
+      const fallbackTier = highestTierKey(tierOptions);
+      if (selectedTier !== fallbackTier) {
+        elements.tierInput.value = fallbackTier;
+        selectedTier = fallbackTier;
+        emitInputChangeEvents(elements.tierInput);
       }
     }
 
+    const petOptions = Array.isArray(catalog.pets)
+      ? catalog.pets.filter((pet) => (
+        Array.isArray(pet?.tiers)
+          ? pet.tiers.some((tier) => String(tier?.key || "") === selectedTier)
+          : false
+      ))
+      : [];
+    const allowedPets = new Set(petOptions.map((pet) => String(pet?.key || "")));
+    let selectedPetKey = String(elements.petInput.value || "").trim();
+    if (selectedPetKey && !allowedPets.has(selectedPetKey)) {
+      elements.petInput.value = "";
+      selectedPetKey = "";
+      emitInputChangeEvents(elements.petInput);
+    }
+
+    const selectedPet = selectedPetKey
+      ? (catalog.petByKey.get(selectedPetKey) || null)
+      : null;
     const selectedTierEntry = selectedPet
       ? (Array.isArray(selectedPet.tiers) ? selectedPet.tiers : []).find(
         (tier) => String(tier?.key || "") === selectedTier,
@@ -252,47 +348,46 @@
       ? (Array.isArray(selectedTierEntry.specials) ? selectedTierEntry.specials : [])
         .map((key) => catalog.specialByKey.get(String(key || "")))
         .filter(Boolean)
-      : catalog.specials;
+      : [];
     const talentOptions = selectedTierEntry
       ? (Array.isArray(selectedTierEntry.talents) ? selectedTierEntry.talents : [])
         .map((key) => catalog.talentByKey.get(String(key || "")))
         .filter(Boolean)
-      : catalog.talents;
+      : [];
     const skillOptions = selectedTierEntry
       ? (Array.isArray(selectedTierEntry.skills) ? selectedTierEntry.skills : [])
         .map((key) => catalog.skillByKey.get(String(key || "")))
         .filter(Boolean)
-      : catalog.skills;
+      : [];
 
-    if (selectedTierEntry && elements.specialInput instanceof HTMLInputElement) {
+    if (elements.specialInput instanceof HTMLInputElement) {
       const allowedSpecials = new Set(specialOptions.map((option) => String(option.key || "")));
-      if (!allowedSpecials.has(String(elements.specialInput.value || "").trim())) {
-        elements.specialInput.value = "";
+      const currentSpecial = String(elements.specialInput.value || "").trim();
+      const nextSpecial = allowedSpecials.has(currentSpecial) ? currentSpecial : "";
+      if (currentSpecial !== nextSpecial) {
+        elements.specialInput.value = nextSpecial;
         emitInputChangeEvents(elements.specialInput);
       }
     }
-    if (selectedTierEntry && elements.talentInput instanceof HTMLInputElement) {
+    if (elements.talentInput instanceof HTMLInputElement) {
       const allowedTalents = new Set(talentOptions.map((option) => String(option.key || "")));
       const currentTalent = String(elements.talentInput.value || "").trim();
-      if (!allowedTalents.has(currentTalent)) {
-        const nextTalent = talentOptions.length === 1
-          ? String(talentOptions[0].key || "")
-          : "";
-        if (currentTalent !== nextTalent) {
-          elements.talentInput.value = nextTalent;
-          emitInputChangeEvents(elements.talentInput);
-        }
+      const nextTalent = allowedTalents.has(currentTalent)
+        ? currentTalent
+        : (talentOptions.length === 1 ? String(talentOptions[0].key || "") : "");
+      if (currentTalent !== nextTalent) {
+        elements.talentInput.value = nextTalent;
+        emitInputChangeEvents(elements.talentInput);
       }
     }
 
+    replaceLocalDropdownOptions(elements.petDropdown, petOptions, elements.petInput, true, "pet");
     replaceLocalDropdownOptions(elements.tierDropdown, tierOptions, elements.tierInput, false);
     replaceLocalDropdownOptions(elements.specialDropdown, specialOptions, elements.specialInput, true);
     replaceLocalDropdownOptions(elements.talentDropdown, talentOptions, elements.talentInput, true);
     syncPetSkillCheckboxes(
       elements.skillsRoot,
-      selectedTierEntry
-        ? new Set(skillOptions.map((option) => String(option.key || "")))
-        : new Set(catalog.skills.map((option) => String(option.key || ""))),
+      new Set(skillOptions.map((option) => String(option.key || ""))),
     );
   };
 
@@ -326,6 +421,15 @@
     if (!(petsRoot instanceof HTMLElement)) {
       return;
     }
+    petsRoot.addEventListener("error", (event) => {
+      if (!(event.target instanceof HTMLImageElement)) {
+        return;
+      }
+      if (!event.target.classList.contains("fishy-calculator-pet-option__image")) {
+        return;
+      }
+      replacePetImageWithFallback(event.target);
+    }, true);
     petsRoot.addEventListener("input", queueCalculatorPetControlSync);
     petsRoot.addEventListener("change", queueCalculatorPetControlSync);
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, queueCalculatorPetControlSync);

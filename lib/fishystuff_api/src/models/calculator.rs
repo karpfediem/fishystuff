@@ -83,6 +83,7 @@ pub struct CalculatorPetEntry {
     pub key: String,
     pub label: String,
     pub skin_key: Option<String>,
+    pub image_url: Option<String>,
     #[serde(default)]
     pub tiers: Vec<CalculatorPetTierEntry>,
 }

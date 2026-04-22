@@ -35,9 +35,10 @@ bot-run:
 cdn-stage:
   ./tools/scripts/stage_cdn_assets.sh
 
-# Rebuild source-backed CDN item icons only
+# Rebuild source-backed CDN calculator icons and pet textures only
 cdn-stage-icons:
   node tools/scripts/build_item_icons_from_source.mjs --output-dir data/cdn/public/images/items
+  node tools/scripts/build_pet_icons_from_source.mjs --output-dir data/cdn/public/images/pets
 
 # Compute the exact CDN filenames required by the current deployment inputs.
 cdn-required-files out="data/cdn/required-files.json":

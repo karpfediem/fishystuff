@@ -711,6 +711,16 @@ export class FishySearchableDropdown extends HTMLElement {
         ).find((template) => template.getAttribute("data-value") === value) ?? null;
     }
 
+    _findCatalogOptionContentTemplateByValue(value) {
+        const catalog = this.selectedContentCatalogElement();
+        if (!(catalog instanceof HTMLElement)) {
+            return null;
+        }
+        return Array.from(
+            catalog.querySelectorAll('template[data-role="option-content"]'),
+        ).find((template) => template.getAttribute("data-value") === value) ?? null;
+    }
+
     _findOptionByValue(value) {
         return Array.from(
             this.panelElement()?.querySelectorAll?.("[data-searchable-dropdown-option]") ?? [],
@@ -907,8 +917,13 @@ export class FishySearchableDropdown extends HTMLElement {
                 const optionContent = document.createElement("span");
                 optionContent.dataset.role = "option-content";
                 optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
-                optionContent.replaceChildren(...cloneChildNodes(template.content));
-                button.append(optionContent);
+                const optionTemplate = this._findCatalogOptionContentTemplateByValue(value);
+                optionContent.replaceChildren(
+                    ...cloneChildNodes(
+                        optionTemplate instanceof HTMLTemplateElement ? optionTemplate.content : template.content,
+                    ),
+                );
+                button.append(optionContent, template.cloneNode(true));
 
                 if (value === selectedValue) {
                     const badge = document.createElement("span");

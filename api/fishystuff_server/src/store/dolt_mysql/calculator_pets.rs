@@ -20,6 +20,7 @@ type CalculatorPetDbRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 type CalculatorPetSkillIndexDbRow = (Option<String>, Option<String>);
 type CalculatorLanguagedataDbRow = (Option<String>, Option<String>);
@@ -34,6 +35,7 @@ type CalculatorPetSkilltypeDbRow = (
 struct RawPetRow {
     character_key: String,
     skin_key: Option<String>,
+    icon_image_file: Option<String>,
     race: String,
     kind: String,
     tier_source: u8,
@@ -65,8 +67,6 @@ struct CalculatorPetOptionRecord {
 #[derive(Debug, Clone)]
 struct BuiltPetEntry {
     entry: CalculatorPetEntry,
-    race: String,
-    kind: String,
 }
 
 fn localized_label(lang: FishLang, en: impl Into<String>, ko: impl Into<String>) -> String {
@@ -112,6 +112,45 @@ fn trim_optional_string(value: Option<String>) -> Option<String> {
 
 fn parse_u8(value: Option<&str>) -> Option<u8> {
     value?.trim().parse::<u8>().ok()
+}
+
+fn parse_asset_stem(raw_path: &str) -> Option<String> {
+    let normalized = raw_path.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+    let basename = normalized
+        .rsplit(['\\', '/'])
+        .next()
+        .unwrap_or(normalized)
+        .trim();
+    if basename.is_empty() {
+        return None;
+    }
+    let stem = basename
+        .rsplit_once('.')
+        .map(|(stem, _)| stem)
+        .unwrap_or(basename)
+        .trim();
+    (!stem.is_empty()).then(|| stem.to_ascii_lowercase())
+}
+
+fn pet_image_url(raw_path: Option<&str>) -> Option<String> {
+    raw_path
+        .and_then(parse_asset_stem)
+        .map(|stem| format!("/images/pets/{stem}.webp"))
+}
+
+fn pet_visual_group_key(row: &RawPetRow) -> String {
+    row.icon_image_file
+        .as_deref()
+        .and_then(parse_asset_stem)
+        .or_else(|| {
+            row.skin_key
+                .as_ref()
+                .map(|value| value.to_ascii_lowercase())
+        })
+        .unwrap_or_else(|| row.character_key.to_ascii_lowercase())
 }
 
 fn parse_nonzero_rate(value: Option<&str>) -> bool {
@@ -254,6 +293,7 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
         "SELECT \
             `CharacterKey`, \
             `PetChangeLookKey`, \
+            `IconImageFile1`, \
             `Race`, \
             `Kind`, \
             `Tier`, \
@@ -265,7 +305,16 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
     Ok(rows
         .into_iter()
         .filter_map(
-            |(character_key, skin_key, race, kind, tier_source, base_skill_index, acquire_key)| {
+            |(
+                character_key,
+                skin_key,
+                icon_image_file,
+                race,
+                kind,
+                tier_source,
+                base_skill_index,
+                acquire_key,
+            )| {
                 let character_key = trim_optional_string(character_key)?;
                 let race = trim_optional_string(race)?;
                 let kind = trim_optional_string(kind)?;
@@ -273,6 +322,7 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
                 Some(RawPetRow {
                     character_key,
                     skin_key: trim_optional_string(skin_key).filter(|value| value != "0"),
+                    icon_image_file: trim_optional_string(icon_image_file),
                     race,
                     kind,
                     tier_source,
@@ -393,6 +443,12 @@ fn choose_pet_tier_representative<'a>(rows: &'a [&'a RawPetRow]) -> Option<&'a R
         let right_has_acquire = right.acquire_key.is_some();
         right_has_acquire
             .cmp(&left_has_acquire)
+            .then_with(|| {
+                right
+                    .icon_image_file
+                    .is_some()
+                    .cmp(&left.icon_image_file.is_some())
+            })
             .then_with(|| right.skin_key.is_some().cmp(&left.skin_key.is_some()))
             .then_with(|| {
                 let left_id = left.character_key.parse::<i64>().unwrap_or(i64::MAX);
@@ -400,13 +456,6 @@ fn choose_pet_tier_representative<'a>(rows: &'a [&'a RawPetRow]) -> Option<&'a R
                 left_id.cmp(&right_id)
             })
     })
-}
-
-fn build_pet_display_label(base_label: &str, skin_key: Option<&str>) -> String {
-    match skin_key.filter(|value| !value.is_empty()) {
-        Some(value) => format!("{base_label} · Skin {value}"),
-        None => base_label.to_string(),
-    }
 }
 
 fn choose_pet_base_label(
@@ -653,7 +702,12 @@ impl DoltMySqlStore {
         let mut grouped_rows = BTreeMap::<String, Vec<RawPetRow>>::new();
         for row in pet_rows {
             grouped_rows
-                .entry(format!("pet:{}:{}", row.race, row.kind))
+                .entry(format!(
+                    "pet:{}:{}:{}",
+                    row.race,
+                    row.kind,
+                    pet_visual_group_key(&row)
+                ))
                 .or_default()
                 .push(row);
         }
@@ -691,46 +745,14 @@ impl DoltMySqlStore {
                         key,
                         label: base_label,
                         skin_key,
+                        image_url: rows
+                            .iter()
+                            .find_map(|row| pet_image_url(row.icon_image_file.as_deref())),
                         tiers,
                     },
-                    race: rows[0].race.clone(),
-                    kind: rows[0].kind.clone(),
                 }
             })
             .collect::<Vec<_>>();
-
-        let mut label_counts = HashMap::<String, usize>::new();
-        for pet in &built_pets {
-            *label_counts.entry(pet.entry.label.clone()).or_default() += 1;
-        }
-        for pet in &mut built_pets {
-            if label_counts
-                .get(&pet.entry.label)
-                .copied()
-                .unwrap_or_default()
-                > 1
-            {
-                pet.entry.label =
-                    build_pet_display_label(&pet.entry.label, pet.entry.skin_key.as_deref());
-            }
-        }
-
-        let mut final_label_counts = HashMap::<String, usize>::new();
-        for pet in &built_pets {
-            *final_label_counts
-                .entry(pet.entry.label.clone())
-                .or_default() += 1;
-        }
-        for pet in &mut built_pets {
-            if final_label_counts
-                .get(&pet.entry.label)
-                .copied()
-                .unwrap_or_default()
-                > 1
-            {
-                pet.entry.label = format!("{} · {}:{}", pet.entry.label, pet.race, pet.kind);
-            }
-        }
 
         built_pets.sort_by(|left, right| {
             left.entry
@@ -784,7 +806,7 @@ mod tests {
     use crate::store::FishLang;
 
     use super::{
-        build_pet_display_label, localized_pet_option_label, parse_pet_option_effects,
+        localized_pet_option_label, parse_asset_stem, parse_pet_option_effects, pet_image_url,
         pet_option_kind, PetOptionKind,
     };
 
@@ -829,8 +851,17 @@ mod tests {
     }
 
     #[test]
-    fn build_pet_display_label_uses_skin_suffix_when_needed() {
-        assert_eq!(build_pet_display_label("Cat", Some("3")), "Cat · Skin 3");
-        assert_eq!(build_pet_display_label("Otter", None), "Otter");
+    fn pet_image_url_maps_source_dds_to_cdn_webp() {
+        assert_eq!(
+            parse_asset_stem(r#"New_UI_Common_forLua\Window\Stable\Pet\Pet_Hawk_0014.dds"#),
+            Some("pet_hawk_0014".to_string())
+        );
+        assert_eq!(
+            pet_image_url(Some(
+                r#"New_UI_Common_forLua\Window\Stable\Pet\Pet_Hawk_0014.dds"#
+            )),
+            Some("/images/pets/pet_hawk_0014.webp".to_string())
+        );
+        assert_eq!(pet_image_url(None), None);
     }
 }

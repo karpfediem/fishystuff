@@ -31,7 +31,8 @@ Current contents:
 - `tools/scripts/stage_cdn_assets.sh`
   - stages CDN-owned site and map assets under `data/cdn/public/`
   - rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
-  - accepts `--map-only` to stage only the map-serving CDN payload without the item icon pass
+  - rebuilds source-backed pet textures into `data/cdn/public/images/pets/`
+  - accepts `--map-only` to stage only the map-serving CDN payload without the icon/texture pass
 - `tools/scripts/push_bunnycdn.sh`
 - `tools/scripts/run_api.sh`
 - `tools/scripts/vector-tap.sh`
@@ -48,6 +49,10 @@ Current contents:
   - accepts `--calculator-api-url <url>` when you want an explicit live catalog cross-check
   - extracts source `.dds` icon textures from PAZ via `pazifista`
   - converts them to `44x44` WebP under `data/cdn/public/images/items/`
+- `tools/scripts/build_pet_icons_from_source.mjs`
+  - resolves the current pet skin texture set from `pet_table.IconImageFile1`
+  - extracts source pet `.dds` textures from PAZ via `pazifista`
+  - converts them to WebP under `data/cdn/public/images/pets/`
 - `tools/scripts/build_minimap_tiles_from_source.mjs`
   - wraps `minimap_source_tiles` plus `minimap_display_tiles`
   - rebuilds the raw source-backed `rader_*.png` cache under
@@ -63,10 +68,17 @@ For local source-backed item icon generation, use:
 devenv shell -- node tools/scripts/build_item_icons_from_source.mjs
 ```
 
-To rebuild all current calculator item icons from PAZ source:
+For local source-backed pet texture generation, use:
+
+```bash
+devenv shell -- node tools/scripts/build_pet_icons_from_source.mjs
+```
+
+To rebuild all current calculator item icons and pet textures from PAZ source:
 
 ```bash
 devenv shell -- node tools/scripts/build_item_icons_from_source.mjs --force
+devenv shell -- node tools/scripts/build_pet_icons_from_source.mjs --force
 ```
 
 For local source-backed minimap generation, use:
