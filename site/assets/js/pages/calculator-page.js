@@ -12,7 +12,10 @@
     "inputs",
     "distribution",
     "loot",
+    "trade",
     "gear",
+    "food",
+    "buffs",
     "pets",
     "overlay",
     "debug",
@@ -1324,9 +1327,15 @@
     signalStore.connect(signals);
     bindPersistListener();
     bindActionListener();
+    const currentUi = normalizeCalculatorUiState(signals?._calculator_ui);
     const storedSignals = loadStoredSignals();
     if (storedSignals && typeof storedSignals === "object") {
-      Object.assign(signals, canonicalizeStoredSignals(storedSignals));
+      const restoredSignals = canonicalizeStoredSignals(storedSignals);
+      restoredSignals._calculator_ui = {
+        ...restoredSignals._calculator_ui,
+        top_level_tab: currentUi.top_level_tab,
+      };
+      Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
     const appRoot = document.getElementById?.("calculator");

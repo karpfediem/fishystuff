@@ -8762,7 +8762,10 @@ fn render_calculator_app(
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'inputs'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'inputs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'inputs'">__TAB_INPUTS__</button>
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'distribution'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'distribution').toString()" data-on:click="$_calculator_ui.top_level_tab = 'distribution'">__SECTION_DISTRIBUTION__</button>
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'loot'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'loot').toString()" data-on:click="$_calculator_ui.top_level_tab = 'loot'">__SECTION_LOOT__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'trade'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'trade').toString()" data-on:click="$_calculator_ui.top_level_tab = 'trade'">__SECTION_TRADE__</button>
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'gear'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'gear').toString()" data-on:click="$_calculator_ui.top_level_tab = 'gear'">__SECTION_GEAR__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'food'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'food').toString()" data-on:click="$_calculator_ui.top_level_tab = 'food'">__SECTION_FOOD__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'buffs'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'buffs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'buffs'">__SECTION_BUFFS__</button>
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'pets'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'pets').toString()" data-on:click="$_calculator_ui.top_level_tab = 'pets'">__SECTION_PETS__</button>
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overlay'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overlay').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overlay'">__TAB_OVERLAY__</button>
                     <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'debug'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'debug').toString()" data-on:click="$_calculator_ui.top_level_tab = 'debug'">__TAB_DEBUG__</button>
@@ -8972,6 +8975,14 @@ fn render_calculator_app(
         __LOOT_WINDOW__
     </div>
 
+    <div data-show="window.__fishystuffCalculator.sectionVisible('trade', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="trade"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'trade')">
+        __TRADE_WINDOW__
+    </div>
+
     <div data-show="window.__fishystuffCalculator.sectionVisible('gear', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
@@ -9015,15 +9026,33 @@ fn render_calculator_app(
                         <legend class="fieldset-legend">__FIELD_OUTFIT__</legend>
                         __OUTFITS__
                     </fieldset>
-                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">__FIELD_FOOD__</legend>
-                        __FOODS__
-                    </fieldset>
-                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">__FIELD_BUFFS__</legend>
-                        __BUFFS__
-                    </fieldset>
                 </div>
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="window.__fishystuffCalculator.sectionVisible('food', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="food"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'food')">
+        <fieldset class="card card-border bg-base-100 xl:col-span-2">
+            __FOOD_LEGEND__
+            <div class="card-body pt-0">
+                __FOODS__
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="window.__fishystuffCalculator.sectionVisible('buffs', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="buffs"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'buffs')">
+        <fieldset class="card card-border bg-base-100 xl:col-span-2">
+            __BUFFS_LEGEND__
+            <div class="card-body pt-0">
+                __BUFFS__
             </div>
         </fieldset>
     </div>
@@ -9169,6 +9198,13 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.section.loot",
+            )),
+        ),
+        (
+            "__SECTION_TRADE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.trade",
             )),
         ),
         (
@@ -9376,11 +9412,43 @@ fn render_calculator_app(
             )),
         ),
         (
+            "__SECTION_FOOD__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.food",
+            )),
+        ),
+        (
+            "__SECTION_BUFFS__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.field.buffs",
+            )),
+        ),
+        (
             "__GEAR_LEGEND__",
             render_calculator_panel_legend(
                 data.lang,
                 "gear",
                 &calculator_route_text(data.lang, "calculator.server.section.gear"),
+                None,
+            ),
+        ),
+        (
+            "__FOOD_LEGEND__",
+            render_calculator_panel_legend(
+                data.lang,
+                "food",
+                &calculator_route_text(data.lang, "calculator.server.field.food"),
+                None,
+            ),
+        ),
+        (
+            "__BUFFS_LEGEND__",
+            render_calculator_panel_legend(
+                data.lang,
+                "buffs",
+                &calculator_route_text(data.lang, "calculator.server.field.buffs"),
                 None,
             ),
         ),
@@ -9562,9 +9630,10 @@ fn render_calculator_app(
                 &target_fish_summary,
             ),
         ),
+        ("__LOOT_WINDOW__", render_loot_window(data, signals)),
         (
-            "__LOOT_WINDOW__",
-            render_loot_window(data, signals, &trade_levels, &loot_chart),
+            "__TRADE_WINDOW__",
+            render_trade_window(data, signals, &trade_levels),
         ),
         (
             "__ROD_SELECT__",
@@ -10729,68 +10798,32 @@ fn render_fish_group_window(
     )
 }
 
-fn render_loot_window(
-    data: &CalculatorData,
-    signals: &CalculatorSignals,
-    trade_levels: &[SelectOption<'_>],
-    _chart: &LootChart,
-) -> String {
+fn render_loot_window(data: &CalculatorData, signals: &CalculatorSignals) -> String {
     let title = calculator_route_text(data.lang, "calculator.server.section.loot");
     format!(
         "<fieldset id=\"calculator-loot-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
             {}\
             <div class=\"card-body gap-4 pt-0\">\
                 {}\
-                <div class=\"grid gap-4\">\
-                        <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
-                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_catches || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
-                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_catches\"></div>\
-                                <div class=\"stat-desc\">{} <span data-text=\"$_live.loot_fish_multiplier_text\"></span> {}</div>\
-                            </div>\
-                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_fish_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title\">{}</div>\
-                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_fish_per_hour\"></div>\
-                            </div>\
-                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_profit || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
-                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_profit\"></div>\
-                                <div class=\"stat-desc\">{} <span data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
-                            </div>\
-                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_profit_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
-                                <div class=\"stat-title\">{}</div>\
-                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_profit_per_hour\"></div>\
-                            </div>\
-                        </div>\
-                        <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
-                            <legend class=\"fieldset-legend\">{}</legend>\
-                            <div class=\"grid gap-3\">\
-                                <fieldset class=\"fieldset\">\
-                                    <legend class=\"fieldset-legend\">{}</legend>\
-                                    {}\
-                                </fieldset>\
-                                <div class=\"grid gap-3 sm:grid-cols-2\">\
-                                    <fieldset class=\"fieldset\">\
-                                        <legend class=\"fieldset-legend\">{}</legend>\
-                                        <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\">\
-                                        <span class=\"label text-xs\">{}</span>\
-                                    </fieldset>\
-                                    <fieldset class=\"fieldset\">\
-                                        <legend class=\"fieldset-legend\">{}</legend>\
-                                        <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradePriceCurve\">\
-                                        <span class=\"label text-xs\">{}</span>\
-                                    </fieldset>\
-                                </div>\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
-                                    <input data-bind=\"applyTradeModifiers\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
-                                    <span class=\"text-sm font-medium\">{}</span>\
-                                </label>\
-                                <div class=\"grid gap-3 sm:grid-cols-2\">\
-                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">{}</span><span class=\"font-medium\" data-text=\"$_calc.trade_bargain_bonus_text\"></span></div>\
-                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">{}</span><span class=\"font-medium\" data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
-                                </div>\
-                            </div>\
-                        </fieldset>\
+                <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_catches || ''\" data-fishy-stat-color=\"var(--color-success)\">\
+                        <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_catches\"></div>\
+                        <div class=\"stat-desc\">{} <span data-text=\"$_live.loot_fish_multiplier_text\"></span> {}</div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_fish_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
+                        <div class=\"stat-title\">{}</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_fish_per_hour\"></div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_profit || ''\" data-fishy-stat-color=\"var(--color-success)\">\
+                        <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_profit\"></div>\
+                        <div class=\"stat-desc\">{} <span data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_profit_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
+                        <div class=\"stat-title\">{}</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_profit_per_hour\"></div>\
+                    </div>\
                 </div>\
             </div>\
         </fieldset>",
@@ -10825,7 +10858,54 @@ fn render_loot_window(
             data.lang,
             "calculator.server.stat.profit_per_hour",
         )),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.section.trade")),
+    )
+}
+
+fn render_trade_window(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+    trade_levels: &[SelectOption<'_>],
+) -> String {
+    let title = calculator_route_text(data.lang, "calculator.server.section.trade");
+    format!(
+        "<fieldset id=\"calculator-trade-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
+            {}\
+            <div class=\"card-body gap-4 pt-0\">\
+                <div class=\"grid gap-3\">\
+                    <fieldset class=\"fieldset\">\
+                        <legend class=\"fieldset-legend\">{}</legend>\
+                        {}\
+                    </fieldset>\
+                    <div class=\"grid gap-3 sm:grid-cols-2\">\
+                        <fieldset class=\"fieldset\">\
+                            <legend class=\"fieldset-legend\">{}</legend>\
+                            <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\">\
+                            <span class=\"label text-xs\">{}</span>\
+                        </fieldset>\
+                        <fieldset class=\"fieldset\">\
+                            <legend class=\"fieldset-legend\">{}</legend>\
+                            <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradePriceCurve\">\
+                            <span class=\"label text-xs\">{}</span>\
+                        </fieldset>\
+                    </div>\
+                    <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                        <input data-bind=\"applyTradeModifiers\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
+                        <span class=\"text-sm font-medium\">{}</span>\
+                    </label>\
+                    <div class=\"grid gap-3 sm:grid-cols-2\">\
+                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\">\
+                            <span class=\"block text-xs text-base-content/70\">{}</span>\
+                            <span class=\"font-medium\" data-text=\"$_calc.trade_bargain_bonus_text\"></span>\
+                        </div>\
+                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\">\
+                            <span class=\"block text-xs text-base-content/70\">{}</span>\
+                            <span class=\"font-medium\" data-text=\"$_calc.trade_sale_multiplier_text\"></span>\
+                        </div>\
+                    </div>\
+                </div>\
+            </div>\
+        </fieldset>",
+        render_calculator_panel_legend(data.lang, "trade", &title, None),
         escape_html(&calculator_route_text(data.lang, "calculator.server.field.trade_level")),
         render_searchable_select_control(
             data.cdn_base_url.as_str(),
@@ -12870,7 +12950,14 @@ mod tests {
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'trade'"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'food'"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'buffs'"));
         assert!(text.contains("calculator-loot-window"));
+        assert!(text.contains("calculator-trade-window"));
+        assert!(text.contains("data-calculator-section-id=\"trade\""));
+        assert!(text.contains("data-calculator-section-id=\"food\""));
+        assert!(text.contains("data-calculator-section-id=\"buffs\""));
         assert!(text.contains("<fishy-distribution-chart"));
         assert!(text.contains("signal-path=\"_calc.fish_group_distribution_chart\""));
         assert!(text.contains("No source-backed loot rows are available for this zone yet."));

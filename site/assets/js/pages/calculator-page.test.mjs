@@ -330,7 +330,7 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.deepEqual(Array.from(signals.buff), ["item:1", "item:2"]);
   assert.deepEqual(Array.from(signals.outfit), ["item:77"]);
   assert.deepEqual(Array.from(signals.pet1.skills), ["pet-skill:a"]);
-  assert.equal(signals._calculator_ui.top_level_tab, "distribution");
+  assert.equal(signals._calculator_ui.top_level_tab, "overview");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
@@ -346,6 +346,29 @@ test("calculator restore canonicalizes stored signals", () => {
     },
   });
   assert.equal(env.window.__fishystuffCalculator.signalObject(), signals);
+});
+
+test("calculator restore keeps the current tab while restoring trade, food, and buffs UI state", () => {
+  const env = createContext({
+    "fishystuff.calculator.ui.v1": JSON.stringify({
+      top_level_tab: "food",
+      distribution_tab: "groups",
+      pinned_sections: ["overview", "trade", "food", "buffs", "missing"],
+    }),
+  });
+  const signals = defaultSignals();
+  signals._calculator_ui.top_level_tab = "trade";
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.equal(signals._calculator_ui.top_level_tab, "trade");
+  assert.equal(signals._calculator_ui.distribution_tab, "groups");
+  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), [
+    "overview",
+    "trade",
+    "food",
+    "buffs",
+  ]);
 });
 
 test("calculator restore leaves initial shell state intact when storage is empty", () => {
