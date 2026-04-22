@@ -359,6 +359,10 @@ calculator.server.action.remove = Remove {$label}
 calculator.server.action.copy_url = Copy URL
 calculator.server.action.copy_share = Copy Share
 calculator.server.action.clear = Clear
+calculator.server.action.pin_section = Pin {$label}
+calculator.server.action.unpin_section = Unpin {$label}
+calculator.server.action.move_pinned_section_up = Move {$label} up
+calculator.server.action.move_pinned_section_down = Move {$label} down
 
 calculator.server.toggle.active_fishing = Active Fishing
 calculator.server.toggle.debug = Debug

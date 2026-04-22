@@ -39,6 +39,10 @@ calculator.server.action.remove = {$label} 제거
 calculator.server.action.copy_url = URL 복사
 calculator.server.action.copy_share = 공유 텍스트 복사
 calculator.server.action.clear = 초기화
+calculator.server.action.pin_section = {$label} 고정
+calculator.server.action.unpin_section = {$label} 고정 해제
+calculator.server.action.move_pinned_section_up = {$label} 위로 이동
+calculator.server.action.move_pinned_section_down = {$label} 아래로 이동
 
 calculator.server.toggle.active_fishing = 수동 낚시
 calculator.server.toggle.debug = 디버그

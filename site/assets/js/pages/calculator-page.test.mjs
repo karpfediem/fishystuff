@@ -245,6 +245,7 @@ function defaultSignals() {
     _calculator_ui: {
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_sections: ["overview"],
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -270,6 +271,7 @@ function defaultSignals() {
       _calculator_ui: {
         top_level_tab: "overview",
         distribution_tab: "groups",
+        pinned_sections: ["overview"],
       },
       _calculator_actions: {
         copyUrlToken: 0,
@@ -307,6 +309,7 @@ test("calculator restore canonicalizes stored signals", () => {
     "fishystuff.calculator.ui.v1": JSON.stringify({
       top_level_tab: "distribution",
       distribution_tab: "loot_flow",
+      pinned_sections: ["inputs", "distribution", "inputs", "missing"],
     }),
   });
   const signals = defaultSignals();
@@ -321,6 +324,7 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.deepEqual(Array.from(signals.pet1.skills), ["pet-skill:a"]);
   assert.equal(signals._calculator_ui.top_level_tab, "distribution");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
+  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
     "8473": {
       tradePriceCurvePercent: 130,
@@ -343,6 +347,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
     _calculator_ui: {
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_sections: ["overview"],
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -362,6 +367,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
     _calculator_ui: {
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_sections: ["overview"],
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -369,6 +375,30 @@ test("calculator restore leaves initial shell state intact when storage is empty
       clearToken: 0,
     },
   });
+});
+
+test("calculator pin helpers keep pinned sections ordered and movable", () => {
+  const env = createContext();
+  const calculator = env.window.__fishystuffCalculator;
+
+  assert.deepEqual(
+    Array.from(calculator.togglePinnedSection(undefined, "inputs")),
+    ["overview", "inputs"],
+  );
+  assert.deepEqual(
+    Array.from(calculator.togglePinnedSection(["overview", "inputs"], "overview")),
+    ["inputs"],
+  );
+  assert.deepEqual(
+    Array.from(calculator.movePinnedSection(["overview", "inputs", "loot"], "loot", -1)),
+    ["overview", "loot", "inputs"],
+  );
+  assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", -1), false);
+  assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", 1), true);
+  assert.equal(calculator.isPinnedSection(["overview", "inputs"], "inputs"), true);
+  assert.equal(calculator.sectionVisible("overview", "loot", []), false);
+  assert.equal(calculator.sectionVisible("overview", "loot", ["overview"]), true);
+  assert.equal(calculator.sectionOrder("loot", "loot", ["overview", "inputs"]), 2);
 });
 
 test("calculator API URLs keep locale and apiLang separate", () => {
@@ -417,6 +447,7 @@ test("calculator persist stores canonical page state and excludes transient bran
   assert.deepEqual(persistedUi, {
     top_level_tab: "overview",
     distribution_tab: "groups",
+    pinned_sections: ["overview"],
   });
   assert.equal("_live" in persistedData, false);
   assert.equal("_calc" in persistedData, false);
@@ -522,12 +553,14 @@ test("calculator action listener handles copy and clear tokens once without clea
     JSON.stringify({
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_sections: ["overview"],
     }),
   );
   env.window.__fishystuffCalculator.restore(signals);
   signals._calculator_ui = {
     top_level_tab: "loot",
     distribution_tab: "loot_flow",
+    pinned_sections: ["overview", "distribution"],
   };
   signals.overlay = {
     zones: {
@@ -583,11 +616,13 @@ test("calculator action listener handles copy and clear tokens once without clea
     {
       top_level_tab: "loot",
       distribution_tab: "loot_flow",
+      pinned_sections: ["overview", "distribution"],
     },
   );
   assert.deepEqual(signals._calculator_ui, {
     top_level_tab: "loot",
     distribution_tab: "loot_flow",
+    pinned_sections: ["overview", "distribution"],
   });
   assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
     zones: {

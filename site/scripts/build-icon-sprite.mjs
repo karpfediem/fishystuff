@@ -57,6 +57,7 @@ const iconSources = {
   bookmarks: { type: "mingcute", name: "bookmarks-fill" },
   "bookmark-add": { type: "mingcute", name: "bookmark-add-fill" },
   "bookmark-edit": { type: "mingcute", name: "bookmark-edit-fill" },
+  pin: { type: "mingcute", name: "pin-fill" },
   copy: { type: "mingcute", name: "copy-2-fill" },
   export: { type: "mingcute", name: "download-3-fill" },
   import: { type: "mingcute", name: "upload-3-fill" },

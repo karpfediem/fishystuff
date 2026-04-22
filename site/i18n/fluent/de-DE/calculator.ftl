@@ -145,6 +145,10 @@ calculator.server.action.remove = {$label} entfernen
 calculator.server.action.copy_url = URL kopieren
 calculator.server.action.copy_share = Freigabe kopieren
 calculator.server.action.clear = Leeren
+calculator.server.action.pin_section = {$label} anheften
+calculator.server.action.unpin_section = {$label} lösen
+calculator.server.action.move_pinned_section_up = {$label} nach oben
+calculator.server.action.move_pinned_section_down = {$label} nach unten
 
 calculator.server.toggle.active_fishing = Aktives Fischen
 calculator.server.toggle.debug = Debug

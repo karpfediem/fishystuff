@@ -1,5 +1,5 @@
 (function () {
-  const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
+  const ICON_SPRITE_URL = "/img/icons.svg?v=20260422-1";
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
@@ -17,6 +17,7 @@
     "overlay",
     "debug",
   ]);
+  const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze(["overview"]);
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
@@ -269,9 +270,108 @@
     return out;
   };
 
+  const normalizePinnedSections = (
+    value,
+    fallback = CALCULATOR_DEFAULT_PINNED_SECTIONS,
+  ) => {
+    const normalizeList = (entries) => compactStringArray(entries)
+      .filter((entry) => CALCULATOR_TOP_LEVEL_TABS.has(entry));
+    if (Array.isArray(value)) {
+      return normalizeList(value);
+    }
+    return normalizeList(fallback);
+  };
+
+  const normalizeCalculatorUiState = (value, legacyDistributionTab = "") => {
+    const current = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const topLevelTab = String(current.top_level_tab || "overview").trim();
+    const distributionTab = String(
+      current.distribution_tab || legacyDistributionTab || "groups",
+    ).trim();
+    return {
+      top_level_tab: CALCULATOR_TOP_LEVEL_TABS.has(topLevelTab)
+        ? topLevelTab
+        : "overview",
+      distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
+        ? distributionTab
+        : "groups",
+      pinned_sections: normalizePinnedSections(current.pinned_sections),
+    };
+  };
+
   const cloneCalculatorSignals = (value) => JSON.parse(JSON.stringify(value));
   const normalizeBooleanFlag = (value, fallback = false) =>
     value == null ? fallback : value === true || value === "true" || value === 1 || value === "1";
+
+  function pinnedSectionIndex(pinnedSections, sectionId) {
+    const normalizedSection = String(sectionId ?? "").trim();
+    return normalizePinnedSections(pinnedSections).indexOf(normalizedSection);
+  }
+
+  function isPinnedSection(pinnedSections, sectionId) {
+    return pinnedSectionIndex(pinnedSections, sectionId) >= 0;
+  }
+
+  function togglePinnedSection(pinnedSections, sectionId) {
+    const normalizedSection = String(sectionId ?? "").trim();
+    if (!CALCULATOR_TOP_LEVEL_TABS.has(normalizedSection)) {
+      return normalizePinnedSections(pinnedSections);
+    }
+    const next = normalizePinnedSections(pinnedSections);
+    const currentIndex = next.indexOf(normalizedSection);
+    if (currentIndex >= 0) {
+      next.splice(currentIndex, 1);
+      return next;
+    }
+    next.push(normalizedSection);
+    return next;
+  }
+
+  function movePinnedSection(pinnedSections, sectionId, direction) {
+    const normalizedSection = String(sectionId ?? "").trim();
+    const normalizedDirection = Number(direction);
+    const next = normalizePinnedSections(pinnedSections);
+    const currentIndex = next.indexOf(normalizedSection);
+    if (currentIndex < 0 || !Number.isFinite(normalizedDirection) || normalizedDirection === 0) {
+      return next;
+    }
+    const targetIndex = currentIndex + (normalizedDirection < 0 ? -1 : 1);
+    if (targetIndex < 0 || targetIndex >= next.length) {
+      return next;
+    }
+    const [movingSection] = next.splice(currentIndex, 1);
+    next.splice(targetIndex, 0, movingSection);
+    return next;
+  }
+
+  function canMovePinnedSection(pinnedSections, sectionId, direction) {
+    const normalizedDirection = Number(direction);
+    const currentIndex = pinnedSectionIndex(pinnedSections, sectionId);
+    const totalPinned = normalizePinnedSections(pinnedSections).length;
+    if (currentIndex < 0 || !Number.isFinite(normalizedDirection) || normalizedDirection === 0) {
+      return false;
+    }
+    const targetIndex = currentIndex + (normalizedDirection < 0 ? -1 : 1);
+    return targetIndex >= 0 && targetIndex < totalPinned;
+  }
+
+  function calculatorSectionVisible(sectionId, topLevelTab, pinnedSections) {
+    const normalizedSection = String(sectionId ?? "").trim();
+    return isPinnedSection(pinnedSections, normalizedSection) || String(topLevelTab ?? "").trim() === normalizedSection;
+  }
+
+  function calculatorSectionOrder(sectionId, topLevelTab, pinnedSections) {
+    const pinned = normalizePinnedSections(pinnedSections);
+    const normalizedSection = String(sectionId ?? "").trim();
+    const pinIndex = pinned.indexOf(normalizedSection);
+    if (pinIndex >= 0) {
+      return pinIndex;
+    }
+    if (String(topLevelTab ?? "").trim() === normalizedSection) {
+      return pinned.length;
+    }
+    return pinned.length + 1;
+  }
 
   const canonicalizeStoredSignals = (signals) => {
     const current = { ...(signals ?? {}) };
@@ -293,25 +393,7 @@
     }
     const legacyDistributionTab = String(current._distribution_tab ?? "").trim();
     delete current._distribution_tab;
-    if (
-      !current._calculator_ui
-      || typeof current._calculator_ui !== "object"
-      || Array.isArray(current._calculator_ui)
-    ) {
-      current._calculator_ui = {};
-    }
-    const topLevelTab = String(current._calculator_ui.top_level_tab || "overview").trim();
-    const distributionTab = String(
-      current._calculator_ui.distribution_tab || legacyDistributionTab || "groups",
-    ).trim();
-    current._calculator_ui = {
-      top_level_tab: CALCULATOR_TOP_LEVEL_TABS.has(topLevelTab)
-        ? topLevelTab
-        : "overview",
-      distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
-        ? distributionTab
-        : "groups",
-    };
+    current._calculator_ui = normalizeCalculatorUiState(current._calculator_ui, legacyDistributionTab);
     if (!("discardGrade" in current)) {
       if (current.discardRareFish || current.discardPrizeFish) {
         current.discardGrade = "yellow";
@@ -1697,5 +1779,12 @@
     },
     restore: restoreCalculator,
     liveCalc: liveCalculator,
+    togglePinnedSection,
+    movePinnedSection,
+    canMovePinnedSection,
+    isPinnedSection,
+    pinnedSectionIndex,
+    sectionVisible: calculatorSectionVisible,
+    sectionOrder: calculatorSectionOrder,
   };
 })();

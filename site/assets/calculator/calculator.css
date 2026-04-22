@@ -625,7 +625,14 @@
     gap: 0.45rem;
 }
 
-.fishy-calculator-panel-toggle {
+.fishy-calculator-panel-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.fishy-calculator-panel-control {
     pointer-events: auto;
     width: 1.85rem;
     height: 1.85rem;
@@ -635,17 +642,20 @@
     transition: color 120ms ease, background 120ms ease;
 }
 
-.fishy-calculator-panel-toggle:hover,
-.fishy-calculator-panel-toggle:focus-visible {
+.fishy-calculator-panel-control:hover,
+.fishy-calculator-panel-control:focus-visible,
+.fishy-calculator-panel-control--active {
     color: var(--color-base-content, #1f2937);
 }
 
-.fishy-calculator-panel-toggle .fishy-icon {
-    transition: transform 120ms ease;
+.fishy-calculator-panel-control--active {
+    background: color-mix(in oklab, var(--color-primary) 12%, var(--color-base-100) 88%);
+    color: var(--color-primary, #2563eb);
 }
 
-.fishy-calculator-panel-toggle.is-collapsed .fishy-icon {
-    transform: rotate(-90deg);
+.fishy-calculator-panel-control--disabled {
+    opacity: 0.35;
+    pointer-events: none;
 }
 
 .fishy-overlay-panel .fishy-overlay-table th {
