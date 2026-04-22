@@ -342,26 +342,6 @@ export function parseFishFilterDirectives(searchText) {
       term: "favourite",
       patterns: [/\bfavou?rites?\b/g],
     },
-    {
-      term: "red",
-      patterns: [/\bred\b/g, /\bprize\b/g],
-    },
-    {
-      term: "yellow",
-      patterns: [/\byellow\b/g, /\brare\b/g],
-    },
-    {
-      term: "blue",
-      patterns: [/\bblue\b/g, /\bhigh[\s_-]*quality\b/g],
-    },
-    {
-      term: "green",
-      patterns: [/\bgreen\b/g, /\bgeneral\b/g],
-    },
-    {
-      term: "white",
-      patterns: [/\bwhite\b/g, /\btrash\b/g],
-    },
   ];
   for (const replacement of replacements) {
     for (const pattern of replacement.patterns) {
@@ -535,13 +515,19 @@ function findFishFilterMatches(searchText, selectedTerms) {
       continue;
     }
     const metadata = metadataByTerm[term];
+    const isGradeFilter = FISH_GRADE_FILTER_TERMS.has(term);
     let score = 0;
     for (const queryTerm of terms) {
       const best = Math.max(
         term === queryTerm ? 240 : Number.NEGATIVE_INFINITY,
+        scoreTermMatch(term, queryTerm, isGradeFilter ? 220 : 180),
         scoreTermMatch(String(metadata?.label || "").toLowerCase(), queryTerm, 200),
-        scoreTermMatch(String(metadata?.description || "").toLowerCase(), queryTerm, 140),
-        scoreTermMatch(String(metadata?.searchText || "").toLowerCase(), queryTerm, 160),
+        isGradeFilter
+          ? Number.NEGATIVE_INFINITY
+          : scoreTermMatch(String(metadata?.description || "").toLowerCase(), queryTerm, 140),
+        isGradeFilter
+          ? Number.NEGATIVE_INFINITY
+          : scoreTermMatch(String(metadata?.searchText || "").toLowerCase(), queryTerm, 160),
       );
       if (!Number.isFinite(best)) {
         score = Number.NEGATIVE_INFINITY;

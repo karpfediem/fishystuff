@@ -254,9 +254,37 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
   signals._map_ui.search.query = "favorite";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
 
-  assert.match(panel.querySelector("#fishymap-search-results")?.innerHTML || "", /Favourite/);
+  assert.match(
+    panel.querySelector("#fishymap-search-results")?.innerHTML || "",
+    /data-fish-filter-term="favourite"/,
+  );
   assert.equal(searchCount.hidden, false);
-  assert.equal(searchCount.textContent, "1 match");
+  assert.equal(searchCount.textContent, "map.search.results.match_count.one");
+});
+
+test("FishyMapSearchPanelElement does not match fish by grade for free-text color queries", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel, searchCount } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = [
+    { fishId: 101, itemId: 101, name: "Whitefin Trevally", grade: "Rare", isPrize: false },
+    { fishId: 102, itemId: 102, name: "Mudskipper", grade: "White", isPrize: false },
+  ];
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "white";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+
+  const html = panel.querySelector("#fishymap-search-results")?.innerHTML || "";
+  assert.match(html, /Whitefin Trevally/);
+  assert.doesNotMatch(html, /Mudskipper/);
+  assert.match(html, /data-fish-filter-term="white"/);
+  assert.equal(searchCount.hidden, false);
+  assert.equal(searchCount.textContent, "map.search.results.match_count.other");
 });
 
 test("FishyMapSearchPanelElement renders zone terms with an RGB indicator", async () => {

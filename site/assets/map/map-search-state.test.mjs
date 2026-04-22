@@ -14,6 +14,7 @@ import {
   buildSearchPanelStateBundle,
   buildSearchSelectionRemovalSignalPatch,
   normalizeFishFilterTerms,
+  parseFishFilterDirectives,
 } from "./map-search-state.js";
 import { normalizeZoneCatalog } from "./map-zone-catalog.js";
 
@@ -134,18 +135,18 @@ test("buildSearchMatches returns fish filters, fish, and semantic matches from l
   assert.equal(filterMatches.some((match) => match.kind === "fish-filter" && match.term === "favourite"), true);
 
   const gradeMatches = buildSearchMatches(bundle, "rare");
-  assert.equal(gradeMatches.some((match) => match.kind === "fish-filter" && match.term === "yellow"), true);
-  assert.equal(gradeMatches.some((match) => match.kind === "fish" && match.fishId === 912), true);
+  assert.equal(gradeMatches.some((match) => match.kind === "fish-filter" && match.term === "yellow"), false);
+  assert.equal(gradeMatches.some((match) => match.kind === "fish" && match.fishId === 912), false);
 });
 
-test("buildSearchMatches treats multiple selected grade filters as an OR group", () => {
+test("buildSearchMatches does not implicitly expand multiple grade words into fish results", () => {
   const bundle = buildSearchPanelStateBundle(baseSignals());
 
   const matches = buildSearchMatches(bundle, "rare general");
 
   assert.deepEqual(
     matches.filter((match) => match.kind === "fish").map((match) => match.fishId),
-    [912, 77],
+    [],
   );
 });
 
@@ -257,6 +258,68 @@ test("buildSearchMatches does not constrain fish matches from selected missing f
       .filter((match) => match.kind === "fish")
       .map((match) => match.fishId),
     [235],
+  );
+});
+
+test("parseFishFilterDirectives does not treat grade words as implicit fish filters", () => {
+  assert.deepEqual(parseFishFilterDirectives("white"), {
+    rawQuery: "white",
+    remainingQuery: "white",
+    directTerms: [],
+  });
+  assert.deepEqual(parseFishFilterDirectives("rare"), {
+    rawQuery: "rare",
+    remainingQuery: "rare",
+    directTerms: [],
+  });
+});
+
+test("buildSearchMatches does not return unrelated grade-matched fish for color queries", () => {
+  const bundle = buildSearchPanelStateBundle({
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "white",
+        open: true,
+        selectedTerms: [],
+      },
+    },
+    _map_runtime: {
+      ready: true,
+      catalog: {
+        fish: [
+          { fishId: 101, itemId: 101, name: "Whitefin Trevally", grade: "Rare", isPrize: false },
+          { fishId: 102, itemId: 102, name: "Mudskipper", grade: "White", isPrize: false },
+        ],
+        patches: [],
+        semanticTerms: [],
+      },
+    },
+  });
+
+  assert.deepEqual(
+    buildSearchMatches(bundle, "white")
+      .filter((match) => match.kind === "fish")
+      .map((match) => match.fishId),
+    [101],
+  );
+  assert.equal(
+    buildSearchMatches(bundle, "white").some(
+      (match) => match.kind === "fish-filter" && match.term === "white",
+    ),
+    true,
+  );
+  assert.equal(
+    buildSearchMatches(bundle, "whit").some(
+      (match) => match.kind === "fish-filter" && match.term === "white",
+    ),
+    true,
+  );
+  assert.deepEqual(
+    buildSearchMatches(bundle, "whit")
+      .filter((match) => match.kind === "fish")
+      .map((match) => match.fishId),
+    [101],
   );
 });
 
