@@ -451,7 +451,7 @@ struct CalculatorData {
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
-const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260422-1";
+const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-1";
 type CalculatorRouteCatalog = HashMap<String, String>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1621,6 +1621,40 @@ fn calculator_route_text_with_vars(
     text
 }
 
+fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
+    match section_id {
+        "distribution" => Some("chart-pie-2-fill"),
+        "loot" => Some("trending-up-fill"),
+        "trade" => Some("wheel-fill"),
+        "food" => Some("dinner-fill"),
+        "buffs" => Some("arrows-up-fill"),
+        "pets" => Some("paw-fill"),
+        "overlay" => Some("edit-4-fill"),
+        "debug" => Some("bug-fill"),
+        _ => None,
+    }
+}
+
+fn render_calculator_icon(alias: &str, size_class: &str) -> String {
+    format!(
+        r#"<svg class="fishy-icon fishy-icon--inline {}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-{}"></use></svg>"#,
+        escape_html(size_class),
+        CALCULATOR_ICON_SPRITE_URL,
+        escape_html(alias),
+    )
+}
+
+fn render_calculator_tab_label(section_id: &str, title: &str) -> String {
+    let title = escape_html(title);
+    calculator_section_icon_alias(section_id).map_or(title.clone(), |icon_alias| {
+        format!(
+            r#"<span class="fishy-calculator-tab-label inline-flex items-center gap-2"><span class="fishy-calculator-tab-icon shrink-0">{}</span><span>{}</span></span>"#,
+            render_calculator_icon(icon_alias, "size-4"),
+            title,
+        )
+    })
+}
+
 fn render_calculator_panel_legend(
     lang: CalculatorLocale,
     section_id: &str,
@@ -1641,13 +1675,11 @@ fn render_calculator_panel_legend(
         "calculator.server.action.unpin_section",
         &[("label", title)],
     ));
-    let label_icon = icon_alias.map_or_else(String::new, |icon_alias| {
-        format!(
-            r#"<svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-{}"></use></svg>"#,
-            CALCULATOR_ICON_SPRITE_URL,
-            escape_html(icon_alias),
-        )
-    });
+    let label_icon = icon_alias
+        .or_else(|| calculator_section_icon_alias(section_id))
+        .map_or_else(String::new, |icon_alias| {
+            render_calculator_icon(icon_alias, "size-5")
+        });
     let section_id = escape_html(section_id);
     format!(
         r#"<legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2">
@@ -9156,10 +9188,10 @@ fn render_calculator_app(
         ),
         (
             "__TAB_OVERVIEW__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.tab.overview",
-            )),
+            render_calculator_tab_label(
+                "overview",
+                &calculator_route_text(data.lang, "calculator.server.tab.overview"),
+            ),
         ),
         (
             "__OVERVIEW_LEGEND__",
@@ -9172,10 +9204,10 @@ fn render_calculator_app(
         ),
         (
             "__TAB_INPUTS__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.tab.inputs",
-            )),
+            render_calculator_tab_label(
+                "inputs",
+                &calculator_route_text(data.lang, "calculator.server.tab.inputs"),
+            ),
         ),
         (
             "__INPUTS_LEGEND__",
@@ -9188,38 +9220,38 @@ fn render_calculator_app(
         ),
         (
             "__SECTION_DISTRIBUTION__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.distribution",
-            )),
+            render_calculator_tab_label(
+                "distribution",
+                &calculator_route_text(data.lang, "calculator.server.section.distribution"),
+            ),
         ),
         (
             "__SECTION_LOOT__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.loot",
-            )),
+            render_calculator_tab_label(
+                "loot",
+                &calculator_route_text(data.lang, "calculator.server.section.loot"),
+            ),
         ),
         (
             "__SECTION_TRADE__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.trade",
-            )),
+            render_calculator_tab_label(
+                "trade",
+                &calculator_route_text(data.lang, "calculator.server.section.trade"),
+            ),
         ),
         (
             "__TAB_OVERLAY__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.tab.overlay",
-            )),
+            render_calculator_tab_label(
+                "overlay",
+                &calculator_route_text(data.lang, "calculator.server.tab.overlay"),
+            ),
         ),
         (
             "__TAB_DEBUG__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.tab.debug",
-            )),
+            render_calculator_tab_label(
+                "debug",
+                &calculator_route_text(data.lang, "calculator.server.tab.debug"),
+            ),
         ),
         (
             "__CALCULATOR_ICON_SPRITE_URL__",
@@ -9406,24 +9438,24 @@ fn render_calculator_app(
         ),
         (
             "__SECTION_GEAR__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.gear",
-            )),
+            render_calculator_tab_label(
+                "gear",
+                &calculator_route_text(data.lang, "calculator.server.section.gear"),
+            ),
         ),
         (
             "__SECTION_FOOD__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.field.food",
-            )),
+            render_calculator_tab_label(
+                "food",
+                &calculator_route_text(data.lang, "calculator.server.field.food"),
+            ),
         ),
         (
             "__SECTION_BUFFS__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.field.buffs",
-            )),
+            render_calculator_tab_label(
+                "buffs",
+                &calculator_route_text(data.lang, "calculator.server.field.buffs"),
+            ),
         ),
         (
             "__GEAR_LEGEND__",
@@ -9524,10 +9556,10 @@ fn render_calculator_app(
         ),
         (
             "__SECTION_PETS__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.pets",
-            )),
+            render_calculator_tab_label(
+                "pets",
+                &calculator_route_text(data.lang, "calculator.server.section.pets"),
+            ),
         ),
         (
             "__PETS_LEGEND__",

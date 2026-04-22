@@ -730,6 +730,15 @@
     flex: none;
 }
 
+.fishy-calculator-tab-icon {
+    display: flex;
+    align-items: center;
+}
+
+.fishy-calculator-tab-icon > .fishy-icon {
+    display: block;
+}
+
 .fishy-calculator-panel-label {
     display: inline-flex;
     align-items: center;
