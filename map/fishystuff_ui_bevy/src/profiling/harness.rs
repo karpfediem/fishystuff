@@ -70,6 +70,8 @@ pub fn run(cli: HarnessCli) -> Result<()> {
         enabled: true,
         capture_after_frame: cli.warmup_frames,
         capture_trace: cli.trace_chrome.is_some(),
+        capture_spans: true,
+        capture_frame_times: true,
     });
 
     let started_at = Instant::now();

@@ -19,6 +19,8 @@ pub mod harness;
 pub mod scenario;
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
+static CAPTURE_FRAMES: AtomicBool = AtomicBool::new(false);
+static CAPTURE_SCOPES: AtomicBool = AtomicBool::new(false);
 static CURRENT_FRAME: AtomicU64 = AtomicU64::new(0);
 static SESSION: OnceLock<Mutex<ProfilingSession>> = OnceLock::new();
 #[cfg(target_arch = "wasm32")]
@@ -32,6 +34,8 @@ pub struct ProfilingConfig {
     pub enabled: bool,
     pub capture_after_frame: u64,
     pub capture_trace: bool,
+    pub capture_spans: bool,
+    pub capture_frame_times: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +102,14 @@ struct TraceEvent {
 
 pub fn reset(config: ProfilingConfig) {
     ENABLED.store(config.enabled, Ordering::Relaxed);
+    CAPTURE_SCOPES.store(
+        config.enabled && (config.capture_spans || config.capture_trace),
+        Ordering::Relaxed,
+    );
+    CAPTURE_FRAMES.store(
+        config.enabled && config.capture_frame_times,
+        Ordering::Relaxed,
+    );
     let session = SESSION.get_or_init(|| Mutex::new(ProfilingSession::default()));
     let mut guard = session.lock().unwrap();
     *guard = ProfilingSession::new(config);
@@ -108,6 +120,9 @@ pub fn begin_frame(frame: u64) {
 }
 
 pub fn end_frame(frame: u64) {
+    if !CAPTURE_FRAMES.load(Ordering::Relaxed) {
+        return;
+    }
     with_session(|session| session.end_frame(frame));
 }
 
@@ -126,7 +141,7 @@ pub fn set_last(name: impl Into<String>, value: f64) {
 }
 
 pub fn scope(name: &'static str) -> ProfilingScope {
-    if !ENABLED.load(Ordering::Relaxed) {
+    if !CAPTURE_SCOPES.load(Ordering::Relaxed) {
         return ProfilingScope::disabled();
     }
     let now_ms = monotonic_now_ms();
@@ -242,10 +257,18 @@ impl ProfilingSession {
 
     fn begin_frame(&mut self, frame: u64) {
         self.current_frame = frame;
+        if !self.config.capture_frame_times {
+            self.frame_started_at_ms = None;
+            return;
+        }
         self.frame_started_at_ms = Some(monotonic_now_ms());
     }
 
     fn end_frame(&mut self, frame: u64) {
+        if !self.config.capture_frame_times {
+            self.frame_started_at_ms = None;
+            return;
+        }
         if !self.should_capture(frame) {
             self.frame_started_at_ms = None;
             return;
@@ -284,7 +307,9 @@ impl ProfilingSession {
             return;
         }
         let ms = duration_ms.max(0.0);
-        self.span_samples_ms.entry(name).or_default().push(ms);
+        if self.config.capture_spans {
+            self.span_samples_ms.entry(name).or_default().push(ms);
+        }
         if self.config.capture_trace {
             self.trace_events.push(TraceEvent {
                 name: name.to_string(),
@@ -390,6 +415,23 @@ pub fn current_build_profile() -> String {
     option_env!("PROFILE").unwrap_or("unknown").to_string()
 }
 
+pub fn snapshot_last_values(names: &[&str]) -> HashMap<String, f64> {
+    if !ENABLED.load(Ordering::Relaxed) {
+        return HashMap::new();
+    }
+    let Some(session) = SESSION.get() else {
+        return HashMap::new();
+    };
+    let guard = session.lock().unwrap();
+    let mut values = HashMap::with_capacity(names.len());
+    for name in names {
+        if let Some(value) = guard.last_values.get(*name) {
+            values.insert((*name).to_string(), *value);
+        }
+    }
+    values
+}
+
 pub fn current_frame() -> u64 {
     CURRENT_FRAME.load(Ordering::Relaxed)
 }
@@ -399,12 +441,20 @@ pub fn set_current_frame(frame: u64) {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn start_live_session(scenario: impl Into<String>, warmup_frames: u64, capture_trace: bool) {
+pub fn start_live_session(
+    scenario: impl Into<String>,
+    warmup_frames: u64,
+    capture_trace: bool,
+    capture_spans: bool,
+    capture_frame_times: bool,
+) {
     let start_frame = current_frame();
     reset(ProfilingConfig {
         enabled: true,
         capture_after_frame: start_frame.saturating_add(warmup_frames),
         capture_trace,
+        capture_spans,
+        capture_frame_times,
     });
     LIVE_PROFILE_STATE.with(|state| {
         *state.borrow_mut() = LiveProfileState {

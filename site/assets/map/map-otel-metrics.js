@@ -28,7 +28,46 @@ function safePerformanceSnapshot(bridge) {
   }
 }
 
+function safeTelemetrySample(bridge) {
+  try {
+    return bridge?.getTelemetrySample?.() || null;
+  } catch {
+    return null;
+  }
+}
+
 export function collectMapTelemetrySample(bridge) {
+  const telemetry = safeTelemetrySample(bridge);
+  if (telemetry && typeof telemetry === "object") {
+    const layers = Array.isArray(telemetry.layers) ? telemetry.layers : [];
+    return {
+      ready: telemetry.ready === true ? 1 : numericOrZero(telemetry.ready),
+      visibleLayers: layers.filter((layer) => layer?.visible === true).length,
+      bevyFps: numericOrZero(telemetry.bevyFps),
+      bevyFrameTimeMs: numericOrZero(telemetry.bevyFrameTimeMs),
+      profileFrameTimeAvgMs: 0,
+      profileFrameTimeP95Ms: 0,
+      terrainReady: numericOrZero(telemetry.terrainReady),
+      terrainChunksRequested: numericOrZero(telemetry.terrainChunksRequested),
+      terrainChunksReady: numericOrZero(telemetry.terrainChunksReady),
+      terrainCacheHits: numericOrZero(telemetry.terrainCacheHits),
+      terrainCacheMisses: numericOrZero(telemetry.terrainCacheMisses),
+      terrainAvgBuildMs: numericOrZero(telemetry.terrainAvgBuildMs),
+      layers: layers.map((layer) => ({
+        attributes: {
+          layer_id: normalizeString(layer?.layerId),
+          layer_kind: normalizeString(layer?.kind) || "unknown",
+        },
+        visibleTiles: numericOrZero(layer?.visibleTileCount),
+        residentTiles: numericOrZero(layer?.residentTileCount),
+        pendingTiles: numericOrZero(layer?.pendingCount),
+        inflightTiles: numericOrZero(layer?.inflightCount),
+        vectorFeatureCount: numericOrZero(layer?.vectorFeatureCount),
+        vectorBuildMs: numericOrZero(layer?.vectorBuildMs),
+      })),
+    };
+  }
+
   const state = safeCurrentState(bridge);
   const performance = safePerformanceSnapshot(bridge);
   const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
@@ -108,20 +147,6 @@ export function createMapOtelMetricsReporter({
     description: "Short-window Bevy frame time from the live browser runtime.",
     unit: "ms",
   });
-  const profileFrameTimeAvgMs = meter.createObservableGauge(
-    "fishystuff.map.profile.frame_time_avg",
-    {
-      description: "Average frame time from the current browser profiling session.",
-      unit: "ms",
-    },
-  );
-  const profileFrameTimeP95Ms = meter.createObservableGauge(
-    "fishystuff.map.profile.frame_time_p95",
-    {
-      description: "P95 frame time from the current browser profiling session.",
-      unit: "ms",
-    },
-  );
   const terrainReady = meter.createObservableGauge("fishystuff.map.terrain.ready", {
     description: "Whether terrain runtime assets are ready.",
   });
@@ -196,8 +221,6 @@ export function createMapOtelMetricsReporter({
     visibleLayers,
     bevyFps,
     bevyFrameTimeMs,
-    profileFrameTimeAvgMs,
-    profileFrameTimeP95Ms,
     terrainReady,
     terrainChunksRequested,
     terrainChunksReady,
@@ -218,8 +241,6 @@ export function createMapOtelMetricsReporter({
     observeScalar(result, visibleLayers, sample.visibleLayers);
     observeScalar(result, bevyFps, sample.bevyFps);
     observeScalar(result, bevyFrameTimeMs, sample.bevyFrameTimeMs);
-    observeScalar(result, profileFrameTimeAvgMs, sample.profileFrameTimeAvgMs);
-    observeScalar(result, profileFrameTimeP95Ms, sample.profileFrameTimeP95Ms);
     observeScalar(result, terrainReady, sample.terrainReady);
     observeScalar(result, terrainChunksRequested, sample.terrainChunksRequested);
     observeScalar(result, terrainChunksReady, sample.terrainChunksReady);

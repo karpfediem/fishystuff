@@ -319,10 +319,13 @@ function createPerformanceCollector(scenario = "browser") {
 
 function normalizePerformanceOptions(options = {}) {
   const warmupFrames = Number.parseInt(options.warmupFrames, 10);
+  const captureTrace = options.captureTrace === true;
   return {
     scenario: String(options.scenario || "browser").trim() || "browser",
     warmupFrames: Number.isFinite(warmupFrames) && warmupFrames >= 0 ? warmupFrames : 0,
-    captureTrace: options.captureTrace === true,
+    captureTrace,
+    captureSpans: captureTrace || options.captureSpans === true,
+    captureFrames: options.captureFrames === true,
   };
 }
 
@@ -2661,7 +2664,11 @@ class FishyMapBridgeImpl {
     this.boundResize = () => {
       this.syncCanvasSize();
     };
-    this.performanceOptions = normalizePerformanceOptions({ scenario: "load_map" });
+    this.performanceOptions = normalizePerformanceOptions({
+      scenario: "load_map",
+      captureSpans: false,
+      captureFrames: false,
+    });
     this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
   }
 
@@ -2704,6 +2711,8 @@ class FishyMapBridgeImpl {
         scenario: this.performanceOptions.scenario,
         warmupFrames: this.performanceOptions.warmupFrames,
         captureTrace: this.performanceOptions.captureTrace,
+        captureSpans: this.performanceOptions.captureSpans,
+        captureFrames: this.performanceOptions.captureFrames,
       }),
     );
   }
@@ -2716,7 +2725,12 @@ class FishyMapBridgeImpl {
       if (this.container) {
         this.destroy();
       }
-      this.resetPerformanceSnapshot({ scenario: options.profileScenario || "load_map" });
+      this.performanceOptions = normalizePerformanceOptions({
+        scenario: options.profileScenario || "load_map",
+        captureSpans: false,
+        captureFrames: false,
+      });
+      this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
       this.patchDebounceMs =
         Number.isFinite(options.debounceMs) && options.debounceMs >= 0
           ? options.debounceMs
@@ -2868,6 +2882,14 @@ class FishyMapBridgeImpl {
     return cloneJson(this.refreshCurrentStateFromWasm());
   }
 
+  getTelemetrySample() {
+    const telemetry = this.readWasmTelemetrySample();
+    if (telemetry) {
+      return cloneJson(telemetry);
+    }
+    return null;
+  }
+
   getCurrentInputState() {
     this.syncInputViewModeFromCurrentState();
     return cloneJson(this.inputState);
@@ -2876,6 +2898,8 @@ class FishyMapBridgeImpl {
   resetPerformanceSnapshot(options = {}) {
     this.performanceOptions = normalizePerformanceOptions({
       ...this.performanceOptions,
+      captureSpans: true,
+      captureFrames: true,
       ...options,
     });
     this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
@@ -2889,6 +2913,17 @@ class FishyMapBridgeImpl {
     }
     try {
       return JSON.parse(this.wasmModule.fishymap_get_profiling_summary_json());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  readWasmTelemetrySample() {
+    if (!this.wasmReady || !this.wasmModule?.fishymap_get_telemetry_sample_json) {
+      return null;
+    }
+    try {
+      return JSON.parse(this.wasmModule.fishymap_get_telemetry_sample_json());
     } catch (_) {
       return null;
     }

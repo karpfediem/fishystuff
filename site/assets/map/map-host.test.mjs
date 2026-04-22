@@ -231,6 +231,18 @@ function createFakeWasm(snapshotRef) {
       named_spans: {},
       counters: {},
     },
+    telemetrySample: {
+      ready: false,
+      bevyFps: 0,
+      bevyFrameTimeMs: 0,
+      terrainReady: 0,
+      terrainChunksRequested: 0,
+      terrainChunksReady: 0,
+      terrainCacheHits: 0,
+      terrainCacheMisses: 0,
+      terrainAvgBuildMs: 0,
+      layers: [],
+    },
     async default() {},
     fishymap_set_event_sink(callback) {
       calls.sink = callback;
@@ -260,6 +272,9 @@ function createFakeWasm(snapshotRef) {
     },
     fishymap_get_profiling_summary_json() {
       return JSON.stringify(this.profilingSummary);
+    },
+    fishymap_get_telemetry_sample_json() {
+      return JSON.stringify(this.telemetrySample);
     },
     fishymap_get_profiling_trace_json() {
       return JSON.stringify({ traceEvents: [] });
@@ -2698,6 +2713,8 @@ test("performance snapshot merges host and wasm profiling summaries", async () =
       scenario: "vector_region_groups_enable",
       warmupFrames: 12,
       captureTrace: false,
+      captureSpans: true,
+      captureFrames: true,
     });
     assert.equal(report.scenario, "vector_region_groups_enable");
     assert.equal(report.frames, 120);

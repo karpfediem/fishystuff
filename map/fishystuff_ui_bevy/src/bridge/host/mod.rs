@@ -61,6 +61,37 @@ struct FishyMapProfilingOptions {
     scenario: Option<String>,
     warmup_frames: u64,
     capture_trace: bool,
+    capture_spans: Option<bool>,
+    capture_frames: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FishyMapTelemetryLayerSnapshot {
+    layer_id: String,
+    kind: String,
+    visible: bool,
+    visible_tile_count: u32,
+    resident_tile_count: u32,
+    pending_count: u32,
+    inflight_count: u32,
+    vector_feature_count: u32,
+    vector_build_ms: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FishyMapTelemetrySnapshot {
+    ready: bool,
+    bevy_fps: f64,
+    bevy_frame_time_ms: f64,
+    terrain_ready: f64,
+    terrain_chunks_requested: f64,
+    terrain_chunks_ready: f64,
+    terrain_cache_hits: f64,
+    terrain_cache_misses: f64,
+    terrain_avg_build_ms: f64,
+    layers: Vec<FishyMapTelemetryLayerSnapshot>,
 }
 
 #[wasm_bindgen]
@@ -146,6 +177,8 @@ pub fn fishymap_reset_profiling_json(json: &str) -> Result<(), JsValue> {
         options.scenario.unwrap_or_else(|| "browser".to_string()),
         options.warmup_frames,
         options.capture_trace,
+        options.capture_spans.unwrap_or(true) || options.capture_trace,
+        options.capture_frames.unwrap_or(true),
     );
     Ok(())
 }
@@ -159,6 +192,55 @@ pub fn fishymap_get_profiling_summary_json() -> String {
 #[wasm_bindgen]
 pub fn fishymap_get_profiling_trace_json() -> String {
     crate::profiling::trace_json().unwrap_or_else(|_| "{\"traceEvents\":[]}".to_string())
+}
+
+#[wasm_bindgen]
+pub fn fishymap_get_telemetry_sample_json() -> String {
+    const TELEMETRY_LAST_VALUE_KEYS: &[&str] = &[
+        "bevy.diagnostics.fps",
+        "bevy.diagnostics.frame_time_ms",
+        "terrain.runtime.ready",
+        "terrain.runtime.chunks_requested",
+        "terrain.runtime.chunks_ready",
+        "terrain.runtime.cache_hits",
+        "terrain.runtime.cache_misses",
+        "terrain.runtime.avg_build_ms",
+    ];
+
+    let last_values = crate::profiling::snapshot_last_values(TELEMETRY_LAST_VALUE_KEYS);
+    let last_value = |name: &str| last_values.get(name).copied().unwrap_or_default();
+
+    CURRENT_SNAPSHOT.with(|snapshot| {
+        let snapshot = snapshot.borrow();
+        serde_json::to_string(&FishyMapTelemetrySnapshot {
+            ready: snapshot.ready,
+            bevy_fps: last_value("bevy.diagnostics.fps"),
+            bevy_frame_time_ms: last_value("bevy.diagnostics.frame_time_ms"),
+            terrain_ready: last_value("terrain.runtime.ready"),
+            terrain_chunks_requested: last_value("terrain.runtime.chunks_requested"),
+            terrain_chunks_ready: last_value("terrain.runtime.chunks_ready"),
+            terrain_cache_hits: last_value("terrain.runtime.cache_hits"),
+            terrain_cache_misses: last_value("terrain.runtime.cache_misses"),
+            terrain_avg_build_ms: last_value("terrain.runtime.avg_build_ms"),
+            layers: snapshot
+                .catalog
+                .layers
+                .iter()
+                .map(|layer| FishyMapTelemetryLayerSnapshot {
+                    layer_id: layer.layer_id.clone(),
+                    kind: layer.kind.clone(),
+                    visible: layer.visible,
+                    visible_tile_count: layer.visible_tile_count,
+                    resident_tile_count: layer.resident_tile_count,
+                    pending_count: layer.pending_count,
+                    inflight_count: layer.inflight_count,
+                    vector_feature_count: layer.vector_feature_count,
+                    vector_build_ms: layer.vector_build_ms,
+                })
+                .collect(),
+        })
+        .unwrap_or_else(|_| "{\"ready\":false,\"layers\":[]}".to_string())
+    })
 }
 
 #[wasm_bindgen]

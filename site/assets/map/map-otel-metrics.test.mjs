@@ -7,46 +7,32 @@ import {
   createMapOtelMetricsReporter,
 } from "./map-otel-metrics.js";
 
-test("collectMapTelemetrySample extracts live Bevy and layer metrics from the bridge", () => {
+test("collectMapTelemetrySample prefers the lightweight bridge telemetry sample", () => {
   const sample = collectMapTelemetrySample({
-    getCurrentState() {
+    getTelemetrySample() {
       return {
         ready: true,
-        catalog: {
-          layers: [
-            {
-              layerId: "zone_mask",
-              kind: "tiled-raster",
-              visible: true,
-              visibleTileCount: 12,
-              residentTileCount: 18,
-              pendingCount: 2,
-              inflightCount: 1,
-              vectorFeatureCount: 0,
-              vectorBuildMs: 0,
-            },
-          ],
-        },
-      };
-    },
-    getPerformanceSnapshot() {
-      return {
-        frame_time_ms: {
-          avg: 16.7,
-          p95: 24.2,
-        },
-        wasm: {
-          counters: {
-            "bevy.diagnostics.fps": 59.8,
-            "bevy.diagnostics.frame_time_ms": 16.7,
-            "terrain.runtime.ready": 1,
-            "terrain.runtime.chunks_requested": 8,
-            "terrain.runtime.chunks_ready": 6,
-            "terrain.runtime.cache_hits": 42,
-            "terrain.runtime.cache_misses": 3,
-            "terrain.runtime.avg_build_ms": 7.1,
+        bevyFps: 59.8,
+        bevyFrameTimeMs: 16.7,
+        terrainReady: 1,
+        terrainChunksRequested: 8,
+        terrainChunksReady: 6,
+        terrainCacheHits: 42,
+        terrainCacheMisses: 3,
+        terrainAvgBuildMs: 7.1,
+        layers: [
+          {
+            layerId: "zone_mask",
+            kind: "tiled-raster",
+            visible: true,
+            visibleTileCount: 12,
+            residentTileCount: 18,
+            pendingCount: 2,
+            inflightCount: 1,
+            vectorFeatureCount: 0,
+            vectorBuildMs: 0,
           },
-        },
+        ],
       };
     },
   });
@@ -54,7 +40,7 @@ test("collectMapTelemetrySample extracts live Bevy and layer metrics from the br
   assert.equal(sample.ready, 1);
   assert.equal(sample.visibleLayers, 1);
   assert.equal(sample.bevyFps, 59.8);
-  assert.equal(sample.profileFrameTimeP95Ms, 24.2);
+  assert.equal(sample.profileFrameTimeP95Ms, 0);
   assert.equal(sample.terrainChunksReady, 6);
   assert.deepEqual(sample.layers[0], {
     attributes: {
@@ -86,14 +72,19 @@ test("createMapOtelMetricsReporter registers a batch callback when OTEL metrics 
 
   const reporter = createMapOtelMetricsReporter({
     bridge: {
-      getCurrentState() {
+      getTelemetrySample() {
         return {
           ready: false,
-          catalog: { layers: [] },
+          layers: [],
+          bevyFps: 0,
+          bevyFrameTimeMs: 0,
+          terrainReady: 0,
+          terrainChunksRequested: 0,
+          terrainChunksReady: 0,
+          terrainCacheHits: 0,
+          terrainCacheMisses: 0,
+          terrainAvgBuildMs: 0,
         };
-      },
-      getPerformanceSnapshot() {
-        return { wasm: { counters: {} }, frame_time_ms: {} };
       },
     },
     globalRef: {
