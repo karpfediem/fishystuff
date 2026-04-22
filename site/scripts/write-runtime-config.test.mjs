@@ -49,6 +49,24 @@ test("runtime config derives telemetry default mode from explicit and legacy env
   assert.equal(explicitDisabled.client.telemetry.defaultMode, "disabled");
 });
 
+test("runtime config defaults local loopback telemetry to opt-in", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
+    FISHYSTUFF_RUNTIME_SITE_BASE_URL: "http://127.0.0.1:1990",
+  });
+
+  assert.equal(runtimeConfig.client.telemetry.defaultMode, "opt-in");
+});
+
+test("runtime config defaults local deployment telemetry to opt-in", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_RUNTIME_OTEL_ENABLED: "true",
+    FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT: "local",
+  });
+
+  assert.equal(runtimeConfig.client.telemetry.defaultMode, "opt-in");
+});
+
 test("runtime config derives beta sibling hosts from the public site base", () => {
   const runtimeConfig = buildRuntimeConfig({
     FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",

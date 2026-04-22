@@ -193,18 +193,33 @@ export function buildRuntimeConfig(env = process.env) {
     publicTelemetryBaseUrl,
     publicTelemetryTracesEndpoint,
   } = resolvePublicBaseUrls(env);
+  const runtimeSiteBaseUrl =
+    normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_SITE_BASE_URL) || publicSiteBaseUrl;
   const runtimeTelemetryEnabledDefault = normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_ENABLED, false);
+  const runtimeDeploymentEnvironment =
+    String(env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT ?? "").trim()
+    || "production";
+  let defaultTelemetryModeFallback = runtimeTelemetryEnabledDefault ? "enabled" : "opt-in";
+  try {
+    const runtimeSiteUrl = new URL(runtimeSiteBaseUrl);
+    if (isLoopbackHost(runtimeSiteUrl.hostname) || runtimeDeploymentEnvironment === "local") {
+      defaultTelemetryModeFallback = "opt-in";
+    }
+  } catch {
+    if (runtimeDeploymentEnvironment === "local") {
+      defaultTelemetryModeFallback = "opt-in";
+    }
+  }
   const telemetryDefaultMode = normalizeTelemetryDefaultMode(
     env.FISHYSTUFF_RUNTIME_TELEMETRY_DEFAULT_MODE,
-    runtimeTelemetryEnabledDefault ? "enabled" : "opt-in",
+    defaultTelemetryModeFallback,
   );
   const traceExporterEndpoint =
     normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
     || publicTelemetryTracesEndpoint;
 
   return {
-    siteBaseUrl:
-      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_SITE_BASE_URL) || publicSiteBaseUrl,
+    siteBaseUrl: runtimeSiteBaseUrl,
     apiBaseUrl:
       normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_API_BASE_URL) || publicApiBaseUrl,
     cdnBaseUrl:
@@ -220,9 +235,7 @@ export function buildRuntimeConfig(env = process.env) {
       debug: normalizeFlag(env.FISHYSTUFF_RUNTIME_OTEL_DEBUG, false),
       serviceName:
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_NAME ?? "").trim() || "fishystuff-site",
-      deploymentEnvironment:
-        String(env.FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT ?? "").trim()
-        || "production",
+      deploymentEnvironment: runtimeDeploymentEnvironment,
       serviceVersion:
         String(env.FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION ?? "").trim(),
       exporterEndpoint: traceExporterEndpoint,
