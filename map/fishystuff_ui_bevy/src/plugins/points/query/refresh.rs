@@ -24,7 +24,7 @@ use crate::plugins::points::query::evidence::zone_membership_binding_support;
 
 use super::super::render::view_bbox_map_px;
 use super::state::PointsQuerySignature;
-use super::{quantize_px, PointsState, RenderPoint, VIEWPORT_SIG_STEP_PX};
+use super::{PointsState, RenderPoint};
 
 pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     mut refresh: LocalSnapshotRefresh<'_, '_>,
@@ -134,14 +134,14 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
             .as_ref()
             .map(search_expression_key)
             .unwrap_or_default(),
-        viewport_qmin_x: quantize_px(viewport_bbox.min_x, VIEWPORT_SIG_STEP_PX),
-        viewport_qmin_y: quantize_px(viewport_bbox.min_y, VIEWPORT_SIG_STEP_PX),
-        viewport_qmax_x: quantize_px(viewport_bbox.max_x, VIEWPORT_SIG_STEP_PX),
-        viewport_qmax_y: quantize_px(viewport_bbox.max_y, VIEWPORT_SIG_STEP_PX),
-        tile_scope_min_x: quantize_px(tile_scope.min_x, VISIBLE_TILE_SCOPE_PX),
-        tile_scope_min_y: quantize_px(tile_scope.min_y, VISIBLE_TILE_SCOPE_PX),
-        tile_scope_max_x: quantize_px(tile_scope.max_x, VISIBLE_TILE_SCOPE_PX),
-        tile_scope_max_y: quantize_px(tile_scope.max_y, VISIBLE_TILE_SCOPE_PX),
+        viewport_min_x: viewport_bbox.min_x,
+        viewport_min_y: viewport_bbox.min_y,
+        viewport_max_x: viewport_bbox.max_x,
+        viewport_max_y: viewport_bbox.max_y,
+        tile_scope_min_x: tile_scope.min_x,
+        tile_scope_min_y: tile_scope.min_y,
+        tile_scope_max_x: tile_scope.max_x,
+        tile_scope_max_y: tile_scope.max_y,
         cluster_bucket_px,
     };
 
@@ -166,6 +166,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         cluster_view_events(
             &refresh.snapshot.events,
             &selection.filtered_indices,
+            &viewport_bbox,
             cluster_bucket_px,
         )
     };

@@ -7,8 +7,6 @@ pub use state::{PointsState, RenderPoint};
 pub(crate) use evidence::sync_layer_effective_filters;
 pub(super) use refresh::refresh_points_from_local_snapshot;
 
-const VIEWPORT_SIG_STEP_PX: i32 = 32;
-
 #[cfg(test)]
 use crate::plugins::api::{FishFilterState, PatchFilterState};
 
@@ -30,10 +28,6 @@ fn normalized_time_and_fish_filters(
     Some((patch_filter.from_ts, patch_filter.to_ts, fish_ids))
 }
 
-fn quantize_px(value: i32, step: i32) -> i32 {
-    value.div_euclid(step.max(1))
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -44,7 +38,7 @@ mod tests {
     use crate::map::events::EventZoneSetResolver;
 
     #[test]
-    fn quantized_signature_ignores_sub_step_viewport_motion() {
+    fn point_query_signature_tracks_sub_pixel_viewport_motion() {
         let sig_a = state::PointsQuerySignature {
             revision: Some("r1".to_string()),
             zone_filter_revision: 0,
@@ -54,14 +48,14 @@ mod tests {
             to_ts_utc: Some(20),
             fish_ids: vec![100],
             search_expression_key: String::new(),
-            viewport_qmin_x: quantize_px(100, VIEWPORT_SIG_STEP_PX),
-            viewport_qmin_y: quantize_px(100, VIEWPORT_SIG_STEP_PX),
-            viewport_qmax_x: quantize_px(500, VIEWPORT_SIG_STEP_PX),
-            viewport_qmax_y: quantize_px(500, VIEWPORT_SIG_STEP_PX),
-            tile_scope_min_x: quantize_px(100, crate::map::events::VISIBLE_TILE_SCOPE_PX),
-            tile_scope_min_y: quantize_px(100, crate::map::events::VISIBLE_TILE_SCOPE_PX),
-            tile_scope_max_x: quantize_px(500, crate::map::events::VISIBLE_TILE_SCOPE_PX),
-            tile_scope_max_y: quantize_px(500, crate::map::events::VISIBLE_TILE_SCOPE_PX),
+            viewport_min_x: 100,
+            viewport_min_y: 100,
+            viewport_max_x: 500,
+            viewport_max_y: 500,
+            tile_scope_min_x: 100,
+            tile_scope_min_y: 100,
+            tile_scope_max_x: 500,
+            tile_scope_max_y: 500,
             cluster_bucket_px: 64,
         };
         let sig_b = state::PointsQuerySignature {
@@ -73,17 +67,17 @@ mod tests {
             to_ts_utc: Some(20),
             fish_ids: vec![100],
             search_expression_key: String::new(),
-            viewport_qmin_x: quantize_px(111, VIEWPORT_SIG_STEP_PX),
-            viewport_qmin_y: quantize_px(119, VIEWPORT_SIG_STEP_PX),
-            viewport_qmax_x: quantize_px(510, VIEWPORT_SIG_STEP_PX),
-            viewport_qmax_y: quantize_px(510, VIEWPORT_SIG_STEP_PX),
-            tile_scope_min_x: quantize_px(111, crate::map::events::VISIBLE_TILE_SCOPE_PX),
-            tile_scope_min_y: quantize_px(119, crate::map::events::VISIBLE_TILE_SCOPE_PX),
-            tile_scope_max_x: quantize_px(510, crate::map::events::VISIBLE_TILE_SCOPE_PX),
-            tile_scope_max_y: quantize_px(510, crate::map::events::VISIBLE_TILE_SCOPE_PX),
+            viewport_min_x: 101,
+            viewport_min_y: 100,
+            viewport_max_x: 501,
+            viewport_max_y: 500,
+            tile_scope_min_x: 101,
+            tile_scope_min_y: 100,
+            tile_scope_max_x: 501,
+            tile_scope_max_y: 500,
             cluster_bucket_px: 64,
         };
-        assert_eq!(sig_a, sig_b);
+        assert_ne!(sig_a, sig_b);
     }
 
     #[test]

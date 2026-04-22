@@ -392,6 +392,7 @@ pub fn event_clustering(fixture: &EventsBenchFixture) -> usize {
     let output = cluster_view_events(
         &fixture.events,
         &fixture.filtered_indices,
+        &fixture.bbox,
         fixture.cluster_bucket_px,
     );
     output.points.len()

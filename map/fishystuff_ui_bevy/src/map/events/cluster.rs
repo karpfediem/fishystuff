@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use fishystuff_api::models::events::{EventPointCompact, EventsQueryMode, MapBboxPx};
 
 const RAW_RENDER_THRESHOLD: usize = 2_000;
+const FULL_DETAIL_VIEWPORT_MAX_SPAN_PX: i32 = 256;
 
 #[derive(Debug, Clone)]
 pub struct DerivedRenderPoint {
@@ -45,9 +46,10 @@ pub fn suggested_cluster_bucket_px(bbox: &MapBboxPx) -> i32 {
 pub fn cluster_view_events(
     events: &[EventPointCompact],
     filtered_indices: &[usize],
+    viewport_bbox: &MapBboxPx,
     cluster_bucket_px: i32,
 ) -> ClusterOutput {
-    if filtered_indices.len() <= RAW_RENDER_THRESHOLD {
+    if should_render_raw_detail(filtered_indices.len(), viewport_bbox) {
         let mut points = Vec::with_capacity(filtered_indices.len());
         for idx in filtered_indices {
             let Some(event) = events.get(*idx) else {
@@ -99,6 +101,17 @@ pub fn cluster_view_events(
         rendered_cluster_count: points.len(),
         points,
     }
+}
+
+fn should_render_raw_detail(filtered_count: usize, viewport_bbox: &MapBboxPx) -> bool {
+    filtered_count <= RAW_RENDER_THRESHOLD
+        || viewport_span_px(viewport_bbox) <= FULL_DETAIL_VIEWPORT_MAX_SPAN_PX
+}
+
+fn viewport_span_px(bbox: &MapBboxPx) -> i32 {
+    let width = (bbox.max_x - bbox.min_x).abs() + 1;
+    let height = (bbox.max_y - bbox.min_y).abs() + 1;
+    width.max(height)
 }
 
 #[derive(Debug, Default, Clone)]
@@ -174,7 +187,7 @@ impl ClusterAcc {
 #[cfg(test)]
 mod tests {
     use super::cluster_view_events;
-    use fishystuff_api::models::events::{EventPointCompact, EventsQueryMode};
+    use fishystuff_api::models::events::{EventPointCompact, EventsQueryMode, MapBboxPx};
 
     #[test]
     fn clustering_is_deterministic_for_same_inputs() {
@@ -197,8 +210,14 @@ mod tests {
             });
         }
         let indices: Vec<usize> = (0..events.len()).collect();
-        let a = cluster_view_events(&events, &indices, 64);
-        let b = cluster_view_events(&events, &indices, 64);
+        let viewport_bbox = MapBboxPx {
+            min_x: 0,
+            min_y: 0,
+            max_x: 2_000,
+            max_y: 2_000,
+        };
+        let a = cluster_view_events(&events, &indices, &viewport_bbox, 64);
+        let b = cluster_view_events(&events, &indices, &viewport_bbox, 64);
 
         assert_eq!(a.mode, EventsQueryMode::GridAggregate);
         assert_eq!(a.rendered_cluster_count, b.rendered_cluster_count);
@@ -233,12 +252,55 @@ mod tests {
         }
 
         let indices: Vec<usize> = (0..events.len()).collect();
-        let clustered = cluster_view_events(&events, &indices, 64);
+        let viewport_bbox = MapBboxPx {
+            min_x: 0,
+            min_y: 0,
+            max_x: 2_000,
+            max_y: 2_000,
+        };
+        let clustered = cluster_view_events(&events, &indices, &viewport_bbox, 64);
 
         assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
         assert_eq!(clustered.points.len(), 1);
         assert_eq!(clustered.points[0].fish_id, Some(10));
         assert!(clustered.points[0].aggregated);
         assert_eq!(clustered.points[0].sample_count, 2501);
+    }
+
+    #[test]
+    fn full_detail_view_keeps_raw_points_even_above_threshold() {
+        let mut events = Vec::new();
+        for idx in 0..2501 {
+            events.push(EventPointCompact {
+                event_id: idx as i64,
+                fish_id: if idx % 2 == 0 { 10 } else { 20 },
+                ts_utc: 1_700_000_000 + idx as i64,
+                map_px_x: 1000 + (idx % 16) as i32,
+                map_px_y: 2000 + (idx % 16) as i32,
+                length_milli: 1000,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: None,
+                zone_rgbs: Vec::new(),
+                full_zone_rgbs: Vec::new(),
+                source_kind: None,
+                source_id: None,
+            });
+        }
+
+        let indices: Vec<usize> = (0..events.len()).collect();
+        let viewport_bbox = MapBboxPx {
+            min_x: 1000,
+            min_y: 2000,
+            max_x: 1100,
+            max_y: 2100,
+        };
+        let clustered = cluster_view_events(&events, &indices, &viewport_bbox, 32);
+
+        assert_eq!(clustered.mode, EventsQueryMode::Raw);
+        assert_eq!(clustered.cluster_bucket_px, None);
+        assert_eq!(clustered.rendered_cluster_count, 0);
+        assert_eq!(clustered.rendered_point_count, indices.len());
+        assert!(clustered.points.iter().all(|point| !point.aggregated));
     }
 }
