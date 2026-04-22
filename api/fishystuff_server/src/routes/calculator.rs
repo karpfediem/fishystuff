@@ -2523,8 +2523,8 @@ fn default_reset_signals_patch_map(
     patch.insert(
         "_calculator_ui".to_string(),
         json!({
+            "top_level_tab": "overview",
             "distribution_tab": "groups",
-            "overlay_panel_collapsed": true,
         }),
     );
     Ok(patch)
@@ -8379,7 +8379,6 @@ fn render_calculator_app(
     let foods = item_options_by_type(&data.catalog.items, "food");
     let buffs = item_options_by_type(&data.catalog.items, "buff");
     let active_checked = if signals.active { " checked" } else { "" };
-    let debug_checked = if signals.debug { " checked" } else { "" };
     let zone_search_url = format!(
         "/api/v1/calculator/datastar/zone-search?lang={}&locale={}",
         lang_param(data.api_lang),
@@ -8418,16 +8417,12 @@ fn render_calculator_app(
          data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
 
     <section class="card card-border bg-base-100">
-        <div class="card-body gap-5">
+        <div class="card-body gap-4">
             <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                 <div class="flex flex-wrap gap-3">
                     <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
                         <input type="checkbox" class="checkbox checkbox-primary" data-bind="active"__ACTIVE_CHECKED__>
                         <span>__TEXT_ACTIVE_FISHING__</span>
-                    </label>
-                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
-                        <input type="checkbox" class="checkbox checkbox-primary" data-bind="debug"__DEBUG_CHECKED__>
-                        <span>__TEXT_DEBUG__</span>
                     </label>
                 </div>
 
@@ -8449,65 +8444,82 @@ fn render_calculator_app(
                     </button>
                 </div>
             </div>
-
-            <div id="calculator-fishing-timeline" class="rounded-box border border-base-300 bg-base-200 p-4">
-                <fishy-timeline-chart
-                    id="fishing-timeline"
-                    class="timeline-chart"
-                    aria-label="__TIMELINE_ARIA__"
-                    signal-path="_live.fishing_timeline_chart"></fishy-timeline-chart>
-            </div>
-
-            <div class="grid gap-4">
-                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.total_time || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">__STAT_TOTAL_TIME__</div>
-                        <div class="stat-value text-2xl" data-text="$_live.total_time"></div>
-                        <div class="stat-desc">__STAT_SECONDS__</div>
-                    </div>
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.bite_time || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">__STAT_BITE_TIME__</div>
-                        <div class="stat-value text-2xl" data-text="$_live.bite_time"></div>
-                        <div class="stat-desc">__STAT_SECONDS__</div>
-                    </div>
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">__STAT_AUTO_FISHING_TIME_AFT__</div>
-                        <div class="stat-value text-2xl" data-text="$_live.auto_fish_time"></div>
-                        <div class="stat-desc">__STAT_SECONDS__</div>
-                    </div>
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time_reduction || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title">__STAT_AUTO_FISHING_TIME_REDUCTION_AFR__</div>
-                        <div class="stat-value text-2xl" data-text="$_live.auto_fish_time_reduction_text"></div>
-                    </div>
-                </div>
-
-                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.casts_average || ''" data-fishy-stat-color="var(--color-info)">
-                        <div class="stat-title whitespace-normal leading-snug" data-text="$_live.casts_title"></div>
-                        <div class="stat-value text-2xl" data-text="$_live.casts_average"></div>
-                    </div>
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.item_drr || ''" data-fishy-stat-color="var(--color-warning)">
-                        <div class="stat-title">__STAT_ITEM_DRR__</div>
-                        <div class="stat-value text-2xl" data-text="$_live.item_drr_text"></div>
-                    </div>
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.chance_to_consume_durability || ''" data-fishy-stat-color="var(--color-warning)">
-                        <div class="stat-title">__STAT_CHANCE_TO_CONSUME_DURABILITY__</div>
-                        <div class="stat-value text-2xl" data-text="$_live.chance_to_consume_durability_text"></div>
-                    </div>
-                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.durability_loss_average || ''" data-fishy-stat-color="var(--color-warning)">
-                        <div class="stat-title whitespace-normal leading-snug" data-text="$_live.durability_loss_title"></div>
-                        <div class="stat-value text-2xl" data-text="$_live.durability_loss_average"></div>
-                    </div>
+            <div class="overflow-x-auto pb-1">
+                <div role="tablist"
+                     class="fishy-calculator-top-tabs tabs tabs-box tabs-sm md:tabs-md w-max min-w-full bg-base-200/80 p-1"
+                     aria-label="__TOP_LEVEL_TABS_ARIA__">
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overview'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overview').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overview'">__TAB_OVERVIEW__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'inputs'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'inputs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'inputs'">__TAB_INPUTS__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'distribution'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'distribution').toString()" data-on:click="$_calculator_ui.top_level_tab = 'distribution'">__SECTION_DISTRIBUTION__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'loot'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'loot').toString()" data-on:click="$_calculator_ui.top_level_tab = 'loot'">__SECTION_LOOT__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'gear'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'gear').toString()" data-on:click="$_calculator_ui.top_level_tab = 'gear'">__SECTION_GEAR__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'pets'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'pets').toString()" data-on:click="$_calculator_ui.top_level_tab = 'pets'">__SECTION_PETS__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overlay'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overlay').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overlay'">__TAB_OVERLAY__</button>
+                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'debug'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'debug').toString()" data-on:click="$_calculator_ui.top_level_tab = 'debug'">__TAB_DEBUG__</button>
                 </div>
             </div>
-
-            <code data-show="$debug" class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
-                <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="$_calc.debug_json"></pre>
-            </code>
         </div>
     </section>
 
-    <div class="grid gap-6 lg:grid-cols-2">
+    <div data-show="$_calculator_ui.top_level_tab === 'overview'" class="grid gap-6">
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">__TAB_OVERVIEW__</legend>
+            <div class="card-body gap-5 pt-0">
+                <div id="calculator-fishing-timeline" class="rounded-box border border-base-300 bg-base-200 p-4">
+                    <fishy-timeline-chart
+                        id="fishing-timeline"
+                        class="timeline-chart"
+                        aria-label="__TIMELINE_ARIA__"
+                        signal-path="_live.fishing_timeline_chart"></fishy-timeline-chart>
+                </div>
+
+                <div class="grid gap-4">
+                    <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.total_time || ''" data-fishy-stat-color="var(--color-info)">
+                            <div class="stat-title">__STAT_TOTAL_TIME__</div>
+                            <div class="stat-value text-2xl" data-text="$_live.total_time"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
+                        </div>
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.bite_time || ''" data-fishy-stat-color="var(--color-info)">
+                            <div class="stat-title">__STAT_BITE_TIME__</div>
+                            <div class="stat-value text-2xl" data-text="$_live.bite_time"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
+                        </div>
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time || ''" data-fishy-stat-color="var(--color-info)">
+                            <div class="stat-title">__STAT_AUTO_FISHING_TIME_AFT__</div>
+                            <div class="stat-value text-2xl" data-text="$_live.auto_fish_time"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
+                        </div>
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time_reduction || ''" data-fishy-stat-color="var(--color-info)">
+                            <div class="stat-title">__STAT_AUTO_FISHING_TIME_REDUCTION_AFR__</div>
+                            <div class="stat-value text-2xl" data-text="$_live.auto_fish_time_reduction_text"></div>
+                        </div>
+                    </div>
+
+                    <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.casts_average || ''" data-fishy-stat-color="var(--color-info)">
+                            <div class="stat-title whitespace-normal leading-snug" data-text="$_live.casts_title"></div>
+                            <div class="stat-value text-2xl" data-text="$_live.casts_average"></div>
+                        </div>
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.item_drr || ''" data-fishy-stat-color="var(--color-warning)">
+                            <div class="stat-title">__STAT_ITEM_DRR__</div>
+                            <div class="stat-value text-2xl" data-text="$_live.item_drr_text"></div>
+                        </div>
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.chance_to_consume_durability || ''" data-fishy-stat-color="var(--color-warning)">
+                            <div class="stat-title">__STAT_CHANCE_TO_CONSUME_DURABILITY__</div>
+                            <div class="stat-value text-2xl" data-text="$_live.chance_to_consume_durability_text"></div>
+                        </div>
+                        <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.durability_loss_average || ''" data-fishy-stat-color="var(--color-warning)">
+                            <div class="stat-title whitespace-normal leading-snug" data-text="$_live.durability_loss_title"></div>
+                            <div class="stat-value text-2xl" data-text="$_live.durability_loss_average"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="$_calculator_ui.top_level_tab === 'inputs'" class="grid gap-6 lg:grid-cols-2">
         <fieldset class="card card-border bg-base-100">
             <legend class="fieldset-legend ml-6 px-2">__SECTION_ZONE__</legend>
             <div class="card-body gap-4 pt-0">
@@ -8609,11 +8621,15 @@ fn render_calculator_app(
 
     </div>
 
-    __FISH_GROUP_WINDOW__
+    <div data-show="$_calculator_ui.top_level_tab === 'distribution'" class="grid gap-6">
+        __FISH_GROUP_WINDOW__
+    </div>
 
-    <div class="grid gap-6 lg:grid-cols-2">
+    <div data-show="$_calculator_ui.top_level_tab === 'loot'" class="grid gap-6">
         __LOOT_WINDOW__
+    </div>
 
+    <div data-show="$_calculator_ui.top_level_tab === 'gear'" class="grid gap-6">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             <legend class="fieldset-legend ml-6 px-2">__SECTION_GEAR__</legend>
             <div class="card-body pt-0">
@@ -8663,7 +8679,9 @@ fn render_calculator_app(
                 </div>
             </div>
         </fieldset>
+    </div>
 
+    <div data-show="$_calculator_ui.top_level_tab === 'pets'" class="grid gap-6">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             <legend class="fieldset-legend ml-6 px-2">__SECTION_PETS__</legend>
             <div class="card-body pt-0">
@@ -8672,22 +8690,27 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <fieldset class="card card-border bg-base-100">
-        <legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2">
-            <span class="fishy-calculator-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-edit-4-fill"></use></svg><span>__SECTION_OVERLAY_PROPOSAL__</span></span>
-            <button type="button"
-                    class="fishy-calculator-panel-toggle btn btn-ghost btn-xs btn-circle"
-                    aria-controls="calculator-overlay-proposal-body"
-                    data-class:is-collapsed="$_calculator_ui.overlay_panel_collapsed"
-                    data-attr:aria-expanded="(!$_calculator_ui.overlay_panel_collapsed).toString()"
-                    data-attr:aria-label="__OVERLAY_PANEL_LABEL_EXPR__"
-                    data-attr:title="__OVERLAY_PANEL_LABEL_EXPR__"
-                    data-on:click="$_calculator_ui.overlay_panel_collapsed = !$_calculator_ui.overlay_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-caret-down"></use></svg></button>
-        </legend>
-        <div id="calculator-overlay-proposal-body" class="card-body pt-0" data-show="!$_calculator_ui.overlay_panel_collapsed">
-            <fishy-calculator-overlay-panel></fishy-calculator-overlay-panel>
-        </div>
-    </fieldset>
+    <div data-show="$_calculator_ui.top_level_tab === 'overlay'" class="grid gap-6">
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2">
+                <span class="fishy-calculator-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-edit-4-fill"></use></svg><span>__SECTION_OVERLAY_PROPOSAL__</span></span>
+            </legend>
+            <div class="card-body pt-0">
+                <fishy-calculator-overlay-panel></fishy-calculator-overlay-panel>
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="$_calculator_ui.top_level_tab === 'debug'" class="grid gap-6">
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">__TAB_DEBUG__</legend>
+            <div class="card-body gap-4 pt-0">
+                <code class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
+                    <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="$_calc.debug_json"></pre>
+                </code>
+            </div>
+        </fieldset>
+    </div>
 </div>
 "####
     .to_string();
@@ -8700,13 +8723,6 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.toggle.active_fishing",
-            )),
-        ),
-        (
-            "__TEXT_DEBUG__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.toggle.debug",
             )),
         ),
         (
@@ -8728,6 +8744,55 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.action.clear",
+            )),
+        ),
+        (
+            "__TOP_LEVEL_TABS_ARIA__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.chart.aria.top_level_tabs",
+            )),
+        ),
+        (
+            "__TAB_OVERVIEW__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.tab.overview",
+            )),
+        ),
+        (
+            "__TAB_INPUTS__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.tab.inputs",
+            )),
+        ),
+        (
+            "__SECTION_DISTRIBUTION__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.distribution",
+            )),
+        ),
+        (
+            "__SECTION_LOOT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.section.loot",
+            )),
+        ),
+        (
+            "__TAB_OVERLAY__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.tab.overlay",
+            )),
+        ),
+        (
+            "__TAB_DEBUG__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.tab.debug",
             )),
         ),
         (
@@ -9005,20 +9070,6 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__OVERLAY_PANEL_LABEL_EXPR__",
-            format!(
-                "$_calculator_ui.overlay_panel_collapsed ? {} : {}",
-                escaped_js_string_literal(&calculator_route_text(
-                    data.lang,
-                    "calculator.server.panel.expand_overlay_proposal",
-                )),
-                escaped_js_string_literal(&calculator_route_text(
-                    data.lang,
-                    "calculator.server.panel.collapse_overlay_proposal",
-                )),
-            ),
-        ),
-        (
             "__LEVEL_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
@@ -9248,7 +9299,6 @@ fn render_calculator_app(
         &canonical_signal_computeds,
     );
     html = html.replace("__ACTIVE_CHECKED__", active_checked);
-    html = html.replace("__DEBUG_CHECKED__", debug_checked);
     Ok(html)
 }
 
@@ -10084,13 +10134,6 @@ fn render_fish_group_window(
     target_fish_options: &[SelectOption<'_>],
     target_fish_summary: &TargetFishSummary,
 ) -> String {
-    let zone = data
-        .zones
-        .iter()
-        .find(|zone| zone.rgb_key.0 == signals.zone)
-        .cloned()
-        .unwrap_or_default();
-    let zone_loot_summary = derive_zone_loot_summary_response(signals, data, &zone);
     format!(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100\">\
             <legend class=\"fieldset-legend ml-6 px-2\">{}</legend>\
@@ -10137,7 +10180,7 @@ fn render_fish_group_window(
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">{}</button>\
                         </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\" class=\"grid gap-4\">{}{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\" class=\"grid gap-4\">{}\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'silver'\">{}\
                         </div>\
@@ -10213,7 +10256,6 @@ fn render_fish_group_window(
         escape_html(&calculator_route_text(data.lang, "calculator.server.tab.loot_flow")),
         escape_html(&calculator_route_text(data.lang, "calculator.server.tab.target_fish")),
         render_fish_group_chart(data.lang, fish_group_chart, signals.show_normalized_select_rates),
-        render_zone_loot_summary_panel(data.lang, &zone_loot_summary),
         render_fish_group_silver_chart(data.lang, loot_chart),
         render_loot_chart(data.lang, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
@@ -12160,7 +12202,7 @@ mod tests {
         assert!(text.contains("오버레이 제안"));
         assert!(text.contains("시간당 예상 횟수"));
         assert!(text.contains("선택됨"));
-        assert!(text.contains("오버레이 제안 패널 펼치기"));
+        assert!(text.contains("<fishy-calculator-overlay-panel>"));
     }
 
     #[tokio::test]
@@ -12668,8 +12710,8 @@ mod tests {
         assert_eq!(
             patch.get("_calculator_ui"),
             Some(&json!({
+                "top_level_tab": "overview",
                 "distribution_tab": "groups",
-                "overlay_panel_collapsed": true,
             }))
         );
     }

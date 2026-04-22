@@ -7,6 +7,16 @@
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN =
     /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$))/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
+  const CALCULATOR_TOP_LEVEL_TABS = new Set([
+    "overview",
+    "inputs",
+    "distribution",
+    "loot",
+    "gear",
+    "pets",
+    "overlay",
+    "debug",
+  ]);
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
@@ -290,19 +300,17 @@
     ) {
       current._calculator_ui = {};
     }
+    const topLevelTab = String(current._calculator_ui.top_level_tab || "overview").trim();
     const distributionTab = String(
       current._calculator_ui.distribution_tab || legacyDistributionTab || "groups",
     ).trim();
-    const overlayPanelCollapsed = normalizeBooleanFlag(
-      current._calculator_ui.overlay_panel_collapsed,
-      true,
-    );
     current._calculator_ui = {
-      ...current._calculator_ui,
+      top_level_tab: CALCULATOR_TOP_LEVEL_TABS.has(topLevelTab)
+        ? topLevelTab
+        : "overview",
       distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
         ? distributionTab
         : "groups",
-      overlay_panel_collapsed: overlayPanelCollapsed,
     };
     if (!("discardGrade" in current)) {
       if (current.discardRareFish || current.discardPrizeFish) {
@@ -406,9 +414,8 @@
     );
   };
 
-  const clearSignals = () => {
+  const clearCalculatorDataStorage = () => {
     localStorage.removeItem(CALCULATOR_DATA_STORAGE_KEY);
-    localStorage.removeItem(CALCULATOR_UI_STORAGE_KEY);
   };
 
   if (presetQueryParam) {
@@ -743,14 +750,24 @@
     const current = signals && typeof signals === "object"
       ? signals
       : signalStore.signalObject();
-    clearSignals();
+    const persistedUi = current && typeof current === "object"
+      ? persistedCalculatorUiSignals(current)
+      : null;
+    clearCalculatorDataStorage();
     const defaults = current && typeof current === "object"
       ? current._defaults
       : null;
     if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) {
+      if (persistedUi) {
+        localStorage.setItem(CALCULATOR_UI_STORAGE_KEY, JSON.stringify(persistedUi));
+      }
       return;
     }
     Object.assign(current, cloneCalculatorSignals(defaults));
+    if (persistedUi) {
+      current._calculator_ui = cloneCalculatorSignals(persistedUi);
+      localStorage.setItem(CALCULATOR_UI_STORAGE_KEY, JSON.stringify(persistedUi));
+    }
     syncSignalsFromSharedUserOverlays(current);
   }
 

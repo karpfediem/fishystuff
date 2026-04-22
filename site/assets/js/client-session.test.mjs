@@ -323,7 +323,6 @@ test("client session can clear scoped local app data without touching unrelated 
       "fishystuff.calculator.data.v1": JSON.stringify({ level: 25 }),
       "fishystuff.calculator.ui.v1": JSON.stringify({
         distribution_tab: "loot_flow",
-        overlay_panel_collapsed: false,
       }),
       "fishystuff.user-overlays.v2": JSON.stringify({
         overlay: {
@@ -458,7 +457,6 @@ test("client session can clear all local user state and start a fresh browser pr
       "fishystuff.calculator.data.v1": JSON.stringify({ level: 25 }),
       "fishystuff.calculator.ui.v1": JSON.stringify({
         distribution_tab: "groups",
-        overlay_panel_collapsed: true,
       }),
       "fishystuff.user-overlays.v2": JSON.stringify({ priceOverrides: { 77: { basePrice: 10 } } }),
     },

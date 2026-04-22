@@ -260,6 +260,10 @@ calculator.server.tab.groups = Gruppen
 calculator.server.tab.silver = Silber
 calculator.server.tab.loot_flow = Beutefluss
 calculator.server.tab.target_fish = Zielfisch
+calculator.server.tab.overview = Übersicht
+calculator.server.tab.inputs = Eingaben
+calculator.server.tab.overlay = Overlay
+calculator.server.tab.debug = Debug
 
 calculator.server.discard.none = Nicht verwerfen
 calculator.server.discard.white = Weiß
@@ -289,6 +293,7 @@ calculator.server.chart.aria.loot_flow = Erwarteter Beutefluss von Gruppen zu Be
 calculator.server.chart.aria.target_distribution = Zielfisch-Sitzungsverteilung
 calculator.server.chart.aria.timeline = Angelzyklus-Zeitachse
 calculator.server.chart.aria.distribution_tabs = Verteilungs-Tabs
+calculator.server.chart.aria.top_level_tabs = Rechnerabschnitte
 
 calculator.server.badge.aft = -{$percent}% AFT
 calculator.server.badge.rare = +{$percent}% Selten

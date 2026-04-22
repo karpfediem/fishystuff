@@ -154,6 +154,10 @@ calculator.server.tab.groups = 그룹
 calculator.server.tab.silver = 은화
 calculator.server.tab.loot_flow = 전리품 흐름
 calculator.server.tab.target_fish = 대상 물고기
+calculator.server.tab.overview = 개요
+calculator.server.tab.inputs = 입력값
+calculator.server.tab.overlay = 오버레이
+calculator.server.tab.debug = 디버그
 
 calculator.server.discard.none = 버리지 않음
 calculator.server.discard.white = 흰색
@@ -183,6 +187,7 @@ calculator.server.chart.aria.loot_flow = 그룹에서 전리품 행으로 이어
 calculator.server.chart.aria.target_distribution = 대상 물고기 세션 분포
 calculator.server.chart.aria.timeline = 낚시 사이클 타임라인
 calculator.server.chart.aria.distribution_tabs = 분포 탭
+calculator.server.chart.aria.top_level_tabs = 계산기 섹션
 
 calculator.server.group.harpoon = 작살
 calculator.server.zone_loot_summary.title = 지역 어획 프로필 그룹

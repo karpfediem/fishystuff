@@ -243,8 +243,8 @@ function defaultSignals() {
     pet4: { skills: [] },
     pet5: { skills: [] },
     _calculator_ui: {
+      top_level_tab: "overview",
       distribution_tab: "groups",
-      overlay_panel_collapsed: true,
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -268,8 +268,8 @@ function defaultSignals() {
       pet4: { skills: [] },
       pet5: { skills: [] },
       _calculator_ui: {
+        top_level_tab: "overview",
         distribution_tab: "groups",
-        overlay_panel_collapsed: true,
       },
       _calculator_actions: {
         copyUrlToken: 0,
@@ -305,8 +305,8 @@ test("calculator restore canonicalizes stored signals", () => {
       },
     }),
     "fishystuff.calculator.ui.v1": JSON.stringify({
+      top_level_tab: "distribution",
       distribution_tab: "loot_flow",
-      overlay_panel_collapsed: "false",
     }),
   });
   const signals = defaultSignals();
@@ -319,8 +319,8 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.deepEqual(Array.from(signals.buff), ["item:1", "item:2"]);
   assert.deepEqual(Array.from(signals.outfit), ["item:77"]);
   assert.deepEqual(Array.from(signals.pet1.skills), ["pet-skill:a"]);
+  assert.equal(signals._calculator_ui.top_level_tab, "distribution");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
-  assert.equal(signals._calculator_ui.overlay_panel_collapsed, false);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
     "8473": {
       tradePriceCurvePercent: 130,
@@ -341,8 +341,8 @@ test("calculator restore leaves initial shell state intact when storage is empty
   const signals = {
     _loading: true,
     _calculator_ui: {
+      top_level_tab: "overview",
       distribution_tab: "groups",
-      overlay_panel_collapsed: true,
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -360,8 +360,8 @@ test("calculator restore leaves initial shell state intact when storage is empty
     },
     priceOverrides: {},
     _calculator_ui: {
+      top_level_tab: "overview",
       distribution_tab: "groups",
-      overlay_panel_collapsed: true,
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -415,8 +415,8 @@ test("calculator persist stores canonical page state and excludes transient bran
   const persistedUi = JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1"));
   assert.deepEqual(persistedData.food, ["item:9359"]);
   assert.deepEqual(persistedUi, {
+    top_level_tab: "overview",
     distribution_tab: "groups",
-    overlay_panel_collapsed: true,
   });
   assert.equal("_live" in persistedData, false);
   assert.equal("_calc" in persistedData, false);
@@ -520,11 +520,15 @@ test("calculator action listener handles copy and clear tokens once without clea
   env.localStorage.setItem(
     "fishystuff.calculator.ui.v1",
     JSON.stringify({
+      top_level_tab: "overview",
       distribution_tab: "groups",
-      overlay_panel_collapsed: true,
     }),
   );
   env.window.__fishystuffCalculator.restore(signals);
+  signals._calculator_ui = {
+    top_level_tab: "loot",
+    distribution_tab: "loot_flow",
+  };
   signals.overlay = {
     zones: {
       stale: {
@@ -574,10 +578,16 @@ test("calculator action listener handles copy and clear tokens once without clea
   assert.equal(env.toastCalls[2].message, calculatorMessage("toast.cleared"));
   assert.deepEqual(Array.from(signals.food), []);
   assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
-  assert.equal(env.localStorage.getItem("fishystuff.calculator.ui.v1"), null);
+  assert.deepEqual(
+    JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1")),
+    {
+      top_level_tab: "loot",
+      distribution_tab: "loot_flow",
+    },
+  );
   assert.deepEqual(signals._calculator_ui, {
-    distribution_tab: "groups",
-    overlay_panel_collapsed: true,
+    top_level_tab: "loot",
+    distribution_tab: "loot_flow",
   });
   assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
     zones: {
