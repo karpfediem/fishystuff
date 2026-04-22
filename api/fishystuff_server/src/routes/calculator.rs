@@ -1,4 +1,4 @@
-use std::cmp::Reverse;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Write as _;
@@ -19,8 +19,9 @@ use serde_json::{json, Value};
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
     CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
-    CalculatorPetSignals, CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry,
-    CalculatorSignals, CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
+    CalculatorPetEntry, CalculatorPetOptionEntry, CalculatorPetSignals,
+    CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry, CalculatorSignals,
+    CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
 };
 use fishystuff_api::models::zone_loot_summary::{
     ZoneLootSummaryGroupRow, ZoneLootSummaryRequest, ZoneLootSummaryResponse,
@@ -1065,6 +1066,7 @@ fn parse_calculator_signals_value(
 
     for key in ["pet1", "pet2", "pet3", "pet4", "pet5"] {
         if let Some(Value::Object(pet)) = object.get_mut(key) {
+            coerce_nested_string(pet, "pet");
             coerce_nested_string(pet, "tier");
             coerce_nested_string(pet, "special");
             coerce_nested_string(pet, "talent");
@@ -1615,6 +1617,10 @@ fn render_calculator_panel_legend(
     title: &str,
     icon_alias: Option<&str>,
 ) -> String {
+    let drag_label = escape_html(&calculator_route_text(
+        lang,
+        "calculator.server.action.drag_section_generic",
+    ));
     let pin_label = escaped_js_string_literal(&calculator_route_text_with_vars(
         lang,
         "calculator.server.action.pin_section",
@@ -1623,16 +1629,6 @@ fn render_calculator_panel_legend(
     let unpin_label = escaped_js_string_literal(&calculator_route_text_with_vars(
         lang,
         "calculator.server.action.unpin_section",
-        &[("label", title)],
-    ));
-    let move_up_label = escaped_js_string_literal(&calculator_route_text_with_vars(
-        lang,
-        "calculator.server.action.move_pinned_section_up",
-        &[("label", title)],
-    ));
-    let move_down_label = escaped_js_string_literal(&calculator_route_text_with_vars(
-        lang,
-        "calculator.server.action.move_pinned_section_down",
         &[("label", title)],
     ));
     let label_icon = icon_alias.map_or_else(String::new, |icon_alias| {
@@ -1648,33 +1644,31 @@ fn render_calculator_panel_legend(
             <span class="fishy-calculator-panel-label">{}<span>{}</span></span>
             <span class="fishy-calculator-panel-controls">
                 <button type="button"
+                        class="fishy-calculator-panel-control fishy-calculator-panel-control--drag btn btn-ghost btn-xs btn-circle"
+                        data-calculator-section-drag
+                        data-calculator-section-id="{}"
+                        aria-label="{}"
+                        title="{}"
+                        data-i18n-attr-aria-label="calculator.server.action.drag_section_generic"
+                        data-i18n-attr-title="calculator.server.action.drag_section_generic"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-drag-handle"></use></svg></button>
+                <button type="button"
                         class="fishy-calculator-panel-control btn btn-ghost btn-xs btn-circle"
+                        data-calculator-section-id="{}"
                         data-class:fishy-calculator-panel-control--active="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}')"
                         data-attr:aria-pressed="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}').toString()"
                         data-attr:aria-label="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}') ? {} : {}"
                         data-attr:title="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}') ? {} : {}"
                         data-on:click="$_calculator_ui.pinned_sections = window.__fishystuffCalculator.togglePinnedSection($_calculator_ui.pinned_sections, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-pin"></use></svg></button>
-                <button type="button"
-                        class="fishy-calculator-panel-control btn btn-ghost btn-xs btn-circle"
-                        data-show="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}')"
-                        data-class:fishy-calculator-panel-control--disabled="!window.__fishystuffCalculator.canMovePinnedSection($_calculator_ui.pinned_sections, '{}', -1)"
-                        data-attr:aria-disabled="(!window.__fishystuffCalculator.canMovePinnedSection($_calculator_ui.pinned_sections, '{}', -1)).toString()"
-                        data-attr:aria-label="{}"
-                        data-attr:title="{}"
-                        data-on:click="window.__fishystuffCalculator.canMovePinnedSection($_calculator_ui.pinned_sections, '{}', -1) && ($_calculator_ui.pinned_sections = window.__fishystuffCalculator.movePinnedSection($_calculator_ui.pinned_sections, '{}', -1))"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-arrow-up-fill"></use></svg></button>
-                <button type="button"
-                        class="fishy-calculator-panel-control btn btn-ghost btn-xs btn-circle"
-                        data-show="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}')"
-                        data-class:fishy-calculator-panel-control--disabled="!window.__fishystuffCalculator.canMovePinnedSection($_calculator_ui.pinned_sections, '{}', 1)"
-                        data-attr:aria-disabled="(!window.__fishystuffCalculator.canMovePinnedSection($_calculator_ui.pinned_sections, '{}', 1)).toString()"
-                        data-attr:aria-label="{}"
-                        data-attr:title="{}"
-                        data-on:click="window.__fishystuffCalculator.canMovePinnedSection($_calculator_ui.pinned_sections, '{}', 1) && ($_calculator_ui.pinned_sections = window.__fishystuffCalculator.movePinnedSection($_calculator_ui.pinned_sections, '{}', 1))"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-arrow-down-fill"></use></svg></button>
             </span>
         </legend>"#,
         label_icon,
         escape_html(title),
         section_id,
+        drag_label,
+        drag_label,
+        CALCULATOR_ICON_SPRITE_URL,
+        section_id,
+        section_id,
         section_id,
         section_id,
         unpin_label,
@@ -1682,22 +1676,6 @@ fn render_calculator_panel_legend(
         section_id,
         unpin_label,
         pin_label,
-        section_id,
-        CALCULATOR_ICON_SPRITE_URL,
-        section_id,
-        section_id,
-        section_id,
-        move_up_label,
-        move_up_label,
-        section_id,
-        section_id,
-        CALCULATOR_ICON_SPRITE_URL,
-        section_id,
-        section_id,
-        section_id,
-        move_down_label,
-        move_down_label,
-        section_id,
         section_id,
         CALCULATOR_ICON_SPRITE_URL,
     )
@@ -1899,11 +1877,36 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         Some(&items_by_key),
     );
 
-    normalize_pet(&mut signals.pet1, defaults.pet1.clone(), &pet_value_aliases);
-    normalize_pet(&mut signals.pet2, defaults.pet2.clone(), &pet_value_aliases);
-    normalize_pet(&mut signals.pet3, defaults.pet3.clone(), &pet_value_aliases);
-    normalize_pet(&mut signals.pet4, defaults.pet4.clone(), &pet_value_aliases);
-    normalize_pet(&mut signals.pet5, defaults.pet5.clone(), &pet_value_aliases);
+    normalize_pet(
+        &mut signals.pet1,
+        defaults.pet1.clone(),
+        &data.catalog.pets,
+        &pet_value_aliases,
+    );
+    normalize_pet(
+        &mut signals.pet2,
+        defaults.pet2.clone(),
+        &data.catalog.pets,
+        &pet_value_aliases,
+    );
+    normalize_pet(
+        &mut signals.pet3,
+        defaults.pet3.clone(),
+        &data.catalog.pets,
+        &pet_value_aliases,
+    );
+    normalize_pet(
+        &mut signals.pet4,
+        defaults.pet4.clone(),
+        &data.catalog.pets,
+        &pet_value_aliases,
+    );
+    normalize_pet(
+        &mut signals.pet5,
+        defaults.pet5.clone(),
+        &data.catalog.pets,
+        &pet_value_aliases,
+    );
 
     if !matches!(
         signals.timespan_unit.as_str(),
@@ -2555,8 +2558,31 @@ fn apply_zone_overlay_to_loot_entries(
     entries
 }
 
-fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> HashMap<String, String> {
-    let mut aliases = HashMap::new();
+const LEGACY_PET_SPECIAL_AUTO_FISHING: &str = "legacy:pet:special:auto_fishing_time_reduction";
+const LEGACY_PET_TALENT_DRR: &str = "legacy:pet:talent:durability_reduction_resistance";
+const LEGACY_PET_TALENT_LIFE_EXP: &str = "legacy:pet:talent:life_exp";
+const LEGACY_PET_SKILL_FISHING_EXP: &str = "legacy:pet:skill:fishing_exp";
+
+#[derive(Default)]
+struct CalculatorPetAliasIndex {
+    pets: HashMap<String, String>,
+    options: HashMap<String, String>,
+}
+
+fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> CalculatorPetAliasIndex {
+    let mut aliases = CalculatorPetAliasIndex::default();
+    for pet in &catalog.pets {
+        if pet.key.is_empty() {
+            continue;
+        }
+        aliases
+            .pets
+            .insert(normalize_lookup_value(&pet.key), pet.key.clone());
+        aliases
+            .pets
+            .entry(normalize_lookup_value(&pet.label))
+            .or_insert_with(|| pet.key.clone());
+    }
     for option in catalog
         .specials
         .iter()
@@ -2566,25 +2592,28 @@ fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> HashMap<String, St
         if option.key.is_empty() {
             continue;
         }
-        aliases.insert(normalize_lookup_value(&option.label), option.key.clone());
-        aliases.insert(normalize_lookup_value(&option.key), option.key.clone());
-        aliases.insert(
-            normalize_lookup_value(&option.key.replace('_', " ")),
-            option.key.clone(),
-        );
+        aliases
+            .options
+            .insert(normalize_lookup_value(&option.label), option.key.clone());
+        aliases
+            .options
+            .insert(normalize_lookup_value(&option.key), option.key.clone());
     }
-    aliases.insert(
+    aliases.options.insert(
         normalize_lookup_value("Auto-Fishing Time Reduction"),
-        "auto_fishing_time_reduction".to_string(),
+        LEGACY_PET_SPECIAL_AUTO_FISHING.to_string(),
     );
-    aliases.insert(
+    aliases.options.insert(
         normalize_lookup_value("Durability Reduction Resistance"),
-        "durability_reduction_resistance".to_string(),
+        LEGACY_PET_TALENT_DRR.to_string(),
     );
-    aliases.insert(normalize_lookup_value("Life EXP"), "life_exp".to_string());
-    aliases.insert(
+    aliases.options.insert(
+        normalize_lookup_value("Life EXP"),
+        LEGACY_PET_TALENT_LIFE_EXP.to_string(),
+    );
+    aliases.options.insert(
         normalize_lookup_value("Fishing EXP"),
-        "fishing_exp".to_string(),
+        LEGACY_PET_SKILL_FISHING_EXP.to_string(),
     );
     aliases
 }
@@ -2715,34 +2744,106 @@ fn render_canonical_checkbox_signal_computeds(pet_slots: usize) -> String {
 fn normalize_pet(
     pet: &mut CalculatorPetSignals,
     defaults: CalculatorPetSignals,
-    aliases: &HashMap<String, String>,
+    catalog: &CalculatorPetCatalog,
+    aliases: &CalculatorPetAliasIndex,
 ) {
-    let mut tier = pet.tier.trim().parse::<i32>().unwrap_or(4);
-    tier = tier.clamp(1, 5);
-    pet.tier = tier.to_string();
-    pet.special = normalize_pet_value(&pet.special, aliases);
-    pet.talent = normalize_pet_value(&pet.talent, aliases);
+    pet.pet = normalize_pet_lookup_value(&pet.pet, &aliases.pets);
+    pet.tier = pet
+        .tier
+        .trim()
+        .parse::<i32>()
+        .ok()
+        .map(|tier| tier.clamp(1, 5).to_string())
+        .or_else(|| (!defaults.tier.trim().is_empty()).then(|| defaults.tier.clone()))
+        .unwrap_or_default();
+    pet.special = normalize_pet_lookup_value(&pet.special, &aliases.options);
+    pet.talent = normalize_pet_lookup_value(&pet.talent, &aliases.options);
     pet.skills = pet
         .skills
         .iter()
-        .map(|value| normalize_pet_value(value, aliases))
+        .map(|value| normalize_pet_lookup_value(value, &aliases.options))
         .filter(|value| !value.is_empty())
         .collect();
+    pet.skills.sort();
+    pet.skills.dedup();
 
-    if pet.special != "auto_fishing_time_reduction" {
+    let Some(pet_entry) = catalog.pets.iter().find(|entry| entry.key == pet.pet) else {
+        pet.pet.clear();
         pet.special.clear();
+        pet.talent.clear();
+        pet.skills.clear();
+        return;
+    };
+
+    let tier_key = if pet_entry.tiers.iter().any(|tier| tier.key == pet.tier) {
+        pet.tier.clone()
+    } else if pet_entry.tiers.iter().any(|tier| tier.key == defaults.tier) {
+        defaults.tier.clone()
+    } else {
+        pet_entry
+            .tiers
+            .iter()
+            .max_by(|left, right| {
+                let left_key = left.key.parse::<i32>().unwrap_or_default();
+                let right_key = right.key.parse::<i32>().unwrap_or_default();
+                left_key.cmp(&right_key)
+            })
+            .map(|tier| tier.key.clone())
+            .unwrap_or_default()
+    };
+    pet.tier = tier_key;
+
+    let Some(tier_entry) = pet_entry.tiers.iter().find(|tier| tier.key == pet.tier) else {
+        pet.special.clear();
+        pet.talent.clear();
+        pet.skills.clear();
+        return;
+    };
+
+    pet.special = resolve_pet_option_selection(
+        &pet.special,
+        &defaults.special,
+        &tier_entry.specials,
+        &catalog.specials,
+        Some(LEGACY_PET_SPECIAL_AUTO_FISHING),
+        |option| option.auto_fishing_time_reduction,
+        false,
+    );
+    pet.talent = resolve_pet_option_selection(
+        &pet.talent,
+        &defaults.talent,
+        &tier_entry.talents,
+        &catalog.talents,
+        None,
+        |_| None,
+        true,
+    );
+    if pet.talent.is_empty() {
+        pet.talent = resolve_pet_option_selection(
+            &pet.talent,
+            &defaults.talent,
+            &tier_entry.talents,
+            &catalog.talents,
+            Some(LEGACY_PET_TALENT_DRR),
+            |option| option.durability_reduction_resistance,
+            true,
+        );
     }
-    if !matches!(
-        pet.talent.as_str(),
-        "" | "durability_reduction_resistance" | "life_exp" | "fishing_exp"
-    ) {
-        pet.talent = defaults.talent;
+    if pet.talent.is_empty() {
+        pet.talent = resolve_pet_option_selection(
+            &pet.talent,
+            &defaults.talent,
+            &tier_entry.talents,
+            &catalog.talents,
+            Some(LEGACY_PET_TALENT_LIFE_EXP),
+            |option| option.life_exp,
+            true,
+        );
     }
-    pet.skills
-        .retain(|value| matches!(value.as_str(), "fishing_exp"));
+    pet.skills = resolve_pet_skill_selection(&pet.skills, &tier_entry.skills, &catalog.skills);
 }
 
-fn normalize_pet_value(value: &str, aliases: &HashMap<String, String>) -> String {
+fn normalize_pet_lookup_value(value: &str, aliases: &HashMap<String, String>) -> String {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return String::new();
@@ -2751,7 +2852,104 @@ fn normalize_pet_value(value: &str, aliases: &HashMap<String, String>) -> String
     aliases
         .get(&normalized)
         .cloned()
-        .unwrap_or_else(|| normalized.replace(' ', "_"))
+        .unwrap_or_else(|| trimmed.to_string())
+}
+
+fn pet_option_by_key<'a>(
+    options: &'a [CalculatorPetOptionEntry],
+    key: &str,
+) -> Option<&'a CalculatorPetOptionEntry> {
+    options.iter().find(|option| option.key == key)
+}
+
+fn resolve_pet_option_selection(
+    current_value: &str,
+    default_value: &str,
+    allowed_keys: &[String],
+    options: &[CalculatorPetOptionEntry],
+    legacy_value: Option<&str>,
+    score: impl Fn(&CalculatorPetOptionEntry) -> Option<f32> + Copy,
+    auto_select_single: bool,
+) -> String {
+    if allowed_keys.iter().any(|key| key == current_value) {
+        return current_value.to_string();
+    }
+    if allowed_keys.iter().any(|key| key == default_value) {
+        return default_value.to_string();
+    }
+    if legacy_value.is_some() && legacy_value == Some(current_value) {
+        return allowed_keys
+            .iter()
+            .filter_map(|key| {
+                pet_option_by_key(options, key).map(|option| {
+                    (
+                        key,
+                        score(option).unwrap_or_default(),
+                        option.label.as_str(),
+                    )
+                })
+            })
+            .max_by(
+                |(left_key, left_score, left_label), (right_key, right_score, right_label)| {
+                    left_score
+                        .partial_cmp(right_score)
+                        .unwrap_or(Ordering::Equal)
+                        .then_with(|| left_label.cmp(right_label))
+                        .then_with(|| left_key.cmp(right_key))
+                },
+            )
+            .map(|(key, _, _)| key.clone())
+            .unwrap_or_default();
+    }
+    if auto_select_single && allowed_keys.len() == 1 {
+        return allowed_keys[0].clone();
+    }
+    String::new()
+}
+
+fn resolve_pet_skill_selection(
+    current_values: &[String],
+    allowed_keys: &[String],
+    options: &[CalculatorPetOptionEntry],
+) -> Vec<String> {
+    let mut selected = current_values
+        .iter()
+        .filter(|value| allowed_keys.iter().any(|key| key == *value))
+        .cloned()
+        .collect::<Vec<_>>();
+    if selected.is_empty()
+        && current_values
+            .iter()
+            .any(|value| value == LEGACY_PET_SKILL_FISHING_EXP)
+    {
+        if let Some(best) = allowed_keys
+            .iter()
+            .filter_map(|key| {
+                pet_option_by_key(options, key).map(|option| {
+                    (
+                        key,
+                        option.fishing_exp.unwrap_or_default(),
+                        option.label.as_str(),
+                    )
+                })
+            })
+            .max_by(
+                |(left_key, left_score, left_label), (right_key, right_score, right_label)| {
+                    left_score
+                        .partial_cmp(right_score)
+                        .unwrap_or(Ordering::Equal)
+                        .then_with(|| left_label.cmp(right_label))
+                        .then_with(|| left_key.cmp(right_key))
+                },
+            )
+            .map(|(key, _, _)| key.clone())
+        {
+            selected.push(best);
+        }
+    }
+    selected.sort();
+    selected.dedup();
+    selected
 }
 
 fn normalize_named_value(
@@ -2981,15 +3179,6 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         .map(|level| (level.key.as_str(), level))
         .collect::<HashMap<_, _>>();
 
-    let pet_stats = [
-        (0.0, 0.0),
-        (0.2, 0.01),
-        (0.2, 0.02),
-        (0.25, 0.03),
-        (0.3, 0.04),
-        (0.3, 0.05),
-    ];
-
     let pets = [
         &signals.pet1,
         &signals.pet2,
@@ -2999,16 +3188,19 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     ];
     let pet_afr_max = pets
         .iter()
-        .map(|pet| pet_afr(pet, &pet_stats))
+        .map(|pet| pet_afr(pet, &data.catalog.pets))
         .fold(0.0_f64, f64::max);
-    let pet_drr_sum = pets.iter().map(|pet| pet_drr(pet, &pet_stats)).sum::<f64>();
+    let pet_drr_sum = pets
+        .iter()
+        .map(|pet| pet_drr(pet, &data.catalog.pets))
+        .sum::<f64>();
     let pet_fishing_exp = pets
         .iter()
-        .map(|pet| pet_fishing_exp(pet, &pet_stats))
+        .map(|pet| pet_fishing_exp(pet, &data.catalog.pets))
         .sum::<f64>();
     let pet_life_exp = pets
         .iter()
-        .map(|pet| pet_life_exp(pet, &pet_stats))
+        .map(|pet| pet_life_exp(pet, &data.catalog.pets))
         .sum::<f64>();
 
     let afr_uncapped_raw = pet_afr_max
@@ -3113,7 +3305,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         &items_by_key,
         lifeskill_level,
         &pets,
-        &pet_stats,
+        &data.catalog.pets,
         &fish_group_chart,
         &loot_chart,
         &target_fish_summary,
@@ -3319,47 +3511,62 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     }
 }
 
-fn pet_afr(pet: &CalculatorPetSignals, pet_stats: &[(f64, f64)]) -> f64 {
-    let tier = pet.tier.parse::<usize>().unwrap_or(4).clamp(1, 5);
-    if pet.special == "auto_fishing_time_reduction" {
-        pet_stats[tier].0
-    } else {
-        0.0
-    }
+fn catalog_pet_option_by_key<'a>(
+    catalog: &'a CalculatorPetCatalog,
+    key: &str,
+) -> Option<&'a CalculatorPetOptionEntry> {
+    pet_option_by_key(&catalog.specials, key)
+        .or_else(|| pet_option_by_key(&catalog.talents, key))
+        .or_else(|| pet_option_by_key(&catalog.skills, key))
 }
 
-fn pet_drr(pet: &CalculatorPetSignals, pet_stats: &[(f64, f64)]) -> f64 {
-    let tier = pet.tier.parse::<usize>().unwrap_or(4).clamp(1, 5);
-    if pet.talent == "durability_reduction_resistance" {
-        pet_stats[tier].1
-    } else {
-        0.0
+fn pet_effect_sum(
+    pet: &CalculatorPetSignals,
+    catalog: &CalculatorPetCatalog,
+    effect: impl Fn(&CalculatorPetOptionEntry) -> Option<f32> + Copy,
+) -> f64 {
+    if pet.pet.trim().is_empty() {
+        return 0.0;
     }
+    let mut selected_keys = Vec::new();
+    if !pet.special.trim().is_empty() {
+        selected_keys.push(pet.special.as_str());
+    }
+    if !pet.talent.trim().is_empty() {
+        selected_keys.push(pet.talent.as_str());
+    }
+    selected_keys.extend(
+        pet.skills
+            .iter()
+            .map(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty()),
+    );
+    selected_keys.sort();
+    selected_keys.dedup();
+    selected_keys
+        .into_iter()
+        .filter_map(|key| catalog_pet_option_by_key(catalog, key))
+        .filter_map(|option| effect(option))
+        .map(f64::from)
+        .sum()
 }
 
-fn pet_fishing_exp(pet: &CalculatorPetSignals, pet_stats: &[(f64, f64)]) -> f64 {
-    let tier = pet.tier.parse::<usize>().unwrap_or(4).clamp(1, 5);
-    let base = if pet.talent == "fishing_exp" {
-        pet_stats[tier].1
-    } else {
-        0.0
-    };
-    let skills = pet
-        .skills
-        .iter()
-        .filter(|skill| skill.as_str() == "fishing_exp")
-        .count() as f64
-        * 0.05;
-    base + skills
+fn pet_afr(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
+    pet_effect_sum(pet, catalog, |option| option.auto_fishing_time_reduction)
 }
 
-fn pet_life_exp(pet: &CalculatorPetSignals, pet_stats: &[(f64, f64)]) -> f64 {
-    let tier = pet.tier.parse::<usize>().unwrap_or(4).clamp(1, 5);
-    if pet.talent == "life_exp" {
-        pet_stats[tier].1
-    } else {
-        0.0
-    }
+fn pet_drr(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
+    pet_effect_sum(pet, catalog, |option| {
+        option.durability_reduction_resistance
+    })
+}
+
+fn pet_fishing_exp(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
+    pet_effect_sum(pet, catalog, |option| option.fishing_exp)
+}
+
+fn pet_life_exp(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
+    pet_effect_sum(pet, catalog, |option| option.life_exp)
 }
 
 fn sum_item_property(
@@ -3602,6 +3809,18 @@ fn option_label(options: &[CalculatorOptionEntry], key: &str) -> String {
         .unwrap_or_else(|| trimmed.to_string())
 }
 
+fn pet_option_label(options: &[CalculatorPetOptionEntry], key: &str) -> String {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    options
+        .iter()
+        .find(|option| option.key == trimmed)
+        .map(|option| option.label.clone())
+        .unwrap_or_else(|| trimmed.to_string())
+}
+
 fn selected_items<'a>(
     items_by_key: &HashMap<&str, &'a CalculatorItemEntry>,
     singles: &[&String],
@@ -3672,17 +3891,16 @@ fn pet_slot_name(lang: CalculatorLocale, slot_idx: usize) -> String {
 fn collect_pet_afr_breakdown_rows(
     lang: CalculatorLocale,
     pets: &[&CalculatorPetSignals],
-    pet_stats: &[(f64, f64)],
     catalog: &CalculatorPetCatalog,
 ) -> Vec<ComputedStatBreakdownRow> {
     pets.iter()
         .enumerate()
         .filter_map(|(index, pet)| {
-            let amount = pet_afr(pet, pet_stats);
+            let amount = pet_afr(pet, catalog);
             if amount <= 0.0 {
                 return None;
             }
-            let special_label = option_label(&catalog.specials, &pet.special);
+            let special_label = pet_option_label(&catalog.specials, &pet.special);
             let tier_label = option_label(&catalog.tiers, &pet.tier);
             Some(computed_stat_breakdown_row(
                 pet_slot_name(lang, index + 1),
@@ -3696,17 +3914,16 @@ fn collect_pet_afr_breakdown_rows(
 fn collect_pet_drr_breakdown_rows(
     lang: CalculatorLocale,
     pets: &[&CalculatorPetSignals],
-    pet_stats: &[(f64, f64)],
     catalog: &CalculatorPetCatalog,
 ) -> Vec<ComputedStatBreakdownRow> {
     pets.iter()
         .enumerate()
         .filter_map(|(index, pet)| {
-            let amount = pet_drr(pet, pet_stats);
+            let amount = pet_drr(pet, catalog);
             if amount <= 0.0 {
                 return None;
             }
-            let talent_label = option_label(&catalog.talents, &pet.talent);
+            let talent_label = pet_option_label(&catalog.talents, &pet.talent);
             let tier_label = option_label(&catalog.tiers, &pet.tier);
             Some(computed_stat_breakdown_row(
                 pet_slot_name(lang, index + 1),
@@ -6454,7 +6671,7 @@ fn derive_stat_breakdowns(
     items_by_key: &HashMap<&str, &CalculatorItemEntry>,
     lifeskill_level: Option<&CalculatorLifeskillLevelEntry>,
     pets: &[&CalculatorPetSignals],
-    pet_stats: &[(f64, f64)],
+    pet_catalog: &CalculatorPetCatalog,
     fish_group_chart: &FishGroupChart,
     loot_chart: &LootChart,
     target_fish_summary: &TargetFishSummary,
@@ -6504,11 +6721,10 @@ fn derive_stat_breakdowns(
         |item| item.afr.map(f64::from),
         "",
     );
-    let pet_afr_rows =
-        collect_pet_afr_breakdown_rows(data.lang, pets, pet_stats, &data.catalog.pets);
+    let pet_afr_rows = collect_pet_afr_breakdown_rows(data.lang, pets, pet_catalog);
     let highest_pet_afr_raw = pets
         .iter()
-        .map(|pet| pet_afr(pet, pet_stats))
+        .map(|pet| pet_afr(pet, pet_catalog))
         .fold(0.0_f64, f64::max);
     let additive_item_afr_raw = sum_item_property(
         items_by_key,
@@ -6557,8 +6773,7 @@ fn derive_stat_breakdowns(
         |item| item.item_drr.map(f64::from),
         "",
     );
-    let pet_drr_rows =
-        collect_pet_drr_breakdown_rows(data.lang, pets, pet_stats, &data.catalog.pets);
+    let pet_drr_rows = collect_pet_drr_breakdown_rows(data.lang, pets, pet_catalog);
     let mut item_drr_input_rows = Vec::new();
     item_drr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
         item_drr_item_rows.clone(),
@@ -8556,10 +8771,22 @@ fn render_calculator_app(
         </div>
     </section>
 
-    <div class="flex flex-col gap-6">
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('overview', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
+    <fishy-calculator-section-stack class="fishy-calculator-section-stack flex flex-col gap-6">
+    <div class="fishy-calculator-pin-dropzone rounded-box border border-dashed border-base-300 bg-base-100/85 px-4 py-3"
+         data-calculator-pin-dropzone>
+        <div class="fishy-calculator-pin-dropzone__body">
+            <span class="fishy-calculator-pin-dropzone__icon" aria-hidden="true"><svg class="fishy-icon size-5" viewBox="0 0 24 24"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-pin"></use></svg></span>
+            <div class="fishy-calculator-pin-dropzone__copy">
+                <div class="fishy-calculator-pin-dropzone__title" data-i18n-text="calculator.server.action.pin_dropzone_title">__PIN_DROPZONE_TITLE__</div>
+                <div class="fishy-calculator-pin-dropzone__detail" data-i18n-text="calculator.server.action.pin_dropzone_detail">__PIN_DROPZONE_DETAIL__</div>
+            </div>
+        </div>
+    </div>
     <div data-show="window.__fishystuffCalculator.sectionVisible('overview', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="overview"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')">
         <fieldset class="card card-border bg-base-100">
             __OVERVIEW_LEGEND__
             <div class="card-body gap-5 pt-0">
@@ -8616,11 +8843,12 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('inputs', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('inputs', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="inputs"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'inputs')">
         <fieldset class="card card-border bg-base-100">
             __INPUTS_LEGEND__
             <div class="card-body pt-0">
@@ -8727,25 +8955,28 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('distribution', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('distribution', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="distribution"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'distribution')">
         __FISH_GROUP_WINDOW__
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('loot', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('loot', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="loot"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'loot')">
         __LOOT_WINDOW__
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('gear', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('gear', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="gear"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'gear')">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             __GEAR_LEGEND__
             <div class="card-body pt-0">
@@ -8796,11 +9027,12 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('pets', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('pets', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="pets"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'pets')">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             __PETS_LEGEND__
             <div class="card-body pt-0">
@@ -8808,11 +9040,12 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('overlay', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('overlay', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="overlay"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overlay')">
         <fieldset class="card card-border bg-base-100">
             __OVERLAY_LEGEND__
             <div class="card-body pt-0">
@@ -8820,11 +9053,12 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
-    </div>
 
-    <div data-attr:style="'order:' + window.__fishystuffCalculator.sectionOrder('debug', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)">
     <div data-show="window.__fishystuffCalculator.sectionVisible('debug', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
-         class="grid gap-6">
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="debug"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'debug')">
         <fieldset class="card card-border bg-base-100">
             __DEBUG_LEGEND__
             <div class="card-body gap-4 pt-0">
@@ -8834,8 +9068,7 @@ fn render_calculator_app(
             </div>
         </fieldset>
     </div>
-    </div>
-    </div>
+    </fishy-calculator-section-stack>
 </div>
 "####
     .to_string();
@@ -8855,6 +9088,20 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.action.copy_url",
+            )),
+        ),
+        (
+            "__PIN_DROPZONE_TITLE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.pin_dropzone_title",
+            )),
+        ),
+        (
+            "__PIN_DROPZONE_DETAIL__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.pin_dropzone_detail",
             )),
         ),
         (
@@ -9482,6 +9729,34 @@ fn render_calculator_app(
 }
 
 fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectOption<'_>> {
+    options
+        .iter()
+        .map(|option| SelectOption {
+            value: option.key.as_str(),
+            label: option.label.as_str(),
+            icon: None,
+            grade_tone: "unknown",
+            item: None,
+            lifeskill_level: None,
+        })
+        .collect()
+}
+
+fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<SelectOption<'_>> {
+    options
+        .iter()
+        .map(|option| SelectOption {
+            value: option.key.as_str(),
+            label: option.label.as_str(),
+            icon: None,
+            grade_tone: "unknown",
+            item: None,
+            lifeskill_level: None,
+        })
+        .collect()
+}
+
+fn select_options_from_pet_entries(options: &[CalculatorPetEntry]) -> Vec<SelectOption<'_>> {
     options
         .iter()
         .map(|option| SelectOption {
@@ -10900,11 +11175,11 @@ fn searchable_options_for_kind<'a>(
             (select_options_from_catalog(&data.catalog.pets.tiers), false)
         }
         CalculatorSearchableOptionKind::PetSpecial => (
-            select_options_from_catalog(&data.catalog.pets.specials),
+            select_options_from_pet_options(&data.catalog.pets.specials),
             false,
         ),
         CalculatorSearchableOptionKind::PetTalent => (
-            select_options_from_catalog(&data.catalog.pets.talents),
+            select_options_from_pet_options(&data.catalog.pets.talents),
             false,
         ),
     }
@@ -11091,6 +11366,71 @@ fn render_searchable_select_control(
             value: selected_value,
             search_url: &search_url,
             search_url_root: Some("api"),
+            search_placeholder,
+        },
+        &results_html,
+    );
+
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(bind_key),
+        escape_html(selected_value),
+        dropdown,
+    )
+}
+
+fn render_local_searchable_select_control(
+    cdn_base_url: &str,
+    lang: CalculatorLocale,
+    root_id: &str,
+    input_id: &str,
+    bind_key: &str,
+    selected_value: &str,
+    options: &[SelectOption<'_>],
+    include_none: bool,
+    search_placeholder: &str,
+    compact: bool,
+) -> String {
+    let results_id = format!("{root_id}-results");
+    let options = with_optional_none(options, include_none, lang);
+    let selected_option = options
+        .iter()
+        .copied()
+        .find(|option| option.value == selected_value);
+    let none_option = none_select_option(lang);
+    let selected_label = selected_option
+        .map(|option| option.label)
+        .unwrap_or_else(|| {
+            if selected_value.trim().is_empty() {
+                none_option.label
+            } else {
+                selected_value
+            }
+        });
+    let selected_content_html = selected_option
+        .map(|option| render_searchable_dropdown_option_content_html(lang, cdn_base_url, option))
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let catalog_html = render_searchable_dropdown_catalog_html(lang, cdn_base_url, &options);
+    let results_html = render_searchable_select_results(
+        lang,
+        cdn_base_url,
+        &results_id,
+        &options,
+        selected_value,
+        "",
+    );
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: selected_value,
+            search_url: "",
+            search_url_root: None,
             search_placeholder,
         },
         &results_html,
@@ -11771,16 +12111,24 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
 
 fn render_pet_cards(
     cdn_base_url: &str,
-    api_lang: FishLang,
+    _api_lang: FishLang,
     lang: CalculatorLocale,
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
 ) -> String {
+    let pet_options = select_options_from_pet_entries(&catalog.pets);
     let tier_options = select_options_from_catalog(&catalog.tiers);
-    let special_options = select_options_from_catalog(&catalog.specials);
-    let talent_options = select_options_from_catalog(&catalog.talents);
+    let special_options = select_options_from_pet_options(&catalog.specials);
+    let talent_options = select_options_from_pet_options(&catalog.talents);
+    let skill_options = select_options_from_pet_options(&catalog.skills);
 
     let mut html = String::new();
+    write!(
+        html,
+        "<script id=\"calculator-pet-catalog-data\" type=\"application/json\">{}</script>",
+        json_script_contents(catalog)
+    )
+    .unwrap();
     html.push_str("<div id=\"pets\" class=\"grid gap-4 md:grid-cols-2\">");
     for slot in 1..=catalog.slots.max(1) {
         let pet = match slot {
@@ -11795,21 +12143,37 @@ fn render_pet_cards(
         let skills_id = format!("pet{slot}_skills");
         write!(
             html,
-            "<div class=\"pet rounded-box border border-base-300 bg-base-200 p-3\"><div class=\"grid gap-3\">"
+            "<div class=\"pet rounded-box border border-base-300 bg-base-200 p-3\" data-pet-slot=\"{}\"><div class=\"grid gap-3\">",
+            slot
         )
         .unwrap();
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
+            escape_html(&calculator_route_text(lang, "calculator.server.field.pet",))
+        ));
+        html.push_str(&render_local_searchable_select_control(
+            cdn_base_url,
+            lang,
+            &format!("calculator-pet{slot}-pet-picker"),
+            &format!("calculator-pet{slot}-pet-value"),
+            &format!("{}.pet", bind_prefix),
+            &pet.pet,
+            &pet_options,
+            true,
+            &calculator_route_text(lang, "calculator.server.search.pets"),
+            true,
+        ));
+        html.push_str("</fieldset>");
+        html.push_str(&format!(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(lang, "calculator.server.field.tier",))
         ));
-        html.push_str(&render_searchable_select_control(
+        html.push_str(&render_local_searchable_select_control(
             cdn_base_url,
-            api_lang,
             lang,
             &format!("calculator-pet{slot}-tier-picker"),
             &format!("calculator-pet{slot}-tier-value"),
             &format!("{}.tier", bind_prefix),
-            CalculatorSearchableOptionKind::PetTier,
             &pet.tier,
             &tier_options,
             false,
@@ -11824,17 +12188,15 @@ fn render_pet_cards(
                 "calculator.server.field.special",
             ))
         ));
-        html.push_str(&render_searchable_select_control(
+        html.push_str(&render_local_searchable_select_control(
             cdn_base_url,
-            api_lang,
             lang,
             &format!("calculator-pet{slot}-special-picker"),
             &format!("calculator-pet{slot}-special-value"),
             &format!("{}.special", bind_prefix),
-            CalculatorSearchableOptionKind::PetSpecial,
             &pet.special,
             &special_options,
-            false,
+            true,
             &calculator_route_text(lang, "calculator.server.search.pet_specials"),
             true,
         ));
@@ -11846,17 +12208,15 @@ fn render_pet_cards(
                 "calculator.server.field.talent",
             ))
         ));
-        html.push_str(&render_searchable_select_control(
+        html.push_str(&render_local_searchable_select_control(
             cdn_base_url,
-            api_lang,
             lang,
             &format!("calculator-pet{slot}-talent-picker"),
             &format!("calculator-pet{slot}-talent-value"),
             &format!("{}.talent", bind_prefix),
-            CalculatorSearchableOptionKind::PetTalent,
             &pet.talent,
             &talent_options,
-            false,
+            true,
             &calculator_route_text(lang, "calculator.server.search.pet_talents"),
             true,
         ));
@@ -11874,7 +12234,7 @@ fn render_pet_cards(
             &skills_id,
             &skill_bind,
             &pet.skills,
-            &select_options_from_catalog(&catalog.skills),
+            &skill_options,
             None,
         ));
         html.push_str("</fieldset></div>");
@@ -11890,6 +12250,12 @@ fn escape_html(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+fn json_script_contents<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_string(value)
+        .unwrap_or_else(|_| "{}".to_string())
+        .replace("</", "<\\/")
 }
 
 fn escaped_js_string_literal(value: &str) -> String {
@@ -11910,8 +12276,8 @@ mod tests {
     use fishystuff_api::models::calculator::{
         CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
         CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
-        CalculatorPetSignals, CalculatorPriceOverrideSignals, CalculatorSignals,
-        CalculatorZoneGroupRateEntry,
+        CalculatorPetOptionEntry, CalculatorPetSignals, CalculatorPriceOverrideSignals,
+        CalculatorSignals, CalculatorZoneGroupRateEntry,
     };
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
@@ -12124,30 +12490,35 @@ mod tests {
                     food: vec!["item:9359".to_string()],
                     buff: vec!["".to_string(), "item:721092".to_string()],
                     pet1: CalculatorPetSignals {
+                        pet: String::new(),
                         tier: "5".to_string(),
                         special: "auto_fishing_time_reduction".to_string(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
                     },
                     pet2: CalculatorPetSignals {
+                        pet: String::new(),
                         tier: "4".to_string(),
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
                     },
                     pet3: CalculatorPetSignals {
+                        pet: String::new(),
                         tier: "4".to_string(),
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
                     },
                     pet4: CalculatorPetSignals {
+                        pet: String::new(),
                         tier: "4".to_string(),
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
                     },
                     pet5: CalculatorPetSignals {
+                        pet: String::new(),
                         tier: "4".to_string(),
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
@@ -12305,13 +12676,18 @@ mod tests {
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
         assert!(text.contains("window.__fishystuffCalculator.togglePinnedSection($_calculator_ui.pinned_sections, 'overview')"));
-        assert!(text.contains("window.__fishystuffCalculator.movePinnedSection($_calculator_ui.pinned_sections, 'overview', 1)"));
+        assert!(text.contains("<fishy-calculator-section-stack"));
+        assert!(text.contains("data-calculator-pin-dropzone"));
+        assert!(text.contains("data-calculator-section-drag"));
+        assert!(text.contains("calculator.server.action.drag_section_generic"));
         assert!(text.contains("#fishy-pin"));
+        assert!(text.contains("#fishy-drag-handle"));
         assert!(!text.contains("window.__fishystuffCalculator.persist("));
         assert!(!text.contains("window.__fishystuffCalculator.persistSignalPatchFilter()"));
         assert!(!text.contains("window.__fishystuffCalculator.presetUrl("));
         assert!(!text.contains("window.__fishystuffCalculator.shareText("));
         assert!(!text.contains("window.__fishystuffCalculator.clear("));
+        assert!(!text.contains("window.__fishystuffCalculator.movePinnedSection($_calculator_ui.pinned_sections, 'overview', 1)"));
         assert!(text.contains(
             "data-computed:outfit=\"Array.isArray($_outfit_slots) ? $_outfit_slots : []\""
         ));
@@ -12985,31 +13361,36 @@ mod tests {
     #[test]
     fn build_pet_value_aliases_includes_catalog_labels_and_keys() {
         let aliases = build_pet_value_aliases(&CalculatorPetCatalog {
-            specials: vec![CalculatorOptionEntry {
+            specials: vec![CalculatorPetOptionEntry {
                 key: "auto_fishing_time_reduction".to_string(),
                 label: "자동 낚시 시간 감소".to_string(),
+                ..CalculatorPetOptionEntry::default()
             }],
-            talents: vec![CalculatorOptionEntry {
+            talents: vec![CalculatorPetOptionEntry {
                 key: "life_exp".to_string(),
                 label: "생활 경험치".to_string(),
+                ..CalculatorPetOptionEntry::default()
             }],
-            skills: vec![CalculatorOptionEntry {
+            skills: vec![CalculatorPetOptionEntry {
                 key: "fishing_exp".to_string(),
                 label: "낚시 경험치".to_string(),
+                ..CalculatorPetOptionEntry::default()
             }],
             ..CalculatorPetCatalog::default()
         });
 
         assert_eq!(
-            aliases.get(&normalize_lookup_value("자동 낚시 시간 감소")),
+            aliases
+                .options
+                .get(&normalize_lookup_value("자동 낚시 시간 감소")),
             Some(&"auto_fishing_time_reduction".to_string())
         );
         assert_eq!(
-            aliases.get(&normalize_lookup_value("life exp")),
+            aliases.options.get(&normalize_lookup_value("life exp")),
             Some(&"life_exp".to_string())
         );
         assert_eq!(
-            aliases.get(&normalize_lookup_value("Fishing EXP")),
+            aliases.options.get(&normalize_lookup_value("Fishing EXP")),
             Some(&"fishing_exp".to_string())
         );
     }

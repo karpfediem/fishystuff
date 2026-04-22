@@ -32,6 +32,11 @@
     actionBinding: null,
     uiStateRestored: false,
   };
+  const calculatorPetCatalogState = {
+    bound: false,
+    catalog: null,
+    syncQueued: false,
+  };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
   const calculatorActionTokens =
@@ -44,6 +49,288 @@
     return helper && typeof helper.current === "function" && typeof helper.t === "function"
       ? helper
       : null;
+  }
+
+  const emitInputChangeEvents = (element) => {
+    if (!(element instanceof EventTarget)) {
+      return;
+    }
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const calculatorPetCatalog = () => {
+    if (calculatorPetCatalogState.catalog) {
+      return calculatorPetCatalogState.catalog;
+    }
+    const script = document.getElementById("calculator-pet-catalog-data");
+    if (!(script instanceof HTMLScriptElement)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(script.textContent || "{}");
+      const pets = Array.isArray(parsed.pets) ? parsed.pets : [];
+      const tiers = Array.isArray(parsed.tiers) ? parsed.tiers : [];
+      const specials = Array.isArray(parsed.specials) ? parsed.specials : [];
+      const talents = Array.isArray(parsed.talents) ? parsed.talents : [];
+      const skills = Array.isArray(parsed.skills) ? parsed.skills : [];
+      const petByKey = new Map(pets.map((pet) => [String(pet.key || ""), pet]));
+      const tierByKey = new Map(tiers.map((tier) => [String(tier.key || ""), tier]));
+      const specialByKey = new Map(specials.map((option) => [String(option.key || ""), option]));
+      const talentByKey = new Map(talents.map((option) => [String(option.key || ""), option]));
+      const skillByKey = new Map(skills.map((option) => [String(option.key || ""), option]));
+      calculatorPetCatalogState.catalog = {
+        ...parsed,
+        pets,
+        tiers,
+        specials,
+        talents,
+        skills,
+        petByKey,
+        tierByKey,
+        specialByKey,
+        talentByKey,
+        skillByKey,
+      };
+      return calculatorPetCatalogState.catalog;
+    } catch (error) {
+      console.error("Error parsing calculator pet catalog:", error);
+      return null;
+    }
+  };
+
+  const petDropdownTemplate = (option) => {
+    const template = document.createElement("template");
+    template.dataset.role = "selected-content";
+    template.dataset.value = String(option?.key ?? "");
+    template.dataset.label = String(option?.label ?? "");
+    template.dataset.searchText = String(option?.label ?? "");
+    const label = document.createElement("span");
+    label.className = "truncate font-medium";
+    label.textContent = String(option?.label ?? "");
+    template.content.append(label);
+    return template;
+  };
+
+  const replaceLocalDropdownOptions = (dropdown, options, boundInput, allowNone) => {
+    if (!(dropdown instanceof HTMLElement)) {
+      return;
+    }
+    const catalog = dropdown.querySelector('[data-role="selected-content-catalog"]');
+    if (!(catalog instanceof HTMLElement)) {
+      return;
+    }
+    const noneTemplate = allowNone
+      ? catalog.querySelector('template[data-role="selected-content"][data-value=""]')
+      : null;
+    const noneOption = noneTemplate instanceof HTMLTemplateElement
+      ? {
+        key: "",
+        label: String(noneTemplate.getAttribute("data-label") || "").trim(),
+      }
+      : null;
+    const normalizedOptions = Array.isArray(options)
+      ? options
+        .filter((option) => option && typeof option === "object")
+        .map((option) => ({
+          key: String(option.key || ""),
+          label: String(option.label || option.key || ""),
+        }))
+      : [];
+    const nextOptions = [];
+    if (allowNone && noneOption) {
+      nextOptions.push(noneOption);
+    }
+    for (const option of normalizedOptions) {
+      if (!option.key && allowNone) {
+        continue;
+      }
+      nextOptions.push(option);
+    }
+    catalog.replaceChildren(...nextOptions.map(petDropdownTemplate));
+    if (typeof dropdown.refreshResults === "function") {
+      dropdown.refreshResults();
+    }
+    if (boundInput instanceof HTMLInputElement) {
+      emitInputChangeEvents(boundInput);
+    }
+  };
+
+  const syncPetSkillCheckboxes = (skillsRoot, allowedKeys) => {
+    if (!(skillsRoot instanceof HTMLElement)) {
+      return;
+    }
+    const select = skillsRoot.querySelector('select[data-role="bound-select"]');
+    if (!(select instanceof HTMLSelectElement)) {
+      return;
+    }
+    const allowed = allowedKeys instanceof Set ? allowedKeys : null;
+    let changed = false;
+    for (const option of Array.from(select.options)) {
+      const visible = !allowed || allowed.has(option.value);
+      option.hidden = !visible;
+      option.disabled = !visible;
+      if (!visible && option.selected) {
+        option.selected = false;
+        changed = true;
+      }
+    }
+    for (const checkbox of skillsRoot.querySelectorAll("input[data-checkbox-group-option]")) {
+      if (!(checkbox instanceof HTMLInputElement)) {
+        continue;
+      }
+      const visible = !allowed || allowed.has(checkbox.value);
+      const label = checkbox.closest("label");
+      if (label instanceof HTMLElement) {
+        label.hidden = !visible;
+      }
+      checkbox.disabled = !visible;
+      if (!visible && checkbox.checked) {
+        checkbox.checked = false;
+      }
+    }
+    if (changed) {
+      emitInputChangeEvents(select);
+    } else {
+      emitInputChangeEvents(select);
+    }
+  };
+
+  const petSlotElements = (slot) => ({
+    petInput: document.getElementById(`calculator-pet${slot}-pet-value`),
+    tierInput: document.getElementById(`calculator-pet${slot}-tier-value`),
+    specialInput: document.getElementById(`calculator-pet${slot}-special-value`),
+    talentInput: document.getElementById(`calculator-pet${slot}-talent-value`),
+    petDropdown: document.getElementById(`calculator-pet${slot}-pet-picker`),
+    tierDropdown: document.getElementById(`calculator-pet${slot}-tier-picker`),
+    specialDropdown: document.getElementById(`calculator-pet${slot}-special-picker`),
+    talentDropdown: document.getElementById(`calculator-pet${slot}-talent-picker`),
+    skillsRoot: document.getElementById(`pet${slot}_skills`),
+  });
+
+  const highestTierKey = (tiers) => (
+    Array.isArray(tiers)
+      ? tiers
+        .map((tier) => String(tier?.key ?? "").trim())
+        .filter(Boolean)
+        .sort((left, right) => Number(right) - Number(left))[0] || ""
+      : ""
+  );
+
+  const syncPetSlotControls = (slot, catalog) => {
+    const elements = petSlotElements(slot);
+    if (!(elements.petInput instanceof HTMLInputElement) || !(elements.tierInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const selectedPet = catalog.petByKey.get(String(elements.petInput.value || "").trim()) || null;
+    const tierOptions = selectedPet
+      ? (Array.isArray(selectedPet.tiers) ? selectedPet.tiers : []).map((tier) => ({
+        key: String(tier.key || ""),
+        label: String(tier.label || tier.key || ""),
+      }))
+      : catalog.tiers;
+    let selectedTier = String(elements.tierInput.value || "").trim();
+    if (selectedPet) {
+      const allowedTiers = new Set(tierOptions.map((tier) => tier.key));
+      if (!allowedTiers.has(selectedTier)) {
+        const fallbackTier = highestTierKey(tierOptions);
+        if (selectedTier !== fallbackTier) {
+          elements.tierInput.value = fallbackTier;
+          selectedTier = fallbackTier;
+          emitInputChangeEvents(elements.tierInput);
+        }
+      }
+    }
+
+    const selectedTierEntry = selectedPet
+      ? (Array.isArray(selectedPet.tiers) ? selectedPet.tiers : []).find(
+        (tier) => String(tier?.key || "") === selectedTier,
+      ) || null
+      : null;
+    const specialOptions = selectedTierEntry
+      ? (Array.isArray(selectedTierEntry.specials) ? selectedTierEntry.specials : [])
+        .map((key) => catalog.specialByKey.get(String(key || "")))
+        .filter(Boolean)
+      : catalog.specials;
+    const talentOptions = selectedTierEntry
+      ? (Array.isArray(selectedTierEntry.talents) ? selectedTierEntry.talents : [])
+        .map((key) => catalog.talentByKey.get(String(key || "")))
+        .filter(Boolean)
+      : catalog.talents;
+    const skillOptions = selectedTierEntry
+      ? (Array.isArray(selectedTierEntry.skills) ? selectedTierEntry.skills : [])
+        .map((key) => catalog.skillByKey.get(String(key || "")))
+        .filter(Boolean)
+      : catalog.skills;
+
+    if (selectedTierEntry && elements.specialInput instanceof HTMLInputElement) {
+      const allowedSpecials = new Set(specialOptions.map((option) => String(option.key || "")));
+      if (!allowedSpecials.has(String(elements.specialInput.value || "").trim())) {
+        elements.specialInput.value = "";
+        emitInputChangeEvents(elements.specialInput);
+      }
+    }
+    if (selectedTierEntry && elements.talentInput instanceof HTMLInputElement) {
+      const allowedTalents = new Set(talentOptions.map((option) => String(option.key || "")));
+      const currentTalent = String(elements.talentInput.value || "").trim();
+      if (!allowedTalents.has(currentTalent)) {
+        const nextTalent = talentOptions.length === 1
+          ? String(talentOptions[0].key || "")
+          : "";
+        if (currentTalent !== nextTalent) {
+          elements.talentInput.value = nextTalent;
+          emitInputChangeEvents(elements.talentInput);
+        }
+      }
+    }
+
+    replaceLocalDropdownOptions(elements.tierDropdown, tierOptions, elements.tierInput, false);
+    replaceLocalDropdownOptions(elements.specialDropdown, specialOptions, elements.specialInput, true);
+    replaceLocalDropdownOptions(elements.talentDropdown, talentOptions, elements.talentInput, true);
+    syncPetSkillCheckboxes(
+      elements.skillsRoot,
+      selectedTierEntry
+        ? new Set(skillOptions.map((option) => String(option.key || "")))
+        : new Set(catalog.skills.map((option) => String(option.key || ""))),
+    );
+  };
+
+  const syncCalculatorPetControls = () => {
+    const catalog = calculatorPetCatalog();
+    if (!catalog) {
+      return;
+    }
+    const slotCount = Number(catalog.slots) > 0 ? Number(catalog.slots) : 5;
+    for (let slot = 1; slot <= slotCount; slot += 1) {
+      syncPetSlotControls(slot, catalog);
+    }
+  };
+
+  const queueCalculatorPetControlSync = () => {
+    if (calculatorPetCatalogState.syncQueued) {
+      return;
+    }
+    calculatorPetCatalogState.syncQueued = true;
+    queueMicrotask(() => {
+      calculatorPetCatalogState.syncQueued = false;
+      syncCalculatorPetControls();
+    });
+  };
+
+  function bindPetCatalogListener() {
+    if (calculatorPetCatalogState.bound) {
+      return;
+    }
+    const petsRoot = document.getElementById("pets");
+    if (!(petsRoot instanceof HTMLElement)) {
+      return;
+    }
+    petsRoot.addEventListener("input", queueCalculatorPetControlSync);
+    petsRoot.addEventListener("change", queueCalculatorPetControlSync);
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, queueCalculatorPetControlSync);
+    calculatorPetCatalogState.bound = true;
+    queueCalculatorPetControlSync();
   }
 
   function calculatorSurfaceLanguage() {
@@ -303,8 +590,12 @@
   const normalizeBooleanFlag = (value, fallback = false) =>
     value == null ? fallback : value === true || value === "true" || value === 1 || value === "1";
 
+  function normalizeSectionId(sectionId) {
+    return String(sectionId ?? "").trim();
+  }
+
   function pinnedSectionIndex(pinnedSections, sectionId) {
-    const normalizedSection = String(sectionId ?? "").trim();
+    const normalizedSection = normalizeSectionId(sectionId);
     return normalizePinnedSections(pinnedSections).indexOf(normalizedSection);
   }
 
@@ -313,7 +604,7 @@
   }
 
   function togglePinnedSection(pinnedSections, sectionId) {
-    const normalizedSection = String(sectionId ?? "").trim();
+    const normalizedSection = normalizeSectionId(sectionId);
     if (!CALCULATOR_TOP_LEVEL_TABS.has(normalizedSection)) {
       return normalizePinnedSections(pinnedSections);
     }
@@ -327,8 +618,42 @@
     return next;
   }
 
+  function pinSection(pinnedSections, sectionId) {
+    const normalizedSection = normalizeSectionId(sectionId);
+    if (!CALCULATOR_TOP_LEVEL_TABS.has(normalizedSection)) {
+      return normalizePinnedSections(pinnedSections);
+    }
+    const next = normalizePinnedSections(pinnedSections);
+    if (next.includes(normalizedSection)) {
+      return next;
+    }
+    next.push(normalizedSection);
+    return next;
+  }
+
+  function placePinnedSection(pinnedSections, sectionId, targetSectionId, position) {
+    const normalizedSection = normalizeSectionId(sectionId);
+    const normalizedTarget = normalizeSectionId(targetSectionId);
+    const normalizedPosition = position === "before" ? "before" : "after";
+    if (!CALCULATOR_TOP_LEVEL_TABS.has(normalizedSection)) {
+      return normalizePinnedSections(pinnedSections);
+    }
+    if (!normalizedTarget || normalizedTarget === normalizedSection) {
+      return pinSection(pinnedSections, normalizedSection);
+    }
+    const next = normalizePinnedSections(pinnedSections)
+      .filter((entry) => entry !== normalizedSection);
+    const targetIndex = next.indexOf(normalizedTarget);
+    if (targetIndex < 0) {
+      next.push(normalizedSection);
+      return next;
+    }
+    next.splice(targetIndex + (normalizedPosition === "after" ? 1 : 0), 0, normalizedSection);
+    return next;
+  }
+
   function movePinnedSection(pinnedSections, sectionId, direction) {
-    const normalizedSection = String(sectionId ?? "").trim();
+    const normalizedSection = normalizeSectionId(sectionId);
     const normalizedDirection = Number(direction);
     const next = normalizePinnedSections(pinnedSections);
     const currentIndex = next.indexOf(normalizedSection);
@@ -356,18 +681,18 @@
   }
 
   function calculatorSectionVisible(sectionId, topLevelTab, pinnedSections) {
-    const normalizedSection = String(sectionId ?? "").trim();
-    return isPinnedSection(pinnedSections, normalizedSection) || String(topLevelTab ?? "").trim() === normalizedSection;
+    const normalizedSection = normalizeSectionId(sectionId);
+    return isPinnedSection(pinnedSections, normalizedSection) || normalizeSectionId(topLevelTab) === normalizedSection;
   }
 
   function calculatorSectionOrder(sectionId, topLevelTab, pinnedSections) {
     const pinned = normalizePinnedSections(pinnedSections);
-    const normalizedSection = String(sectionId ?? "").trim();
+    const normalizedSection = normalizeSectionId(sectionId);
     const pinIndex = pinned.indexOf(normalizedSection);
     if (pinIndex >= 0) {
       return pinIndex;
     }
-    if (String(topLevelTab ?? "").trim() === normalizedSection) {
+    if (normalizeSectionId(topLevelTab) === normalizedSection) {
       return pinned.length;
     }
     return pinned.length + 1;
@@ -904,6 +1229,7 @@
     if (appRoot && languageHelper()) {
       languageHelper().apply(appRoot);
     }
+    bindPetCatalogListener();
     calculatorState.uiStateRestored = true;
   }
 
@@ -1780,6 +2106,8 @@
     restore: restoreCalculator,
     liveCalc: liveCalculator,
     togglePinnedSection,
+    pinSection,
+    placePinnedSection,
     movePinnedSection,
     canMovePinnedSection,
     isPinnedSection,

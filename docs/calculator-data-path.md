@@ -139,6 +139,7 @@ What this importer currently reads:
 - `Pet_BaseSkill_Table.xlsx`
 - `Pet_SetStats_Table.xlsx`
 - `Pet_EquipSkill_Table.xlsx`
+- `Pet_EquipSkill_Aquire_Table.xlsx`
 - `Pet_Grade_Table.xlsx`
 - `Pet_Exp_Table.xlsx`
 - `UpgradePet_Looting_Percent.xlsx`

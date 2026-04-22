@@ -96,6 +96,9 @@ function createContext(localStorageInitial = {}, options = {}) {
     documentElement: {
       lang: options.lang || "en-US",
     },
+    getElementById() {
+      return null;
+    },
     addEventListener(type, listener) {
       if (!documentListeners.has(type)) {
         documentListeners.set(type, []);
@@ -176,6 +179,7 @@ function createContext(localStorageInitial = {}, options = {}) {
     Boolean,
     RegExp,
     Error,
+    HTMLElement: class HTMLElement {},
     Map,
     Set,
     Intl,
@@ -205,6 +209,7 @@ function createContext(localStorageInitial = {}, options = {}) {
       },
     },
   };
+  window.HTMLElement = context.HTMLElement;
   context.globalThis = context;
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
@@ -377,7 +382,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
   });
 });
 
-test("calculator pin helpers keep pinned sections ordered and movable", () => {
+test("calculator pin helpers keep pinned sections ordered and placeable", () => {
   const env = createContext();
   const calculator = env.window.__fishystuffCalculator;
 
@@ -392,6 +397,18 @@ test("calculator pin helpers keep pinned sections ordered and movable", () => {
   assert.deepEqual(
     Array.from(calculator.movePinnedSection(["overview", "inputs", "loot"], "loot", -1)),
     ["overview", "loot", "inputs"],
+  );
+  assert.deepEqual(
+    Array.from(calculator.pinSection(["overview"], "overview")),
+    ["overview"],
+  );
+  assert.deepEqual(
+    Array.from(calculator.placePinnedSection(["overview"], "loot", "overview", "before")),
+    ["loot", "overview"],
+  );
+  assert.deepEqual(
+    Array.from(calculator.placePinnedSection(["overview", "inputs"], "overview", "inputs", "after")),
+    ["inputs", "overview"],
   );
   assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", -1), false);
   assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", 1), true);

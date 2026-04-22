@@ -67,18 +67,53 @@ pub struct CalculatorSessionPresetEntry {
 pub struct CalculatorPetCatalog {
     pub slots: usize,
     #[serde(default)]
+    pub pets: Vec<CalculatorPetEntry>,
+    #[serde(default)]
     pub tiers: Vec<CalculatorOptionEntry>,
     #[serde(default)]
-    pub specials: Vec<CalculatorOptionEntry>,
+    pub specials: Vec<CalculatorPetOptionEntry>,
     #[serde(default)]
-    pub talents: Vec<CalculatorOptionEntry>,
+    pub talents: Vec<CalculatorPetOptionEntry>,
     #[serde(default)]
-    pub skills: Vec<CalculatorOptionEntry>,
+    pub skills: Vec<CalculatorPetOptionEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorPetEntry {
+    pub key: String,
+    pub label: String,
+    pub skin_key: Option<String>,
+    #[serde(default)]
+    pub tiers: Vec<CalculatorPetTierEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorPetTierEntry {
+    pub key: String,
+    pub label: String,
+    #[serde(default)]
+    pub specials: Vec<String>,
+    #[serde(default)]
+    pub talents: Vec<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorPetOptionEntry {
+    pub key: String,
+    pub label: String,
+    pub icon: Option<String>,
+    pub auto_fishing_time_reduction: Option<f32>,
+    pub durability_reduction_resistance: Option<f32>,
+    pub fishing_exp: Option<f32>,
+    pub life_exp: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct CalculatorPetSignals {
+    pub pet: String,
     pub tier: String,
     pub special: String,
     pub talent: String,

@@ -9,12 +9,13 @@ pub(super) fn lifeskill_level_drr_from_index(index: i32) -> f32 {
     (0.1 + 0.005 * index as f32).min(0.6)
 }
 
-fn build_calculator_default_pet(tier: &str, special: &str) -> CalculatorPetSignals {
+fn build_calculator_default_pet(_tier: &str, _special: &str) -> CalculatorPetSignals {
     CalculatorPetSignals {
-        tier: tier.to_string(),
-        special: special.to_string(),
-        talent: "durability_reduction_resistance".to_string(),
-        skills: vec!["fishing_exp".to_string()],
+        pet: String::new(),
+        tier: String::new(),
+        special: String::new(),
+        talent: String::new(),
+        skills: Vec::new(),
     }
 }
 

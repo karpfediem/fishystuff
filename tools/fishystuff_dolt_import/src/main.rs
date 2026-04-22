@@ -17,10 +17,11 @@ use sha2::{Digest, Sha256};
 use effect_table_headers::{
     BUFF_TABLE_HEADERS, COMMON_STAT_DATA_HEADERS, ENCHANT_WORKBOOK_HEADERS,
     FISHING_STAT_DATA_HEADERS, LIGHTSTONE_SET_OPTION_HEADERS, PET_BASE_SKILL_TABLE_HEADERS,
-    PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS, PET_GRADE_TABLE_HEADERS,
-    PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS, PET_TABLE_HEADERS,
-    PRODUCTTOOL_PROPERTY_HEADERS, SKILLTYPE_TABLE_NEW_HEADERS, SKILL_TABLE_NEW_HEADERS,
-    TOOLTIP_TABLE_HEADERS, TRANSLATE_STAT_HEADERS, UPGRADEPET_LOOTING_PERCENT_HEADERS,
+    PET_EQUIPSKILL_AQUIRE_TABLE_HEADERS, PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS,
+    PET_GRADE_TABLE_HEADERS, PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS,
+    PET_TABLE_HEADERS, PRODUCTTOOL_PROPERTY_HEADERS, SKILLTYPE_TABLE_NEW_HEADERS,
+    SKILL_TABLE_NEW_HEADERS, TOOLTIP_TABLE_HEADERS, TRANSLATE_STAT_HEADERS,
+    UPGRADEPET_LOOTING_PERCENT_HEADERS,
 };
 use item_table_headers::ITEM_TABLE_HEADERS;
 const FISHING_HEADERS: [&str; 18] = [
@@ -548,6 +549,7 @@ struct CalculatorEffectsWorkbookSet {
     pet_base_skill_table_xlsx: PathBuf,
     pet_setstats_table_xlsx: PathBuf,
     pet_equipskill_table_xlsx: PathBuf,
+    pet_equipskill_aquire_table_xlsx: PathBuf,
     pet_grade_table_xlsx: PathBuf,
     pet_exp_table_xlsx: PathBuf,
     upgradepet_looting_percent_xlsx: PathBuf,
@@ -571,6 +573,7 @@ struct CalculatorEffectsOutputs {
     pet_base_skill_table_csv: PathBuf,
     pet_setstats_table_csv: PathBuf,
     pet_equipskill_table_csv: PathBuf,
+    pet_equipskill_aquire_table_csv: PathBuf,
     pet_grade_table_csv: PathBuf,
     pet_exp_table_csv: PathBuf,
     upgradepet_looting_percent_csv: PathBuf,
@@ -594,6 +597,7 @@ struct CalculatorEffectsDigests {
     pet_base_skill_table_sha: String,
     pet_setstats_table_sha: String,
     pet_equipskill_table_sha: String,
+    pet_equipskill_aquire_table_sha: String,
     pet_grade_table_sha: String,
     pet_exp_table_sha: String,
     upgradepet_looting_percent_sha: String,
@@ -1733,6 +1737,9 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         pet_base_skill_table_sha: sha256_file(&workbook_set.pet_base_skill_table_xlsx)?,
         pet_setstats_table_sha: sha256_file(&workbook_set.pet_setstats_table_xlsx)?,
         pet_equipskill_table_sha: sha256_file(&workbook_set.pet_equipskill_table_xlsx)?,
+        pet_equipskill_aquire_table_sha: sha256_file(
+            &workbook_set.pet_equipskill_aquire_table_xlsx,
+        )?,
         pet_grade_table_sha: sha256_file(&workbook_set.pet_grade_table_xlsx)?,
         pet_exp_table_sha: sha256_file(&workbook_set.pet_exp_table_xlsx)?,
         upgradepet_looting_percent_sha: sha256_file(&workbook_set.upgradepet_looting_percent_xlsx)?,
@@ -1756,6 +1763,7 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         pet_base_skill_table_csv: output_dir.join("pet_base_skill_table.csv"),
         pet_setstats_table_csv: output_dir.join("pet_setstats_table.csv"),
         pet_equipskill_table_csv: output_dir.join("pet_equipskill_table.csv"),
+        pet_equipskill_aquire_table_csv: output_dir.join("pet_equipskill_aquire_table.csv"),
         pet_grade_table_csv: output_dir.join("pet_grade_table.csv"),
         pet_exp_table_csv: output_dir.join("pet_exp_table.csv"),
         upgradepet_looting_percent_csv: output_dir.join("upgradepet_looting_percent.csv"),
@@ -1863,6 +1871,12 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         &PET_EQUIPSKILL_TABLE_HEADERS,
         &outputs.pet_equipskill_table_csv,
     )?;
+    let pet_equipskill_aquire_table_stats = import_workbook_sheet(
+        &workbook_set.pet_equipskill_aquire_table_xlsx,
+        "Pet_EquipSkill_Aquire_Table",
+        &PET_EQUIPSKILL_AQUIRE_TABLE_HEADERS,
+        &outputs.pet_equipskill_aquire_table_csv,
+    )?;
     let pet_grade_table_stats = import_workbook_sheet(
         &workbook_set.pet_grade_table_xlsx,
         "Pet_Grade_Table",
@@ -1939,6 +1953,11 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "pet_equipskill_table",
         &outputs.pet_equipskill_table_csv,
     )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "pet_equipskill_aquire_table",
+        &outputs.pet_equipskill_aquire_table_csv,
+    )?;
     run_dolt_sql_table_import(&dolt_repo, "pet_grade_table", &outputs.pet_grade_table_csv)?;
     run_dolt_sql_table_import(&dolt_repo, "pet_exp_table", &outputs.pet_exp_table_csv)?;
     run_dolt_sql_table_import(
@@ -2013,6 +2032,10 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
     println!(
         "pet_equipskill_table rows imported: {}",
         pet_equipskill_table_stats.row_count
+    );
+    println!(
+        "pet_equipskill_aquire_table rows imported: {}",
+        pet_equipskill_aquire_table_stats.row_count
     );
     println!(
         "pet_grade_table rows imported: {}",
@@ -2542,6 +2565,10 @@ fn resolve_calculator_effect_workbooks(excel_dir: &Path) -> Result<CalculatorEff
         pet_equipskill_table_xlsx: resolve_required_workbook(
             excel_dir,
             "Pet_EquipSkill_Table.xlsx",
+        )?,
+        pet_equipskill_aquire_table_xlsx: resolve_required_workbook(
+            excel_dir,
+            "Pet_EquipSkill_Aquire_Table.xlsx",
         )?,
         pet_grade_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Grade_Table.xlsx")?,
         pet_exp_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Exp_Table.xlsx")?,
@@ -3416,10 +3443,11 @@ fn run_dolt_sql_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> 
         .map(|header| header.to_string())
         .collect::<Vec<_>>();
 
+    let ensure_table_query = build_import_table_ensure_query(table, &headers)?;
     run_dolt_sql_query(
         repo_path,
-        &format!("DELETE FROM {};", sql_ident(table)),
-        &format!("truncate {table} via delete"),
+        &format!("{ensure_table_query}\nDELETE FROM {};", sql_ident(table)),
+        &format!("ensure and truncate {table} via delete"),
     )?;
 
     let mut batch = Vec::new();
@@ -3476,13 +3504,15 @@ fn run_dolt_remote_sql_table_import(table: &str, csv_path: &Path) -> Result<()> 
         .map(|header| header.to_string())
         .collect::<Vec<_>>();
 
+    let ensure_table_query = build_import_table_ensure_query(table, &headers)?;
     run_dolt_remote_sql_query(
         &format!(
-            "USE {};\nDELETE FROM {};",
+            "USE {};\n{}\nDELETE FROM {};",
             sql_ident(&remote_dolt_database_name()),
+            ensure_table_query,
             sql_ident(table)
         ),
-        &format!("truncate {table} via delete on sql-server"),
+        &format!("ensure and truncate {table} via delete on sql-server"),
     )?;
 
     let mut batch = Vec::new();
@@ -3505,6 +3535,22 @@ fn run_dolt_remote_sql_table_import(table: &str, csv_path: &Path) -> Result<()> 
     }
 
     Ok(())
+}
+
+fn build_import_table_ensure_query(table: &str, headers: &[String]) -> Result<String> {
+    if headers.is_empty() {
+        bail!("generated csv for {table} has no headers");
+    }
+    let columns = headers
+        .iter()
+        .map(|header| format!("{} LONGTEXT", sql_ident(header)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Ok(format!(
+        "CREATE TABLE IF NOT EXISTS {} ({}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        sql_ident(table),
+        columns
+    ))
 }
 
 fn run_dolt_insert_batch(
@@ -3784,7 +3830,7 @@ fn build_calculator_effects_commit_message(
     digests: &CalculatorEffectsDigests,
 ) -> String {
     let suffix = format!(
-        "(Buff_Table={}, CommonStatData={}, FishingStatData={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, TranslateStat={}, Enchant_Cash={}, Enchant_Equipment={}, Enchant_LifeEquipment={}, Tooltip_Table={}, ProductTool_Property={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
+        "(Buff_Table={}, CommonStatData={}, FishingStatData={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, TranslateStat={}, Enchant_Cash={}, Enchant_Equipment={}, Enchant_LifeEquipment={}, Tooltip_Table={}, ProductTool_Property={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_EquipSkill_Aquire_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
         digests.buff_table_sha,
         digests.common_stat_data_sha,
         digests.fishing_stat_data_sha,
@@ -3802,6 +3848,7 @@ fn build_calculator_effects_commit_message(
         digests.pet_base_skill_table_sha,
         digests.pet_setstats_table_sha,
         digests.pet_equipskill_table_sha,
+        digests.pet_equipskill_aquire_table_sha,
         digests.pet_grade_table_sha,
         digests.pet_exp_table_sha,
         digests.upgradepet_looting_percent_sha,
