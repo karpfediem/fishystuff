@@ -13,7 +13,7 @@ body {
         --site-content-pad-x: 1rem;
         --site-content-pad-y: 1rem;
         position: relative;
-        z-index: 0;
+        /* Avoid trapping in-content overlays under later footer content. */
         overflow: visible;
         border-radius: var(--site-content-notch-radius);
         background: color-mix(in srgb, var(--color-base-300) 15%, transparent);
