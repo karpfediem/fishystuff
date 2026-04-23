@@ -77,10 +77,6 @@ impl FishLang {
 
 #[async_trait]
 pub trait Store: Send + Sync {
-    async fn prime_startup_caches(&self) -> AppResult<()> {
-        Ok(())
-    }
-
     async fn get_meta(&self) -> AppResult<MetaResponse>;
     async fn get_region_groups(
         &self,

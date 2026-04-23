@@ -1,14 +1,7 @@
 mod calculator;
-mod calculator_defaults;
-mod calculator_effects;
-mod calculator_items;
 mod calculator_loot;
-mod calculator_pets;
-mod calculator_progression;
-mod calculator_sources;
 mod catalog;
 mod fish_best_spots;
-mod item_metadata;
 mod stats;
 mod util;
 mod zone_profile_v2;
@@ -55,7 +48,6 @@ use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
 use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, FishLang, Store};
-use calculator_sources::CalculatorCatalogSourceData;
 use catalog::{
     encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_is_dried,
     item_grade_from_db, merge_fish_catalog_row, parse_positive_i64,
@@ -100,9 +92,6 @@ pub struct DoltMySqlStore {
     event_zone_ring_support_exists_cache: Arc<Mutex<HashMap<String, bool>>>,
     event_zone_support_mode_cache: Arc<Mutex<HashMap<String, Option<EventZoneSupportMode>>>>,
     calculator_catalog_cache: Arc<Mutex<HashMap<String, CalculatorCatalogResponse>>>,
-    calculator_catalog_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
-    calculator_source_data_cache: Arc<Mutex<HashMap<String, CalculatorCatalogSourceData>>>,
-    calculator_source_data_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     calculator_zone_loot_cache: Arc<Mutex<HashMap<String, Vec<CalculatorZoneLootEntry>>>>,
     calculator_zone_loot_load_state: Arc<(Mutex<CalculatorZoneLootLoadState>, Condvar)>,
     fish_list_cache: Arc<Mutex<HashMap<String, FishListResponse>>>,
@@ -401,9 +390,6 @@ impl DoltMySqlStore {
             event_zone_ring_support_exists_cache: Arc::new(Mutex::new(HashMap::new())),
             event_zone_support_mode_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_catalog_cache: Arc::new(Mutex::new(HashMap::new())),
-            calculator_catalog_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
-            calculator_source_data_cache: Arc::new(Mutex::new(HashMap::new())),
-            calculator_source_data_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             calculator_zone_loot_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_zone_loot_load_state: Arc::new((
                 Mutex::new(CalculatorZoneLootLoadState::default()),
@@ -2002,38 +1988,6 @@ fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
 
 #[async_trait]
 impl Store for DoltMySqlStore {
-    #[instrument(name = "store.prime_startup_caches", skip_all)]
-    async fn prime_startup_caches(&self) -> AppResult<()> {
-        let this = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let default_zone_rgb_key = calculator_defaults::build_calculator_default_signals().zone;
-            let _ = this.query_dolt_head_revision();
-            this.query_zones(None)?;
-            this.query_fish_identities(None)?;
-            this.query_community_fish_zone_support_cached(None)?;
-            if let Some(map_version_id) = this.defaults.map_version_id.as_ref() {
-                let layer_revision_id = this.resolve_layer_revision_id(
-                    None,
-                    Some(map_version_id),
-                    Some(ZONE_MASK_LAYER_ID),
-                    None,
-                    None,
-                    0,
-                )?;
-                let _ = this.resolve_event_zone_support_mode(&layer_revision_id)?;
-            }
-            this.query_fish_best_spots_index_cached(None)?;
-            for lang in [FishLang::En, FishLang::Ko] {
-                this.query_fish_list_cached(lang, None)?;
-                this.query_calculator_catalog(lang, None)?;
-                this.query_calculator_zone_loot_cached(lang, None, &default_zone_rgb_key)?;
-            }
-            Ok(())
-        })
-        .await
-        .map_err(|err| AppError::internal(err.to_string()))?
-    }
-
     #[instrument(name = "store.get_meta", skip_all)]
     async fn get_meta(&self) -> AppResult<MetaResponse> {
         let this = self.clone();
