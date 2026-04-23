@@ -104,6 +104,8 @@ Repository notes for working in this monorepo.
   - `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js`
   - `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm`
 - Generated site icon sprite: `site/assets/img/icons.svg`
+- Fluent i18n sources under `site/i18n/fluent/` are the source of truth for site translations.
+- Generated i18n artifacts `site/assets/js/generated/site-i18n.js` and `site/i18n/*.ziggy` are currently checked in; regenerate them from Fluent with `node site/scripts/build-i18n.mjs` or `bun run i18n:build` after translation changes instead of hand-editing them.
 - Generated site runtime config: `site/.out/runtime-config.js`
 - Runtime-served image, tile, terrain, GeoJSON, and icon assets live under `data/cdn/public/`.
 - Treat the contents of `data/cdn/public/` as local CDN payload state; keep only `.gitkeep` placeholders tracked there.
