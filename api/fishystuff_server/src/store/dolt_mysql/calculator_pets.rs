@@ -507,6 +507,34 @@ fn build_pet_skin_key(rows: &[RawPetRow]) -> Option<String> {
         .map(|(skin_key, _)| skin_key)
 }
 
+fn pet_lineage_key(row: &RawPetRow) -> String {
+    row.skin_key
+        .as_ref()
+        .map(|skin_key| {
+            format!(
+                "change-look:{}:{}:{}",
+                skin_key.trim(),
+                row.race.trim(),
+                row.kind.trim()
+            )
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "visual:{}:{}:{}",
+                row.race.trim(),
+                row.kind.trim(),
+                pet_visual_group_key(row)
+            )
+        })
+}
+
+fn build_pet_lineage_keys(rows: &[RawPetRow]) -> Vec<String> {
+    let mut keys = rows.iter().map(pet_lineage_key).collect::<Vec<_>>();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
 fn build_tier_entry(
     lang: FishLang,
     tier_source: u8,
@@ -595,6 +623,10 @@ fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
                 if existing.entry.skin_key.is_none() {
                     existing.entry.skin_key = built.entry.skin_key.clone();
                 }
+                existing
+                    .entry
+                    .lineage_keys
+                    .extend(built.entry.lineage_keys.clone());
             }
             None => {
                 deduped.insert(signature, built);
@@ -608,6 +640,8 @@ fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
             built.alias_keys.sort();
             built.alias_keys.dedup();
             built.entry.alias_keys = built.alias_keys.clone();
+            built.entry.lineage_keys.sort();
+            built.entry.lineage_keys.dedup();
             built
         })
         .collect()
@@ -766,6 +800,7 @@ impl DoltMySqlStore {
             .map(|(key, rows)| {
                 let base_label = choose_pet_base_label(&rows, &names_by_character_key);
                 let skin_key = build_pet_skin_key(&rows);
+                let lineage_keys = build_pet_lineage_keys(&rows);
                 let mut tiers_by_source = BTreeMap::<u8, Vec<&RawPetRow>>::new();
                 for row in &rows {
                     tiers_by_source
@@ -798,6 +833,7 @@ impl DoltMySqlStore {
                             .iter()
                             .find_map(|row| pet_image_url(row.icon_image_file.as_deref())),
                         alias_keys: Vec::new(),
+                        lineage_keys,
                         tiers,
                     },
                     alias_keys: Vec::new(),
@@ -937,6 +973,7 @@ mod tests {
                     key: "pet:azure:38".to_string(),
                     label: "Young Azure Dragon".to_string(),
                     image_url: Some("/images/pets/pet_blue_dragon_0001.webp".to_string()),
+                    lineage_keys: vec!["change-look:blue:38".to_string()],
                     tiers: vec![CalculatorPetTierEntry {
                         key: "5".to_string(),
                         label: "Tier 5".to_string(),
@@ -953,6 +990,7 @@ mod tests {
                     key: "pet:azure:43".to_string(),
                     label: "Young Azure Dragon".to_string(),
                     image_url: Some("/images/pets/pet_blue_dragon_0001.webp".to_string()),
+                    lineage_keys: vec!["change-look:blue:43".to_string()],
                     tiers: vec![CalculatorPetTierEntry {
                         key: "5".to_string(),
                         label: "Tier 5".to_string(),
@@ -972,6 +1010,13 @@ mod tests {
         assert_eq!(
             deduped[0].entry.alias_keys,
             vec!["pet:azure:38".to_string(), "pet:azure:43".to_string()]
+        );
+        assert_eq!(
+            deduped[0].entry.lineage_keys,
+            vec![
+                "change-look:blue:38".to_string(),
+                "change-look:blue:43".to_string()
+            ]
         );
     }
 }

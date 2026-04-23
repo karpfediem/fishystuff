@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
     CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
-    CalculatorPetOptionEntry, CalculatorPetSignals, CalculatorPetTierEntry,
+    CalculatorPetEntry, CalculatorPetOptionEntry, CalculatorPetSignals, CalculatorPetTierEntry,
     CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry, CalculatorSignals,
     CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
 };
@@ -2883,7 +2883,23 @@ fn normalize_pet(
         return;
     }
 
-    let Some(pet_entry) = catalog.pets.iter().find(|entry| entry.key == pet.pet) else {
+    let Some(selected_pet_entry) = catalog.pets.iter().find(|entry| entry.key == pet.pet) else {
+        pet.pet.clear();
+        pet.pack_leader = false;
+        pet.special.clear();
+        pet.talent.clear();
+        pet.skills.clear();
+        return;
+    };
+
+    let pet_entry = if pet_entry_has_tier(selected_pet_entry, &pet.tier) {
+        selected_pet_entry
+    } else if let Some(lineage_entry) =
+        find_pet_lineage_entry_for_tier(catalog, selected_pet_entry, &pet.tier)
+    {
+        pet.pet = lineage_entry.key.clone();
+        lineage_entry
+    } else {
         pet.pet.clear();
         pet.pack_leader = false;
         pet.special.clear();
@@ -2963,6 +2979,38 @@ fn normalize_pet_lookup_value(value: &str, aliases: &HashMap<String, String>) ->
         .get(&normalized)
         .cloned()
         .unwrap_or_else(|| trimmed.to_string())
+}
+
+fn pet_entry_has_tier(entry: &CalculatorPetEntry, tier_key: &str) -> bool {
+    entry.tiers.iter().any(|tier| tier.key == tier_key)
+}
+
+fn pet_entries_share_lineage(left: &CalculatorPetEntry, right: &CalculatorPetEntry) -> bool {
+    !left.lineage_keys.is_empty()
+        && left.lineage_keys.iter().any(|left_key| {
+            right
+                .lineage_keys
+                .iter()
+                .any(|right_key| right_key == left_key)
+        })
+}
+
+fn find_pet_lineage_entry_for_tier<'a>(
+    catalog: &'a CalculatorPetCatalog,
+    selected_pet: &CalculatorPetEntry,
+    tier_key: &str,
+) -> Option<&'a CalculatorPetEntry> {
+    catalog
+        .pets
+        .iter()
+        .filter(|entry| entry.key != selected_pet.key)
+        .filter(|entry| pet_entry_has_tier(entry, tier_key))
+        .filter(|entry| pet_entries_share_lineage(selected_pet, entry))
+        .min_by(|left, right| {
+            left.label
+                .cmp(&right.label)
+                .then_with(|| left.key.cmp(&right.key))
+        })
 }
 
 fn pet_option_by_key<'a>(
@@ -13111,6 +13159,7 @@ mod tests {
                         skin_key: Some("2001".to_string()),
                         image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
                         alias_keys: Vec::new(),
+                        lineage_keys: Vec::new(),
                         tiers: vec![CalculatorPetTierEntry {
                             key: "5".to_string(),
                             label: "Tier 5".to_string(),
@@ -14049,6 +14098,7 @@ mod tests {
                 skin_key: Some("2001".to_string()),
                 image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
                 alias_keys: Vec::new(),
+                lineage_keys: Vec::new(),
                 tiers: vec![CalculatorPetTierEntry {
                     key: "5".to_string(),
                     label: "Tier 5".to_string(),
@@ -14115,6 +14165,7 @@ mod tests {
                 skin_key: Some("2001".to_string()),
                 image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
                 alias_keys: Vec::new(),
+                lineage_keys: Vec::new(),
                 tiers: vec![
                     CalculatorPetTierEntry {
                         key: "3".to_string(),
@@ -14206,6 +14257,125 @@ mod tests {
     }
 
     #[test]
+    fn normalize_pet_follows_lineage_to_target_tier_entry() {
+        let lineage_key = "change-look:46001:46:1".to_string();
+        let catalog = CalculatorPetCatalog {
+            slots: 5,
+            pets: vec![
+                CalculatorPetEntry {
+                    key: "pet:arctic:tier3".to_string(),
+                    label: "Arctic Fox".to_string(),
+                    skin_key: Some("46001".to_string()),
+                    image_url: Some("/images/pets/pet_arcticfox_0001.webp".to_string()),
+                    lineage_keys: vec![lineage_key.clone()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "3".to_string(),
+                        label: "Tier 3".to_string(),
+                        talents: vec!["talent_t3".to_string()],
+                        skills: vec!["skill_t3".to_string()],
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                CalculatorPetEntry {
+                    key: "pet:arctic:tier45".to_string(),
+                    label: "Arctic Fox".to_string(),
+                    skin_key: Some("46001".to_string()),
+                    image_url: Some("/images/pets/pet_arcticfox_0002.webp".to_string()),
+                    lineage_keys: vec![lineage_key],
+                    tiers: vec![
+                        CalculatorPetTierEntry {
+                            key: "4".to_string(),
+                            label: "Tier 4".to_string(),
+                            talents: vec!["talent_t4".to_string()],
+                            skills: vec!["skill_t4".to_string()],
+                            ..CalculatorPetTierEntry::default()
+                        },
+                        CalculatorPetTierEntry {
+                            key: "5".to_string(),
+                            label: "Tier 5".to_string(),
+                            talents: vec!["talent_t4".to_string()],
+                            skills: vec!["skill_t4".to_string()],
+                            ..CalculatorPetTierEntry::default()
+                        },
+                    ],
+                    ..CalculatorPetEntry::default()
+                },
+            ],
+            tiers: (1..=5)
+                .map(|tier| CalculatorOptionEntry {
+                    key: tier.to_string(),
+                    label: format!("Tier {tier}"),
+                })
+                .collect(),
+            talents: vec![
+                CalculatorPetOptionEntry {
+                    key: "talent_t3".to_string(),
+                    label: "Tier 3 Talent".to_string(),
+                    durability_reduction_resistance: Some(0.03),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "talent_t4".to_string(),
+                    label: "Tier 4 Talent".to_string(),
+                    durability_reduction_resistance: Some(0.04),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            skills: vec![
+                CalculatorPetOptionEntry {
+                    key: "skill_t3".to_string(),
+                    label: "Tier 3 Skill".to_string(),
+                    fishing_exp: Some(0.03),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_t4".to_string(),
+                    label: "Tier 4 Skill".to_string(),
+                    fishing_exp: Some(0.04),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            ..CalculatorPetCatalog::default()
+        };
+        let aliases = build_pet_value_aliases(&catalog);
+        let defaults = CalculatorPetSignals::default();
+
+        let mut descendant_to_ancestor = CalculatorPetSignals {
+            pet: "pet:arctic:tier45".to_string(),
+            tier: "3".to_string(),
+            pack_leader: true,
+            talent: "talent_t4".to_string(),
+            skills: vec!["skill_t4".to_string()],
+            ..CalculatorPetSignals::default()
+        };
+        normalize_pet(
+            &mut descendant_to_ancestor,
+            defaults.clone(),
+            &catalog,
+            &aliases,
+        );
+        assert_eq!(descendant_to_ancestor.pet, "pet:arctic:tier3");
+        assert_eq!(descendant_to_ancestor.tier, "3");
+        assert_eq!(descendant_to_ancestor.talent, "talent_t3");
+        assert_eq!(descendant_to_ancestor.skills, vec!["skill_t3".to_string()]);
+        assert!(descendant_to_ancestor.pack_leader);
+
+        let mut ancestor_to_descendant = CalculatorPetSignals {
+            pet: "pet:arctic:tier3".to_string(),
+            tier: "4".to_string(),
+            talent: "talent_t3".to_string(),
+            skills: vec!["skill_t3".to_string()],
+            ..CalculatorPetSignals::default()
+        };
+        normalize_pet(&mut ancestor_to_descendant, defaults, &catalog, &aliases);
+        assert_eq!(ancestor_to_descendant.pet, "pet:arctic:tier45");
+        assert_eq!(ancestor_to_descendant.tier, "4");
+        assert_eq!(ancestor_to_descendant.talent, "talent_t4");
+        assert_eq!(ancestor_to_descendant.skills, vec!["skill_t4".to_string()]);
+    }
+
+    #[test]
     fn normalize_pet_defaults_to_first_skill_and_caps_skill_count() {
         let catalog = CalculatorPetCatalog {
             slots: 5,
@@ -14215,6 +14385,7 @@ mod tests {
                 skin_key: None,
                 image_url: None,
                 alias_keys: Vec::new(),
+                lineage_keys: Vec::new(),
                 tiers: vec![CalculatorPetTierEntry {
                     key: "5".to_string(),
                     label: "Tier 5".to_string(),

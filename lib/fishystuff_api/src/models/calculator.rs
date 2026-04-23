@@ -86,6 +86,8 @@ pub struct CalculatorPetEntry {
     pub image_url: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub alias_keys: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lineage_keys: Vec<String>,
     #[serde(default)]
     pub tiers: Vec<CalculatorPetTierEntry>,
 }
