@@ -186,6 +186,7 @@ calculator.server.search.pet_specials = Haustier-Spezialisierungen suchen
 calculator.server.search.pet_talents = Haustier-Talente suchen
 calculator.server.search.pets = Haustiere suchen
 
+calculator.server.section.mode = Modus
 calculator.server.section.zone = Zone
 calculator.server.section.bite_time = Bisszeit
 calculator.server.section.catch_time = Fangzeit
@@ -200,6 +201,8 @@ calculator.server.section.trade = Handel
 
 calculator.server.field.fishing_level = Angelstufe
 calculator.server.field.fishing_resources = Angelressourcen
+calculator.server.field.fishing_mode = Angelmodus
+calculator.server.field.fishing_method = Methode
 calculator.server.field.active = Aktiv
 calculator.server.field.afk = AFK
 calculator.server.field.amount = Menge
@@ -228,6 +231,10 @@ calculator.server.field.trade_level = Handelsstufe
 calculator.server.field.distance_bonus = Distanzbonus
 calculator.server.field.trade_price_curve = Handelspreiskurve
 calculator.server.field.discard_grade = Fische bis Qualität verwerfen
+calculator.server.mode.rod = Rute
+calculator.server.mode.hotspot = Hotspot
+calculator.server.mode.harpoon = Harpune
+calculator.server.mode.harpoon_forces_active = Harpune erzwingt voruebergehend Aktiv.
 
 calculator.server.stat.seconds = Sekunden
 calculator.server.stat.average_total_fishing_time = Durchschnittliche Gesamtangelzeit

@@ -81,6 +81,7 @@ calculator.server.search.pet_specials = 펫 특기 검색
 calculator.server.search.pet_talents = 펫 재능 검색
 calculator.server.search.pets = 펫 검색
 
+calculator.server.section.mode = 모드
 calculator.server.section.zone = 지역
 calculator.server.section.bite_time = 입질 시간
 calculator.server.section.catch_time = 낚아올리기 시간
@@ -95,6 +96,8 @@ calculator.server.section.trade = 무역
 
 calculator.server.field.fishing_level = 낚시 레벨
 calculator.server.field.fishing_resources = 낚시 자원
+calculator.server.field.fishing_mode = 낚시 모드
+calculator.server.field.fishing_method = 방식
 calculator.server.field.active = 수동
 calculator.server.field.afk = 잠수
 calculator.server.field.amount = 수량
@@ -123,6 +126,10 @@ calculator.server.field.trade_level = 무역 레벨
 calculator.server.field.distance_bonus = 거리 보너스
 calculator.server.field.trade_price_curve = 무역 가격 곡선
 calculator.server.field.discard_grade = 이 등급까지 물고기 버리기
+calculator.server.mode.rod = 낚싯대
+calculator.server.mode.hotspot = 핫스팟
+calculator.server.mode.harpoon = 작살
+calculator.server.mode.harpoon_forces_active = 작살은 일시적으로 수동만 허용합니다.
 
 calculator.server.stat.seconds = 초
 calculator.server.stat.average_total_fishing_time = 평균 총 낚시 시간

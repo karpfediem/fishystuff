@@ -453,7 +453,9 @@ struct CalculatorData {
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
-const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-2";
+const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-3";
+const CALCULATOR_MODE_ROD_TEXTURE_URL: &str = "/img/calculator/fishing-mode-rod.png";
+const CALCULATOR_MODE_HARPOON_TEXTURE_URL: &str = "/img/calculator/fishing-mode-harpoon.png";
 type CalculatorRouteCatalog = HashMap<String, String>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1103,6 +1105,7 @@ fn parse_calculator_signals_value(
     coerce_object_f64(&mut object, "catchTimeActive");
     coerce_object_f64(&mut object, "catchTimeAfk");
     coerce_object_f64(&mut object, "timespanAmount");
+    coerce_object_string(&mut object, "fishingMode");
     coerce_object_bool(&mut object, "brand");
     coerce_object_bool(&mut object, "active");
     coerce_object_bool(&mut object, "debug");
@@ -1670,6 +1673,7 @@ fn calculator_route_text_with_vars(
 
 fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
     match section_id {
+        "mode" => Some("fish-fill"),
         "overview" => Some("information-fill"),
         "zone" => Some("fullscreen-fill"),
         "bite_time" => Some("stopwatch-2-fill"),
@@ -1685,6 +1689,24 @@ fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
         "debug" => Some("bug-fill"),
         _ => None,
     }
+}
+
+fn normalize_calculator_fishing_mode(value: &str, default: &str) -> String {
+    let normalized = value.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "rod" | "hotspot" | "harpoon" => normalized,
+        _ => {
+            let fallback = default.trim().to_ascii_lowercase();
+            match fallback.as_str() {
+                "rod" | "hotspot" | "harpoon" => fallback,
+                _ => "rod".to_string(),
+            }
+        }
+    }
+}
+
+fn calculator_effective_active(fishing_mode: &str, active: bool) -> bool {
+    normalize_calculator_fishing_mode(fishing_mode, "rod") == "harpoon" || active
 }
 
 fn render_calculator_icon(alias: &str, size_class: &str) -> String {
@@ -1808,6 +1830,145 @@ fn render_calculator_unpinned_slot_handle(lang: CalculatorLocale) -> String {
     )
 }
 
+fn render_calculator_mode_texture_icon(src: &str) -> String {
+    format!(
+        r#"<img class="fishy-calculator-mode-choice__image" src="{}" alt="" aria-hidden="true" loading="lazy" decoding="async">"#,
+        escape_html(src),
+    )
+}
+
+fn render_calculator_mode_sprite_icon(alias: &str) -> String {
+    format!(
+        r#"<span class="fishy-calculator-mode-choice__sprite" aria-hidden="true">{}</span>"#,
+        render_calculator_icon(alias, "size-10"),
+    )
+}
+
+fn render_calculator_mode_choice(
+    label: &str,
+    selected_expr: &str,
+    click_expr: &str,
+    icon_html: &str,
+    disabled_expr: Option<&str>,
+) -> String {
+    let disabled_class_attr = disabled_expr
+        .map(|expr| {
+            format!(
+                r#" data-class:fishy-calculator-mode-choice--disabled="{}""#,
+                escape_html(expr),
+            )
+        })
+        .unwrap_or_default();
+    let disabled_aria_attr = disabled_expr
+        .map(|expr| {
+            format!(
+                r#" data-attr:aria-disabled="({}).toString()""#,
+                escape_html(expr),
+            )
+        })
+        .unwrap_or_default();
+    format!(
+        r#"<button type="button"
+                class="fishy-calculator-mode-choice"
+                data-class:fishy-calculator-mode-choice--selected="{}"{}{}
+                data-attr:aria-pressed="({}).toString()"
+                data-on:click="{}">
+                <span class="fishy-calculator-mode-choice__icon-frame">{}</span>
+                <span class="fishy-calculator-mode-choice__label">{}</span>
+            </button>"#,
+        escape_html(selected_expr),
+        disabled_class_attr,
+        disabled_aria_attr,
+        escape_html(selected_expr),
+        escape_html(click_expr),
+        icon_html,
+        escape_html(label),
+    )
+}
+
+fn render_calculator_mode_window(lang: CalculatorLocale) -> String {
+    let section_title = calculator_route_text(lang, "calculator.server.section.mode");
+    let fishing_mode_label = calculator_route_text(lang, "calculator.server.field.fishing_mode");
+    let fishing_method_label =
+        calculator_route_text(lang, "calculator.server.field.fishing_method");
+    let harpoon_note = calculator_route_text(lang, "calculator.server.mode.harpoon_forces_active");
+    let normalized_mode = "window.__fishystuffCalculator.normalizeFishingMode($fishingMode)";
+    let effective_active = "window.__fishystuffCalculator.effectiveActivity($fishingMode, $active)";
+    let harpoon_selected =
+        "window.__fishystuffCalculator.normalizeFishingMode($fishingMode) === 'harpoon'";
+    let mode_choices = [
+        render_calculator_mode_choice(
+            &calculator_route_text(lang, "calculator.server.mode.rod"),
+            &format!("{normalized_mode} === 'rod'"),
+            "$fishingMode = 'rod'",
+            &render_calculator_mode_texture_icon(CALCULATOR_MODE_ROD_TEXTURE_URL),
+            None,
+        ),
+        render_calculator_mode_choice(
+            &calculator_route_text(lang, "calculator.server.mode.hotspot"),
+            &format!("{normalized_mode} === 'hotspot'"),
+            "$fishingMode = 'hotspot'",
+            &render_calculator_mode_sprite_icon("fish-fill"),
+            None,
+        ),
+        render_calculator_mode_choice(
+            &calculator_route_text(lang, "calculator.server.mode.harpoon"),
+            &format!("{normalized_mode} === 'harpoon'"),
+            "$fishingMode = 'harpoon'",
+            &render_calculator_mode_texture_icon(CALCULATOR_MODE_HARPOON_TEXTURE_URL),
+            None,
+        ),
+    ]
+    .join("");
+    let method_choices = [
+        render_calculator_mode_choice(
+            &calculator_route_text(lang, "calculator.server.field.afk"),
+            &format!("!{effective_active}"),
+            &format!("$active = {harpoon_selected} ? $active : false"),
+            &render_calculator_icon("time-fill", "size-10"),
+            Some(harpoon_selected),
+        ),
+        render_calculator_mode_choice(
+            &calculator_route_text(lang, "calculator.server.field.active"),
+            effective_active,
+            "$active = true",
+            &render_calculator_icon("stopwatch-fill", "size-10"),
+            None,
+        ),
+    ]
+    .join("");
+
+    format!(
+        r#"<div data-show="window.__fishystuffCalculator.sectionVisible('mode', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="mode"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'mode')">
+        <fieldset class="card card-border bg-base-100">
+            {}
+            <div class="card-body gap-5 pt-0">
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">{}</legend>
+                    <div class="grid grid-cols-3 gap-3">{}</div>
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">{}</legend>
+                    <div class="grid grid-cols-2 gap-3">{}</div>
+                    <p class="pt-1 text-xs text-base-content/60" data-show="{}">{}</p>
+                </fieldset>
+            </div>
+        </fieldset>
+    </div>"#,
+        render_calculator_panel_legend(lang, "mode", &section_title, Some("fish-fill")),
+        escape_html(&fishing_mode_label),
+        mode_choices,
+        escape_html(&fishing_method_label),
+        method_choices,
+        escape_html(harpoon_selected),
+        escape_html(&harpoon_note),
+    )
+}
+
 fn calculator_group_label_key(slot_idx: u8) -> Option<&'static str> {
     match slot_idx {
         1 => Some("calculator.server.group.prize"),
@@ -1925,6 +2086,8 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         false,
         true,
     );
+    signals.fishing_mode =
+        normalize_calculator_fishing_mode(&signals.fishing_mode, &defaults.fishing_mode);
     signals.lifeskill_level = normalize_named_value_with_fuzzy(
         &signals.lifeskill_level,
         &valid_level_keys,
@@ -2796,6 +2959,16 @@ fn init_signals_patch_map(
     let mut patch = signals_patch_map(signals)?;
     mirror_resources_signal(&mut patch);
     patch_checkbox_transport_signals(signals, &mut patch);
+    patch.insert(
+        "_calculator_ui".to_string(),
+        json!({
+            "top_level_tab": "mode",
+            "distribution_tab": "groups",
+            "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
+            "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
+            "unpinned_insert_index": [0, 0],
+        }),
+    );
     Ok(patch)
 }
 
@@ -2806,7 +2979,7 @@ fn default_reset_signals_patch_map(
     patch.insert(
         "_calculator_ui".to_string(),
         json!({
-            "top_level_tab": "overview",
+            "top_level_tab": "mode",
             "distribution_tab": "groups",
             "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
             "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
@@ -2898,7 +3071,7 @@ fn render_canonical_checkbox_signal_computeds(pet_slots: usize) -> String {
     }
     html.push_str(
         r#"
-         data-computed:_live="window.__fishystuffCalculator.liveCalc($level, $_resources, $active, $catchTimeActive, $catchTimeAfk, $timespanAmount, $timespanUnit, $_calc)"></div>"#,
+         data-computed:_live="window.__fishystuffCalculator.liveCalc($level, $_resources, window.__fishystuffCalculator.effectiveActivity($fishingMode, $active), $catchTimeActive, $catchTimeAfk, $timespanAmount, $timespanUnit, $_calc)"></div>"#,
     );
     html
 }
@@ -3455,20 +3628,21 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             |item| item.item_drr.map(f64::from),
         );
 
+    let active = calculator_effective_active(&signals.fishing_mode, signals.active);
     let catch_time_active_raw = signals.catch_time_active.max(0.0);
     let catch_time_afk_raw = signals.catch_time_afk.max(0.0);
-    let catch_time_raw = if signals.active {
+    let catch_time_raw = if active {
         catch_time_active_raw
     } else {
         catch_time_afk_raw
     };
-    let total_time_raw = if signals.active {
+    let total_time_raw = if active {
         bite_time_raw + catch_time_active_raw
     } else {
         bite_time_raw + auto_fish_time_raw + catch_time_afk_raw
     };
     let unoptimized_time_raw = zone_bite_avg_raw
-        + if signals.active {
+        + if active {
             catch_time_active_raw
         } else {
             catch_time_afk_raw + 180.0
@@ -3559,7 +3733,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     );
     let fishing_timeline_chart = fishing_timeline_chart(
         data.lang,
-        signals.active,
+        active,
         bite_time_raw,
         auto_fish_time_raw,
         catch_time_active_raw,
@@ -3575,6 +3749,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let debug_json = serde_json::to_string_pretty(&json!({
         "inputs": signals,
         "derived": {
+            "effectiveActive": active,
             "zoneName": zone_name,
             "petFishingExp": pet_fishing_exp,
             "petLifeExp": pet_life_exp,
@@ -3699,7 +3874,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
                 ("percent", &fmt2(percent_improvement)),
             ],
         ),
-        show_auto_fishing: !signals.active,
+        show_auto_fishing: !active,
         percent_bite: fmt2(percent_bite),
         percent_af: fmt2(percent_af),
         percent_catch: fmt2(percent_catch),
@@ -6990,6 +7165,7 @@ fn derive_stat_breakdowns(
     let breakdown_inputs = breakdown_text("calculator.breakdown.section.inputs");
     let breakdown_composition = breakdown_text("calculator.breakdown.section.composition");
     let abundance_label = calc_abundance_label(data.lang, signals.resources);
+    let active = calculator_effective_active(&signals.fishing_mode, signals.active);
     let afr_item_rows = collect_item_property_breakdown_rows(
         items_by_key,
         data.cdn_base_url.as_str(),
@@ -7152,12 +7328,12 @@ fn derive_stat_breakdowns(
     let total_time_breakdown = computed_stat_breakdown(
         breakdown_text("calculator.breakdown.title.total_time"),
         fmt2(total_time_raw),
-        if signals.active {
+        if active {
             breakdown_text("calculator.breakdown.summary.total_time.active")
         } else {
             breakdown_text("calculator.breakdown.summary.total_time.afk")
         },
-        if signals.active {
+        if active {
             breakdown_text("calculator.breakdown.formula.total_time.active")
         } else {
             breakdown_text("calculator.breakdown.formula.total_time.afk")
@@ -7175,7 +7351,7 @@ fn derive_stat_breakdowns(
                     breakdown_text("calculator.breakdown.label.average_bite_time"),
                     1,
                 )];
-                if signals.active {
+                if active {
                     rows.push(computed_stat_breakdown_row_with_formula_part(
                         computed_stat_breakdown_row(
                             breakdown_text("calculator.breakdown.label.active_catch_time"),
@@ -7217,7 +7393,7 @@ fn derive_stat_breakdowns(
             ),
         ],
     )
-    .with_formula_terms(if signals.active {
+    .with_formula_terms(if active {
         vec![
             computed_stat_formula_term(
                 breakdown_text("calculator.breakdown.label.average_total"),
@@ -7402,19 +7578,19 @@ fn derive_stat_breakdowns(
         ),
     ]);
 
-    let catch_time_raw = if signals.active {
+    let catch_time_raw = if active {
         catch_time_active_raw
     } else {
         catch_time_afk_raw
     };
-    let catch_time_input_label = if signals.active {
+    let catch_time_input_label = if active {
         breakdown_text("calculator.breakdown.label.active_catch_time")
     } else {
         breakdown_text("calculator.breakdown.label.afk_catch_time")
     };
     let catch_time_formula_part = catch_time_input_label.clone();
     let catch_time_formula_label = catch_time_input_label.clone();
-    let catch_time_detail = if signals.active {
+    let catch_time_detail = if active {
         breakdown_text("calculator.breakdown.detail.manual_catch_time_active")
     } else {
         breakdown_text("calculator.breakdown.detail.manual_catch_after_passive_timer")
@@ -7422,12 +7598,12 @@ fn derive_stat_breakdowns(
     let catch_time_breakdown = computed_stat_breakdown(
         breakdown_text("calculator.breakdown.title.catch_time"),
         fmt2(catch_time_raw),
-        if signals.active {
+        if active {
             breakdown_text("calculator.breakdown.summary.catch_time.active")
         } else {
             breakdown_text("calculator.breakdown.summary.catch_time.afk")
         },
-        if signals.active {
+        if active {
             breakdown_text("calculator.breakdown.formula.catch_time.active")
         } else {
             breakdown_text("calculator.breakdown.formula.catch_time.afk")
@@ -7464,7 +7640,7 @@ fn derive_stat_breakdowns(
     ]);
 
     let unoptimized_time_raw = zone_bite_avg_raw
-        + if signals.active {
+        + if active {
             catch_time_active_raw
         } else {
             catch_time_afk_raw + 180.0
@@ -7490,7 +7666,7 @@ fn derive_stat_breakdowns(
                         computed_stat_breakdown_row(
                             breakdown_text("calculator.breakdown.label.average_unoptimized_time"),
                             fmt2(unoptimized_time_raw),
-                            if signals.active {
+                            if active {
                                 breakdown_text("calculator.breakdown.detail.baseline_active_cycle")
                             } else {
                                 breakdown_text("calculator.breakdown.detail.baseline_afk_cycle")
@@ -8970,7 +9146,6 @@ fn render_calculator_app(
     let outfits = item_options_by_type(&data.catalog.items, "outfit");
     let foods = item_options_by_type(&data.catalog.items, "food");
     let buffs = item_options_by_type(&data.catalog.items, "buff");
-    let active_checked = if signals.active { " checked" } else { "" };
     let zone_search_url = format!(
         "/api/v1/calculator/datastar/zone-search?lang={}&locale={}",
         lang_param(data.api_lang),
@@ -9011,14 +9186,7 @@ fn render_calculator_app(
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-4">
-            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                <div class="flex flex-wrap gap-3">
-                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
-                        <input type="checkbox" class="checkbox checkbox-primary" data-bind="active"__ACTIVE_CHECKED__>
-                        <span>__TEXT_ACTIVE_FISHING__</span>
-                    </label>
-                </div>
-
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-end">
                 <div class="flex flex-wrap gap-2">
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1">
@@ -9048,6 +9216,7 @@ fn render_calculator_app(
                 <div role="tablist"
                      class="fishy-calculator-top-tabs tabs tabs-box tabs-sm md:tabs-md w-full max-w-full bg-base-200/80 p-1"
                      aria-label="__TOP_LEVEL_TABS_ARIA__">
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'mode'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'mode')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'mode').toString()" data-on:click="$_calculator_ui.top_level_tab = 'mode'">__TAB_MODE__</button>
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overview'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overview').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overview'">__TAB_OVERVIEW__</button>
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'zone'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'zone')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'zone').toString()" data-on:click="$_calculator_ui.top_level_tab = 'zone'">__TAB_ZONE__</button>
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'bite_time'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'bite_time')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'bite_time').toString()" data-on:click="$_calculator_ui.top_level_tab = 'bite_time'">__TAB_BITE_TIME__</button>
@@ -9086,6 +9255,7 @@ fn render_calculator_app(
             </div>
         </div>
     </div>
+    __MODE_WINDOW__
     <div data-show="window.__fishystuffCalculator.sectionVisible('overview', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
@@ -9421,13 +9591,7 @@ fn render_calculator_app(
             "__UNPINNED_SLOT_HANDLE__",
             render_calculator_unpinned_slot_handle(data.lang),
         ),
-        (
-            "__TEXT_ACTIVE_FISHING__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.toggle.active_fishing",
-            )),
-        ),
+        ("__MODE_WINDOW__", render_calculator_mode_window(data.lang)),
         (
             "__TEXT_COPY_URL__",
             escape_html(&calculator_route_text(
@@ -9490,6 +9654,13 @@ fn render_calculator_app(
                 data.lang,
                 "calculator.server.chart.aria.top_level_tabs",
             )),
+        ),
+        (
+            "__TAB_MODE__",
+            render_calculator_tab_label(
+                "mode",
+                &calculator_route_text(data.lang, "calculator.server.section.mode"),
+            ),
         ),
         (
             "__TAB_OVERVIEW__",
@@ -10178,7 +10349,6 @@ fn render_calculator_app(
         "__CANONICAL_SIGNAL_COMPUTEDS__",
         &canonical_signal_computeds,
     );
-    html = html.replace("__ACTIVE_CHECKED__", active_checked);
     Ok(html)
 }
 
@@ -13406,6 +13576,7 @@ mod tests {
                     trade_level: "73".to_string(),
                     zone: "240,74,74".to_string(),
                     resources: 0.0,
+                    fishing_mode: "rod".to_string(),
                     rod: "item:16162".to_string(),
                     float: String::new(),
                     chair: "item:705539".to_string(),
@@ -13581,6 +13752,7 @@ mod tests {
         assert!(text.contains("\"mastery\":2500.0"));
         assert!(text.contains("\"timespanAmount\":8.0"));
         assert!(text.contains("\"active\":false"));
+        assert!(text.contains("\"fishingMode\":\"rod\""));
         assert!(text.contains("\"_resources\":0.0"));
         assert!(text.contains("\"unpinned_insert_index\":[0,0]"));
         assert!(text.contains("\"chair\":\"item:705539\""));
@@ -13698,6 +13870,7 @@ mod tests {
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'mode'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'zone'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'bite_time'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'catch_time'"));
@@ -13705,6 +13878,7 @@ mod tests {
         assert!(text.contains("$_calculator_ui.top_level_tab === 'trade'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'food'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'buffs'"));
+        assert!(text.contains("data-calculator-section-id=\"mode\""));
         assert!(text.contains("data-calculator-section-id=\"zone\""));
         assert!(text.contains("data-calculator-section-id=\"bite_time\""));
         assert!(text.contains("data-calculator-section-id=\"catch_time\""));
@@ -13714,6 +13888,7 @@ mod tests {
         assert!(text.contains("data-calculator-section-id=\"trade\""));
         assert!(text.contains("data-calculator-section-id=\"food\""));
         assert!(text.contains("data-calculator-section-id=\"buffs\""));
+        assert!(text.contains("#fishy-fish-fill"));
         assert!(text.contains("#fishy-information-fill"));
         assert!(text.contains("#fishy-fullscreen-fill"));
         assert!(text.contains("#fishy-stopwatch-2-fill"));
@@ -13736,6 +13911,8 @@ mod tests {
         assert!(text.contains("value=\"effect:mainhand-weapon-outfit\" checked"));
         assert!(text.contains("value=\"effect:awakening-weapon-outfit\" checked"));
         assert!(text.contains("value=\"item:14330\" checked"));
+        assert!(text.contains("src=\"/img/calculator/fishing-mode-rod.png\""));
+        assert!(text.contains("src=\"/img/calculator/fishing-mode-harpoon.png\""));
         assert!(text.contains("src=\"http://127.0.0.1:4040/images/items/00016162.webp\""));
     }
 
@@ -14274,6 +14451,16 @@ mod tests {
         assert_eq!(patch.get("_food_slots"), Some(&json!(["item:9359"])));
         assert_eq!(patch.get("buff"), Some(&json!(["item:721092"])));
         assert_eq!(patch.get("_buff_slots"), Some(&json!(["item:721092"])));
+        assert_eq!(
+            patch.get("_calculator_ui"),
+            Some(&json!({
+                "top_level_tab": "mode",
+                "distribution_tab": "groups",
+                "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
+                "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
+                "unpinned_insert_index": [0, 0],
+            }))
+        );
     }
 
     #[test]
@@ -14302,7 +14489,7 @@ mod tests {
         assert_eq!(
             patch.get("_calculator_ui"),
             Some(&json!({
-                "top_level_tab": "overview",
+                "top_level_tab": "mode",
                 "distribution_tab": "groups",
                 "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
                 "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],

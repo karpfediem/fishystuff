@@ -35,6 +35,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
         trade_level: "73".to_string(),
         zone: "240,74,74".to_string(),
         resources: 0.0,
+        fishing_mode: "rod".to_string(),
         rod: "item:16162".to_string(),
         float: String::new(),
         chair: "item:705539".to_string(),

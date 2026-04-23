@@ -28,6 +28,7 @@ const iconSources = {
   "book-open": { type: "mingcute", name: "book-2-fill" },
   "nav-guides": { type: "mingcute", name: "book-2-fill" },
   "nav-map": { type: "mingcute", name: "map-pin-fill" },
+  "fish-fill": { type: "mingcute", name: "fish-fill" },
   "nav-dex": { type: "mingcute", name: "fish-fill" },
   "nav-calculator": { type: "mingcute", name: "chart-line-fill" },
   "nav-community": { type: "mingcute", name: "group-3-fill" },

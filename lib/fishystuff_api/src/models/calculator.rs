@@ -183,6 +183,8 @@ pub struct CalculatorSignals {
     pub trade_level: String,
     pub zone: String,
     pub resources: f64,
+    #[serde(rename = "fishingMode")]
+    pub fishing_mode: String,
     pub rod: String,
     pub float: String,
     pub chair: String,

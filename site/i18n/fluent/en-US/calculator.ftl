@@ -400,6 +400,7 @@ calculator.server.search.pet_specials = Search pet specials
 calculator.server.search.pet_talents = Search pet talents
 calculator.server.search.pets = Search pets
 
+calculator.server.section.mode = Mode
 calculator.server.section.zone = Zone
 calculator.server.section.bite_time = Bite Time
 calculator.server.section.catch_time = Catch Time
@@ -414,6 +415,8 @@ calculator.server.section.trade = Trade
 
 calculator.server.field.fishing_level = Fishing Level
 calculator.server.field.fishing_resources = Fishing Resources
+calculator.server.field.fishing_mode = Fishing Mode
+calculator.server.field.fishing_method = Method
 calculator.server.field.active = Active
 calculator.server.field.afk = AFK
 calculator.server.field.amount = Amount
@@ -442,6 +445,10 @@ calculator.server.field.trade_level = Trade Level
 calculator.server.field.distance_bonus = Distance Bonus
 calculator.server.field.trade_price_curve = Trade Price Curve
 calculator.server.field.discard_grade = Discard fish up to grade
+calculator.server.mode.rod = Rod
+calculator.server.mode.hotspot = Hotspot
+calculator.server.mode.harpoon = Harpoon
+calculator.server.mode.harpoon_forces_active = Harpoon temporarily forces Active.
 
 calculator.server.stat.seconds = seconds
 calculator.server.stat.average_total_fishing_time = Average Total Fishing Time
