@@ -5,11 +5,29 @@ const LANGUAGE_CHANGE_EVENT = "fishystuff:languagechange";
 const CARD_SELECTOR = "[data-calculator-section-card]";
 const HANDLE_SELECTOR = "[data-calculator-section-drag]";
 const DROPZONE_SELECTOR = "[data-calculator-pin-dropzone]";
+const ROWS_HOST_SELECTOR = "[data-calculator-pinned-rows]";
+const ROW_SELECTOR = "[data-calculator-pinned-row]";
 const DRAG_THRESHOLD_PX = 4;
 const DRAG_Z_INDEX = 80;
 const DROPZONE_HEADER_GAP_PX = 16;
 const DROPZONE_FRAME_PADDING_PX = 16;
-const DROPZONE_SLOT_HEIGHT_PX = 88;
+const DROPZONE_EMPTY_HEIGHT_PX = 96;
+const PLACEHOLDER_MIN_HEIGHT_PX = 120;
+const INLINE_PLACEHOLDER_SELECTOR = "[data-calculator-inline-placeholder]";
+const SECTION_LAYOUT_META = Object.freeze({
+    overview: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
+    inputs: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
+    distribution: { kind: "wide", basis: "36rem", minWidth: "min(100%, 36rem)", shareable: true },
+    loot: { kind: "wide", basis: "38rem", minWidth: "min(100%, 38rem)", shareable: true },
+    trade: { kind: "compact", basis: "30rem", minWidth: "min(100%, 30rem)", shareable: true },
+    gear: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
+    food: { kind: "compact", basis: "24rem", minWidth: "min(100%, 24rem)", shareable: true },
+    buffs: { kind: "compact", basis: "26rem", minWidth: "min(100%, 26rem)", shareable: true },
+    pets: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
+    overlay: { kind: "wide", basis: "34rem", minWidth: "min(100%, 34rem)", shareable: true },
+    debug: { kind: "compact", basis: "26rem", minWidth: "min(100%, 26rem)", shareable: true },
+    default: { kind: "wide", basis: "32rem", minWidth: "min(100%, 32rem)", shareable: true },
+});
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function trimString(value) {
@@ -38,9 +56,50 @@ function normalizeUniqueSectionIds(sectionIds, availableSectionIds = []) {
     return normalized;
 }
 
-export function buildCalculatorSectionRenderOrder(sectionIds, topLevelTab, pinnedSections) {
+export function flattenPinnedLayout(layout, availableSectionIds = []) {
+    return normalizeUniqueSectionIds(
+        Array.isArray(layout) ? layout.flatMap((row) => (Array.isArray(row) ? row : [])) : [],
+        availableSectionIds,
+    );
+}
+
+export function normalizePinnedLayout(layout, availableSectionIds = [], fallbackPinnedSections = []) {
+    const fallbackRows = normalizeUniqueSectionIds(fallbackPinnedSections, availableSectionIds)
+        .map((sectionId) => [sectionId]);
+    const rows = Array.isArray(layout) ? layout : fallbackRows;
+    const seen = new Set();
+    const normalized = [];
+    for (const row of rows) {
+        if (!Array.isArray(row)) {
+            continue;
+        }
+        const nextRow = [];
+        for (const entry of row) {
+            const sectionId = trimString(entry);
+            if (!sectionId || seen.has(sectionId)) {
+                continue;
+            }
+            if (availableSectionIds.length && !availableSectionIds.includes(sectionId)) {
+                continue;
+            }
+            seen.add(sectionId);
+            nextRow.push(sectionId);
+        }
+        if (nextRow.length) {
+            normalized.push(nextRow);
+        }
+    }
+    if (Array.isArray(layout)) {
+        return normalized;
+    }
+    return normalized.length ? normalized : fallbackRows;
+}
+
+export function buildCalculatorSectionRenderOrder(sectionIds, topLevelTab, pinnedSectionsOrLayout) {
     const availableSectionIds = normalizeUniqueSectionIds(sectionIds);
-    const pinned = normalizeUniqueSectionIds(pinnedSections, availableSectionIds);
+    const pinned = Array.isArray(pinnedSectionsOrLayout?.[0])
+        ? flattenPinnedLayout(pinnedSectionsOrLayout, availableSectionIds)
+        : normalizeUniqueSectionIds(pinnedSectionsOrLayout, availableSectionIds);
     const topLevelSectionId = trimString(topLevelTab);
     const ordered = [...pinned];
     if (topLevelSectionId && !ordered.includes(topLevelSectionId) && availableSectionIds.includes(topLevelSectionId)) {
@@ -52,53 +111,6 @@ export function buildCalculatorSectionRenderOrder(sectionIds, topLevelTab, pinne
         }
     }
     return ordered;
-}
-
-export function projectPinnedSlotIndex(slotMidpoints, centerY) {
-    const normalizedCenterY = Number(centerY);
-    if (!Number.isFinite(normalizedCenterY)) {
-        return 0;
-    }
-    const normalizedMidpoints = Array.isArray(slotMidpoints)
-        ? slotMidpoints
-            .map((value) => {
-                if (value && typeof value === "object") {
-                    return Number(value.thresholdY);
-                }
-                return Number(value);
-            })
-            .filter(Number.isFinite)
-        : [];
-    let insertionIndex = 0;
-    while (
-        insertionIndex < normalizedMidpoints.length
-        && normalizedCenterY > normalizedMidpoints[insertionIndex]
-    ) {
-        insertionIndex += 1;
-    }
-    return insertionIndex;
-}
-
-export function buildPinnedSlots(cardRects) {
-    const normalizedRects = Array.isArray(cardRects)
-        ? cardRects
-            .map((rect) => {
-                if (!rect || typeof rect !== "object") {
-                    return null;
-                }
-                const top = Number(rect.top);
-                const height = Number(rect.height);
-                if (!Number.isFinite(top) || !Number.isFinite(height)) {
-                    return null;
-                }
-                return { top, height };
-            })
-            .filter(Boolean)
-        : [];
-    return normalizedRects.map((rect, index) => ({
-        index,
-        thresholdY: rect.top + (rect.height / 2),
-    }));
 }
 
 function languageHelper() {
@@ -119,13 +131,15 @@ function calculatorUi() {
     return current && typeof current === "object" ? current : {};
 }
 
-function patchPinnedSections(pinnedSections) {
+function patchPinnedLayout(pinnedLayout) {
     if (typeof globalThis.window?.__fishystuffCalculator?.patchSignals !== "function") {
         return;
     }
+    const normalizedLayout = normalizePinnedLayout(pinnedLayout);
     globalThis.window.__fishystuffCalculator.patchSignals({
         _calculator_ui: {
-            pinned_sections: [...pinnedSections],
+            pinned_layout: normalizedLayout.map((row) => [...row]),
+            pinned_sections: flattenPinnedLayout(normalizedLayout),
         },
     });
 }
@@ -152,6 +166,42 @@ function isElementVisible(element) {
     return state.display !== "none" && state.visibility !== "hidden";
 }
 
+function sectionLayoutMeta(sectionId) {
+    return SECTION_LAYOUT_META[trimString(sectionId)] ?? SECTION_LAYOUT_META.default;
+}
+
+function applySectionLayoutMeta(element, sectionId) {
+    const meta = sectionLayoutMeta(sectionId);
+    element.style.setProperty("--fishy-calculator-section-basis", meta.basis);
+    element.style.setProperty("--fishy-calculator-section-min-width", meta.minWidth);
+    element.dataset.calculatorSectionLayout = meta.kind;
+    element.dataset.calculatorSectionShareable = meta.shareable ? "true" : "false";
+}
+
+function rowAcceptsInline(rowSectionIds, draggedSectionId) {
+    const sectionIds = [
+        ...normalizeUniqueSectionIds(rowSectionIds),
+        ...normalizeUniqueSectionIds([draggedSectionId]),
+    ];
+    return sectionIds.every((sectionId) => sectionLayoutMeta(sectionId).shareable);
+}
+
+function closestRectIndex(rects, pointX, pointY) {
+    let bestIndex = -1;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < rects.length; index += 1) {
+        const rect = rects[index];
+        const dx = pointX < rect.left ? rect.left - pointX : pointX > rect.right ? pointX - rect.right : 0;
+        const dy = pointY < rect.top ? rect.top - pointY : pointY > rect.bottom ? pointY - rect.bottom : 0;
+        const score = (dy * 10_000) + dx;
+        if (score < bestScore) {
+            bestScore = score;
+            bestIndex = index;
+        }
+    }
+    return bestIndex;
+}
+
 export class FishyCalculatorSectionStack extends HTMLElementBase {
     constructor() {
         super();
@@ -166,14 +216,14 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             active: false,
             engaged: false,
             wasPinned: false,
-            insertionIndex: 0,
             startClientX: 0,
             startClientY: 0,
             offsetX: 0,
             offsetY: 0,
             width: 0,
             height: 0,
-            placeholder: null,
+            inlinePlaceholder: null,
+            rowPlaceholder: null,
         };
         this._handlePointerDown = (event) => this.handlePointerDown(event);
         this._handlePointerMove = (event) => this.handlePointerMove(event);
@@ -247,28 +297,23 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         return this.sectionCards().find((card) => trimString(card.dataset.calculatorSectionId) === normalizedSectionId) || null;
     }
 
-    visibleSectionCards(excludeSectionId = "") {
-        const ignoredSectionId = trimString(excludeSectionId);
-        return this.sectionCards().filter((card) => {
-            const sectionId = trimString(card.dataset.calculatorSectionId);
-            if (!sectionId || sectionId === ignoredSectionId) {
-                return false;
-            }
-            return isElementVisible(card);
-        });
-    }
-
     availableSectionIds() {
         return this.sectionCards()
             .map((card) => trimString(card.dataset.calculatorSectionId))
             .filter(Boolean);
     }
 
-    pinnedSectionIds() {
-        return normalizeUniqueSectionIds(
+    pinnedLayout() {
+        const availableSectionIds = this.availableSectionIds();
+        return normalizePinnedLayout(
+            calculatorUi().pinned_layout,
+            availableSectionIds,
             calculatorUi().pinned_sections,
-            this.availableSectionIds(),
         );
+    }
+
+    pinnedSectionIds() {
+        return flattenPinnedLayout(this.pinnedLayout(), this.availableSectionIds());
     }
 
     dropzoneElement() {
@@ -279,91 +324,151 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         return this.querySelector(".fishy-calculator-pin-dropzone__body");
     }
 
-    dragPlaceholderHeight() {
-        return DROPZONE_SLOT_HEIGHT_PX;
+    rowsHost() {
+        return this.querySelector(ROWS_HOST_SELECTOR);
     }
 
-    pinnedCardsForDrag() {
-        return this.pinnedSectionIds()
-            .filter((sectionId) => sectionId !== this._drag.sectionId)
-            .map((sectionId) => this.sectionCardById(sectionId))
-            .filter((card) => card && isElementVisible(card));
-    }
-
-    dropzoneMetrics() {
-        const dropzone = this.dropzoneElement();
-        const dropzoneBody = this.dropzoneBodyElement();
-        if (!dropzone || !dropzoneBody) {
+    ensureRowsHost() {
+        let host = this.rowsHost();
+        if (host) {
+            return host;
+        }
+        host = globalThis.document?.createElement?.("div") ?? null;
+        if (!host) {
             return null;
         }
-        const pinnedCards = this.pinnedCardsForDrag();
-        const placeholder = this._drag.placeholder;
-        const stackRect = this.getBoundingClientRect();
-        const bodyRect = dropzoneBody.getBoundingClientRect();
-        const headerHeight = Math.max(0, Math.ceil(bodyRect.height));
-        const contentTopOffset = headerHeight + DROPZONE_HEADER_GAP_PX;
-        let pinnedBottomOffset = contentTopOffset;
-        for (const card of pinnedCards) {
-            const rect = card.getBoundingClientRect();
-            pinnedBottomOffset = Math.max(pinnedBottomOffset, rect.bottom - stackRect.top);
+        host.className = "fishy-calculator-section-stack__rows";
+        host.setAttribute("data-calculator-pinned-rows", "");
+        const dropzone = this.dropzoneElement();
+        if (dropzone?.nextSibling) {
+            this.insertBefore(host, dropzone.nextSibling);
+        } else if (dropzone) {
+            this.appendChild(host);
+        } else {
+            this.prepend(host);
         }
-        const placeholderBottomOffset = placeholder?.parentNode === this
-            ? placeholder.getBoundingClientRect().bottom - stackRect.top
-            : Number.NEGATIVE_INFINITY;
-        const placeholderExtendsTail = Boolean(
-            this._drag.engaged
-            && placeholder?.parentNode === this
-            && this._drag.insertionIndex >= pinnedCards.length,
-        );
-        const frameBottomOffset = Math.max(
-            pinnedCards.length ? pinnedBottomOffset : (contentTopOffset + this.dragPlaceholderHeight()),
-            placeholderExtendsTail ? placeholderBottomOffset : Number.NEGATIVE_INFINITY,
-        );
-        return {
-            left: stackRect.left,
-            right: stackRect.right,
-            top: stackRect.top,
-            bottom: stackRect.top + frameBottomOffset,
-            contentTopOffset,
-            height: Math.ceil(frameBottomOffset + DROPZONE_FRAME_PADDING_PX),
-        };
+        return host;
     }
 
-    updateDropzoneFrame() {
-        const dropzone = this.dropzoneElement();
-        if (!this._drag.active) {
-            this.style.removeProperty("padding-top");
-            dropzone?.style.removeProperty("height");
-            return;
+    rowElements({ includePlaceholder = false } = {}) {
+        return Array.from(this.rowsHost()?.querySelectorAll(ROW_SELECTOR) ?? [])
+            .filter((row) => includePlaceholder || !row.hasAttribute("data-calculator-row-placeholder"));
+    }
+
+    syncSectionLayoutMeta(card) {
+        const sectionId = trimString(card.dataset.calculatorSectionId);
+        applySectionLayoutMeta(card, sectionId);
+    }
+
+    syncCardLayoutMeta() {
+        for (const card of this.sectionCards()) {
+            this.syncSectionLayoutMeta(card);
         }
-        const metrics = this.dropzoneMetrics();
-        if (!dropzone || !metrics) {
-            return;
+    }
+
+    createRowElement() {
+        const row = globalThis.document?.createElement?.("div");
+        if (!row) {
+            return null;
         }
-        this.style.setProperty("padding-top", `${metrics.contentTopOffset}px`);
-        dropzone.style.setProperty("height", `${metrics.height}px`);
+        row.className = "fishy-calculator-section-stack__row";
+        row.setAttribute("data-calculator-pinned-row", "");
+        return row;
+    }
+
+    createInlinePlaceholder() {
+        const placeholder = globalThis.document?.createElement?.("div");
+        if (!placeholder) {
+            return null;
+        }
+        placeholder.className = "fishy-calculator-section-slot-placeholder fishy-calculator-section-slot-placeholder--inline";
+        placeholder.setAttribute("data-calculator-inline-placeholder", "");
+        placeholder.setAttribute("aria-hidden", "true");
+        applySectionLayoutMeta(placeholder, this._drag.sectionId);
+        placeholder.style.setProperty("min-height", `${Math.max(this._drag.height || 0, PLACEHOLDER_MIN_HEIGHT_PX)}px`);
+        return placeholder;
+    }
+
+    createRowPlaceholder() {
+        const row = this.createRowElement();
+        if (!row) {
+            return null;
+        }
+        row.classList.add("fishy-calculator-section-stack__row--placeholder");
+        row.setAttribute("data-calculator-row-placeholder", "");
+        const marker = globalThis.document?.createElement?.("div");
+        if (!marker) {
+            return null;
+        }
+        marker.className = "fishy-calculator-section-slot-placeholder fishy-calculator-section-slot-placeholder--row";
+        marker.setAttribute("aria-hidden", "true");
+        marker.style.setProperty("min-height", `${Math.max(this._drag.height || 0, PLACEHOLDER_MIN_HEIGHT_PX)}px`);
+        row.appendChild(marker);
+        return row;
     }
 
     syncOrderFromSignals() {
         this._isSyncing = true;
-        const dropzone = this.dropzoneElement();
         try {
+            const dropzone = this.dropzoneElement();
             if (dropzone && this.firstElementChild !== dropzone) {
                 this.prepend(dropzone);
             }
+            const rowsHost = this.ensureRowsHost();
+            if (dropzone && rowsHost && dropzone.nextElementSibling !== rowsHost) {
+                this.insertBefore(rowsHost, dropzone.nextSibling);
+            }
+            this.syncCardLayoutMeta();
             const cardsById = new Map(
                 this.sectionCards().map((card) => [
                     trimString(card.dataset.calculatorSectionId),
                     card,
                 ]),
             );
-            const order = buildCalculatorSectionRenderOrder(
-                this.availableSectionIds(),
-                calculatorUi().top_level_tab,
-                this.pinnedSectionIds(),
+            const availableSectionIds = Array.from(cardsById.keys());
+            const pinnedLayout = normalizePinnedLayout(
+                calculatorUi().pinned_layout,
+                availableSectionIds,
+                calculatorUi().pinned_sections,
             );
-            let reference = dropzone ? dropzone.nextElementSibling : this.firstElementChild;
+            if (rowsHost) {
+                const fragment = globalThis.document?.createDocumentFragment?.();
+                for (const rowSectionIds of pinnedLayout) {
+                    const row = this.createRowElement();
+                    if (!row) {
+                        continue;
+                    }
+                    for (const sectionId of rowSectionIds) {
+                        const card = cardsById.get(sectionId);
+                        if (card) {
+                            row.appendChild(card);
+                        }
+                    }
+                    if (row.childElementCount) {
+                        if (fragment) {
+                            fragment.appendChild(row);
+                        } else {
+                            rowsHost.appendChild(row);
+                        }
+                    }
+                }
+                if (fragment) {
+                    rowsHost.replaceChildren(fragment);
+                } else {
+                    rowsHost.replaceChildren();
+                }
+            }
+            const pinnedSet = new Set(flattenPinnedLayout(pinnedLayout, availableSectionIds));
+            const order = buildCalculatorSectionRenderOrder(
+                availableSectionIds,
+                calculatorUi().top_level_tab,
+                pinnedLayout,
+            );
+            let reference = rowsHost?.nextElementSibling ?? this.firstElementChild;
             for (const sectionId of order) {
+                if (pinnedSet.has(sectionId)) {
+                    continue;
+                }
                 const card = cardsById.get(sectionId);
                 if (!card) {
                     continue;
@@ -397,14 +502,14 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._drag.active = false;
         this._drag.engaged = false;
         this._drag.wasPinned = this.pinnedSectionIds().includes(sectionId);
-        this._drag.insertionIndex = Math.max(0, this.pinnedSectionIds().indexOf(sectionId));
         this._drag.startClientX = event.clientX;
         this._drag.startClientY = event.clientY;
         this._drag.offsetX = 0;
         this._drag.offsetY = 0;
         this._drag.width = 0;
         this._drag.height = 0;
-        this._drag.placeholder = null;
+        this._drag.inlinePlaceholder = null;
+        this._drag.rowPlaceholder = null;
         handle.setPointerCapture?.(event.pointerId);
     }
 
@@ -413,14 +518,13 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             return;
         }
         const rect = this._drag.item.getBoundingClientRect();
-        const placeholder = globalThis.document?.createElement?.("div");
-        if (!placeholder) {
-            return;
+        if (this._drag.wasPinned) {
+            this._drag.inlinePlaceholder = this.createInlinePlaceholder();
+            const sourceRow = this._drag.item.closest(ROW_SELECTOR);
+            if (this._drag.inlinePlaceholder && sourceRow) {
+                sourceRow.insertBefore(this._drag.inlinePlaceholder, this._drag.item);
+            }
         }
-        placeholder.className = "fishy-calculator-section-slot-placeholder";
-        placeholder.style.height = `${this.dragPlaceholderHeight()}px`;
-        placeholder.setAttribute("aria-hidden", "true");
-        this._drag.item.before(placeholder);
         this.appendChild(this._drag.item);
         this._drag.item.classList.add("fishy-calculator-section-card--dragging");
         this._drag.item.style.position = "fixed";
@@ -434,9 +538,9 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._drag.offsetY = event.clientY - rect.top;
         this._drag.width = rect.width;
         this._drag.height = rect.height;
-        this._drag.placeholder = placeholder;
         this._drag.active = true;
         this.classList.add("fishy-calculator-section-stack--dragging");
+        this.pruneEmptyRows();
         this.updateDropzoneFrame();
         this.projectDrag(event);
     }
@@ -460,6 +564,97 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this.projectDrag(event);
     }
 
+    rowInfos() {
+        return this.rowElements({ includePlaceholder: false }).map((row, index) => ({
+            index,
+            row,
+            rect: row.getBoundingClientRect(),
+            cards: Array.from(row.querySelectorAll(CARD_SELECTOR))
+                .filter((card) => card !== this._drag.item && isElementVisible(card)),
+            sectionIds: Array.from(row.querySelectorAll(CARD_SELECTOR))
+                .map((card) => trimString(card.dataset.calculatorSectionId))
+                .filter((sectionId) => sectionId && sectionId !== this._drag.sectionId),
+        }));
+    }
+
+    resolveDropTarget(pointX, pointY) {
+        const rows = this.rowInfos();
+        if (!rows.length) {
+            return { kind: "row", rowIndex: 0 };
+        }
+        if (pointY < rows[0].rect.top) {
+            return { kind: "row", rowIndex: 0 };
+        }
+        for (let index = 0; index < rows.length; index += 1) {
+            const rowInfo = rows[index];
+            const previousRect = rows[index - 1]?.rect ?? null;
+            const nextRect = rows[index + 1]?.rect ?? null;
+            const beforeBoundary = previousRect ? (previousRect.bottom + rowInfo.rect.top) / 2 : rowInfo.rect.top;
+            const afterBoundary = nextRect ? (rowInfo.rect.bottom + nextRect.top) / 2 : rowInfo.rect.bottom;
+            if (pointY >= beforeBoundary && pointY < rowInfo.rect.top) {
+                return { kind: "row", rowIndex: index };
+            }
+            if (pointY >= rowInfo.rect.top && pointY <= rowInfo.rect.bottom) {
+                if (rowAcceptsInline(rowInfo.sectionIds, this._drag.sectionId)) {
+                    const rects = rowInfo.cards.map((card) => card.getBoundingClientRect());
+                    if (!rects.length) {
+                        return { kind: "inline", rowIndex: index, itemIndex: 0 };
+                    }
+                    const closestIndex = closestRectIndex(rects, pointX, pointY);
+                    const rect = rects[Math.max(0, closestIndex)];
+                    const itemIndex = pointX <= rect.left + (rect.width / 2) ? closestIndex : closestIndex + 1;
+                    return { kind: "inline", rowIndex: index, itemIndex };
+                }
+                return {
+                    kind: "row",
+                    rowIndex: pointY <= rowInfo.rect.top + (rowInfo.rect.height / 2) ? index : index + 1,
+                };
+            }
+            if (pointY > rowInfo.rect.bottom && pointY <= afterBoundary) {
+                return { kind: "row", rowIndex: index + 1 };
+            }
+        }
+        return { kind: "row", rowIndex: rows.length };
+    }
+
+    moveInlinePlaceholder(rowIndex, itemIndex) {
+        const rows = this.rowElements({ includePlaceholder: false });
+        const row = rows[Math.max(0, Math.min(rowIndex, rows.length - 1))];
+        const placeholder = this._drag.inlinePlaceholder ?? this.createInlinePlaceholder();
+        if (!row || !placeholder) {
+            return;
+        }
+        if (this._drag.rowPlaceholder?.parentNode) {
+            this._drag.rowPlaceholder.remove();
+        }
+        this._drag.inlinePlaceholder = placeholder;
+        const siblings = Array.from(row.children).filter((child) => child !== placeholder);
+        const insertionIndex = Math.max(0, Math.min(itemIndex, siblings.length));
+        const reference = siblings[insertionIndex] ?? null;
+        row.insertBefore(placeholder, reference);
+        this.pruneEmptyRows();
+    }
+
+    moveRowPlaceholder(rowIndex) {
+        const rowsHost = this.ensureRowsHost();
+        if (!rowsHost) {
+            return;
+        }
+        if (this._drag.inlinePlaceholder?.parentNode) {
+            this._drag.inlinePlaceholder.remove();
+        }
+        const placeholderRow = this._drag.rowPlaceholder ?? this.createRowPlaceholder();
+        if (!placeholderRow) {
+            return;
+        }
+        this._drag.rowPlaceholder = placeholderRow;
+        const rows = this.rowElements({ includePlaceholder: false });
+        const insertionIndex = Math.max(0, Math.min(rowIndex, rows.length));
+        const reference = rows[insertionIndex] ?? null;
+        rowsHost.insertBefore(placeholderRow, reference);
+        this.pruneEmptyRows();
+    }
+
     projectDrag(event) {
         const item = this._drag.item;
         if (!this._drag.active || !item) {
@@ -469,14 +664,10 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         const nextTop = event.clientY - this._drag.offsetY;
         item.style.left = `${nextLeft}px`;
         item.style.top = `${nextTop}px`;
-        const probeY = event.clientY;
         const probeX = event.clientX;
+        const probeY = event.clientY;
         const dropzone = this.dropzoneElement();
         const dropzoneMetrics = this.dropzoneMetrics();
-        const pinnedCards = this.pinnedCardsForDrag();
-        const pinnedSlots = buildPinnedSlots(
-            pinnedCards.map((card) => card.getBoundingClientRect()),
-        );
         const dropzoneActive = Boolean(
             dropzoneMetrics
             && probeX >= dropzoneMetrics.left
@@ -486,48 +677,94 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         );
         this._drag.engaged = dropzoneActive;
         if (dropzoneActive) {
-            this._drag.insertionIndex = projectPinnedSlotIndex(pinnedSlots, probeY);
-            this.movePlaceholderToPinnedIndex(pinnedCards, this._drag.insertionIndex);
+            const target = this.resolveDropTarget(probeX, probeY);
+            if (target.kind === "inline") {
+                this.moveInlinePlaceholder(target.rowIndex, target.itemIndex);
+            } else {
+                this.moveRowPlaceholder(target.rowIndex);
+            }
         }
         this.updateDropzoneFrame();
         dropzone?.classList.toggle("fishy-calculator-pin-dropzone--active", dropzoneActive);
     }
 
-    firstCardAfterPinnedArea() {
-        const pinnedIds = new Set(this.pinnedSectionIds().filter((sectionId) => sectionId !== this._drag.sectionId));
-        const order = buildCalculatorSectionRenderOrder(
-            this.availableSectionIds(),
-            calculatorUi().top_level_tab,
-            this.pinnedSectionIds(),
-        );
-        for (const sectionId of order) {
-            if (sectionId === this._drag.sectionId || pinnedIds.has(sectionId)) {
-                continue;
-            }
-            const card = this.sectionCardById(sectionId);
-            if (card) {
-                return card;
+    pruneEmptyRows() {
+        for (const row of this.rowElements({ includePlaceholder: true })) {
+            if (!row.querySelector(CARD_SELECTOR) && !row.querySelector(INLINE_PLACEHOLDER_SELECTOR) && !row.hasAttribute("data-calculator-row-placeholder")) {
+                row.remove();
             }
         }
-        return null;
     }
 
-    movePlaceholderToPinnedIndex(pinnedCards, insertionIndex) {
-        const placeholder = this._drag.placeholder;
-        if (!placeholder) {
+    dropzoneMetrics() {
+        const dropzone = this.dropzoneElement();
+        const dropzoneBody = this.dropzoneBodyElement();
+        if (!dropzone || !dropzoneBody) {
+            return null;
+        }
+        const stackRect = this.getBoundingClientRect();
+        const bodyRect = dropzoneBody.getBoundingClientRect();
+        const headerHeight = Math.max(0, Math.ceil(bodyRect.height));
+        const contentTopOffset = headerHeight + DROPZONE_HEADER_GAP_PX;
+        const rows = this.rowElements({ includePlaceholder: true });
+        const frameBottomOffset = rows.length
+            ? Math.max(
+                contentTopOffset,
+                ...rows.map((row) => row.getBoundingClientRect().bottom - stackRect.top),
+            )
+            : contentTopOffset + DROPZONE_EMPTY_HEIGHT_PX;
+        return {
+            left: stackRect.left,
+            right: stackRect.right,
+            top: stackRect.top,
+            bottom: stackRect.top + frameBottomOffset,
+            contentTopOffset,
+            height: Math.ceil(frameBottomOffset + DROPZONE_FRAME_PADDING_PX),
+        };
+    }
+
+    updateDropzoneFrame() {
+        const dropzone = this.dropzoneElement();
+        if (!this._drag.active) {
+            this.style.removeProperty("padding-top");
+            dropzone?.style.removeProperty("height");
             return;
         }
-        const clampedIndex = Math.max(0, Math.min(Number(insertionIndex) || 0, pinnedCards.length));
-        if (clampedIndex < pinnedCards.length) {
-            this.insertBefore(placeholder, pinnedCards[clampedIndex]);
+        const metrics = this.dropzoneMetrics();
+        if (!dropzone || !metrics) {
             return;
         }
-        const anchor = this.firstCardAfterPinnedArea();
-        if (anchor) {
-            this.insertBefore(placeholder, anchor);
-            return;
+        this.style.setProperty("padding-top", `${metrics.contentTopOffset}px`);
+        dropzone.style.setProperty("height", `${metrics.height}px`);
+    }
+
+    layoutFromPlaceholders() {
+        const availableSectionIds = this.availableSectionIds();
+        const layout = [];
+        for (const row of this.rowElements({ includePlaceholder: true })) {
+            if (row.hasAttribute("data-calculator-row-placeholder")) {
+                layout.push([this._drag.sectionId]);
+                continue;
+            }
+            const rowEntries = [];
+            for (const child of Array.from(row.children)) {
+                if (child === this._drag.inlinePlaceholder) {
+                    rowEntries.push(this._drag.sectionId);
+                    continue;
+                }
+                if (!child.matches?.(CARD_SELECTOR)) {
+                    continue;
+                }
+                const sectionId = trimString(child.dataset.calculatorSectionId);
+                if (sectionId && sectionId !== this._drag.sectionId) {
+                    rowEntries.push(sectionId);
+                }
+            }
+            if (rowEntries.length) {
+                layout.push(rowEntries);
+            }
         }
-        this.appendChild(placeholder);
+        return normalizePinnedLayout(layout, availableSectionIds, []);
     }
 
     handlePointerUp(event) {
@@ -552,26 +789,10 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             handle.releasePointerCapture(pointerId);
         }
         const item = this._drag.item;
-        const placeholder = this._drag.placeholder;
-        const pinnedIds = this.pinnedSectionIds().filter((sectionId) => sectionId !== this._drag.sectionId);
-        const shouldPatch = Boolean(
-            commit
-            && wasActive
-            && item
-            && (this._drag.wasPinned || this._drag.engaged),
-        );
-        const nextPinnedSections = shouldPatch
-            ? (() => {
-                const next = [...pinnedIds];
-                const insertionIndex = Math.max(0, Math.min(this._drag.insertionIndex, next.length));
-                next.splice(insertionIndex, 0, this._drag.sectionId);
-                return next;
-            })()
-            : null;
-        if (item && placeholder?.parentNode === this) {
-            this.insertBefore(item, placeholder);
-        }
-        placeholder?.remove?.();
+        const shouldPatch = Boolean(commit && wasActive && this._drag.engaged);
+        const nextLayout = shouldPatch ? this.layoutFromPlaceholders() : null;
+        this._drag.inlinePlaceholder?.remove?.();
+        this._drag.rowPlaceholder?.remove?.();
         if (item) {
             item.classList.remove("fishy-calculator-section-card--dragging");
             item.style.removeProperty("position");
@@ -591,18 +812,18 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._drag.active = false;
         this._drag.engaged = false;
         this._drag.wasPinned = false;
-        this._drag.insertionIndex = 0;
         this._drag.startClientX = 0;
         this._drag.startClientY = 0;
         this._drag.offsetX = 0;
         this._drag.offsetY = 0;
         this._drag.width = 0;
         this._drag.height = 0;
-        this._drag.placeholder = null;
+        this._drag.inlinePlaceholder = null;
+        this._drag.rowPlaceholder = null;
         this.style.removeProperty("padding-top");
         this.dropzoneElement()?.style.removeProperty("height");
-        if (shouldPatch && nextPinnedSections) {
-            patchPinnedSections(nextPinnedSections);
+        if (shouldPatch && nextLayout) {
+            patchPinnedLayout(nextLayout);
             return;
         }
         this.scheduleSync();

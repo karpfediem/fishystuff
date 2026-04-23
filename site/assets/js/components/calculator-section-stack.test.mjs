@@ -19,64 +19,76 @@ async function loadModule() {
     }
 }
 
-test("buildCalculatorSectionRenderOrder keeps pinned sections first and selected section next", async () => {
+test("buildCalculatorSectionRenderOrder keeps pinned rows first and selected section next", async () => {
     const { buildCalculatorSectionRenderOrder } = await loadModule();
 
     assert.deepEqual(
         buildCalculatorSectionRenderOrder(
             ["overview", "inputs", "distribution", "gear"],
             "gear",
-            ["overview", "distribution"],
+            [["overview", "distribution"]],
         ),
         ["overview", "distribution", "gear", "inputs"],
     );
 });
 
-test("buildCalculatorSectionRenderOrder filters duplicates and unknown pinned ids", async () => {
-    const { buildCalculatorSectionRenderOrder } = await loadModule();
+test("flattenPinnedLayout preserves row order and removes duplicates", async () => {
+    const { flattenPinnedLayout } = await loadModule();
 
     assert.deepEqual(
-        buildCalculatorSectionRenderOrder(
-            ["overview", "inputs", "distribution"],
-            "inputs",
-            ["distribution", "distribution", "missing"],
-        ),
-        ["distribution", "inputs", "overview"],
+        flattenPinnedLayout([
+            ["overview", "distribution"],
+            ["distribution", "gear"],
+            ["missing", "food"],
+        ], ["overview", "distribution", "gear", "food"]),
+        ["overview", "distribution", "gear", "food"],
     );
 });
 
-test("projectPinnedSlotIndex projects the dragged center into the nearest slot band", async () => {
-    const { projectPinnedSlotIndex } = await loadModule();
-
-    assert.equal(projectPinnedSlotIndex([100, 200, 300], 20), 0);
-    assert.equal(projectPinnedSlotIndex([100, 200, 300], 150), 1);
-    assert.equal(projectPinnedSlotIndex([100, 200, 300], 260), 2);
-    assert.equal(projectPinnedSlotIndex([100, 200, 300], 360), 3);
-});
-
-test("buildPinnedSlots derives slot thresholds from card rect midpoints", async () => {
-    const { buildPinnedSlots } = await loadModule();
+test("normalizePinnedLayout keeps rows while filtering unknown sections", async () => {
+    const { normalizePinnedLayout } = await loadModule();
 
     assert.deepEqual(
-        buildPinnedSlots([
-            { top: 20, height: 100 },
-            { top: 160, height: 80 },
-        ]),
+        normalizePinnedLayout(
+            [
+                ["overview", "missing"],
+                ["distribution", "gear", "distribution"],
+            ],
+            ["overview", "distribution", "gear", "food"],
+            ["food"],
+        ),
         [
-            { index: 0, thresholdY: 70 },
-            { index: 1, thresholdY: 200 },
+            ["overview"],
+            ["distribution", "gear"],
         ],
     );
 });
 
-test("projectPinnedSlotIndex accepts slot objects from buildPinnedSlots", async () => {
-    const { buildPinnedSlots, projectPinnedSlotIndex } = await loadModule();
-    const slots = buildPinnedSlots([
-        { top: 40, height: 80 },
-        { top: 160, height: 120 },
-    ]);
+test("normalizePinnedLayout falls back to one-item rows for legacy pinned sections", async () => {
+    const { normalizePinnedLayout } = await loadModule();
 
-    assert.equal(projectPinnedSlotIndex(slots, 10), 0);
-    assert.equal(projectPinnedSlotIndex(slots, 110), 1);
-    assert.equal(projectPinnedSlotIndex(slots, 300), 2);
+    assert.deepEqual(
+        normalizePinnedLayout(
+            undefined,
+            ["overview", "inputs", "distribution"],
+            ["overview", "distribution"],
+        ),
+        [
+            ["overview"],
+            ["distribution"],
+        ],
+    );
+});
+
+test("normalizePinnedLayout preserves an explicit empty layout", async () => {
+    const { normalizePinnedLayout } = await loadModule();
+
+    assert.deepEqual(
+        normalizePinnedLayout(
+            [],
+            ["overview", "inputs", "distribution"],
+            ["overview", "distribution"],
+        ),
+        [],
+    );
 });

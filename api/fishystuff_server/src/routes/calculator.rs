@@ -1721,7 +1721,7 @@ fn render_calculator_panel_legend(
                         data-attr:aria-pressed="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}').toString()"
                         data-attr:aria-label="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}') ? {} : {}"
                         data-attr:title="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}') ? {} : {}"
-                        data-on:click="$_calculator_ui = window.__fishystuffCalculator.togglePinnedSection($_calculator_ui, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-pin"></use></svg></button>
+                        data-on:click="window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-pin"></use></svg></button>
             </span>
         </legend>"#,
         label_icon,
@@ -13313,7 +13313,7 @@ mod tests {
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
         assert!(text.contains(
-            "window.__fishystuffCalculator.togglePinnedSection($_calculator_ui, 'overview')"
+            "window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, 'overview')"
         ));
         assert!(text.contains("<fishy-calculator-section-stack"));
         assert!(text.contains("data-calculator-pin-dropzone"));

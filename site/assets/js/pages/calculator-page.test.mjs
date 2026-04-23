@@ -253,6 +253,7 @@ function defaultSignals() {
     _calculator_ui: {
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_layout: [["overview"]],
       pinned_sections: ["overview"],
     },
     _calculator_actions: {
@@ -279,6 +280,7 @@ function defaultSignals() {
       _calculator_ui: {
         top_level_tab: "overview",
         distribution_tab: "groups",
+        pinned_layout: [["overview"]],
         pinned_sections: ["overview"],
       },
       _calculator_actions: {
@@ -322,6 +324,7 @@ test("calculator restore canonicalizes stored signals", () => {
     "fishystuff.calculator.ui.v1": JSON.stringify({
       top_level_tab: "distribution",
       distribution_tab: "loot_flow",
+      pinned_layout: [["inputs", "distribution"], ["missing"]],
       pinned_sections: ["inputs", "distribution", "inputs", "missing"],
     }),
   });
@@ -339,6 +342,7 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.equal(signals.pet2.packLeader, false);
   assert.equal(signals._calculator_ui.top_level_tab, "overview");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [["inputs", "distribution"]]);
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
     "8473": {
@@ -360,6 +364,7 @@ test("calculator restore keeps the current tab while restoring trade, food, and 
     "fishystuff.calculator.ui.v1": JSON.stringify({
       top_level_tab: "food",
       distribution_tab: "groups",
+      pinned_layout: [["overview", "trade"], ["food", "buffs", "missing"]],
       pinned_sections: ["overview", "trade", "food", "buffs", "missing"],
     }),
   });
@@ -370,12 +375,34 @@ test("calculator restore keeps the current tab while restoring trade, food, and 
 
   assert.equal(signals._calculator_ui.top_level_tab, "trade");
   assert.equal(signals._calculator_ui.distribution_tab, "groups");
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [
+    ["overview", "trade"],
+    ["food", "buffs"],
+  ]);
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), [
     "overview",
     "trade",
     "food",
     "buffs",
   ]);
+});
+
+test("calculator restore ignores legacy pinned UI state without a pinned layout", () => {
+  const env = createContext({
+    "fishystuff.calculator.ui.v1": JSON.stringify({
+      top_level_tab: "food",
+      distribution_tab: "groups",
+      pinned_sections: ["trade", "food", "buffs"],
+    }),
+  });
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.equal(signals._calculator_ui.top_level_tab, "overview");
+  assert.equal(signals._calculator_ui.distribution_tab, "groups");
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [["overview"]]);
+  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["overview"]);
 });
 
 test("calculator restore leaves initial shell state intact when storage is empty", () => {
@@ -385,6 +412,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
     _calculator_ui: {
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_layout: [["overview"]],
       pinned_sections: ["overview"],
     },
     _calculator_actions: {
@@ -405,6 +433,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
     _calculator_ui: {
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_layout: [["overview"]],
       pinned_sections: ["overview"],
     },
     _calculator_actions: {
@@ -443,9 +472,71 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     Array.from(calculator.placePinnedSection(["overview", "inputs"], "overview", "inputs", "after")),
     ["inputs", "overview"],
   );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calculator.togglePinnedSection({
+      top_level_tab: "overview",
+      distribution_tab: "groups",
+      pinned_layout: [["overview"], ["inputs"]],
+      pinned_sections: ["overview", "inputs"],
+    }, "distribution"))),
+    {
+      top_level_tab: "overview",
+      distribution_tab: "groups",
+      pinned_layout: [["overview"], ["inputs"], ["distribution"]],
+      pinned_sections: ["overview", "inputs", "distribution"],
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calculator.togglePinnedSection({
+      top_level_tab: "overview",
+      distribution_tab: "groups",
+      pinned_layout: [["overview"]],
+      pinned_sections: ["overview"],
+    }, "overview"))),
+    {
+      top_level_tab: "overview",
+      distribution_tab: "groups",
+      pinned_layout: [],
+      pinned_sections: [],
+    },
+  );
+  const uiState = {
+    top_level_tab: "loot",
+    distribution_tab: "loot_flow",
+    pinned_layout: [["overview"]],
+    pinned_sections: ["overview"],
+  };
+  assert.equal(calculator.togglePinnedSectionInPlace(uiState, "inputs"), uiState);
+  assert.deepEqual(JSON.parse(JSON.stringify(uiState)), {
+    top_level_tab: "loot",
+    distribution_tab: "loot_flow",
+    pinned_layout: [["overview"], ["inputs"]],
+    pinned_sections: ["overview", "inputs"],
+  });
+  const selectedPinnedState = {
+    top_level_tab: "trade",
+    distribution_tab: "groups",
+    pinned_layout: [["overview"], ["trade"]],
+    pinned_sections: ["overview", "trade"],
+  };
+  assert.equal(calculator.togglePinnedSectionInPlace(selectedPinnedState, "trade"), selectedPinnedState);
+  assert.deepEqual(JSON.parse(JSON.stringify(selectedPinnedState)), {
+    top_level_tab: "trade",
+    distribution_tab: "groups",
+    pinned_layout: [["overview"]],
+    pinned_sections: ["overview"],
+  });
+  assert.equal(
+    calculator.sectionVisible("trade", selectedPinnedState.top_level_tab, selectedPinnedState.pinned_sections),
+    true,
+  );
   assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", -1), false);
   assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", 1), true);
   assert.equal(calculator.isPinnedSection(["overview", "inputs"], "inputs"), true);
+  assert.equal(calculator.isPinnedSection({
+    pinned_layout: [["overview", "inputs"]],
+    pinned_sections: ["overview", "inputs"],
+  }, "inputs"), true);
   assert.equal(calculator.sectionVisible("overview", "loot", []), false);
   assert.equal(calculator.sectionVisible("overview", "loot", ["overview"]), true);
   assert.equal(calculator.sectionOrder("loot", "loot", ["overview", "inputs"]), 2);
@@ -497,6 +588,7 @@ test("calculator persist stores canonical page state and excludes transient bran
   assert.deepEqual(persistedUi, {
     top_level_tab: "overview",
     distribution_tab: "groups",
+    pinned_layout: [["overview"]],
     pinned_sections: ["overview"],
   });
   assert.equal("_live" in persistedData, false);
@@ -603,6 +695,7 @@ test("calculator action listener handles copy and clear tokens once without clea
     JSON.stringify({
       top_level_tab: "overview",
       distribution_tab: "groups",
+      pinned_layout: [["overview"]],
       pinned_sections: ["overview"],
     }),
   );
@@ -610,6 +703,7 @@ test("calculator action listener handles copy and clear tokens once without clea
   signals._calculator_ui = {
     top_level_tab: "loot",
     distribution_tab: "loot_flow",
+    pinned_layout: [["overview", "distribution"]],
     pinned_sections: ["overview", "distribution"],
   };
   signals.overlay = {
@@ -666,12 +760,14 @@ test("calculator action listener handles copy and clear tokens once without clea
     {
       top_level_tab: "loot",
       distribution_tab: "loot_flow",
+      pinned_layout: [["overview", "distribution"]],
       pinned_sections: ["overview", "distribution"],
     },
   );
   assert.deepEqual(signals._calculator_ui, {
     top_level_tab: "loot",
     distribution_tab: "loot_flow",
+    pinned_layout: [["overview", "distribution"]],
     pinned_sections: ["overview", "distribution"],
   });
   assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
