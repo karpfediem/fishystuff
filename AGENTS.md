@@ -118,3 +118,7 @@ Repository notes for working in this monorepo.
 - The site is static. SVG icons must be static at runtime.
 - Do not add browser-side Iconify usage such as `iconify-icon`, runtime SVG generation, client-side icon fetches, or MutationObserver-based icon patching.
 - When adding or replacing site icons, generate static SVGs at build time with `@iconify/utils` via `site/scripts/build-icon-sprite.mjs`, update `site/assets/img/icons.svg`, and reference icons from templates/JS with `<svg><use href="/img/icons.svg#..."></use></svg>`.
+
+## Expectations and hard limitations
+- DO NOT, EVER, provide migrations or fallbacks to prior version for unreleased code paths.
+- IF you implemented a fallback to a previously existing codepath, clearly call it out ("Fallbacks introduced:") INCLUDING specific reasoning why this fallback is required and justified.
