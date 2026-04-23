@@ -346,6 +346,159 @@ test("user presets keep selected preset immutable until current changes are expl
   assert.equal(helper.current("calculator-layouts"), null);
 });
 
+test("user presets do not clear current state when source activation does not change the captured payload", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply() {
+      return null;
+    },
+  });
+  const preset = helper.createPreset("calculator-layouts", {
+    name: "Layout 1",
+    payload: {
+      row: 1,
+    },
+  });
+  currentPayload = {
+    row: 4,
+  };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  helper.activatePreset("calculator-layouts", preset.id);
+
+  assert.deepEqual(helper.current("calculator-layouts")?.payload, { row: 4 });
+  assert.deepEqual(helper.preset("calculator-layouts", preset.id).payload, { row: 1 });
+  assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+});
+
+test("user presets keep current state when selecting a different source without applying it", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const alpha = helper.createPreset("calculator-layouts", {
+    name: "Alpha",
+    payload: {
+      row: 1,
+    },
+  });
+  const beta = helper.createPreset("calculator-layouts", {
+    name: "Beta",
+    payload: {
+      row: 9,
+    },
+    select: false,
+  });
+  currentPayload = {
+    row: 4,
+  };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  helper.setSelectedPresetId("calculator-layouts", beta.id);
+
+  assert.equal(helper.selectedPresetId("calculator-layouts"), beta.id);
+  assert.deepEqual(helper.current("calculator-layouts")?.origin, { kind: "preset", id: alpha.id });
+  assert.deepEqual(helper.current("calculator-layouts")?.payload, { row: 4 });
+});
+
+test("user presets clear current state when copying the current payload into a new selected preset", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  helper.createPreset("calculator-layouts", {
+    name: "Alpha",
+    payload: {
+      row: 1,
+    },
+  });
+  currentPayload = {
+    row: 4,
+  };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  const copied = helper.createPreset("calculator-layouts", {
+    name: "Copied current",
+    payload: helper.current("calculator-layouts").payload,
+  });
+
+  assert.equal(helper.selectedPresetId("calculator-layouts"), copied.id);
+  assert.equal(helper.current("calculator-layouts"), null);
+});
+
+test("user presets discard current state by applying the original source payload", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
+    },
+  });
+  const preset = helper.createPreset("calculator-layouts", {
+    name: "Layout 1",
+    payload: {
+      row: 1,
+    },
+  });
+  currentPayload = {
+    row: 4,
+  };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  const discarded = helper.discardCurrent("calculator-layouts");
+
+  assert.equal(discarded.action, "matched-preset");
+  assert.deepEqual(currentPayload, { row: 1 });
+  assert.equal(helper.current("calculator-layouts"), null);
+  assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+});
+
 test("user presets keep an action log for undo and redo of the current modified preset", () => {
   const env = createEnv();
   const helper = env.helper;

@@ -365,6 +365,7 @@ export class FishyPresetManager extends HTMLElementBase {
                   </fieldset>
                   <div class="flex flex-wrap gap-2">
                     <button type="button" class="btn btn-primary" data-role="save" data-on:click='window.__fishystuffPresetManager.saveCurrent(el)'></button>
+                    <button type="button" class="btn btn-warning btn-outline" data-role="discard" data-on:click='window.__fishystuffPresetManager.discardCurrent(el)'></button>
                     <button type="button" class="btn btn-outline" data-role="copy" data-on:click='window.__fishystuffPresetManager.copySelected(el)'></button>
                     <button type="button" class="btn btn-outline" data-role="export" data-on:click='window.__fishystuffPresetManager.exportSelected(el)'></button>
                     <button type="button" class="btn btn-outline" data-role="import" data-on:click='window.__fishystuffPresetManager.openImport(el)'></button>
@@ -557,6 +558,13 @@ export class FishyPresetManager extends HTMLElementBase {
     return presetId ? (presetHelper()?.preset?.(this.collectionKey, presetId) ?? null) : null;
   }
 
+  sourceItemForCurrent(currentItem, items = this.cardItems().items) {
+    if (!currentItem) {
+      return null;
+    }
+    return items.find((item) => sourceMatchesCard(currentItem.source, item.key)) || null;
+  }
+
   linkedSavedPresetForCurrent(currentItem = this.cardItems().currentItem) {
     if (!currentItem || currentItem.source?.kind !== "preset") {
       return null;
@@ -566,10 +574,10 @@ export class FishyPresetManager extends HTMLElementBase {
 
   ensureSelectedCard(items, activePresetId, activeFixedId = "") {
     const existing = this.selectedItem(items);
-    const currentPayload = this.currentPayload();
-    if (existing && this.isCardApplied(existing, activePresetId, currentPayload)) {
+    if (existing) {
       return false;
     }
+    const currentPayload = this.currentPayload();
     const currentItem = items.find((item) => item.kind === "current" && this.isCardApplied(item, activePresetId, currentPayload));
     if (currentItem) {
       this.selectedCardKey = currentItem.key;
@@ -690,6 +698,9 @@ export class FishyPresetManager extends HTMLElementBase {
     const selectedItem = this.selectedItem(items);
     const selectedSavedPreset = this.selectedSavedPreset();
     const linkedSavedPreset = this.linkedSavedPresetForCurrent(currentItem);
+    const linkedSourceItem = this.sourceItemForCurrent(currentItem, items);
+    const copyItem = currentItem || selectedItem;
+    const shouldHighlightCopy = Boolean(currentItem && !linkedSavedPreset);
 
     setElementText(this.element("open-label"), this.openLabelText());
     setElementText(this.element("manager-title"), this.titleText());
@@ -748,10 +759,17 @@ export class FishyPresetManager extends HTMLElementBase {
       saveButton.disabled = !canInteract || !currentItem || !linkedSavedPreset;
     }
 
+    const discardButton = this.button("discard");
+    if (discardButton) {
+      discardButton.innerHTML = `${iconMarkup("clear", "size-4")}<span>${this.translate("presets.button.discard", "Discard")}</span>`;
+      discardButton.disabled = !canInteract || !currentItem || !linkedSourceItem;
+    }
+
     const copyButton = this.button("copy");
     if (copyButton) {
-      copyButton.innerHTML = `${iconMarkup("copy", "size-4")}<span>${this.translate("presets.button.copy", "Copy")}</span>`;
-      copyButton.disabled = !canInteract || !selectedItem || !this.copyPayload(selectedItem);
+      copyButton.className = shouldHighlightCopy ? "btn btn-primary" : "btn btn-outline";
+      copyButton.innerHTML = `${iconMarkup("copy", "size-4")}<span>${this.translate("presets.button.copy", "Clone")}</span>`;
+      copyButton.disabled = !canInteract || !copyItem || !this.copyPayload(copyItem);
     }
 
     const exportButton = this.button("export");
@@ -917,6 +935,11 @@ export class FishyPresetManager extends HTMLElementBase {
     }
     this.selectedCardKey = selectedItem.key;
     if (helper) {
+      const current = helper.current?.(this.collectionKey) ?? null;
+      if (current && selectedItem.kind !== "current") {
+        this.sync({ refreshNames: true });
+        return;
+      }
       if (selectedItem.kind === "preset") {
         helper.activatePreset(this.collectionKey, selectedItem.id);
       } else if (selectedItem.kind === "fixed") {
@@ -989,10 +1012,40 @@ export class FishyPresetManager extends HTMLElementBase {
     }
   }
 
+  handleDiscardClick() {
+    const helper = presetHelper();
+    if (!helper || typeof helper.discardCurrent !== "function") {
+      return;
+    }
+    try {
+      const result = helper.discardCurrent(this.collectionKey);
+      if (result?.source?.kind === "preset") {
+        this.selectedCardKey = presetCardKey(result.source.id);
+      } else if (result?.source?.kind === "fixed") {
+        this.selectedCardKey = fixedCardKey(result.source.id);
+      }
+      if (result?.current) {
+        toastHelper()?.error?.(
+          this.translate("presets.error.discard", "Preset discard failed."),
+        );
+        this.sync({ refreshNames: true });
+        return;
+      }
+      toastHelper()?.info?.(
+        this.translate("presets.toast.discarded", "Discarded current changes."),
+      );
+      this.sync({ refreshNames: true });
+    } catch (error) {
+      toastHelper()?.error?.(
+        error instanceof Error ? error.message : this.translate("presets.error.discard", "Preset discard failed."),
+      );
+    }
+  }
+
   handleCopyClick() {
     const helper = presetHelper();
-    const { items } = this.cardItems();
-    const selectedItem = this.selectedItem(items);
+    const { items, currentItem } = this.cardItems();
+    const selectedItem = currentItem || this.selectedItem(items);
     const payload = this.copyPayload(selectedItem);
     if (!helper || !payload) {
       return;
@@ -1005,7 +1058,7 @@ export class FishyPresetManager extends HTMLElementBase {
       });
       this.selectedCardKey = presetCardKey(created.id);
       toastHelper()?.success?.(
-        this.translate("presets.toast.copied", 'Copied "{$name}".', { name: created.name }),
+        this.translate("presets.toast.copied", 'Cloned "{$name}".', { name: created.name }),
       );
       this.sync({ refreshNames: true });
     } catch (error) {
@@ -1114,6 +1167,9 @@ function bindPresetManagerHelpers() {
     },
     saveCurrent(node) {
       managerFromNode(node)?.handleSaveClick();
+    },
+    discardCurrent(node) {
+      managerFromNode(node)?.handleDiscardClick();
     },
     copySelected(node) {
       managerFromNode(node)?.handleCopyClick();

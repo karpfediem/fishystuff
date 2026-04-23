@@ -433,7 +433,7 @@
     return firstFixed ? fixedSource(firstFixed.id) : { kind: "none", id: "" };
   }
 
-  function selectCollectionSource(collection, source, { clearCurrent = true } = {}) {
+  function selectCollectionSource(collection, source, { clearCurrent = false } = {}) {
     const normalized = normalizeSource(source);
     collection.selectedPresetId = normalized.kind === "preset" ? normalized.id : "";
     collection.selectedFixedId = normalized.kind === "fixed" ? normalized.id : "";
@@ -485,7 +485,9 @@
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       collection.presets.push(preset);
       if (select) {
-        selectCollectionSource(collection, presetSource(preset.id));
+        selectCollectionSource(collection, presetSource(preset.id), {
+          clearCurrent: payloadsEqual(key, collection.current?.payload, payload),
+        });
       }
       draft.collections[key] = collection;
     }, "create-preset", {
@@ -523,7 +525,9 @@
       };
       collection.presets[presetIndex] = updatedPreset;
       if (options.select === true) {
-        selectCollectionSource(collection, presetSource(updatedPreset.id));
+        selectCollectionSource(collection, presetSource(updatedPreset.id), {
+          clearCurrent: payloadsEqual(key, collection.current?.payload, updatedPreset.payload),
+        });
       }
       draft.collections[key] = collection;
     }, "update-preset", {
@@ -591,6 +595,42 @@
     return adapter.apply(normalizePresetPayload(key, payload));
   }
 
+  function observedPayloadAfterApply(collectionKey, fallbackPayload, appliedValue) {
+    const key = normalizeCollectionKey(collectionKey);
+    const captured = capturePayload(key);
+    if (captured) {
+      return captured;
+    }
+    if (appliedValue && typeof appliedValue === "object") {
+      try {
+        return normalizePresetPayload(key, appliedValue);
+      } catch (_error) {
+        return normalizePresetPayload(key, fallbackPayload);
+      }
+    }
+    return null;
+  }
+
+  function applyAndTrackSourcePayload(collectionKey, source, payload) {
+    const key = normalizeCollectionKey(collectionKey);
+    const normalizedPayload = normalizePresetPayload(key, payload);
+    const appliedValue = applyPayload(key, normalizedPayload);
+    const observedPayload = observedPayloadAfterApply(key, normalizedPayload, appliedValue);
+    if (!observedPayload) {
+      return {
+        action: "apply-failed",
+        kind: "current",
+        source: normalizeSource(source),
+        current: currentPresetState(key),
+        preset: null,
+      };
+    }
+    return trackCurrentPayload(key, {
+      payload: observedPayload,
+      origin: source,
+    });
+  }
+
   function activatePreset(collectionKey, presetId) {
     const key = normalizeCollectionKey(collectionKey);
     const preset = currentPreset(key, presetId);
@@ -598,8 +638,7 @@
       setSelectedPresetId(key, "");
       return null;
     }
-    applyPayload(key, preset.payload);
-    setSelectedPresetId(key, preset.id);
+    applyAndTrackSourcePayload(key, presetSource(preset.id), preset.payload);
     return preset;
   }
 
@@ -610,9 +649,29 @@
       setSelectedFixedId(key, "");
       return null;
     }
-    applyPayload(key, preset.payload);
-    setSelectedFixedId(key, preset.id);
+    applyAndTrackSourcePayload(key, fixedSource(preset.id), preset.payload);
     return preset;
+  }
+
+  function discardCurrent(collectionKey) {
+    const key = normalizeCollectionKey(collectionKey);
+    const collection = currentCollection(key);
+    const current = collection.current;
+    if (!current) {
+      return {
+        action: "none",
+        kind: "none",
+        source: { kind: "none", id: "" },
+        current: null,
+        preset: null,
+      };
+    }
+    const origin = normalizeSource(current.origin);
+    const originPayload = sourcePayload(key, collection, origin);
+    if (!originPayload) {
+      throw new Error("Current preset has no original preset to discard to.");
+    }
+    return applyAndTrackSourcePayload(key, origin, originPayload);
   }
 
   function trackCurrentPayload(collectionKey, options = {}) {
@@ -634,7 +693,7 @@
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       const matchedSource = matchingSource(key, collection, payload);
       if (matchedSource) {
-        selectCollectionSource(collection, matchedSource);
+        selectCollectionSource(collection, matchedSource, { clearCurrent: true });
         assignCollection(draft, key, collection);
         result = {
           action: matchedSource.kind === "fixed" ? "matched-fixed" : "matched-preset",
@@ -732,7 +791,7 @@
         updatedAt: nowIso(),
       };
       collection.presets[presetIndex] = savedPreset;
-      selectCollectionSource(collection, presetSource(savedPreset.id));
+      selectCollectionSource(collection, presetSource(savedPreset.id), { clearCurrent: true });
       assignCollection(draft, key, collection);
     }, "save-current", { collectionKey: key });
     return cloneJson(savedPreset);
@@ -960,6 +1019,7 @@
     applyPayload,
     activatePreset,
     activateFixedPreset,
+    discardCurrent,
     trackCurrentPayload,
     saveCurrentToSelectedPreset,
     undoCurrent,

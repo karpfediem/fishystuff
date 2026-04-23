@@ -72,6 +72,7 @@
     layoutPresetBinding: null,
     uiStateRestored: false,
     layoutPresetAdapterBound: false,
+    pendingLayoutPresetRestore: false,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -344,6 +345,16 @@
       const signals = signalStore.signalObject();
       if (!signals) {
         return;
+      }
+      if (calculatorState.pendingLayoutPresetRestore && calculatorInitPatch(patch)) {
+        calculatorState.pendingLayoutPresetRestore = false;
+        const applied = applyStoredCalculatorLayoutPresetState(signals);
+        if (applied && typeof window.__fishystuffCalculator?.patchSignals === "function") {
+          window.__fishystuffCalculator.patchSignals({
+            _calculator_ui: cloneCalculatorSignals(signals._calculator_ui),
+          });
+          return;
+        }
       }
       trackCalculatorLayoutPresetCurrent(signals);
     };
@@ -946,6 +957,37 @@
     return helper.trackCurrentPayload(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
       payload,
     });
+  }
+
+  function calculatorInitPatch(patch) {
+    return Boolean(
+      patch
+      && typeof patch === "object"
+      && (
+        Object.prototype.hasOwnProperty.call(patch, "_defaults")
+        || Object.prototype.hasOwnProperty.call(patch, "_loading")
+      ),
+    );
+  }
+
+  function applyStoredCalculatorLayoutPresetState(signals) {
+    const helper = sharedUserPresets();
+    if (!signals || typeof signals !== "object") {
+      return null;
+    }
+    const currentPreset = helper?.current?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
+    if (currentPreset?.payload) {
+      const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, currentPreset.payload);
+      signals._calculator_ui = cloneCalculatorSignals(nextUiState);
+      return currentPreset;
+    }
+    const selectedPreset = helper?.selectedPreset?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
+    if (!selectedPreset?.payload) {
+      return null;
+    }
+    const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedPreset.payload);
+    signals._calculator_ui = cloneCalculatorSignals(nextUiState);
+    return selectedPreset;
   }
 
   function pinSection(pinnedSections, sectionId) {
@@ -1601,6 +1643,8 @@
       Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
+    const restoredLayoutPresetState = applyStoredCalculatorLayoutPresetState(signals);
+    calculatorState.pendingLayoutPresetRestore = Boolean(restoredLayoutPresetState);
     trackCalculatorLayoutPresetCurrent(signals);
     const appRoot = document.getElementById?.("calculator");
     if (appRoot && languageHelper()) {
