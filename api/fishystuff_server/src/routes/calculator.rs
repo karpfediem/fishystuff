@@ -451,7 +451,7 @@ struct CalculatorData {
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
-const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-1";
+const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-2";
 type CalculatorRouteCatalog = HashMap<String, String>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12668,6 +12668,65 @@ fn pack_leader_change_expression(slot: usize, total_slots: usize) -> String {
     expression
 }
 
+fn normalized_pet_tier_value(value: &str) -> &str {
+    match value.trim() {
+        "1" | "2" | "3" | "4" | "5" => value.trim(),
+        _ => "1",
+    }
+}
+
+fn pet_tier_step_expression(slot: usize, delta: i32) -> String {
+    let signal = format!("$pet{slot}.tier");
+    format!(
+        "{signal} = String(Math.min(5, Math.max(1, (Number({signal} || '1') || 1) + ({delta}))))"
+    )
+}
+
+fn render_pet_tier_header_control(
+    slot: usize,
+    selected_tier: &str,
+    pet_name: &str,
+    lang: CalculatorLocale,
+) -> String {
+    let input_id = format!("calculator-pet{slot}-tier-value");
+    let bind_key = format!("pet{slot}.tier");
+    let tier_value = normalized_pet_tier_value(selected_tier);
+    let tier_signal = format!("$pet{slot}.tier || '1'");
+    let increment_expression = escape_html(&pet_tier_step_expression(slot, 1));
+    let decrement_expression = escape_html(&pet_tier_step_expression(slot, -1));
+    let increment_disabled = escape_html(&format!("Number({tier_signal}) >= 5"));
+    let decrement_disabled = escape_html(&format!("Number({tier_signal}) <= 1"));
+    let tier_label = calculator_route_text(lang, "calculator.server.field.tier");
+    let increment_label = format!("{tier_label} +1");
+    let decrement_label = format!("{tier_label} -1");
+
+    format!(
+        "<input id=\"{input_id}\" type=\"hidden\" data-bind=\"{bind_key}\" value=\"{tier_value}\">\
+         <div class=\"grid min-w-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center gap-x-3\" data-pet-tier-control>\
+            <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square col-start-1 row-start-1 justify-self-center\" data-on:click=\"{increment_expression}\" data-class:btn-disabled=\"{increment_disabled}\" data-attr:aria-disabled=\"({increment_disabled}).toString()\" aria-label=\"{increment_label}\">\
+                <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-up-small-fill\"></use></svg>\
+            </button>\
+            <kbd class=\"kbd kbd-xl col-start-1 row-start-2 h-12 min-h-12 w-12 text-2xl font-bold\" aria-live=\"polite\" data-text=\"{tier_signal}\">{tier_value}</kbd>\
+            <h3 class=\"card-title col-start-2 row-start-2 min-w-0 text-base\">{pet_name}</h3>\
+            <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square col-start-1 row-start-3 justify-self-center\" data-on:click=\"{decrement_expression}\" data-class:btn-disabled=\"{decrement_disabled}\" data-attr:aria-disabled=\"({decrement_disabled}).toString()\" aria-label=\"{decrement_label}\">\
+                <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-down-small-fill\"></use></svg>\
+            </button>\
+         </div>",
+        input_id = escape_html(&input_id),
+        bind_key = escape_html(&bind_key),
+        tier_value = escape_html(tier_value),
+        tier_signal = escape_html(&tier_signal),
+        increment_expression = increment_expression,
+        increment_disabled = increment_disabled,
+        increment_label = escape_html(&increment_label),
+        icon_sprite_url = CALCULATOR_ICON_SPRITE_URL,
+        pet_name = escape_html(pet_name),
+        decrement_expression = decrement_expression,
+        decrement_disabled = decrement_disabled,
+        decrement_label = escape_html(&decrement_label),
+    )
+}
+
 fn render_pet_cards(
     cdn_base_url: &str,
     _api_lang: FishLang,
@@ -12675,7 +12734,6 @@ fn render_pet_cards(
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
 ) -> String {
-    let tier_options = select_options_from_catalog(&catalog.tiers);
     let total_slots = catalog.slots.max(1);
 
     let mut html = String::new();
@@ -12711,6 +12769,11 @@ fn render_pet_cards(
             " disabled"
         };
         let pack_leader_change = escape_html(&pack_leader_change_expression(slot, total_slots));
+        let pet_header_label = selected_pet
+            .map(|entry| entry.label.clone())
+            .unwrap_or_else(|| pet_slot_name(lang, slot));
+        let tier_header_html =
+            render_pet_tier_header_control(slot, &pet.tier, &pet_header_label, lang);
         write!(
             html,
             "<section class=\"card card-border bg-base-100\" data-pet-slot=\"{}\"><div class=\"card-body gap-4\">",
@@ -12719,8 +12782,8 @@ fn render_pet_cards(
         .unwrap();
         write!(
             html,
-            "<div class=\"flex flex-wrap items-center justify-between gap-3\"><h3 class=\"card-title text-base\">{}</h3><label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium{}\"><input type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><span>{}</span></label></div>",
-            escape_html(&pet_slot_name(lang, slot)),
+            "<div class=\"flex flex-wrap items-start justify-between gap-3\"><div class=\"min-w-0\">{}</div><label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium{}\"><input type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><span>{}</span></label></div>",
+            tier_header_html,
             if pack_leader_disabled.is_empty() {
                 ""
             } else {
@@ -12751,24 +12814,7 @@ fn render_pet_cards(
             false,
         ));
         html.push_str("</fieldset>");
-        html.push_str("<div class=\"grid gap-4 sm:grid-cols-2 xl:grid-cols-3\">");
-        html.push_str(&format!(
-            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
-            escape_html(&calculator_route_text(lang, "calculator.server.field.tier",))
-        ));
-        html.push_str(&render_local_searchable_select_control(
-            cdn_base_url,
-            lang,
-            &format!("calculator-pet{slot}-tier-picker"),
-            &format!("calculator-pet{slot}-tier-value"),
-            &format!("{}.tier", bind_prefix),
-            &pet.tier,
-            &tier_options,
-            false,
-            &calculator_route_text(lang, "calculator.server.search.pet_tiers"),
-            true,
-        ));
-        html.push_str("</fieldset>");
+        html.push_str("<div class=\"grid gap-4 sm:grid-cols-2\">");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
@@ -13297,7 +13343,16 @@ mod tests {
         assert!(text.contains("data-role=\"selected-content\""));
         assert!(text.contains("kind=rod"));
         assert!(text.contains("calculator-rod-picker"));
-        assert!(text.contains("calculator-pet1-tier-picker"));
+        assert!(text.contains("calculator-pet1-tier-value"));
+        assert!(text.contains("data-bind=\"pet1.tier\""));
+        assert!(text.contains("data-pet-tier-control"));
+        assert!(text.contains("grid-cols-[auto_minmax(0,1fr)]"));
+        assert!(text.contains("btn btn-ghost btn-xs btn-square col-start-1 row-start-1"));
+        assert!(text.contains("kbd kbd-xl col-start-1 row-start-2"));
+        assert!(text.contains("card-title col-start-2 row-start-2"));
+        assert!(text.contains("btn btn-ghost btn-xs btn-square col-start-1 row-start-3"));
+        assert!(text.contains("#fishy-up-small-fill"));
+        assert!(text.contains("#fishy-down-small-fill"));
         assert!(text.contains("http://127.0.0.1:4040/images/pets/pet_hawk_0014.webp"));
         assert!(text.contains("data-pet-pack-leader"));
         assert!(text.contains("fishy-calculator-pet-option--selected"));
@@ -13305,6 +13360,7 @@ mod tests {
         assert!(text.contains("fishy-calculator-pet-option__badges"));
         assert!(text.contains("+5% Item DRR"));
         assert!(text.contains("Durability Reduction Resistance"));
+        assert!(!text.contains("calculator-pet1-tier-picker"));
         assert!(text.contains("<fishy-searchable-multiselect"));
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
@@ -14045,6 +14101,106 @@ mod tests {
         assert_eq!(pet.special, "");
         assert_eq!(pet.talent, "");
         assert!(pet.skills.is_empty());
+    }
+
+    #[test]
+    fn normalize_pet_keeps_selected_skin_when_target_tier_exists() {
+        let catalog = CalculatorPetCatalog {
+            slots: 5,
+            pets: vec![CalculatorPetEntry {
+                key: "pet:hawk".to_string(),
+                label: "Hawk".to_string(),
+                skin_key: Some("2001".to_string()),
+                image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
+                alias_keys: Vec::new(),
+                tiers: vec![
+                    CalculatorPetTierEntry {
+                        key: "3".to_string(),
+                        label: "Tier 3".to_string(),
+                        specials: vec!["special_t3".to_string()],
+                        talents: vec!["talent_t3".to_string()],
+                        skills: vec!["skill_t3".to_string()],
+                    },
+                    CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        label: "Tier 4".to_string(),
+                        specials: vec!["special_t4".to_string()],
+                        talents: vec!["talent_t4".to_string()],
+                        skills: vec!["skill_t4".to_string()],
+                    },
+                ],
+            }],
+            tiers: (1..=5)
+                .map(|tier| CalculatorOptionEntry {
+                    key: tier.to_string(),
+                    label: format!("Tier {tier}"),
+                })
+                .collect(),
+            specials: vec![
+                CalculatorPetOptionEntry {
+                    key: "special_t3".to_string(),
+                    label: "Tier 3 Special".to_string(),
+                    auto_fishing_time_reduction: Some(0.07),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "special_t4".to_string(),
+                    label: "Tier 4 Special".to_string(),
+                    auto_fishing_time_reduction: Some(0.10),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            talents: vec![
+                CalculatorPetOptionEntry {
+                    key: "talent_t3".to_string(),
+                    label: "Tier 3 Talent".to_string(),
+                    durability_reduction_resistance: Some(0.03),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "talent_t4".to_string(),
+                    label: "Tier 4 Talent".to_string(),
+                    durability_reduction_resistance: Some(0.04),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            skills: vec![
+                CalculatorPetOptionEntry {
+                    key: "skill_t3".to_string(),
+                    label: "Tier 3 Skill".to_string(),
+                    fishing_exp: Some(0.03),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_t4".to_string(),
+                    label: "Tier 4 Skill".to_string(),
+                    fishing_exp: Some(0.04),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+        };
+        let aliases = build_pet_value_aliases(&catalog);
+        let defaults = CalculatorPetSignals {
+            tier: "4".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+        let mut pet = CalculatorPetSignals {
+            pet: "pet:hawk".to_string(),
+            tier: "4".to_string(),
+            pack_leader: true,
+            special: "special_t3".to_string(),
+            talent: "talent_t3".to_string(),
+            skills: vec!["skill_t3".to_string()],
+        };
+
+        normalize_pet(&mut pet, defaults, &catalog, &aliases);
+
+        assert_eq!(pet.pet, "pet:hawk");
+        assert_eq!(pet.tier, "4");
+        assert_eq!(pet.special, "");
+        assert_eq!(pet.talent, "talent_t4");
+        assert_eq!(pet.skills, vec!["skill_t4".to_string()]);
+        assert!(pet.pack_leader);
     }
 
     #[test]
