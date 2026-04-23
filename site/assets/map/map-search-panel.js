@@ -1,6 +1,41 @@
 import { buildAppliedSearchTermsView } from "../js/components/applied-search-terms.js";
 import { mapCountText, mapText } from "./map-i18n.js";
 
+export const MAP_SEARCH_RESULTS_PAGE_SIZE = 12;
+
+export function buildSearchResultsMatchSetKey(matches, stateBundle) {
+  const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
+  return JSON.stringify({
+    query,
+    results: matches.map((match) =>
+      match.kind === "fish-filter"
+        ? ["fish-filter", match.term, match.label || "", match.description || ""]
+        : match.kind === "patch-bound"
+          ? ["patch-bound", match.bound, match.patchId, match.label || "", match.description || ""]
+          : match.kind === "zone"
+            ? ["zone", match.zoneRgb, match.name, match.rgbKey]
+            : match.kind === "semantic"
+              ? [
+                  "semantic",
+                  match.layerId,
+                  match.fieldId,
+                  match.label || "",
+                  match.description || "",
+                  match.layerName || "",
+                ]
+              : [
+                  "fish",
+                  match.fishId,
+                  match.itemId ?? null,
+                  match.encyclopediaId ?? null,
+                  match.grade || "",
+                  match.isPrize === true ? 1 : 0,
+                ],
+    ),
+    total: matches.length,
+  });
+}
+
 function normalizeExpressionOperator(value) {
   return String(value ?? "").trim().toLowerCase() === "and" ? "and" : "or";
 }
@@ -428,38 +463,20 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
       ? options.semanticIdentityMarkup
       : () => "";
   const formatZone = typeof options.formatZone === "function" ? options.formatZone : (value) => String(value || "");
-
+  const requestedVisibleCount =
+    Number.isInteger(options.visibleCount) && options.visibleCount > 0
+      ? options.visibleCount
+      : MAP_SEARCH_RESULTS_PAGE_SIZE;
+  const matchSetKey =
+    typeof options.matchSetKey === "string" && options.matchSetKey
+      ? options.matchSetKey
+      : buildSearchResultsMatchSetKey(matches, stateBundle);
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
   const showResults = matches.length > 0;
-  const activeMatches = matches.slice(0, 12);
+  const activeMatches = matches.slice(0, requestedVisibleCount);
   const renderKey = JSON.stringify({
-    query,
-    results: activeMatches.map((match) =>
-      match.kind === "fish-filter"
-        ? ["fish-filter", match.term, match.label || "", match.description || ""]
-        : match.kind === "patch-bound"
-          ? ["patch-bound", match.bound, match.patchId, match.label || "", match.description || ""]
-        : match.kind === "zone"
-          ? ["zone", match.zoneRgb, match.name, match.rgbKey]
-          : match.kind === "semantic"
-            ? [
-                "semantic",
-                match.layerId,
-                match.fieldId,
-                match.label || "",
-                match.description || "",
-                match.layerName || "",
-              ]
-            : [
-                "fish",
-                match.fishId,
-                match.itemId ?? null,
-                match.encyclopediaId ?? null,
-                match.grade || "",
-                match.isPrize === true ? 1 : 0,
-              ],
-    ),
-    total: matches.length,
+    matchSetKey,
+    visible: activeMatches.length,
   });
   if (elements.searchResultsShell) {
     setBooleanProperty(elements.searchResultsShell, "hidden", !showResults);
@@ -472,12 +489,30 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
     setBooleanProperty(elements.searchCount, "hidden", !query);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
-    return;
+    return {
+      hasMore: activeMatches.length < matches.length,
+      matchSetKey,
+      nextOffset: activeMatches.length < matches.length ? activeMatches.length : null,
+      visibleCount: activeMatches.length,
+    };
   }
+  elements.searchResults.dataset.matchSetKey = matchSetKey;
   elements.searchResults.dataset.renderKey = renderKey;
   if (!showResults) {
+    delete elements.searchResults.dataset.matchSetKey;
+    delete elements.searchResults.dataset.nextOffset;
     elements.searchResults.innerHTML = "";
-    return;
+    return {
+      hasMore: false,
+      matchSetKey,
+      nextOffset: null,
+      visibleCount: 0,
+    };
+  }
+  if (activeMatches.length < matches.length) {
+    elements.searchResults.dataset.nextOffset = String(activeMatches.length);
+  } else {
+    delete elements.searchResults.dataset.nextOffset;
   }
   elements.searchResults.innerHTML = activeMatches
     .map((match) => {
@@ -616,5 +651,28 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
         </li>
       `;
     })
+    .concat(
+      activeMatches.length < matches.length
+        ? `
+          <li>
+            <button
+              type="button"
+              class="w-full rounded-box px-3 py-2 text-left text-sm text-base-content/70"
+              data-search-results-more
+              data-next-offset="${escapeHtml(activeMatches.length)}"
+            >
+              ${escapeHtml(mapText("search.results.more_available"))}
+            </button>
+          </li>
+        `
+        : "",
+    )
     .join("");
+
+  return {
+    hasMore: activeMatches.length < matches.length,
+    matchSetKey,
+    nextOffset: activeMatches.length < matches.length ? activeMatches.length : null,
+    visibleCount: activeMatches.length,
+  };
 }

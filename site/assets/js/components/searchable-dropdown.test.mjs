@@ -7,19 +7,49 @@ const originalNode = globalThis.Node;
 const originalDocument = globalThis.document;
 const originalWindow = globalThis.window;
 const originalCustomElements = globalThis.customElements;
+const originalFetch = globalThis.fetch;
 const originalHTMLInputElement = globalThis.HTMLInputElement;
 const originalHTMLTemplateElement = globalThis.HTMLTemplateElement;
 
+function datasetKeyToAttributeName(key) {
+    return `data-${String(key).replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}`;
+}
+
+function attributeNameToDatasetKey(name) {
+    return String(name).slice(5).replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+}
+
+function createDatasetProxy(element, values = {}) {
+    const target = { ...values };
+    return new Proxy(target, {
+        deleteProperty(store, property) {
+            delete store[property];
+            element.attributes.delete(datasetKeyToAttributeName(property));
+            return true;
+        },
+        set(store, property, value) {
+            const normalized = String(value ?? "");
+            store[property] = normalized;
+            element.attributes.set(datasetKeyToAttributeName(property), normalized);
+            return true;
+        },
+    });
+}
+
 class FakeElement extends EventTarget {
-    constructor() {
+    constructor(tagName = "div") {
         super();
         this.attributes = new Map();
         this.childNodes = [];
-        this.dataset = {};
+        this.dataset = createDatasetProxy(this);
         this.hidden = false;
         this.parentNode = null;
+        this.tagName = String(tagName || "div").toUpperCase();
         this.style = {};
         this.textContent = "";
+        this.scrollHeight = 0;
+        this.scrollTop = 0;
+        this.clientHeight = 0;
         this._queryMap = new Map();
         this._queryAllMap = new Map();
         this._closestMap = new Map();
@@ -52,7 +82,36 @@ class FakeElement extends EventTarget {
     }
 
     closest(selector) {
-        return this._closestMap.get(selector) || null;
+        if (this._closestMap.has(selector)) {
+            return this._closestMap.get(selector) || null;
+        }
+        let current = this;
+        while (current) {
+            if (current.matches(selector)) {
+                return current;
+            }
+            current = current.parentNode;
+        }
+        return null;
+    }
+
+    cloneNode(deep = false) {
+        const clone = new FakeElement(this.tagName);
+        clone.hidden = this.hidden;
+        clone.textContent = this.textContent;
+        clone.scrollHeight = this.scrollHeight;
+        clone.scrollTop = this.scrollTop;
+        clone.clientHeight = this.clientHeight;
+        clone.style = { ...this.style };
+        for (const [name, value] of this.attributes) {
+            clone.setAttribute(name, value);
+        }
+        if (deep) {
+            for (const child of this.childNodes) {
+                clone.appendChild(typeof child.cloneNode === "function" ? child.cloneNode(true) : child);
+            }
+        }
+        return clone;
     }
 
     contains(node) {
@@ -87,16 +146,48 @@ class FakeElement extends EventTarget {
         return child;
     }
 
+    matches(selector) {
+        if (!selector) {
+            return false;
+        }
+
+        const attributeSelector = selector.match(
+            /^(?:(?<tag>[a-zA-Z0-9-]+))?\[(?<attr>[^\]=]+)(?:=\"(?<value>[^\"]*)\")?\]$/,
+        );
+        if (attributeSelector?.groups) {
+            const { tag, attr, value } = attributeSelector.groups;
+            if (tag && this.tagName !== String(tag).toUpperCase()) {
+                return false;
+            }
+            if (!this.hasAttribute(attr)) {
+                return false;
+            }
+            return value === undefined || this.getAttribute(attr) === value;
+        }
+
+        return this.tagName === String(selector).toUpperCase();
+    }
+
     querySelector(selector) {
-        return this._queryMap.get(selector) || null;
+        if (this._queryMap.has(selector)) {
+            return this._queryMap.get(selector) || null;
+        }
+        return this._walk().find((node) => node !== this && node.matches(selector)) || null;
     }
 
     querySelectorAll(selector) {
-        return this._queryAllMap.get(selector) || [];
+        if (this._queryAllMap.has(selector)) {
+            return this._queryAllMap.get(selector) || [];
+        }
+        return this._walk().filter((node) => node !== this && node.matches(selector));
     }
 
     removeAttribute(name) {
-        this.attributes.delete(String(name));
+        const normalized = String(name);
+        this.attributes.delete(normalized);
+        if (normalized.startsWith("data-")) {
+            delete this.dataset[attributeNameToDatasetKey(normalized)];
+        }
     }
 
     removeChild(child) {
@@ -109,7 +200,12 @@ class FakeElement extends EventTarget {
     }
 
     setAttribute(name, value) {
-        this.attributes.set(String(name), String(value ?? ""));
+        const normalizedName = String(name);
+        const normalizedValue = String(value ?? "");
+        this.attributes.set(normalizedName, normalizedValue);
+        if (normalizedName.startsWith("data-")) {
+            this.dataset[attributeNameToDatasetKey(normalizedName)] = normalizedValue;
+        }
     }
 
     setQuery(selector, element) {
@@ -142,16 +238,100 @@ class FakeElement extends EventTarget {
         const index = this.parentNode.childNodes.indexOf(this);
         return index >= 0 ? this.parentNode.childNodes[index + 1] ?? null : null;
     }
+
+    get firstElementChild() {
+        return this.childNodes.find((child) => child instanceof FakeElement) || null;
+    }
+
+    hasAttribute(name) {
+        return this.attributes.has(String(name));
+    }
+
+    replaceChildren(...nodes) {
+        for (const child of [...this.childNodes]) {
+            child.parentNode = null;
+        }
+        this.childNodes = [];
+        for (const node of nodes) {
+            this.appendChild(node);
+        }
+    }
+
+    replaceWith(node) {
+        if (!this.parentNode) {
+            return;
+        }
+        const siblings = this.parentNode.childNodes;
+        const index = siblings.indexOf(this);
+        if (index < 0) {
+            return;
+        }
+        if (node.parentNode) {
+            node.parentNode.removeChild(node);
+        }
+        siblings.splice(index, 1, node);
+        node.parentNode = this.parentNode;
+        this.parentNode = null;
+    }
+
+    _walk() {
+        const nodes = [this];
+        for (const child of this.childNodes) {
+            if (child instanceof FakeElement) {
+                nodes.push(...child._walk());
+            }
+        }
+        return nodes;
+    }
 }
 
 class FakeComment extends FakeElement {}
 
-function createEnvironment() {
+class FakeTemplateElement extends FakeElement {
+    constructor(fragmentRegistry = null) {
+        super("template");
+        this._fragmentRegistry = fragmentRegistry;
+        this._innerHTML = "";
+        this.content = new FakeElement("fragment");
+    }
+
+    set innerHTML(value) {
+        this._innerHTML = String(value ?? "");
+        const mapped = this._fragmentRegistry?.get(this._innerHTML) || null;
+        this.content.replaceChildren(...(mapped ? [mapped] : []));
+    }
+
+    get innerHTML() {
+        return this._innerHTML;
+    }
+
+    cloneNode(deep = false) {
+        const clone = new FakeTemplateElement(this._fragmentRegistry);
+        clone.content = this.content.cloneNode(true);
+        clone._innerHTML = this._innerHTML;
+        if (deep) {
+            for (const child of this.childNodes) {
+                clone.appendChild(typeof child.cloneNode === "function" ? child.cloneNode(true) : child);
+            }
+        }
+        for (const [name, value] of this.attributes) {
+            clone.setAttribute(name, value);
+        }
+        return clone;
+    }
+}
+
+function createEnvironment(options = {}) {
+    const fragmentRegistry = options.fragmentRegistry || null;
     const document = new EventTarget();
-    document.body = new FakeElement();
-    document.documentElement = new FakeElement();
+    document.body = new FakeElement("body");
+    document.documentElement = new FakeElement("html");
     document.createComment = () => new FakeComment();
-    document.createElement = () => new FakeElement();
+    document.createElement = (tagName = "div") => (
+        String(tagName).toLowerCase() === "template"
+            ? new FakeTemplateElement(fragmentRegistry)
+            : new FakeElement(tagName)
+    );
     document.getElementById = () => null;
 
     const customElementsRegistry = {
@@ -174,8 +354,8 @@ function createEnvironment() {
     return { document, window, customElementsRegistry };
 }
 
-async function loadModule() {
-    const { document, window, customElementsRegistry } = createEnvironment();
+async function loadModule(options = {}) {
+    const { document, window, customElementsRegistry } = createEnvironment(options);
     globalThis.HTMLElement = FakeElement;
     globalThis.Element = FakeElement;
     globalThis.Node = FakeElement;
@@ -183,21 +363,78 @@ async function loadModule() {
     globalThis.window = window;
     globalThis.customElements = customElementsRegistry;
     globalThis.HTMLInputElement = FakeElement;
-    globalThis.HTMLTemplateElement = FakeElement;
+    globalThis.HTMLTemplateElement = FakeTemplateElement;
     return import(`./searchable-dropdown.js?test=${Date.now()}-${Math.random()}`);
 }
 
+function restoreGlobals() {
+    globalThis.HTMLElement = originalHTMLElement;
+    globalThis.Element = originalElement;
+    globalThis.Node = originalNode;
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+    globalThis.customElements = originalCustomElements;
+    globalThis.fetch = originalFetch;
+    globalThis.HTMLInputElement = originalHTMLInputElement;
+    globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
+}
+
+function createDropdownOption(value, label) {
+    const item = new FakeElement("li");
+    const button = new FakeElement("button");
+    const content = new FakeElement("span");
+
+    button.setAttribute("data-searchable-dropdown-option", "");
+    button.setAttribute("data-value", value);
+    button.setAttribute("data-label", label);
+    content.setAttribute("data-role", "option-content");
+    content.textContent = label;
+    button.append(content);
+    item.append(button);
+    return item;
+}
+
+function createMoreResultsRow(nextOffset, label = "Scroll to load more results") {
+    const item = new FakeElement("li");
+    const content = new FakeElement("span");
+
+    item.setAttribute("data-searchable-dropdown-more", "");
+    item.setAttribute("data-next-offset", String(nextOffset));
+    content.textContent = label;
+    item.append(content);
+    return item;
+}
+
+function createResultsPage({
+    count,
+    start = 0,
+    nextOffset = null,
+    id = "results",
+}) {
+    const results = new FakeElement("ul");
+    results.setAttribute("id", id);
+    results.setAttribute("data-role", "results");
+    results.clientHeight = 100;
+    results.scrollHeight = 400;
+    for (let index = 0; index < count; index += 1) {
+        const value = `value-${start + index}`;
+        results.append(createDropdownOption(value, `Option ${start + index}`));
+    }
+    if (nextOffset !== null) {
+        results.setAttribute("data-next-offset", String(nextOffset));
+        results.append(createMoreResultsRow(nextOffset));
+    }
+    return results;
+}
+
+async function flushAsyncWork() {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+}
+
 test("FishySearchableDropdown keeps its panel attached by default", async (t) => {
-    t.after(() => {
-        globalThis.HTMLElement = originalHTMLElement;
-        globalThis.Element = originalElement;
-        globalThis.Node = originalNode;
-        globalThis.document = originalDocument;
-        globalThis.window = originalWindow;
-        globalThis.customElements = originalCustomElements;
-        globalThis.HTMLInputElement = originalHTMLInputElement;
-        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
-    });
+    t.after(restoreGlobals);
 
     const { FishySearchableDropdown } = await loadModule();
 
@@ -219,7 +456,7 @@ test("FishySearchableDropdown keeps its panel attached by default", async (t) =>
     panel.append(results);
 
     dropdown.connectedCallback();
-    await Promise.resolve();
+    await flushAsyncWork();
 
     dropdown.open();
 
@@ -236,16 +473,7 @@ test("FishySearchableDropdown keeps its panel attached by default", async (t) =>
 });
 
 test("FishySearchableDropdown detaches its panel to the document body in detached mode and restores it on close", async (t) => {
-    t.after(() => {
-        globalThis.HTMLElement = originalHTMLElement;
-        globalThis.Element = originalElement;
-        globalThis.Node = originalNode;
-        globalThis.document = originalDocument;
-        globalThis.window = originalWindow;
-        globalThis.customElements = originalCustomElements;
-        globalThis.HTMLInputElement = originalHTMLInputElement;
-        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
-    });
+    t.after(restoreGlobals);
 
     const { FishySearchableDropdown } = await loadModule();
 
@@ -289,16 +517,7 @@ test("FishySearchableDropdown detaches its panel to the document body in detache
 });
 
 test("searchable dropdown accepts valid ISO date custom options", async (t) => {
-    t.after(() => {
-        globalThis.HTMLElement = originalHTMLElement;
-        globalThis.Element = originalElement;
-        globalThis.Node = originalNode;
-        globalThis.document = originalDocument;
-        globalThis.window = originalWindow;
-        globalThis.customElements = originalCustomElements;
-        globalThis.HTMLInputElement = originalHTMLInputElement;
-        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
-    });
+    t.after(restoreGlobals);
 
     const { FishySearchableDropdown, normalizeIsoDateValue } = await loadModule();
     const dropdown = new FishySearchableDropdown();
@@ -316,16 +535,7 @@ test("searchable dropdown accepts valid ISO date custom options", async (t) => {
 });
 
 test("searchable dropdown can anchor its detached panel to a wider ancestor", async (t) => {
-    t.after(() => {
-        globalThis.HTMLElement = originalHTMLElement;
-        globalThis.Element = originalElement;
-        globalThis.Node = originalNode;
-        globalThis.document = originalDocument;
-        globalThis.window = originalWindow;
-        globalThis.customElements = originalCustomElements;
-        globalThis.HTMLInputElement = originalHTMLInputElement;
-        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
-    });
+    t.after(restoreGlobals);
 
     const { FishySearchableDropdown } = await loadModule();
 
@@ -362,16 +572,7 @@ test("searchable dropdown can anchor its detached panel to a wider ancestor", as
 });
 
 test("searchable dropdown can keep its panel minimum width when the anchor is narrower", async (t) => {
-    t.after(() => {
-        globalThis.HTMLElement = originalHTMLElement;
-        globalThis.Element = originalElement;
-        globalThis.Node = originalNode;
-        globalThis.document = originalDocument;
-        globalThis.window = originalWindow;
-        globalThis.customElements = originalCustomElements;
-        globalThis.HTMLInputElement = originalHTMLInputElement;
-        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
-    });
+    t.after(restoreGlobals);
 
     const { FishySearchableDropdown } = await loadModule();
 
@@ -406,4 +607,138 @@ test("searchable dropdown can keep its panel minimum width when the anchor is na
     assert.equal(panel.style.left, "180px");
     assert.equal(panel.style.top, "180px");
     assert.equal(panel.style.width, "288px");
+});
+
+test("searchable dropdown paginates local catalog results instead of silently truncating", async (t) => {
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const results = new FakeElement("ul");
+    const catalog = new FakeElement("div");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+    results.clientHeight = 100;
+    results.scrollHeight = 400;
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = `Option ${index}`;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", `value-${index}`);
+        template.setAttribute("data-label", `Option ${index}`);
+        template.setAttribute("data-search-text", `Option ${index}`);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
+    assert.equal(results.getAttribute("data-next-offset"), "24");
+    assert.ok(results.querySelector("[data-searchable-dropdown-more]"));
+
+    results.scrollTop = 320;
+    dropdown._handleResultsScroll();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(results.getAttribute("data-next-offset"), null);
+    assert.equal(results.querySelector("[data-searchable-dropdown-more]"), null);
+});
+
+test("searchable dropdown loads the next remote page when scrolling near the end", async (t) => {
+    const fragmentRegistry = new Map();
+    const { FishySearchableDropdown } = await loadModule({ fragmentRegistry });
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const initialResults = new FakeElement("ul");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    initialResults.setAttribute("data-role", "results");
+    initialResults.clientHeight = 100;
+    initialResults.scrollHeight = 400;
+
+    dropdown.setAttribute("search-url", "/api/search");
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(initialResults);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    const page1 = createResultsPage({
+        count: 24,
+        nextOffset: 24,
+        id: "calculator-rod-picker-results",
+    });
+    const page2 = createResultsPage({
+        count: 6,
+        start: 24,
+        id: "calculator-rod-picker-results",
+    });
+    fragmentRegistry.set("PAGE1", page1);
+    fragmentRegistry.set("PAGE2", page2);
+
+    const fetchCalls = [];
+    globalThis.fetch = async (url) => {
+        fetchCalls.push(String(url));
+        return {
+            ok: true,
+            async text() {
+                return fetchCalls.length === 1 ? "PAGE1" : "PAGE2";
+            },
+        };
+    };
+
+    dropdown.connectedCallback();
+    await flushAsyncWork();
+
+    dropdown.search("rod");
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 1);
+    assert.match(fetchCalls[0], /q=rod/);
+    assert.doesNotMatch(fetchCalls[0], /offset=/);
+    assert.equal(dropdown.resultsElement(), page1);
+    assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
+    assert.equal(page1.getAttribute("data-next-offset"), "24");
+    assert.ok(page1.querySelector("[data-searchable-dropdown-more]"));
+
+    page1.scrollTop = 320;
+    dropdown._handleResultsScroll();
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 2);
+    assert.match(fetchCalls[1], /q=rod/);
+    assert.match(fetchCalls[1], /offset=24/);
+    assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(page1.getAttribute("data-next-offset"), null);
+    assert.equal(page1.querySelector("[data-searchable-dropdown-more]"), null);
 });

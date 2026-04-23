@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { MAP_SEARCH_RESULTS_PAGE_SIZE } from "./map-search-panel.js";
 
 import {
   readMapSearchPanelShellSignals,
@@ -151,6 +152,17 @@ function createSignals() {
       favouriteIds: [],
     },
   };
+}
+
+function buildFishCatalog(count) {
+  return Array.from({ length: count }, (_value, index) => ({
+    fishId: index + 1,
+    itemId: index + 1,
+    encyclopediaId: index + 1,
+    name: `Fish ${index + 1}`,
+    grade: "Blue",
+    isPrize: false,
+  }));
 }
 
 async function loadModule() {
@@ -314,6 +326,70 @@ test("FishyMapSearchPanelElement renders zone terms with an RGB indicator", asyn
   assert.match(html, /fishy-zone-rgb-indicator/);
   assert.match(html, /--fishy-zone-rgb: 1 2 3/);
   assert.match(html, /Velia Coast/);
+});
+
+test("FishyMapSearchPanelElement loads another page when the more-results button is activated", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE + 8);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = panel.querySelector("#fishymap-search-results");
+  results.clientHeight = 240;
+  results.scrollHeight = 640;
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE));
+  assert.match(results.innerHTML, /data-search-results-more/);
+
+  let prevented = false;
+  const moreButton = new FakeElement();
+  moreButton.setAttribute("data-search-results-more", "");
+  moreButton.setAttribute("data-next-offset", String(MAP_SEARCH_RESULTS_PAGE_SIZE));
+  moreButton.setClosest("button[data-search-results-more][data-next-offset]", moreButton);
+
+  panel._handleClick({
+    target: moreButton,
+    preventDefault() {
+      prevented = true;
+    },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE + 8);
+  assert.equal(results.dataset.nextOffset, undefined);
+});
+
+test("FishyMapSearchPanelElement loads another page when search results are scrolled near the end", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = panel.querySelector("#fishymap-search-results");
+  results.clientHeight = 240;
+  results.scrollHeight = 640;
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+
+  results.scrollTop = 320;
+  panel._handleResultsScroll();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
+  assert.match(results.innerHTML, /data-search-results-more/);
 });
 
 test("resolveSearchPanelMatches exposes unresolved date prompts after fish filters when the query is empty", () => {

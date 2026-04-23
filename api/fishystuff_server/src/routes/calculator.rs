@@ -57,6 +57,7 @@ pub struct CalculatorZoneSearchQuery {
     pub locale: Option<String>,
     pub r#ref: Option<String>,
     pub q: Option<String>,
+    pub offset: Option<usize>,
     pub selected: Option<String>,
 }
 
@@ -67,6 +68,7 @@ pub struct CalculatorSearchableOptionQuery {
     pub r#ref: Option<String>,
     pub kind: Option<String>,
     pub q: Option<String>,
+    pub offset: Option<usize>,
     pub results_id: Option<String>,
     pub selected: Option<String>,
     pub zone: Option<String>,
@@ -546,7 +548,27 @@ struct SearchableMultiselectConfig<'a> {
     helper_text: Option<&'a str>,
 }
 
-const SEARCHABLE_DROPDOWN_RESULT_LIMIT: usize = 24;
+struct SearchableDropdownPage<T> {
+    items: Vec<T>,
+    next_offset: Option<usize>,
+}
+
+fn paginate_searchable_dropdown_items<T: Clone>(
+    items: Vec<T>,
+    offset: usize,
+) -> SearchableDropdownPage<T> {
+    let start = offset.min(items.len());
+    let end = start
+        .saturating_add(SEARCHABLE_DROPDOWN_PAGE_SIZE)
+        .min(items.len());
+    SearchableDropdownPage {
+        items: items[start..end].to_vec(),
+        next_offset: (end < items.len()).then_some(end),
+    }
+}
+
+const SEARCHABLE_DROPDOWN_PAGE_SIZE: usize = 24;
+const SEARCHABLE_MULTISELECT_RESULT_LIMIT: usize = 24;
 
 static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
     value: "",
@@ -873,12 +895,14 @@ pub async fn get_calculator_datastar_zone_search(
         .filter(|value| !value.is_empty())
         .unwrap_or(data.catalog.defaults.zone.as_str());
     let search_text = query.q.unwrap_or_default();
+    let offset = query.offset.unwrap_or(0);
     let fragment = render_zone_search_results(
         data.lang,
         "calculator-zone-search-results",
         &data.zones,
         selected_zone,
         &search_text,
+        offset,
     );
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -922,6 +946,7 @@ pub async fn get_calculator_datastar_option_search(
     }
     let selected_value = query.selected.as_deref().unwrap_or_default();
     let search_text = query.q.unwrap_or_default();
+    let offset = query.offset.unwrap_or(0);
     let results_id = query
         .results_id
         .as_deref()
@@ -935,6 +960,7 @@ pub async fn get_calculator_datastar_option_search(
         &with_optional_none(&options, include_none, data.lang),
         selected_value,
         &search_text,
+        offset,
     );
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -8957,6 +8983,7 @@ fn render_calculator_app(
         &data.zones,
         &signals.zone,
         "",
+        0,
     );
     let zone_dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
@@ -10267,7 +10294,6 @@ fn fuzzy_zone_matches<'a>(
                 zone_name(zone).to_string(),
             )
         });
-        zones.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
         return zones;
     }
 
@@ -10282,8 +10308,21 @@ fn fuzzy_zone_matches<'a>(
         })
         .collect::<Vec<_>>();
     scored.sort_by_key(|(zone, score)| (Reverse(*score), zone_name(zone).to_string()));
-    scored.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
     scored.into_iter().map(|(zone, _)| zone).collect()
+}
+
+fn render_searchable_dropdown_more_results_row(
+    lang: CalculatorLocale,
+    next_offset: usize,
+) -> String {
+    format!(
+        "<li><button type=\"button\" class=\"justify-start gap-3 text-left text-base-content/70\" data-searchable-dropdown-more data-next-offset=\"{}\"><span>{}</span></button></li>",
+        next_offset,
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.result.more_available",
+        )),
+    )
 }
 
 fn render_searchable_dropdown_text_content(label: &str) -> String {
@@ -11888,7 +11927,6 @@ fn fuzzy_select_matches<'a>(
                 option.label.to_string(),
             )
         });
-        options.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
         return options;
     }
 
@@ -11903,7 +11941,6 @@ fn fuzzy_select_matches<'a>(
         })
         .collect::<Vec<_>>();
     scored.sort_by_key(|(option, score)| (Reverse(*score), option.label.to_string()));
-    scored.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
     scored.into_iter().map(|(option, _)| option).collect()
 }
 
@@ -11949,16 +11986,25 @@ fn render_searchable_select_results(
     options: &[SelectOption<'_>],
     current_value: &str,
     query: &str,
+    offset: usize,
 ) -> String {
-    let matches = fuzzy_select_matches(options, query, current_value);
+    let page = paginate_searchable_dropdown_items(
+        fuzzy_select_matches(options, query, current_value),
+        offset,
+    );
+    let next_offset_attr = page
+        .next_offset
+        .map(|value| format!(" data-next-offset=\"{}\"", value))
+        .unwrap_or_default();
     let mut html = String::new();
     write!(
         html,
-        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
+        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\"{}>",
         escape_html(results_list_id),
+        next_offset_attr,
     )
     .unwrap();
-    if matches.is_empty() {
+    if page.items.is_empty() {
         write!(
             html,
             "<li class=\"menu-disabled\"><span>{}</span></li>",
@@ -11969,7 +12015,7 @@ fn render_searchable_select_results(
         )
         .unwrap();
     } else {
-        for option in matches {
+        for option in page.items.iter().copied() {
             let is_selected = option.value == current_value;
             let selected_content_html =
                 render_searchable_dropdown_selected_content_html(lang, cdn_base_url, option);
@@ -11995,6 +12041,12 @@ fn render_searchable_select_results(
                 selected_badge
             )
             .unwrap();
+        }
+        if let Some(next_offset) = page.next_offset {
+            html.push_str(&render_searchable_dropdown_more_results_row(
+                lang,
+                next_offset,
+            ));
         }
     }
     html.push_str("</ul>");
@@ -12057,6 +12109,7 @@ fn render_searchable_select_control(
         &options,
         selected_value,
         "",
+        0,
     );
     let search_url = render_calculator_option_search_url(api_lang, lang, kind, &results_id);
     let dropdown = render_searchable_dropdown(
@@ -12123,6 +12176,7 @@ fn render_local_searchable_select_control(
         &options,
         selected_value,
         "",
+        0,
     );
     let dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
@@ -12183,6 +12237,7 @@ fn render_target_fish_select_control(
         &options,
         &signals.target_fish,
         "",
+        0,
     );
     let search_url = format!(
         "/api/v1/calculator/datastar/option-search?lang={}&locale={}&kind=target_fish&results_id={}&zone={}",
@@ -12355,7 +12410,7 @@ fn render_searchable_multiselect_results_html(
         })
         .collect::<Vec<_>>();
     matches.sort_by_key(|option| (selected.contains(option.value), option.label.to_string()));
-    matches.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
+    matches.truncate(SEARCHABLE_MULTISELECT_RESULT_LIMIT);
 
     let mut html = String::new();
     html.push_str(
@@ -12496,16 +12551,23 @@ fn render_zone_search_results(
     zones: &[ZoneEntry],
     current_zone: &str,
     query: &str,
+    offset: usize,
 ) -> String {
-    let matches = fuzzy_zone_matches(zones, query, current_zone);
+    let page =
+        paginate_searchable_dropdown_items(fuzzy_zone_matches(zones, query, current_zone), offset);
+    let next_offset_attr = page
+        .next_offset
+        .map(|value| format!(" data-next-offset=\"{}\"", value))
+        .unwrap_or_default();
     let mut html = String::new();
     write!(
         html,
-        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
+        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\"{}>",
         escape_html(results_list_id),
+        next_offset_attr,
     )
     .unwrap();
-    if matches.is_empty() {
+    if page.items.is_empty() {
         write!(
             html,
             "<li class=\"menu-disabled\"><span>{}</span></li>",
@@ -12516,7 +12578,7 @@ fn render_zone_search_results(
         )
         .unwrap();
     } else {
-        for zone in matches {
+        for zone in page.items.iter().copied() {
             let label = zone_name(zone);
             let is_selected = zone.rgb_key.0 == current_zone;
             let active_class = if is_selected { " menu-active" } else { "" };
@@ -12542,6 +12604,12 @@ fn render_zone_search_results(
                 selected_badge
             )
             .unwrap();
+        }
+        if let Some(next_offset) = page.next_offset {
+            html.push_str(&render_searchable_dropdown_more_results_row(
+                lang,
+                next_offset,
+            ));
         }
     }
     html.push_str("</ul>");
@@ -13127,10 +13195,11 @@ mod tests {
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
         poisson_probability_at_least, post_calculator_datastar_eval, render_pet_talent_badges,
-        render_select_option_search_text, trade_sale_multiplier_for_species, CalculatorData,
-        CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
-        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
-        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
+        render_searchable_select_results, render_select_option_search_text,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
+        SelectOption, SelectOptionPresentation,
     };
 
     struct MockStore;
@@ -13894,6 +13963,7 @@ mod tests {
                 locale: Some("en-US".to_string()),
                 r#ref: None,
                 q: Some("vlia bech".to_string()),
+                offset: None,
                 selected: Some("240,74,74".to_string()),
             })),
             Extension(RequestId("req-test".to_string())),
@@ -13922,6 +13992,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn searchable_select_results_include_pagination_metadata_when_more_results_exist() {
+        let options = (0..30)
+            .map(|index| SelectOption {
+                value: Box::leak(format!("value-{index}").into_boxed_str()),
+                label: Box::leak(format!("Option {index}").into_boxed_str()),
+                icon: None,
+                grade_tone: "unknown",
+                pet_variant_talent: None,
+                item: None,
+                lifeskill_level: None,
+                presentation: SelectOptionPresentation::Default,
+            })
+            .collect::<Vec<_>>();
+        let text = render_searchable_select_results(
+            CalculatorLocale::EnUs,
+            "",
+            "calculator-search-results",
+            &options,
+            "",
+            "",
+            0,
+        );
+
+        assert!(text.contains("data-next-offset=\"24\""));
+        assert!(text.contains("data-searchable-dropdown-more"));
+        assert!(text.contains("Scroll to load more results"));
+    }
+
+    #[tokio::test]
     async fn option_search_returns_fuzzy_item_results_with_rich_content() {
         let response = get_calculator_datastar_option_search(
             State(test_state()),
@@ -13931,6 +14030,7 @@ mod tests {
                 r#ref: None,
                 kind: Some("rod".to_string()),
                 q: Some("baleno".to_string()),
+                offset: None,
                 results_id: Some("calculator-rod-picker-results".to_string()),
                 selected: Some("item:16162".to_string()),
                 zone: None,
@@ -13972,6 +14072,7 @@ mod tests {
                 r#ref: None,
                 kind: Some("lightstone_set".to_string()),
                 q: Some("blacksmith".to_string()),
+                offset: None,
                 results_id: Some("calculator-lightstone-picker-results".to_string()),
                 selected: Some("lightstone-set:30".to_string()),
                 zone: None,
@@ -14002,6 +14103,7 @@ mod tests {
                 r#ref: None,
                 kind: Some("lifeskill_level".to_string()),
                 q: Some("guru".to_string()),
+                offset: None,
                 results_id: Some("calculator-lifeskill-level-picker-results".to_string()),
                 selected: Some("100".to_string()),
                 zone: None,

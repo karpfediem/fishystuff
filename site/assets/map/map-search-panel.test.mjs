@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { installMapTestI18n } from "./test-i18n.js";
 
-import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
+import {
+  MAP_SEARCH_RESULTS_PAGE_SIZE,
+  renderSearchResults,
+  renderSearchSelection,
+} from "./map-search-panel.js";
 
 installMapTestI18n();
 
@@ -381,6 +385,46 @@ test("renderSearchResults renders unresolved date prompt rows without a concrete
   assert.doesNotMatch(elements.searchResults.innerHTML, /badge badge-ghost badge-xs/);
   assert.doesNotMatch(elements.searchResults.innerHTML, /data-patch-id=/);
   assert.match(elements.searchResults.innerHTML, /Pick a patch or date to limit samples\./);
+});
+
+test("renderSearchResults appends a load-more control when additional matches exist", () => {
+  const elements = createRenderElements();
+  const stateBundle = {
+    inputState: {
+      filters: {
+        searchText: "fish",
+      },
+    },
+  };
+  const matches = Array.from({ length: MAP_SEARCH_RESULTS_PAGE_SIZE + 5 }, (_value, index) => ({
+    kind: "fish",
+    fishId: index + 1,
+    itemId: index + 1,
+    encyclopediaId: index + 1,
+    grade: "blue",
+    isPrize: false,
+    name: `Fish ${index + 1}`,
+  }));
+
+  renderSearchResults(elements, matches, stateBundle, {
+    setBooleanProperty: (element, property, value) => {
+      element[property] = Boolean(value);
+    },
+    setTextContent: (element, value) => {
+      element.textContent = String(value ?? "");
+    },
+    escapeHtml,
+    fishIdentityMarkup: (fish) => `<span class="fishy-item-row">${escapeHtml(fish.name)}</span>`,
+  });
+
+  assert.equal(elements.searchResultsShell.hidden, false);
+  assert.equal(elements.searchResults.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE));
+  assert.equal(
+    (elements.searchResults.innerHTML.match(/data-fish-id=/g) || []).length,
+    MAP_SEARCH_RESULTS_PAGE_SIZE,
+  );
+  assert.match(elements.searchResults.innerHTML, /data-search-results-more/);
+  assert.match(elements.searchResults.innerHTML, /Scroll to load more results/);
 });
 
 test("renderSearchSelection hides the selection shell when no terms are applied", () => {

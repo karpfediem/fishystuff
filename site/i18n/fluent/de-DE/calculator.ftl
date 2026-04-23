@@ -139,6 +139,7 @@ calculator.server.option.none = Keine
 
 calculator.server.result.no_matching_options = Keine passenden Optionen
 calculator.server.result.no_matching_zones = Keine passenden Zonen
+calculator.server.result.more_available = Scrollen, um mehr Ergebnisse zu laden
 calculator.server.result.selected = Ausgewählt
 calculator.server.result.added = Hinzugefügt
 

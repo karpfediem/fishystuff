@@ -1,6 +1,9 @@
 const CLOSE_DELAY_MS = 150;
-const LOCAL_RESULT_LIMIT = 24;
+const RESULTS_PAGE_SIZE = 24;
+const LOAD_MORE_THRESHOLD_PX = 96;
+const DEFAULT_MORE_RESULTS_LABEL = "Scroll to load more results";
 const SEARCH_QUERY_PARAM = "q";
+const OFFSET_QUERY_PARAM = "offset";
 const SELECTED_QUERY_PARAM = "selected";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const URL_SCOPE_RESOLVERS = Object.freeze({
@@ -136,6 +139,12 @@ export class FishySearchableDropdown extends HTMLElement {
         this._panelEventsAttached = false;
         this._panelPositionFrame = 0;
         this._releaseBoundInput = null;
+        this._resultsElement = null;
+        this._activeSearchMode = "";
+        this._activeSearchQuery = "";
+        this._activeSearchSelectedValue = "";
+        this._loadMoreController = null;
+        this._localSearchState = null;
         this._searchController = null;
 
         this._handleBoundInputEvent = this._handleBoundInputEvent.bind(this);
@@ -146,6 +155,7 @@ export class FishySearchableDropdown extends HTMLElement {
         this._handleInput = this._handleInput.bind(this);
         this._handleKeyDown = this._handleKeyDown.bind(this);
         this._handleMouseDown = this._handleMouseDown.bind(this);
+        this._handleResultsScroll = this._handleResultsScroll.bind(this);
         this._handleViewportChange = this._handleViewportChange.bind(this);
 
         this.addEventListener("click", this._handleClick);
@@ -213,6 +223,7 @@ export class FishySearchableDropdown extends HTMLElement {
         upgradeProperty(this, "value");
         this._ensurePanelReference();
         this._attachPanelEvents();
+        this._attachResultsEvents();
         this._bindBoundInput();
 
         queueMicrotask(() => {
@@ -228,9 +239,11 @@ export class FishySearchableDropdown extends HTMLElement {
     disconnectedCallback() {
         this.close();
         this._detachPanelEvents();
+        this._detachResultsEvents();
         this._unbindBoundInput();
         this._cancelClose();
         this._abortSearch();
+        this._abortLoadMore();
         this._detachOutsideListener();
         this._detachViewportListeners();
     }
@@ -295,6 +308,7 @@ export class FishySearchableDropdown extends HTMLElement {
 
         this.style.zIndex = "";
         this._abortSearch();
+        this._abortLoadMore();
         this._detachOutsideListener();
         if (this._usesDetachedPanel()) {
             this._detachViewportListeners();
@@ -336,13 +350,21 @@ export class FishySearchableDropdown extends HTMLElement {
         this._cancelClose();
         this._lastSearchKey = searchKey;
         this._abortSearch();
+        this._abortLoadMore();
+        this._setResultsNextOffset(results, null);
+        results.removeAttribute("aria-busy");
+        this._activeSearchQuery = query;
+        this._activeSearchSelectedValue = selectedValue;
+        this._localSearchState = null;
 
         const searchUrl = this._buildSearchUrl(query);
         if (!searchUrl) {
+            this._activeSearchMode = "local";
             this._renderLocalResults(query, selectedValue);
             return;
         }
 
+        this._activeSearchMode = "remote";
         const controller = new AbortController();
         this._searchController = controller;
         fetch(searchUrl, {
@@ -374,6 +396,8 @@ export class FishySearchableDropdown extends HTMLElement {
                     return;
                 }
                 currentResults.replaceWith(nextResults);
+                this._attachResultsEvents();
+                this._maybeLoadMore();
             })
             .catch((error) => {
                 if (error?.name === "AbortError") {
@@ -384,6 +408,7 @@ export class FishySearchableDropdown extends HTMLElement {
             .finally(() => {
                 if (this._searchController === controller) {
                     this._searchController = null;
+                    this._maybeLoadMore();
                 }
             });
     }
@@ -512,6 +537,19 @@ export class FishySearchableDropdown extends HTMLElement {
         this._panelEventsAttached = true;
     }
 
+    _attachResultsEvents() {
+        const results = this.resultsElement();
+        if (this._resultsElement === results) {
+            return;
+        }
+        this._detachResultsEvents();
+        if (!(results instanceof HTMLElement)) {
+            return;
+        }
+        results.addEventListener("scroll", this._handleResultsScroll, { passive: true });
+        this._resultsElement = results;
+    }
+
     _attachViewportListeners() {
         if (this._viewportListenersAttached) {
             return;
@@ -582,6 +620,14 @@ export class FishySearchableDropdown extends HTMLElement {
         this._searchController = null;
     }
 
+    _abortLoadMore() {
+        if (!this._loadMoreController) {
+            return;
+        }
+        this._loadMoreController.abort();
+        this._loadMoreController = null;
+    }
+
     _attachOutsideListener() {
         if (this._outsideListenerAttached) {
             return;
@@ -604,7 +650,7 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.style.margin = "";
     }
 
-    _buildSearchUrl(query) {
+    _buildSearchUrl(query, offset = null) {
         const resolved = resolveScopedUrl(this.searchUrl, this.searchUrlRoot);
         if (!resolved) {
             return "";
@@ -632,6 +678,12 @@ export class FishySearchableDropdown extends HTMLElement {
             url.searchParams.set(SELECTED_QUERY_PARAM, selectedValue);
         } else {
             url.searchParams.delete(SELECTED_QUERY_PARAM);
+        }
+
+        if (Number.isInteger(offset) && offset > 0) {
+            url.searchParams.set(OFFSET_QUERY_PARAM, String(offset));
+        } else {
+            url.searchParams.delete(OFFSET_QUERY_PARAM);
         }
 
         return url.toString();
@@ -679,6 +731,15 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.removeEventListener("keydown", this._handleKeyDown);
         panel.removeEventListener("mousedown", this._handleMouseDown);
         this._panelEventsAttached = false;
+    }
+
+    _detachResultsEvents() {
+        if (!(this._resultsElement instanceof HTMLElement)) {
+            this._resultsElement = null;
+            return;
+        }
+        this._resultsElement.removeEventListener("scroll", this._handleResultsScroll);
+        this._resultsElement = null;
     }
 
     _detachViewportListeners() {
@@ -751,6 +812,13 @@ export class FishySearchableDropdown extends HTMLElement {
             return;
         }
 
+        const moreIndicator = event.target.closest("[data-searchable-dropdown-more]");
+        if (moreIndicator && this._ownsNode(moreIndicator)) {
+            event.preventDefault();
+            this._loadMore();
+            return;
+        }
+
         const option = event.target.closest("[data-searchable-dropdown-option]");
         if (!option || !this._ownsNode(option)) {
             return;
@@ -817,10 +885,20 @@ export class FishySearchableDropdown extends HTMLElement {
 
         this._cancelClose();
 
+        const moreIndicator = event.target.closest("[data-searchable-dropdown-more]");
+        if (moreIndicator && this._ownsNode(moreIndicator)) {
+            event.preventDefault();
+            return;
+        }
+
         const option = event.target.closest("[data-searchable-dropdown-option]");
         if (option && this._ownsNode(option)) {
             event.preventDefault();
         }
+    }
+
+    _handleResultsScroll() {
+        this._maybeLoadMore();
     }
 
     _handleViewportChange() {
@@ -875,6 +953,7 @@ export class FishySearchableDropdown extends HTMLElement {
 
         const templates = this._catalogTemplates();
         if (!templates.length) {
+            this._setResultsNextOffset(results, null);
             return;
         }
 
@@ -887,9 +966,13 @@ export class FishySearchableDropdown extends HTMLElement {
                 const leftSelected = leftValue === selectedValue ? 0 : 1;
                 const rightSelected = rightValue === selectedValue ? 0 : 1;
                 return leftSelected - rightSelected;
-            })
-            .slice(0, LOCAL_RESULT_LIMIT);
+            });
         const customOption = this._buildCustomOption(rawQuery, selectedValue, templates);
+        this._localSearchState = {
+            matches,
+            nextOffset: 0,
+            selectedValue,
+        };
 
         if (!matches.length && !customOption) {
             const item = document.createElement("li");
@@ -898,44 +981,227 @@ export class FishySearchableDropdown extends HTMLElement {
             label.textContent = "No matching options";
             item.append(label);
             results.replaceChildren(item);
+            this._setResultsNextOffset(results, null);
             return;
         }
 
+        results.replaceChildren(...(customOption ? [customOption] : []));
+        this._appendLocalResultsPage();
+    }
+
+    _appendLocalResultsPage() {
+        const results = this.resultsElement();
+        const state = this._localSearchState;
+        if (!(results instanceof HTMLElement) || !state) {
+            return;
+        }
+
+        const start = state.nextOffset;
+        const end = Math.min(start + RESULTS_PAGE_SIZE, state.matches.length);
+        const pageMatches = state.matches.slice(start, end);
+        state.nextOffset = end;
+
+        const existingNodes = Array.from(results.childNodes).filter(
+            (node) => !this._isMoreResultsNode(node),
+        );
         results.replaceChildren(
-            ...(customOption ? [customOption] : []),
-            ...matches.map((template) => {
-                const value = String(template.getAttribute("data-value") ?? "");
-                const label = String(template.getAttribute("data-label") ?? value).trim();
-                const item = document.createElement("li");
-                const button = document.createElement("button");
-                button.type = "button";
-                button.className = `justify-between gap-3 text-left${value === selectedValue ? " menu-active" : ""}`;
-                button.dataset.searchableDropdownOption = "";
-                button.setAttribute("data-value", value);
-                button.setAttribute("data-label", label);
+            ...existingNodes,
+            ...pageMatches.map((template) => this._buildLocalResultItem(template, state.selectedValue)),
+        );
 
-                const optionContent = document.createElement("span");
-                optionContent.dataset.role = "option-content";
-                optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
-                const optionTemplate = this._findCatalogOptionContentTemplateByValue(value);
-                optionContent.replaceChildren(
-                    ...cloneChildNodes(
-                        optionTemplate instanceof HTMLTemplateElement ? optionTemplate.content : template.content,
-                    ),
-                );
-                button.append(optionContent, template.cloneNode(true));
+        const nextOffset = end < state.matches.length ? end : null;
+        this._setResultsNextOffset(results, nextOffset);
+        if (nextOffset !== null) {
+            results.append(this._buildMoreResultsIndicator(nextOffset));
+        }
+        this._maybeLoadMore();
+    }
 
-                if (value === selectedValue) {
-                    const badge = document.createElement("span");
-                    badge.className = "badge badge-soft badge-primary badge-xs";
-                    badge.textContent = "Selected";
-                    button.append(badge);
+    _buildLocalResultItem(template, selectedValue) {
+        const value = String(template.getAttribute("data-value") ?? "");
+        const label = String(template.getAttribute("data-label") ?? value).trim();
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `justify-between gap-3 text-left${value === selectedValue ? " menu-active" : ""}`;
+        button.dataset.searchableDropdownOption = "";
+        button.setAttribute("data-value", value);
+        button.setAttribute("data-label", label);
+
+        const optionContent = document.createElement("span");
+        optionContent.dataset.role = "option-content";
+        optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
+        const optionTemplate = this._findCatalogOptionContentTemplateByValue(value);
+        optionContent.replaceChildren(
+            ...cloneChildNodes(
+                optionTemplate instanceof HTMLTemplateElement ? optionTemplate.content : template.content,
+            ),
+        );
+        button.append(optionContent, template.cloneNode(true));
+
+        if (value === selectedValue) {
+            const badge = document.createElement("span");
+            badge.className = "badge badge-soft badge-primary badge-xs";
+            badge.textContent = "Selected";
+            button.append(badge);
+        }
+
+        item.append(button);
+        return item;
+    }
+
+    _buildMoreResultsIndicator(nextOffset) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "justify-start gap-3 text-left text-base-content/70";
+        button.setAttribute("data-searchable-dropdown-more", "");
+        button.setAttribute("data-next-offset", String(nextOffset));
+
+        const label = document.createElement("span");
+        label.textContent = this._moreResultsLabel();
+        button.append(label);
+        item.append(button);
+        return item;
+    }
+
+    _isMoreResultsNode(node) {
+        return (
+            node instanceof Element
+            && (
+                node.hasAttribute("data-searchable-dropdown-more")
+                || node.querySelector?.("[data-searchable-dropdown-more]")
+            )
+        );
+    }
+
+    _loadMore() {
+        if (this._searchController || this._loadMoreController) {
+            return;
+        }
+        if (this._activeSearchMode === "local") {
+            if (!this._localSearchState || this._resultsNextOffset() === null) {
+                return;
+            }
+            this._appendLocalResultsPage();
+            return;
+        }
+        if (this._activeSearchMode === "remote") {
+            this._loadMoreRemote();
+        }
+    }
+
+    _loadMoreRemote() {
+        const offset = this._resultsNextOffset();
+        if (offset === null) {
+            return;
+        }
+
+        const searchUrl = this._buildSearchUrl(this._activeSearchQuery, offset);
+        if (!searchUrl) {
+            return;
+        }
+
+        const results = this.resultsElement();
+        if (results instanceof HTMLElement) {
+            results.setAttribute("aria-busy", "true");
+        }
+
+        const controller = new AbortController();
+        this._loadMoreController = controller;
+        fetch(searchUrl, {
+            cache: "no-store",
+            headers: {
+                Accept: "text/html",
+            },
+            signal: controller.signal,
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Search request failed: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then((html) => {
+                if (controller.signal.aborted) {
+                    return;
                 }
 
-                item.append(button);
-                return item;
-            }),
-        );
+                const currentResults = this.resultsElement();
+                if (!(currentResults instanceof HTMLElement)) {
+                    return;
+                }
+
+                const fragment = parseHtmlFragment(html);
+                const nextResults = fragment.firstElementChild;
+                if (!(nextResults instanceof HTMLElement)) {
+                    return;
+                }
+
+                const mergedChildren = [
+                    ...Array.from(currentResults.childNodes).filter(
+                        (node) => !this._isMoreResultsNode(node),
+                    ),
+                    ...Array.from(nextResults.childNodes),
+                ];
+                currentResults.replaceChildren(...mergedChildren);
+                this._setResultsNextOffset(currentResults, this._resultsNextOffset(nextResults));
+                this._maybeLoadMore();
+            })
+            .catch((error) => {
+                if (error?.name === "AbortError") {
+                    return;
+                }
+                console.error("Error loading more searchable dropdown results:", error);
+            })
+            .finally(() => {
+                if (results instanceof HTMLElement) {
+                    results.removeAttribute("aria-busy");
+                }
+                if (this._loadMoreController === controller) {
+                    this._loadMoreController = null;
+                }
+            });
+    }
+
+    _maybeLoadMore() {
+        const results = this.resultsElement();
+        if (!(results instanceof HTMLElement) || this._searchController || this._loadMoreController) {
+            return;
+        }
+        if (this._resultsNextOffset(results) === null) {
+            return;
+        }
+
+        const maxScrollTop = Math.max(0, results.scrollHeight - results.clientHeight);
+        const remaining = maxScrollTop - Math.max(0, results.scrollTop);
+        if (maxScrollTop === 0 || remaining <= LOAD_MORE_THRESHOLD_PX) {
+            this._loadMore();
+        }
+    }
+
+    _moreResultsLabel() {
+        return getStringAttribute(this, "more-results-label") || DEFAULT_MORE_RESULTS_LABEL;
+    }
+
+    _resultsNextOffset(results = this.resultsElement()) {
+        const raw = String(results?.getAttribute?.("data-next-offset") ?? "").trim();
+        if (!raw) {
+            return null;
+        }
+        const value = Number.parseInt(raw, 10);
+        return Number.isInteger(value) && value >= 0 ? value : null;
+    }
+
+    _setResultsNextOffset(results, nextOffset) {
+        if (!(results instanceof HTMLElement)) {
+            return;
+        }
+        if (Number.isInteger(nextOffset) && nextOffset >= 0) {
+            results.setAttribute("data-next-offset", String(nextOffset));
+            return;
+        }
+        results.removeAttribute("data-next-offset");
     }
 
     _measurePanelRect() {

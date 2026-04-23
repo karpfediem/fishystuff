@@ -34,6 +34,7 @@ calculator.server.option.none = 없음
 
 calculator.server.result.no_matching_options = 일치하는 항목 없음
 calculator.server.result.no_matching_zones = 일치하는 지역 없음
+calculator.server.result.more_available = 스크롤해서 결과 더 불러오기
 calculator.server.result.selected = 선택됨
 calculator.server.result.added = 추가됨
 

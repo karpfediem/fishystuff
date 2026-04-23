@@ -2,7 +2,12 @@ import {
   FISH_FILTER_TERM_ORDER,
   wouldSearchExpressionMoveToIndexChangeTree,
 } from "./map-search-contract.js";
-import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
+import {
+  buildSearchResultsMatchSetKey,
+  MAP_SEARCH_RESULTS_PAGE_SIZE,
+  renderSearchResults,
+  renderSearchSelection,
+} from "./map-search-panel.js";
 import {
   buildDefaultSearchMatches,
   buildSearchExpressionDragSignalPatch,
@@ -27,6 +32,7 @@ const SEARCH_PANEL_TAG_NAME = "fishymap-search-panel";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const EXPRESSION_DRAG_PROXY_SCALE = 0.78;
 const EXPRESSION_DRAG_PROXY_HOTSPOT = 8;
+const SEARCH_RESULTS_LOAD_MORE_THRESHOLD_PX = 96;
 let expressionDragProxyElement = null;
 
 if (globalThis.window?.customElements) {
@@ -290,6 +296,12 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this._rafId = 0;
     this._zoneCatalog = [];
     this._elements = null;
+    this._searchResultsAutoLoadId = 0;
+    this._searchResultsAutoLoadKind = "";
+    this._searchResultsState = {
+      matchSetKey: "",
+      visibleCount: MAP_SEARCH_RESULTS_PAGE_SIZE,
+    };
     this._dragState = {
       sourcePath: "",
       sourceElement: null,
@@ -327,6 +339,9 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
           },
         });
       }, 0);
+    };
+    this._handleResultsScroll = () => {
+      this.maybeLoadMoreSearchResults();
     };
     this._handleDragStart = (event) => {
       if (event.target.closest("button")) {
@@ -456,6 +471,12 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       }
     };
     this._handleClick = (event) => {
+      const moreResultsButton = event.target.closest("button[data-search-results-more][data-next-offset]");
+      if (moreResultsButton) {
+        event.preventDefault();
+        this.loadMoreSearchResults(moreResultsButton.getAttribute("data-next-offset"));
+        return;
+      }
       const negateButton = event.target.closest(
         "button.fishy-applied-expression-negate-toggle[data-expression-negate-path]",
       );
@@ -522,6 +543,12 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
+      const moreResultsButton = event.target.closest("button[data-search-results-more][data-next-offset]");
+      if (moreResultsButton) {
+        event.preventDefault();
+        this.loadMoreSearchResults(moreResultsButton.getAttribute("data-next-offset"));
+        return;
+      }
       const row = event.target.closest(
         "[data-fish-filter-term], [data-patch-bound], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
       );
@@ -559,6 +586,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.addEventListener("dragover", this._handleDragOver);
     this.addEventListener("drop", this._handleDrop);
     this.addEventListener("dragend", this._handleDragEnd);
+    this._elements.searchResults?.addEventListener?.("scroll", this._handleResultsScroll);
     this._elements.searchWindow?.addEventListener?.("focusout", this._handleSearchWindowFocusOut);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
@@ -574,10 +602,12 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.removeEventListener("dragover", this._handleDragOver);
     this.removeEventListener("drop", this._handleDrop);
     this.removeEventListener("dragend", this._handleDragEnd);
+    this._elements?.searchResults?.removeEventListener?.("scroll", this._handleResultsScroll);
     this._elements?.searchWindow?.removeEventListener?.("focusout", this._handleSearchWindowFocusOut);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
+    this.clearQueuedSearchResultsAutoLoad();
     if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
       globalThis.cancelAnimationFrame(this._rafId);
     }
@@ -648,6 +678,70 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     dispatchShellSignalPatch(this._shell, patch);
   }
 
+  clearQueuedSearchResultsAutoLoad() {
+    if (!this._searchResultsAutoLoadId) {
+      return;
+    }
+    if (this._searchResultsAutoLoadKind === "animation-frame") {
+      globalThis.cancelAnimationFrame?.(this._searchResultsAutoLoadId);
+    } else if (this._searchResultsAutoLoadKind === "timeout") {
+      globalThis.clearTimeout?.(this._searchResultsAutoLoadId);
+    }
+    this._searchResultsAutoLoadId = 0;
+    this._searchResultsAutoLoadKind = "";
+  }
+
+  queueSearchResultsAutoLoad() {
+    if (this._searchResultsAutoLoadId) {
+      return;
+    }
+    const run = () => {
+      this._searchResultsAutoLoadId = 0;
+      this._searchResultsAutoLoadKind = "";
+      this.maybeLoadMoreSearchResults();
+    };
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      this._searchResultsAutoLoadKind = "animation-frame";
+      this._searchResultsAutoLoadId = globalThis.requestAnimationFrame(run) || 0;
+      return;
+    }
+    this._searchResultsAutoLoadKind = "timeout";
+    this._searchResultsAutoLoadId = globalThis.setTimeout?.(run, 0) || 0;
+  }
+
+  loadMoreSearchResults(offset = null) {
+    const nextOffset = Number.parseInt(
+      offset ?? this._elements?.searchResults?.dataset?.nextOffset ?? "",
+      10,
+    );
+    if (!Number.isFinite(nextOffset) || nextOffset < 0) {
+      return false;
+    }
+    const nextVisibleCount = nextOffset + MAP_SEARCH_RESULTS_PAGE_SIZE;
+    if (nextVisibleCount <= this._searchResultsState.visibleCount) {
+      return false;
+    }
+    this._searchResultsState.visibleCount = nextVisibleCount;
+    this.scheduleRender();
+    return true;
+  }
+
+  maybeLoadMoreSearchResults() {
+    const results = this._elements?.searchResults;
+    if (!results?.dataset?.nextOffset) {
+      return false;
+    }
+    const clientHeight = Number(results.clientHeight || 0);
+    const scrollHeight = Number(results.scrollHeight || 0);
+    const scrollTop = Math.max(0, Number(results.scrollTop || 0));
+    const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+    const remaining = maxScrollTop - scrollTop;
+    if (maxScrollTop === 0 || remaining <= SEARCH_RESULTS_LOAD_MORE_THRESHOLD_PX) {
+      return this.loadMoreSearchResults(results.dataset.nextOffset);
+    }
+    return false;
+  }
+
   handleSearchResultSelection(row) {
     const fishFilterTerm = row.getAttribute("data-fish-filter-term");
     if (fishFilterTerm) {
@@ -689,6 +783,12 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     }
     const bundle = buildSearchPanelStateBundle(signals);
     const matches = resolveSearchPanelMatches(bundle, signals?._map_ui?.search, this._zoneCatalog);
+    const matchSetKey = buildSearchResultsMatchSetKey(matches, bundle);
+
+    if (matchSetKey !== this._searchResultsState.matchSetKey) {
+      this._searchResultsState.matchSetKey = matchSetKey;
+      this._searchResultsState.visibleCount = MAP_SEARCH_RESULTS_PAGE_SIZE;
+    }
 
     const fishLookup = new Map((bundle.state?.catalog?.fish || []).map((fish) => [fish.fishId, fish]));
     const fishFilterMetadataByTerm = Object.fromEntries(
@@ -711,7 +811,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       formatZone,
       fishFilterTermMetadata: fishFilterMetadataByTerm,
     });
-    renderSearchResults(this._elements, matches, bundle, {
+    const searchResultsRender = renderSearchResults(this._elements, matches, bundle, {
       setBooleanProperty,
       setTextContent,
       escapeHtml,
@@ -720,7 +820,15 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       zoneIdentityMarkup,
       semanticIdentityMarkup,
       formatZone,
+      matchSetKey,
+      visibleCount: this._searchResultsState.visibleCount,
     });
+
+    if (searchResultsRender.hasMore) {
+      this.queueSearchResultsAutoLoad();
+    } else {
+      this.clearQueuedSearchResultsAutoLoad();
+    }
   }
 
   scheduleRender() {

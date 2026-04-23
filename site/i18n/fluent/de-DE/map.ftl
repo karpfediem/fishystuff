@@ -9,6 +9,7 @@ map.search.window_title = Suche
 map.search.placeholder = Fisch, Zone, Filter oder Patch suchen
 map.search.results.match_count.one = {$count} Treffer
 map.search.results.match_count.other = {$count} Treffer
+map.search.results.more_available = Scrollen, um mehr Ergebnisse zu laden
 map.search.bound.before = Vor
 map.search.bound.after = Nach
 map.search.patch.choose_date = Datum wählen

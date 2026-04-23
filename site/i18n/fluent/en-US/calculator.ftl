@@ -353,6 +353,7 @@ calculator.server.option.none = None
 
 calculator.server.result.no_matching_options = No matching options
 calculator.server.result.no_matching_zones = No matching zones
+calculator.server.result.more_available = Scroll to load more results
 calculator.server.result.selected = Selected
 calculator.server.result.added = Added
 
