@@ -343,7 +343,7 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.deepEqual(Array.from(signals.pet1.skills), ["pet-skill:a"]);
   assert.equal(signals.pet1.packLeader, true);
   assert.equal(signals.pet2.packLeader, false);
-  assert.equal(signals._calculator_ui.top_level_tab, "overview");
+  assert.equal(signals._calculator_ui.top_level_tab, "distribution");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["inputs"], ["distribution"]]]);
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);
@@ -405,7 +405,7 @@ test("calculator restore ignores legacy pinned UI state without a pinned layout"
 
   env.window.__fishystuffCalculator.restore(signals);
 
-  assert.equal(signals._calculator_ui.top_level_tab, "overview");
+  assert.equal(signals._calculator_ui.top_level_tab, "food");
   assert.equal(signals._calculator_ui.distribution_tab, "groups");
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["overview"]]]);
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["overview"]);

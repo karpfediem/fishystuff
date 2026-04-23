@@ -20,6 +20,7 @@
     "overlay",
     "debug",
   ]);
+  const CALCULATOR_DEFAULT_TOP_LEVEL_TAB = "overview";
   const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze(["overview"]);
   const CALCULATOR_DEFAULT_PINNED_LAYOUT = Object.freeze([
     Object.freeze([Object.freeze(["overview"])]),
@@ -476,7 +477,7 @@
     return {
       top_level_tab: CALCULATOR_TOP_LEVEL_TABS.has(topLevelTab)
         ? topLevelTab
-        : "overview",
+        : CALCULATOR_DEFAULT_TOP_LEVEL_TAB,
       distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
         ? distributionTab
         : "groups",
@@ -1233,10 +1234,12 @@
     const storedSignals = loadStoredSignals();
     if (storedSignals && typeof storedSignals === "object") {
       const restoredSignals = canonicalizeStoredSignals(storedSignals);
-      restoredSignals._calculator_ui = {
-        ...restoredSignals._calculator_ui,
-        top_level_tab: currentUi.top_level_tab,
-      };
+      if (currentUi.top_level_tab !== CALCULATOR_DEFAULT_TOP_LEVEL_TAB) {
+        restoredSignals._calculator_ui = {
+          ...restoredSignals._calculator_ui,
+          top_level_tab: currentUi.top_level_tab,
+        };
+      }
       Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
@@ -1258,6 +1261,13 @@
     const persistedUi = persistedCalculatorUiSignals(signals);
     localStorage.setItem(CALCULATOR_DATA_STORAGE_KEY, JSON.stringify(persistedData));
     localStorage.setItem(CALCULATOR_UI_STORAGE_KEY, JSON.stringify(persistedUi));
+  }
+
+  function blurActiveElement() {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && typeof activeElement.blur === "function") {
+      activeElement.blur();
+    }
   }
 
   function liveCalculator(
@@ -2132,5 +2142,6 @@
     sectionVisible: calculatorSectionVisible,
     sectionOrder: calculatorSectionOrder,
     normalizeUnpinnedInsertIndex,
+    blurActiveElement,
   };
 })();
