@@ -7,6 +7,7 @@ const HANDLE_SELECTOR = "[data-calculator-section-drag]";
 const DROPZONE_SELECTOR = "[data-calculator-pin-dropzone]";
 const ROWS_HOST_SELECTOR = "[data-calculator-pinned-rows]";
 const ROW_SELECTOR = "[data-calculator-pinned-row]";
+const COLUMN_SELECTOR = "[data-calculator-pinned-column]";
 const DRAG_THRESHOLD_PX = 4;
 const DRAG_Z_INDEX = 80;
 const DROPZONE_HEADER_GAP_PX = 16;
@@ -57,15 +58,28 @@ function normalizeUniqueSectionIds(sectionIds, availableSectionIds = []) {
 }
 
 export function flattenPinnedLayout(layout, availableSectionIds = []) {
+    const entries = [];
+    if (Array.isArray(layout)) {
+        for (const row of layout) {
+            if (!Array.isArray(row)) {
+                continue;
+            }
+            for (const column of row) {
+                if (Array.isArray(column)) {
+                    entries.push(...column);
+                }
+            }
+        }
+    }
     return normalizeUniqueSectionIds(
-        Array.isArray(layout) ? layout.flatMap((row) => (Array.isArray(row) ? row : [])) : [],
+        entries,
         availableSectionIds,
     );
 }
 
 export function normalizePinnedLayout(layout, availableSectionIds = [], fallbackPinnedSections = []) {
     const fallbackRows = normalizeUniqueSectionIds(fallbackPinnedSections, availableSectionIds)
-        .map((sectionId) => [sectionId]);
+        .map((sectionId) => [[sectionId]]);
     const rows = Array.isArray(layout) ? layout : fallbackRows;
     const seen = new Set();
     const normalized = [];
@@ -73,20 +87,29 @@ export function normalizePinnedLayout(layout, availableSectionIds = [], fallback
         if (!Array.isArray(row)) {
             continue;
         }
-        const nextRow = [];
-        for (const entry of row) {
-            const sectionId = trimString(entry);
-            if (!sectionId || seen.has(sectionId)) {
+        const normalizedRow = [];
+        for (const column of row) {
+            if (!Array.isArray(column)) {
                 continue;
             }
-            if (availableSectionIds.length && !availableSectionIds.includes(sectionId)) {
-                continue;
+            const normalizedColumn = [];
+            for (const entry of column) {
+                const sectionId = trimString(entry);
+                if (!sectionId || seen.has(sectionId)) {
+                    continue;
+                }
+                if (availableSectionIds.length && !availableSectionIds.includes(sectionId)) {
+                    continue;
+                }
+                seen.add(sectionId);
+                normalizedColumn.push(sectionId);
             }
-            seen.add(sectionId);
-            nextRow.push(sectionId);
+            if (normalizedColumn.length) {
+                normalizedRow.push(normalizedColumn);
+            }
         }
-        if (nextRow.length) {
-            normalized.push(nextRow);
+        if (normalizedRow.length) {
+            normalized.push(normalizedRow);
         }
     }
     if (Array.isArray(layout)) {
@@ -97,7 +120,7 @@ export function normalizePinnedLayout(layout, availableSectionIds = [], fallback
 
 export function buildCalculatorSectionRenderOrder(sectionIds, topLevelTab, pinnedSectionsOrLayout) {
     const availableSectionIds = normalizeUniqueSectionIds(sectionIds);
-    const pinned = Array.isArray(pinnedSectionsOrLayout?.[0])
+    const pinned = Array.isArray(pinnedSectionsOrLayout?.[0]?.[0])
         ? flattenPinnedLayout(pinnedSectionsOrLayout, availableSectionIds)
         : normalizeUniqueSectionIds(pinnedSectionsOrLayout, availableSectionIds);
     const topLevelSectionId = trimString(topLevelTab);
@@ -138,7 +161,7 @@ function patchPinnedLayout(pinnedLayout) {
     const normalizedLayout = normalizePinnedLayout(pinnedLayout);
     globalThis.window.__fishystuffCalculator.patchSignals({
         _calculator_ui: {
-            pinned_layout: normalizedLayout.map((row) => [...row]),
+            pinned_layout: normalizedLayout.map((row) => row.map((column) => [...column])),
             pinned_sections: flattenPinnedLayout(normalizedLayout),
         },
     });
@@ -184,6 +207,29 @@ function rowAcceptsInline(rowSectionIds, draggedSectionId) {
         ...normalizeUniqueSectionIds([draggedSectionId]),
     ];
     return sectionIds.every((sectionId) => sectionLayoutMeta(sectionId).shareable);
+}
+
+function columnLayoutMeta(sectionIds) {
+    const metas = normalizeUniqueSectionIds(sectionIds).map(sectionLayoutMeta);
+    if (metas.some((meta) => !meta.shareable || meta.kind === "full")) {
+        return { basis: "100%", minWidth: "100%", shareable: false };
+    }
+    const basisRem = metas
+        .map((meta) => Number.parseFloat(String(meta.basis).replace("rem", "")))
+        .filter(Number.isFinite);
+    const widthRem = basisRem.length ? Math.max(...basisRem) : 32;
+    return {
+        basis: `${widthRem}rem`,
+        minWidth: `min(100%, ${widthRem}rem)`,
+        shareable: true,
+    };
+}
+
+function applyColumnLayoutMeta(element, sectionIds) {
+    const meta = columnLayoutMeta(sectionIds);
+    element.style.setProperty("--fishy-calculator-column-basis", meta.basis);
+    element.style.setProperty("--fishy-calculator-column-min-width", meta.minWidth);
+    element.dataset.calculatorColumnShareable = meta.shareable ? "true" : "false";
 }
 
 function closestRectIndex(rects, pointX, pointY) {
@@ -355,6 +401,13 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             .filter((row) => includePlaceholder || !row.hasAttribute("data-calculator-row-placeholder"));
     }
 
+    columnElements(row = null, { includePlaceholder = false } = {}) {
+        const root = row ?? this.rowsHost();
+        return Array.from(root?.children ?? [])
+            .filter((child) => child.matches?.(COLUMN_SELECTOR))
+            .filter((column) => includePlaceholder || !column.hasAttribute("data-calculator-column-placeholder"));
+    }
+
     syncSectionLayoutMeta(card) {
         const sectionId = trimString(card.dataset.calculatorSectionId);
         applySectionLayoutMeta(card, sectionId);
@@ -376,7 +429,18 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         return row;
     }
 
-    createInlinePlaceholder() {
+    createColumnElement(sectionIds = []) {
+        const column = globalThis.document?.createElement?.("div");
+        if (!column) {
+            return null;
+        }
+        column.className = "fishy-calculator-section-stack__column";
+        column.setAttribute("data-calculator-pinned-column", "");
+        applyColumnLayoutMeta(column, sectionIds);
+        return column;
+    }
+
+    prepareInlinePlaceholder(mode) {
         const placeholder = globalThis.document?.createElement?.("div");
         if (!placeholder) {
             return null;
@@ -386,7 +450,15 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         placeholder.setAttribute("aria-hidden", "true");
         applySectionLayoutMeta(placeholder, this._drag.sectionId);
         placeholder.style.setProperty("min-height", `${Math.max(this._drag.height || 0, PLACEHOLDER_MIN_HEIGHT_PX)}px`);
+        this.setInlinePlaceholderMode(placeholder, mode);
         return placeholder;
+    }
+
+    setInlinePlaceholderMode(placeholder, mode) {
+        const normalizedMode = mode === "stack" ? "stack" : "column";
+        placeholder.dataset.calculatorInlinePlaceholder = normalizedMode;
+        placeholder.classList.toggle("fishy-calculator-section-slot-placeholder--column", normalizedMode === "column");
+        placeholder.classList.toggle("fishy-calculator-section-slot-placeholder--stack", normalizedMode === "stack");
     }
 
     createRowPlaceholder() {
@@ -433,15 +505,29 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             );
             if (rowsHost) {
                 const fragment = globalThis.document?.createDocumentFragment?.();
-                for (const rowSectionIds of pinnedLayout) {
+                for (const rowColumns of pinnedLayout) {
                     const row = this.createRowElement();
                     if (!row) {
                         continue;
                     }
-                    for (const sectionId of rowSectionIds) {
-                        const card = cardsById.get(sectionId);
-                        if (card) {
-                            row.appendChild(card);
+                    for (const columnSectionIds of rowColumns) {
+                        const column = this.createColumnElement(columnSectionIds);
+                        if (!column) {
+                            continue;
+                        }
+                        for (const sectionId of columnSectionIds) {
+                            const card = cardsById.get(sectionId);
+                            if (card) {
+                                column.appendChild(card);
+                            }
+                        }
+                        if (column.childElementCount) {
+                            applyColumnLayoutMeta(
+                                column,
+                                Array.from(column.querySelectorAll(CARD_SELECTOR))
+                                    .map((card) => trimString(card.dataset.calculatorSectionId)),
+                            );
+                            row.appendChild(column);
                         }
                     }
                     if (row.childElementCount) {
@@ -519,10 +605,10 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         }
         const rect = this._drag.item.getBoundingClientRect();
         if (this._drag.wasPinned) {
-            this._drag.inlinePlaceholder = this.createInlinePlaceholder();
-            const sourceRow = this._drag.item.closest(ROW_SELECTOR);
-            if (this._drag.inlinePlaceholder && sourceRow) {
-                sourceRow.insertBefore(this._drag.inlinePlaceholder, this._drag.item);
+            this._drag.inlinePlaceholder = this.prepareInlinePlaceholder("stack");
+            const sourceColumn = this._drag.item.closest(COLUMN_SELECTOR);
+            if (this._drag.inlinePlaceholder && sourceColumn) {
+                sourceColumn.insertBefore(this._drag.inlinePlaceholder, this._drag.item);
             }
         }
         this.appendChild(this._drag.item);
@@ -569,12 +655,60 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             index,
             row,
             rect: row.getBoundingClientRect(),
-            cards: Array.from(row.querySelectorAll(CARD_SELECTOR))
-                .filter((card) => card !== this._drag.item && isElementVisible(card)),
-            sectionIds: Array.from(row.querySelectorAll(CARD_SELECTOR))
+            columns: this.columnElements(row).map((column, columnIndex) => {
+                const cards = Array.from(column.querySelectorAll(CARD_SELECTOR))
+                    .filter((card) => card !== this._drag.item && isElementVisible(card))
+                    .map((card, cardIndex) => ({
+                        card,
+                        cardIndex,
+                        rect: card.getBoundingClientRect(),
+                        sectionId: trimString(card.dataset.calculatorSectionId),
+                    }))
+                    .filter((cardInfo) => cardInfo.sectionId && cardInfo.sectionId !== this._drag.sectionId);
+                return {
+                    column,
+                    columnIndex,
+                    rect: column.getBoundingClientRect(),
+                    cards,
+                    sectionIds: cards.map((cardInfo) => cardInfo.sectionId),
+                };
+            }),
+            sectionIds: this.columnElements(row)
+                .flatMap((column) => Array.from(column.querySelectorAll(CARD_SELECTOR)))
                 .map((card) => trimString(card.dataset.calculatorSectionId))
                 .filter((sectionId) => sectionId && sectionId !== this._drag.sectionId),
         }));
+    }
+
+    resolveMosaicDropTarget(rowInfo, pointX, pointY) {
+        if (!rowInfo.columns.length) {
+            return { kind: "column", rowIndex: rowInfo.index, columnIndex: 0 };
+        }
+        const columnIndex = Math.max(0, closestRectIndex(
+            rowInfo.columns.map((columnInfo) => columnInfo.rect),
+            pointX,
+            pointY,
+        ));
+        const columnInfo = rowInfo.columns[columnIndex];
+        if (!columnInfo?.cards.length) {
+            return { kind: "stack", rowIndex: rowInfo.index, columnIndex, itemIndex: 0 };
+        }
+        const cardIndex = Math.max(0, closestRectIndex(
+            columnInfo.cards.map((cardInfo) => cardInfo.rect),
+            pointX,
+            pointY,
+        ));
+        const cardInfo = columnInfo.cards[cardIndex];
+        const rect = cardInfo.rect;
+        const sideGutterWidth = Math.min(96, Math.max(32, rect.width * 0.25));
+        if (pointX <= rect.left + sideGutterWidth) {
+            return { kind: "column", rowIndex: rowInfo.index, columnIndex };
+        }
+        if (pointX >= rect.right - sideGutterWidth) {
+            return { kind: "column", rowIndex: rowInfo.index, columnIndex: columnIndex + 1 };
+        }
+        const itemIndex = pointY <= rect.top + (rect.height / 2) ? cardIndex : cardIndex + 1;
+        return { kind: "stack", rowIndex: rowInfo.index, columnIndex, itemIndex };
     }
 
     resolveDropTarget(pointX, pointY) {
@@ -596,14 +730,7 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
             }
             if (pointY >= rowInfo.rect.top && pointY <= rowInfo.rect.bottom) {
                 if (rowAcceptsInline(rowInfo.sectionIds, this._drag.sectionId)) {
-                    const rects = rowInfo.cards.map((card) => card.getBoundingClientRect());
-                    if (!rects.length) {
-                        return { kind: "inline", rowIndex: index, itemIndex: 0 };
-                    }
-                    const closestIndex = closestRectIndex(rects, pointX, pointY);
-                    const rect = rects[Math.max(0, closestIndex)];
-                    const itemIndex = pointX <= rect.left + (rect.width / 2) ? closestIndex : closestIndex + 1;
-                    return { kind: "inline", rowIndex: index, itemIndex };
+                    return this.resolveMosaicDropTarget(rowInfo, pointX, pointY);
                 }
                 return {
                     kind: "row",
@@ -617,21 +744,54 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         return { kind: "row", rowIndex: rows.length };
     }
 
-    moveInlinePlaceholder(rowIndex, itemIndex) {
+    inlinePlaceholder(mode) {
+        const placeholder = this._drag.inlinePlaceholder ?? this.prepareInlinePlaceholder(mode);
+        if (!placeholder) {
+            return null;
+        }
+        this._drag.inlinePlaceholder = placeholder;
+        this.setInlinePlaceholderMode(placeholder, mode);
+        if (mode === "column") {
+            placeholder.setAttribute("data-calculator-column-placeholder", "");
+            applyColumnLayoutMeta(placeholder, [this._drag.sectionId]);
+        } else {
+            placeholder.removeAttribute("data-calculator-column-placeholder");
+        }
+        return placeholder;
+    }
+
+    moveColumnPlaceholder(rowIndex, columnIndex) {
         const rows = this.rowElements({ includePlaceholder: false });
         const row = rows[Math.max(0, Math.min(rowIndex, rows.length - 1))];
-        const placeholder = this._drag.inlinePlaceholder ?? this.createInlinePlaceholder();
+        const placeholder = this.inlinePlaceholder("column");
         if (!row || !placeholder) {
             return;
         }
         if (this._drag.rowPlaceholder?.parentNode) {
             this._drag.rowPlaceholder.remove();
         }
-        this._drag.inlinePlaceholder = placeholder;
-        const siblings = Array.from(row.children).filter((child) => child !== placeholder);
-        const insertionIndex = Math.max(0, Math.min(itemIndex, siblings.length));
+        const siblings = this.columnElements(row).filter((child) => child !== placeholder);
+        const insertionIndex = Math.max(0, Math.min(columnIndex, siblings.length));
         const reference = siblings[insertionIndex] ?? null;
         row.insertBefore(placeholder, reference);
+        this.pruneEmptyRows();
+    }
+
+    moveStackPlaceholder(rowIndex, columnIndex, itemIndex) {
+        const rows = this.rowElements({ includePlaceholder: false });
+        const row = rows[Math.max(0, Math.min(rowIndex, rows.length - 1))];
+        const column = this.columnElements(row)[Math.max(0, columnIndex)];
+        const placeholder = this.inlinePlaceholder("stack");
+        if (!column || !placeholder) {
+            return;
+        }
+        if (this._drag.rowPlaceholder?.parentNode) {
+            this._drag.rowPlaceholder.remove();
+        }
+        const siblings = Array.from(column.children).filter((child) => child !== placeholder);
+        const insertionIndex = Math.max(0, Math.min(itemIndex, siblings.length));
+        const reference = siblings[insertionIndex] ?? null;
+        column.insertBefore(placeholder, reference);
         this.pruneEmptyRows();
     }
 
@@ -678,8 +838,10 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._drag.engaged = dropzoneActive;
         if (dropzoneActive) {
             const target = this.resolveDropTarget(probeX, probeY);
-            if (target.kind === "inline") {
-                this.moveInlinePlaceholder(target.rowIndex, target.itemIndex);
+            if (target.kind === "column") {
+                this.moveColumnPlaceholder(target.rowIndex, target.columnIndex);
+            } else if (target.kind === "stack") {
+                this.moveStackPlaceholder(target.rowIndex, target.columnIndex, target.itemIndex);
             } else {
                 this.moveRowPlaceholder(target.rowIndex);
             }
@@ -690,7 +852,16 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
 
     pruneEmptyRows() {
         for (const row of this.rowElements({ includePlaceholder: true })) {
-            if (!row.querySelector(CARD_SELECTOR) && !row.querySelector(INLINE_PLACEHOLDER_SELECTOR) && !row.hasAttribute("data-calculator-row-placeholder")) {
+            for (const column of this.columnElements(row, { includePlaceholder: true })) {
+                if (!column.querySelector(CARD_SELECTOR) && !column.querySelector(INLINE_PLACEHOLDER_SELECTOR)) {
+                    column.remove();
+                }
+            }
+        }
+        for (const row of this.rowElements({ includePlaceholder: true })) {
+            if (!row.querySelector(CARD_SELECTOR)
+                && !row.querySelector(INLINE_PLACEHOLDER_SELECTOR)
+                && !row.hasAttribute("data-calculator-row-placeholder")) {
                 row.remove();
             }
         }
@@ -743,25 +914,38 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         const layout = [];
         for (const row of this.rowElements({ includePlaceholder: true })) {
             if (row.hasAttribute("data-calculator-row-placeholder")) {
-                layout.push([this._drag.sectionId]);
+                layout.push([[this._drag.sectionId]]);
                 continue;
             }
-            const rowEntries = [];
+            const rowColumns = [];
             for (const child of Array.from(row.children)) {
-                if (child === this._drag.inlinePlaceholder) {
-                    rowEntries.push(this._drag.sectionId);
+                if (child === this._drag.inlinePlaceholder && child.dataset.calculatorInlinePlaceholder === "column") {
+                    rowColumns.push([this._drag.sectionId]);
                     continue;
                 }
-                if (!child.matches?.(CARD_SELECTOR)) {
+                if (!child.matches?.(COLUMN_SELECTOR)) {
                     continue;
                 }
-                const sectionId = trimString(child.dataset.calculatorSectionId);
-                if (sectionId && sectionId !== this._drag.sectionId) {
-                    rowEntries.push(sectionId);
+                const columnEntries = [];
+                for (const columnChild of Array.from(child.children)) {
+                    if (columnChild === this._drag.inlinePlaceholder && columnChild.dataset.calculatorInlinePlaceholder === "stack") {
+                        columnEntries.push(this._drag.sectionId);
+                        continue;
+                    }
+                    if (!columnChild.matches?.(CARD_SELECTOR)) {
+                        continue;
+                    }
+                    const sectionId = trimString(columnChild.dataset.calculatorSectionId);
+                    if (sectionId && sectionId !== this._drag.sectionId) {
+                        columnEntries.push(sectionId);
+                    }
+                }
+                if (columnEntries.length) {
+                    rowColumns.push(columnEntries);
                 }
             }
-            if (rowEntries.length) {
-                layout.push(rowEntries);
+            if (rowColumns.length) {
+                layout.push(rowColumns);
             }
         }
         return normalizePinnedLayout(layout, availableSectionIds, []);

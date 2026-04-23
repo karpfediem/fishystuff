@@ -22,7 +22,7 @@
   ]);
   const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze(["overview"]);
   const CALCULATOR_DEFAULT_PINNED_LAYOUT = Object.freeze([
-    Object.freeze(["overview"]),
+    Object.freeze([Object.freeze(["overview"])]),
   ]);
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
@@ -343,13 +343,18 @@
       if (!Array.isArray(row)) {
         continue;
       }
-      for (const entry of row) {
-        const normalized = String(entry ?? "").trim();
-        if (!normalized || !CALCULATOR_TOP_LEVEL_TABS.has(normalized) || seen.has(normalized)) {
+      for (const column of row) {
+        if (!Array.isArray(column)) {
           continue;
         }
-        seen.add(normalized);
-        out.push(normalized);
+        for (const entry of column) {
+          const normalized = String(entry ?? "").trim();
+          if (!normalized || !CALCULATOR_TOP_LEVEL_TABS.has(normalized) || seen.has(normalized)) {
+            continue;
+          }
+          seen.add(normalized);
+          out.push(normalized);
+        }
       }
     }
     return out;
@@ -359,9 +364,9 @@
     value,
     fallback = CALCULATOR_DEFAULT_PINNED_LAYOUT,
   ) => {
-    const fallbackRows = Array.isArray(fallback?.[0])
+    const fallbackRows = Array.isArray(fallback?.[0]?.[0])
       ? fallback
-      : normalizePinnedSections(fallback).map((sectionId) => [sectionId]);
+      : normalizePinnedSections(fallback).map((sectionId) => [[sectionId]]);
     const rows = Array.isArray(value) ? value : fallbackRows;
     const seen = new Set();
     const out = [];
@@ -370,13 +375,22 @@
         continue;
       }
       const normalizedRow = [];
-      for (const entry of row) {
-        const normalized = String(entry ?? "").trim();
-        if (!normalized || !CALCULATOR_TOP_LEVEL_TABS.has(normalized) || seen.has(normalized)) {
+      for (const column of row) {
+        if (!Array.isArray(column)) {
           continue;
         }
-        seen.add(normalized);
-        normalizedRow.push(normalized);
+        const normalizedColumn = [];
+        for (const entry of column) {
+          const normalized = String(entry ?? "").trim();
+          if (!normalized || !CALCULATOR_TOP_LEVEL_TABS.has(normalized) || seen.has(normalized)) {
+            continue;
+          }
+          seen.add(normalized);
+          normalizedColumn.push(normalized);
+        }
+        if (normalizedColumn.length) {
+          normalizedRow.push(normalizedColumn);
+        }
       }
       if (normalizedRow.length) {
         out.push(normalizedRow);
@@ -388,11 +402,11 @@
     if (out.length) {
       return out;
     }
-    const normalizedFallback = normalizePinnedSections(fallbackRows.flat());
+    const normalizedFallback = normalizePinnedSections(fallbackRows.flat(2));
     return normalizedFallback.length
-      ? normalizedFallback.map((sectionId) => [sectionId])
+      ? normalizedFallback.map((sectionId) => [[sectionId]])
       : normalizePinnedSections(CALCULATOR_DEFAULT_PINNED_SECTIONS)
-        .map((sectionId) => [sectionId]);
+        .map((sectionId) => [[sectionId]]);
   };
 
   const pinnedSectionsFromUiState = (value) => {
@@ -410,7 +424,7 @@
 
   const pinnedLayoutFromUiState = (value) => {
     if (Array.isArray(value)) {
-      return Array.isArray(value[0])
+      return Array.isArray(value[0]?.[0])
         ? normalizePinnedLayout(value)
         : normalizePinnedLayout(undefined, value);
     }
@@ -469,6 +483,33 @@
     return pinnedSectionIndex(pinnedSections, sectionId) >= 0;
   }
 
+  function clonePinnedLayout(layout) {
+    return normalizePinnedLayout(layout).map((row) => row.map((column) => [...column]));
+  }
+
+  function compactPinnedLayout(layout) {
+    return layout
+      .map((row) => row
+        .map((column) => column.filter(Boolean))
+        .filter((column) => column.length))
+      .filter((row) => row.length);
+  }
+
+  function removeSectionFromPinnedLayout(layout, sectionId) {
+    const normalizedSection = normalizeSectionId(sectionId);
+    return compactPinnedLayout(
+      clonePinnedLayout(layout).map((row) => row
+        .map((column) => column.filter((entry) => entry !== normalizedSection))),
+    );
+  }
+
+  function appendSectionRow(layout, sectionId) {
+    return [
+      ...clonePinnedLayout(layout),
+      [[sectionId]],
+    ];
+  }
+
   function togglePinnedSection(pinnedSections, sectionId) {
     const normalizedSection = normalizeSectionId(sectionId);
     if (!CALCULATOR_TOP_LEVEL_TABS.has(normalizedSection)) {
@@ -481,16 +522,12 @@
       && typeof pinnedSections === "object"
       ? normalizeCalculatorUiState(pinnedSections)
       : null;
-    const nextLayout = pinnedLayoutFromUiState(pinnedSections)
-      .map((row) => [...row]);
-    const currentRowIndex = nextLayout.findIndex((row) => row.includes(normalizedSection));
-    if (currentRowIndex >= 0) {
-      nextLayout[currentRowIndex] = nextLayout[currentRowIndex]
-        .filter((entry) => entry !== normalizedSection);
-      const compacted = nextLayout.filter((row) => row.length);
-      return uiState ? uiStateWithPinnedLayout(uiState, compacted) : flattenPinnedLayout(compacted);
+    const currentLayout = pinnedLayoutFromUiState(pinnedSections);
+    if (flattenPinnedLayout(currentLayout).includes(normalizedSection)) {
+      const nextLayout = removeSectionFromPinnedLayout(currentLayout, normalizedSection);
+      return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
     }
-    nextLayout.push([normalizedSection]);
+    const nextLayout = appendSectionRow(currentLayout, normalizedSection);
     return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
   }
 
@@ -527,13 +564,12 @@
       && typeof pinnedSections === "object"
       ? normalizeCalculatorUiState(pinnedSections)
       : null;
-    const nextLayout = pinnedLayoutFromUiState(pinnedSections)
-      .map((row) => [...row]);
+    const nextLayout = clonePinnedLayout(pinnedLayoutFromUiState(pinnedSections));
     if (flattenPinnedLayout(nextLayout).includes(normalizedSection)) {
       return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
     }
-    nextLayout.push([normalizedSection]);
-    return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
+    const appendedLayout = appendSectionRow(nextLayout, normalizedSection);
+    return uiState ? uiStateWithPinnedLayout(uiState, appendedLayout) : flattenPinnedLayout(appendedLayout);
   }
 
   function placePinnedSection(pinnedSections, sectionId, targetSectionId, position) {
@@ -553,19 +589,23 @@
       && typeof pinnedSections === "object"
       ? normalizeCalculatorUiState(pinnedSections)
       : null;
-    const nextLayout = pinnedLayoutFromUiState(pinnedSections)
-      .map((row) => row.filter((entry) => entry !== normalizedSection))
-      .filter((row) => row.length);
+    const nextLayout = removeSectionFromPinnedLayout(pinnedLayoutFromUiState(pinnedSections), normalizedSection);
     for (let rowIndex = 0; rowIndex < nextLayout.length; rowIndex += 1) {
-      const targetIndex = nextLayout[rowIndex].indexOf(normalizedTarget);
-      if (targetIndex < 0) {
-        continue;
+      for (let columnIndex = 0; columnIndex < nextLayout[rowIndex].length; columnIndex += 1) {
+        const targetIndex = nextLayout[rowIndex][columnIndex].indexOf(normalizedTarget);
+        if (targetIndex < 0) {
+          continue;
+        }
+        nextLayout[rowIndex][columnIndex].splice(
+          targetIndex + (normalizedPosition === "after" ? 1 : 0),
+          0,
+          normalizedSection,
+        );
+        return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
       }
-      nextLayout[rowIndex].splice(targetIndex + (normalizedPosition === "after" ? 1 : 0), 0, normalizedSection);
-      return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
     }
-    nextLayout.push([normalizedSection]);
-    return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
+    const appendedLayout = appendSectionRow(nextLayout, normalizedSection);
+    return uiState ? uiStateWithPinnedLayout(uiState, appendedLayout) : flattenPinnedLayout(appendedLayout);
   }
 
   function movePinnedSection(pinnedSections, sectionId, direction) {
@@ -576,19 +616,19 @@
     if (currentIndex < 0 || !Number.isFinite(normalizedDirection) || normalizedDirection === 0) {
       return Array.isArray(pinnedSections)
         ? next
-        : uiStateWithPinnedLayout(normalizeCalculatorUiState(pinnedSections), next.map((entry) => [entry]));
+        : uiStateWithPinnedLayout(normalizeCalculatorUiState(pinnedSections), next.map((entry) => [[entry]]));
     }
     const targetIndex = currentIndex + (normalizedDirection < 0 ? -1 : 1);
     if (targetIndex < 0 || targetIndex >= next.length) {
       return Array.isArray(pinnedSections)
         ? next
-        : uiStateWithPinnedLayout(normalizeCalculatorUiState(pinnedSections), next.map((entry) => [entry]));
+        : uiStateWithPinnedLayout(normalizeCalculatorUiState(pinnedSections), next.map((entry) => [[entry]]));
     }
     const [movingSection] = next.splice(currentIndex, 1);
     next.splice(targetIndex, 0, movingSection);
     return Array.isArray(pinnedSections)
       ? next
-      : uiStateWithPinnedLayout(normalizeCalculatorUiState(pinnedSections), next.map((entry) => [entry]));
+      : uiStateWithPinnedLayout(normalizeCalculatorUiState(pinnedSections), next.map((entry) => [[entry]]));
   }
 
   function canMovePinnedSection(pinnedSections, sectionId, direction) {

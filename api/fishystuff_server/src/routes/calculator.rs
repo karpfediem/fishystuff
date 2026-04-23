@@ -2749,7 +2749,7 @@ fn default_reset_signals_patch_map(
         json!({
             "top_level_tab": "overview",
             "distribution_tab": "groups",
-            "pinned_layout": [["overview"]],
+            "pinned_layout": [[["overview"]]],
             "pinned_sections": ["overview"],
         }),
     );
@@ -14034,7 +14034,7 @@ mod tests {
             Some(&json!({
                 "top_level_tab": "overview",
                 "distribution_tab": "groups",
-                "pinned_layout": [["overview"]],
+                "pinned_layout": [[["overview"]]],
                 "pinned_sections": ["overview"],
             }))
         );

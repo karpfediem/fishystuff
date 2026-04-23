@@ -26,40 +26,40 @@ test("buildCalculatorSectionRenderOrder keeps pinned rows first and selected sec
         buildCalculatorSectionRenderOrder(
             ["overview", "inputs", "distribution", "gear"],
             "gear",
-            [["overview", "distribution"]],
+            [[["overview"], ["distribution"]]],
         ),
         ["overview", "distribution", "gear", "inputs"],
     );
 });
 
-test("flattenPinnedLayout preserves row order and removes duplicates", async () => {
+test("flattenPinnedLayout preserves row, column, and stack order while removing duplicates", async () => {
     const { flattenPinnedLayout } = await loadModule();
 
     assert.deepEqual(
         flattenPinnedLayout([
-            ["overview", "distribution"],
-            ["distribution", "gear"],
-            ["missing", "food"],
+            [["overview"], ["distribution"]],
+            [["distribution", "gear"]],
+            [["missing"], ["food"]],
         ], ["overview", "distribution", "gear", "food"]),
         ["overview", "distribution", "gear", "food"],
     );
 });
 
-test("normalizePinnedLayout keeps rows while filtering unknown sections", async () => {
+test("normalizePinnedLayout keeps rows and columns while filtering unknown sections", async () => {
     const { normalizePinnedLayout } = await loadModule();
 
     assert.deepEqual(
         normalizePinnedLayout(
             [
-                ["overview", "missing"],
-                ["distribution", "gear", "distribution"],
+                [["overview", "missing"]],
+                [["distribution"], ["gear", "distribution"]],
             ],
             ["overview", "distribution", "gear", "food"],
             ["food"],
         ),
         [
-            ["overview"],
-            ["distribution", "gear"],
+            [["overview"]],
+            [["distribution"], ["gear"]],
         ],
     );
 });
@@ -74,9 +74,24 @@ test("normalizePinnedLayout falls back to one-item rows for legacy pinned sectio
             ["overview", "distribution"],
         ),
         [
-            ["overview"],
-            ["distribution"],
+            [["overview"]],
+            [["distribution"]],
         ],
+    );
+});
+
+test("normalizePinnedLayout rejects row-only layout values as non-current UI state", async () => {
+    const { normalizePinnedLayout } = await loadModule();
+
+    assert.deepEqual(
+        normalizePinnedLayout(
+            [
+                ["overview", "distribution"],
+            ],
+            ["overview", "distribution"],
+            ["overview"],
+        ),
+        [],
     );
 });
 
