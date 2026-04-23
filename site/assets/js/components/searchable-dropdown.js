@@ -1,7 +1,8 @@
 const CLOSE_DELAY_MS = 150;
 const RESULTS_PAGE_SIZE = 24;
 const LOAD_MORE_THRESHOLD_PX = 96;
-const DEFAULT_MORE_RESULTS_LABEL = "Scroll to load more results";
+const LOAD_MORE_THRESHOLD_RATIO = 0.25;
+const DEFAULT_MORE_RESULTS_LABEL = "Load more results";
 const SEARCH_QUERY_PARAM = "q";
 const OFFSET_QUERY_PARAM = "offset";
 const SELECTED_QUERY_PARAM = "selected";
@@ -85,6 +86,43 @@ export function normalizeIsoDateValue(value) {
     return normalized;
 }
 
+function loadMoreThreshold(maxScrollTop) {
+    return Math.min(LOAD_MORE_THRESHOLD_PX, Math.max(0, maxScrollTop) * LOAD_MORE_THRESHOLD_RATIO);
+}
+
+function scrollMetrics(element) {
+    const maxScrollTop = Math.max(0, Number(element?.scrollHeight || 0) - Number(element?.clientHeight || 0));
+    const maxScrollLeft = Math.max(0, Number(element?.scrollWidth || 0) - Number(element?.clientWidth || 0));
+    return {
+        maxScrollTop,
+        maxScrollLeft,
+        scrollTop: Math.max(0, Number(element?.scrollTop || 0)),
+        scrollLeft: Math.max(0, Number(element?.scrollLeft || 0)),
+    };
+}
+
+function hasScrollableRange(metrics) {
+    return metrics.maxScrollTop > 0 || metrics.maxScrollLeft > 0;
+}
+
+function hasScrollProgress(metrics) {
+    return metrics.scrollTop > 0 || metrics.scrollLeft > 0;
+}
+
+function isNearScrollEnd(metrics) {
+    const remainingY = metrics.maxScrollTop - metrics.scrollTop;
+    const remainingX = metrics.maxScrollLeft - metrics.scrollLeft;
+    return (
+        (metrics.maxScrollTop > 0 && remainingY <= loadMoreThreshold(metrics.maxScrollTop))
+        || (metrics.maxScrollLeft > 0 && remainingX <= loadMoreThreshold(metrics.maxScrollLeft))
+    );
+}
+
+function isScrollableOverflowValue(value) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return normalized === "auto" || normalized === "scroll" || normalized === "overlay";
+}
+
 function parseHtmlFragment(html) {
     const template = document.createElement("template");
     template.innerHTML = String(html ?? "");
@@ -138,8 +176,12 @@ export class FishySearchableDropdown extends HTMLElement {
         this._panelElement = null;
         this._panelEventsAttached = false;
         this._panelPositionFrame = 0;
+        this._autoFilledSearchKey = "";
+        this._moreResultsObserver = null;
+        this._pendingAutoFillSearchKey = "";
         this._releaseBoundInput = null;
         this._resultsElement = null;
+        this._resultsScrollHost = null;
         this._activeSearchMode = "";
         this._activeSearchQuery = "";
         this._activeSearchSelectedValue = "";
@@ -244,6 +286,7 @@ export class FishySearchableDropdown extends HTMLElement {
         this._cancelClose();
         this._abortSearch();
         this._abortLoadMore();
+        this._disconnectMoreResultsObserver();
         this._detachOutsideListener();
         this._detachViewportListeners();
     }
@@ -349,6 +392,8 @@ export class FishySearchableDropdown extends HTMLElement {
 
         this._cancelClose();
         this._lastSearchKey = searchKey;
+        this._autoFilledSearchKey = "";
+        this._pendingAutoFillSearchKey = "";
         this._abortSearch();
         this._abortLoadMore();
         this._setResultsNextOffset(results, null);
@@ -397,7 +442,7 @@ export class FishySearchableDropdown extends HTMLElement {
                 }
                 currentResults.replaceWith(nextResults);
                 this._attachResultsEvents();
-                this._maybeLoadMore();
+                this._syncMoreResultsObserver();
             })
             .catch((error) => {
                 if (error?.name === "AbortError") {
@@ -408,7 +453,7 @@ export class FishySearchableDropdown extends HTMLElement {
             .finally(() => {
                 if (this._searchController === controller) {
                     this._searchController = null;
-                    this._maybeLoadMore();
+                    this._scheduleAutoFillIfNeeded();
                 }
             });
     }
@@ -539,15 +584,42 @@ export class FishySearchableDropdown extends HTMLElement {
 
     _attachResultsEvents() {
         const results = this.resultsElement();
-        if (this._resultsElement === results) {
+        const scrollHost = this._resolveResultsScrollHost(results);
+        if (this._resultsElement === results && this._resultsScrollHost === scrollHost) {
             return;
         }
         this._detachResultsEvents();
-        if (!(results instanceof HTMLElement)) {
+        if (!(results instanceof HTMLElement) || !(scrollHost instanceof HTMLElement)) {
             return;
         }
-        results.addEventListener("scroll", this._handleResultsScroll, { passive: true });
+        scrollHost.addEventListener("scroll", this._handleResultsScroll, { passive: true });
         this._resultsElement = results;
+        this._resultsScrollHost = scrollHost;
+    }
+
+    _resolveResultsScrollHost(results = this.resultsElement()) {
+        if (!(results instanceof HTMLElement)) {
+            return null;
+        }
+        let fallback = results;
+        let current = results;
+        while (current instanceof HTMLElement) {
+            const style = typeof window.getComputedStyle === "function" ? window.getComputedStyle(current) : null;
+            const overflowY = style?.overflowY ?? style?.overflow ?? "";
+            const overflowX = style?.overflowX ?? style?.overflow ?? "";
+            if (isScrollableOverflowValue(overflowY) || isScrollableOverflowValue(overflowX)) {
+                fallback = current;
+                const metrics = scrollMetrics(current);
+                if (hasScrollableRange(metrics)) {
+                    return current;
+                }
+            }
+            if (current === this.panelElement()) {
+                break;
+            }
+            current = current.parentElement ?? (current.parentNode instanceof HTMLElement ? current.parentNode : null);
+        }
+        return fallback;
     }
 
     _attachViewportListeners() {
@@ -734,12 +806,14 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     _detachResultsEvents() {
-        if (!(this._resultsElement instanceof HTMLElement)) {
+        if (!(this._resultsScrollHost instanceof HTMLElement)) {
             this._resultsElement = null;
+            this._resultsScrollHost = null;
             return;
         }
-        this._resultsElement.removeEventListener("scroll", this._handleResultsScroll);
+        this._resultsScrollHost.removeEventListener("scroll", this._handleResultsScroll);
         this._resultsElement = null;
+        this._resultsScrollHost = null;
     }
 
     _detachViewportListeners() {
@@ -1014,7 +1088,8 @@ export class FishySearchableDropdown extends HTMLElement {
         if (nextOffset !== null) {
             results.append(this._buildMoreResultsIndicator(nextOffset));
         }
-        this._maybeLoadMore();
+        this._syncMoreResultsObserver();
+        this._scheduleAutoFillIfNeeded();
     }
 
     _buildLocalResultItem(template, selectedValue) {
@@ -1146,7 +1221,7 @@ export class FishySearchableDropdown extends HTMLElement {
                 ];
                 currentResults.replaceChildren(...mergedChildren);
                 this._setResultsNextOffset(currentResults, this._resultsNextOffset(nextResults));
-                this._maybeLoadMore();
+                this._syncMoreResultsObserver();
             })
             .catch((error) => {
                 if (error?.name === "AbortError") {
@@ -1160,8 +1235,97 @@ export class FishySearchableDropdown extends HTMLElement {
                 }
                 if (this._loadMoreController === controller) {
                     this._loadMoreController = null;
+                    this._scheduleAutoFillIfNeeded();
                 }
             });
+    }
+
+    _scheduleAutoFillIfNeeded() {
+        if (
+            !this._lastSearchKey
+            || this._autoFilledSearchKey === this._lastSearchKey
+            || this._pendingAutoFillSearchKey === this._lastSearchKey
+        ) {
+            return;
+        }
+        this._pendingAutoFillSearchKey = this._lastSearchKey;
+        queueMicrotask(() => {
+            if (this._pendingAutoFillSearchKey !== this._lastSearchKey) {
+                return;
+            }
+            this._pendingAutoFillSearchKey = "";
+            this._maybeAutoFillUntilScrollable();
+        });
+    }
+
+    _disconnectMoreResultsObserver() {
+        if (
+            typeof IntersectionObserver !== "function"
+            || !(this._moreResultsObserver instanceof IntersectionObserver)
+        ) {
+            this._moreResultsObserver = null;
+            return;
+        }
+        this._moreResultsObserver.disconnect();
+        this._moreResultsObserver = null;
+    }
+
+    _maybeAutoFillUntilScrollable() {
+        const results = this.resultsElement();
+        if (!(results instanceof HTMLElement) || this._searchController || this._loadMoreController) {
+            return;
+        }
+        if (this._resultsNextOffset(results) === null) {
+            return;
+        }
+        const scrollHost = this._resultsScrollHost ?? this._resolveResultsScrollHost(results);
+        if (!(scrollHost instanceof HTMLElement)) {
+            return;
+        }
+        if (hasScrollableRange(scrollMetrics(scrollHost))) {
+            return;
+        }
+        this._autoFilledSearchKey = this._lastSearchKey;
+        this._loadMore();
+    }
+
+    _syncMoreResultsObserver() {
+        this._attachResultsEvents();
+        this._disconnectMoreResultsObserver();
+        if (typeof IntersectionObserver !== "function") {
+            return;
+        }
+        const results = this.resultsElement();
+        const moreButton = results?.querySelector?.("[data-searchable-dropdown-more]");
+        const scrollHost = this._resultsScrollHost ?? this._resolveResultsScrollHost(results);
+        if (
+            !(results instanceof HTMLElement)
+            || !(moreButton instanceof HTMLElement)
+            || !(scrollHost instanceof HTMLElement)
+        ) {
+            return;
+        }
+        this._moreResultsObserver = new IntersectionObserver(
+            (entries) => {
+                if (!entries.some((entry) => entry.isIntersecting)) {
+                    return;
+                }
+                const currentScrollHost = this._resultsScrollHost ?? this._resolveResultsScrollHost();
+                if (!(currentScrollHost instanceof HTMLElement)) {
+                    return;
+                }
+                const metrics = scrollMetrics(currentScrollHost);
+                if (!hasScrollableRange(metrics) || !hasScrollProgress(metrics)) {
+                    return;
+                }
+                this._maybeLoadMore();
+            },
+            {
+                root: scrollHost,
+                threshold: 1,
+            },
+        );
+        this._moreResultsObserver.observe(moreButton);
     }
 
     _maybeLoadMore() {
@@ -1173,9 +1337,15 @@ export class FishySearchableDropdown extends HTMLElement {
             return;
         }
 
-        const maxScrollTop = Math.max(0, results.scrollHeight - results.clientHeight);
-        const remaining = maxScrollTop - Math.max(0, results.scrollTop);
-        if (maxScrollTop === 0 || remaining <= LOAD_MORE_THRESHOLD_PX) {
+        const scrollHost = this._resultsScrollHost ?? this._resolveResultsScrollHost(results);
+        if (!(scrollHost instanceof HTMLElement)) {
+            return;
+        }
+        const metrics = scrollMetrics(scrollHost);
+        if (!hasScrollableRange(metrics)) {
+            return;
+        }
+        if (isNearScrollEnd(metrics)) {
             this._loadMore();
         }
     }

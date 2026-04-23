@@ -33,6 +33,7 @@ const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const EXPRESSION_DRAG_PROXY_SCALE = 0.78;
 const EXPRESSION_DRAG_PROXY_HOTSPOT = 8;
 const SEARCH_RESULTS_LOAD_MORE_THRESHOLD_PX = 96;
+const SEARCH_RESULTS_LOAD_MORE_THRESHOLD_RATIO = 0.25;
 let expressionDragProxyElement = null;
 
 if (globalThis.window?.customElements) {
@@ -69,6 +70,46 @@ function setTextContent(element, text) {
     return;
   }
   element.textContent = String(text ?? "");
+}
+
+function loadMoreThreshold(maxScrollTop) {
+  return Math.min(
+    SEARCH_RESULTS_LOAD_MORE_THRESHOLD_PX,
+    Math.max(0, maxScrollTop) * SEARCH_RESULTS_LOAD_MORE_THRESHOLD_RATIO,
+  );
+}
+
+function scrollMetrics(element) {
+  const maxScrollTop = Math.max(0, Number(element?.scrollHeight || 0) - Number(element?.clientHeight || 0));
+  const maxScrollLeft = Math.max(0, Number(element?.scrollWidth || 0) - Number(element?.clientWidth || 0));
+  return {
+    maxScrollTop,
+    maxScrollLeft,
+    scrollTop: Math.max(0, Number(element?.scrollTop || 0)),
+    scrollLeft: Math.max(0, Number(element?.scrollLeft || 0)),
+  };
+}
+
+function hasScrollableRange(metrics) {
+  return metrics.maxScrollTop > 0 || metrics.maxScrollLeft > 0;
+}
+
+function hasScrollProgress(metrics) {
+  return metrics.scrollTop > 0 || metrics.scrollLeft > 0;
+}
+
+function isNearScrollEnd(metrics) {
+  const remainingY = metrics.maxScrollTop - metrics.scrollTop;
+  const remainingX = metrics.maxScrollLeft - metrics.scrollLeft;
+  return (
+    (metrics.maxScrollTop > 0 && remainingY <= loadMoreThreshold(metrics.maxScrollTop))
+    || (metrics.maxScrollLeft > 0 && remainingX <= loadMoreThreshold(metrics.maxScrollLeft))
+  );
+}
+
+function isScrollableOverflowValue(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "auto" || normalized === "scroll" || normalized === "overlay";
 }
 
 function normalizeExpressionPath(path) {
@@ -280,7 +321,7 @@ function ensureSearchPanelMarkup(host) {
       <div id="fishymap-search-selection" hidden></div>
     </div>
     <div id="fishymap-search-results-shell" class="card card-border bg-base-100 overflow-hidden" hidden>
-      <ul id="fishymap-search-results" class="menu menu-sm max-h-64 overflow-auto gap-1 p-2"></ul>
+      <ul id="fishymap-search-results" class="menu menu-sm max-h-64 w-full overflow-auto gap-1 p-2"></ul>
     </div>
   `;
 }
@@ -293,15 +334,17 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
+    this._moreResultsObserver = null;
     this._rafId = 0;
+    this._resultsScrollHost = null;
     this._zoneCatalog = [];
     this._elements = null;
-    this._searchResultsAutoLoadId = 0;
-    this._searchResultsAutoLoadKind = "";
     this._searchResultsState = {
       matchSetKey: "",
+      autoFilledMatchSetKey: "",
       visibleCount: MAP_SEARCH_RESULTS_PAGE_SIZE,
     };
+    this._pendingAutoFillMatchSetKey = "";
     this._dragState = {
       sourcePath: "",
       sourceElement: null,
@@ -586,7 +629,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.addEventListener("dragover", this._handleDragOver);
     this.addEventListener("drop", this._handleDrop);
     this.addEventListener("dragend", this._handleDragEnd);
-    this._elements.searchResults?.addEventListener?.("scroll", this._handleResultsScroll);
+    this.syncResultsScrollEvents();
     this._elements.searchWindow?.addEventListener?.("focusout", this._handleSearchWindowFocusOut);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
@@ -602,12 +645,13 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.removeEventListener("dragover", this._handleDragOver);
     this.removeEventListener("drop", this._handleDrop);
     this.removeEventListener("dragend", this._handleDragEnd);
-    this._elements?.searchResults?.removeEventListener?.("scroll", this._handleResultsScroll);
+    this.disconnectResultsScrollEvents();
     this._elements?.searchWindow?.removeEventListener?.("focusout", this._handleSearchWindowFocusOut);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
-    this.clearQueuedSearchResultsAutoLoad();
+    this.disconnectMoreResultsObserver();
+    this._pendingAutoFillMatchSetKey = "";
     if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
       globalThis.cancelAnimationFrame(this._rafId);
     }
@@ -678,35 +722,63 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     dispatchShellSignalPatch(this._shell, patch);
   }
 
-  clearQueuedSearchResultsAutoLoad() {
-    if (!this._searchResultsAutoLoadId) {
+  disconnectMoreResultsObserver() {
+    if (
+      typeof IntersectionObserver !== "function"
+      || !(this._moreResultsObserver instanceof IntersectionObserver)
+    ) {
+      this._moreResultsObserver = null;
       return;
     }
-    if (this._searchResultsAutoLoadKind === "animation-frame") {
-      globalThis.cancelAnimationFrame?.(this._searchResultsAutoLoadId);
-    } else if (this._searchResultsAutoLoadKind === "timeout") {
-      globalThis.clearTimeout?.(this._searchResultsAutoLoadId);
-    }
-    this._searchResultsAutoLoadId = 0;
-    this._searchResultsAutoLoadKind = "";
+    this._moreResultsObserver.disconnect();
+    this._moreResultsObserver = null;
   }
 
-  queueSearchResultsAutoLoad() {
-    if (this._searchResultsAutoLoadId) {
+  disconnectResultsScrollEvents() {
+    if (!(this._resultsScrollHost instanceof HTMLElement)) {
+      this._resultsScrollHost = null;
       return;
     }
-    const run = () => {
-      this._searchResultsAutoLoadId = 0;
-      this._searchResultsAutoLoadKind = "";
-      this.maybeLoadMoreSearchResults();
-    };
-    if (typeof globalThis.requestAnimationFrame === "function") {
-      this._searchResultsAutoLoadKind = "animation-frame";
-      this._searchResultsAutoLoadId = globalThis.requestAnimationFrame(run) || 0;
+    this._resultsScrollHost.removeEventListener("scroll", this._handleResultsScroll);
+    this._resultsScrollHost = null;
+  }
+
+  resolveResultsScrollHost() {
+    const results = this._elements?.searchResults;
+    if (!(results instanceof HTMLElement)) {
+      return null;
+    }
+    let fallback = results;
+    let current = results;
+    while (current instanceof HTMLElement) {
+      const style = typeof globalThis.getComputedStyle === "function" ? globalThis.getComputedStyle(current) : null;
+      const overflowY = style?.overflowY ?? style?.overflow ?? "";
+      const overflowX = style?.overflowX ?? style?.overflow ?? "";
+      if (isScrollableOverflowValue(overflowY) || isScrollableOverflowValue(overflowX)) {
+        fallback = current;
+        if (hasScrollableRange(scrollMetrics(current))) {
+          return current;
+        }
+      }
+      if (current === this._elements?.searchResultsShell || current === this._elements?.searchWindow) {
+        break;
+      }
+      current = current.parentElement ?? (current.parentNode instanceof HTMLElement ? current.parentNode : null);
+    }
+    return fallback;
+  }
+
+  syncResultsScrollEvents() {
+    const scrollHost = this.resolveResultsScrollHost();
+    if (this._resultsScrollHost === scrollHost) {
       return;
     }
-    this._searchResultsAutoLoadKind = "timeout";
-    this._searchResultsAutoLoadId = globalThis.setTimeout?.(run, 0) || 0;
+    this.disconnectResultsScrollEvents();
+    if (!(scrollHost instanceof HTMLElement)) {
+      return;
+    }
+    scrollHost.addEventListener("scroll", this._handleResultsScroll, { passive: true });
+    this._resultsScrollHost = scrollHost;
   }
 
   loadMoreSearchResults(offset = null) {
@@ -731,15 +803,87 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     if (!results?.dataset?.nextOffset) {
       return false;
     }
-    const clientHeight = Number(results.clientHeight || 0);
-    const scrollHeight = Number(results.scrollHeight || 0);
-    const scrollTop = Math.max(0, Number(results.scrollTop || 0));
-    const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
-    const remaining = maxScrollTop - scrollTop;
-    if (maxScrollTop === 0 || remaining <= SEARCH_RESULTS_LOAD_MORE_THRESHOLD_PX) {
+    const scrollHost = this._resultsScrollHost ?? this.resolveResultsScrollHost();
+    if (!(scrollHost instanceof HTMLElement)) {
+      return false;
+    }
+    const metrics = scrollMetrics(scrollHost);
+    if (!hasScrollableRange(metrics)) {
+      return false;
+    }
+    if (isNearScrollEnd(metrics)) {
       return this.loadMoreSearchResults(results.dataset.nextOffset);
     }
     return false;
+  }
+
+  syncMoreResultsObserver() {
+    this.syncResultsScrollEvents();
+    this.disconnectMoreResultsObserver();
+    if (typeof IntersectionObserver !== "function") {
+      return;
+    }
+    const results = this._elements?.searchResults;
+    const moreButton = results?.querySelector?.("button[data-search-results-more][data-next-offset]");
+    const scrollHost = this._resultsScrollHost ?? this.resolveResultsScrollHost();
+    if (
+      !(results instanceof HTMLElement)
+      || !(moreButton instanceof HTMLElement)
+      || !(scrollHost instanceof HTMLElement)
+    ) {
+      return;
+    }
+    this._moreResultsObserver = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) {
+          return;
+        }
+        const currentResults = this._elements?.searchResults;
+        const currentScrollHost = this._resultsScrollHost ?? this.resolveResultsScrollHost();
+        if (!(currentResults instanceof HTMLElement) || !(currentScrollHost instanceof HTMLElement)) {
+          return;
+        }
+        const metrics = scrollMetrics(currentScrollHost);
+        if (!hasScrollableRange(metrics) || !hasScrollProgress(metrics)) {
+          return;
+        }
+        this.maybeLoadMoreSearchResults();
+      },
+      {
+        root: scrollHost,
+        threshold: 1,
+      },
+    );
+    this._moreResultsObserver.observe(moreButton);
+  }
+
+  queueAutoFillSearchResultsOnce(matchSetKey) {
+    if (!matchSetKey || this._pendingAutoFillMatchSetKey === matchSetKey) {
+      return;
+    }
+    this._pendingAutoFillMatchSetKey = matchSetKey;
+    queueMicrotask(() => {
+      if (this._pendingAutoFillMatchSetKey !== matchSetKey) {
+        return;
+      }
+      this._pendingAutoFillMatchSetKey = "";
+      const results = this._elements?.searchResults;
+      if (!results?.dataset?.nextOffset) {
+        return;
+      }
+      if (this._searchResultsState.autoFilledMatchSetKey === matchSetKey) {
+        return;
+      }
+      const scrollHost = this._resultsScrollHost ?? this.resolveResultsScrollHost();
+      if (!(scrollHost instanceof HTMLElement)) {
+        return;
+      }
+      if (hasScrollableRange(scrollMetrics(scrollHost))) {
+        return;
+      }
+      this._searchResultsState.autoFilledMatchSetKey = matchSetKey;
+      this.loadMoreSearchResults(results.dataset.nextOffset);
+    });
   }
 
   handleSearchResultSelection(row) {
@@ -787,6 +931,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
 
     if (matchSetKey !== this._searchResultsState.matchSetKey) {
       this._searchResultsState.matchSetKey = matchSetKey;
+      this._searchResultsState.autoFilledMatchSetKey = "";
       this._searchResultsState.visibleCount = MAP_SEARCH_RESULTS_PAGE_SIZE;
     }
 
@@ -823,11 +968,9 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       matchSetKey,
       visibleCount: this._searchResultsState.visibleCount,
     });
-
+    this.syncMoreResultsObserver();
     if (searchResultsRender.hasMore) {
-      this.queueSearchResultsAutoLoad();
-    } else {
-      this.clearQueuedSearchResultsAutoLoad();
+      this.queueAutoFillSearchResultsOnce(matchSetKey);
     }
   }
 

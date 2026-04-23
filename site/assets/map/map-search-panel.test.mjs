@@ -424,7 +424,7 @@ test("renderSearchResults appends a load-more control when additional matches ex
     MAP_SEARCH_RESULTS_PAGE_SIZE,
   );
   assert.match(elements.searchResults.innerHTML, /data-search-results-more/);
-  assert.match(elements.searchResults.innerHTML, /Scroll to load more results/);
+  assert.match(elements.searchResults.innerHTML, /Load more results/);
 });
 
 test("renderSearchSelection hides the selection shell when no terms are applied", () => {

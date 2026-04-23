@@ -10,6 +10,7 @@ import {
 
 const originalHTMLElement = globalThis.HTMLElement;
 const originalDocument = globalThis.document;
+const originalGetComputedStyle = globalThis.getComputedStyle;
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
 
@@ -27,6 +28,12 @@ class FakeElement extends EventTarget {
     this._closestMap = new Map();
     this._children = [];
     this._parent = null;
+    this.clientWidth = 0;
+    this.scrollHeight = 0;
+    this.scrollLeft = 0;
+    this.scrollTop = 0;
+    this.clientHeight = 0;
+    this.scrollWidth = 0;
   }
 
   get innerHTML() {
@@ -87,6 +94,8 @@ class FakeElement extends EventTarget {
       return child;
     }
     child._parent = this;
+    child.parentNode = this;
+    child.parentElement = this;
     this._children.push(child);
     return child;
   }
@@ -96,6 +105,8 @@ class FakeElement extends EventTarget {
       return;
     }
     this._parent._children = this._parent._children.filter((child) => child !== this);
+    this.parentNode = null;
+    this.parentElement = null;
     this._parent = null;
   }
 
@@ -108,6 +119,12 @@ class FakeElement extends EventTarget {
     clone.dataset = { ...this.dataset };
     clone.style = { ...this.style };
     clone.attributes = new Map(this.attributes);
+    clone.clientWidth = this.clientWidth;
+    clone.scrollHeight = this.scrollHeight;
+    clone.scrollLeft = this.scrollLeft;
+    clone.scrollTop = this.scrollTop;
+    clone.clientHeight = this.clientHeight;
+    clone.scrollWidth = this.scrollWidth;
     return clone;
   }
 
@@ -165,9 +182,46 @@ function buildFishCatalog(count) {
   }));
 }
 
+function configureAutoSizingSearchResults(results, { clientHeight, columns = 1, rowHeight = 24 }) {
+  const descriptor = Object.getOwnPropertyDescriptor(FakeElement.prototype, "innerHTML");
+  results.clientHeight = clientHeight;
+
+  const recomputeScrollHeight = (html) => {
+    const matchCount = (String(html || "").match(/data-fish-id=/g) || []).length;
+    const moreRowCount = (String(html || "").match(/data-search-results-more/g) || []).length;
+    const resultRows = matchCount > 0 ? Math.ceil(matchCount / Math.max(1, columns)) : 0;
+    results.scrollHeight = Math.max(clientHeight, (resultRows + moreRowCount) * rowHeight);
+  };
+
+  Object.defineProperty(results, "innerHTML", {
+    configurable: true,
+    get() {
+      return descriptor.get.call(this);
+    },
+    set(value) {
+      descriptor.set.call(this, value);
+      recomputeScrollHeight(value);
+    },
+  });
+
+  recomputeScrollHeight(results.innerHTML);
+  return results;
+}
+
+async function flushMapRenderWork(iterations = 4) {
+  for (let index = 0; index < iterations; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 async function loadModule() {
   globalThis.HTMLElement = FakeElement;
   globalThis.document = createDocumentStub();
+  globalThis.getComputedStyle = (element) => ({
+    overflow: element?.style?.overflow ?? "",
+    overflowX: element?.style?.overflowX ?? element?.style?.overflow ?? "",
+    overflowY: element?.style?.overflowY ?? element?.style?.overflow ?? "",
+  });
   globalThis.requestAnimationFrame = undefined;
   globalThis.cancelAnimationFrame = undefined;
   return import(`./map-search-panel-element.js?test=${Date.now()}-${Math.random()}`);
@@ -390,6 +444,140 @@ test("FishyMapSearchPanelElement loads another page when search results are scro
   assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
   assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
   assert.match(results.innerHTML, /data-search-results-more/);
+});
+
+test("FishyMapSearchPanelElement loads more when an ancestor is the actual scroll host", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = panel.querySelector("#fishymap-search-results");
+  const resultsShell = panel.querySelector("#fishymap-search-results-shell");
+  results.parentNode = resultsShell;
+  results.parentElement = resultsShell;
+  resultsShell.style.overflowY = "auto";
+  resultsShell.clientHeight = 240;
+  resultsShell.scrollHeight = 640;
+  results.clientHeight = 240;
+  results.scrollHeight = 240;
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+
+  resultsShell.scrollTop = 320;
+  panel._handleResultsScroll();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
+});
+
+test("FishyMapSearchPanelElement loads more when horizontal overflow reaches the end", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = panel.querySelector("#fishymap-search-results");
+  results.style.overflowX = "auto";
+  results.clientHeight = 240;
+  results.scrollHeight = 240;
+  results.clientWidth = 320;
+  results.scrollWidth = 760;
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+
+  results.scrollLeft = 440;
+  panel._handleResultsScroll();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
+});
+
+test("FishyMapSearchPanelElement auto-loads one extra page when the first page does not scroll", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = panel.querySelector("#fishymap-search-results");
+  results.clientHeight = 640;
+  results.scrollHeight = 640;
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+  await Promise.resolve();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
+  assert.match(results.innerHTML, /data-search-results-more/);
+});
+
+test("FishyMapSearchPanelElement stops after one extra auto-fill when results still do not scroll", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 4 + 4);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = configureAutoSizingSearchResults(panel.querySelector("#fishymap-search-results"), {
+    clientHeight: 210,
+    columns: 6,
+    rowHeight: 30,
+  });
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+  await flushMapRenderWork();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
+  assert.equal(results.scrollHeight, results.clientHeight);
+  assert.match(results.innerHTML, /data-search-results-more/);
+});
+
+test("FishyMapSearchPanelElement does not treat the top of a short scroll range as near-end", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_runtime.ready = true;
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+  const results = panel.querySelector("#fishymap-search-results");
+  results.clientHeight = 360;
+  results.scrollHeight = 420;
+
+  signals._map_ui.search.open = true;
+  signals._map_ui.search.query = "fish";
+  panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
+  await Promise.resolve();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE));
+
+  results.scrollTop = 50;
+  panel._handleResultsScroll();
+
+  assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE * 2);
+  assert.equal(results.dataset.nextOffset, String(MAP_SEARCH_RESULTS_PAGE_SIZE * 2));
 });
 
 test("resolveSearchPanelMatches exposes unresolved date prompts after fish filters when the query is empty", () => {

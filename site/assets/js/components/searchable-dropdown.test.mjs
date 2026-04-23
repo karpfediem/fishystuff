@@ -8,6 +8,7 @@ const originalDocument = globalThis.document;
 const originalWindow = globalThis.window;
 const originalCustomElements = globalThis.customElements;
 const originalFetch = globalThis.fetch;
+const originalGetComputedStyle = globalThis.getComputedStyle;
 const originalHTMLInputElement = globalThis.HTMLInputElement;
 const originalHTMLTemplateElement = globalThis.HTMLTemplateElement;
 
@@ -47,9 +48,12 @@ class FakeElement extends EventTarget {
         this.tagName = String(tagName || "div").toUpperCase();
         this.style = {};
         this.textContent = "";
+        this.clientWidth = 0;
         this.scrollHeight = 0;
+        this.scrollLeft = 0;
         this.scrollTop = 0;
         this.clientHeight = 0;
+        this.scrollWidth = 0;
         this._queryMap = new Map();
         this._queryAllMap = new Map();
         this._closestMap = new Map();
@@ -99,9 +103,12 @@ class FakeElement extends EventTarget {
         const clone = new FakeElement(this.tagName);
         clone.hidden = this.hidden;
         clone.textContent = this.textContent;
+        clone.clientWidth = this.clientWidth;
         clone.scrollHeight = this.scrollHeight;
+        clone.scrollLeft = this.scrollLeft;
         clone.scrollTop = this.scrollTop;
         clone.clientHeight = this.clientHeight;
+        clone.scrollWidth = this.scrollWidth;
         clone.style = { ...this.style };
         for (const [name, value] of this.attributes) {
             clone.setAttribute(name, value);
@@ -346,6 +353,11 @@ function createEnvironment(options = {}) {
     window.innerHeight = 900;
     window.location = { href: "http://localhost/" };
     window.customElements = customElementsRegistry;
+    window.getComputedStyle = (element) => ({
+        overflow: element?.style?.overflow ?? "",
+        overflowX: element?.style?.overflowX ?? element?.style?.overflow ?? "",
+        overflowY: element?.style?.overflowY ?? element?.style?.overflow ?? "",
+    });
     window.requestAnimationFrame = (callback) => {
         callback();
         return 1;
@@ -362,6 +374,7 @@ async function loadModule(options = {}) {
     globalThis.document = document;
     globalThis.window = window;
     globalThis.customElements = customElementsRegistry;
+    globalThis.getComputedStyle = window.getComputedStyle;
     globalThis.HTMLInputElement = FakeElement;
     globalThis.HTMLTemplateElement = FakeTemplateElement;
     return import(`./searchable-dropdown.js?test=${Date.now()}-${Math.random()}`);
@@ -375,6 +388,7 @@ function restoreGlobals() {
     globalThis.window = originalWindow;
     globalThis.customElements = originalCustomElements;
     globalThis.fetch = originalFetch;
+    globalThis.getComputedStyle = originalGetComputedStyle;
     globalThis.HTMLInputElement = originalHTMLInputElement;
     globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
 }
@@ -394,7 +408,7 @@ function createDropdownOption(value, label) {
     return item;
 }
 
-function createMoreResultsRow(nextOffset, label = "Scroll to load more results") {
+function createMoreResultsRow(nextOffset, label = "Load more results") {
     const item = new FakeElement("li");
     const content = new FakeElement("span");
 
@@ -424,6 +438,33 @@ function createResultsPage({
         results.setAttribute("data-next-offset", String(nextOffset));
         results.append(createMoreResultsRow(nextOffset));
     }
+    return results;
+}
+
+function configureAutoSizingDropdownResults(results, { clientHeight, columns = 1, rowHeight = 24 }) {
+    results.clientHeight = clientHeight;
+
+    const recomputeScrollHeight = () => {
+        const optionCount = results.querySelectorAll("[data-searchable-dropdown-option]").length;
+        const moreRowCount = results.querySelectorAll("[data-searchable-dropdown-more]").length;
+        const optionRows = optionCount > 0 ? Math.ceil(optionCount / Math.max(1, columns)) : 0;
+        results.scrollHeight = Math.max(clientHeight, (optionRows + moreRowCount) * rowHeight);
+    };
+
+    const appendChild = results.appendChild.bind(results);
+    results.appendChild = (child) => {
+        const appended = appendChild(child);
+        recomputeScrollHeight();
+        return appended;
+    };
+
+    const replaceChildren = results.replaceChildren.bind(results);
+    results.replaceChildren = (...nodes) => {
+        replaceChildren(...nodes);
+        recomputeScrollHeight();
+    };
+
+    recomputeScrollHeight();
     return results;
 }
 
@@ -666,6 +707,285 @@ test("searchable dropdown paginates local catalog results instead of silently tr
     assert.equal(results.querySelector("[data-searchable-dropdown-more]"), null);
 });
 
+test("searchable dropdown loads more when an ancestor is the actual scroll host", async (t) => {
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const scrollShell = new FakeElement("div");
+    const results = new FakeElement("ul");
+    const catalog = new FakeElement("div");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+    scrollShell.style.overflowY = "auto";
+    scrollShell.clientHeight = 100;
+    scrollShell.scrollHeight = 400;
+    results.clientHeight = 100;
+    results.scrollHeight = 100;
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(scrollShell);
+    scrollShell.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = `Option ${index}`;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", `value-${index}`);
+        template.setAttribute("data-label", `Option ${index}`);
+        template.setAttribute("data-search-text", `Option ${index}`);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
+    assert.equal(results.getAttribute("data-next-offset"), "24");
+
+    scrollShell.scrollTop = 320;
+    dropdown._handleResultsScroll();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(results.getAttribute("data-next-offset"), null);
+});
+
+test("searchable dropdown loads more when horizontal overflow reaches the end", async (t) => {
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const results = new FakeElement("ul");
+    const catalog = new FakeElement("div");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+    results.style.overflowX = "auto";
+    results.clientHeight = 100;
+    results.scrollHeight = 100;
+    results.clientWidth = 200;
+    results.scrollWidth = 520;
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = `Option ${index}`;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", `value-${index}`);
+        template.setAttribute("data-label", `Option ${index}`);
+        template.setAttribute("data-search-text", `Option ${index}`);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
+    assert.equal(results.getAttribute("data-next-offset"), "24");
+
+    results.scrollLeft = 320;
+    dropdown._handleResultsScroll();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(results.getAttribute("data-next-offset"), null);
+});
+
+test("searchable dropdown auto-loads one extra local page when the first page does not scroll", async (t) => {
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const results = new FakeElement("ul");
+    const catalog = new FakeElement("div");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+    results.clientHeight = 400;
+    results.scrollHeight = 400;
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = `Option ${index}`;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", `value-${index}`);
+        template.setAttribute("data-label", `Option ${index}`);
+        template.setAttribute("data-search-text", `Option ${index}`);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+    await flushAsyncWork();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(results.getAttribute("data-next-offset"), null);
+    assert.equal(results.querySelector("[data-searchable-dropdown-more]"), null);
+});
+
+test("searchable dropdown stops after one extra auto-fill when results still do not scroll", async (t) => {
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const results = configureAutoSizingDropdownResults(new FakeElement("ul"), {
+        clientHeight: 390,
+        columns: 4,
+        rowHeight: 30,
+    });
+    const catalog = new FakeElement("div");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (let index = 0; index < 90; index += 1) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = `Option ${index}`;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", `value-${index}`);
+        template.setAttribute("data-label", `Option ${index}`);
+        template.setAttribute("data-search-text", `Option ${index}`);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+    await flushAsyncWork();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 48);
+    assert.equal(results.getAttribute("data-next-offset"), "48");
+    assert.equal(results.scrollHeight, results.clientHeight);
+    assert.ok(results.querySelector("[data-searchable-dropdown-more]"));
+});
+
+test("searchable dropdown does not treat the top of a short scroll range as near-end", async (t) => {
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const results = new FakeElement("ul");
+    const catalog = new FakeElement("div");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+    results.clientHeight = 360;
+    results.scrollHeight = 420;
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = `Option ${index}`;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", `value-${index}`);
+        template.setAttribute("data-label", `Option ${index}`);
+        template.setAttribute("data-search-text", `Option ${index}`);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+    dropdown._handleResultsScroll();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
+    assert.equal(results.getAttribute("data-next-offset"), "24");
+
+    results.scrollTop = 50;
+    dropdown._handleResultsScroll();
+
+    assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(results.getAttribute("data-next-offset"), null);
+});
+
 test("searchable dropdown loads the next remote page when scrolling near the end", async (t) => {
     const fragmentRegistry = new Map();
     const { FishySearchableDropdown } = await loadModule({ fragmentRegistry });
@@ -741,4 +1061,141 @@ test("searchable dropdown loads the next remote page when scrolling near the end
     assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
     assert.equal(page1.getAttribute("data-next-offset"), null);
     assert.equal(page1.querySelector("[data-searchable-dropdown-more]"), null);
+});
+
+test("searchable dropdown auto-loads one extra remote page when the first page does not scroll", async (t) => {
+    const fragmentRegistry = new Map();
+    const { FishySearchableDropdown } = await loadModule({ fragmentRegistry });
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const initialResults = new FakeElement("ul");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    initialResults.setAttribute("data-role", "results");
+    initialResults.clientHeight = 400;
+    initialResults.scrollHeight = 400;
+
+    dropdown.setAttribute("search-url", "/api/search");
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(initialResults);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    const page1 = createResultsPage({
+        count: 24,
+        nextOffset: 24,
+        id: "calculator-rod-picker-results",
+    });
+    page1.clientHeight = 400;
+    page1.scrollHeight = 400;
+    const page2 = createResultsPage({
+        count: 6,
+        start: 24,
+        id: "calculator-rod-picker-results",
+    });
+    fragmentRegistry.set("PAGE1", page1);
+    fragmentRegistry.set("PAGE2", page2);
+
+    const fetchCalls = [];
+    globalThis.fetch = async (url) => {
+        fetchCalls.push(String(url));
+        return {
+            ok: true,
+            async text() {
+                return fetchCalls.length === 1 ? "PAGE1" : "PAGE2";
+            },
+        };
+    };
+
+    dropdown.connectedCallback();
+    await flushAsyncWork();
+
+    await flushAsyncWork();
+    dropdown.search("rod");
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 2);
+    assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(page1.getAttribute("data-next-offset"), null);
+    assert.equal(page1.querySelector("[data-searchable-dropdown-more]"), null);
+});
+
+test("searchable dropdown does not treat the top of a short remote scroll range as near-end", async (t) => {
+    const fragmentRegistry = new Map();
+    const { FishySearchableDropdown } = await loadModule({ fragmentRegistry });
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const initialResults = new FakeElement("ul");
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    initialResults.setAttribute("data-role", "results");
+    initialResults.clientHeight = 360;
+    initialResults.scrollHeight = 420;
+
+    dropdown.setAttribute("search-url", "/api/search");
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(initialResults);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    const page1 = createResultsPage({
+        count: 24,
+        nextOffset: 24,
+        id: "calculator-rod-picker-results",
+    });
+    page1.clientHeight = 360;
+    page1.scrollHeight = 420;
+    const page2 = createResultsPage({
+        count: 6,
+        start: 24,
+        id: "calculator-rod-picker-results",
+    });
+    fragmentRegistry.set("PAGE1", page1);
+    fragmentRegistry.set("PAGE2", page2);
+
+    const fetchCalls = [];
+    globalThis.fetch = async (url) => {
+        fetchCalls.push(String(url));
+        return {
+            ok: true,
+            async text() {
+                return fetchCalls.length === 1 ? "PAGE1" : "PAGE2";
+            },
+        };
+    };
+
+    dropdown.connectedCallback();
+    await flushAsyncWork();
+
+    dropdown.search("rod");
+    await flushAsyncWork();
+    dropdown._handleResultsScroll();
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 1);
+
+    page1.scrollTop = 50;
+    dropdown._handleResultsScroll();
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 2);
+    assert.match(fetchCalls[1], /offset=24/);
 });
