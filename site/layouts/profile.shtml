@@ -374,6 +374,12 @@
                                                     data-reset-confirm="Clear saved calculator interface state on this browser?"
                                                     data-reset-progress="Clearing calculator UI state..."
                                                     data-reset-success="Calculator UI state cleared.">Clear UI</button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline"
+                                                    data-reset-scope="presets-data"
+                                                    data-reset-confirm="Clear saved presets on this browser?"
+                                                    data-reset-progress="Clearing saved presets..."
+                                                    data-reset-success="Saved presets cleared.">Clear presets</button>
                                         </div>
                                     </div>
                                 </div>

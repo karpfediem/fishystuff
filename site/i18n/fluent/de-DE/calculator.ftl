@@ -29,6 +29,11 @@ calculator.toast.share_copied = Freigabetext kopiert.
 calculator.toast.cleared = Rechner zurückgesetzt.
 calculator.toast.layout_reset = Layout zurückgesetzt.
 
+calculator.layout_presets.title = Layout-Vorlagen
+calculator.layout_presets.current = Aktuelles Layout
+calculator.layout_presets.default = Standard
+calculator.layout_presets.default_name = Layout {$index}
+
 calculator.title.casts_average = Durchschnittliche Würfe ({$timespan})
 calculator.title.durability_loss_average = Durchschnittlicher Haltbarkeitsverlust ({$timespan})
 calculator.title.expected_catches = Erwartete Fänge ({$timespan})
@@ -139,7 +144,7 @@ calculator.server.option.none = Keine
 
 calculator.server.result.no_matching_options = Keine passenden Optionen
 calculator.server.result.no_matching_zones = Keine passenden Zonen
-calculator.server.result.more_available = Scrollen, um mehr Ergebnisse zu laden
+calculator.server.result.more_available = Weitere Ergebnisse laden
 calculator.server.result.selected = Ausgewählt
 calculator.server.result.added = Hinzugefügt
 

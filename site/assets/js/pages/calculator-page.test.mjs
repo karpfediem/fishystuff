@@ -17,6 +17,10 @@ const USER_OVERLAYS_SOURCE = fs.readFileSync(
   new URL("../user-overlays.js", import.meta.url),
   "utf8",
 );
+const USER_PRESETS_SOURCE = fs.readFileSync(
+  new URL("../user-presets.js", import.meta.url),
+  "utf8",
+);
 const CALCULATOR_PAGE_SOURCE = fs.readFileSync(
   new URL("./calculator-page.js", import.meta.url),
   "utf8",
@@ -255,6 +259,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(USER_OVERLAYS_SOURCE, context, { filename: "user-overlays.js" });
+  vm.runInNewContext(USER_PRESETS_SOURCE, context, { filename: "user-presets.js" });
   vm.runInNewContext(CALCULATOR_PAGE_SOURCE, context, { filename: "calculator-page.js" });
   return {
     window,
@@ -619,6 +624,45 @@ test("calculator reset layout restores the default pinned mosaic while keeping t
     pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
     unpinned_insert_index: [0, 0],
   });
+});
+
+test("calculator layout presets register a shared adapter and apply layout-only changes", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  signals._calculator_ui.top_level_tab = "trade";
+  signals._calculator_ui.distribution_tab = "target_fish";
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  const preset = env.window.__fishystuffUserPresets.createPreset("calculator-layouts", {
+    name: "Split loot",
+    payload: {
+      pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+      unpinned_insert_index: [2, 1],
+    },
+    select: false,
+  });
+
+  env.window.__fishystuffUserPresets.activatePreset("calculator-layouts", preset.id);
+  env.flushTimers();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
+    top_level_tab: "trade",
+    distribution_tab: "target_fish",
+    pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+    pinned_sections: ["overview", "distribution", "loot"],
+    unpinned_insert_index: [2, 1],
+  });
+  assert.deepEqual(
+    JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1")),
+    {
+      top_level_tab: "trade",
+      distribution_tab: "target_fish",
+      pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+      pinned_sections: ["overview", "distribution", "loot"],
+      unpinned_insert_index: [2, 1],
+    },
+  );
 });
 
 test("calculator API URLs keep locale and apiLang separate", () => {

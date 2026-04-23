@@ -274,6 +274,7 @@
   <script src="$site.asset('js/datastar-persist.js').link()"></script>
   <script src="$site.asset('js/datastar-state.js').link()"></script>
   <script src="$site.asset('js/user-overlays.js').link()"></script>
+  <script src="$site.asset('js/user-presets.js').link()"></script>
   <script src="$site.asset('js/shared-fish-state.js').link()"></script>
   <style>
     :where(.fishy-icon) {

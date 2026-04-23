@@ -324,6 +324,22 @@ test("client session can clear scoped local app data without touching unrelated 
       "fishystuff.calculator.ui.v1": JSON.stringify({
         distribution_tab: "loot_flow",
       }),
+      "fishystuff.user-presets.v1": JSON.stringify({
+        collections: {
+          "calculator-layouts": {
+            selectedPresetId: "preset_a",
+            presets: [
+              {
+                id: "preset_a",
+                name: "Alpha",
+                payload: {
+                  pinned_layout: [],
+                },
+              },
+            ],
+          },
+        },
+      }),
       "fishystuff.user-overlays.v2": JSON.stringify({
         overlay: {
           zones: {
@@ -390,10 +406,15 @@ test("client session can clear scoped local app data without touching unrelated 
   assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
   assert.notEqual(env.localStorage.getItem("fishystuff.calculator.ui.v1"), null);
   assert.notEqual(env.localStorage.getItem("fishystuff.user-overlays.v2"), null);
+  assert.notEqual(env.localStorage.getItem("fishystuff.user-presets.v1"), null);
 
   env.helper.clearLocalDataScope("calculator-ui");
   assert.equal(env.localStorage.getItem("fishystuff.calculator.ui.v1"), null);
   assert.notEqual(env.localStorage.getItem("fishystuff.user-overlays.v2"), null);
+  assert.notEqual(env.localStorage.getItem("fishystuff.user-presets.v1"), null);
+
+  env.helper.clearLocalDataScope("presets-data");
+  assert.equal(env.localStorage.getItem("fishystuff.user-presets.v1"), null);
 
   const profileBefore = env.helper.current().localProfile.id;
   env.helper.clearLocalDataScope("profile-data");
@@ -458,6 +479,22 @@ test("client session can clear all local user state and start a fresh browser pr
       "fishystuff.calculator.ui.v1": JSON.stringify({
         distribution_tab: "groups",
       }),
+      "fishystuff.user-presets.v1": JSON.stringify({
+        collections: {
+          "calculator-layouts": {
+            selectedPresetId: "preset_a",
+            presets: [
+              {
+                id: "preset_a",
+                name: "Alpha",
+                payload: {
+                  pinned_layout: [],
+                },
+              },
+            ],
+          },
+        },
+      }),
       "fishystuff.user-overlays.v2": JSON.stringify({ priceOverrides: { 77: { basePrice: 10 } } }),
     },
     sessionStorageValues: {
@@ -486,6 +523,7 @@ test("client session can clear all local user state and start a fresh browser pr
   assert.equal(env.localStorage.getItem("fishystuff.fishydex.caught.v1"), null);
   assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
   assert.equal(env.localStorage.getItem("fishystuff.calculator.ui.v1"), null);
+  assert.equal(env.localStorage.getItem("fishystuff.user-presets.v1"), null);
   assert.equal(env.localStorage.getItem("fishystuff.user-overlays.v2"), null);
   assert.equal(env.sessionStorage.getItem("fishystuff.map.session.v1"), null);
 });

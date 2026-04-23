@@ -28,6 +28,11 @@ calculator.toast.share_copied = Share text copied.
 calculator.toast.cleared = Calculator cleared.
 calculator.toast.layout_reset = Layout reset.
 
+calculator.layout_presets.title = Layout presets
+calculator.layout_presets.current = Current layout
+calculator.layout_presets.default = Default
+calculator.layout_presets.default_name = Layout {$index}
+
 calculator.title.casts_average = Average Casts ({$timespan})
 calculator.title.durability_loss_average = Average Durability Loss ({$timespan})
 calculator.title.expected_catches = Expected Catches ({$timespan})
@@ -353,7 +358,7 @@ calculator.server.option.none = None
 
 calculator.server.result.no_matching_options = No matching options
 calculator.server.result.no_matching_zones = No matching zones
-calculator.server.result.more_available = Scroll to load more results
+calculator.server.result.more_available = Load more results
 calculator.server.result.selected = Selected
 calculator.server.result.added = Added
 

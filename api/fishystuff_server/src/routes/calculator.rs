@@ -9040,6 +9040,8 @@ fn render_calculator_app(
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
                         __TEXT_CLEAR__
                     </button>
+                    <fishy-preset-manager class="fishy-calculator-layout-presets"
+                                          data-preset-collection="calculator-layouts"></fishy-preset-manager>
                 </div>
             </div>
             <div class="pb-1">
@@ -13629,6 +13631,8 @@ mod tests {
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.resetLayoutToken = (($_calculator_actions && $_calculator_actions.resetLayoutToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
+        assert!(text.contains("<fishy-preset-manager"));
+        assert!(text.contains("data-preset-collection=\"calculator-layouts\""));
         assert!(text.contains(
             "window.__fishystuffCalculator.blurActiveElement(); window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, 'overview')"
         ));
@@ -14017,7 +14021,7 @@ mod tests {
 
         assert!(text.contains("data-next-offset=\"24\""));
         assert!(text.contains("data-searchable-dropdown-more"));
-        assert!(text.contains("Scroll to load more results"));
+        assert!(text.contains("Load more results"));
     }
 
     #[tokio::test]

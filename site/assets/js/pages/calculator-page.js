@@ -24,6 +24,22 @@
     "debug",
   ]);
   const CALCULATOR_DEFAULT_TOP_LEVEL_TAB = "overview";
+  const CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY = "calculator-layouts";
+  const CALCULATOR_SECTION_ICON_BY_ID = Object.freeze({
+    overview: "information-fill",
+    zone: "fullscreen-fill",
+    bite_time: "stopwatch-2-fill",
+    catch_time: "stopwatch-fill",
+    session: "time-fill",
+    distribution: "chart-pie-2-fill",
+    loot: "trending-up-fill",
+    trade: "wheel-fill",
+    food: "dinner-fill",
+    buffs: "arrows-up-fill",
+    pets: "paw-fill",
+    overlay: "edit-4-fill",
+    debug: "bug-fill",
+  });
   const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze([
     "overview",
     "zone",
@@ -51,6 +67,7 @@
     persistBinding: null,
     actionBinding: null,
     uiStateRestored: false,
+    layoutPresetAdapterBound: false,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -210,6 +227,16 @@
   function sharedUserOverlays() {
     const helper = window.__fishystuffUserOverlays;
     return helper && typeof helper.overlaySignals === "function" && typeof helper.priceOverrides === "function"
+      ? helper
+      : null;
+  }
+
+  function sharedUserPresets() {
+    const helper = window.__fishystuffUserPresets;
+    return helper
+      && typeof helper.registerCollectionAdapter === "function"
+      && typeof helper.capturePayload === "function"
+      && typeof helper.activatePreset === "function"
       ? helper
       : null;
   }
@@ -624,6 +651,224 @@
 
   function resetCalculatorLayoutInPlace(uiState) {
     return assignPinnedUiState(uiState, resetCalculatorLayout(uiState));
+  }
+
+  function normalizeCalculatorLayoutPresetPayload(value) {
+    const current = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return {
+      pinned_layout: pinnedLayoutFromUiState(current),
+      unpinned_insert_index: normalizeUnpinnedInsertIndex(current.unpinned_insert_index),
+    };
+  }
+
+  function calculatorLayoutPresetPayload(uiState) {
+    return normalizeCalculatorLayoutPresetPayload(uiState);
+  }
+
+  function applyCalculatorLayoutPreset(uiState, payload) {
+    const current = normalizeCalculatorUiState(uiState);
+    const layoutPreset = normalizeCalculatorLayoutPresetPayload(payload);
+    return assignPinnedUiState(current, {
+      pinned_layout: layoutPreset.pinned_layout,
+      pinned_sections: flattenPinnedLayout(layoutPreset.pinned_layout),
+      unpinned_insert_index: layoutPreset.unpinned_insert_index,
+    });
+  }
+
+  function applyCalculatorLayoutPresetInPlace(uiState, payload) {
+    return assignPinnedUiState(uiState, applyCalculatorLayoutPreset(uiState, payload));
+  }
+
+  function defaultCalculatorLayoutPresetPayload() {
+    return normalizeCalculatorLayoutPresetPayload({
+      pinned_layout: CALCULATOR_DEFAULT_PINNED_LAYOUT,
+      unpinned_insert_index: CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX,
+    });
+  }
+
+  function calculatorSectionPreviewIconHref(sectionId) {
+    const alias = CALCULATOR_SECTION_ICON_BY_ID[normalizeSectionId(sectionId)];
+    return alias ? `${ICON_SPRITE_URL}#fishy-${alias}` : "";
+  }
+
+  function renderCalculatorLayoutPresetPreview(container, context = {}) {
+    const d3Namespace = context?.d3;
+    if (!(container instanceof HTMLElement) || !d3Namespace || typeof d3Namespace.select !== "function") {
+      return;
+    }
+    const layoutPreset = normalizeCalculatorLayoutPresetPayload(context.payload);
+    const root = d3Namespace.select(container);
+    root.selectAll("*").remove();
+
+    const layout = Array.isArray(layoutPreset.pinned_layout) ? layoutPreset.pinned_layout : [];
+    const [slotRowIndex] = normalizeUnpinnedInsertIndex(layoutPreset.unpinned_insert_index);
+    const previewWidth = 96;
+    const paddingX = 4;
+    const paddingY = 4;
+    const topGutter = 10;
+    const bottomGutter = 10;
+    const cardHeight = 14;
+    const columnGap = 6;
+    const stackGap = 4;
+    const rowGap = 10;
+    const iconSize = 8;
+    const innerWidth = previewWidth - paddingX * 2;
+    const boxes = [];
+    const rowFrames = [];
+    let cursorY = paddingY + topGutter;
+
+    for (const row of layout) {
+      const normalizedRow = (Array.isArray(row) ? row : [])
+        .map((column) => Array.isArray(column) ? column : [])
+        .filter((column) => column.length > 0);
+      if (!normalizedRow.length) {
+        continue;
+      }
+      let cursorX = paddingX;
+      let rowHeight = cardHeight;
+      const columnCount = normalizedRow.length;
+      const boxWidth = (innerWidth - columnGap * (columnCount - 1)) / columnCount;
+      for (const column of normalizedRow) {
+        let columnY = cursorY;
+        let columnHeight = 0;
+        for (let index = 0; index < column.length; index += 1) {
+          const sectionId = normalizeSectionId(column[index]);
+          boxes.push({
+            x: cursorX,
+            y: columnY,
+            width: boxWidth,
+            height: cardHeight,
+            iconHref: calculatorSectionPreviewIconHref(sectionId),
+          });
+          columnY += cardHeight + stackGap;
+          columnHeight += cardHeight + (index < column.length - 1 ? stackGap : 0);
+        }
+        rowHeight = Math.max(rowHeight, columnHeight || cardHeight);
+        cursorX += boxWidth + columnGap;
+      }
+      rowFrames.push({
+        top: cursorY,
+        bottom: cursorY + rowHeight,
+      });
+      cursorY += rowHeight + rowGap;
+    }
+
+    let slotY = paddingY + topGutter / 2;
+    if (rowFrames.length) {
+      if (slotRowIndex <= 0) {
+        slotY = paddingY + topGutter / 2;
+      } else if (slotRowIndex >= rowFrames.length) {
+        slotY = rowFrames[rowFrames.length - 1].bottom + bottomGutter / 2;
+      } else {
+        slotY = (rowFrames[slotRowIndex - 1].bottom + rowFrames[slotRowIndex].top) / 2;
+      }
+    }
+
+    const lastRowBottom = rowFrames.length
+      ? rowFrames[rowFrames.length - 1].bottom
+      : paddingY + topGutter + cardHeight;
+    const contentHeight = Math.max(
+      paddingY * 2 + topGutter + bottomGutter + cardHeight,
+      lastRowBottom + bottomGutter + paddingY,
+    );
+
+    const svg = root.append("svg")
+      .attr("class", "fishy-preset-manager__preview-svg")
+      .attr("width", previewWidth)
+      .attr("height", contentHeight)
+      .attr("viewBox", `0 0 ${previewWidth} ${contentHeight}`)
+      .attr("pointer-events", "none");
+
+    svg.append("line")
+      .attr("class", "fishy-preset-manager__preview-slot")
+      .attr("x1", paddingX)
+      .attr("x2", previewWidth - paddingX)
+      .attr("y1", slotY)
+      .attr("y2", slotY)
+      .attr("pointer-events", "none");
+
+    const cards = svg.selectAll(".fishy-preset-manager__preview-card")
+      .data(boxes)
+      .enter()
+      .append("g")
+      .attr("class", "fishy-preset-manager__preview-card-group")
+      .attr("pointer-events", "none");
+
+    cards.append("rect")
+      .attr("class", "fishy-preset-manager__preview-card")
+      .attr("x", (box) => box.x)
+      .attr("y", (box) => box.y)
+      .attr("width", (box) => box.width)
+      .attr("height", (box) => box.height)
+      .attr("rx", 3)
+      .attr("ry", 3)
+      .attr("pointer-events", "none");
+
+    cards
+      .filter((box) => Boolean(box.iconHref))
+      .append("use")
+      .attr("class", "fishy-preset-manager__preview-icon")
+      .attr("href", (box) => box.iconHref)
+      .attr("x", (box) => box.x + (box.width - iconSize) / 2)
+      .attr("y", (box) => box.y + (box.height - iconSize) / 2)
+      .attr("width", iconSize)
+      .attr("height", iconSize)
+      .attr("pointer-events", "none");
+  }
+
+  function bindCalculatorLayoutPresetAdapter() {
+    if (calculatorState.layoutPresetAdapterBound) {
+      return;
+    }
+    const helper = sharedUserPresets();
+    if (!helper) {
+      return;
+    }
+    helper.registerCollectionAdapter(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
+      titleKey: "calculator.layout_presets.title",
+      titleFallback: "Layout presets",
+      currentLabelKey: "calculator.layout_presets.current",
+      currentLabelFallback: "Current layout",
+      fileBaseName: "fishystuff-calculator-layouts",
+      defaultPresetName(index) {
+        return calculatorText("layout_presets.default_name", {
+          index: String(index),
+        });
+      },
+      fixedPresets() {
+        return [{
+          id: "default",
+          name: calculatorText("layout_presets.default"),
+          payload: defaultCalculatorLayoutPresetPayload(),
+        }];
+      },
+      normalizePayload: normalizeCalculatorLayoutPresetPayload,
+      renderPreview(container, context) {
+        renderCalculatorLayoutPresetPreview(container, context);
+      },
+      capture() {
+        const signals = signalStore.signalObject();
+        return signals && typeof signals === "object"
+          ? calculatorLayoutPresetPayload(signals._calculator_ui)
+          : null;
+      },
+      apply(payload) {
+        const signals = signalStore.signalObject();
+        if (!signals || typeof signals !== "object") {
+          return null;
+        }
+        const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, payload);
+        if (typeof window.__fishystuffCalculator?.patchSignals === "function") {
+          window.__fishystuffCalculator.patchSignals({
+            _calculator_ui: cloneCalculatorSignals(nextUiState),
+          });
+          return nextUiState;
+        }
+        signals._calculator_ui = cloneCalculatorSignals(nextUiState);
+        return nextUiState;
+      },
+    });
+    calculatorState.layoutPresetAdapterBound = true;
   }
 
   function pinSection(pinnedSections, sectionId) {
@@ -1260,6 +1505,7 @@
 
   function restoreCalculator(signals) {
     signalStore.connect(signals);
+    bindCalculatorLayoutPresetAdapter();
     bindPersistListener();
     bindActionListener();
     const currentUi = normalizeCalculatorUiState(signals?._calculator_ui);
@@ -2163,6 +2409,11 @@
     restore: restoreCalculator,
     liveCalc: liveCalculator,
     assignPinnedUiState,
+    layoutPresetCollectionKey: CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY,
+    layoutPresetPayload: calculatorLayoutPresetPayload,
+    normalizeLayoutPresetPayload: normalizeCalculatorLayoutPresetPayload,
+    applyLayoutPreset: applyCalculatorLayoutPreset,
+    applyLayoutPresetInPlace: applyCalculatorLayoutPresetInPlace,
     togglePinnedSection,
     togglePinnedSectionInPlace,
     resetCalculatorLayout,

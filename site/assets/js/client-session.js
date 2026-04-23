@@ -15,6 +15,7 @@
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const USER_OVERLAYS_STORAGE_KEY = "fishystuff.user-overlays.v2";
+  const USER_PRESETS_STORAGE_KEY = "fishystuff.user-presets.v1";
   const CHANGE_EVENT = "fishystuff:client-session-change";
   const VERSION = 1;
   const LOCAL_DATA_SCOPES = Object.freeze([
@@ -28,6 +29,7 @@
     { id: "dex-ui", label: "Dex UI" },
     { id: "calculator-data", label: "Calculator data" },
     { id: "calculator-ui", label: "Calculator UI" },
+    { id: "presets-data", label: "Saved presets" },
     { id: "overrides-data", label: "Overrides data" },
     { id: "all", label: "All local data" },
   ]);
@@ -675,6 +677,10 @@
     removeStorageKey(globalThis.localStorage, USER_OVERLAYS_STORAGE_KEY);
   }
 
+  function clearUserPresetsLocalState() {
+    removeStorageKey(globalThis.localStorage, USER_PRESETS_STORAGE_KEY);
+  }
+
   function clearAllLocalState(options = {}) {
     clearMapDataLocalState();
     clearMapUiLocalState();
@@ -682,6 +688,7 @@
     clearDexUiLocalState();
     clearCalculatorDataLocalState();
     clearCalculatorUiLocalState();
+    clearUserPresetsLocalState();
     clearUserOverridesLocalState();
     clearSharedUiSettings("local-user-reset");
 
@@ -740,6 +747,10 @@
         return current();
       case "calculator-ui":
         clearCalculatorUiLocalState();
+        maybeReload(options);
+        return current();
+      case "presets-data":
+        clearUserPresetsLocalState();
         maybeReload(options);
         return current();
       case "overrides-data":

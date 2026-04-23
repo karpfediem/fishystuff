@@ -47,6 +47,7 @@ const iconSources = {
   "adjustments-horizontal": { type: "mingcute", name: "settings-3-fill" },
   "information-circle": { type: "mingcute", name: "live-location-fill" },
   "inspect-fill": { type: "mingcute", name: "inspect-fill" },
+  "layout-fill": { type: "mingcute", name: "layout-fill" },
   "paw-fill": { type: "mingcute", name: "paw-fill" },
   "squares-2x2": { type: "mingcute", name: "layers-fill" },
   "search-field": { type: "mingcute", name: "search-fill" },

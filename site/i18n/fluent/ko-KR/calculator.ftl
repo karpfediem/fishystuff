@@ -21,6 +21,11 @@ calculator.timeline.time_saved = 절약 시간
 
 calculator.toast.layout_reset = 레이아웃을 재설정했습니다.
 
+calculator.layout_presets.title = 레이아웃 프리셋
+calculator.layout_presets.current = 현재 레이아웃
+calculator.layout_presets.default = 기본값
+calculator.layout_presets.default_name = 레이아웃 {$index}
+
 calculator.title.casts_average = 평균 낚시 횟수 ({$timespan})
 calculator.title.durability_loss_average = 평균 내구도 소모 ({$timespan})
 calculator.title.expected_catches = 예상 횟수 ({$timespan})
@@ -34,7 +39,7 @@ calculator.server.option.none = 없음
 
 calculator.server.result.no_matching_options = 일치하는 항목 없음
 calculator.server.result.no_matching_zones = 일치하는 지역 없음
-calculator.server.result.more_available = 스크롤해서 결과 더 불러오기
+calculator.server.result.more_available = 결과 더 불러오기
 calculator.server.result.selected = 선택됨
 calculator.server.result.added = 추가됨
 
