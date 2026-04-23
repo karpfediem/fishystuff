@@ -717,6 +717,7 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.style.left = "";
         panel.style.top = "";
         panel.style.width = "";
+        panel.style.minWidth = "";
         panel.style.maxWidth = "";
         panel.style.zIndex = "";
         panel.style.margin = "";
@@ -1390,18 +1391,21 @@ export class FishySearchableDropdown extends HTMLElement {
         const previousHidden = panel.hidden;
         const previousVisibility = panel.style.visibility;
         const previousWidth = panel.style.width;
+        const previousMinWidth = panel.style.minWidth;
         const previousMaxWidth = panel.style.maxWidth;
         const configuredWidth = this._configuredPanelWidthStyle();
         panel.hidden = false;
         panel.style.visibility = "hidden";
         if (configuredWidth) {
             panel.style.width = configuredWidth;
+            panel.style.minWidth = "0";
             panel.style.maxWidth = "calc(100vw - 24px)";
         }
         const rect = panel.getBoundingClientRect();
         panel.hidden = previousHidden;
         panel.style.visibility = previousVisibility;
         panel.style.width = previousWidth;
+        panel.style.minWidth = previousMinWidth;
         panel.style.maxWidth = previousMaxWidth;
         return rect;
     }
@@ -1457,6 +1461,7 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.style.margin = "0";
         panel.style.zIndex = "70";
         panel.style.width = width ? `${width}px` : "";
+        panel.style.minWidth = "0";
         panel.style.maxWidth = `${Math.max(viewportWidth - 24, 160)}px`;
         panel.style.left = "12px";
         panel.style.top = "12px";

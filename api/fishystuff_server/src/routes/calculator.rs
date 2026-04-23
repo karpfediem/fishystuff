@@ -12400,7 +12400,7 @@ fn render_local_searchable_select_control(
                 None
             },
             panel_width: if uses_card_results {
-                Some("46rem")
+                Some("60rem")
             } else {
                 None
             },
