@@ -56,6 +56,44 @@ function timelineLabel(key) {
   return calculatorMessage(`timeline.${key}`);
 }
 
+const DEFAULT_PINNED_LAYOUT = Object.freeze([
+  Object.freeze([Object.freeze(["overview"])]),
+  Object.freeze([Object.freeze(["zone"]), Object.freeze(["session"])]),
+  Object.freeze([Object.freeze(["bite_time"]), Object.freeze(["loot"])]),
+]);
+const DEFAULT_PINNED_SECTIONS = Object.freeze([
+  "overview",
+  "zone",
+  "session",
+  "bite_time",
+  "loot",
+]);
+
+function cloneTestValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function defaultCalculatorUiState(overrides = {}) {
+  return {
+    top_level_tab: "overview",
+    distribution_tab: "groups",
+    pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
+    pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
+    unpinned_insert_index: [0, 0],
+    ...cloneTestValue(overrides),
+  };
+}
+
+function defaultCalculatorActionState(overrides = {}) {
+  return {
+    copyUrlToken: 0,
+    copyShareToken: 0,
+    clearToken: 0,
+    resetLayoutToken: 0,
+    ...cloneTestValue(overrides),
+  };
+}
+
 class MemoryStorage {
   constructor(initial = {}) {
     this.map = new Map(Object.entries(initial));
@@ -250,18 +288,8 @@ function defaultSignals() {
     pet3: { skills: [] },
     pet4: { skills: [] },
     pet5: { skills: [] },
-    _calculator_ui: {
-      top_level_tab: "overview",
-      distribution_tab: "groups",
-      pinned_layout: [[["overview"]]],
-      pinned_sections: ["overview"],
-      unpinned_insert_index: [0, 0],
-    },
-    _calculator_actions: {
-      copyUrlToken: 0,
-      copyShareToken: 0,
-      clearToken: 0,
-    },
+    _calculator_ui: defaultCalculatorUiState(),
+    _calculator_actions: defaultCalculatorActionState(),
     _defaults: {
       active: false,
       debug: false,
@@ -278,18 +306,8 @@ function defaultSignals() {
       pet3: { skills: [] },
       pet4: { skills: [] },
       pet5: { skills: [] },
-      _calculator_ui: {
-        top_level_tab: "overview",
-        distribution_tab: "groups",
-        pinned_layout: [[["overview"]]],
-        pinned_sections: ["overview"],
-        unpinned_insert_index: [0, 0],
-      },
-      _calculator_actions: {
-        copyUrlToken: 0,
-        copyShareToken: 0,
-        clearToken: 0,
-      },
+      _calculator_ui: defaultCalculatorUiState(),
+      _calculator_actions: defaultCalculatorActionState(),
     },
     _calc: {
       auto_fish_time_reduction_text: "72%",
@@ -407,8 +425,8 @@ test("calculator restore ignores legacy pinned UI state without a pinned layout"
 
   assert.equal(signals._calculator_ui.top_level_tab, "food");
   assert.equal(signals._calculator_ui.distribution_tab, "groups");
-  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["overview"]]]);
-  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["overview"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), cloneTestValue(DEFAULT_PINNED_LAYOUT));
+  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), Array.from(DEFAULT_PINNED_SECTIONS));
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.unpinned_insert_index)), [0, 0]);
 });
 
@@ -416,18 +434,8 @@ test("calculator restore leaves initial shell state intact when storage is empty
   const env = createContext();
   const signals = {
     _loading: true,
-    _calculator_ui: {
-      top_level_tab: "overview",
-      distribution_tab: "groups",
-      pinned_layout: [[["overview"]]],
-      pinned_sections: ["overview"],
-      unpinned_insert_index: [0, 0],
-    },
-    _calculator_actions: {
-      copyUrlToken: 0,
-      copyShareToken: 0,
-      clearToken: 0,
-    },
+    _calculator_ui: defaultCalculatorUiState(),
+    _calculator_actions: defaultCalculatorActionState(),
   };
 
   env.window.__fishystuffCalculator.restore(signals);
@@ -438,18 +446,8 @@ test("calculator restore leaves initial shell state intact when storage is empty
       zones: {},
     },
     priceOverrides: {},
-    _calculator_ui: {
-      top_level_tab: "overview",
-      distribution_tab: "groups",
-      pinned_layout: [[["overview"]]],
-      pinned_sections: ["overview"],
-      unpinned_insert_index: [0, 0],
-    },
-    _calculator_actions: {
-      copyUrlToken: 0,
-      copyShareToken: 0,
-      clearToken: 0,
-    },
+    _calculator_ui: defaultCalculatorUiState(),
+    _calculator_actions: defaultCalculatorActionState(),
   });
 });
 
@@ -458,8 +456,8 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
   const calculator = env.window.__fishystuffCalculator;
 
   assert.deepEqual(
-    Array.from(calculator.togglePinnedSection(undefined, "zone")),
-    ["overview", "zone"],
+    Array.from(calculator.togglePinnedSection(undefined, "distribution")),
+    ["overview", "zone", "session", "bite_time", "loot", "distribution"],
   );
   assert.deepEqual(
     Array.from(calculator.togglePinnedSection(["overview", "zone"], "overview")),
@@ -594,6 +592,35 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
   assert.equal(calculator.sectionOrder("loot", "loot", ["overview", "zone"]), 2);
 });
 
+test("calculator reset layout restores the default pinned mosaic while keeping the selected tab", () => {
+  const env = createContext();
+  const calculator = env.window.__fishystuffCalculator;
+  const uiState = {
+    top_level_tab: "trade",
+    distribution_tab: "loot_flow",
+    pinned_layout: [[["overview"], ["distribution"]], [["food", "buffs"]]],
+    pinned_sections: ["overview", "distribution", "food", "buffs"],
+    unpinned_insert_index: [4, 2],
+  };
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calculator.resetCalculatorLayout(uiState))), {
+    top_level_tab: "trade",
+    distribution_tab: "loot_flow",
+    pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
+    pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
+    unpinned_insert_index: [0, 0],
+  });
+
+  assert.equal(calculator.resetCalculatorLayoutInPlace(uiState), uiState);
+  assert.deepEqual(JSON.parse(JSON.stringify(uiState)), {
+    top_level_tab: "trade",
+    distribution_tab: "loot_flow",
+    pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
+    pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
+    unpinned_insert_index: [0, 0],
+  });
+});
+
 test("calculator API URLs keep locale and apiLang separate", () => {
   const korean = createContext({}, { locale: "ko-KR", lang: "en-US" });
   assert.equal(korean.window.__fishystuffCalculator.lang, "ko");
@@ -637,13 +664,7 @@ test("calculator persist stores canonical page state and excludes transient bran
   const persistedData = JSON.parse(env.localStorage.getItem("fishystuff.calculator.data.v1"));
   const persistedUi = JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1"));
   assert.deepEqual(persistedData.food, ["item:9359"]);
-  assert.deepEqual(persistedUi, {
-    top_level_tab: "overview",
-    distribution_tab: "groups",
-    pinned_layout: [[["overview"]]],
-    pinned_sections: ["overview"],
-    unpinned_insert_index: [0, 0],
-  });
+  assert.deepEqual(persistedUi, defaultCalculatorUiState());
   assert.equal("_live" in persistedData, false);
   assert.equal("_calc" in persistedData, false);
   assert.equal("_defaults" in persistedData, false);
@@ -732,11 +753,11 @@ test("calculator action listener handles copy and clear tokens once without clea
   Object.assign(signals, {
     active: true,
     food: ["item:9359"],
-    _calculator_actions: {
+    _calculator_actions: defaultCalculatorActionState({
       copyUrlToken: 1,
       copyShareToken: 1,
       clearToken: 1,
-    },
+    }),
   });
 
   env.localStorage.setItem(
@@ -745,13 +766,9 @@ test("calculator action listener handles copy and clear tokens once without clea
   );
   env.localStorage.setItem(
     "fishystuff.calculator.ui.v1",
-    JSON.stringify({
-      top_level_tab: "overview",
-      distribution_tab: "groups",
-      pinned_layout: [[["overview"]]],
-      pinned_sections: ["overview"],
+    JSON.stringify(defaultCalculatorUiState({
       unpinned_insert_index: [2, 0],
-    }),
+    })),
   );
   env.window.__fishystuffCalculator.restore(signals);
   signals._calculator_ui = {
@@ -785,6 +802,7 @@ test("calculator action listener handles copy and clear tokens once without clea
         copyUrlToken: 1,
         copyShareToken: 1,
         clearToken: 1,
+        resetLayoutToken: 0,
       },
     },
   });
@@ -795,6 +813,7 @@ test("calculator action listener handles copy and clear tokens once without clea
         copyUrlToken: 0,
         copyShareToken: 0,
         clearToken: 0,
+        resetLayoutToken: 0,
       },
     },
   });
@@ -863,6 +882,57 @@ test("calculator action listener handles copy and clear tokens once without clea
       },
     },
   });
+});
+
+test("calculator action listener resets only layout state", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  signals._calculator_ui = {
+    top_level_tab: "trade",
+    distribution_tab: "target_fish",
+    pinned_layout: [[["overview"], ["distribution"]]],
+    pinned_sections: ["overview", "distribution"],
+    unpinned_insert_index: [3, 2],
+  };
+  signals._calculator_actions = defaultCalculatorActionState({
+    resetLayoutToken: 1,
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_actions: {
+        copyUrlToken: 0,
+        copyShareToken: 0,
+        clearToken: 0,
+        resetLayoutToken: 1,
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(env.toastCalls.length, 1);
+  assert.equal(env.toastCalls[0].type, "info");
+  assert.equal(env.toastCalls[0].message, calculatorMessage("toast.layout_reset"));
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
+    top_level_tab: "trade",
+    distribution_tab: "target_fish",
+    pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
+    pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
+    unpinned_insert_index: [0, 0],
+  });
+  assert.deepEqual(
+    JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1")),
+    {
+      top_level_tab: "trade",
+      distribution_tab: "target_fish",
+      pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
+      pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
+      unpinned_insert_index: [0, 0],
+    },
+  );
 });
 
 test("calculator liveCalc keeps stat breakdown payloads aligned with local derived values", () => {

@@ -19,6 +19,8 @@ calculator.timeline.auto_fishing_time = 자동 낚시 시간
 calculator.timeline.catch_time = 낚아올리기 시간
 calculator.timeline.time_saved = 절약 시간
 
+calculator.toast.layout_reset = 레이아웃을 재설정했습니다.
+
 calculator.title.casts_average = 평균 낚시 횟수 ({$timespan})
 calculator.title.durability_loss_average = 평균 내구도 소모 ({$timespan})
 calculator.title.expected_catches = 예상 횟수 ({$timespan})
@@ -38,6 +40,7 @@ calculator.server.result.added = 추가됨
 calculator.server.action.remove = {$label} 제거
 calculator.server.action.copy_url = URL 복사
 calculator.server.action.copy_share = 공유 텍스트 복사
+calculator.server.action.reset_layout = 레이아웃 재설정
 calculator.server.action.clear = 초기화
 calculator.server.action.pin_section = {$label} 고정
 calculator.server.action.unpin_section = {$label} 고정 해제

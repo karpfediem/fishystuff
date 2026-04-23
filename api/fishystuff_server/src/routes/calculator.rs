@@ -2782,8 +2782,8 @@ fn default_reset_signals_patch_map(
         json!({
             "top_level_tab": "overview",
             "distribution_tab": "groups",
-            "pinned_layout": [[["overview"]]],
-            "pinned_sections": ["overview"],
+            "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
+            "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
             "unpinned_insert_index": [0, 0],
         }),
     );
@@ -9004,6 +9004,11 @@ fn render_calculator_app(
                         __TEXT_COPY_SHARE__
                     </button>
                     <button class="btn btn-dash btn-error"
+                            data-on:click="$_calculator_actions.resetLayoutToken = (($_calculator_actions && $_calculator_actions.resetLayoutToken) || 0) + 1">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
+                        __TEXT_RESET_LAYOUT__
+                    </button>
+                    <button class="btn btn-dash btn-error"
                             data-on:click="$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
                         __TEXT_CLEAR__
@@ -9434,6 +9439,13 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.action.copy_share",
+            )),
+        ),
+        (
+            "__TEXT_RESET_LAYOUT__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.reset_layout",
             )),
         ),
         (
@@ -13546,6 +13558,7 @@ mod tests {
         assert!(text.contains("bound-select-id=\"outfits-bound-inputs\""));
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
+        assert!(text.contains("$_calculator_actions.resetLayoutToken = (($_calculator_actions && $_calculator_actions.resetLayoutToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
         assert!(text.contains(
             "window.__fishystuffCalculator.blurActiveElement(); window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, 'overview')"
@@ -14184,8 +14197,8 @@ mod tests {
             Some(&json!({
                 "top_level_tab": "overview",
                 "distribution_tab": "groups",
-                "pinned_layout": [[["overview"]]],
-                "pinned_sections": ["overview"],
+                "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
+                "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
                 "unpinned_insert_index": [0, 0],
             }))
         );

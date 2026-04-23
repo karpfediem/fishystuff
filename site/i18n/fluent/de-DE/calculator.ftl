@@ -27,6 +27,7 @@ calculator.share.link = [Fishy Stuff-Rechner-Preset | {$lead}{$item_drr} Gegenst
 calculator.toast.preset_url_copied = Preset-URL kopiert.
 calculator.toast.share_copied = Freigabetext kopiert.
 calculator.toast.cleared = Rechner zurückgesetzt.
+calculator.toast.layout_reset = Layout zurückgesetzt.
 
 calculator.title.casts_average = Durchschnittliche Würfe ({$timespan})
 calculator.title.durability_loss_average = Durchschnittlicher Haltbarkeitsverlust ({$timespan})
@@ -144,6 +145,7 @@ calculator.server.result.added = Hinzugefügt
 calculator.server.action.remove = {$label} entfernen
 calculator.server.action.copy_url = URL kopieren
 calculator.server.action.copy_share = Freigabe kopieren
+calculator.server.action.reset_layout = Layout zurücksetzen
 calculator.server.action.clear = Leeren
 calculator.server.action.pin_section = {$label} anheften
 calculator.server.action.unpin_section = {$label} lösen

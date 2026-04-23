@@ -24,9 +24,17 @@
     "debug",
   ]);
   const CALCULATOR_DEFAULT_TOP_LEVEL_TAB = "overview";
-  const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze(["overview"]);
+  const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze([
+    "overview",
+    "zone",
+    "session",
+    "bite_time",
+    "loot",
+  ]);
   const CALCULATOR_DEFAULT_PINNED_LAYOUT = Object.freeze([
     Object.freeze([Object.freeze(["overview"])]),
+    Object.freeze([Object.freeze(["zone"]), Object.freeze(["session"])]),
+    Object.freeze([Object.freeze(["bite_time"]), Object.freeze(["loot"])]),
   ]);
   const CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX = Object.freeze([0, 0]);
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
@@ -34,6 +42,7 @@
     copyUrlToken: 0,
     copyShareToken: 0,
     clearToken: 0,
+    resetLayoutToken: 0,
   });
   const DEFAULT_CALCULATOR_LOCALE = "en-US";
   const BREAKDOWN_SECTION_KEYS = Object.freeze(["inputs", "composition"]);
@@ -469,6 +478,14 @@
     };
   };
 
+  const defaultCalculatorLayoutUiState = (value) => {
+    const current = normalizeCalculatorUiState(value);
+    return {
+      ...uiStateWithPinnedLayout(current, CALCULATOR_DEFAULT_PINNED_LAYOUT),
+      unpinned_insert_index: normalizeUnpinnedInsertIndex(CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX),
+    };
+  };
+
   const normalizeCalculatorUiState = (value) => {
     const current = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     const topLevelTab = String(current.top_level_tab || "overview").trim();
@@ -599,6 +616,14 @@
 
   function togglePinnedSectionInPlace(uiState, sectionId) {
     return assignPinnedUiState(uiState, togglePinnedSection(uiState, sectionId));
+  }
+
+  function resetCalculatorLayout(uiState) {
+    return defaultCalculatorLayoutUiState(uiState);
+  }
+
+  function resetCalculatorLayoutInPlace(uiState) {
+    return assignPinnedUiState(uiState, resetCalculatorLayout(uiState));
   }
 
   function pinSection(pinnedSections, sectionId) {
@@ -1214,6 +1239,10 @@
         clearToken: () => {
           clearCalculator(current);
           window.__fishystuffToast.info(calculatorText("toast.cleared"));
+        },
+        resetLayoutToken: () => {
+          current._calculator_ui = resetCalculatorLayoutInPlace(current._calculator_ui);
+          window.__fishystuffToast.info(calculatorText("toast.layout_reset"));
         },
       },
     );
@@ -2136,6 +2165,8 @@
     assignPinnedUiState,
     togglePinnedSection,
     togglePinnedSectionInPlace,
+    resetCalculatorLayout,
+    resetCalculatorLayoutInPlace,
     pinSection,
     placePinnedSection,
     movePinnedSection,

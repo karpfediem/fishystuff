@@ -26,6 +26,7 @@ calculator.share.link = [Fishy Stuff Calculator Preset | {$lead}{$item_drr} Item
 calculator.toast.preset_url_copied = Preset URL copied.
 calculator.toast.share_copied = Share text copied.
 calculator.toast.cleared = Calculator cleared.
+calculator.toast.layout_reset = Layout reset.
 
 calculator.title.casts_average = Average Casts ({$timespan})
 calculator.title.durability_loss_average = Average Durability Loss ({$timespan})
@@ -358,6 +359,7 @@ calculator.server.result.added = Added
 calculator.server.action.remove = Remove {$label}
 calculator.server.action.copy_url = Copy URL
 calculator.server.action.copy_share = Copy Share
+calculator.server.action.reset_layout = Reset Layout
 calculator.server.action.clear = Clear
 calculator.server.action.pin_section = Pin {$label}
 calculator.server.action.unpin_section = Unpin {$label}
