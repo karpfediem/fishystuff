@@ -15,8 +15,12 @@
         display: grid;
         width: 100%;
         justify-items: center;
-        gap: 0.65rem;
+        gap: 0.75rem;
         padding: 0.85rem 0.8rem 0.8rem;
+    }
+
+    .fishy-calculator-pet-option--selected {
+        gap: 0.85rem;
     }
 
     .fishy-calculator-pet-option__frame {
@@ -25,9 +29,14 @@
         aspect-ratio: 1;
         place-items: center;
         overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
+        border: 2px solid var(--fishy-item-grade-color, var(--color-base-300));
         border-radius: calc(var(--radius-box) * 0.95);
         background: var(--color-base-100);
+    }
+
+    .fishy-calculator-pet-option--selected .fishy-calculator-pet-option__frame {
+        width: min(100%, 8rem);
+        border-width: 3px;
     }
 
     .fishy-calculator-pet-option__image {
@@ -52,12 +61,25 @@
         font-weight: 700;
         line-height: 1.15;
         text-wrap: balance;
-        color: color-mix(in srgb, var(--color-base-content) 92%, transparent);
+        color: var(--color-base-content);
+    }
+
+    .fishy-calculator-pet-option--selected .fishy-calculator-pet-option__label {
+        font-size: 0.95rem;
+    }
+
+    .fishy-calculator-pet-option__detail {
+        width: 100%;
+        text-align: center;
+        font-size: 0.75rem;
+        line-height: 1.2;
+        text-wrap: balance;
+        color: var(--color-base-content);
     }
 
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-role="results"] {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
         gap: 0.75rem;
         padding: 0.5rem;
     }
@@ -78,16 +100,16 @@
         justify-content: stretch;
         padding: 0;
         overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        border: 1px solid var(--color-base-300);
         border-radius: calc(var(--radius-box) * 0.95);
-        background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
+        background: var(--color-base-100);
     }
 
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-searchable-dropdown-option]:hover,
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-searchable-dropdown-option]:focus-visible,
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-searchable-dropdown-option].menu-active {
-        border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-base-content) 12%);
-        background: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
+        border-color: var(--color-base-content);
+        background: var(--color-base-100);
         outline: none;
     }
 
@@ -97,11 +119,17 @@
     }
 
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-role="trigger"] {
+        align-items: center;
+        padding: 0.85rem 1rem;
         box-shadow: none;
     }
 
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-role="panel"] > div {
         box-shadow: none;
+    }
+
+    #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-role="selected-content"] {
+        justify-content: flex-start;
     }
 
     #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-searchable-dropdown-option] > .badge {
@@ -113,12 +141,16 @@
 
     @media (max-width: 640px) {
         #pets fishy-searchable-dropdown[id$="-pet-picker"] [data-role="results"] {
-            grid-template-columns: repeat(auto-fill, minmax(7.25rem, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
         }
 
         .fishy-calculator-pet-option {
             gap: 0.55rem;
             padding: 0.7rem 0.65rem;
+        }
+
+        .fishy-calculator-pet-option--selected .fishy-calculator-pet-option__frame {
+            width: min(100%, 7rem);
         }
     }
 

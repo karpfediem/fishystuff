@@ -84,6 +84,8 @@ pub struct CalculatorPetEntry {
     pub label: String,
     pub skin_key: Option<String>,
     pub image_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alias_keys: Vec<String>,
     #[serde(default)]
     pub tiers: Vec<CalculatorPetTierEntry>,
 }
@@ -116,6 +118,8 @@ pub struct CalculatorPetOptionEntry {
 pub struct CalculatorPetSignals {
     pub pet: String,
     pub tier: String,
+    #[serde(rename = "packLeader")]
+    pub pack_leader: bool,
     pub special: String,
     pub talent: String,
     pub skills: Vec<String>,

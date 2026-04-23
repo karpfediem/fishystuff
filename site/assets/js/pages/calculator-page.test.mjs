@@ -304,7 +304,12 @@ test("calculator restore canonicalizes stored signals", () => {
       buff: ["item:1", "item:2", "item:1"],
       outfit: ["item:77", ""],
       pet1: {
+        packLeader: "true",
         skills: ["pet-skill:a", "", "pet-skill:a"],
+      },
+      pet2: {
+        packLeader: true,
+        skills: [],
       },
       priceOverrides: {
         "item:8473": {
@@ -330,6 +335,8 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.deepEqual(Array.from(signals.buff), ["item:1", "item:2"]);
   assert.deepEqual(Array.from(signals.outfit), ["item:77"]);
   assert.deepEqual(Array.from(signals.pet1.skills), ["pet-skill:a"]);
+  assert.equal(signals.pet1.packLeader, true);
+  assert.equal(signals.pet2.packLeader, false);
   assert.equal(signals._calculator_ui.top_level_tab, "overview");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);

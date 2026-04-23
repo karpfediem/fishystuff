@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
     CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
-    CalculatorPetEntry, CalculatorPetOptionEntry, CalculatorPetSignals,
+    CalculatorPetOptionEntry, CalculatorPetSignals, CalculatorPetTierEntry,
     CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry, CalculatorSignals,
     CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
 };
@@ -513,6 +513,7 @@ struct SelectOption<'a> {
     label: &'a str,
     icon: Option<&'a str>,
     grade_tone: &'a str,
+    pet_variant_detail: Option<&'a str>,
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
     presentation: SelectOptionPresentation,
@@ -555,6 +556,7 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
     ),
     icon: None,
     grade_tone: "unknown",
+    pet_variant_detail: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -568,6 +570,7 @@ static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(||
     ),
     icon: None,
     grade_tone: "unknown",
+    pet_variant_detail: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -581,6 +584,7 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     ),
     icon: None,
     grade_tone: "unknown",
+    pet_variant_detail: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -810,6 +814,16 @@ pub async fn post_calculator_datastar_eval(
             CalculatorPatchMode::Eval,
             None,
         )?
+        .into_datastar_event(),
+        PatchElements::new(render_pet_cards(
+            data.cdn_base_url.as_str(),
+            data.api_lang,
+            data.lang,
+            &data.catalog.pets,
+            &normalized_signals,
+        ))
+        .selector("#pets")
+        .mode(ElementPatchMode::Outer)
         .into_datastar_event(),
         PatchElements::new(render_fish_group_chart(
             data.lang,
@@ -1078,6 +1092,7 @@ fn parse_calculator_signals_value(
         if let Some(Value::Object(pet)) = object.get_mut(key) {
             coerce_nested_string(pet, "pet");
             coerce_nested_string(pet, "tier");
+            coerce_nested_bool(pet, "packLeader");
             coerce_nested_string(pet, "special");
             coerce_nested_string(pet, "talent");
             coerce_nested_string_array(pet, "skills");
@@ -1406,6 +1421,12 @@ fn coerce_nested_string(object: &mut serde_json::Map<String, Value>, key: &str) 
 fn coerce_nested_string_array(object: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(value) = object.get_mut(key) {
         coerce_value_string_array(value);
+    }
+}
+
+fn coerce_nested_bool(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        coerce_value_bool(value);
     }
 }
 
@@ -1949,6 +1970,13 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         &data.catalog.pets,
         &pet_value_aliases,
     );
+    normalize_pack_leader_selection([
+        &mut signals.pet1,
+        &mut signals.pet2,
+        &mut signals.pet3,
+        &mut signals.pet4,
+        &mut signals.pet5,
+    ]);
 
     if !matches!(
         signals.timespan_unit.as_str(),
@@ -2620,6 +2648,14 @@ fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> CalculatorPetAlias
         aliases
             .pets
             .insert(normalize_lookup_value(&pet.key), pet.key.clone());
+        for alias_key in &pet.alias_keys {
+            if alias_key.trim().is_empty() {
+                continue;
+            }
+            aliases
+                .pets
+                .insert(normalize_lookup_value(alias_key), pet.key.clone());
+        }
         aliases
             .pets
             .entry(normalize_lookup_value(&pet.label))
@@ -2640,23 +2676,41 @@ fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> CalculatorPetAlias
         aliases
             .options
             .insert(normalize_lookup_value(&option.key), option.key.clone());
+        for english_alias in [
+            option
+                .auto_fishing_time_reduction
+                .map(|_| "Auto-Fishing Time Reduction"),
+            option
+                .durability_reduction_resistance
+                .map(|_| "Durability Reduction Resistance"),
+            option.life_exp.map(|_| "Life EXP"),
+            option.fishing_exp.map(|_| "Fishing EXP"),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            aliases
+                .options
+                .entry(normalize_lookup_value(english_alias))
+                .or_insert_with(|| option.key.clone());
+        }
     }
-    aliases.options.insert(
-        normalize_lookup_value("Auto-Fishing Time Reduction"),
-        LEGACY_PET_SPECIAL_AUTO_FISHING.to_string(),
-    );
-    aliases.options.insert(
-        normalize_lookup_value("Durability Reduction Resistance"),
-        LEGACY_PET_TALENT_DRR.to_string(),
-    );
-    aliases.options.insert(
-        normalize_lookup_value("Life EXP"),
-        LEGACY_PET_TALENT_LIFE_EXP.to_string(),
-    );
-    aliases.options.insert(
-        normalize_lookup_value("Fishing EXP"),
-        LEGACY_PET_SKILL_FISHING_EXP.to_string(),
-    );
+    aliases
+        .options
+        .entry(normalize_lookup_value("Auto-Fishing Time Reduction"))
+        .or_insert_with(|| LEGACY_PET_SPECIAL_AUTO_FISHING.to_string());
+    aliases
+        .options
+        .entry(normalize_lookup_value("Durability Reduction Resistance"))
+        .or_insert_with(|| LEGACY_PET_TALENT_DRR.to_string());
+    aliases
+        .options
+        .entry(normalize_lookup_value("Life EXP"))
+        .or_insert_with(|| LEGACY_PET_TALENT_LIFE_EXP.to_string());
+    aliases
+        .options
+        .entry(normalize_lookup_value("Fishing EXP"))
+        .or_insert_with(|| LEGACY_PET_SKILL_FISHING_EXP.to_string());
     aliases
 }
 
@@ -2806,10 +2860,17 @@ fn normalize_pet(
         .map(|value| normalize_pet_lookup_value(value, &aliases.options))
         .filter(|value| !value.is_empty())
         .collect();
-    pet.skills.sort();
-    pet.skills.dedup();
+    pet.skills = std::mem::take(&mut pet.skills)
+        .into_iter()
+        .fold(Vec::new(), |mut out, value| {
+            if !out.iter().any(|existing| existing == &value) {
+                out.push(value);
+            }
+            out
+        });
 
     if pet.pet.trim().is_empty() {
+        pet.pack_leader = false;
         pet.special.clear();
         pet.talent.clear();
         pet.skills.clear();
@@ -2818,6 +2879,7 @@ fn normalize_pet(
 
     let Some(pet_entry) = catalog.pets.iter().find(|entry| entry.key == pet.pet) else {
         pet.pet.clear();
+        pet.pack_leader = false;
         pet.special.clear();
         pet.talent.clear();
         pet.skills.clear();
@@ -2826,6 +2888,7 @@ fn normalize_pet(
 
     let Some(tier_entry) = pet_entry.tiers.iter().find(|tier| tier.key == pet.tier) else {
         pet.pet.clear();
+        pet.pack_leader = false;
         pet.special.clear();
         pet.talent.clear();
         pet.skills.clear();
@@ -2873,6 +2936,15 @@ fn normalize_pet(
         );
     }
     pet.skills = resolve_pet_skill_selection(&pet.skills, &tier_entry.skills, &catalog.skills);
+}
+
+fn normalize_pack_leader_selection(mut pets: [&mut CalculatorPetSignals; 5]) {
+    let first_selected = pets
+        .iter()
+        .position(|pet| pet.pack_leader && !pet.pet.trim().is_empty());
+    for (index, pet) in pets.iter_mut().enumerate() {
+        pet.pack_leader = matches!(first_selected, Some(selected) if selected == index);
+    }
 }
 
 fn normalize_pet_lookup_value(value: &str, aliases: &HashMap<String, String>) -> String {
@@ -2944,9 +3016,10 @@ fn resolve_pet_skill_selection(
     allowed_keys: &[String],
     options: &[CalculatorPetOptionEntry],
 ) -> Vec<String> {
-    let mut selected = current_values
+    let selected_lookup = current_values.iter().collect::<HashSet<_>>();
+    let mut selected = allowed_keys
         .iter()
-        .filter(|value| allowed_keys.iter().any(|key| key == *value))
+        .filter(|key| selected_lookup.contains(key))
         .cloned()
         .collect::<Vec<_>>();
     if selected.is_empty()
@@ -2979,8 +3052,10 @@ fn resolve_pet_skill_selection(
             selected.push(best);
         }
     }
-    selected.sort();
-    selected.dedup();
+    if selected.is_empty() && !allowed_keys.is_empty() {
+        selected.push(allowed_keys[0].clone());
+    }
+    selected.truncate(3);
     selected
 }
 
@@ -3543,16 +3618,36 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     }
 }
 
-fn catalog_pet_option_by_key<'a>(
-    catalog: &'a CalculatorPetCatalog,
-    key: &str,
-) -> Option<&'a CalculatorPetOptionEntry> {
-    pet_option_by_key(&catalog.specials, key)
-        .or_else(|| pet_option_by_key(&catalog.talents, key))
-        .or_else(|| pet_option_by_key(&catalog.skills, key))
+fn pet_effect_sum_by_keys<'a>(
+    keys: impl IntoIterator<Item = &'a str>,
+    catalog: &'a [CalculatorPetOptionEntry],
+    effect: impl Fn(&CalculatorPetOptionEntry) -> Option<f32> + Copy,
+) -> f64 {
+    let mut selected_keys = keys
+        .into_iter()
+        .filter(|value| !value.trim().is_empty())
+        .collect::<Vec<_>>();
+    selected_keys.sort();
+    selected_keys.dedup();
+    selected_keys
+        .into_iter()
+        .filter_map(|key| pet_option_by_key(catalog, key))
+        .filter_map(|option| effect(option))
+        .map(f64::from)
+        .sum()
 }
 
-fn pet_effect_sum(
+fn pet_talent_tier_multiplier(tier_key: &str) -> f64 {
+    match tier_key.trim() {
+        "1" => 1.0,
+        "2" => 2.0,
+        "3" => 3.0,
+        "4" | "5" => 4.0,
+        _ => 0.0,
+    }
+}
+
+fn pet_talent_effect(
     pet: &CalculatorPetSignals,
     catalog: &CalculatorPetCatalog,
     effect: impl Fn(&CalculatorPetOptionEntry) -> Option<f32> + Copy,
@@ -3560,45 +3655,55 @@ fn pet_effect_sum(
     if pet.pet.trim().is_empty() {
         return 0.0;
     }
-    let mut selected_keys = Vec::new();
-    if !pet.special.trim().is_empty() {
-        selected_keys.push(pet.special.as_str());
+    let Some(option) = pet_option_by_key(&catalog.talents, &pet.talent) else {
+        return 0.0;
+    };
+    let base = effect(option).map(f64::from).unwrap_or_default();
+    if base <= 0.0 {
+        return 0.0;
     }
-    if !pet.talent.trim().is_empty() {
-        selected_keys.push(pet.talent.as_str());
+    let multiplier = pet_talent_tier_multiplier(&pet.tier);
+    if multiplier <= 0.0 {
+        return 0.0;
     }
-    selected_keys.extend(
-        pet.skills
-            .iter()
-            .map(|value| value.as_str())
-            .filter(|value| !value.trim().is_empty()),
-    );
-    selected_keys.sort();
-    selected_keys.dedup();
-    selected_keys
-        .into_iter()
-        .filter_map(|key| catalog_pet_option_by_key(catalog, key))
-        .filter_map(|option| effect(option))
-        .map(f64::from)
-        .sum()
+    let scaled = base * multiplier;
+    if pet.pack_leader {
+        scaled + 0.01
+    } else {
+        scaled
+    }
 }
 
 fn pet_afr(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
-    pet_effect_sum(pet, catalog, |option| option.auto_fishing_time_reduction)
+    if pet.pet.trim().is_empty() {
+        return 0.0;
+    }
+    pet_effect_sum_by_keys(
+        std::iter::once(pet.special.as_str()),
+        &catalog.specials,
+        |option| option.auto_fishing_time_reduction,
+    )
 }
 
 fn pet_drr(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
-    pet_effect_sum(pet, catalog, |option| {
+    pet_talent_effect(pet, catalog, |option| {
         option.durability_reduction_resistance
     })
 }
 
 fn pet_fishing_exp(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
-    pet_effect_sum(pet, catalog, |option| option.fishing_exp)
+    if pet.pet.trim().is_empty() {
+        return 0.0;
+    }
+    pet_effect_sum_by_keys(
+        pet.skills.iter().map(String::as_str),
+        &catalog.skills,
+        |option| option.fishing_exp,
+    )
 }
 
 fn pet_life_exp(pet: &CalculatorPetSignals, catalog: &CalculatorPetCatalog) -> f64 {
-    pet_effect_sum(pet, catalog, |option| option.life_exp)
+    pet_talent_effect(pet, catalog, |option| option.life_exp)
 }
 
 fn sum_item_property(
@@ -3920,6 +4025,39 @@ fn pet_slot_name(lang: CalculatorLocale, slot_idx: usize) -> String {
     )
 }
 
+fn calculator_pet_pack_leader_label(lang: CalculatorLocale) -> &'static str {
+    match lang {
+        CalculatorLocale::EnUs => "Pack leader",
+        CalculatorLocale::DeDe => "Rudelanführer",
+        CalculatorLocale::KoKr => "우두머리",
+    }
+}
+
+fn calculator_pet_skills_hint(lang: CalculatorLocale) -> &'static str {
+    match lang {
+        CalculatorLocale::EnUs => "Choose 1 to 3 skills.",
+        CalculatorLocale::DeDe => "Wähle 1 bis 3 Fähigkeiten.",
+        CalculatorLocale::KoKr => "기술은 1개부터 3개까지 선택합니다.",
+    }
+}
+
+fn pet_talent_breakdown_detail(
+    lang: CalculatorLocale,
+    pet: &CalculatorPetSignals,
+    catalog: &CalculatorPetCatalog,
+) -> String {
+    let talent_label = pet_option_label(&catalog.talents, &pet.talent);
+    let tier_label = option_label(&catalog.tiers, &pet.tier);
+    if pet.pack_leader {
+        format!(
+            "{talent_label} · {tier_label} · {}",
+            calculator_pet_pack_leader_label(lang)
+        )
+    } else {
+        format!("{talent_label} · {tier_label}")
+    }
+}
+
 fn collect_pet_afr_breakdown_rows(
     lang: CalculatorLocale,
     pets: &[&CalculatorPetSignals],
@@ -3955,12 +4093,10 @@ fn collect_pet_drr_breakdown_rows(
             if amount <= 0.0 {
                 return None;
             }
-            let talent_label = pet_option_label(&catalog.talents, &pet.talent);
-            let tier_label = option_label(&catalog.tiers, &pet.tier);
             Some(computed_stat_breakdown_row(
                 pet_slot_name(lang, index + 1),
                 format!("+{}%", trim_float(amount * 100.0)),
-                format!("{talent_label} · {tier_label}"),
+                pet_talent_breakdown_detail(lang, pet, catalog),
             ))
         })
         .collect()
@@ -9837,6 +9973,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             label: option.label.as_str(),
             icon: None,
             grade_tone: "unknown",
+            pet_variant_detail: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -9852,6 +9989,7 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
             label: option.label.as_str(),
             icon: None,
             grade_tone: "unknown",
+            pet_variant_detail: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -9859,15 +9997,34 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
         .collect()
 }
 
+fn pet_variant_detail_label<'a>(
+    tier_entry: &'a CalculatorPetTierEntry,
+    catalog: &'a CalculatorPetCatalog,
+) -> Option<&'a str> {
+    tier_entry
+        .talents
+        .iter()
+        .find_map(|key| {
+            catalog
+                .talents
+                .iter()
+                .find(|option| option.key == *key)
+                .map(|option| option.label.as_str())
+        })
+        .or_else(|| (!tier_entry.label.trim().is_empty()).then_some(tier_entry.label.as_str()))
+}
+
 fn select_options_from_pet_entries_for_tier<'a>(
-    options: &'a [CalculatorPetEntry],
+    catalog: &'a CalculatorPetCatalog,
     tier_key: &str,
 ) -> Vec<SelectOption<'a>> {
     let tier_key = tier_key.trim();
+    let tier_grade_tone = pet_tier_grade_tone(tier_key);
     let filtered = if tier_key.is_empty() {
-        options.iter().collect::<Vec<_>>()
+        catalog.pets.iter().collect::<Vec<_>>()
     } else {
-        options
+        catalog
+            .pets
             .iter()
             .filter(|option| option.tiers.iter().any(|tier| tier.key == tier_key))
             .collect::<Vec<_>>()
@@ -9878,12 +10035,28 @@ fn select_options_from_pet_entries_for_tier<'a>(
             value: option.key.as_str(),
             label: option.label.as_str(),
             icon: option.image_url.as_deref(),
-            grade_tone: "unknown",
+            grade_tone: tier_grade_tone,
+            pet_variant_detail: option
+                .tiers
+                .iter()
+                .find(|tier| tier.key == tier_key)
+                .and_then(|tier| pet_variant_detail_label(tier, catalog)),
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
         })
         .collect()
+}
+
+fn pet_tier_grade_tone(tier_key: &str) -> &'static str {
+    match tier_key.trim() {
+        "5" => "red",
+        "4" => "yellow",
+        "3" => "blue",
+        "2" => "green",
+        "1" => "white",
+        _ => "unknown",
+    }
 }
 
 fn zone_name(zone: &ZoneEntry) -> &str {
@@ -10318,7 +10491,10 @@ fn render_fish_group_silver_chart(lang: CalculatorLocale, chart: &LootChart) -> 
         )),
         render_distribution_chart(
             "fish-group-silver-distribution-chart",
-            &calculator_route_text(lang, "calculator.server.chart.aria.group_silver_distribution"),
+            &calculator_route_text(
+                lang,
+                "calculator.server.chart.aria.group_silver_distribution"
+            ),
             "_calc.fish_group_silver_distribution_chart",
         ),
     )
@@ -10806,11 +10982,26 @@ fn render_fish_group_window(
             data.lang,
             "calculator.server.field.discard_grade",
         )),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.none")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.white")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.green")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.blue")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.discard.yellow")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.discard.none"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.discard.white"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.discard.green"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.discard.blue"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.discard.yellow"
+        )),
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.helper.fish_only_notice",
@@ -10819,11 +11010,27 @@ fn render_fish_group_window(
             data.lang,
             "calculator.server.chart.aria.distribution_tabs",
         )),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.groups")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.silver")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.loot_flow")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.tab.target_fish")),
-        render_fish_group_chart(data.lang, fish_group_chart, signals.show_normalized_select_rates),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.groups"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.silver"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.loot_flow"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.target_fish"
+        )),
+        render_fish_group_chart(
+            data.lang,
+            fish_group_chart,
+            signals.show_normalized_select_rates
+        ),
         render_fish_group_silver_chart(data.lang, loot_chart),
         render_loot_chart(data.lang, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
@@ -10870,8 +11077,14 @@ fn render_loot_window(data: &CalculatorData, signals: &CalculatorSignals) -> Str
             signals.timespan_amount,
             &signals.timespan_unit,
         )),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.helper.using")),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.helper.per_cast")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.using"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.per_cast"
+        )),
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.stat.expected_catches_per_hour",
@@ -10885,7 +11098,10 @@ fn render_loot_window(data: &CalculatorData, signals: &CalculatorSignals) -> Str
             signals.timespan_amount,
             &signals.timespan_unit,
         )),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.helper.sale")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.sale"
+        )),
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.stat.profit_per_hour",
@@ -10938,7 +11154,10 @@ fn render_trade_window(
             </div>\
         </fieldset>",
         render_calculator_panel_legend(data.lang, "trade", &title, None),
-        escape_html(&calculator_route_text(data.lang, "calculator.server.field.trade_level")),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.trade_level"
+        )),
         render_searchable_select_control(
             data.cdn_base_url.as_str(),
             data.api_lang,
@@ -11010,11 +11229,26 @@ fn render_calculator_data_disclaimer(lang: CalculatorLocale) -> String {
             lang,
             "calculator.server.disclaimer.title",
         )),
-        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p1")),
-        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p2")),
-        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p3")),
-        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p4")),
-        escape_html(&calculator_route_text(lang, "calculator.server.disclaimer.p5")),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.disclaimer.p1"
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.disclaimer.p2"
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.disclaimer.p3"
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.disclaimer.p4"
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.disclaimer.p5"
+        )),
     )
 }
 
@@ -11179,7 +11413,12 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
     parts.join(" ")
 }
 
-fn render_pet_dropdown_option_content_html(cdn_base_url: &str, option: SelectOption<'_>) -> String {
+fn render_pet_dropdown_content_html(
+    cdn_base_url: &str,
+    option: SelectOption<'_>,
+    selected: bool,
+) -> String {
+    let tone_class = format!("fishy-item-grade-{}", escape_html(option.grade_tone));
     let image_html = option
         .icon
         .map(|icon| {
@@ -11192,7 +11431,7 @@ fn render_pet_dropdown_option_content_html(cdn_base_url: &str, option: SelectOpt
         })
         .unwrap_or_else(|| {
             format!(
-                "<span class=\"fishy-calculator-pet-option__fallback fishy-item-icon-fallback\">{}</span>",
+                "<span class=\"fishy-calculator-pet-option__fallback fishy-item-icon-fallback {tone_class}\">{}</span>",
                 escape_html(
                     &option
                         .label
@@ -11203,11 +11442,42 @@ fn render_pet_dropdown_option_content_html(cdn_base_url: &str, option: SelectOpt
                 )
             )
         });
+    let detail_html = if selected {
+        String::new()
+    } else {
+        option
+            .pet_variant_detail
+            .map(|detail| {
+                format!(
+                    "<span class=\"fishy-calculator-pet-option__detail\">{}</span>",
+                    escape_html(detail),
+                )
+            })
+            .unwrap_or_default()
+    };
     format!(
-        "<span class=\"fishy-calculator-pet-option\" data-pet-option-card><span class=\"fishy-calculator-pet-option__frame\">{}</span><span class=\"fishy-calculator-pet-option__label\">{}</span></span>",
+        "<span class=\"fishy-calculator-pet-option{}\" data-pet-option-card><span class=\"fishy-calculator-pet-option__frame {}\">{}</span><span class=\"fishy-calculator-pet-option__label\">{}</span>{}</span>",
+        if selected {
+            " fishy-calculator-pet-option--selected"
+        } else {
+            ""
+        },
+        tone_class,
         image_html,
         escape_html(option.label),
+        detail_html,
     )
+}
+
+fn render_pet_dropdown_option_content_html(cdn_base_url: &str, option: SelectOption<'_>) -> String {
+    render_pet_dropdown_content_html(cdn_base_url, option, false)
+}
+
+fn render_pet_dropdown_selected_content_html(
+    cdn_base_url: &str,
+    option: SelectOption<'_>,
+) -> String {
+    render_pet_dropdown_content_html(cdn_base_url, option, true)
 }
 
 fn render_searchable_dropdown_option_content_html(
@@ -11288,9 +11558,20 @@ fn render_searchable_dropdown_selected_content_html(
     option: SelectOption<'_>,
 ) -> String {
     if matches!(option.presentation, SelectOptionPresentation::PetCard) {
-        return render_searchable_dropdown_text_content(option.label);
+        return render_pet_dropdown_selected_content_html(cdn_base_url, option);
     }
     render_searchable_dropdown_option_content_html(lang, cdn_base_url, option)
+}
+
+fn render_select_option_search_text(option: SelectOption<'_>) -> String {
+    let mut parts = vec![option.label.to_string()];
+    if let Some(detail) = option.pet_variant_detail {
+        let normalized = detail.trim();
+        if !normalized.is_empty() {
+            parts.push(normalized.to_string());
+        }
+    }
+    parts.join(" ")
 }
 
 fn with_optional_none<'a>(
@@ -11410,7 +11691,7 @@ fn render_searchable_dropdown_catalog_html(
             "<template data-role=\"selected-content\" data-value=\"{}\" data-label=\"{}\" data-search-text=\"{}\">{}</template>",
             escape_html(option.value),
             escape_html(option.label),
-            escape_html(option.label),
+            escape_html(&render_select_option_search_text(*option)),
             selected_content_html,
         )
         .unwrap();
@@ -12128,6 +12409,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             label: level.name.as_str(),
             icon: None,
             grade_tone: "unknown",
+            pet_variant_detail: None,
             item: None,
             lifeskill_level: Some(level),
             presentation: SelectOptionPresentation::Default,
@@ -12147,6 +12429,7 @@ fn item_options_by_type<'a>(
             label: item.name.as_str(),
             icon: item.icon.as_deref(),
             grade_tone: item_grade_tone(item.grade.as_deref()),
+            pet_variant_detail: None,
             item: Some(item),
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12168,6 +12451,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             label: entry.name.as_str(),
             icon: entry.icon.as_deref(),
             grade_tone: item_grade_tone(entry.grade.as_deref()),
+            pet_variant_detail: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12313,11 +12597,24 @@ fn select_pet_option_entries_by_keys<'a>(
             label: option.label.as_str(),
             icon: None,
             grade_tone: "unknown",
+            pet_variant_detail: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
         })
         .collect()
+}
+
+fn pack_leader_change_expression(slot: usize, total_slots: usize) -> String {
+    let mut expression = format!("if ($pet{slot}.packLeader) {{");
+    for other_slot in 1..=total_slots.max(1) {
+        if other_slot == slot {
+            continue;
+        }
+        write!(expression, " $pet{other_slot}.packLeader = false;").unwrap();
+    }
+    expression.push_str(" }");
+    expression
 }
 
 fn render_pet_cards(
@@ -12328,16 +12625,11 @@ fn render_pet_cards(
     signals: &CalculatorSignals,
 ) -> String {
     let tier_options = select_options_from_catalog(&catalog.tiers);
+    let total_slots = catalog.slots.max(1);
 
     let mut html = String::new();
-    write!(
-        html,
-        "<script id=\"calculator-pet-catalog-data\" type=\"application/json\">{}</script>",
-        json_script_contents(catalog)
-    )
-    .unwrap();
     html.push_str("<div id=\"pets\" class=\"grid gap-4 md:grid-cols-2\">");
-    for slot in 1..=catalog.slots.max(1) {
+    for slot in 1..=total_slots {
         let pet = match slot {
             1 => &signals.pet1,
             2 => &signals.pet2,
@@ -12345,7 +12637,7 @@ fn render_pet_cards(
             4 => &signals.pet4,
             _ => &signals.pet5,
         };
-        let pet_options = select_options_from_pet_entries_for_tier(&catalog.pets, &pet.tier);
+        let pet_options = select_options_from_pet_entries_for_tier(catalog, &pet.tier);
         let selected_pet = catalog.pets.iter().find(|entry| entry.key == pet.pet);
         let selected_tier_entry =
             selected_pet.and_then(|entry| entry.tiers.iter().find(|tier| tier.key == pet.tier));
@@ -12361,10 +12653,34 @@ fn render_pet_cards(
         let bind_prefix = format!("pet{slot}");
         let skill_bind = format!("_pet{slot}_skill_slots");
         let skills_id = format!("pet{slot}_skills");
+        let pack_leader_checked = if pet.pack_leader { " checked" } else { "" };
+        let pack_leader_disabled = if selected_pet.is_some() {
+            ""
+        } else {
+            " disabled"
+        };
+        let pack_leader_change = escape_html(&pack_leader_change_expression(slot, total_slots));
         write!(
             html,
-            "<div class=\"pet rounded-box border border-base-300 bg-base-200 p-3\" data-pet-slot=\"{}\"><div class=\"grid gap-3\">",
+            "<section class=\"card card-border bg-base-100\" data-pet-slot=\"{}\"><div class=\"card-body gap-4\">",
             slot
+        )
+        .unwrap();
+        write!(
+            html,
+            "<div class=\"flex flex-wrap items-center justify-between gap-3\"><h3 class=\"card-title text-base\">{}</h3><label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium{}\"><input type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><span>{}</span></label></div>",
+            escape_html(&pet_slot_name(lang, slot)),
+            if pack_leader_disabled.is_empty() {
+                ""
+            } else {
+                " opacity-60"
+            },
+            escape_html(&bind_prefix),
+            pack_leader_change,
+            slot,
+            pack_leader_checked,
+            pack_leader_disabled,
+            escape_html(calculator_pet_pack_leader_label(lang)),
         )
         .unwrap();
         html.push_str(&format!(
@@ -12381,9 +12697,10 @@ fn render_pet_cards(
             &pet_options,
             true,
             &calculator_route_text(lang, "calculator.server.search.pets"),
-            true,
+            false,
         ));
         html.push_str("</fieldset>");
+        html.push_str("<div class=\"grid gap-4 sm:grid-cols-2 xl:grid-cols-3\">");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(lang, "calculator.server.field.tier",))
@@ -12442,7 +12759,7 @@ fn render_pet_cards(
         ));
         html.push_str("</fieldset></div>");
         html.push_str(&format!(
-            "<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">{}</legend>",
+            "<fieldset class=\"fieldset gap-2\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
                 lang,
                 "calculator.server.field.skills",
@@ -12457,7 +12774,12 @@ fn render_pet_cards(
             &skill_options,
             None,
         ));
-        html.push_str("</fieldset></div>");
+        write!(
+            html,
+            "<p class=\"label\">{}</p></fieldset></div></section>",
+            escape_html(calculator_pet_skills_hint(lang)),
+        )
+        .unwrap();
     }
     html.push_str("</div>");
     html
@@ -12470,12 +12792,6 @@ fn escape_html(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
-}
-
-fn json_script_contents<T: serde::Serialize>(value: &T) -> String {
-    serde_json::to_string(value)
-        .unwrap_or_else(|_| "{}".to_string())
-        .replace("</", "<\\/")
 }
 
 fn escaped_js_string_literal(value: &str) -> String {
@@ -12527,8 +12843,9 @@ mod tests {
         init_signals_patch_map, load_calculator_runtime_data, loot_species_evidence_text,
         loot_species_presence_source_kind, loot_species_presence_text,
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
-        normalize_named_array, normalize_pet, normalize_signals, parse_calculator_signals_value,
-        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
+        normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
+        parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
+        poisson_probability_at_least, post_calculator_datastar_eval,
         trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
         CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
         CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
@@ -12693,6 +13010,7 @@ mod tests {
                         label: "Hawk".to_string(),
                         skin_key: Some("2001".to_string()),
                         image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
+                        alias_keys: Vec::new(),
                         tiers: vec![CalculatorPetTierEntry {
                             key: "5".to_string(),
                             label: "Tier 5".to_string(),
@@ -12752,6 +13070,7 @@ mod tests {
                     pet1: CalculatorPetSignals {
                         pet: String::new(),
                         tier: "5".to_string(),
+                        pack_leader: false,
                         special: "auto_fishing_time_reduction".to_string(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
@@ -12759,6 +13078,7 @@ mod tests {
                     pet2: CalculatorPetSignals {
                         pet: String::new(),
                         tier: "4".to_string(),
+                        pack_leader: false,
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
@@ -12766,6 +13086,7 @@ mod tests {
                     pet3: CalculatorPetSignals {
                         pet: String::new(),
                         tier: "4".to_string(),
+                        pack_leader: false,
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
@@ -12773,6 +13094,7 @@ mod tests {
                     pet4: CalculatorPetSignals {
                         pet: String::new(),
                         tier: "4".to_string(),
+                        pack_leader: false,
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
@@ -12780,6 +13102,7 @@ mod tests {
                     pet5: CalculatorPetSignals {
                         pet: String::new(),
                         tier: "4".to_string(),
+                        pack_leader: false,
                         special: String::new(),
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
@@ -12924,6 +13247,11 @@ mod tests {
         assert!(text.contains("calculator-rod-picker"));
         assert!(text.contains("calculator-pet1-tier-picker"));
         assert!(text.contains("http://127.0.0.1:4040/images/pets/pet_hawk_0014.webp"));
+        assert!(text.contains("data-pet-pack-leader"));
+        assert!(text.contains("fishy-calculator-pet-option--selected"));
+        assert!(text.contains("fishy-item-grade-red"));
+        assert!(text.contains("fishy-calculator-pet-option__detail"));
+        assert!(text.contains("Durability Reduction Resistance"));
         assert!(text.contains("<fishy-searchable-multiselect"));
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
@@ -12990,6 +13318,13 @@ mod tests {
         assert!(text.contains("data-calculator-section-id=\"trade\""));
         assert!(text.contains("data-calculator-section-id=\"food\""));
         assert!(text.contains("data-calculator-section-id=\"buffs\""));
+        assert!(text.contains("#fishy-chart-pie-2-fill"));
+        assert!(text.contains("#fishy-trending-up-fill"));
+        assert!(text.contains("#fishy-wheel-fill"));
+        assert!(text.contains("#fishy-dinner-fill"));
+        assert!(text.contains("#fishy-arrows-up-fill"));
+        assert!(text.contains("#fishy-paw-fill"));
+        assert!(text.contains("#fishy-bug-fill"));
         assert!(text.contains("<fishy-distribution-chart"));
         assert!(text.contains("signal-path=\"_calc.fish_group_distribution_chart\""));
         assert!(text.contains("No source-backed loot rows are available for this zone yet."));
@@ -13061,6 +13396,7 @@ mod tests {
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("event:datastar-patch-signals"));
         assert!(text.contains("event:datastar-patch-elements"));
+        assert!(text.contains("data:selector #pets"));
         assert!(text.contains("data:selector #calculator-fish-group-chart"));
         assert!(text.contains("data:selector #calculator-target-fish-panel"));
         assert!(text.contains("data:selector #calculator-loot-chart"));
@@ -13126,11 +13462,6 @@ mod tests {
             .unwrap()
             .iter()
             .any(|row| row["label"] == "Lil' Otter Fishing Carrier"));
-        assert!(item_drr["sections"][0]["rows"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|row| row["label"] == "Pet 1"));
 
         let raw_prize =
             serde_json::from_str::<Value>(&derived.stat_breakdowns.raw_prize_rate).unwrap();
@@ -13601,6 +13932,7 @@ mod tests {
                 label: "Hawk".to_string(),
                 skin_key: Some("2001".to_string()),
                 image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
+                alias_keys: Vec::new(),
                 tiers: vec![CalculatorPetTierEntry {
                     key: "5".to_string(),
                     label: "Tier 5".to_string(),
@@ -13642,6 +13974,7 @@ mod tests {
         let mut pet = CalculatorPetSignals {
             pet: "pet:3:1:pet_hawk_0014".to_string(),
             tier: "3".to_string(),
+            pack_leader: false,
             special: "auto_fishing_time_reduction".to_string(),
             talent: "durability_reduction_resistance".to_string(),
             skills: vec!["fishing_exp".to_string()],
@@ -13654,6 +13987,165 @@ mod tests {
         assert_eq!(pet.special, "");
         assert_eq!(pet.talent, "");
         assert!(pet.skills.is_empty());
+    }
+
+    #[test]
+    fn normalize_pet_defaults_to_first_skill_and_caps_skill_count() {
+        let catalog = CalculatorPetCatalog {
+            slots: 5,
+            pets: vec![CalculatorPetEntry {
+                key: "pet:test".to_string(),
+                label: "Test Pet".to_string(),
+                skin_key: None,
+                image_url: None,
+                alias_keys: Vec::new(),
+                tiers: vec![CalculatorPetTierEntry {
+                    key: "5".to_string(),
+                    label: "Tier 5".to_string(),
+                    specials: Vec::new(),
+                    talents: vec!["durability_reduction_resistance".to_string()],
+                    skills: vec![
+                        "skill_a".to_string(),
+                        "skill_b".to_string(),
+                        "skill_c".to_string(),
+                        "skill_d".to_string(),
+                    ],
+                }],
+            }],
+            tiers: vec![CalculatorOptionEntry {
+                key: "5".to_string(),
+                label: "Tier 5".to_string(),
+            }],
+            specials: Vec::new(),
+            talents: vec![CalculatorPetOptionEntry {
+                key: "durability_reduction_resistance".to_string(),
+                label: "Durability Reduction Resistance".to_string(),
+                durability_reduction_resistance: Some(0.05),
+                ..CalculatorPetOptionEntry::default()
+            }],
+            skills: vec![
+                CalculatorPetOptionEntry {
+                    key: "skill_a".to_string(),
+                    label: "Skill A".to_string(),
+                    fishing_exp: Some(0.01),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_b".to_string(),
+                    label: "Skill B".to_string(),
+                    fishing_exp: Some(0.02),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_c".to_string(),
+                    label: "Skill C".to_string(),
+                    fishing_exp: Some(0.03),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_d".to_string(),
+                    label: "Skill D".to_string(),
+                    fishing_exp: Some(0.04),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+        };
+        let aliases = build_pet_value_aliases(&catalog);
+        let defaults = CalculatorPetSignals {
+            tier: "5".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+
+        let mut pet = CalculatorPetSignals {
+            pet: "pet:test".to_string(),
+            tier: "5".to_string(),
+            pack_leader: false,
+            talent: "durability_reduction_resistance".to_string(),
+            skills: vec![
+                "skill_c".to_string(),
+                "skill_a".to_string(),
+                "skill_d".to_string(),
+                "skill_b".to_string(),
+            ],
+            ..CalculatorPetSignals::default()
+        };
+
+        normalize_pet(&mut pet, defaults.clone(), &catalog, &aliases);
+        assert_eq!(
+            pet.skills,
+            vec![
+                "skill_a".to_string(),
+                "skill_b".to_string(),
+                "skill_c".to_string(),
+            ]
+        );
+
+        let mut empty_skill_pet = CalculatorPetSignals {
+            pet: "pet:test".to_string(),
+            tier: "5".to_string(),
+            pack_leader: false,
+            talent: "durability_reduction_resistance".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+        normalize_pet(&mut empty_skill_pet, defaults, &catalog, &aliases);
+        assert_eq!(empty_skill_pet.skills, vec!["skill_a".to_string()]);
+    }
+
+    #[test]
+    fn normalize_pack_leader_selection_keeps_only_first_selected_pet() {
+        let mut pet1 = CalculatorPetSignals {
+            pet: "pet:1".to_string(),
+            pack_leader: true,
+            ..CalculatorPetSignals::default()
+        };
+        let mut pet2 = CalculatorPetSignals {
+            pet: "pet:2".to_string(),
+            pack_leader: true,
+            ..CalculatorPetSignals::default()
+        };
+        let mut pet3 = CalculatorPetSignals {
+            pet: String::new(),
+            pack_leader: true,
+            ..CalculatorPetSignals::default()
+        };
+        let mut pet4 = CalculatorPetSignals::default();
+        let mut pet5 = CalculatorPetSignals::default();
+
+        normalize_pack_leader_selection([&mut pet1, &mut pet2, &mut pet3, &mut pet4, &mut pet5]);
+
+        assert!(pet1.pack_leader);
+        assert!(!pet2.pack_leader);
+        assert!(!pet3.pack_leader);
+    }
+
+    #[test]
+    fn pet_talent_effect_caps_tier_five_and_applies_pack_leader_bonus() {
+        let catalog = CalculatorPetCatalog {
+            talents: vec![CalculatorPetOptionEntry {
+                key: "durability_reduction_resistance".to_string(),
+                label: "Durability Reduction Resistance".to_string(),
+                durability_reduction_resistance: Some(0.05),
+                ..CalculatorPetOptionEntry::default()
+            }],
+            ..CalculatorPetCatalog::default()
+        };
+
+        let tier_four_pet = CalculatorPetSignals {
+            pet: "pet:1".to_string(),
+            tier: "4".to_string(),
+            talent: "durability_reduction_resistance".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+        let tier_five_pack_leader_pet = CalculatorPetSignals {
+            pet: "pet:1".to_string(),
+            tier: "5".to_string(),
+            pack_leader: true,
+            talent: "durability_reduction_resistance".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+
+        assert!((pet_drr(&tier_four_pet, &catalog) - 0.20).abs() < 0.0001);
+        assert!((pet_drr(&tier_five_pack_leader_pet, &catalog) - 0.21).abs() < 0.0001);
     }
 
     #[test]
@@ -13693,6 +14185,12 @@ mod tests {
     #[test]
     fn build_pet_value_aliases_includes_catalog_labels_and_keys() {
         let aliases = build_pet_value_aliases(&CalculatorPetCatalog {
+            pets: vec![CalculatorPetEntry {
+                key: "pet:azure:38".to_string(),
+                label: "Young Azure Dragon".to_string(),
+                alias_keys: vec!["pet:azure:43".to_string()],
+                ..CalculatorPetEntry::default()
+            }],
             specials: vec![CalculatorPetOptionEntry {
                 key: "auto_fishing_time_reduction".to_string(),
                 label: "자동 낚시 시간 감소".to_string(),
@@ -13701,11 +14199,13 @@ mod tests {
             talents: vec![CalculatorPetOptionEntry {
                 key: "life_exp".to_string(),
                 label: "생활 경험치".to_string(),
+                life_exp: Some(0.01),
                 ..CalculatorPetOptionEntry::default()
             }],
             skills: vec![CalculatorPetOptionEntry {
                 key: "fishing_exp".to_string(),
                 label: "낚시 경험치".to_string(),
+                fishing_exp: Some(0.01),
                 ..CalculatorPetOptionEntry::default()
             }],
             ..CalculatorPetCatalog::default()
@@ -13724,6 +14224,16 @@ mod tests {
         assert_eq!(
             aliases.options.get(&normalize_lookup_value("Fishing EXP")),
             Some(&"fishing_exp".to_string())
+        );
+        assert_eq!(
+            aliases.pets.get(&normalize_lookup_value("pet:azure:43")),
+            Some(&"pet:azure:38".to_string())
+        );
+        assert_eq!(
+            aliases
+                .pets
+                .get(&normalize_lookup_value("Young Azure Dragon")),
+            Some(&"pet:azure:38".to_string())
         );
     }
 
@@ -13786,6 +14296,7 @@ mod tests {
                     "0": "item:721092"
                 },
                 "pet1": {
+                    "packLeader": "true",
                     "skills": {
                         "1": "fishing_exp",
                         "0": "life_exp"
@@ -13811,6 +14322,7 @@ mod tests {
             parsed.pet1.skills,
             vec!["life_exp".to_string(), "fishing_exp".to_string()]
         );
+        assert!(parsed.pet1.pack_leader);
     }
 
     #[test]

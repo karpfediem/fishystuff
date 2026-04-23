@@ -21,6 +21,7 @@ type CalculatorPetDbRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 type CalculatorPetSkillIndexDbRow = (Option<String>, Option<String>);
 type CalculatorLanguagedataDbRow = (Option<String>, Option<String>);
@@ -67,6 +68,7 @@ struct CalculatorPetOptionRecord {
 #[derive(Debug, Clone)]
 struct BuiltPetEntry {
     entry: CalculatorPetEntry,
+    alias_keys: Vec<String>,
 }
 
 fn localized_label(lang: FishLang, en: impl Into<String>, ko: impl Into<String>) -> String {
@@ -112,6 +114,10 @@ fn trim_optional_string(value: Option<String>) -> Option<String> {
 
 fn parse_u8(value: Option<&str>) -> Option<u8> {
     value?.trim().parse::<u8>().ok()
+}
+
+fn is_looting_pet_type(value: Option<&str>) -> bool {
+    matches!(value.map(str::trim), None | Some("") | Some("0"))
 }
 
 fn parse_asset_stem(raw_path: &str) -> Option<String> {
@@ -298,7 +304,8 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
             `Kind`, \
             `Tier`, \
             `BaseSkill`, \
-            `EquipSkillAquireKey` \
+            `EquipSkillAquireKey`, \
+            `PetType` \
          FROM pet_table{as_of}"
     );
     let rows: Vec<CalculatorPetDbRow> = conn.query(query)?;
@@ -314,10 +321,14 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
                 tier_source,
                 base_skill_index,
                 acquire_key,
+                pet_type,
             )| {
                 let character_key = trim_optional_string(character_key)?;
                 let race = trim_optional_string(race)?;
                 let kind = trim_optional_string(kind)?;
+                if !is_looting_pet_type(trim_optional_string(pet_type).as_deref()) {
+                    return None;
+                }
                 let tier_source = parse_u8(trim_optional_string(tier_source).as_deref())?;
                 Some(RawPetRow {
                     character_key,
@@ -564,6 +575,44 @@ fn build_tier_entry(
     }
 }
 
+fn pet_entry_dedup_signature(entry: &CalculatorPetEntry) -> String {
+    format!(
+        "{}\u{1f}{}\u{1f}{}",
+        entry.label.trim().to_ascii_lowercase(),
+        entry.image_url.as_deref().unwrap_or_default().trim(),
+        serde_json::to_string(&entry.tiers).unwrap_or_default(),
+    )
+}
+
+fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
+    let mut deduped = BTreeMap::<String, BuiltPetEntry>::new();
+    for mut built in entries {
+        let signature = pet_entry_dedup_signature(&built.entry);
+        built.alias_keys.push(built.entry.key.clone());
+        match deduped.get_mut(&signature) {
+            Some(existing) => {
+                existing.alias_keys.extend(built.alias_keys);
+                if existing.entry.skin_key.is_none() {
+                    existing.entry.skin_key = built.entry.skin_key.clone();
+                }
+            }
+            None => {
+                deduped.insert(signature, built);
+            }
+        }
+    }
+
+    deduped
+        .into_values()
+        .map(|mut built| {
+            built.alias_keys.sort();
+            built.alias_keys.dedup();
+            built.entry.alias_keys = built.alias_keys.clone();
+            built
+        })
+        .collect()
+}
+
 fn calculator_pet_option_records(
     lang: FishLang,
     skill_ids: &HashSet<String>,
@@ -712,7 +761,7 @@ impl DoltMySqlStore {
                 .push(row);
         }
 
-        let mut built_pets = grouped_rows
+        let built_pets = grouped_rows
             .into_iter()
             .map(|(key, rows)| {
                 let base_label = choose_pet_base_label(&rows, &names_by_character_key);
@@ -748,11 +797,15 @@ impl DoltMySqlStore {
                         image_url: rows
                             .iter()
                             .find_map(|row| pet_image_url(row.icon_image_file.as_deref())),
+                        alias_keys: Vec::new(),
                         tiers,
                     },
+                    alias_keys: Vec::new(),
                 }
             })
             .collect::<Vec<_>>();
+
+        let mut built_pets = dedupe_built_pet_entries(built_pets);
 
         built_pets.sort_by(|left, right| {
             left.entry
@@ -803,11 +856,14 @@ impl DoltMySqlStore {
 
 #[cfg(test)]
 mod tests {
+    use fishystuff_api::models::calculator::{CalculatorPetEntry, CalculatorPetTierEntry};
+
     use crate::store::FishLang;
 
     use super::{
-        localized_pet_option_label, parse_asset_stem, parse_pet_option_effects, pet_image_url,
-        pet_option_kind, PetOptionKind,
+        dedupe_built_pet_entries, is_looting_pet_type, localized_pet_option_label,
+        parse_asset_stem, parse_pet_option_effects, pet_image_url, pet_option_kind, BuiltPetEntry,
+        PetOptionKind,
     };
 
     #[test]
@@ -863,5 +919,59 @@ mod tests {
             Some("/images/pets/pet_hawk_0014.webp".to_string())
         );
         assert_eq!(pet_image_url(None), None);
+    }
+
+    #[test]
+    fn is_looting_pet_type_excludes_fairies() {
+        assert!(is_looting_pet_type(None));
+        assert!(is_looting_pet_type(Some("")));
+        assert!(is_looting_pet_type(Some("0")));
+        assert!(!is_looting_pet_type(Some("1")));
+    }
+
+    #[test]
+    fn dedupe_built_pet_entries_collapses_identical_pet_variants() {
+        let duplicated = vec![
+            BuiltPetEntry {
+                entry: CalculatorPetEntry {
+                    key: "pet:azure:38".to_string(),
+                    label: "Young Azure Dragon".to_string(),
+                    image_url: Some("/images/pets/pet_blue_dragon_0001.webp".to_string()),
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "5".to_string(),
+                        label: "Tier 5".to_string(),
+                        specials: vec!["special_a".to_string()],
+                        talents: vec!["talent_a".to_string()],
+                        skills: vec!["skill_a".to_string()],
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                alias_keys: Vec::new(),
+            },
+            BuiltPetEntry {
+                entry: CalculatorPetEntry {
+                    key: "pet:azure:43".to_string(),
+                    label: "Young Azure Dragon".to_string(),
+                    image_url: Some("/images/pets/pet_blue_dragon_0001.webp".to_string()),
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "5".to_string(),
+                        label: "Tier 5".to_string(),
+                        specials: vec!["special_a".to_string()],
+                        talents: vec!["talent_a".to_string()],
+                        skills: vec!["skill_a".to_string()],
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                alias_keys: Vec::new(),
+            },
+        ];
+
+        let deduped = dedupe_built_pet_entries(duplicated);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].entry.key, "pet:azure:38");
+        assert_eq!(
+            deduped[0].entry.alias_keys,
+            vec!["pet:azure:38".to_string(), "pet:azure:43".to_string()]
+        );
     }
 }

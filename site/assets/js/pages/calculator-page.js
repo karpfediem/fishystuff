@@ -35,10 +35,8 @@
     actionBinding: null,
     uiStateRestored: false,
   };
-  const calculatorPetCatalogState = {
-    bound: false,
-    catalog: null,
-    syncQueued: false,
+  const calculatorPetUiState = {
+    imageFallbackBound: false,
   };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
@@ -53,14 +51,6 @@
       ? helper
       : null;
   }
-
-  const emitInputChangeEvents = (element) => {
-    if (!(element instanceof EventTarget)) {
-      return;
-    }
-    element.dispatchEvent(new Event("input", { bubbles: true }));
-    element.dispatchEvent(new Event("change", { bubbles: true }));
-  };
 
   const replacePetImageWithFallback = (image) => {
     if (!(image instanceof HTMLImageElement)) {
@@ -81,350 +71,11 @@
     frame.replaceChildren(fallback);
   };
 
-  const resolveCdnAssetUrl = (rawUrl) => {
-    const normalized = String(rawUrl ?? "").trim();
-    if (!normalized) {
-      return "";
-    }
-    if (
-      normalized.startsWith("http://")
-      || normalized.startsWith("https://")
-      || normalized.startsWith("data:")
-    ) {
-      return normalized;
-    }
-    return typeof window.__fishystuffResolveCdnUrl === "function"
-      ? window.__fishystuffResolveCdnUrl(normalized)
-      : normalized;
-  };
-
-  const calculatorPetCatalog = () => {
-    if (calculatorPetCatalogState.catalog) {
-      return calculatorPetCatalogState.catalog;
-    }
-    const script = document.getElementById("calculator-pet-catalog-data");
-    if (!(script instanceof HTMLScriptElement)) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(script.textContent || "{}");
-      const pets = Array.isArray(parsed.pets) ? parsed.pets : [];
-      const tiers = Array.isArray(parsed.tiers) ? parsed.tiers : [];
-      const specials = Array.isArray(parsed.specials) ? parsed.specials : [];
-      const talents = Array.isArray(parsed.talents) ? parsed.talents : [];
-      const skills = Array.isArray(parsed.skills) ? parsed.skills : [];
-      const petByKey = new Map(pets.map((pet) => [String(pet.key || ""), pet]));
-      const tierByKey = new Map(tiers.map((tier) => [String(tier.key || ""), tier]));
-      const specialByKey = new Map(specials.map((option) => [String(option.key || ""), option]));
-      const talentByKey = new Map(talents.map((option) => [String(option.key || ""), option]));
-      const skillByKey = new Map(skills.map((option) => [String(option.key || ""), option]));
-      calculatorPetCatalogState.catalog = {
-        ...parsed,
-        pets,
-        tiers,
-        specials,
-        talents,
-        skills,
-        petByKey,
-        tierByKey,
-        specialByKey,
-        talentByKey,
-        skillByKey,
-      };
-      return calculatorPetCatalogState.catalog;
-    } catch (error) {
-      console.error("Error parsing calculator pet catalog:", error);
-      return null;
-    }
-  };
-
-  const textDropdownTemplate = (option) => {
-    const template = document.createElement("template");
-    template.dataset.role = "selected-content";
-    template.dataset.value = String(option?.key ?? "");
-    template.dataset.label = String(option?.label ?? "");
-    template.dataset.searchText = String(option?.label ?? "");
-    const label = document.createElement("span");
-    label.className = "truncate font-medium";
-    label.textContent = String(option?.label ?? "");
-    template.content.append(label);
-    return template;
-  };
-
-  const petDropdownTemplates = (option) => {
-    const selectedTemplate = textDropdownTemplate(option);
-    const key = String(option?.key ?? "");
-    if (!key) {
-      return [selectedTemplate];
-    }
-
-    const optionTemplate = document.createElement("template");
-    optionTemplate.dataset.role = "option-content";
-    optionTemplate.dataset.value = key;
-
-    const card = document.createElement("span");
-    card.className = "fishy-calculator-pet-option";
-    card.dataset.petOptionCard = "";
-
-    const frame = document.createElement("span");
-    frame.className = "fishy-calculator-pet-option__frame";
-    const imageUrl = String(option?.image_url ?? option?.imageUrl ?? option?.icon ?? "").trim();
-    if (imageUrl) {
-      const image = document.createElement("img");
-      image.className = "fishy-calculator-pet-option__image item-icon";
-      image.src = resolveCdnAssetUrl(imageUrl);
-      image.alt = "";
-      image.dataset.fallbackLabel = String(option?.label ?? "");
-      image.loading = "lazy";
-      image.decoding = "async";
-      image.setAttribute("aria-hidden", "true");
-      image.addEventListener("error", () => replacePetImageWithFallback(image), { once: true });
-      frame.append(image);
-    } else {
-      const fallback = document.createElement("span");
-      fallback.className = "fishy-calculator-pet-option__fallback fishy-item-icon-fallback";
-      fallback.textContent = String(option?.label ?? "?").trim().charAt(0).toUpperCase() || "?";
-      frame.append(fallback);
-    }
-
-    const label = document.createElement("span");
-    label.className = "fishy-calculator-pet-option__label";
-    label.textContent = String(option?.label ?? "");
-
-    card.append(frame, label);
-    optionTemplate.content.append(card);
-    return [selectedTemplate, optionTemplate];
-  };
-
-  const replaceLocalDropdownOptions = (dropdown, options, boundInput, allowNone, presentation = "default") => {
-    if (!(dropdown instanceof HTMLElement)) {
+  function bindPetImageFallbackListener() {
+    if (calculatorPetUiState.imageFallbackBound) {
       return;
     }
-    const catalog = dropdown.querySelector('[data-role="selected-content-catalog"]');
-    if (!(catalog instanceof HTMLElement)) {
-      return;
-    }
-    const noneTemplate = allowNone
-      ? catalog.querySelector('template[data-role="selected-content"][data-value=""]')
-      : null;
-    const noneOption = noneTemplate instanceof HTMLTemplateElement
-      ? {
-        key: "",
-        label: String(noneTemplate.getAttribute("data-label") || "").trim(),
-      }
-      : null;
-    const normalizedOptions = Array.isArray(options)
-      ? options
-        .filter((option) => option && typeof option === "object")
-        .map((option) => ({
-          key: String(option.key || ""),
-          label: String(option.label || option.key || ""),
-          image_url: String(option.image_url ?? option.imageUrl ?? option.icon ?? "").trim(),
-        }))
-      : [];
-    const nextOptions = [];
-    if (allowNone && noneOption) {
-      nextOptions.push(noneOption);
-    }
-    for (const option of normalizedOptions) {
-      if (!option.key && allowNone) {
-        continue;
-      }
-      nextOptions.push(option);
-    }
-    catalog.replaceChildren(
-      ...nextOptions.flatMap((option) => (
-        presentation === "pet" ? petDropdownTemplates(option) : [textDropdownTemplate(option)]
-      )),
-    );
-    if (typeof dropdown.refreshResults === "function") {
-      dropdown.refreshResults();
-    }
-    if (boundInput instanceof HTMLInputElement) {
-      emitInputChangeEvents(boundInput);
-    }
-  };
-
-  const syncPetSkillCheckboxes = (skillsRoot, allowedKeys) => {
-    if (!(skillsRoot instanceof HTMLElement)) {
-      return;
-    }
-    const select = skillsRoot.querySelector('select[data-role="bound-select"]');
-    if (!(select instanceof HTMLSelectElement)) {
-      return;
-    }
-    const allowed = allowedKeys instanceof Set ? allowedKeys : null;
-    let changed = false;
-    for (const option of Array.from(select.options)) {
-      const visible = !allowed || allowed.has(option.value);
-      option.hidden = !visible;
-      option.disabled = !visible;
-      if (!visible && option.selected) {
-        option.selected = false;
-        changed = true;
-      }
-    }
-    for (const checkbox of skillsRoot.querySelectorAll("input[data-checkbox-group-option]")) {
-      if (!(checkbox instanceof HTMLInputElement)) {
-        continue;
-      }
-      const visible = !allowed || allowed.has(checkbox.value);
-      const label = checkbox.closest("label");
-      if (label instanceof HTMLElement) {
-        label.hidden = !visible;
-      }
-      checkbox.disabled = !visible;
-      if (!visible && checkbox.checked) {
-        checkbox.checked = false;
-      }
-    }
-    if (changed) {
-      emitInputChangeEvents(select);
-    } else {
-      emitInputChangeEvents(select);
-    }
-  };
-
-  const petSlotElements = (slot) => ({
-    petInput: document.getElementById(`calculator-pet${slot}-pet-value`),
-    tierInput: document.getElementById(`calculator-pet${slot}-tier-value`),
-    specialInput: document.getElementById(`calculator-pet${slot}-special-value`),
-    talentInput: document.getElementById(`calculator-pet${slot}-talent-value`),
-    petDropdown: document.getElementById(`calculator-pet${slot}-pet-picker`),
-    tierDropdown: document.getElementById(`calculator-pet${slot}-tier-picker`),
-    specialDropdown: document.getElementById(`calculator-pet${slot}-special-picker`),
-    talentDropdown: document.getElementById(`calculator-pet${slot}-talent-picker`),
-    skillsRoot: document.getElementById(`pet${slot}_skills`),
-  });
-
-  const highestTierKey = (tiers) => (
-    Array.isArray(tiers)
-      ? tiers
-        .map((tier) => String(tier?.key ?? "").trim())
-        .filter(Boolean)
-        .sort((left, right) => Number(right) - Number(left))[0] || ""
-      : ""
-  );
-
-  const syncPetSlotControls = (slot, catalog) => {
-    const elements = petSlotElements(slot);
-    if (!(elements.petInput instanceof HTMLInputElement) || !(elements.tierInput instanceof HTMLInputElement)) {
-      return;
-    }
-
-    const tierOptions = Array.isArray(catalog.tiers) ? catalog.tiers : [];
-    let selectedTier = String(elements.tierInput.value || "").trim();
-    const allowedTierKeys = new Set(tierOptions.map((tier) => String(tier?.key || "")));
-    if (!allowedTierKeys.has(selectedTier)) {
-      const fallbackTier = highestTierKey(tierOptions);
-      if (selectedTier !== fallbackTier) {
-        elements.tierInput.value = fallbackTier;
-        selectedTier = fallbackTier;
-        emitInputChangeEvents(elements.tierInput);
-      }
-    }
-
-    const petOptions = Array.isArray(catalog.pets)
-      ? catalog.pets.filter((pet) => (
-        Array.isArray(pet?.tiers)
-          ? pet.tiers.some((tier) => String(tier?.key || "") === selectedTier)
-          : false
-      ))
-      : [];
-    const allowedPets = new Set(petOptions.map((pet) => String(pet?.key || "")));
-    let selectedPetKey = String(elements.petInput.value || "").trim();
-    if (selectedPetKey && !allowedPets.has(selectedPetKey)) {
-      elements.petInput.value = "";
-      selectedPetKey = "";
-      emitInputChangeEvents(elements.petInput);
-    }
-
-    const selectedPet = selectedPetKey
-      ? (catalog.petByKey.get(selectedPetKey) || null)
-      : null;
-    const selectedTierEntry = selectedPet
-      ? (Array.isArray(selectedPet.tiers) ? selectedPet.tiers : []).find(
-        (tier) => String(tier?.key || "") === selectedTier,
-      ) || null
-      : null;
-    const specialOptions = selectedTierEntry
-      ? (Array.isArray(selectedTierEntry.specials) ? selectedTierEntry.specials : [])
-        .map((key) => catalog.specialByKey.get(String(key || "")))
-        .filter(Boolean)
-      : [];
-    const talentOptions = selectedTierEntry
-      ? (Array.isArray(selectedTierEntry.talents) ? selectedTierEntry.talents : [])
-        .map((key) => catalog.talentByKey.get(String(key || "")))
-        .filter(Boolean)
-      : [];
-    const skillOptions = selectedTierEntry
-      ? (Array.isArray(selectedTierEntry.skills) ? selectedTierEntry.skills : [])
-        .map((key) => catalog.skillByKey.get(String(key || "")))
-        .filter(Boolean)
-      : [];
-
-    if (elements.specialInput instanceof HTMLInputElement) {
-      const allowedSpecials = new Set(specialOptions.map((option) => String(option.key || "")));
-      const currentSpecial = String(elements.specialInput.value || "").trim();
-      const nextSpecial = allowedSpecials.has(currentSpecial) ? currentSpecial : "";
-      if (currentSpecial !== nextSpecial) {
-        elements.specialInput.value = nextSpecial;
-        emitInputChangeEvents(elements.specialInput);
-      }
-    }
-    if (elements.talentInput instanceof HTMLInputElement) {
-      const allowedTalents = new Set(talentOptions.map((option) => String(option.key || "")));
-      const currentTalent = String(elements.talentInput.value || "").trim();
-      const nextTalent = allowedTalents.has(currentTalent)
-        ? currentTalent
-        : (talentOptions.length === 1 ? String(talentOptions[0].key || "") : "");
-      if (currentTalent !== nextTalent) {
-        elements.talentInput.value = nextTalent;
-        emitInputChangeEvents(elements.talentInput);
-      }
-    }
-
-    replaceLocalDropdownOptions(elements.petDropdown, petOptions, elements.petInput, true, "pet");
-    replaceLocalDropdownOptions(elements.tierDropdown, tierOptions, elements.tierInput, false);
-    replaceLocalDropdownOptions(elements.specialDropdown, specialOptions, elements.specialInput, true);
-    replaceLocalDropdownOptions(elements.talentDropdown, talentOptions, elements.talentInput, true);
-    syncPetSkillCheckboxes(
-      elements.skillsRoot,
-      new Set(skillOptions.map((option) => String(option.key || ""))),
-    );
-  };
-
-  const syncCalculatorPetControls = () => {
-    const catalog = calculatorPetCatalog();
-    if (!catalog) {
-      return;
-    }
-    const slotCount = Number(catalog.slots) > 0 ? Number(catalog.slots) : 5;
-    for (let slot = 1; slot <= slotCount; slot += 1) {
-      syncPetSlotControls(slot, catalog);
-    }
-  };
-
-  const queueCalculatorPetControlSync = () => {
-    if (calculatorPetCatalogState.syncQueued) {
-      return;
-    }
-    calculatorPetCatalogState.syncQueued = true;
-    queueMicrotask(() => {
-      calculatorPetCatalogState.syncQueued = false;
-      syncCalculatorPetControls();
-    });
-  };
-
-  function bindPetCatalogListener() {
-    if (calculatorPetCatalogState.bound) {
-      return;
-    }
-    const petsRoot = document.getElementById("pets");
-    if (!(petsRoot instanceof HTMLElement)) {
-      return;
-    }
-    petsRoot.addEventListener("error", (event) => {
+    document.addEventListener("error", (event) => {
       if (!(event.target instanceof HTMLImageElement)) {
         return;
       }
@@ -433,11 +84,7 @@
       }
       replacePetImageWithFallback(event.target);
     }, true);
-    petsRoot.addEventListener("input", queueCalculatorPetControlSync);
-    petsRoot.addEventListener("change", queueCalculatorPetControlSync);
-    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, queueCalculatorPetControlSync);
-    calculatorPetCatalogState.bound = true;
-    queueCalculatorPetControlSync();
+    calculatorPetUiState.imageFallbackBound = true;
   }
 
   function calculatorSurfaceLanguage() {
@@ -664,6 +311,15 @@
     return out;
   };
 
+  const canonicalizePetSignals = (value) => {
+    const current = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return {
+      ...current,
+      packLeader: normalizeBooleanFlag(current.packLeader, false),
+      skills: compactStringArray(current.skills),
+    };
+  };
+
   const normalizePinnedSections = (
     value,
     fallback = CALCULATOR_DEFAULT_PINNED_SECTIONS,
@@ -885,14 +541,15 @@
     current.outfit = compactStringArray(current.outfit);
     current.food = compactStringArray(current.food);
     current.buff = compactStringArray(current.buff);
+    let packLeaderSeen = false;
     for (const petKey of ["pet1", "pet2", "pet3", "pet4", "pet5"]) {
       if (!current[petKey] || typeof current[petKey] !== "object" || Array.isArray(current[petKey])) {
         continue;
       }
-      current[petKey] = {
-        ...current[petKey],
-        skills: compactStringArray(current[petKey].skills),
-      };
+      const normalizedPet = canonicalizePetSignals(current[petKey]);
+      normalizedPet.packLeader = normalizedPet.packLeader && !packLeaderSeen;
+      packLeaderSeen ||= normalizedPet.packLeader;
+      current[petKey] = normalizedPet;
     }
     return current;
   };
@@ -1342,7 +999,7 @@
     if (appRoot && languageHelper()) {
       languageHelper().apply(appRoot);
     }
-    bindPetCatalogListener();
+    bindPetImageFallbackListener();
     calculatorState.uiStateRestored = true;
   }
 
