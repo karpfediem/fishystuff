@@ -11038,6 +11038,7 @@ fn render_target_fish_panel(
             data.lang,
             "calculator.server.field.target_fish",
         )),
+        render_target_fish_select_control(data, signals, target_fish_options),
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.target_amount",
@@ -11050,7 +11051,6 @@ fn render_target_fish_panel(
             data.lang,
             "calculator.server.field.pmf_max_count",
         )),
-        render_target_fish_select_control(data, signals, target_fish_options),
         escape_html(&target_fish_summary.pmf_count_hint_text),
         escape_html(&calculator_route_text_with_vars(
             data.lang,
@@ -13198,10 +13198,11 @@ mod tests {
         parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
         poisson_probability_at_least, post_calculator_datastar_eval, render_pet_talent_badges,
         render_searchable_select_results, render_select_option_search_text,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
-        SelectOption, SelectOptionPresentation,
+        render_target_fish_panel, trade_sale_multiplier_for_species, CalculatorData,
+        CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
+        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
+        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
+        TargetFishSummary,
     };
 
     struct MockStore;
@@ -16442,6 +16443,53 @@ mod tests {
         assert_eq!(summary.session_distribution[0].probability_text, "1.83%");
         assert_eq!(summary.session_distribution[1].label, "≥1");
         assert_eq!(summary.session_distribution[1].probability_text, "98.17%");
+    }
+
+    #[test]
+    fn render_target_fish_panel_places_picker_before_target_amount_field() {
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: Vec::new(),
+        };
+        let signals = CalculatorSignals::default();
+        let target_fish_options = vec![SelectOption {
+            value: "item:1",
+            label: "Test Fish",
+            icon: None,
+            grade_tone: "unknown",
+            pet_variant_talent: None,
+            item: None,
+            lifeskill_level: None,
+            presentation: SelectOptionPresentation::Default,
+        }];
+        let target_fish_summary = TargetFishSummary {
+            selected_label: String::new(),
+            target_amount: 1,
+            target_amount_text: "1".to_string(),
+            pmf_count_hint_text: "0 = auto".to_string(),
+            expected_count_text: "—".to_string(),
+            per_day_text: "—".to_string(),
+            time_to_target_text: "—".to_string(),
+            probability_at_least_text: "—".to_string(),
+            session_distribution: Vec::new(),
+            status_text: "Select a target fish.".to_string(),
+        };
+
+        let html =
+            render_target_fish_panel(&data, &signals, &target_fish_options, &target_fish_summary);
+
+        let target_fish_picker = html
+            .find("calculator-target-fish-picker")
+            .expect("target fish picker should render");
+        let target_amount_input = html
+            .find("data-bind=\"targetFishAmount\"")
+            .expect("target amount input should render");
+        assert!(target_fish_picker < target_amount_input);
     }
 
     #[test]
