@@ -12702,15 +12702,17 @@ fn render_pet_tier_header_control(
 
     format!(
         "<input id=\"{input_id}\" type=\"hidden\" data-bind=\"{bind_key}\" value=\"{tier_value}\">\
-         <div class=\"grid min-w-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center gap-x-3\" data-pet-tier-control>\
-            <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square col-start-1 row-start-1 justify-self-center\" data-on:click=\"{increment_expression}\" data-class:btn-disabled=\"{increment_disabled}\" data-attr:aria-disabled=\"({increment_disabled}).toString()\" aria-label=\"{increment_label}\">\
-                <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-up-small-fill\"></use></svg>\
-            </button>\
-            <kbd class=\"kbd kbd-xl col-start-1 row-start-2 h-12 min-h-12 w-12 text-2xl font-bold\" aria-live=\"polite\" data-text=\"{tier_signal}\">{tier_value}</kbd>\
-            <h3 class=\"card-title col-start-2 row-start-2 min-w-0 text-base\">{pet_name}</h3>\
-            <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square col-start-1 row-start-3 justify-self-center\" data-on:click=\"{decrement_expression}\" data-class:btn-disabled=\"{decrement_disabled}\" data-attr:aria-disabled=\"({decrement_disabled}).toString()\" aria-label=\"{decrement_label}\">\
-                <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-down-small-fill\"></use></svg>\
-            </button>\
+         <div class=\"flex min-w-0 items-center gap-3\" data-pet-tier-control>\
+            <div class=\"flex shrink-0 flex-col items-center\" data-pet-tier-stack>\
+                <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square\" data-on:click=\"{increment_expression}\" data-class:btn-disabled=\"{increment_disabled}\" data-attr:aria-disabled=\"({increment_disabled}).toString()\" aria-label=\"{increment_label}\">\
+                    <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-up-small-fill\"></use></svg>\
+                </button>\
+                <kbd class=\"kbd kbd-xl h-12 min-h-12 w-12 text-2xl font-bold\" aria-live=\"polite\" data-text=\"{tier_signal}\">{tier_value}</kbd>\
+                <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square\" data-on:click=\"{decrement_expression}\" data-class:btn-disabled=\"{decrement_disabled}\" data-attr:aria-disabled=\"({decrement_disabled}).toString()\" aria-label=\"{decrement_label}\">\
+                    <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-down-small-fill\"></use></svg>\
+                </button>\
+            </div>\
+            <h3 class=\"card-title min-w-0 text-base\">{pet_name}</h3>\
          </div>",
         input_id = escape_html(&input_id),
         bind_key = escape_html(&bind_key),
@@ -13346,11 +13348,11 @@ mod tests {
         assert!(text.contains("calculator-pet1-tier-value"));
         assert!(text.contains("data-bind=\"pet1.tier\""));
         assert!(text.contains("data-pet-tier-control"));
-        assert!(text.contains("grid-cols-[auto_minmax(0,1fr)]"));
-        assert!(text.contains("btn btn-ghost btn-xs btn-square col-start-1 row-start-1"));
-        assert!(text.contains("kbd kbd-xl col-start-1 row-start-2"));
-        assert!(text.contains("card-title col-start-2 row-start-2"));
-        assert!(text.contains("btn btn-ghost btn-xs btn-square col-start-1 row-start-3"));
+        assert!(text.contains("data-pet-tier-stack"));
+        assert!(text.contains("flex shrink-0 flex-col items-center"));
+        assert!(text.contains("btn btn-ghost btn-xs btn-square"));
+        assert!(text.contains("kbd kbd-xl h-12 min-h-12 w-12 text-2xl font-bold"));
+        assert!(text.contains("card-title min-w-0 text-base"));
         assert!(text.contains("#fishy-up-small-fill"));
         assert!(text.contains("#fishy-down-small-fill"));
         assert!(text.contains("http://127.0.0.1:4040/images/pets/pet_hawk_0014.webp"));
