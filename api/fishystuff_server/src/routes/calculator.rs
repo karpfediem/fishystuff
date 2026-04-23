@@ -1703,19 +1703,24 @@ fn render_calculator_panel_legend(
         });
     let section_id = escape_html(section_id);
     format!(
-        r#"<legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2">
-            <span class="fishy-calculator-panel-label">{}<span>{}</span></span>
-            <span class="fishy-calculator-panel-controls">
+        r#"<legend class="fishy-calculator-panel-legend fishy-calculator-panel-legend--split fieldset-legend ml-6 px-2">
+            <span class="fishy-calculator-panel-heading">
+                <span class="fishy-calculator-panel-label">{}<span>{}</span></span>
+                <span class="fishy-calculator-panel-controls">
+                    <button type="button"
+                            class="fishy-calculator-panel-control fishy-calculator-panel-control--drag btn btn-ghost btn-xs btn-circle"
+                            data-calculator-section-drag
+                            data-calculator-section-id="{}"
+                            aria-label="{}"
+                            title="{}"
+                            data-i18n-attr-aria-label="calculator.server.action.drag_section_generic"
+                            data-i18n-attr-title="calculator.server.action.drag_section_generic"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-drag-handle"></use></svg></button>
+                </span>
+            </span>
+            <span class="fishy-calculator-panel-rule" aria-hidden="true"></span>
+            <span class="fishy-calculator-panel-pin-slot">
                 <button type="button"
-                        class="fishy-calculator-panel-control fishy-calculator-panel-control--drag btn btn-ghost btn-xs btn-circle"
-                        data-calculator-section-drag
-                        data-calculator-section-id="{}"
-                        aria-label="{}"
-                        title="{}"
-                        data-i18n-attr-aria-label="calculator.server.action.drag_section_generic"
-                        data-i18n-attr-title="calculator.server.action.drag_section_generic"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-drag-handle"></use></svg></button>
-                <button type="button"
-                        class="fishy-calculator-panel-control btn btn-ghost btn-xs btn-circle"
+                        class="fishy-calculator-panel-control fishy-calculator-panel-control--pin btn btn-ghost btn-xs btn-circle"
                         data-calculator-section-id="{}"
                         data-class:fishy-calculator-panel-control--active="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}')"
                         data-attr:aria-pressed="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}').toString()"
@@ -13318,6 +13323,8 @@ mod tests {
         assert!(text.contains("<fishy-calculator-section-stack"));
         assert!(text.contains("data-calculator-pin-dropzone"));
         assert!(text.contains("data-calculator-section-drag"));
+        assert!(text.contains("fishy-calculator-panel-pin-slot"));
+        assert!(text.contains("fishy-calculator-panel-control--pin"));
         assert!(text.contains("calculator.server.action.drag_section_generic"));
         assert!(text.contains("#fishy-pin"));
         assert!(text.contains("#fishy-drag-handle"));

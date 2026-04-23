@@ -757,6 +757,13 @@
     text-transform: none;
 }
 
+.fishy-calculator-panel-legend--split.fieldset-legend {
+    display: grid;
+    width: calc(100% - 3rem);
+    grid-template-columns: minmax(0, auto) minmax(1rem, 1fr) auto;
+    gap: 0.65rem;
+}
+
 .fishy-calculator-panel-legend .fishy-icon {
     flex: none;
 }
@@ -776,11 +783,30 @@
     gap: 0.45rem;
 }
 
+.fishy-calculator-panel-heading {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.45rem;
+}
+
 .fishy-calculator-panel-controls {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     flex-wrap: wrap;
+}
+
+.fishy-calculator-panel-rule {
+    min-width: 1rem;
+    border-block-start: var(--border) solid var(--color-base-200);
+}
+
+.fishy-calculator-panel-pin-slot {
+    display: inline-flex;
+    align-items: center;
+    background: var(--color-base-100);
+    border-radius: var(--radius-field);
 }
 
 .fishy-calculator-panel-control {
