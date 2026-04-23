@@ -1,6 +1,7 @@
 presets.select.label = Saved presets
 presets.select.hint = Choose a saved layout to apply it immediately, or stay on the current unsaved layout.
 presets.button.open_manager = Layout Manager
+presets.button.clone = Clone
 presets.button.save = Save
 presets.button.save_as = Save as new
 presets.button.rename = Rename
@@ -13,7 +14,7 @@ presets.manager.description = Save, rename, import, export, and switch between s
 presets.grid.title = Layouts
 presets.grid.description = Click a layout card to inspect it. Additional actions appear on the right for the selected item.
 presets.grid.count = {$count} saved
-presets.grid.empty = No saved layouts yet. Select Default or Current and use Save As to keep a copy.
+presets.grid.empty = No saved layouts yet. Select Default or Current and use Clone to keep a copy.
 
 presets.status.current = Current
 presets.status.saved = Saved
@@ -52,6 +53,7 @@ presets.dialog.rename.submit = Rename
 presets.confirm.delete = Delete "{$name}"?
 
 presets.toast.created = Saved new preset "{$name}".
+presets.toast.cloned = Cloned "{$name}".
 presets.toast.saved = Saved "{$name}".
 presets.toast.renamed = Renamed to "{$name}".
 presets.toast.deleted = Deleted "{$name}".

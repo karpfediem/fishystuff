@@ -54,6 +54,33 @@
     return `Preset ${Math.max(1, Number.parseInt(index, 10) || 1)}`;
   }
 
+  function fixedPresets(collectionKey) {
+    const key = normalizeCollectionKey(collectionKey);
+    const adapter = collectionAdapter(key);
+    const entries = adapter && typeof adapter.fixedPresets === "function" ? adapter.fixedPresets() : [];
+    if (!Array.isArray(entries)) {
+      return [];
+    }
+    return entries
+      .map((entry, index) => {
+        if (!isPlainObject(entry)) {
+          return null;
+        }
+        let payload;
+        try {
+          payload = normalizePresetPayload(key, entry.payload);
+        } catch (_error) {
+          return null;
+        }
+        return {
+          id: trimString(entry.id) || `fixed_${index + 1}`,
+          name: trimString(entry.name) || `Fixed ${index + 1}`,
+          payload,
+        };
+      })
+      .filter(Boolean);
+  }
+
   function normalizePresetPayload(collectionKey, payload) {
     const adapter = collectionAdapter(collectionKey);
     let normalized = payload;
@@ -64,6 +91,10 @@
       throw new Error("Preset payload must be an object.");
     }
     return cloneJson(normalized);
+  }
+
+  function stablePresetPayloadJson(collectionKey, payload) {
+    return JSON.stringify(normalizePresetPayload(collectionKey, payload));
   }
 
   function normalizePresetEntry(collectionKey, value, index = 0) {
@@ -358,9 +389,89 @@
       setSelectedPresetId(key, "");
       return null;
     }
-    applyPayload(key, preset.payload);
     setSelectedPresetId(key, preset.id);
+    applyPayload(key, preset.payload);
     return preset;
+  }
+
+  function syncSelectedPresetToCurrent(collectionKey, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
+    const payload = hasPayload ? options.payload : capturePayload(key);
+    if (!payload) {
+      setSelectedPresetId(key, "");
+      return null;
+    }
+    const payloadJson = stablePresetPayloadJson(key, payload);
+    const matchedPreset = currentCollection(key).presets.find((preset) => (
+      stablePresetPayloadJson(key, preset.payload) === payloadJson
+    )) || null;
+    setSelectedPresetId(key, matchedPreset?.id || "");
+    return cloneJson(matchedPreset);
+  }
+
+  function ensurePersistedSelection(collectionKey, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
+    const payload = hasPayload ? normalizePresetPayload(key, options.payload) : capturePayload(key);
+    if (!payload) {
+      setSelectedPresetId(key, "");
+      return {
+        action: "cleared",
+        kind: "none",
+        preset: null,
+      };
+    }
+    const payloadJson = stablePresetPayloadJson(key, payload);
+    const selected = selectedPreset(key);
+    if (selected) {
+      if (stablePresetPayloadJson(key, selected.payload) === payloadJson) {
+        return {
+          action: "selected",
+          kind: "preset",
+          preset: selected,
+        };
+      }
+      return {
+        action: "updated",
+        kind: "preset",
+        preset: updatePreset(key, selected.id, {
+          payload,
+          select: true,
+        }),
+      };
+    }
+    const matchedFixed = fixedPresets(key).find((preset) => (
+      stablePresetPayloadJson(key, preset.payload) === payloadJson
+    )) || null;
+    if (matchedFixed) {
+      setSelectedPresetId(key, "");
+      return {
+        action: "fixed",
+        kind: "fixed",
+        preset: cloneJson(matchedFixed),
+      };
+    }
+    const matchedPreset = currentCollection(key).presets.find((preset) => (
+      stablePresetPayloadJson(key, preset.payload) === payloadJson
+    )) || null;
+    if (matchedPreset) {
+      setSelectedPresetId(key, matchedPreset.id);
+      return {
+        action: "selected-existing",
+        kind: "preset",
+        preset: cloneJson(matchedPreset),
+      };
+    }
+    return {
+      action: "created",
+      kind: "preset",
+      preset: createPreset(key, {
+        name: trimString(options.name) || defaultPresetName(key, currentCollection(key).presets.length + 1),
+        payload,
+        select: true,
+      }),
+    };
   }
 
   function exportCollectionPayload(collectionKey, options = {}) {
@@ -516,6 +627,9 @@
     capturePayload,
     applyPayload,
     activatePreset,
+    ensurePersistedSelection,
+    fixedPresets,
+    syncSelectedPresetToCurrent,
     exportCollectionPayload,
     exportCollectionText,
     importCollectionPayload,

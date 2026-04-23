@@ -220,6 +220,118 @@ test("user presets can activate a preset through the registered adapter", () => 
   assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
 });
 
+test("user presets can sync selected preset to the current payload", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = { row: 0 };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const preset = helper.createPreset("calculator-layouts", {
+    name: "Row Two",
+    payload: { row: 2 },
+    select: false,
+  });
+
+  currentPayload = { row: 2 };
+  const matched = helper.syncSelectedPresetToCurrent("calculator-layouts");
+
+  assert.equal(matched?.id, preset.id);
+  assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+
+  currentPayload = { row: 9 };
+  const unmatched = helper.syncSelectedPresetToCurrent("calculator-layouts");
+
+  assert.equal(unmatched, null);
+  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+});
+
+test("user presets materialize a fixed layout into a real preset once it changes", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+    defaultPresetName(index) {
+      return `Layout ${index}`;
+    },
+  });
+
+  const fixed = helper.ensurePersistedSelection("calculator-layouts");
+  assert.equal(fixed.kind, "fixed");
+  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+
+  currentPayload = {
+    row: 2,
+  };
+  const created = helper.ensurePersistedSelection("calculator-layouts");
+
+  assert.equal(created.action, "created");
+  assert.equal(created.kind, "preset");
+  assert.equal(created.preset.name, "Layout 1");
+  assert.deepEqual(created.preset.payload, { row: 2 });
+  assert.equal(helper.selectedPresetId("calculator-layouts"), created.preset.id);
+});
+
+test("user presets update the selected preset payload in place when the live payload changes", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const preset = helper.createPreset("calculator-layouts", {
+    name: "Layout 1",
+    payload: {
+      row: 1,
+    },
+  });
+
+  currentPayload = {
+    row: 4,
+  };
+  const updated = helper.ensurePersistedSelection("calculator-layouts");
+
+  assert.equal(updated.action, "updated");
+  assert.equal(updated.preset.id, preset.id);
+  assert.deepEqual(updated.preset.payload, { row: 4 });
+  assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+});
+
 test("user presets snapshot reloads from local storage changes", () => {
   const env = createEnv({
     "fishystuff.user-presets.v1": JSON.stringify({

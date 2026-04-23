@@ -79,7 +79,7 @@ function cloneTestValue(value) {
 
 function defaultCalculatorUiState(overrides = {}) {
   return {
-    top_level_tab: "overview",
+    top_level_tab: "mode",
     distribution_tab: "groups",
     pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
     pinned_sections: Array.from(DEFAULT_PINNED_SECTIONS),
@@ -279,6 +279,7 @@ function createContext(localStorageInitial = {}, options = {}) {
 function defaultSignals() {
   return {
     active: false,
+    fishingMode: "rod",
     debug: false,
     level: 0,
     resources: 100,
@@ -297,6 +298,7 @@ function defaultSignals() {
     _calculator_actions: defaultCalculatorActionState(),
     _defaults: {
       active: false,
+      fishingMode: "rod",
       debug: false,
       level: 0,
       resources: 100,
@@ -626,6 +628,16 @@ test("calculator reset layout restores the default pinned mosaic while keeping t
   });
 });
 
+test("calculator effective activity normalizes mode names and forces harpoon to active", () => {
+  const env = createContext();
+  const calculator = env.window.__fishystuffCalculator;
+
+  assert.equal(calculator.normalizeFishingMode("HOTSPOT"), "hotspot");
+  assert.equal(calculator.normalizeFishingMode("unknown"), "rod");
+  assert.equal(calculator.effectiveActivity("rod", false), false);
+  assert.equal(calculator.effectiveActivity("harpoon", false), true);
+});
+
 test("calculator layout presets register a shared adapter and apply layout-only changes", () => {
   const env = createContext();
   const signals = defaultSignals();
@@ -663,6 +675,97 @@ test("calculator layout presets register a shared adapter and apply layout-only 
       unpinned_insert_index: [2, 1],
     },
   );
+});
+
+test("calculator preset activation switches selection without overwriting the previous preset", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
+
+  const alpha = env.window.__fishystuffUserPresets.createPreset("calculator-layouts", {
+    name: "Alpha",
+    payload: {
+      pinned_layout: [[["mode"]], [["overview"]]],
+      unpinned_insert_index: [0, 0],
+    },
+    select: true,
+  });
+  const beta = env.window.__fishystuffUserPresets.createPreset("calculator-layouts", {
+    name: "Beta",
+    payload: {
+      pinned_layout: [[["zone"]], [["loot"]]],
+      unpinned_insert_index: [1, 0],
+    },
+    select: false,
+  });
+
+  env.window.__fishystuffUserPresets.activatePreset("calculator-layouts", beta.id);
+  env.flushTimers();
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), beta.id);
+  assert.deepEqual(env.window.__fishystuffUserPresets.preset("calculator-layouts", alpha.id)?.payload, {
+    pinned_layout: [[["mode"]], [["overview"]]],
+    unpinned_insert_index: [0, 0],
+  });
+  assert.deepEqual(env.window.__fishystuffUserPresets.preset("calculator-layouts", beta.id)?.payload, {
+    pinned_layout: [[["zone"]], [["loot"]]],
+    unpinned_insert_index: [1, 0],
+  });
+});
+
+test("calculator layout changes fork default into a real saved preset", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), "");
+  assert.equal(env.window.__fishystuffUserPresets.presets("calculator-layouts").length, 0);
+
+  env.window.__fishystuffCalculator.togglePinnedSectionInPlace(signals._calculator_ui, "trade");
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_ui: cloneTestValue(signals._calculator_ui),
+    },
+  });
+  env.flushTimers();
+
+  const selectedId = env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts");
+  const selectedPreset = env.window.__fishystuffUserPresets.selectedPreset("calculator-layouts");
+  assert.ok(selectedId);
+  assert.equal(selectedPreset?.id, selectedId);
+  assert.deepEqual(selectedPreset?.payload, {
+    pinned_layout: [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]], [["trade"]]],
+    unpinned_insert_index: [0, 0],
+  });
+});
+
+test("calculator layout changes update the selected saved preset in place", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
+
+  const preset = env.window.__fishystuffUserPresets.createPreset("calculator-layouts", {
+    name: "Layout 1",
+    payload: env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui),
+    select: true,
+  });
+
+  env.window.__fishystuffCalculator.togglePinnedSectionInPlace(signals._calculator_ui, "trade");
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_ui: cloneTestValue(signals._calculator_ui),
+    },
+  });
+  env.flushTimers();
+
+  const selectedPreset = env.window.__fishystuffUserPresets.selectedPreset("calculator-layouts");
+  assert.equal(selectedPreset?.id, preset.id);
+  assert.deepEqual(selectedPreset?.payload, {
+    pinned_layout: [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]], [["trade"]]],
+    unpinned_insert_index: [0, 0],
+  });
 });
 
 test("calculator layout preset title icon follows the first pinned section", () => {

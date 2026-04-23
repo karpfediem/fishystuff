@@ -1,13 +1,15 @@
 (function () {
-  const ICON_SPRITE_URL = "/img/icons.svg?v=20260423-1";
+  const ICON_SPRITE_URL = "/img/icons.svg?v=20260423-3";
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN =
-    /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$))/;
+    /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$)|_preset_manager_ui(?:\.|$))/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
+  const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
   const CALCULATOR_TOP_LEVEL_TABS = new Set([
+    "mode",
     "overview",
     "zone",
     "bite_time",
@@ -23,9 +25,10 @@
     "overlay",
     "debug",
   ]);
-  const CALCULATOR_DEFAULT_TOP_LEVEL_TAB = "overview";
+  const CALCULATOR_DEFAULT_TOP_LEVEL_TAB = "mode";
   const CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY = "calculator-layouts";
   const CALCULATOR_SECTION_ICON_BY_ID = Object.freeze({
+    mode: "fish-fill",
     overview: "information-fill",
     zone: "fullscreen-fill",
     bite_time: "stopwatch-2-fill",
@@ -66,6 +69,7 @@
   const calculatorState = {
     persistBinding: null,
     actionBinding: null,
+    layoutPresetBinding: null,
     uiStateRestored: false,
     layoutPresetAdapterBound: false,
   };
@@ -158,6 +162,15 @@
     });
   }
 
+  function normalizeFishingMode(mode) {
+    const normalized = String(mode ?? "").trim().toLowerCase();
+    return normalized === "hotspot" || normalized === "harpoon" ? normalized : "rod";
+  }
+
+  function effectiveActivity(mode, active) {
+    return normalizeFishingMode(mode) === "harpoon" || Boolean(active);
+  }
+
   function breakdownSectionLabel(key) {
     return calculatorText(`breakdown.section.${key}`);
   }
@@ -237,6 +250,7 @@
       && typeof helper.registerCollectionAdapter === "function"
       && typeof helper.capturePayload === "function"
       && typeof helper.activatePreset === "function"
+      && typeof helper.ensurePersistedSelection === "function"
       ? helper
       : null;
   }
@@ -302,6 +316,39 @@
     };
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     calculatorState.actionBinding = {
+      dispose() {
+        document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
+  }
+
+  function bindLayoutPresetListener() {
+    if (calculatorState.layoutPresetBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    if (!patchMatches) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      if (!calculatorState.uiStateRestored) {
+        return;
+      }
+      const patch = event && event.detail ? event.detail : null;
+      if (!patchMatches(patch, { include: CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN })) {
+        return;
+      }
+      const signals = signalStore.signalObject();
+      if (!signals) {
+        return;
+      }
+      ensureCalculatorLayoutPresetOwnership(signals);
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    calculatorState.layoutPresetBinding = {
       dispose() {
         document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
       },
@@ -515,7 +562,7 @@
 
   const normalizeCalculatorUiState = (value) => {
     const current = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const topLevelTab = String(current.top_level_tab || "overview").trim();
+    const topLevelTab = String(current.top_level_tab || CALCULATOR_DEFAULT_TOP_LEVEL_TAB).trim();
     const distributionTab = String(
       current.distribution_tab || "groups",
     ).trim();
@@ -844,8 +891,6 @@
     helper.registerCollectionAdapter(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
       titleKey: "calculator.layout_presets.title",
       titleFallback: "Layout presets",
-      currentLabelKey: "calculator.layout_presets.current",
-      currentLabelFallback: "Current layout",
       fileBaseName: "fishystuff-calculator-layouts",
       defaultPresetName(index) {
         return calculatorText("layout_presets.default_name", {
@@ -889,6 +934,17 @@
       },
     });
     calculatorState.layoutPresetAdapterBound = true;
+  }
+
+  function ensureCalculatorLayoutPresetOwnership(signals) {
+    const helper = sharedUserPresets();
+    if (!helper) {
+      return null;
+    }
+    const payload = calculatorLayoutPresetPayload(signals?._calculator_ui);
+    return helper.ensurePersistedSelection(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
+      payload,
+    });
   }
 
   function pinSection(pinnedSections, sectionId) {
@@ -1012,6 +1068,7 @@
       _catchTimeAfk: "catchTimeAfk",
       _timespanAmount: "timespanAmount",
       _timespanUnit: "timespanUnit",
+      mode: "fishingMode",
     };
     for (const [legacyKey, canonicalKey] of Object.entries(aliases)) {
       if (!(canonicalKey in current) && legacyKey in current) {
@@ -1039,6 +1096,7 @@
     delete current.discardHighQualityFish;
     delete current.discardRareFish;
     delete current.discardPrizeFish;
+    current.fishingMode = normalizeFishingMode(current.fishingMode);
     const validDiscardGrades = new Set(["none", "white", "green", "blue", "yellow"]);
     if (!validDiscardGrades.has(String(current.discardGrade ?? "").trim().toLowerCase())) {
       current.discardGrade = "none";
@@ -1443,7 +1501,7 @@
   function calculatorShareText(signals) {
     const current = signals ?? {};
     const calc = current._calc ?? {};
-    const lead = current.active
+    const lead = effectiveActivity(current.fishingMode, current.active)
       ? calculatorText("share.active_lead")
       : calculatorText("share.afr_lead", {
           afr: calc.auto_fish_time_reduction_text ?? "0%",
@@ -1528,6 +1586,7 @@
     bindCalculatorLayoutPresetAdapter();
     bindPersistListener();
     bindActionListener();
+    bindLayoutPresetListener();
     const currentUi = normalizeCalculatorUiState(signals?._calculator_ui);
     const storedSignals = loadStoredSignals();
     if (storedSignals && typeof storedSignals === "object") {
@@ -1541,6 +1600,7 @@
       Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
+    ensureCalculatorLayoutPresetOwnership(signals);
     const appRoot = document.getElementById?.("calculator");
     if (appRoot && languageHelper()) {
       languageHelper().apply(appRoot);
@@ -1555,6 +1615,7 @@
       shared.setOverlaySignals(signals.overlay);
       shared.setPriceOverrides(signals.priceOverrides);
     }
+    ensureCalculatorLayoutPresetOwnership(signals);
     const persistedData = persistedCalculatorSignals(signals);
     const persistedUi = persistedCalculatorUiSignals(signals);
     localStorage.setItem(CALCULATOR_DATA_STORAGE_KEY, JSON.stringify(persistedData));
@@ -2420,6 +2481,8 @@
     signalObject() {
       return signalStore.signalObject();
     },
+    normalizeFishingMode,
+    effectiveActivity,
     patchSignals(patch) {
       signalStore.patchSignals(patch);
       document.dispatchEvent(new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
