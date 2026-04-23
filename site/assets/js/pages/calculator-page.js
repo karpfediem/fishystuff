@@ -24,6 +24,7 @@
   const CALCULATOR_DEFAULT_PINNED_LAYOUT = Object.freeze([
     Object.freeze([Object.freeze(["overview"])]),
   ]);
+  const CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX = Object.freeze([0, 0]);
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
@@ -409,6 +410,23 @@
         .map((sectionId) => [[sectionId]]);
   };
 
+  const normalizeUnpinnedInsertIndex = (
+    value,
+    fallback = CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX,
+  ) => {
+    const fallbackRow = Number.parseInt(fallback?.[0] ?? CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX[0], 10);
+    const fallbackColumn = Number.parseInt(
+      fallback?.[1] ?? CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX[1],
+      10,
+    );
+    const rowCandidate = Number.parseInt(Array.isArray(value) ? value[0] : fallbackRow, 10);
+    const columnCandidate = Number.parseInt(Array.isArray(value) ? value[1] : fallbackColumn, 10);
+    return [
+      Math.max(0, Number.isFinite(rowCandidate) ? rowCandidate : fallbackRow),
+      Math.max(0, Number.isFinite(columnCandidate) ? columnCandidate : fallbackColumn),
+    ];
+  };
+
   const pinnedSectionsFromUiState = (value) => {
     if (Array.isArray(value)) {
       return normalizePinnedSections(value);
@@ -454,6 +472,7 @@
       current.distribution_tab || "groups",
     ).trim();
     const pinnedLayout = pinnedLayoutFromUiState(current);
+    const unpinnedInsertIndex = normalizeUnpinnedInsertIndex(current.unpinned_insert_index);
     return {
       top_level_tab: CALCULATOR_TOP_LEVEL_TABS.has(topLevelTab)
         ? topLevelTab
@@ -463,6 +482,7 @@
         : "groups",
       pinned_layout: pinnedLayout,
       pinned_sections: flattenPinnedLayout(pinnedLayout),
+      unpinned_insert_index: unpinnedInsertIndex,
     };
   };
 
@@ -545,6 +565,7 @@
     targetUiState.distribution_tab = normalized.distribution_tab;
     targetUiState.pinned_layout = normalized.pinned_layout;
     targetUiState.pinned_sections = normalized.pinned_sections;
+    targetUiState.unpinned_insert_index = normalized.unpinned_insert_index;
     return targetUiState;
   }
 
@@ -2084,5 +2105,6 @@
     pinnedSectionIndex,
     sectionVisible: calculatorSectionVisible,
     sectionOrder: calculatorSectionOrder,
+    normalizeUnpinnedInsertIndex,
   };
 })();

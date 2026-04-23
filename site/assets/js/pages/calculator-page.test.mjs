@@ -255,6 +255,7 @@ function defaultSignals() {
       distribution_tab: "groups",
       pinned_layout: [[["overview"]]],
       pinned_sections: ["overview"],
+      unpinned_insert_index: [0, 0],
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -282,6 +283,7 @@ function defaultSignals() {
         distribution_tab: "groups",
         pinned_layout: [[["overview"]]],
         pinned_sections: ["overview"],
+        unpinned_insert_index: [0, 0],
       },
       _calculator_actions: {
         copyUrlToken: 0,
@@ -326,6 +328,7 @@ test("calculator restore canonicalizes stored signals", () => {
       distribution_tab: "loot_flow",
       pinned_layout: [[["inputs"], ["distribution"]], [["missing"]]],
       pinned_sections: ["inputs", "distribution", "inputs", "missing"],
+      unpinned_insert_index: [2, 0],
     }),
   });
   const signals = defaultSignals();
@@ -344,6 +347,7 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["inputs"], ["distribution"]]]);
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.unpinned_insert_index)), [2, 0]);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
     "8473": {
       tradePriceCurvePercent: 130,
@@ -366,6 +370,7 @@ test("calculator restore keeps the current tab while restoring trade, food, and 
       distribution_tab: "groups",
       pinned_layout: [[["overview"], ["trade"]], [["food", "buffs"], ["missing"]]],
       pinned_sections: ["overview", "trade", "food", "buffs", "missing"],
+      unpinned_insert_index: [1, 0],
     }),
   });
   const signals = defaultSignals();
@@ -385,6 +390,7 @@ test("calculator restore keeps the current tab while restoring trade, food, and 
     "food",
     "buffs",
   ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.unpinned_insert_index)), [1, 0]);
 });
 
 test("calculator restore ignores legacy pinned UI state without a pinned layout", () => {
@@ -403,6 +409,7 @@ test("calculator restore ignores legacy pinned UI state without a pinned layout"
   assert.equal(signals._calculator_ui.distribution_tab, "groups");
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["overview"]]]);
   assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["overview"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.unpinned_insert_index)), [0, 0]);
 });
 
 test("calculator restore leaves initial shell state intact when storage is empty", () => {
@@ -414,6 +421,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
       distribution_tab: "groups",
       pinned_layout: [[["overview"]]],
       pinned_sections: ["overview"],
+      unpinned_insert_index: [0, 0],
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -435,6 +443,7 @@ test("calculator restore leaves initial shell state intact when storage is empty
       distribution_tab: "groups",
       pinned_layout: [[["overview"]]],
       pinned_sections: ["overview"],
+      unpinned_insert_index: [0, 0],
     },
     _calculator_actions: {
       copyUrlToken: 0,
@@ -478,12 +487,14 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
       distribution_tab: "groups",
       pinned_layout: [[["overview"]], [["inputs"]]],
       pinned_sections: ["overview", "inputs"],
+      unpinned_insert_index: [0, 0],
     }, "distribution"))),
     {
       top_level_tab: "overview",
       distribution_tab: "groups",
       pinned_layout: [[["overview"]], [["inputs"]], [["distribution"]]],
       pinned_sections: ["overview", "inputs", "distribution"],
+      unpinned_insert_index: [0, 0],
     },
   );
   assert.deepEqual(
@@ -492,12 +503,14 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
       distribution_tab: "groups",
       pinned_layout: [[["overview"]]],
       pinned_sections: ["overview"],
+      unpinned_insert_index: [0, 0],
     }, "overview"))),
     {
       top_level_tab: "overview",
       distribution_tab: "groups",
       pinned_layout: [],
       pinned_sections: [],
+      unpinned_insert_index: [0, 0],
     },
   );
   const uiState = {
@@ -505,6 +518,7 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     distribution_tab: "loot_flow",
     pinned_layout: [[["overview"]]],
     pinned_sections: ["overview"],
+    unpinned_insert_index: [3, 0],
   };
   assert.equal(calculator.togglePinnedSectionInPlace(uiState, "inputs"), uiState);
   assert.deepEqual(JSON.parse(JSON.stringify(uiState)), {
@@ -512,12 +526,14 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     distribution_tab: "loot_flow",
     pinned_layout: [[["overview"]], [["inputs"]]],
     pinned_sections: ["overview", "inputs"],
+    unpinned_insert_index: [3, 0],
   });
   const selectedPinnedState = {
     top_level_tab: "trade",
     distribution_tab: "groups",
     pinned_layout: [[["overview"]], [["trade"]]],
     pinned_sections: ["overview", "trade"],
+    unpinned_insert_index: [1, 0],
   };
   assert.equal(calculator.togglePinnedSectionInPlace(selectedPinnedState, "trade"), selectedPinnedState);
   assert.deepEqual(JSON.parse(JSON.stringify(selectedPinnedState)), {
@@ -525,6 +541,7 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     distribution_tab: "groups",
     pinned_layout: [[["overview"]]],
     pinned_sections: ["overview"],
+    unpinned_insert_index: [1, 0],
   });
   assert.equal(
     calculator.sectionVisible("trade", selectedPinnedState.top_level_tab, selectedPinnedState.pinned_sections),
@@ -537,6 +554,10 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     pinned_layout: [[["overview", "inputs"]]],
     pinned_sections: ["overview", "inputs"],
   }, "inputs"), true);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calculator.normalizeUnpinnedInsertIndex(["-4", "3"]))),
+    [0, 3],
+  );
   assert.equal(calculator.sectionVisible("overview", "loot", []), false);
   assert.equal(calculator.sectionVisible("overview", "loot", ["overview"]), true);
   assert.equal(calculator.sectionOrder("loot", "loot", ["overview", "inputs"]), 2);
@@ -590,6 +611,7 @@ test("calculator persist stores canonical page state and excludes transient bran
     distribution_tab: "groups",
     pinned_layout: [[["overview"]]],
     pinned_sections: ["overview"],
+    unpinned_insert_index: [0, 0],
   });
   assert.equal("_live" in persistedData, false);
   assert.equal("_calc" in persistedData, false);
@@ -697,6 +719,7 @@ test("calculator action listener handles copy and clear tokens once without clea
       distribution_tab: "groups",
       pinned_layout: [[["overview"]]],
       pinned_sections: ["overview"],
+      unpinned_insert_index: [2, 0],
     }),
   );
   env.window.__fishystuffCalculator.restore(signals);
@@ -705,6 +728,7 @@ test("calculator action listener handles copy and clear tokens once without clea
     distribution_tab: "loot_flow",
     pinned_layout: [[["overview"], ["distribution"]]],
     pinned_sections: ["overview", "distribution"],
+    unpinned_insert_index: [2, 0],
   };
   signals.overlay = {
     zones: {
@@ -762,6 +786,7 @@ test("calculator action listener handles copy and clear tokens once without clea
       distribution_tab: "loot_flow",
       pinned_layout: [[["overview"], ["distribution"]]],
       pinned_sections: ["overview", "distribution"],
+      unpinned_insert_index: [2, 0],
     },
   );
   assert.deepEqual(signals._calculator_ui, {
@@ -769,6 +794,7 @@ test("calculator action listener handles copy and clear tokens once without clea
     distribution_tab: "loot_flow",
     pinned_layout: [[["overview"], ["distribution"]]],
     pinned_sections: ["overview", "distribution"],
+    unpinned_insert_index: [2, 0],
   });
   assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
     zones: {

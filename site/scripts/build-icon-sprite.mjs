@@ -88,6 +88,8 @@ const iconSources = {
   "calendar-2-fill": { type: "mingcute", name: "calendar-2-fill" },
   "arrow-up-fill": { type: "mingcute", name: "arrow-up-fill" },
   "arrow-down-fill": { type: "mingcute", name: "arrow-down-fill" },
+  "arrow-to-down-fill": { type: "mingcute", name: "arrow-to-down-fill" },
+  "dots-fill": { type: "mingcute", name: "dots-fill" },
   "up-small-fill": { type: "mingcute", name: "up-small-fill" },
   "down-small-fill": { type: "mingcute", name: "down-small-fill" },
   "az-sort-ascending-letters-fill": { type: "mingcute", name: "az-sort-ascending-letters-fill" },

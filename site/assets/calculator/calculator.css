@@ -896,6 +896,51 @@
     transition: padding-top 120ms ease;
 }
 
+.fishy-calculator-unpinned-slot-handle {
+    position: absolute;
+    left: calc(-1 * (2.5rem + 0.65rem));
+    top: var(--fishy-calculator-unpinned-slot-top, 0.55rem);
+    z-index: 2;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: color-mix(in srgb, var(--color-base-content) 58%, transparent);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    cursor: grab;
+    touch-action: none;
+    outline: none;
+}
+
+.fishy-calculator-unpinned-slot-handle--projection {
+    top: var(--fishy-calculator-unpinned-slot-projection-top, 0.55rem);
+    opacity: 0.38;
+    pointer-events: none;
+}
+
+.fishy-calculator-unpinned-slot-handle:hover,
+.fishy-calculator-unpinned-slot-handle:focus-visible,
+.fishy-calculator-section-stack--slot-dragging .fishy-calculator-unpinned-slot-handle {
+    color: color-mix(in srgb, var(--color-base-content) 58%, transparent);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.fishy-calculator-section-stack--slot-dragging .fishy-calculator-unpinned-slot-handle {
+    cursor: grabbing;
+    transform: none;
+}
+
+.fishy-calculator-section-stack--slot-dragging .fishy-calculator-unpinned-slot-handle--projection {
+    color: color-mix(in srgb, var(--color-base-content) 42%, transparent);
+}
+
 .fishy-calculator-section-stack__rows {
     position: relative;
     z-index: 1;
@@ -961,10 +1006,33 @@
     background: color-mix(in oklab, var(--color-primary) 9%, var(--color-base-100) 91%);
 }
 
+.fishy-calculator-pin-dropzone__icon--slot,
+.fishy-calculator-pin-dropzone__copy-mode--slot {
+    display: none;
+}
+
+.fishy-calculator-pin-dropzone--slot-mode .fishy-calculator-pin-dropzone__icon--pin,
+.fishy-calculator-pin-dropzone--slot-mode .fishy-calculator-pin-dropzone__copy-mode--pin {
+    display: none;
+}
+
+.fishy-calculator-pin-dropzone--slot-mode .fishy-calculator-pin-dropzone__icon--slot {
+    display: inline-flex;
+}
+
+.fishy-calculator-pin-dropzone--slot-mode .fishy-calculator-pin-dropzone__copy-mode--slot {
+    display: grid;
+    gap: 0.08rem;
+}
+
 .fishy-calculator-pin-dropzone__copy {
     min-width: 0;
     display: grid;
     gap: 0.08rem;
+}
+
+.fishy-calculator-pin-dropzone__copy-mode {
+    min-width: 0;
 }
 
 .fishy-calculator-pin-dropzone__title {

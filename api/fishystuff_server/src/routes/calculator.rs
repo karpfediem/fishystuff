@@ -1755,6 +1755,28 @@ fn render_calculator_panel_legend(
     )
 }
 
+fn render_calculator_unpinned_slot_handle(lang: CalculatorLocale) -> String {
+    let drag_label = escape_html(&calculator_route_text(
+        lang,
+        "calculator.server.action.drag_unpinned_slot",
+    ));
+    format!(
+        r#"<button type="button"
+                  class="fishy-calculator-unpinned-slot-handle"
+                  data-calculator-unpinned-slot-drag
+                  aria-label="{}"
+                  title="{}"
+                  data-i18n-attr-aria-label="calculator.server.action.drag_unpinned_slot"
+                  data-i18n-attr-title="calculator.server.action.drag_unpinned_slot"
+                  hidden><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-dots-fill"></use></svg></button>
+           <div class="fishy-calculator-unpinned-slot-handle fishy-calculator-unpinned-slot-handle--projection"
+                data-calculator-unpinned-slot-projection
+                aria-hidden="true"
+                hidden><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-dots-fill"></use></svg></div>"#,
+        drag_label, drag_label, CALCULATOR_ICON_SPRITE_URL, CALCULATOR_ICON_SPRITE_URL,
+    )
+}
+
 fn calculator_group_label_key(slot_idx: u8) -> Option<&'static str> {
     match slot_idx {
         1 => Some("calculator.server.group.prize"),
@@ -2757,6 +2779,7 @@ fn default_reset_signals_patch_map(
             "distribution_tab": "groups",
             "pinned_layout": [[["overview"]]],
             "pinned_sections": ["overview"],
+            "unpinned_insert_index": [0, 0],
         }),
     );
     Ok(patch)
@@ -9003,13 +9026,21 @@ fn render_calculator_app(
     </section>
 
     <fishy-calculator-section-stack class="fishy-calculator-section-stack flex flex-col gap-6">
+    __UNPINNED_SLOT_HANDLE__
     <div class="fishy-calculator-pin-dropzone rounded-box border border-dashed border-base-300 bg-base-100/85 px-4 py-3"
          data-calculator-pin-dropzone>
         <div class="fishy-calculator-pin-dropzone__body">
-            <span class="fishy-calculator-pin-dropzone__icon" aria-hidden="true"><svg class="fishy-icon size-5" viewBox="0 0 24 24"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-pin"></use></svg></span>
+            <span class="fishy-calculator-pin-dropzone__icon fishy-calculator-pin-dropzone__icon--pin" aria-hidden="true"><svg class="fishy-icon size-5" viewBox="0 0 24 24"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-pin"></use></svg></span>
+            <span class="fishy-calculator-pin-dropzone__icon fishy-calculator-pin-dropzone__icon--slot" aria-hidden="true"><svg class="fishy-icon size-5" viewBox="0 0 24 24"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-arrow-to-down-fill"></use></svg></span>
             <div class="fishy-calculator-pin-dropzone__copy">
-                <div class="fishy-calculator-pin-dropzone__title" data-i18n-text="calculator.server.action.pin_dropzone_title">__PIN_DROPZONE_TITLE__</div>
-                <div class="fishy-calculator-pin-dropzone__detail" data-i18n-text="calculator.server.action.pin_dropzone_detail">__PIN_DROPZONE_DETAIL__</div>
+                <div class="fishy-calculator-pin-dropzone__copy-mode fishy-calculator-pin-dropzone__copy-mode--pin">
+                    <div class="fishy-calculator-pin-dropzone__title" data-i18n-text="calculator.server.action.pin_dropzone_title">__PIN_DROPZONE_TITLE__</div>
+                    <div class="fishy-calculator-pin-dropzone__detail" data-i18n-text="calculator.server.action.pin_dropzone_detail">__PIN_DROPZONE_DETAIL__</div>
+                </div>
+                <div class="fishy-calculator-pin-dropzone__copy-mode fishy-calculator-pin-dropzone__copy-mode--slot">
+                    <div class="fishy-calculator-pin-dropzone__title" data-i18n-text="calculator.server.action.unpinned_dropzone_title">__UNPINNED_DROPZONE_TITLE__</div>
+                    <div class="fishy-calculator-pin-dropzone__detail" data-i18n-text="calculator.server.action.unpinned_dropzone_detail">__UNPINNED_DROPZONE_DETAIL__</div>
+                </div>
             </div>
         </div>
     </div>
@@ -9334,6 +9365,10 @@ fn render_calculator_app(
         ("__ZONE_SEARCH_DROPDOWN__", zone_dropdown),
         ("__ZONE_VALUE__", escape_html(&signals.zone)),
         (
+            "__UNPINNED_SLOT_HANDLE__",
+            render_calculator_unpinned_slot_handle(data.lang),
+        ),
+        (
             "__TEXT_ACTIVE_FISHING__",
             escape_html(&calculator_route_text(
                 data.lang,
@@ -9359,6 +9394,20 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.action.pin_dropzone_detail",
+            )),
+        ),
+        (
+            "__UNPINNED_DROPZONE_TITLE__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.unpinned_dropzone_title",
+            )),
+        ),
+        (
+            "__UNPINNED_DROPZONE_DETAIL__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.action.unpinned_dropzone_detail",
             )),
         ),
         (
@@ -13382,6 +13431,7 @@ mod tests {
         assert!(text.contains("\"timespanAmount\":8.0"));
         assert!(text.contains("\"active\":false"));
         assert!(text.contains("\"_resources\":0.0"));
+        assert!(text.contains("\"unpinned_insert_index\":[0,0]"));
         assert!(text.contains("\"chair\":\"item:705539\""));
         assert!(text.contains("\"zone_name\":\"Velia Beach"));
         assert!(text.contains("event:datastar-patch-elements"));
@@ -13434,10 +13484,13 @@ mod tests {
             "window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, 'overview')"
         ));
         assert!(text.contains("<fishy-calculator-section-stack"));
+        assert!(text.contains("data-calculator-unpinned-slot-drag"));
+        assert!(text.contains("data-calculator-unpinned-slot-projection"));
         assert!(text.contains("data-calculator-pin-dropzone"));
         assert!(text.contains("data-calculator-section-drag"));
         assert!(text.contains("fishy-calculator-panel-pin-slot"));
         assert!(text.contains("fishy-calculator-panel-control--pin"));
+        assert!(text.contains("fishy-calculator-unpinned-slot-handle"));
         assert!(text.contains("fishy-calculator-tab--pinned"));
         assert!(text.contains("fishy-calculator-tab-label"));
         assert!(text.contains("fishy-calculator-tab-main"));
@@ -13446,7 +13499,11 @@ mod tests {
             "data-class:fishy-calculator-tab--pinned=\"window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')\""
         ));
         assert!(text.contains("calculator.server.action.drag_section_generic"));
+        assert!(text.contains("calculator.server.action.drag_unpinned_slot"));
+        assert!(text.contains("calculator.server.action.unpinned_dropzone_title"));
+        assert!(text.contains("calculator.server.action.unpinned_dropzone_detail"));
         assert!(text.contains("#fishy-pin"));
+        assert!(text.contains("#fishy-arrow-to-down-fill"));
         assert!(text.contains("#fishy-drag-handle"));
         assert!(!text.contains("window.__fishystuffCalculator.persist("));
         assert!(!text.contains("window.__fishystuffCalculator.persistSignalPatchFilter()"));
@@ -14049,6 +14106,7 @@ mod tests {
                 "distribution_tab": "groups",
                 "pinned_layout": [[["overview"]]],
                 "pinned_sections": ["overview"],
+                "unpinned_insert_index": [0, 0],
             }))
         );
     }
