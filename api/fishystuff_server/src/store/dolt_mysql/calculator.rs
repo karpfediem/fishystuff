@@ -33,34 +33,28 @@ fn bundled_calculator_catalog_snapshot() -> AppResult<&'static BundledCalculator
 }
 
 impl DoltMySqlStore {
-    fn calculator_catalog_cache_key(lang: FishLang, ref_id: Option<&str>) -> String {
+    fn calculator_catalog_cache_key(lang: FishLang, revision: &str) -> String {
         let lang = match lang {
             FishLang::En => "en",
             FishLang::Ko => "ko",
         };
-        match ref_id {
-            Some(ref_id) => format!("{lang}:{ref_id}"),
-            None => format!("{lang}:head"),
-        }
+        format!("{lang}:{revision}")
     }
 
-    fn bundled_calculator_catalog(
-        &self,
-        lang: FishLang,
-        ref_id: Option<&str>,
-    ) -> AppResult<CalculatorCatalogResponse> {
+    fn resolve_calculator_catalog_revision(&self, ref_id: Option<&str>) -> AppResult<String> {
         let snapshot = bundled_calculator_catalog_snapshot()?;
-        let requested_revision = self.query_dolt_revision(ref_id).ok_or_else(|| {
-            AppError::unavailable(
-                "could not resolve requested Dolt revision for calculator catalog",
-            )
-        })?;
+        let requested_revision = self.query_dolt_revision_uncached(ref_id)?;
         if requested_revision != snapshot.dolt_revision {
             return Err(AppError::unavailable(format!(
                 "calculator catalog snapshot is for {}; requested {requested_revision}",
                 snapshot.dolt_revision
             )));
         }
+        Ok(requested_revision)
+    }
+
+    fn bundled_calculator_catalog(&self, lang: FishLang) -> AppResult<CalculatorCatalogResponse> {
+        let snapshot = bundled_calculator_catalog_snapshot()?;
         Ok(match lang {
             FishLang::En => snapshot.catalogs.en.clone(),
             FishLang::Ko => snapshot.catalogs.ko.clone(),
@@ -72,14 +66,15 @@ impl DoltMySqlStore {
         lang: FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogResponse> {
-        let cache_key = Self::calculator_catalog_cache_key(lang, ref_id);
+        let revision = self.resolve_calculator_catalog_revision(ref_id)?;
+        let cache_key = Self::calculator_catalog_cache_key(lang, &revision);
         if let Ok(cache) = self.calculator_catalog_cache.lock() {
             if let Some(cached) = cache.get(&cache_key) {
                 return Ok(cached.clone());
             }
         }
 
-        let catalog = self.bundled_calculator_catalog(lang, ref_id)?;
+        let catalog = self.bundled_calculator_catalog(lang)?;
 
         if let Ok(mut cache) = self.calculator_catalog_cache.lock() {
             cache.insert(cache_key, catalog.clone());

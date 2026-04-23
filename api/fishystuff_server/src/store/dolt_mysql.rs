@@ -698,6 +698,22 @@ impl DoltMySqlStore {
         self.query_dolt_revision(None)
     }
 
+    fn query_dolt_revision_uncached(&self, ref_id: Option<&str>) -> AppResult<String> {
+        let ref_id = ref_id.map(str::trim).filter(|value| !value.is_empty());
+        if let Some(value) = ref_id {
+            validate_dolt_ref(value)?;
+        }
+        let ref_id = ref_id.unwrap_or("HEAD").replace('\'', "''");
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let query = format!("SELECT HASHOF('{ref_id}')");
+        let hash: Option<String> = conn.query_first(query).map_err(db_unavailable)?;
+        let hash = hash
+            .map(|hash| hash.trim().to_string())
+            .filter(|hash| !hash.is_empty())
+            .ok_or_else(|| AppError::not_found("Dolt ref did not resolve to a revision"))?;
+        Ok(format!("dolt:{hash}"))
+    }
+
     fn query_dolt_revision(&self, ref_id: Option<&str>) -> Option<String> {
         let cache_key = Self::revision_cache_key(ref_id);
         if let Ok(cache) = self.dolt_revision_cache.lock() {
@@ -706,25 +722,11 @@ impl DoltMySqlStore {
             }
         }
 
-        let ref_id = ref_id.map(str::trim).filter(|value| !value.is_empty());
-        if let Some(value) = ref_id {
-            validate_dolt_ref(value).ok()?;
+        let revision = self.query_dolt_revision_uncached(ref_id).ok()?;
+        if let Ok(mut cache) = self.dolt_revision_cache.lock() {
+            cache.insert(cache_key, revision.clone());
         }
-        let ref_id = ref_id.unwrap_or("HEAD").replace('\'', "''");
-        let mut conn = self.pool.get_conn().ok()?;
-        let query = format!("SELECT HASHOF('{ref_id}')");
-        let hash: Option<String> = conn.query_first(query).ok()?;
-        let hash = hash?;
-        let hash = hash.trim();
-        if hash.is_empty() {
-            None
-        } else {
-            let revision = format!("dolt:{hash}");
-            if let Ok(mut cache) = self.dolt_revision_cache.lock() {
-                cache.insert(cache_key, revision.clone());
-            }
-            Some(revision)
-        }
+        Some(revision)
     }
 
     fn query_fish_names(
