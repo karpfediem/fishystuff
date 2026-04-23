@@ -665,6 +665,33 @@ test("calculator layout presets register a shared adapter and apply layout-only 
   );
 });
 
+test("calculator layout preset title icon follows the first pinned section", () => {
+  const env = createContext();
+  const calculator = env.window.__fishystuffCalculator;
+
+  assert.equal(
+    calculator.layoutPresetTitleIconAlias({
+      pinned_layout: [[["zone"], ["loot"]], [["buffs"]]],
+      unpinned_insert_index: [0, 0],
+    }),
+    "fullscreen-fill",
+  );
+  assert.equal(
+    calculator.layoutPresetTitleIconAlias({
+      pinned_layout: [[["gear"]], [["debug"]]],
+      unpinned_insert_index: [0, 0],
+    }),
+    "bug-fill",
+  );
+  assert.equal(
+    calculator.layoutPresetTitleIconAlias({
+      pinned_layout: [],
+      unpinned_insert_index: [0, 0],
+    }),
+    "",
+  );
+});
+
 test("calculator API URLs keep locale and apiLang separate", () => {
   const korean = createContext({}, { locale: "ko-KR", lang: "en-US" });
   assert.equal(korean.window.__fishystuffCalculator.lang, "ko");

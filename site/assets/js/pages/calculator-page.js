@@ -691,6 +691,23 @@
     return alias ? `${ICON_SPRITE_URL}#fishy-${alias}` : "";
   }
 
+  function calculatorLayoutPresetTitleIconAlias(payload) {
+    const layoutPreset = normalizeCalculatorLayoutPresetPayload(payload);
+    for (const row of layoutPreset.pinned_layout) {
+      const normalizedRow = Array.isArray(row) ? row : [];
+      for (const column of normalizedRow) {
+        const normalizedColumn = Array.isArray(column) ? column : [];
+        for (const sectionId of normalizedColumn) {
+          const alias = CALCULATOR_SECTION_ICON_BY_ID[normalizeSectionId(sectionId)];
+          if (alias) {
+            return alias;
+          }
+        }
+      }
+    }
+    return "";
+  }
+
   function renderCalculatorLayoutPresetPreview(container, context = {}) {
     const d3Namespace = context?.d3;
     if (!(container instanceof HTMLElement) || !d3Namespace || typeof d3Namespace.select !== "function") {
@@ -843,6 +860,9 @@
         }];
       },
       normalizePayload: normalizeCalculatorLayoutPresetPayload,
+      titleIconAlias({ payload }) {
+        return calculatorLayoutPresetTitleIconAlias(payload);
+      },
       renderPreview(container, context) {
         renderCalculatorLayoutPresetPreview(container, context);
       },
@@ -2412,6 +2432,7 @@
     layoutPresetCollectionKey: CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY,
     layoutPresetPayload: calculatorLayoutPresetPayload,
     normalizeLayoutPresetPayload: normalizeCalculatorLayoutPresetPayload,
+    layoutPresetTitleIconAlias: calculatorLayoutPresetTitleIconAlias,
     applyLayoutPreset: applyCalculatorLayoutPreset,
     applyLayoutPresetInPlace: applyCalculatorLayoutPresetInPlace,
     togglePinnedSection,

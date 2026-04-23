@@ -855,6 +855,19 @@
     justify-items: flex-start;
 }
 
+.fishy-preset-manager__layout-card-heading {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.fishy-preset-manager__layout-card-title-icon {
+    flex: none;
+    color: color-mix(in srgb, var(--color-base-content) 52%, transparent);
+}
+
 .fishy-preset-manager__layout-card-title {
     overflow: hidden;
     text-overflow: ellipsis;

@@ -51,6 +51,23 @@ function iconMarkup(alias, sizeClass = "size-5") {
   return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${iconSpriteUrl()}#fishy-${alias}"></use></svg>`;
 }
 
+function createIconElement(alias, className = "") {
+  const normalizedAlias = trimString(alias);
+  if (!normalizedAlias) {
+    return null;
+  }
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", trimString(`fishy-icon ${className}`) || "fishy-icon");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("width", "100%");
+  use.setAttribute("height", "100%");
+  use.setAttribute("href", `${iconSpriteUrl()}#fishy-${normalizedAlias}`);
+  svg.append(use);
+  return svg;
+}
+
 function downloadTextFile(filename, text) {
   const blob = new Blob([String(text ?? "")], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -376,6 +393,22 @@ export class FishyPresetManager extends HTMLElementBase {
 
   activePreset() {
     return presetHelper()?.selectedPreset?.(this.collectionKey) ?? null;
+  }
+
+  titleIconAlias(item) {
+    const adapter = this.adapter();
+    if (!adapter || typeof adapter.titleIconAlias !== "function") {
+      return "";
+    }
+    try {
+      return trimString(adapter.titleIconAlias({
+        item: cloneJson(item),
+        payload: cloneJson(item?.payload),
+      }));
+    } catch (error) {
+      console.error("fishy preset title icon resolution failed", error);
+      return "";
+    }
   }
 
   fixedItems() {
@@ -753,7 +786,11 @@ export class FishyPresetManager extends HTMLElementBase {
       header.className = "fishy-preset-manager__layout-card-header";
 
       const heading = document.createElement("div");
-      heading.className = "min-w-0";
+      heading.className = "fishy-preset-manager__layout-card-heading";
+      const titleIcon = createIconElement(this.titleIconAlias(item), "fishy-preset-manager__layout-card-title-icon size-4");
+      if (titleIcon) {
+        heading.append(titleIcon);
+      }
       const title = document.createElement("div");
       title.className = "fishy-preset-manager__layout-card-title";
       title.textContent = item.name;
