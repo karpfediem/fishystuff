@@ -499,6 +499,22 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(calculator.togglePinnedSection({
+      top_level_tab: "trade",
+      distribution_tab: "groups",
+      pinned_layout: [[["overview"]], [["loot"]]],
+      pinned_sections: ["overview", "loot"],
+      unpinned_insert_index: [1, 0],
+    }, "trade"))),
+    {
+      top_level_tab: "trade",
+      distribution_tab: "groups",
+      pinned_layout: [[["overview"]], [["trade"]], [["loot"]]],
+      pinned_sections: ["overview", "trade", "loot"],
+      unpinned_insert_index: [1, 0],
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calculator.togglePinnedSection({
       top_level_tab: "overview",
       distribution_tab: "groups",
       pinned_layout: [[["overview"]]],
@@ -527,6 +543,21 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     pinned_layout: [[["overview"]], [["inputs"]]],
     pinned_sections: ["overview", "inputs"],
     unpinned_insert_index: [3, 0],
+  });
+  const selectedUnpinnedState = {
+    top_level_tab: "trade",
+    distribution_tab: "groups",
+    pinned_layout: [[["overview"]], [["loot"]]],
+    pinned_sections: ["overview", "loot"],
+    unpinned_insert_index: [1, 0],
+  };
+  assert.equal(calculator.togglePinnedSectionInPlace(selectedUnpinnedState, "trade"), selectedUnpinnedState);
+  assert.deepEqual(JSON.parse(JSON.stringify(selectedUnpinnedState)), {
+    top_level_tab: "trade",
+    distribution_tab: "groups",
+    pinned_layout: [[["overview"]], [["trade"]], [["loot"]]],
+    pinned_sections: ["overview", "trade", "loot"],
+    unpinned_insert_index: [1, 0],
   });
   const selectedPinnedState = {
     top_level_tab: "trade",

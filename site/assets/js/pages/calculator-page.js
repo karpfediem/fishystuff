@@ -530,6 +530,28 @@
     ];
   }
 
+  function insertSectionRowAt(layout, sectionId, rowIndex) {
+    const nextLayout = clonePinnedLayout(layout);
+    const normalizedRowIndex = Math.max(
+      0,
+      Math.min(
+        nextLayout.length,
+        Number.parseInt(rowIndex, 10) || 0,
+      ),
+    );
+    nextLayout.splice(normalizedRowIndex, 0, [[sectionId]]);
+    return nextLayout;
+  }
+
+  function pinLayoutForUiState(uiState, currentLayout, sectionId) {
+    const normalizedSection = normalizeSectionId(sectionId);
+    if (!uiState || normalizeSectionId(uiState.top_level_tab) !== normalizedSection) {
+      return appendSectionRow(currentLayout, normalizedSection);
+    }
+    const [rowIndex] = normalizeUnpinnedInsertIndex(uiState.unpinned_insert_index);
+    return insertSectionRowAt(currentLayout, normalizedSection, rowIndex);
+  }
+
   function togglePinnedSection(pinnedSections, sectionId) {
     const normalizedSection = normalizeSectionId(sectionId);
     if (!CALCULATOR_TOP_LEVEL_TABS.has(normalizedSection)) {
@@ -547,7 +569,9 @@
       const nextLayout = removeSectionFromPinnedLayout(currentLayout, normalizedSection);
       return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
     }
-    const nextLayout = appendSectionRow(currentLayout, normalizedSection);
+    const nextLayout = uiState
+      ? pinLayoutForUiState(uiState, currentLayout, normalizedSection)
+      : appendSectionRow(currentLayout, normalizedSection);
     return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
   }
 
@@ -589,8 +613,10 @@
     if (flattenPinnedLayout(nextLayout).includes(normalizedSection)) {
       return uiState ? uiStateWithPinnedLayout(uiState, nextLayout) : flattenPinnedLayout(nextLayout);
     }
-    const appendedLayout = appendSectionRow(nextLayout, normalizedSection);
-    return uiState ? uiStateWithPinnedLayout(uiState, appendedLayout) : flattenPinnedLayout(appendedLayout);
+    const pinnedLayout = uiState
+      ? pinLayoutForUiState(uiState, nextLayout, normalizedSection)
+      : appendSectionRow(nextLayout, normalizedSection);
+    return uiState ? uiStateWithPinnedLayout(uiState, pinnedLayout) : flattenPinnedLayout(pinnedLayout);
   }
 
   function placePinnedSection(pinnedSections, sectionId, targetSectionId, position) {
