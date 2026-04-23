@@ -1667,13 +1667,19 @@ fn render_calculator_icon(alias: &str, size_class: &str) -> String {
 
 fn render_calculator_tab_label(section_id: &str, title: &str) -> String {
     let title = escape_html(title);
-    calculator_section_icon_alias(section_id).map_or(title.clone(), |icon_alias| {
-        format!(
-            r#"<span class="fishy-calculator-tab-label inline-flex items-center gap-2"><span class="fishy-calculator-tab-icon shrink-0">{}</span><span>{}</span></span>"#,
-            render_calculator_icon(icon_alias, "size-4"),
-            title,
-        )
-    })
+    let section_icon = calculator_section_icon_alias(section_id)
+        .map(|icon_alias| {
+            format!(
+                r#"<span class="fishy-calculator-tab-icon shrink-0">{}</span>"#,
+                render_calculator_icon(icon_alias, "size-4"),
+            )
+        })
+        .unwrap_or_default();
+    let pin_icon = render_calculator_icon("pin", "size-3");
+    format!(
+        r#"<span class="fishy-calculator-tab-label inline-flex items-center gap-2"><span class="fishy-calculator-tab-main inline-flex min-w-0 items-center gap-2">{}<span>{}</span></span><span class="fishy-calculator-tab-pin shrink-0" aria-hidden="true">{}</span></span>"#,
+        section_icon, title, pin_icon,
+    )
 }
 
 fn render_calculator_panel_legend(
@@ -8980,17 +8986,17 @@ fn render_calculator_app(
                 <div role="tablist"
                      class="fishy-calculator-top-tabs tabs tabs-box tabs-sm md:tabs-md w-max min-w-full bg-base-200/80 p-1"
                      aria-label="__TOP_LEVEL_TABS_ARIA__">
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overview'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overview').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overview'">__TAB_OVERVIEW__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'inputs'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'inputs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'inputs'">__TAB_INPUTS__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'distribution'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'distribution').toString()" data-on:click="$_calculator_ui.top_level_tab = 'distribution'">__SECTION_DISTRIBUTION__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'loot'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'loot').toString()" data-on:click="$_calculator_ui.top_level_tab = 'loot'">__SECTION_LOOT__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'trade'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'trade').toString()" data-on:click="$_calculator_ui.top_level_tab = 'trade'">__SECTION_TRADE__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'gear'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'gear').toString()" data-on:click="$_calculator_ui.top_level_tab = 'gear'">__SECTION_GEAR__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'food'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'food').toString()" data-on:click="$_calculator_ui.top_level_tab = 'food'">__SECTION_FOOD__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'buffs'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'buffs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'buffs'">__SECTION_BUFFS__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'pets'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'pets').toString()" data-on:click="$_calculator_ui.top_level_tab = 'pets'">__SECTION_PETS__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overlay'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overlay').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overlay'">__TAB_OVERLAY__</button>
-                    <button type="button" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'debug'" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'debug').toString()" data-on:click="$_calculator_ui.top_level_tab = 'debug'">__TAB_DEBUG__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overview'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overview').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overview'">__TAB_OVERVIEW__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'inputs'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'inputs')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'inputs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'inputs'">__TAB_INPUTS__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'distribution'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'distribution')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'distribution').toString()" data-on:click="$_calculator_ui.top_level_tab = 'distribution'">__SECTION_DISTRIBUTION__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'loot'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'loot')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'loot').toString()" data-on:click="$_calculator_ui.top_level_tab = 'loot'">__SECTION_LOOT__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'trade'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'trade')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'trade').toString()" data-on:click="$_calculator_ui.top_level_tab = 'trade'">__SECTION_TRADE__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'gear'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'gear')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'gear').toString()" data-on:click="$_calculator_ui.top_level_tab = 'gear'">__SECTION_GEAR__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'food'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'food')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'food').toString()" data-on:click="$_calculator_ui.top_level_tab = 'food'">__SECTION_FOOD__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'buffs'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'buffs')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'buffs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'buffs'">__SECTION_BUFFS__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'pets'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'pets')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'pets').toString()" data-on:click="$_calculator_ui.top_level_tab = 'pets'">__SECTION_PETS__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overlay'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overlay')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overlay').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overlay'">__TAB_OVERLAY__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'debug'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'debug')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'debug').toString()" data-on:click="$_calculator_ui.top_level_tab = 'debug'">__TAB_DEBUG__</button>
                 </div>
             </div>
         </div>
@@ -13432,6 +13438,13 @@ mod tests {
         assert!(text.contains("data-calculator-section-drag"));
         assert!(text.contains("fishy-calculator-panel-pin-slot"));
         assert!(text.contains("fishy-calculator-panel-control--pin"));
+        assert!(text.contains("fishy-calculator-tab--pinned"));
+        assert!(text.contains("fishy-calculator-tab-label"));
+        assert!(text.contains("fishy-calculator-tab-main"));
+        assert!(text.contains("fishy-calculator-tab-pin"));
+        assert!(text.contains(
+            "data-class:fishy-calculator-tab--pinned=\"window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')\""
+        ));
         assert!(text.contains("calculator.server.action.drag_section_generic"));
         assert!(text.contains("#fishy-pin"));
         assert!(text.contains("#fishy-drag-handle"));
