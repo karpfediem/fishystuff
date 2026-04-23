@@ -409,17 +409,6 @@
                 </a>
             </div>
 
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45" data-i18n-text="footer.legal" :text="$i18n.getOr('footer.legal','')"></span>
-                <a class="text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
-                   href="$site.page('privacy').link()"
-                   data-i18n-text="footer.privacy"
-                   :text="$i18n.getOr('footer.privacy','')"></a>
-                <a class="text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
-                   href="$site.page('terms-of-service').link()"
-                   data-i18n-text="footer.terms_of_service"
-                   :text="$i18n.getOr('footer.terms_of_service','')"></a>
-            </div>
         </div>
     </footer>
 

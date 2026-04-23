@@ -698,10 +698,7 @@
       "nav.log": "Log",
       "nav.devlog": "Development Log",
       "footer.about": "About",
-      "footer.legal": "Legal",
       "footer.feedback": "Feedback",
-      "footer.privacy": "Privacy",
-      "footer.terms_of_service": "Terms of Service",
       "by": "By",
       "by_lower": "by",
       "last_updated": "Last updated",
@@ -1721,10 +1718,7 @@
       "nav.log": "Log",
       "nav.devlog": "Development Log",
       "footer.about": "About",
-      "footer.legal": "Legal",
       "footer.feedback": "Feedback",
-      "footer.privacy": "Privacy",
-      "footer.terms_of_service": "Terms of Service",
       "by": "By",
       "by_lower": "by",
       "last_updated": "Last updated",
@@ -2744,10 +2738,7 @@
       "nav.log": "Log",
       "nav.devlog": "Entwicklungslog",
       "footer.about": "Über",
-      "footer.legal": "Rechtliches",
       "footer.feedback": "Feedback",
-      "footer.privacy": "Datenschutz",
-      "footer.terms_of_service": "Nutzungsbedingungen",
       "by": "Von",
       "by_lower": "von",
       "last_updated": "Zuletzt aktualisiert",
@@ -3163,14 +3154,6 @@
     "/log/": {
       "en-US": "/log/",
       "de-DE": "/de-DE/log/"
-    },
-    "/privacy/": {
-      "en-US": "/privacy/",
-      "de-DE": "/de-DE/privacy/"
-    },
-    "/terms-of-service/": {
-      "en-US": "/terms-of-service/",
-      "de-DE": "/de-DE/terms-of-service/"
     },
     "/dex/": {
       "de-DE": "/de-DE/dex/",

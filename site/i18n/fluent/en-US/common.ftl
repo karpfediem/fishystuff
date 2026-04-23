@@ -8,10 +8,7 @@ nav.log = Log
 nav.devlog = Development Log
 
 footer.about = About
-footer.legal = Legal
 footer.feedback = Feedback
-footer.privacy = Privacy
-footer.terms_of_service = Terms of Service
 
 by = By
 by_lower = by
