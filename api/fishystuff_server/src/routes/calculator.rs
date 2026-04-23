@@ -1644,6 +1644,11 @@ fn calculator_route_text_with_vars(
 
 fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
     match section_id {
+        "overview" => Some("information-fill"),
+        "zone" => Some("fullscreen-fill"),
+        "bite_time" => Some("stopwatch-2-fill"),
+        "catch_time" => Some("stopwatch-fill"),
+        "session" => Some("time-fill"),
         "distribution" => Some("chart-pie-2-fill"),
         "loot" => Some("trending-up-fill"),
         "trade" => Some("wheel-fill"),
@@ -9005,12 +9010,15 @@ fn render_calculator_app(
                     </button>
                 </div>
             </div>
-            <div class="overflow-x-auto pb-1">
+            <div class="pb-1">
                 <div role="tablist"
-                     class="fishy-calculator-top-tabs tabs tabs-box tabs-sm md:tabs-md w-max min-w-full bg-base-200/80 p-1"
+                     class="fishy-calculator-top-tabs tabs tabs-box tabs-sm md:tabs-md w-full max-w-full bg-base-200/80 p-1"
                      aria-label="__TOP_LEVEL_TABS_ARIA__">
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overview'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overview').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overview'">__TAB_OVERVIEW__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'inputs'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'inputs')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'inputs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'inputs'">__TAB_INPUTS__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'zone'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'zone')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'zone').toString()" data-on:click="$_calculator_ui.top_level_tab = 'zone'">__TAB_ZONE__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'bite_time'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'bite_time')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'bite_time').toString()" data-on:click="$_calculator_ui.top_level_tab = 'bite_time'">__TAB_BITE_TIME__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'catch_time'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'catch_time')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'catch_time').toString()" data-on:click="$_calculator_ui.top_level_tab = 'catch_time'">__TAB_CATCH_TIME__</button>
+                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'session'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'session')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'session').toString()" data-on:click="$_calculator_ui.top_level_tab = 'session'">__TAB_SESSION__</button>
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'distribution'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'distribution')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'distribution').toString()" data-on:click="$_calculator_ui.top_level_tab = 'distribution'">__SECTION_DISTRIBUTION__</button>
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'loot'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'loot')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'loot').toString()" data-on:click="$_calculator_ui.top_level_tab = 'loot'">__SECTION_LOOT__</button>
                     <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'trade'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'trade')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'trade').toString()" data-on:click="$_calculator_ui.top_level_tab = 'trade'">__SECTION_TRADE__</button>
@@ -9106,113 +9114,124 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('inputs', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisible('zone', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
-         data-calculator-section-id="inputs"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'inputs')">
+         data-calculator-section-id="zone"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'zone')">
         <fieldset class="card card-border bg-base-100">
-            __INPUTS_LEGEND__
-            <div class="card-body pt-0">
-                <div class="grid gap-6 lg:grid-cols-2">
-                    <fieldset class="card card-border bg-base-100">
-                        <legend class="fieldset-legend ml-6 px-2">__SECTION_ZONE__</legend>
-                        <div class="card-body gap-4 pt-0">
-                            <div class="grid gap-4">
-                                <input id="calculator-zone-value" type="hidden" data-bind="zone" value="__ZONE_VALUE__">
-                                __ZONE_SEARCH_DROPDOWN__
-                                <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
-                                    <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
-                                        <div class="stat-title">__STAT_MIN__</div>
-                                        <div class="stat-value text-lg" data-text="$_live.zone_bite_min"></div>
-                                        <div class="stat-desc">__STAT_SECONDS__</div>
-                                    </div>
-                                    <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
-                                        <div class="stat-title">__STAT_AVERAGE__</div>
-                                        <div class="stat-value text-lg" data-text="$_live.zone_bite_avg"></div>
-                                        <div class="stat-desc">__STAT_SECONDS__</div>
-                                    </div>
-                                    <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
-                                        <div class="stat-title">__STAT_MAX__</div>
-                                        <div class="stat-value text-lg" data-text="$_live.zone_bite_max"></div>
-                                        <div class="stat-desc">__STAT_SECONDS__</div>
-                                    </div>
-                                </div>
-                            </div>
+            __ZONE_LEGEND__
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    <input id="calculator-zone-value" type="hidden" data-bind="zone" value="__ZONE_VALUE__">
+                    __ZONE_SEARCH_DROPDOWN__
+                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
+                            <div class="stat-title">__STAT_MIN__</div>
+                            <div class="stat-value text-lg" data-text="$_live.zone_bite_min"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
-                    </fieldset>
-
-                    <fieldset class="card card-border bg-base-100">
-                        <legend class="fieldset-legend ml-6 px-2">__SECTION_BITE_TIME__</legend>
-                        <div class="card-body gap-4 pt-0">
-                            <div class="grid gap-4">
-                                <fieldset class="fieldset">
-                                    <legend class="fieldset-legend">__FIELD_FISHING_LEVEL__</legend>
-                                    __LEVEL_SELECT__
-                                </fieldset>
-                                <fieldset class="fieldset">
-                                    <legend class="fieldset-legend">__FIELD_FISHING_RESOURCES__</legend>
-                                    <input data-bind="_resources" type="range" class="range-xs range-secondary w-full" min="0" max="100">
-                                    <span class="label text-sm font-medium" data-text="$_resources + '% (' + ($_live.abundance_label || __ABUNDANCE_FALLBACK_JS__) + ')'"></span>
-                                </fieldset>
-                                <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
-                                    <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
-                                        <div class="stat-title">__STAT_EFFECTIVE_MIN__</div>
-                                        <div class="stat-value text-lg" data-text="$_live.effective_bite_min"></div>
-                                        <div class="stat-desc">__STAT_SECONDS__</div>
-                                    </div>
-                                    <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
-                                        <div class="stat-title">__STAT_EFFECTIVE_AVERAGE__</div>
-                                        <div class="stat-value text-lg" data-text="$_live.effective_bite_avg"></div>
-                                        <div class="stat-desc">__STAT_SECONDS__</div>
-                                    </div>
-                                    <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
-                                        <div class="stat-title">__STAT_EFFECTIVE_MAX__</div>
-                                        <div class="stat-value text-lg" data-text="$_live.effective_bite_max"></div>
-                                        <div class="stat-desc">__STAT_SECONDS__</div>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
+                            <div class="stat-title">__STAT_AVERAGE__</div>
+                            <div class="stat-value text-lg" data-text="$_live.zone_bite_avg"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
-                    </fieldset>
-
-                    <fieldset class="card card-border bg-base-100">
-                        <legend class="fieldset-legend ml-6 px-2">__SECTION_CATCH_TIME__</legend>
-                        <div class="card-body gap-4 pt-0">
-                            <div class="grid gap-3 sm:grid-cols-2">
-                                <fieldset class="fieldset">
-                                    <legend class="fieldset-legend">__FIELD_ACTIVE__</legend>
-                                    <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeActive">
-                                    <span class="label text-xs">__STAT_SECONDS__</span>
-                                </fieldset>
-                                <fieldset class="fieldset">
-                                    <legend class="fieldset-legend">__FIELD_AFK__</legend>
-                                    <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeAfk">
-                                    <span class="label text-xs">__STAT_SECONDS__</span>
-                                </fieldset>
-                            </div>
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
+                            <div class="stat-title">__STAT_MAX__</div>
+                            <div class="stat-value text-lg" data-text="$_live.zone_bite_max"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="window.__fishystuffCalculator.sectionVisible('bite_time', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="bite_time"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'bite_time')">
+        <fieldset class="card card-border bg-base-100">
+            __BITE_TIME_LEGEND__
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">__FIELD_FISHING_LEVEL__</legend>
+                        __LEVEL_SELECT__
                     </fieldset>
-
-                    <fieldset class="card card-border bg-base-100">
-                        <legend class="fieldset-legend ml-6 px-2">__SECTION_SESSION__ (<span data-text="$_live.timespan_text || __TIMESPAN_FALLBACK_JS__"></span>)</legend>
-                        <div class="card-body gap-3 pt-0">
-                            <div class="grid gap-3">
-                                <div class="grid grid-cols-2 gap-3">
-                                    <fieldset class="fieldset">
-                                        <legend class="fieldset-legend">__FIELD_AMOUNT__</legend>
-                                        <input type="number" min="0" step="any" class="input input-sm w-full" id="timespan_amount" data-bind="timespanAmount" name="timespan_amount">
-                                    </fieldset>
-                                    <fieldset class="fieldset">
-                                        <legend class="fieldset-legend">__FIELD_UNIT__</legend>
-                                        __TIMESPAN_UNIT_SELECT__
-                                    </fieldset>
-                                </div>
-
-                                __SESSION_PRESETS__
-                            </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">__FIELD_FISHING_RESOURCES__</legend>
+                        <input data-bind="_resources" type="range" class="range-xs range-secondary w-full" min="0" max="100">
+                        <span class="label text-sm font-medium" data-text="$_resources + '% (' + ($_live.abundance_label || __ABUNDANCE_FALLBACK_JS__) + ')'"></span>
+                    </fieldset>
+                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
+                            <div class="stat-title">__STAT_EFFECTIVE_MIN__</div>
+                            <div class="stat-value text-lg" data-text="$_live.effective_bite_min"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
                         </div>
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
+                            <div class="stat-title">__STAT_EFFECTIVE_AVERAGE__</div>
+                            <div class="stat-value text-lg" data-text="$_live.effective_bite_avg"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
+                        </div>
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
+                            <div class="stat-title">__STAT_EFFECTIVE_MAX__</div>
+                            <div class="stat-value text-lg" data-text="$_live.effective_bite_max"></div>
+                            <div class="stat-desc">__STAT_SECONDS__</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="window.__fishystuffCalculator.sectionVisible('catch_time', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="catch_time"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'catch_time')">
+        <fieldset class="card card-border bg-base-100">
+            __CATCH_TIME_LEGEND__
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">__FIELD_ACTIVE__</legend>
+                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeActive">
+                        <span class="label text-xs">__STAT_SECONDS__</span>
                     </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">__FIELD_AFK__</legend>
+                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeAfk">
+                        <span class="label text-xs">__STAT_SECONDS__</span>
+                    </fieldset>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+
+    <div data-show="window.__fishystuffCalculator.sectionVisible('session', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+         class="grid gap-6 fishy-calculator-section-card"
+         data-calculator-section-card
+         data-calculator-section-id="session"
+         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'session')">
+        <fieldset class="card card-border bg-base-100">
+            __SESSION_LEGEND__
+            <div class="card-body gap-3 pt-0">
+                <div class="grid gap-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">__FIELD_AMOUNT__</legend>
+                            <input type="number" min="0" step="any" class="input input-sm w-full" id="timespan_amount" data-bind="timespanAmount" name="timespan_amount">
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">__FIELD_UNIT__</legend>
+                            __TIMESPAN_UNIT_SELECT__
+                        </fieldset>
+                    </div>
+
+                    __SESSION_PRESETS__
                 </div>
             </div>
         </fieldset>
@@ -9448,18 +9467,66 @@ fn render_calculator_app(
             ),
         ),
         (
-            "__TAB_INPUTS__",
+            "__TAB_ZONE__",
             render_calculator_tab_label(
-                "inputs",
-                &calculator_route_text(data.lang, "calculator.server.tab.inputs"),
+                "zone",
+                &calculator_route_text(data.lang, "calculator.server.section.zone"),
             ),
         ),
         (
-            "__INPUTS_LEGEND__",
+            "__ZONE_LEGEND__",
             render_calculator_panel_legend(
                 data.lang,
-                "inputs",
-                &calculator_route_text(data.lang, "calculator.server.tab.inputs"),
+                "zone",
+                &calculator_route_text(data.lang, "calculator.server.section.zone"),
+                None,
+            ),
+        ),
+        (
+            "__TAB_BITE_TIME__",
+            render_calculator_tab_label(
+                "bite_time",
+                &calculator_route_text(data.lang, "calculator.server.section.bite_time"),
+            ),
+        ),
+        (
+            "__BITE_TIME_LEGEND__",
+            render_calculator_panel_legend(
+                data.lang,
+                "bite_time",
+                &calculator_route_text(data.lang, "calculator.server.section.bite_time"),
+                None,
+            ),
+        ),
+        (
+            "__TAB_CATCH_TIME__",
+            render_calculator_tab_label(
+                "catch_time",
+                &calculator_route_text(data.lang, "calculator.server.section.catch_time"),
+            ),
+        ),
+        (
+            "__CATCH_TIME_LEGEND__",
+            render_calculator_panel_legend(
+                data.lang,
+                "catch_time",
+                &calculator_route_text(data.lang, "calculator.server.section.catch_time"),
+                None,
+            ),
+        ),
+        (
+            "__TAB_SESSION__",
+            render_calculator_tab_label(
+                "session",
+                &calculator_route_text(data.lang, "calculator.server.section.session"),
+            ),
+        ),
+        (
+            "__SESSION_LEGEND__",
+            render_calculator_panel_legend(
+                data.lang,
+                "session",
+                &calculator_route_text(data.lang, "calculator.server.section.session"),
                 None,
             ),
         ),
@@ -13544,14 +13611,27 @@ mod tests {
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'zone'"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'bite_time'"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'catch_time'"));
+        assert!(text.contains("$_calculator_ui.top_level_tab === 'session'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'trade'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'food'"));
         assert!(text.contains("$_calculator_ui.top_level_tab === 'buffs'"));
+        assert!(text.contains("data-calculator-section-id=\"zone\""));
+        assert!(text.contains("data-calculator-section-id=\"bite_time\""));
+        assert!(text.contains("data-calculator-section-id=\"catch_time\""));
+        assert!(text.contains("data-calculator-section-id=\"session\""));
         assert!(text.contains("calculator-loot-window"));
         assert!(text.contains("calculator-trade-window"));
         assert!(text.contains("data-calculator-section-id=\"trade\""));
         assert!(text.contains("data-calculator-section-id=\"food\""));
         assert!(text.contains("data-calculator-section-id=\"buffs\""));
+        assert!(text.contains("#fishy-information-fill"));
+        assert!(text.contains("#fishy-fullscreen-fill"));
+        assert!(text.contains("#fishy-stopwatch-2-fill"));
+        assert!(text.contains("#fishy-stopwatch-fill"));
+        assert!(text.contains("#fishy-time-fill"));
         assert!(text.contains("#fishy-chart-pie-2-fill"));
         assert!(text.contains("#fishy-trending-up-fill"));
         assert!(text.contains("#fishy-wheel-fill"));

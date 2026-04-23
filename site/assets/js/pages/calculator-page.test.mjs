@@ -326,8 +326,8 @@ test("calculator restore canonicalizes stored signals", () => {
     "fishystuff.calculator.ui.v1": JSON.stringify({
       top_level_tab: "distribution",
       distribution_tab: "loot_flow",
-      pinned_layout: [[["inputs"], ["distribution"]], [["missing"]]],
-      pinned_sections: ["inputs", "distribution", "inputs", "missing"],
+      pinned_layout: [[["zone"], ["distribution"]], [["missing"]]],
+      pinned_sections: ["zone", "distribution", "zone", "missing"],
       unpinned_insert_index: [2, 0],
     }),
   });
@@ -345,8 +345,8 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.equal(signals.pet2.packLeader, false);
   assert.equal(signals._calculator_ui.top_level_tab, "distribution");
   assert.equal(signals._calculator_ui.distribution_tab, "loot_flow");
-  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["inputs"], ["distribution"]]]);
-  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["inputs", "distribution"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.pinned_layout)), [[["zone"], ["distribution"]]]);
+  assert.deepEqual(Array.from(signals._calculator_ui.pinned_sections), ["zone", "distribution"]);
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui.unpinned_insert_index)), [2, 0]);
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
     "8473": {
@@ -458,16 +458,16 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
   const calculator = env.window.__fishystuffCalculator;
 
   assert.deepEqual(
-    Array.from(calculator.togglePinnedSection(undefined, "inputs")),
-    ["overview", "inputs"],
+    Array.from(calculator.togglePinnedSection(undefined, "zone")),
+    ["overview", "zone"],
   );
   assert.deepEqual(
-    Array.from(calculator.togglePinnedSection(["overview", "inputs"], "overview")),
-    ["inputs"],
+    Array.from(calculator.togglePinnedSection(["overview", "zone"], "overview")),
+    ["zone"],
   );
   assert.deepEqual(
-    Array.from(calculator.movePinnedSection(["overview", "inputs", "loot"], "loot", -1)),
-    ["overview", "loot", "inputs"],
+    Array.from(calculator.movePinnedSection(["overview", "zone", "loot"], "loot", -1)),
+    ["overview", "loot", "zone"],
   );
   assert.deepEqual(
     Array.from(calculator.pinSection(["overview"], "overview")),
@@ -478,22 +478,22 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     ["loot", "overview"],
   );
   assert.deepEqual(
-    Array.from(calculator.placePinnedSection(["overview", "inputs"], "overview", "inputs", "after")),
-    ["inputs", "overview"],
+    Array.from(calculator.placePinnedSection(["overview", "zone"], "overview", "zone", "after")),
+    ["zone", "overview"],
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(calculator.togglePinnedSection({
       top_level_tab: "overview",
       distribution_tab: "groups",
-      pinned_layout: [[["overview"]], [["inputs"]]],
-      pinned_sections: ["overview", "inputs"],
+      pinned_layout: [[["overview"]], [["zone"]]],
+      pinned_sections: ["overview", "zone"],
       unpinned_insert_index: [0, 0],
     }, "distribution"))),
     {
       top_level_tab: "overview",
       distribution_tab: "groups",
-      pinned_layout: [[["overview"]], [["inputs"]], [["distribution"]]],
-      pinned_sections: ["overview", "inputs", "distribution"],
+      pinned_layout: [[["overview"]], [["zone"]], [["distribution"]]],
+      pinned_sections: ["overview", "zone", "distribution"],
       unpinned_insert_index: [0, 0],
     },
   );
@@ -536,12 +536,12 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     pinned_sections: ["overview"],
     unpinned_insert_index: [3, 0],
   };
-  assert.equal(calculator.togglePinnedSectionInPlace(uiState, "inputs"), uiState);
+  assert.equal(calculator.togglePinnedSectionInPlace(uiState, "zone"), uiState);
   assert.deepEqual(JSON.parse(JSON.stringify(uiState)), {
     top_level_tab: "loot",
     distribution_tab: "loot_flow",
-    pinned_layout: [[["overview"]], [["inputs"]]],
-    pinned_sections: ["overview", "inputs"],
+    pinned_layout: [[["overview"]], [["zone"]]],
+    pinned_sections: ["overview", "zone"],
     unpinned_insert_index: [3, 0],
   });
   const selectedUnpinnedState = {
@@ -578,20 +578,20 @@ test("calculator pin helpers keep pinned sections ordered and placeable", () => 
     calculator.sectionVisible("trade", selectedPinnedState.top_level_tab, selectedPinnedState.pinned_sections),
     true,
   );
-  assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", -1), false);
-  assert.equal(calculator.canMovePinnedSection(["overview", "inputs"], "overview", 1), true);
-  assert.equal(calculator.isPinnedSection(["overview", "inputs"], "inputs"), true);
+  assert.equal(calculator.canMovePinnedSection(["overview", "zone"], "overview", -1), false);
+  assert.equal(calculator.canMovePinnedSection(["overview", "zone"], "overview", 1), true);
+  assert.equal(calculator.isPinnedSection(["overview", "zone"], "zone"), true);
   assert.equal(calculator.isPinnedSection({
-    pinned_layout: [[["overview", "inputs"]]],
-    pinned_sections: ["overview", "inputs"],
-  }, "inputs"), true);
+    pinned_layout: [[["overview", "zone"]]],
+    pinned_sections: ["overview", "zone"],
+  }, "zone"), true);
   assert.deepEqual(
     JSON.parse(JSON.stringify(calculator.normalizeUnpinnedInsertIndex(["-4", "3"]))),
     [0, 3],
   );
   assert.equal(calculator.sectionVisible("overview", "loot", []), false);
   assert.equal(calculator.sectionVisible("overview", "loot", ["overview"]), true);
-  assert.equal(calculator.sectionOrder("loot", "loot", ["overview", "inputs"]), 2);
+  assert.equal(calculator.sectionOrder("loot", "loot", ["overview", "zone"]), 2);
 });
 
 test("calculator API URLs keep locale and apiLang separate", () => {

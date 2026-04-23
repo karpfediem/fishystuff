@@ -24,11 +24,11 @@ test("buildCalculatorSectionRenderOrder keeps pinned rows first and selected sec
 
     assert.deepEqual(
         buildCalculatorSectionRenderOrder(
-            ["overview", "inputs", "distribution", "gear"],
+            ["overview", "zone", "distribution", "gear"],
             "gear",
             [[["overview"], ["distribution"]]],
         ),
-        ["overview", "distribution", "gear", "inputs"],
+        ["overview", "distribution", "gear", "zone"],
     );
 });
 
@@ -70,7 +70,7 @@ test("normalizePinnedLayout falls back to one-item rows for legacy pinned sectio
     assert.deepEqual(
         normalizePinnedLayout(
             undefined,
-            ["overview", "inputs", "distribution"],
+            ["overview", "zone", "distribution"],
             ["overview", "distribution"],
         ),
         [
@@ -101,7 +101,7 @@ test("normalizePinnedLayout preserves an explicit empty layout", async () => {
     assert.deepEqual(
         normalizePinnedLayout(
             [],
-            ["overview", "inputs", "distribution"],
+            ["overview", "zone", "distribution"],
             ["overview", "distribution"],
         ),
         [],

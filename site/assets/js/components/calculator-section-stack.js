@@ -20,7 +20,10 @@ const INLINE_PLACEHOLDER_SELECTOR = "[data-calculator-inline-placeholder]";
 const DEFAULT_UNPINNED_INSERT_INDEX = Object.freeze([0, 0]);
 const SECTION_LAYOUT_META = Object.freeze({
     overview: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
-    inputs: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
+    zone: { kind: "wide", basis: "34rem", minWidth: "min(100%, 34rem)", shareable: true },
+    bite_time: { kind: "wide", basis: "34rem", minWidth: "min(100%, 34rem)", shareable: true },
+    catch_time: { kind: "compact", basis: "24rem", minWidth: "min(100%, 24rem)", shareable: true },
+    session: { kind: "compact", basis: "24rem", minWidth: "min(100%, 24rem)", shareable: true },
     distribution: { kind: "wide", basis: "36rem", minWidth: "min(100%, 36rem)", shareable: true },
     loot: { kind: "wide", basis: "38rem", minWidth: "min(100%, 38rem)", shareable: true },
     trade: { kind: "compact", basis: "30rem", minWidth: "min(100%, 30rem)", shareable: true },

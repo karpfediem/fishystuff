@@ -777,6 +777,21 @@
     display: block;
 }
 
+.fishy-calculator-top-tabs {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    column-gap: 0.35rem;
+    row-gap: 0.35rem;
+}
+
+.fishy-calculator-top-tabs > .fishy-calculator-tab {
+    flex: 0 0 auto;
+}
+
 .fishy-calculator-tab {
     --fishy-calculator-tab-pin-space: 1.2rem;
     transition: background-color 120ms ease, box-shadow 120ms ease, color 120ms ease;

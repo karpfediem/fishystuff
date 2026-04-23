@@ -9,7 +9,10 @@
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_TOP_LEVEL_TABS = new Set([
     "overview",
-    "inputs",
+    "zone",
+    "bite_time",
+    "catch_time",
+    "session",
     "distribution",
     "loot",
     "trade",
