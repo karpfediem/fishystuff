@@ -722,6 +722,14 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.style.margin = "";
     }
 
+    _configuredPanelWidthStyle() {
+        const width = getStringAttribute(this, "panel-width");
+        if (!width) {
+            return "";
+        }
+        return `min(${width}, calc(100vw - 24px))`;
+    }
+
     _buildSearchUrl(query, offset = null) {
         const resolved = resolveScopedUrl(this.searchUrl, this.searchUrlRoot);
         if (!resolved) {
@@ -1381,11 +1389,20 @@ export class FishySearchableDropdown extends HTMLElement {
         }
         const previousHidden = panel.hidden;
         const previousVisibility = panel.style.visibility;
+        const previousWidth = panel.style.width;
+        const previousMaxWidth = panel.style.maxWidth;
+        const configuredWidth = this._configuredPanelWidthStyle();
         panel.hidden = false;
         panel.style.visibility = "hidden";
+        if (configuredWidth) {
+            panel.style.width = configuredWidth;
+            panel.style.maxWidth = "calc(100vw - 24px)";
+        }
         const rect = panel.getBoundingClientRect();
         panel.hidden = previousHidden;
         panel.style.visibility = previousVisibility;
+        panel.style.width = previousWidth;
+        panel.style.maxWidth = previousMaxWidth;
         return rect;
     }
 

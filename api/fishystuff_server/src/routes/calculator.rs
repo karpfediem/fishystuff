@@ -529,9 +529,26 @@ enum SelectOptionPresentation {
     PetCard,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchableDropdownTriggerSize {
+    Fill,
+    Content,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchableDropdownResultsLayout {
+    List,
+    Cards,
+}
+
 struct SearchableDropdownConfig<'a> {
     catalog_html: Option<&'a str>,
     compact: bool,
+    trigger_size: SearchableDropdownTriggerSize,
+    trigger_width: Option<&'a str>,
+    trigger_min_height: Option<&'a str>,
+    panel_width: Option<&'a str>,
+    results_layout: SearchableDropdownResultsLayout,
     root_id: &'a str,
     input_id: &'a str,
     label: &'a str,
@@ -9164,6 +9181,11 @@ fn render_calculator_app(
         &SearchableDropdownConfig {
             catalog_html: None,
             compact: false,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: None,
+            results_layout: SearchableDropdownResultsLayout::List,
             root_id: "calculator-zone-picker",
             input_id: "calculator-zone-value",
             label: &derived.zone_name,
@@ -12288,6 +12310,11 @@ fn render_searchable_select_control(
         &SearchableDropdownConfig {
             catalog_html: Some(&catalog_html),
             compact,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: None,
+            results_layout: SearchableDropdownResultsLayout::List,
             root_id,
             input_id,
             label: selected_label,
@@ -12322,6 +12349,9 @@ fn render_local_searchable_select_control(
     compact: bool,
 ) -> String {
     let results_id = format!("{root_id}-results");
+    let uses_card_results = options
+        .iter()
+        .any(|option| option.presentation == SelectOptionPresentation::PetCard);
     let options = with_optional_none(options, include_none, lang);
     let selected_option = options
         .iter()
@@ -12354,6 +12384,31 @@ fn render_local_searchable_select_control(
         &SearchableDropdownConfig {
             catalog_html: Some(&catalog_html),
             compact,
+            trigger_size: if uses_card_results {
+                SearchableDropdownTriggerSize::Content
+            } else {
+                SearchableDropdownTriggerSize::Fill
+            },
+            trigger_width: if uses_card_results {
+                Some("12rem")
+            } else {
+                None
+            },
+            trigger_min_height: if uses_card_results {
+                Some("12rem")
+            } else {
+                None
+            },
+            panel_width: if uses_card_results {
+                Some("46rem")
+            } else {
+                None
+            },
+            results_layout: if uses_card_results {
+                SearchableDropdownResultsLayout::Cards
+            } else {
+                SearchableDropdownResultsLayout::List
+            },
             root_id,
             input_id,
             label: selected_label,
@@ -12422,6 +12477,11 @@ fn render_target_fish_select_control(
         &SearchableDropdownConfig {
             catalog_html: Some(&catalog_html),
             compact: false,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: None,
+            results_layout: SearchableDropdownResultsLayout::List,
             root_id,
             input_id,
             label: selected_label,
@@ -12792,7 +12852,10 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
     let panel_id = format!("{}-panel", config.root_id);
     let search_input_id = format!("{}-search-input", config.root_id);
     let catalog_html = config.catalog_html.unwrap_or("");
-    let trigger_class = if config.compact {
+    let content_sized_trigger = config.trigger_size == SearchableDropdownTriggerSize::Content;
+    let trigger_class = if content_sized_trigger {
+        "inline-flex w-auto max-w-full items-center justify-between gap-2 overflow-hidden rounded-box border border-base-300 bg-base-100 p-0 text-left shadow-sm"
+    } else if config.compact {
         "flex min-h-10 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-left text-sm shadow-sm"
     } else {
         "flex min-h-11 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3 text-left shadow-sm"
@@ -12802,11 +12865,56 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
     } else {
         "flex min-h-11 w-full min-w-full items-center gap-3 bg-base-100 px-4 py-3"
     };
-    let selected_content_class = if config.compact {
+    let selected_content_class = if content_sized_trigger {
+        "flex min-w-0 items-center"
+    } else if config.compact {
         "flex min-w-0 flex-1 items-center gap-3 text-sm"
     } else {
         "flex min-w-0 flex-1 items-center gap-3"
     };
+    let trigger_size_attr = if content_sized_trigger {
+        " trigger-size=\"content\""
+    } else {
+        ""
+    };
+    let mut trigger_style_parts = Vec::new();
+    if let Some(width) = config.trigger_width {
+        trigger_style_parts.push(format!(
+            "--fishy-searchable-dropdown-trigger-width: {};",
+            escape_html(width)
+        ));
+    }
+    if let Some(min_height) = config.trigger_min_height {
+        trigger_style_parts.push(format!(
+            "--fishy-searchable-dropdown-trigger-min-height: {};",
+            escape_html(min_height)
+        ));
+    }
+    let trigger_style_attr = if trigger_style_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" style=\"{}\"", trigger_style_parts.join(" "))
+    };
+    let panel_attrs = config
+        .panel_width
+        .map(|width| {
+            format!(
+                " panel-mode=\"detached\" panel-min-width=\"panel\" panel-width=\"{}\"",
+                escape_html(width)
+            )
+        })
+        .unwrap_or_default();
+    let results_layout_attr = if config.results_layout == SearchableDropdownResultsLayout::Cards {
+        " results-layout=\"cards\""
+    } else {
+        ""
+    };
+    let panel_results_layout_attr =
+        if config.results_layout == SearchableDropdownResultsLayout::Cards {
+            " data-searchable-dropdown-results-layout=\"cards\""
+        } else {
+            ""
+        };
     let search_url_root_attr = config
         .search_url_root
         .map(|value| format!(" search-url-root=\"{}\"", escape_html(value)))
@@ -12820,7 +12928,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
      label="{label}"
      value="{value}"
      search-url="{search_url}"{search_url_root_attr}
-     placeholder="{search_placeholder}">
+     placeholder="{search_placeholder}"{trigger_size_attr}{panel_attrs}{results_layout_attr}{trigger_style_attr}>
     <button type="button"
             data-role="trigger"
             class="{trigger_class}"
@@ -12831,7 +12939,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{icon_sprite_url}#fishy-caret-down"></use></svg>
     </button>
 
-    <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
+    <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full"{panel_results_layout_attr} hidden>
         <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
             <label class="{search_shell_class}">
                 <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{icon_sprite_url}#fishy-search-field"></use></svg>
@@ -12864,6 +12972,11 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         panel_id = escape_html(&panel_id),
         search_input_id = escape_html(&search_input_id),
         search_placeholder = escape_html(config.search_placeholder),
+        trigger_size_attr = trigger_size_attr,
+        trigger_style_attr = trigger_style_attr,
+        panel_attrs = panel_attrs,
+        results_layout_attr = results_layout_attr,
+        panel_results_layout_attr = panel_results_layout_attr,
         results_html = results_html,
         trigger_class = trigger_class,
         icon_sprite_url = CALCULATOR_ICON_SPRITE_URL,
@@ -13107,7 +13220,6 @@ fn pet_tier_step_expression(slot: usize, delta: i32) -> String {
 fn render_pet_tier_header_control(
     slot: usize,
     selected_tier: &str,
-    pet_name: &str,
     lang: CalculatorLocale,
 ) -> String {
     let input_id = format!("calculator-pet{slot}-tier-value");
@@ -13124,17 +13236,14 @@ fn render_pet_tier_header_control(
 
     format!(
         "<input id=\"{input_id}\" type=\"hidden\" data-bind=\"{bind_key}\" value=\"{tier_value}\">\
-         <div class=\"flex min-w-0 items-center gap-3\" data-pet-tier-control>\
-            <div class=\"flex shrink-0 flex-col items-center\" data-pet-tier-stack>\
-                <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square\" data-on:click=\"{increment_expression}\" data-class:btn-disabled=\"{increment_disabled}\" data-attr:aria-disabled=\"({increment_disabled}).toString()\" aria-label=\"{increment_label}\">\
-                    <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-up-small-fill\"></use></svg>\
-                </button>\
-                <kbd class=\"kbd kbd-xl h-12 min-h-12 w-12 text-2xl font-bold\" aria-live=\"polite\" data-text=\"{tier_signal}\">{tier_value}</kbd>\
-                <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square\" data-on:click=\"{decrement_expression}\" data-class:btn-disabled=\"{decrement_disabled}\" data-attr:aria-disabled=\"({decrement_disabled}).toString()\" aria-label=\"{decrement_label}\">\
-                    <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-down-small-fill\"></use></svg>\
-                </button>\
-            </div>\
-            <h3 class=\"card-title min-w-0 text-base\">{pet_name}</h3>\
+         <div class=\"flex shrink-0 flex-col items-center\" data-pet-tier-control data-pet-tier-stack>\
+            <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square\" data-on:click=\"{increment_expression}\" data-class:btn-disabled=\"{increment_disabled}\" data-attr:aria-disabled=\"({increment_disabled}).toString()\" aria-label=\"{increment_label}\">\
+                <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-up-small-fill\"></use></svg>\
+            </button>\
+            <kbd class=\"kbd kbd-xl h-12 min-h-12 w-12 text-2xl font-bold\" aria-live=\"polite\" data-text=\"{tier_signal}\">{tier_value}</kbd>\
+            <button type=\"button\" class=\"btn btn-ghost btn-xs btn-square\" data-on:click=\"{decrement_expression}\" data-class:btn-disabled=\"{decrement_disabled}\" data-attr:aria-disabled=\"({decrement_disabled}).toString()\" aria-label=\"{decrement_label}\">\
+                <svg class=\"fishy-icon size-5\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{icon_sprite_url}#fishy-down-small-fill\"></use></svg>\
+            </button>\
          </div>",
         input_id = escape_html(&input_id),
         bind_key = escape_html(&bind_key),
@@ -13144,7 +13253,6 @@ fn render_pet_tier_header_control(
         increment_disabled = increment_disabled,
         increment_label = escape_html(&increment_label),
         icon_sprite_url = CALCULATOR_ICON_SPRITE_URL,
-        pet_name = escape_html(pet_name),
         decrement_expression = decrement_expression,
         decrement_disabled = decrement_disabled,
         decrement_label = escape_html(&decrement_label),
@@ -13193,11 +13301,7 @@ fn render_pet_cards(
             " disabled"
         };
         let pack_leader_change = escape_html(&pack_leader_change_expression(slot, total_slots));
-        let pet_header_label = selected_pet
-            .map(|entry| entry.label.clone())
-            .unwrap_or_else(|| pet_slot_name(lang, slot));
-        let tier_header_html =
-            render_pet_tier_header_control(slot, &pet.tier, &pet_header_label, lang);
+        let tier_header_html = render_pet_tier_header_control(slot, &pet.tier, lang);
         write!(
             html,
             "<section class=\"card card-border bg-base-100\" data-pet-slot=\"{}\"><div class=\"card-body gap-4\">",
@@ -13206,25 +13310,11 @@ fn render_pet_cards(
         .unwrap();
         write!(
             html,
-            "<div class=\"flex flex-wrap items-start justify-between gap-3\"><div class=\"min-w-0\">{}</div><label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium{}\"><input type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><span>{}</span></label></div>",
+            "<div class=\"flex flex-wrap items-center gap-3\">{}",
             tier_header_html,
-            if pack_leader_disabled.is_empty() {
-                ""
-            } else {
-                " opacity-60"
-            },
-            escape_html(&bind_prefix),
-            pack_leader_change,
-            slot,
-            pack_leader_checked,
-            pack_leader_disabled,
-            escape_html(calculator_pet_pack_leader_label(lang)),
         )
         .unwrap();
-        html.push_str(&format!(
-            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
-            escape_html(&calculator_route_text(lang, "calculator.server.field.pet",))
-        ));
+        html.push_str("<fieldset class=\"fieldset min-w-0 max-w-full shrink\">");
         html.push_str(&render_local_searchable_select_control(
             cdn_base_url,
             lang,
@@ -13237,8 +13327,7 @@ fn render_pet_cards(
             &calculator_route_text(lang, "calculator.server.search.pets"),
             false,
         ));
-        html.push_str("</fieldset>");
-        html.push_str("<div class=\"grid gap-4 sm:grid-cols-2\">");
+        html.push_str("</fieldset></div>");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
@@ -13259,6 +13348,7 @@ fn render_pet_cards(
             true,
         ));
         html.push_str("</fieldset>");
+        html.push_str("<div class=\"grid gap-4 sm:grid-cols-2 sm:items-end\">");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
@@ -13278,7 +13368,23 @@ fn render_pet_cards(
             &calculator_route_text(lang, "calculator.server.search.pet_talents"),
             true,
         ));
-        html.push_str("</fieldset></div>");
+        html.push_str("</fieldset>");
+        write!(
+            html,
+            "<label class=\"label min-h-12 cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium{}\"><input type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><span>{}</span></label></div>",
+            if pack_leader_disabled.is_empty() {
+                ""
+            } else {
+                " opacity-60"
+            },
+            escape_html(&bind_prefix),
+            pack_leader_change,
+            slot,
+            pack_leader_checked,
+            pack_leader_disabled,
+            escape_html(calculator_pet_pack_leader_label(lang)),
+        )
+        .unwrap();
         html.push_str(&format!(
             "<fieldset class=\"fieldset gap-2\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(

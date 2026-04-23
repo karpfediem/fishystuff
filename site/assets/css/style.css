@@ -620,12 +620,14 @@ fishy-searchable-dropdown[trigger-size="content"] {
 fishy-searchable-dropdown[trigger-size="content"] [data-role="trigger"] {
     align-items: center;
     width: var(--fishy-searchable-dropdown-trigger-width, auto);
+    min-height: var(--fishy-searchable-dropdown-trigger-min-height, auto);
     padding: 0;
     box-shadow: none;
 }
 
 fishy-searchable-dropdown[trigger-size="content"] [data-role="selected-content"] {
     flex: 1 1 auto;
+    align-self: stretch;
     justify-content: flex-start;
 }
 
