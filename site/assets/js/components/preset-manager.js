@@ -7,6 +7,7 @@ const DEFAULT_TITLE = "Saved presets";
 const ICON_SPRITE_FALLBACK_URL = "/img/icons.svg";
 const FIXED_CARD_PREFIX = "fixed:";
 const PRESET_CARD_PREFIX = "preset:";
+const CURRENT_CARD_PREFIX = "current:";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function trimString(value) {
@@ -112,9 +113,40 @@ function fixedCardKey(fixedId) {
   return `${FIXED_CARD_PREFIX}${trimString(fixedId)}`;
 }
 
+function currentCardKey(source) {
+  const normalized = normalizeSource(source);
+  return `${CURRENT_CARD_PREFIX}${sourceKey(normalized)}`;
+}
+
 function presetIdFromCardKey(cardKey) {
   const normalized = trimString(cardKey);
   return normalized.startsWith(PRESET_CARD_PREFIX) ? trimString(normalized.slice(PRESET_CARD_PREFIX.length)) : "";
+}
+
+function normalizeSource(value) {
+  const source = isPlainObject(value) ? value : {};
+  const kind = trimString(source.kind).toLowerCase();
+  const id = trimString(source.id);
+  if ((kind === "preset" || kind === "fixed") && id) {
+    return { kind, id };
+  }
+  return { kind: "none", id: "" };
+}
+
+function sourceKey(source) {
+  const normalized = normalizeSource(source);
+  return normalized.kind === "none" ? "none" : `${normalized.kind}:${normalized.id}`;
+}
+
+function sourceMatchesCard(source, cardKey) {
+  const normalized = normalizeSource(source);
+  if (normalized.kind === "preset") {
+    return presetCardKey(normalized.id) === cardKey;
+  }
+  if (normalized.kind === "fixed") {
+    return fixedCardKey(normalized.id) === cardKey;
+  }
+  return false;
 }
 
 function isPlainObject(value) {
@@ -222,7 +254,17 @@ export class FishyPresetManager extends HTMLElementBase {
   }
 
   openLabelText() {
-    return this.translate("presets.button.open_manager", "Layout Manager");
+    const adapter = this.adapter();
+    if (adapter?.openLabelKey) {
+      return this.translate(adapter.openLabelKey, adapter?.openLabelFallback || "Preset Manager");
+    }
+    if (adapter?.openLabelFallback) {
+      return this.translate("", adapter.openLabelFallback);
+    }
+    return this.translate(
+      "presets.button.open_manager",
+      "Preset Manager",
+    );
   }
 
   defaultName(index) {
@@ -322,7 +364,8 @@ export class FishyPresetManager extends HTMLElementBase {
                     >
                   </fieldset>
                   <div class="flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-outline" data-role="clone" data-on:click='window.__fishystuffPresetManager.cloneSelected(el)'></button>
+                    <button type="button" class="btn btn-primary" data-role="save" data-on:click='window.__fishystuffPresetManager.saveCurrent(el)'></button>
+                    <button type="button" class="btn btn-outline" data-role="copy" data-on:click='window.__fishystuffPresetManager.copySelected(el)'></button>
                     <button type="button" class="btn btn-outline" data-role="export" data-on:click='window.__fishystuffPresetManager.exportSelected(el)'></button>
                     <button type="button" class="btn btn-outline" data-role="import" data-on:click='window.__fishystuffPresetManager.openImport(el)'></button>
                     <button type="button" class="btn btn-error btn-outline" data-role="delete" data-on:click='window.__fishystuffPresetManager.deleteSelected(el)'></button>
@@ -334,7 +377,7 @@ export class FishyPresetManager extends HTMLElementBase {
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <div class="card-title text-base" data-role="grid-title"></div>
                   </div>
-                  <div class="fishy-preset-manager__layout-grid" data-role="preset-cards"></div>
+                  <div class="fishy-preset-manager__preset-grid" data-role="preset-cards"></div>
                   <p class="text-sm text-base-content/55" data-role="grid-empty"></p>
                 </div>
               </section>
@@ -380,6 +423,10 @@ export class FishyPresetManager extends HTMLElementBase {
     return presetHelper()?.selectedPresetId?.(this.collectionKey) ?? "";
   }
 
+  activeFixedId() {
+    return presetHelper()?.selectedFixedId?.(this.collectionKey) ?? "";
+  }
+
   titleIconAlias(item) {
     const adapter = this.adapter();
     if (!adapter || typeof adapter.titleIconAlias !== "function") {
@@ -417,6 +464,7 @@ export class FishyPresetManager extends HTMLElementBase {
           id,
           name,
           payload,
+          source: { kind: "fixed", id },
           editableName: false,
           removable: false,
         };
@@ -431,23 +479,67 @@ export class FishyPresetManager extends HTMLElementBase {
       id: preset.id,
       name: preset.name,
       payload: cloneJson(preset.payload),
+      source: { kind: "preset", id: preset.id },
       editableName: true,
       removable: true,
     }));
   }
 
+  currentItem(baseItems) {
+    const helper = presetHelper();
+    const current = helper?.current?.(this.collectionKey) ?? null;
+    const payload = normalizePayload(this.adapter(), current?.payload);
+    if (!current || !payload) {
+      return null;
+    }
+    const origin = normalizeSource(current.origin);
+    const sourceItem = baseItems.find((item) => sourceMatchesCard(origin, item.key)) || null;
+    if (sourceItem && stableJson(sourceItem.payload) === stableJson(payload)) {
+      return null;
+    }
+    const sourceName = trimString(sourceItem?.name);
+    return {
+      key: currentCardKey(origin),
+      kind: "current",
+      id: sourceKey(origin),
+      name: sourceName
+        ? this.translate("presets.current.modified_from", "Modified: {$name}", { name: sourceName })
+        : this.translate("presets.current.modified", "Modified current preset"),
+      payload,
+      source: origin,
+      sourceKey: sourceItem?.key || "",
+      editableName: false,
+      removable: false,
+    };
+  }
+
   cardItems() {
     const fixedItems = this.fixedItems();
     const presetItems = this.presetItems();
+    const baseItems = [
+      ...fixedItems,
+      ...presetItems,
+    ];
+    const currentItem = this.currentItem(baseItems);
+    const items = [];
+    let insertedCurrent = false;
+    for (const item of baseItems) {
+      items.push(item);
+      if (currentItem && sourceMatchesCard(currentItem.source, item.key)) {
+        items.push(currentItem);
+        insertedCurrent = true;
+      }
+    }
+    if (currentItem && !insertedCurrent) {
+      items.unshift(currentItem);
+    }
     const currentPayload = this.currentPayload();
     return {
       currentPayload,
       fixedItems,
       presetItems,
-      items: [
-        ...fixedItems,
-        ...presetItems,
-      ],
+      currentItem,
+      items,
     };
   }
 
@@ -465,15 +557,32 @@ export class FishyPresetManager extends HTMLElementBase {
     return presetId ? (presetHelper()?.preset?.(this.collectionKey, presetId) ?? null) : null;
   }
 
-  ensureSelectedCard(items, activePresetId) {
+  linkedSavedPresetForCurrent(currentItem = this.cardItems().currentItem) {
+    if (!currentItem || currentItem.source?.kind !== "preset") {
+      return null;
+    }
+    return presetHelper()?.preset?.(this.collectionKey, currentItem.source.id) ?? null;
+  }
+
+  ensureSelectedCard(items, activePresetId, activeFixedId = "") {
     const existing = this.selectedItem(items);
     const currentPayload = this.currentPayload();
     if (existing && this.isCardApplied(existing, activePresetId, currentPayload)) {
       return false;
     }
+    const currentItem = items.find((item) => item.kind === "current" && this.isCardApplied(item, activePresetId, currentPayload));
+    if (currentItem) {
+      this.selectedCardKey = currentItem.key;
+      return true;
+    }
     const activeCardKey = activePresetId ? presetCardKey(activePresetId) : "";
     if (activeCardKey && this.findItem(items, activeCardKey)) {
       this.selectedCardKey = activeCardKey;
+      return true;
+    }
+    const activeFixedCardKey = activeFixedId ? fixedCardKey(activeFixedId) : "";
+    if (activeFixedCardKey && this.findItem(items, activeFixedCardKey)) {
+      this.selectedCardKey = activeFixedCardKey;
       return true;
     }
     const appliedItem = items.find((item) => this.isCardApplied(item, activePresetId, currentPayload));
@@ -496,11 +605,20 @@ export class FishyPresetManager extends HTMLElementBase {
       && stableJson(currentPayload) === stableJson(item.payload);
   }
 
+  isCurrentActive(item, _activePresetId, currentPayload) {
+    return item?.kind === "current"
+      && currentPayload
+      && stableJson(currentPayload) === stableJson(item.payload);
+  }
+
   isCardApplied(item, activePresetId, currentPayload) {
     if (!item || !currentPayload) {
       return false;
     }
     const currentJson = stableJson(currentPayload);
+    if (item.kind === "current") {
+      return this.isCurrentActive(item, activePresetId, currentPayload);
+    }
     if (item.kind === "fixed") {
       return this.isFixedActive(item, activePresetId, currentPayload);
     }
@@ -512,6 +630,19 @@ export class FishyPresetManager extends HTMLElementBase {
     if (!item) {
       return null;
     }
+    if (item.kind === "current") {
+      return {
+        className: "badge badge-sm badge-warning",
+        text: this.translate("presets.status.modified", "Modified"),
+      };
+    }
+    const current = presetHelper()?.current?.(this.collectionKey) ?? null;
+    if (current && sourceMatchesCard(current.origin, item.key)) {
+      return {
+        className: "badge badge-sm badge-outline",
+        text: this.translate("presets.status.original", "Original"),
+      };
+    }
     return null;
   }
 
@@ -520,6 +651,12 @@ export class FishyPresetManager extends HTMLElementBase {
       return {
         className: "badge badge-sm badge-outline",
         text: "",
+      };
+    }
+    if (item.kind === "current") {
+      return {
+        className: "badge badge-sm badge-warning",
+        text: this.translate("presets.status.modified", "Modified"),
       };
     }
     if (item.kind === "fixed") {
@@ -538,7 +675,7 @@ export class FishyPresetManager extends HTMLElementBase {
     return item?.name || "";
   }
 
-  clonePayload(item) {
+  copyPayload(item) {
     return item ? cloneJson(item.payload) : null;
   }
 
@@ -546,17 +683,19 @@ export class FishyPresetManager extends HTMLElementBase {
     const helper = presetHelper();
     const adapter = this.adapter();
     const canInteract = Boolean(helper && adapter && this.collectionKey);
-    const { items, presetItems, currentPayload } = this.cardItems();
+    const { items, presetItems, currentPayload, currentItem } = this.cardItems();
     const activePresetId = this.activePresetId();
-    const selectionChanged = this.ensureSelectedCard(items, activePresetId);
+    const activeFixedId = this.activeFixedId();
+    const selectionChanged = this.ensureSelectedCard(items, activePresetId, activeFixedId);
     const selectedItem = this.selectedItem(items);
     const selectedSavedPreset = this.selectedSavedPreset();
+    const linkedSavedPreset = this.linkedSavedPresetForCurrent(currentItem);
 
     setElementText(this.element("open-label"), this.openLabelText());
     setElementText(this.element("manager-title"), this.titleText());
     setElementText(
       this.element("grid-title"),
-      this.translate("presets.grid.title", "Layouts"),
+      this.translate("presets.grid.title", "Presets"),
     );
     setElementText(
       this.element("grid-count"),
@@ -566,7 +705,7 @@ export class FishyPresetManager extends HTMLElementBase {
     if (gridEmpty) {
       gridEmpty.textContent = presetItems.length
         ? ""
-        : this.translate("presets.grid.empty", "No saved layouts yet.");
+        : this.translate("presets.grid.empty", "No saved presets yet.");
       gridEmpty.hidden = presetItems.length > 0;
     }
 
@@ -581,7 +720,7 @@ export class FishyPresetManager extends HTMLElementBase {
 
     setElementText(
       this.element("selected-section-title"),
-      this.translate("presets.section.selected.title", "Selected layout"),
+      this.translate("presets.section.selected.title", "Selected preset"),
     );
     const selectedTitleInput = this.selectedTitleInput();
     if (selectedTitleInput instanceof HTMLInputElement) {
@@ -603,10 +742,16 @@ export class FishyPresetManager extends HTMLElementBase {
       this.translate("presets.field.selected_title.label", "Title"),
     );
 
-    const cloneButton = this.button("clone");
-    if (cloneButton) {
-      cloneButton.innerHTML = `${iconMarkup("copy", "size-4")}<span>${this.translate("presets.button.clone", "Clone")}</span>`;
-      cloneButton.disabled = !canInteract || !selectedItem || !this.clonePayload(selectedItem);
+    const saveButton = this.button("save");
+    if (saveButton) {
+      saveButton.innerHTML = `${iconMarkup("check-badge-solid", "size-4")}<span>${this.translate("presets.button.save", "Save")}</span>`;
+      saveButton.disabled = !canInteract || !currentItem || !linkedSavedPreset;
+    }
+
+    const copyButton = this.button("copy");
+    if (copyButton) {
+      copyButton.innerHTML = `${iconMarkup("copy", "size-4")}<span>${this.translate("presets.button.copy", "Copy")}</span>`;
+      copyButton.disabled = !canInteract || !selectedItem || !this.copyPayload(selectedItem);
     }
 
     const exportButton = this.button("export");
@@ -635,9 +780,15 @@ export class FishyPresetManager extends HTMLElementBase {
     container.replaceChildren();
     for (const item of items) {
       const card = document.createElement("article");
-      card.className = "fishy-preset-manager__layout-card";
+      card.className = "fishy-preset-manager__preset-card";
+      if (item.kind === "current") {
+        card.classList.add("fishy-preset-manager__preset-card--current");
+      }
+      if (items.some((candidate) => candidate.kind === "current" && sourceMatchesCard(candidate.source, item.key))) {
+        card.classList.add("fishy-preset-manager__preset-card--source");
+      }
       if (item.key === this.selectedCardKey) {
-        card.classList.add("fishy-preset-manager__layout-card--selected");
+        card.classList.add("fishy-preset-manager__preset-card--selected");
       }
       card.dataset.role = "preset-card";
       card.dataset.cardKey = item.key;
@@ -648,16 +799,16 @@ export class FishyPresetManager extends HTMLElementBase {
       card.setAttribute("data-on:keydown", "window.__fishystuffPresetManager.handleCardKeydown(evt, el)");
 
       const header = document.createElement("div");
-      header.className = "fishy-preset-manager__layout-card-header";
+      header.className = "fishy-preset-manager__preset-card-header";
 
       const heading = document.createElement("div");
-      heading.className = "fishy-preset-manager__layout-card-heading";
-      const titleIcon = createIconElement(this.titleIconAlias(item), "fishy-preset-manager__layout-card-title-icon size-4");
+      heading.className = "fishy-preset-manager__preset-card-heading";
+      const titleIcon = createIconElement(this.titleIconAlias(item), "fishy-preset-manager__preset-card-title-icon size-4");
       if (titleIcon) {
         heading.append(titleIcon);
       }
       const title = document.createElement("div");
-      title.className = "fishy-preset-manager__layout-card-title";
+      title.className = "fishy-preset-manager__preset-card-title";
       title.textContent = item.name;
       heading.append(title);
       header.append(heading);
@@ -671,11 +822,11 @@ export class FishyPresetManager extends HTMLElementBase {
       }
 
       const previewShell = document.createElement("div");
-      previewShell.className = "fishy-preset-manager__layout-preview-shell";
+      previewShell.className = "fishy-preset-manager__preset-preview-shell";
       const previewViewport = document.createElement("div");
-      previewViewport.className = "fishy-preset-manager__layout-preview-viewport";
+      previewViewport.className = "fishy-preset-manager__preset-preview-viewport";
       const preview = document.createElement("div");
-      preview.className = "fishy-preset-manager__layout-preview";
+      preview.className = "fishy-preset-manager__preset-preview";
       preview.dataset.cardKey = item.key;
       previewViewport.append(preview);
       previewShell.append(previewViewport);
@@ -768,8 +919,13 @@ export class FishyPresetManager extends HTMLElementBase {
     if (helper) {
       if (selectedItem.kind === "preset") {
         helper.activatePreset(this.collectionKey, selectedItem.id);
+      } else if (selectedItem.kind === "fixed") {
+        helper.activateFixedPreset?.(this.collectionKey, selectedItem.id);
       } else {
-        helper.setSelectedPresetId?.(this.collectionKey, "");
+        helper.trackCurrentPayload?.(this.collectionKey, {
+          payload: selectedItem.payload,
+          origin: selectedItem.source,
+        });
         helper.applyPayload(this.collectionKey, selectedItem.payload);
       }
     }
@@ -812,11 +968,32 @@ export class FishyPresetManager extends HTMLElementBase {
     }
   }
 
-  handleCloneClick() {
+  handleSaveClick() {
+    const helper = presetHelper();
+    if (!helper || typeof helper.saveCurrentToSelectedPreset !== "function") {
+      return;
+    }
+    try {
+      const saved = helper.saveCurrentToSelectedPreset(this.collectionKey);
+      if (saved?.id) {
+        this.selectedCardKey = presetCardKey(saved.id);
+      }
+      toastHelper()?.success?.(
+        this.translate("presets.toast.saved", 'Saved "{$name}".', { name: saved?.name || "" }),
+      );
+      this.sync({ refreshNames: true });
+    } catch (error) {
+      toastHelper()?.error?.(
+        error instanceof Error ? error.message : this.translate("presets.error.save", "Preset save failed."),
+      );
+    }
+  }
+
+  handleCopyClick() {
     const helper = presetHelper();
     const { items } = this.cardItems();
     const selectedItem = this.selectedItem(items);
-    const payload = this.clonePayload(selectedItem);
+    const payload = this.copyPayload(selectedItem);
     if (!helper || !payload) {
       return;
     }
@@ -828,7 +1005,7 @@ export class FishyPresetManager extends HTMLElementBase {
       });
       this.selectedCardKey = presetCardKey(created.id);
       toastHelper()?.success?.(
-        this.translate("presets.toast.cloned", 'Cloned "{$name}".', { name: created.name }),
+        this.translate("presets.toast.copied", 'Copied "{$name}".', { name: created.name }),
       );
       this.sync({ refreshNames: true });
     } catch (error) {
@@ -849,12 +1026,6 @@ export class FishyPresetManager extends HTMLElementBase {
     );
     if (confirmed === false) {
       return;
-    }
-    const fallbackFixed = this.fixedItems()[0] || null;
-    if (fallbackFixed) {
-      helper.setSelectedPresetId?.(this.collectionKey, "");
-      helper.applyPayload(this.collectionKey, fallbackFixed.payload);
-      this.selectedCardKey = fallbackFixed.key;
     }
     helper.deletePreset(this.collectionKey, selectedPreset.id);
     toastHelper()?.info?.(
@@ -941,8 +1112,11 @@ function bindPresetManagerHelpers() {
     handleSelectedTitleKeydown(event, node) {
       managerFromNode(node)?.handleSelectedTitleKeyDown(event, node);
     },
-    cloneSelected(node) {
-      managerFromNode(node)?.handleCloneClick();
+    saveCurrent(node) {
+      managerFromNode(node)?.handleSaveClick();
+    },
+    copySelected(node) {
+      managerFromNode(node)?.handleCopyClick();
     },
     exportSelected(node) {
       managerFromNode(node)?.handleExportClick();

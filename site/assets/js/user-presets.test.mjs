@@ -136,6 +136,8 @@ test("user presets can create, update, rename, delete, and select collection pre
   helper.deletePreset("calculator-layouts", created.id);
   assert.deepEqual(helper.collection("calculator-layouts"), {
     selectedPresetId: "",
+    selectedFixedId: "",
+    current: null,
     presets: [],
   });
 });
@@ -253,7 +255,7 @@ test("user presets can sync selected preset to the current payload", () => {
   assert.equal(helper.selectedPresetId("calculator-layouts"), "");
 });
 
-test("user presets materialize a fixed layout into a real preset once it changes", () => {
+test("user presets track modified current state from a fixed preset without creating a saved preset", () => {
   const env = createEnv();
   const helper = env.helper;
   let currentPayload = {
@@ -284,21 +286,26 @@ test("user presets materialize a fixed layout into a real preset once it changes
 
   const fixed = helper.ensurePersistedSelection("calculator-layouts");
   assert.equal(fixed.kind, "fixed");
+  assert.equal(fixed.action, "matched-fixed");
   assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
+  assert.equal(helper.current("calculator-layouts"), null);
 
   currentPayload = {
     row: 2,
   };
-  const created = helper.ensurePersistedSelection("calculator-layouts");
+  const tracked = helper.ensurePersistedSelection("calculator-layouts");
 
-  assert.equal(created.action, "created");
-  assert.equal(created.kind, "preset");
-  assert.equal(created.preset.name, "Layout 1");
-  assert.deepEqual(created.preset.payload, { row: 2 });
-  assert.equal(helper.selectedPresetId("calculator-layouts"), created.preset.id);
+  assert.equal(tracked.action, "created-current");
+  assert.equal(tracked.kind, "current");
+  assert.deepEqual(tracked.source, { kind: "fixed", id: "default" });
+  assert.deepEqual(tracked.current.payload, { row: 2 });
+  assert.equal(helper.presets("calculator-layouts").length, 0);
+  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
 });
 
-test("user presets update the selected preset payload in place when the live payload changes", () => {
+test("user presets keep selected preset immutable until current changes are explicitly saved", () => {
   const env = createEnv();
   const helper = env.helper;
   let currentPayload = {
@@ -324,12 +331,67 @@ test("user presets update the selected preset payload in place when the live pay
   currentPayload = {
     row: 4,
   };
-  const updated = helper.ensurePersistedSelection("calculator-layouts");
+  const tracked = helper.ensurePersistedSelection("calculator-layouts");
 
-  assert.equal(updated.action, "updated");
-  assert.equal(updated.preset.id, preset.id);
-  assert.deepEqual(updated.preset.payload, { row: 4 });
+  assert.equal(tracked.action, "created-current");
+  assert.equal(tracked.kind, "current");
+  assert.deepEqual(tracked.current.payload, { row: 4 });
   assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+  assert.deepEqual(helper.preset("calculator-layouts", preset.id).payload, { row: 1 });
+
+  const saved = helper.saveCurrentToSelectedPreset("calculator-layouts");
+
+  assert.equal(saved.id, preset.id);
+  assert.deepEqual(saved.payload, { row: 4 });
+  assert.equal(helper.current("calculator-layouts"), null);
+});
+
+test("user presets keep an action log for undo and redo of the current modified preset", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  const applied = [];
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      applied.push(payload);
+      currentPayload = payload;
+      return payload;
+    },
+  });
+  const preset = helper.createPreset("calculator-layouts", {
+    name: "Layout 1",
+    payload: {
+      row: 1,
+    },
+  });
+
+  currentPayload = { row: 2 };
+  helper.trackCurrentPayload("calculator-layouts");
+  currentPayload = { row: 3 };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  assert.equal(helper.currentHistoryState("calculator-layouts").canUndo, true);
+  assert.equal(helper.current("calculator-layouts").events.length, 2);
+  assert.deepEqual(helper.preset("calculator-layouts", preset.id).payload, { row: 1 });
+
+  const undone = helper.undoCurrent("calculator-layouts");
+  assert.deepEqual(undone.payload, { row: 2 });
+  assert.deepEqual(applied.at(-1), { row: 2 });
+  assert.equal(helper.currentHistoryState("calculator-layouts").canRedo, true);
+
+  const redone = helper.redoCurrent("calculator-layouts");
+  assert.deepEqual(redone.payload, { row: 3 });
+  assert.deepEqual(applied.at(-1), { row: 3 });
 });
 
 test("user presets snapshot reloads from local storage changes", () => {

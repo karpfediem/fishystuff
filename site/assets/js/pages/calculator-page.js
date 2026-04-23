@@ -250,7 +250,7 @@
       && typeof helper.registerCollectionAdapter === "function"
       && typeof helper.capturePayload === "function"
       && typeof helper.activatePreset === "function"
-      && typeof helper.ensurePersistedSelection === "function"
+      && typeof helper.trackCurrentPayload === "function"
       ? helper
       : null;
   }
@@ -345,7 +345,7 @@
       if (!signals) {
         return;
       }
-      ensureCalculatorLayoutPresetOwnership(signals);
+      trackCalculatorLayoutPresetCurrent(signals);
     };
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     calculatorState.layoutPresetBinding = {
@@ -891,6 +891,7 @@
     helper.registerCollectionAdapter(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
       titleKey: "calculator.layout_presets.title",
       titleFallback: "Layout presets",
+      openLabelFallback: "Layout Manager",
       fileBaseName: "fishystuff-calculator-layouts",
       defaultPresetName(index) {
         return calculatorText("layout_presets.default_name", {
@@ -936,13 +937,13 @@
     calculatorState.layoutPresetAdapterBound = true;
   }
 
-  function ensureCalculatorLayoutPresetOwnership(signals) {
+  function trackCalculatorLayoutPresetCurrent(signals) {
     const helper = sharedUserPresets();
     if (!helper) {
       return null;
     }
     const payload = calculatorLayoutPresetPayload(signals?._calculator_ui);
-    return helper.ensurePersistedSelection(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
+    return helper.trackCurrentPayload(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
       payload,
     });
   }
@@ -1600,7 +1601,7 @@
       Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
-    ensureCalculatorLayoutPresetOwnership(signals);
+    trackCalculatorLayoutPresetCurrent(signals);
     const appRoot = document.getElementById?.("calculator");
     if (appRoot && languageHelper()) {
       languageHelper().apply(appRoot);
@@ -1615,7 +1616,7 @@
       shared.setOverlaySignals(signals.overlay);
       shared.setPriceOverrides(signals.priceOverrides);
     }
-    ensureCalculatorLayoutPresetOwnership(signals);
+    trackCalculatorLayoutPresetCurrent(signals);
     const persistedData = persistedCalculatorSignals(signals);
     const persistedUi = persistedCalculatorUiSignals(signals);
     localStorage.setItem(CALCULATOR_DATA_STORAGE_KEY, JSON.stringify(persistedData));

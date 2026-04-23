@@ -713,7 +713,7 @@ test("calculator preset activation switches selection without overwriting the pr
   });
 });
 
-test("calculator layout changes fork default into a real saved preset", () => {
+test("calculator layout changes create a current modified preset from default without saving", () => {
   const env = createContext();
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
@@ -731,16 +731,18 @@ test("calculator layout changes fork default into a real saved preset", () => {
   env.flushTimers();
 
   const selectedId = env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts");
-  const selectedPreset = env.window.__fishystuffUserPresets.selectedPreset("calculator-layouts");
-  assert.ok(selectedId);
-  assert.equal(selectedPreset?.id, selectedId);
-  assert.deepEqual(selectedPreset?.payload, {
+  const current = env.window.__fishystuffUserPresets.current("calculator-layouts");
+  assert.equal(selectedId, "");
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "default");
+  assert.equal(env.window.__fishystuffUserPresets.presets("calculator-layouts").length, 0);
+  assert.deepEqual(current?.origin, { kind: "fixed", id: "default" });
+  assert.deepEqual(current?.payload, {
     pinned_layout: [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]], [["trade"]]],
     unpinned_insert_index: [0, 0],
   });
 });
 
-test("calculator layout changes update the selected saved preset in place", () => {
+test("calculator layout changes keep the selected saved preset immutable until explicit save", () => {
   const env = createContext();
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
@@ -763,9 +765,21 @@ test("calculator layout changes update the selected saved preset in place", () =
   const selectedPreset = env.window.__fishystuffUserPresets.selectedPreset("calculator-layouts");
   assert.equal(selectedPreset?.id, preset.id);
   assert.deepEqual(selectedPreset?.payload, {
+    pinned_layout: cloneTestValue(DEFAULT_PINNED_LAYOUT),
+    unpinned_insert_index: [0, 0],
+  });
+  assert.deepEqual(env.window.__fishystuffUserPresets.current("calculator-layouts")?.payload, {
     pinned_layout: [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]], [["trade"]]],
     unpinned_insert_index: [0, 0],
   });
+
+  const saved = env.window.__fishystuffUserPresets.saveCurrentToSelectedPreset("calculator-layouts");
+  assert.equal(saved.id, preset.id);
+  assert.deepEqual(saved.payload, {
+    pinned_layout: [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]], [["trade"]]],
+    unpinned_insert_index: [0, 0],
+  });
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
 });
 
 test("calculator layout preset title icon follows the first pinned section", () => {

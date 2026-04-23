@@ -3,6 +3,7 @@
   const CHANGED_EVENT = "fishystuff:user-presets-changed";
   const ADAPTERS_CHANGED_EVENT = "fishystuff:user-presets-adapters-changed";
   const EXPORT_FORMAT = "fishystuff-user-presets.v1";
+  const CURRENT_EVENT_LIMIT = 100;
 
   function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
@@ -34,6 +35,35 @@
       .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
+  }
+
+  function normalizeSource(value) {
+    const source = isPlainObject(value) ? value : {};
+    const kind = trimString(source.kind).toLowerCase();
+    const id = trimString(source.id);
+    if ((kind === "preset" || kind === "fixed") && id) {
+      return { kind, id };
+    }
+    return { kind: "none", id: "" };
+  }
+
+  function presetSource(presetId) {
+    const id = trimString(presetId);
+    return id ? { kind: "preset", id } : { kind: "none", id: "" };
+  }
+
+  function fixedSource(fixedId) {
+    const id = trimString(fixedId);
+    return id ? { kind: "fixed", id } : { kind: "none", id: "" };
+  }
+
+  function sourceKey(source) {
+    const normalized = normalizeSource(source);
+    return normalized.kind === "none" ? "none" : `${normalized.kind}:${normalized.id}`;
+  }
+
+  function sourcesEqual(left, right) {
+    return sourceKey(left) === sourceKey(right);
   }
 
   const collectionAdapters = new Map();
@@ -97,6 +127,68 @@
     return JSON.stringify(normalizePresetPayload(collectionKey, payload));
   }
 
+  function payloadsEqual(collectionKey, left, right) {
+    if (!left || !right) {
+      return false;
+    }
+    try {
+      return stablePresetPayloadJson(collectionKey, left) === stablePresetPayloadJson(collectionKey, right);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function normalizePresetEvent(collectionKey, value) {
+    if (!isPlainObject(value)) {
+      return null;
+    }
+    let beforePayload = null;
+    let afterPayload = null;
+    if (Object.prototype.hasOwnProperty.call(value, "beforePayload")) {
+      try {
+        beforePayload = normalizePresetPayload(collectionKey, value.beforePayload);
+      } catch (_error) {
+        beforePayload = null;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(value, "afterPayload")) {
+      try {
+        afterPayload = normalizePresetPayload(collectionKey, value.afterPayload);
+      } catch (_error) {
+        afterPayload = null;
+      }
+    }
+    if (!beforePayload && !afterPayload) {
+      return null;
+    }
+    return {
+      id: trimString(value.id) || randomId("preset_event_"),
+      action: trimString(value.action) || "payload-change",
+      at: trimString(value.at) || nowIso(),
+      source: normalizeSource(value.source),
+      beforePayload,
+      afterPayload,
+    };
+  }
+
+  function normalizePresetEvents(collectionKey, value) {
+    return (Array.isArray(value) ? value : [])
+      .map((entry) => normalizePresetEvent(collectionKey, entry))
+      .filter(Boolean)
+      .slice(-CURRENT_EVENT_LIMIT);
+  }
+
+  function createPayloadEvent(collectionKey, action, source, beforePayload, afterPayload) {
+    return normalizePresetEvent(collectionKey, {
+      id: randomId("preset_event_"),
+      action,
+      at: nowIso(),
+      source,
+      beforePayload,
+      afterPayload,
+    });
+  }
+
   function normalizePresetEntry(collectionKey, value, index = 0) {
     if (!isPlainObject(value)) {
       return null;
@@ -117,6 +209,25 @@
     };
   }
 
+  function normalizeCurrentPreset(collectionKey, value) {
+    if (!isPlainObject(value)) {
+      return null;
+    }
+    let payload;
+    try {
+      payload = normalizePresetPayload(collectionKey, value.payload);
+    } catch (_error) {
+      return null;
+    }
+    return {
+      origin: normalizeSource(value.origin),
+      payload,
+      updatedAt: trimString(value.updatedAt) || nowIso(),
+      events: normalizePresetEvents(collectionKey, value.events),
+      undoneEvents: normalizePresetEvents(collectionKey, value.undoneEvents),
+    };
+  }
+
   function normalizeCollectionSnapshot(collectionKey, value) {
     const key = normalizeCollectionKey(collectionKey);
     const source = isPlainObject(value) ? value : {};
@@ -131,12 +242,33 @@
       presets.push(preset);
     }
     const selectedPresetId = trimString(source.selectedPresetId);
+    const selectedFixedId = trimString(source.selectedFixedId);
+    const normalizedSelectedPresetId = presets.some((preset) => preset.id === selectedPresetId)
+      ? selectedPresetId
+      : "";
     return {
-      selectedPresetId: presets.some((preset) => preset.id === selectedPresetId)
-        ? selectedPresetId
-        : "",
+      selectedPresetId: normalizedSelectedPresetId,
+      selectedFixedId: selectedFixedId && !normalizedSelectedPresetId ? selectedFixedId : "",
+      current: normalizeCurrentPreset(key, source.current),
       presets,
     };
+  }
+
+  function collectionHasState(collection) {
+    return Boolean(
+      collection?.selectedPresetId
+      || collection?.selectedFixedId
+      || collection?.current
+      || collection?.presets?.length,
+    );
+  }
+
+  function assignCollection(draft, collectionKey, collection) {
+    if (collectionHasState(collection)) {
+      draft.collections[collectionKey] = collection;
+    } else {
+      delete draft.collections[collectionKey];
+    }
   }
 
   function normalizeSnapshot(value) {
@@ -149,7 +281,7 @@
         continue;
       }
       const normalizedCollection = normalizeCollectionSnapshot(key, rawCollection);
-      if (normalizedCollection.presets.length || normalizedCollection.selectedPresetId) {
+      if (collectionHasState(normalizedCollection)) {
         collections[key] = normalizedCollection;
       }
     }
@@ -228,6 +360,8 @@
       currentSnapshot.collections[key]
         || {
           selectedPresetId: "",
+          selectedFixedId: "",
+          current: null,
           presets: [],
         },
     );
@@ -246,20 +380,93 @@
     );
   }
 
+  function currentPresetState(collectionKey) {
+    return cloneJson(currentCollection(collectionKey).current || null);
+  }
+
+  function fixedPreset(collectionKey, fixedId) {
+    const normalizedId = trimString(fixedId);
+    return cloneJson(fixedPresets(collectionKey).find((preset) => preset.id === normalizedId) || null);
+  }
+
+  function sourcePayload(collectionKey, collection, source) {
+    const normalized = normalizeSource(source);
+    if (normalized.kind === "preset") {
+      return collection.presets.find((preset) => preset.id === normalized.id)?.payload || null;
+    }
+    if (normalized.kind === "fixed") {
+      return fixedPresets(collectionKey).find((preset) => preset.id === normalized.id)?.payload || null;
+    }
+    return null;
+  }
+
+  function selectedSource(collection) {
+    if (collection?.selectedPresetId) {
+      return presetSource(collection.selectedPresetId);
+    }
+    if (collection?.selectedFixedId) {
+      return fixedSource(collection.selectedFixedId);
+    }
+    return normalizeSource(collection?.current?.origin);
+  }
+
+  function matchingSource(collectionKey, collection, payload) {
+    const selected = selectedSource(collection);
+    if (selected.kind !== "none" && payloadsEqual(collectionKey, sourcePayload(collectionKey, collection, selected), payload)) {
+      return selected;
+    }
+    for (const preset of fixedPresets(collectionKey)) {
+      if (payloadsEqual(collectionKey, preset.payload, payload)) {
+        return fixedSource(preset.id);
+      }
+    }
+    for (const preset of collection.presets) {
+      if (payloadsEqual(collectionKey, preset.payload, payload)) {
+        return presetSource(preset.id);
+      }
+    }
+    return null;
+  }
+
+  function firstFixedSource(collectionKey) {
+    const firstFixed = fixedPresets(collectionKey)[0] || null;
+    return firstFixed ? fixedSource(firstFixed.id) : { kind: "none", id: "" };
+  }
+
+  function selectCollectionSource(collection, source, { clearCurrent = true } = {}) {
+    const normalized = normalizeSource(source);
+    collection.selectedPresetId = normalized.kind === "preset" ? normalized.id : "";
+    collection.selectedFixedId = normalized.kind === "fixed" ? normalized.id : "";
+    if (clearCurrent) {
+      collection.current = null;
+    }
+    return collection;
+  }
+
   function setSelectedPresetId(collectionKey, presetId) {
     const key = normalizeCollectionKey(collectionKey);
     const normalizedPresetId = trimString(presetId);
     return updateSnapshot((draft) => {
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
-      collection.selectedPresetId = collection.presets.some((preset) => preset.id === normalizedPresetId)
-        ? normalizedPresetId
-        : "";
-      if (collection.presets.length || collection.selectedPresetId) {
-        draft.collections[key] = collection;
-      } else {
-        delete draft.collections[key];
-      }
+      const source = collection.presets.some((preset) => preset.id === normalizedPresetId)
+        ? presetSource(normalizedPresetId)
+        : { kind: "none", id: "" };
+      selectCollectionSource(collection, source);
+      assignCollection(draft, key, collection);
     }, "select-preset", { collectionKey: key });
+  }
+
+  function setSelectedFixedId(collectionKey, fixedId) {
+    const key = normalizeCollectionKey(collectionKey);
+    const normalizedFixedId = trimString(fixedId);
+    return updateSnapshot((draft) => {
+      const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
+      const source = fixedPresets(key).some((preset) => preset.id === normalizedFixedId)
+        ? fixedSource(normalizedFixedId)
+        : { kind: "none", id: "" };
+      selectCollectionSource(collection, source);
+      assignCollection(draft, key, collection);
+    }, "select-fixed-preset", { collectionKey: key, fixedId: normalizedFixedId });
   }
 
   function createPreset(collectionKey, options = {}) {
@@ -278,7 +485,7 @@
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       collection.presets.push(preset);
       if (select) {
-        collection.selectedPresetId = preset.id;
+        selectCollectionSource(collection, presetSource(preset.id));
       }
       draft.collections[key] = collection;
     }, "create-preset", {
@@ -316,7 +523,7 @@
       };
       collection.presets[presetIndex] = updatedPreset;
       if (options.select === true) {
-        collection.selectedPresetId = updatedPreset.id;
+        selectCollectionSource(collection, presetSource(updatedPreset.id));
       }
       draft.collections[key] = collection;
     }, "update-preset", {
@@ -342,11 +549,13 @@
       if (collection.selectedPresetId === normalizedPresetId) {
         collection.selectedPresetId = "";
       }
-      if (collection.presets.length || collection.selectedPresetId) {
-        draft.collections[key] = collection;
-      } else {
-        delete draft.collections[key];
+      if (collection.current?.origin?.kind === "preset" && collection.current.origin.id === normalizedPresetId) {
+        collection.current = {
+          ...collection.current,
+          origin: { kind: "none", id: "" },
+        };
       }
+      assignCollection(draft, key, collection);
     }, "delete-preset", {
       collectionKey: key,
       presetId: normalizedPresetId,
@@ -389,9 +598,98 @@
       setSelectedPresetId(key, "");
       return null;
     }
-    setSelectedPresetId(key, preset.id);
     applyPayload(key, preset.payload);
+    setSelectedPresetId(key, preset.id);
     return preset;
+  }
+
+  function activateFixedPreset(collectionKey, fixedId) {
+    const key = normalizeCollectionKey(collectionKey);
+    const preset = fixedPreset(key, fixedId);
+    if (!preset) {
+      setSelectedFixedId(key, "");
+      return null;
+    }
+    applyPayload(key, preset.payload);
+    setSelectedFixedId(key, preset.id);
+    return preset;
+  }
+
+  function trackCurrentPayload(collectionKey, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
+    const payload = hasPayload ? normalizePresetPayload(key, options.payload) : capturePayload(key);
+    let result = {
+      action: "cleared",
+      kind: "none",
+      source: { kind: "none", id: "" },
+      current: null,
+      preset: null,
+    };
+    if (!payload) {
+      setSelectedPresetId(key, "");
+      return result;
+    }
+    updateSnapshot((draft) => {
+      const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
+      const matchedSource = matchingSource(key, collection, payload);
+      if (matchedSource) {
+        selectCollectionSource(collection, matchedSource);
+        assignCollection(draft, key, collection);
+        result = {
+          action: matchedSource.kind === "fixed" ? "matched-fixed" : "matched-preset",
+          kind: matchedSource.kind,
+          source: matchedSource,
+          current: null,
+          preset: matchedSource.kind === "preset"
+            ? cloneJson(collection.presets.find((preset) => preset.id === matchedSource.id) || null)
+            : cloneJson(fixedPresets(key).find((preset) => preset.id === matchedSource.id) || null),
+        };
+        return;
+      }
+
+      const explicitOrigin = Object.prototype.hasOwnProperty.call(options, "origin")
+        ? normalizeSource(options.origin)
+        : null;
+      const previousCurrent = collection.current;
+      const origin = explicitOrigin && explicitOrigin.kind !== "none"
+        ? explicitOrigin
+        : (
+            selectedSource(collection).kind !== "none"
+              ? selectedSource(collection)
+              : (previousCurrent && previousCurrent.origin?.kind !== "none" ? previousCurrent.origin : firstFixedSource(key))
+          );
+      const previousPayload = previousCurrent && sourcesEqual(previousCurrent.origin, origin)
+        ? previousCurrent.payload
+        : sourcePayload(key, collection, origin);
+      const events = previousCurrent && sourcesEqual(previousCurrent.origin, origin)
+        ? previousCurrent.events.slice()
+        : [];
+      if (!payloadsEqual(key, previousPayload, payload)) {
+        const event = createPayloadEvent(key, "payload-change", origin, previousPayload || payload, payload);
+        if (event) {
+          events.push(event);
+        }
+      }
+      const current = {
+        origin,
+        payload,
+        updatedAt: nowIso(),
+        events: events.slice(-CURRENT_EVENT_LIMIT),
+        undoneEvents: [],
+      };
+      selectCollectionSource(collection, origin, { clearCurrent: false });
+      collection.current = current;
+      assignCollection(draft, key, collection);
+      result = {
+        action: previousCurrent && sourcesEqual(previousCurrent.origin, origin) ? "updated-current" : "created-current",
+        kind: "current",
+        source: origin,
+        current: cloneJson(current),
+        preset: null,
+      };
+    }, "track-current", { collectionKey: key });
+    return cloneJson(result);
   }
 
   function syncSelectedPresetToCurrent(collectionKey, options = {}) {
@@ -411,67 +709,96 @@
   }
 
   function ensurePersistedSelection(collectionKey, options = {}) {
+    return trackCurrentPayload(collectionKey, options);
+  }
+
+  function saveCurrentToSelectedPreset(collectionKey) {
     const key = normalizeCollectionKey(collectionKey);
-    const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
-    const payload = hasPayload ? normalizePresetPayload(key, options.payload) : capturePayload(key);
-    if (!payload) {
-      setSelectedPresetId(key, "");
-      return {
-        action: "cleared",
-        kind: "none",
-        preset: null,
-      };
-    }
-    const payloadJson = stablePresetPayloadJson(key, payload);
-    const selected = selectedPreset(key);
-    if (selected) {
-      if (stablePresetPayloadJson(key, selected.payload) === payloadJson) {
-        return {
-          action: "selected",
-          kind: "preset",
-          preset: selected,
-        };
+    let savedPreset = null;
+    updateSnapshot((draft) => {
+      const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
+      const current = collection.current;
+      if (!current || current.origin.kind !== "preset") {
+        throw new Error("Current preset is not linked to a saved preset.");
       }
-      return {
-        action: "updated",
-        kind: "preset",
-        preset: updatePreset(key, selected.id, {
-          payload,
-          select: true,
-        }),
+      const presetIndex = collection.presets.findIndex((preset) => preset.id === current.origin.id);
+      if (presetIndex < 0) {
+        throw new Error(`Unknown preset: ${current.origin.id}`);
+      }
+      const previousPreset = collection.presets[presetIndex];
+      savedPreset = {
+        ...previousPreset,
+        payload: normalizePresetPayload(key, current.payload),
+        updatedAt: nowIso(),
       };
-    }
-    const matchedFixed = fixedPresets(key).find((preset) => (
-      stablePresetPayloadJson(key, preset.payload) === payloadJson
-    )) || null;
-    if (matchedFixed) {
-      setSelectedPresetId(key, "");
-      return {
-        action: "fixed",
-        kind: "fixed",
-        preset: cloneJson(matchedFixed),
-      };
-    }
-    const matchedPreset = currentCollection(key).presets.find((preset) => (
-      stablePresetPayloadJson(key, preset.payload) === payloadJson
-    )) || null;
-    if (matchedPreset) {
-      setSelectedPresetId(key, matchedPreset.id);
-      return {
-        action: "selected-existing",
-        kind: "preset",
-        preset: cloneJson(matchedPreset),
-      };
-    }
+      collection.presets[presetIndex] = savedPreset;
+      selectCollectionSource(collection, presetSource(savedPreset.id));
+      assignCollection(draft, key, collection);
+    }, "save-current", { collectionKey: key });
+    return cloneJson(savedPreset);
+  }
+
+  function currentHistoryState(collectionKey) {
+    const current = currentPresetState(collectionKey);
     return {
-      action: "created",
-      kind: "preset",
-      preset: createPreset(key, {
-        name: trimString(options.name) || defaultPresetName(key, currentCollection(key).presets.length + 1),
-        payload,
-        select: true,
-      }),
+      canUndo: Boolean(current?.events?.length),
+      canRedo: Boolean(current?.undoneEvents?.length),
+      current,
     };
+  }
+
+  function undoCurrent(collectionKey) {
+    const key = normalizeCollectionKey(collectionKey);
+    let nextCurrent = null;
+    updateSnapshot((draft) => {
+      const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
+      const current = collection.current;
+      const event = current?.events?.[current.events.length - 1] || null;
+      if (!current || !event?.beforePayload) {
+        nextCurrent = current || null;
+        assignCollection(draft, key, collection);
+        return;
+      }
+      current.events = current.events.slice(0, -1);
+      current.undoneEvents = [...current.undoneEvents, event].slice(-CURRENT_EVENT_LIMIT);
+      current.payload = normalizePresetPayload(key, event.beforePayload);
+      current.updatedAt = nowIso();
+      collection.current = current;
+      selectCollectionSource(collection, current.origin, { clearCurrent: false });
+      assignCollection(draft, key, collection);
+      nextCurrent = cloneJson(current);
+    }, "undo-current", { collectionKey: key });
+    if (nextCurrent?.payload) {
+      applyPayload(key, nextCurrent.payload);
+    }
+    return cloneJson(nextCurrent);
+  }
+
+  function redoCurrent(collectionKey) {
+    const key = normalizeCollectionKey(collectionKey);
+    let nextCurrent = null;
+    updateSnapshot((draft) => {
+      const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
+      const current = collection.current;
+      const event = current?.undoneEvents?.[current.undoneEvents.length - 1] || null;
+      if (!current || !event?.afterPayload) {
+        nextCurrent = current || null;
+        assignCollection(draft, key, collection);
+        return;
+      }
+      current.undoneEvents = current.undoneEvents.slice(0, -1);
+      current.events = [...current.events, event].slice(-CURRENT_EVENT_LIMIT);
+      current.payload = normalizePresetPayload(key, event.afterPayload);
+      current.updatedAt = nowIso();
+      collection.current = current;
+      selectCollectionSource(collection, current.origin, { clearCurrent: false });
+      assignCollection(draft, key, collection);
+      nextCurrent = cloneJson(current);
+    }, "redo-current", { collectionKey: key });
+    if (nextCurrent?.payload) {
+      applyPayload(key, nextCurrent.payload);
+    }
+    return cloneJson(nextCurrent);
   }
 
   function exportCollectionPayload(collectionKey, options = {}) {
@@ -545,13 +872,12 @@
         }
       }
       if (selectImported) {
-        collection.selectedPresetId = selectedImportedId || importedIds[0] || collection.selectedPresetId;
+        const importedSelection = selectedImportedId || importedIds[0] || collection.selectedPresetId;
+        if (importedSelection) {
+          selectCollectionSource(collection, presetSource(importedSelection));
+        }
       }
-      if (collection.presets.length || collection.selectedPresetId) {
-        draft.collections[key] = collection;
-      } else {
-        delete draft.collections[key];
-      }
+      assignCollection(draft, key, collection);
     }, "import-collection", {
       collectionKey: key,
       presetIds: importedIds,
@@ -613,11 +939,17 @@
       return currentCollection(collectionKey).presets;
     },
     preset: currentPreset,
+    current: currentPresetState,
+    fixedPreset,
     selectedPresetId(collectionKey) {
       return currentCollection(collectionKey).selectedPresetId;
     },
+    selectedFixedId(collectionKey) {
+      return currentCollection(collectionKey).selectedFixedId;
+    },
     selectedPreset,
     setSelectedPresetId,
+    setSelectedFixedId,
     createPreset,
     updatePreset,
     renamePreset,
@@ -627,6 +959,12 @@
     capturePayload,
     applyPayload,
     activatePreset,
+    activateFixedPreset,
+    trackCurrentPayload,
+    saveCurrentToSelectedPreset,
+    undoCurrent,
+    redoCurrent,
+    currentHistoryState,
     ensurePersistedSelection,
     fixedPresets,
     syncSelectedPresetToCurrent,
