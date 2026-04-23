@@ -705,12 +705,16 @@ pub async fn get_calculator_catalog(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, locale, query.r#ref, &request_id).await?;
+    let catalog = with_timeout(
+        state.config.request_timeout_secs,
+        state.store.calculator_catalog(lang, query.r#ref),
+    )
+    .await
+    .map_err(|err| map_request_id(err, &request_id))?;
 
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    Ok((headers, Json(data.catalog)))
+    Ok((headers, Json(catalog)))
 }
 
 pub async fn post_zone_loot_summary(
@@ -1549,18 +1553,26 @@ async fn load_calculator_data(
     ref_id: Option<String>,
     request_id: &RequestId,
 ) -> AppResult<CalculatorData> {
-    let catalog = with_timeout(
-        state.config.request_timeout_secs,
-        state.store.calculator_catalog(api_lang, ref_id.clone()),
-    )
-    .await
-    .map_err(|err| map_request_id(err, request_id))?;
-    let zones = with_timeout(
-        state.config.request_timeout_secs,
-        state.store.list_zones(ref_id),
-    )
-    .await
-    .map_err(|err| map_request_id(err, request_id))?;
+    let catalog_ref_id = ref_id.clone();
+    let zones_ref_id = ref_id;
+    let (catalog, zones) = tokio::try_join!(
+        async {
+            with_timeout(
+                state.config.request_timeout_secs,
+                state.store.calculator_catalog(api_lang, catalog_ref_id),
+            )
+            .await
+            .map_err(|err| map_request_id(err, request_id))
+        },
+        async {
+            with_timeout(
+                state.config.request_timeout_secs,
+                state.store.list_zones(zones_ref_id),
+            )
+            .await
+            .map_err(|err| map_request_id(err, request_id))
+        }
+    )?;
     let zone_group_rates = catalog
         .zone_group_rates
         .iter()
