@@ -513,7 +513,7 @@ struct SelectOption<'a> {
     label: &'a str,
     icon: Option<&'a str>,
     grade_tone: &'a str,
-    pet_variant_detail: Option<&'a str>,
+    pet_variant_talent: Option<&'a CalculatorPetOptionEntry>,
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
     presentation: SelectOptionPresentation,
@@ -556,7 +556,7 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
     ),
     icon: None,
     grade_tone: "unknown",
-    pet_variant_detail: None,
+    pet_variant_talent: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -570,7 +570,7 @@ static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(||
     ),
     icon: None,
     grade_tone: "unknown",
-    pet_variant_detail: None,
+    pet_variant_talent: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -584,7 +584,7 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     ),
     icon: None,
     grade_tone: "unknown",
-    pet_variant_detail: None,
+    pet_variant_talent: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -1717,11 +1717,11 @@ fn render_calculator_panel_legend(
                 <button type="button"
                         class="fishy-calculator-panel-control btn btn-ghost btn-xs btn-circle"
                         data-calculator-section-id="{}"
-                        data-class:fishy-calculator-panel-control--active="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}')"
-                        data-attr:aria-pressed="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}').toString()"
-                        data-attr:aria-label="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}') ? {} : {}"
-                        data-attr:title="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, '{}') ? {} : {}"
-                        data-on:click="$_calculator_ui.pinned_sections = window.__fishystuffCalculator.togglePinnedSection($_calculator_ui.pinned_sections, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-pin"></use></svg></button>
+                        data-class:fishy-calculator-panel-control--active="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}')"
+                        data-attr:aria-pressed="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}').toString()"
+                        data-attr:aria-label="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}') ? {} : {}"
+                        data-attr:title="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}') ? {} : {}"
+                        data-on:click="$_calculator_ui = window.__fishystuffCalculator.togglePinnedSection($_calculator_ui, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-pin"></use></svg></button>
             </span>
         </legend>"#,
         label_icon,
@@ -2744,6 +2744,7 @@ fn default_reset_signals_patch_map(
         json!({
             "top_level_tab": "overview",
             "distribution_tab": "groups",
+            "pinned_layout": [["overview"]],
             "pinned_sections": ["overview"],
         }),
     );
@@ -9973,7 +9974,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             label: option.label.as_str(),
             icon: None,
             grade_tone: "unknown",
-            pet_variant_detail: None,
+            pet_variant_talent: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -9989,7 +9990,7 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
             label: option.label.as_str(),
             icon: None,
             grade_tone: "unknown",
-            pet_variant_detail: None,
+            pet_variant_talent: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -9997,21 +9998,14 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
         .collect()
 }
 
-fn pet_variant_detail_label<'a>(
+fn pet_variant_talent_option<'a>(
     tier_entry: &'a CalculatorPetTierEntry,
     catalog: &'a CalculatorPetCatalog,
-) -> Option<&'a str> {
+) -> Option<&'a CalculatorPetOptionEntry> {
     tier_entry
         .talents
         .iter()
-        .find_map(|key| {
-            catalog
-                .talents
-                .iter()
-                .find(|option| option.key == *key)
-                .map(|option| option.label.as_str())
-        })
-        .or_else(|| (!tier_entry.label.trim().is_empty()).then_some(tier_entry.label.as_str()))
+        .find_map(|key| catalog.talents.iter().find(|option| option.key == *key))
 }
 
 fn select_options_from_pet_entries_for_tier<'a>(
@@ -10036,11 +10030,11 @@ fn select_options_from_pet_entries_for_tier<'a>(
             label: option.label.as_str(),
             icon: option.image_url.as_deref(),
             grade_tone: tier_grade_tone,
-            pet_variant_detail: option
+            pet_variant_talent: option
                 .tiers
                 .iter()
                 .find(|tier| tier.key == tier_key)
-                .and_then(|tier| pet_variant_detail_label(tier, catalog)),
+                .and_then(|tier| pet_variant_talent_option(tier, catalog)),
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -11344,6 +11338,43 @@ fn render_item_effect_badges(lang: CalculatorLocale, item: &CalculatorItemEntry)
     )
 }
 
+fn render_pet_talent_badges(lang: CalculatorLocale, talent: &CalculatorPetOptionEntry) -> String {
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let mut badges = Vec::new();
+    if let Some(item_drr) = talent
+        .durability_reduction_resistance
+        .filter(|value| *value > 0.0)
+    {
+        badges.push(render_effect_badge(
+            &text_with_vars(
+                "calculator.server.badge.item_drr",
+                &[("percent", &format_effect_percent(item_drr))],
+            ),
+            "border-amber-400 bg-amber-300 text-amber-950",
+        ));
+    }
+    if let Some(exp_life) = talent.life_exp.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &text_with_vars(
+                "calculator.server.badge.life_exp",
+                &[("percent", &format_effect_percent(exp_life))],
+            ),
+            "border-green-400 bg-green-300 text-green-950",
+        ));
+    }
+    if badges.is_empty() {
+        badges.push(render_effect_badge(
+            &talent.label,
+            "border-base-content/15 bg-base-300 text-base-content",
+        ));
+    }
+    format!(
+        "<span class=\"fishy-calculator-pet-option__badges\">{}</span>",
+        badges.join("")
+    )
+}
+
 fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
     let mut parts = Vec::<String>::new();
     if item.afr.filter(|value| *value > 0.0).is_some() {
@@ -11414,6 +11445,7 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
 }
 
 fn render_pet_dropdown_content_html(
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     option: SelectOption<'_>,
     selected: bool,
@@ -11442,19 +11474,10 @@ fn render_pet_dropdown_content_html(
                 )
             )
         });
-    let detail_html = if selected {
-        String::new()
-    } else {
-        option
-            .pet_variant_detail
-            .map(|detail| {
-                format!(
-                    "<span class=\"fishy-calculator-pet-option__detail\">{}</span>",
-                    escape_html(detail),
-                )
-            })
-            .unwrap_or_default()
-    };
+    let badges_html = option
+        .pet_variant_talent
+        .map(|talent| render_pet_talent_badges(lang, talent))
+        .unwrap_or_default();
     format!(
         "<span class=\"fishy-calculator-pet-option{}\" data-pet-option-card><span class=\"fishy-calculator-pet-option__frame {}\">{}</span><span class=\"fishy-calculator-pet-option__label\">{}</span>{}</span>",
         if selected {
@@ -11465,19 +11488,24 @@ fn render_pet_dropdown_content_html(
         tone_class,
         image_html,
         escape_html(option.label),
-        detail_html,
+        badges_html,
     )
 }
 
-fn render_pet_dropdown_option_content_html(cdn_base_url: &str, option: SelectOption<'_>) -> String {
-    render_pet_dropdown_content_html(cdn_base_url, option, false)
-}
-
-fn render_pet_dropdown_selected_content_html(
+fn render_pet_dropdown_option_content_html(
+    lang: CalculatorLocale,
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
-    render_pet_dropdown_content_html(cdn_base_url, option, true)
+    render_pet_dropdown_content_html(lang, cdn_base_url, option, false)
+}
+
+fn render_pet_dropdown_selected_content_html(
+    lang: CalculatorLocale,
+    cdn_base_url: &str,
+    option: SelectOption<'_>,
+) -> String {
+    render_pet_dropdown_content_html(lang, cdn_base_url, option, true)
 }
 
 fn render_searchable_dropdown_option_content_html(
@@ -11486,7 +11514,7 @@ fn render_searchable_dropdown_option_content_html(
     option: SelectOption<'_>,
 ) -> String {
     if matches!(option.presentation, SelectOptionPresentation::PetCard) {
-        return render_pet_dropdown_option_content_html(cdn_base_url, option);
+        return render_pet_dropdown_option_content_html(lang, cdn_base_url, option);
     }
 
     let uses_item_presentation = option.icon.is_some();
@@ -11558,17 +11586,35 @@ fn render_searchable_dropdown_selected_content_html(
     option: SelectOption<'_>,
 ) -> String {
     if matches!(option.presentation, SelectOptionPresentation::PetCard) {
-        return render_pet_dropdown_selected_content_html(cdn_base_url, option);
+        return render_pet_dropdown_selected_content_html(lang, cdn_base_url, option);
     }
     render_searchable_dropdown_option_content_html(lang, cdn_base_url, option)
 }
 
 fn render_select_option_search_text(option: SelectOption<'_>) -> String {
     let mut parts = vec![option.label.to_string()];
-    if let Some(detail) = option.pet_variant_detail {
-        let normalized = detail.trim();
+    if let Some(talent) = option.pet_variant_talent {
+        let normalized = talent.label.trim();
         if !normalized.is_empty() {
             parts.push(normalized.to_string());
+        }
+        if talent
+            .durability_reduction_resistance
+            .filter(|value| *value > 0.0)
+            .is_some()
+        {
+            parts.extend(
+                ["item drr", "durability reduction resistance", "durability"]
+                    .into_iter()
+                    .map(ToOwned::to_owned),
+            );
+        }
+        if talent.life_exp.filter(|value| *value > 0.0).is_some() {
+            parts.extend(
+                ["life exp", "life experience"]
+                    .into_iter()
+                    .map(ToOwned::to_owned),
+            );
         }
     }
     parts.join(" ")
@@ -12409,7 +12455,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             label: level.name.as_str(),
             icon: None,
             grade_tone: "unknown",
-            pet_variant_detail: None,
+            pet_variant_talent: None,
             item: None,
             lifeskill_level: Some(level),
             presentation: SelectOptionPresentation::Default,
@@ -12429,7 +12475,7 @@ fn item_options_by_type<'a>(
             label: item.name.as_str(),
             icon: item.icon.as_deref(),
             grade_tone: item_grade_tone(item.grade.as_deref()),
-            pet_variant_detail: None,
+            pet_variant_talent: None,
             item: Some(item),
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12451,7 +12497,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             label: entry.name.as_str(),
             icon: entry.icon.as_deref(),
             grade_tone: item_grade_tone(entry.grade.as_deref()),
-            pet_variant_detail: None,
+            pet_variant_talent: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12597,7 +12643,7 @@ fn select_pet_option_entries_by_keys<'a>(
             label: option.label.as_str(),
             icon: None,
             grade_tone: "unknown",
-            pet_variant_detail: None,
+            pet_variant_talent: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12845,10 +12891,11 @@ mod tests {
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
-        poisson_probability_at_least, post_calculator_datastar_eval,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
+        poisson_probability_at_least, post_calculator_datastar_eval, render_pet_talent_badges,
+        render_select_option_search_text, trade_sale_multiplier_for_species, CalculatorData,
+        CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
+        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
+        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
     };
 
     struct MockStore;
@@ -13250,7 +13297,8 @@ mod tests {
         assert!(text.contains("data-pet-pack-leader"));
         assert!(text.contains("fishy-calculator-pet-option--selected"));
         assert!(text.contains("fishy-item-grade-red"));
-        assert!(text.contains("fishy-calculator-pet-option__detail"));
+        assert!(text.contains("fishy-calculator-pet-option__badges"));
+        assert!(text.contains("+5% Item DRR"));
         assert!(text.contains("Durability Reduction Resistance"));
         assert!(text.contains("<fishy-searchable-multiselect"));
         assert!(text.contains("calculator-food-picker"));
@@ -13264,7 +13312,9 @@ mod tests {
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
-        assert!(text.contains("window.__fishystuffCalculator.togglePinnedSection($_calculator_ui.pinned_sections, 'overview')"));
+        assert!(text.contains(
+            "window.__fishystuffCalculator.togglePinnedSection($_calculator_ui, 'overview')"
+        ));
         assert!(text.contains("<fishy-calculator-section-stack"));
         assert!(text.contains("data-calculator-pin-dropzone"));
         assert!(text.contains("data-calculator-section-drag"));
@@ -13870,6 +13920,7 @@ mod tests {
             Some(&json!({
                 "top_level_tab": "overview",
                 "distribution_tab": "groups",
+                "pinned_layout": [["overview"]],
                 "pinned_sections": ["overview"],
             }))
         );
@@ -14235,6 +14286,47 @@ mod tests {
                 .get(&normalize_lookup_value("Young Azure Dragon")),
             Some(&"pet:azure:38".to_string())
         );
+    }
+
+    #[test]
+    fn render_select_option_search_text_includes_pet_talent_label() {
+        let option = SelectOption {
+            value: "pet:azure:life",
+            label: "Young Azure Dragon",
+            icon: Some("/images/pets/pet_blue_dragon_0001.webp"),
+            grade_tone: "red",
+            pet_variant_talent: Some(&CalculatorPetOptionEntry {
+                key: "life_exp".to_string(),
+                label: "Life EXP +4%".to_string(),
+                life_exp: Some(0.04),
+                ..CalculatorPetOptionEntry::default()
+            }),
+            item: None,
+            lifeskill_level: None,
+            presentation: SelectOptionPresentation::PetCard,
+        };
+
+        let text = render_select_option_search_text(option);
+        assert!(text.contains("Young Azure Dragon"));
+        assert!(text.contains("Life EXP +4%"));
+        assert!(text.contains("life exp"));
+        assert!(text.contains("life experience"));
+    }
+
+    #[test]
+    fn render_pet_talent_badges_uses_abbreviated_item_drr_badge() {
+        let html = render_pet_talent_badges(
+            CalculatorLocale::EnUs,
+            &CalculatorPetOptionEntry {
+                key: "durability_reduction_resistance".to_string(),
+                label: "Durability Reduction Resistance +5%".to_string(),
+                durability_reduction_resistance: Some(0.05),
+                ..CalculatorPetOptionEntry::default()
+            },
+        );
+
+        assert!(html.contains("+5% Item DRR"));
+        assert!(!html.contains("Durability Reduction Resistance +5%"));
     }
 
     #[test]
