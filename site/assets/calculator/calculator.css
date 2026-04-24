@@ -155,6 +155,12 @@
         gap: 0.25rem;
     }
 
+    .fishy-calculator-pet-special-badge {
+        border-color: color-mix(in oklab, var(--fishy-item-grade-blue) 78%, var(--color-base-content) 12%);
+        background: color-mix(in oklab, var(--fishy-item-grade-blue) 24%, var(--color-base-100) 76%);
+        color: color-mix(in oklab, var(--fishy-item-grade-blue) 72%, var(--color-base-content) 28%);
+    }
+
     @media (max-width: 640px) {
         .fishy-calculator-pet-option {
             gap: 0.55rem;
