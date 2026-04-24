@@ -10535,14 +10535,16 @@ fn format_effect_percent(value: f32) -> String {
 
 fn render_effect_badge(label: &str, class_name: &str) -> String {
     format!(
-        "<span class=\"badge badge-xs whitespace-nowrap border font-medium {class_name}\">{}</span>",
+        "<span class=\"badge badge-xs whitespace-nowrap border font-medium {class_name}\" title=\"{}\">{}</span>",
+        escape_html(label),
         escape_html(label)
     )
 }
 
 fn render_wrapping_effect_badge(label: &str, class_name: &str) -> String {
     format!(
-        "<span class=\"badge badge-xs h-auto min-h-5 max-w-full whitespace-normal border px-1.5 py-0.5 text-center font-medium leading-tight {class_name}\">{}</span>",
+        "<span class=\"badge badge-xs h-auto min-h-5 max-w-full whitespace-normal border px-1.5 py-0.5 text-center font-medium leading-tight {class_name}\" title=\"{}\">{}</span>",
+        escape_html(label),
         escape_html(label)
     )
 }
@@ -15348,6 +15350,7 @@ mod tests {
         );
 
         assert!(html.contains("+5% Item DRR"));
+        assert!(html.contains("title=\"+5% Item DRR\""));
         assert!(!html.contains("Durability Reduction Resistance +5%"));
     }
 
