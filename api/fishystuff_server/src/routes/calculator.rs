@@ -11647,7 +11647,7 @@ fn render_pet_special_badges(special: &CalculatorPetOptionEntry) -> String {
         .filter(|value| *value > 0.0)
         .is_some()
     {
-        "fishy-calculator-pet-special-badge"
+        "badge-info fishy-calculator-pet-special-badge"
     } else {
         "border-base-content/15 bg-base-300 text-base-content"
     };

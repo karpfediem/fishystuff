@@ -155,10 +155,15 @@
         gap: 0.25rem;
     }
 
-    .fishy-calculator-pet-special-badge {
-        border-color: color-mix(in oklab, var(--fishy-item-grade-blue) 78%, var(--color-base-content) 12%);
-        background: color-mix(in oklab, var(--fishy-item-grade-blue) 24%, var(--color-base-100) 76%);
-        color: color-mix(in oklab, var(--fishy-item-grade-blue) 72%, var(--color-base-content) 28%);
+    .badge.fishy-calculator-pet-special-badge {
+        --fishy-calculator-pet-special-blue: var(--fishy-item-grade-blue, var(--color-info, #6b8afd));
+        --badge-color: var(--fishy-calculator-pet-special-blue);
+        --badge-bg: var(--fishy-calculator-pet-special-blue);
+        --badge-fg: var(--color-info-content, #ffffff);
+        --fishy-badge-color: var(--fishy-calculator-pet-special-blue);
+        border-color: color-mix(in oklab, var(--fishy-calculator-pet-special-blue) 82%, var(--color-base-content, #1f2937) 18%);
+        background-color: var(--fishy-calculator-pet-special-blue);
+        color: var(--badge-fg);
     }
 
     @media (max-width: 640px) {
