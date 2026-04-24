@@ -71,6 +71,7 @@ pub struct CalculatorSearchableOptionQuery {
     pub offset: Option<usize>,
     pub results_id: Option<String>,
     pub selected: Option<String>,
+    pub tier: Option<String>,
     pub zone: Option<String>,
 }
 
@@ -518,6 +519,7 @@ struct SelectOption<'a> {
     icon: Option<&'a str>,
     grade_tone: &'a str,
     pet_variant_talent: Option<&'a CalculatorPetOptionEntry>,
+    pet_variant_special: Option<&'a CalculatorPetOptionEntry>,
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
     presentation: SelectOptionPresentation,
@@ -605,6 +607,7 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
     icon: None,
     grade_tone: "unknown",
     pet_variant_talent: None,
+    pet_variant_special: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -619,6 +622,7 @@ static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(||
     icon: None,
     grade_tone: "unknown",
     pet_variant_talent: None,
+    pet_variant_special: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -633,6 +637,7 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     icon: None,
     grade_tone: "unknown",
     pet_variant_talent: None,
+    pet_variant_special: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -657,6 +662,7 @@ enum CalculatorSearchableOptionKind {
     Chair,
     LightstoneSet,
     Backpack,
+    Pet,
     PetSpecial,
     PetTalent,
     PetTier,
@@ -675,6 +681,7 @@ impl CalculatorSearchableOptionKind {
             "chair" => Some(Self::Chair),
             "lightstone_set" => Some(Self::LightstoneSet),
             "backpack" => Some(Self::Backpack),
+            "pet" => Some(Self::Pet),
             "pet_special" => Some(Self::PetSpecial),
             "pet_talent" => Some(Self::PetTalent),
             "pet_tier" => Some(Self::PetTier),
@@ -694,6 +701,7 @@ impl CalculatorSearchableOptionKind {
             Self::Chair => "chair",
             Self::LightstoneSet => "lightstone_set",
             Self::Backpack => "backpack",
+            Self::Pet => "pet",
             Self::PetSpecial => "pet_special",
             Self::PetTalent => "pet_talent",
             Self::PetTier => "pet_tier",
@@ -982,7 +990,7 @@ pub async fn get_calculator_datastar_option_search(
         .as_deref()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or("calculator-search-results");
-    let (options, include_none) = searchable_options_for_kind(&data, kind);
+    let (options, include_none) = searchable_options_for_kind(&data, kind, query.tier.as_deref());
     let fragment = render_searchable_select_results(
         data.lang,
         data.cdn_base_url.as_str(),
@@ -3193,7 +3201,7 @@ fn normalize_pet(
         &catalog.specials,
         Some(LEGACY_PET_SPECIAL_AUTO_FISHING),
         |option| option.auto_fishing_time_reduction,
-        false,
+        true,
     );
     pet.talent = resolve_pet_option_selection(
         &pet.talent,
@@ -10405,6 +10413,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             icon: None,
             grade_tone: "unknown",
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -10421,6 +10430,7 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
             icon: None,
             grade_tone: "unknown",
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -10436,6 +10446,16 @@ fn pet_variant_talent_option<'a>(
         .talents
         .iter()
         .find_map(|key| catalog.talents.iter().find(|option| option.key == *key))
+}
+
+fn pet_variant_special_option<'a>(
+    tier_entry: &'a CalculatorPetTierEntry,
+    catalog: &'a CalculatorPetCatalog,
+) -> Option<&'a CalculatorPetOptionEntry> {
+    tier_entry
+        .specials
+        .iter()
+        .find_map(|key| catalog.specials.iter().find(|option| option.key == *key))
 }
 
 fn select_options_from_pet_entries_for_tier<'a>(
@@ -10465,6 +10485,11 @@ fn select_options_from_pet_entries_for_tier<'a>(
                 .iter()
                 .find(|tier| tier.key == tier_key)
                 .and_then(|tier| pet_variant_talent_option(tier, catalog)),
+            pet_variant_special: option
+                .tiers
+                .iter()
+                .find(|tier| tier.key == tier_key)
+                .and_then(|tier| pet_variant_special_option(tier, catalog)),
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -10602,6 +10627,13 @@ fn format_effect_percent(value: f32) -> String {
 fn render_effect_badge(label: &str, class_name: &str) -> String {
     format!(
         "<span class=\"badge badge-xs whitespace-nowrap border font-medium {class_name}\">{}</span>",
+        escape_html(label)
+    )
+}
+
+fn render_wrapping_effect_badge(label: &str, class_name: &str) -> String {
+    format!(
+        "<span class=\"badge badge-xs h-auto min-h-5 max-w-full whitespace-normal border px-1.5 py-0.5 text-center font-medium leading-tight {class_name}\">{}</span>",
         escape_html(label)
     )
 }
@@ -11609,6 +11641,22 @@ fn render_pet_talent_badges(lang: CalculatorLocale, talent: &CalculatorPetOption
     )
 }
 
+fn render_pet_special_badges(special: &CalculatorPetOptionEntry) -> String {
+    let class_name = if special
+        .auto_fishing_time_reduction
+        .filter(|value| *value > 0.0)
+        .is_some()
+    {
+        "border-blue-400 bg-blue-300 text-blue-950"
+    } else {
+        "border-base-content/15 bg-base-300 text-base-content"
+    };
+    format!(
+        "<span class=\"fishy-calculator-pet-option__badges\">{}</span>",
+        render_wrapping_effect_badge(&special.label, class_name)
+    )
+}
+
 fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
     let mut parts = Vec::<String>::new();
     if item.afr.filter(|value| *value > 0.0).is_some() {
@@ -11708,10 +11756,13 @@ fn render_pet_dropdown_content_html(
                 )
             )
         });
-    let badges_html = option
-        .pet_variant_talent
-        .map(|talent| render_pet_talent_badges(lang, talent))
-        .unwrap_or_default();
+    let mut badges_html = String::new();
+    if let Some(special) = option.pet_variant_special {
+        badges_html.push_str(&render_pet_special_badges(special));
+    }
+    if let Some(talent) = option.pet_variant_talent {
+        badges_html.push_str(&render_pet_talent_badges(lang, talent));
+    }
     format!(
         "<span class=\"fishy-calculator-pet-option{}\" data-pet-option-card><span class=\"fishy-calculator-pet-option__frame {}\">{}</span><span class=\"fishy-calculator-pet-option__label\">{}</span>{}</span>",
         if selected {
@@ -11827,6 +11878,29 @@ fn render_searchable_dropdown_selected_content_html(
 
 fn render_select_option_search_text(option: SelectOption<'_>) -> String {
     let mut parts = vec![option.label.to_string()];
+    if let Some(special) = option.pet_variant_special {
+        let normalized = special.label.trim();
+        if !normalized.is_empty() {
+            parts.push(normalized.to_string());
+        }
+        if special
+            .auto_fishing_time_reduction
+            .filter(|value| *value > 0.0)
+            .is_some()
+        {
+            parts.extend(
+                [
+                    "aft",
+                    "afr",
+                    "auto fishing",
+                    "auto-fishing",
+                    "auto fish time",
+                ]
+                .into_iter()
+                .map(ToOwned::to_owned),
+            );
+        }
+    }
     if let Some(talent) = option.pet_variant_talent {
         let normalized = talent.label.trim();
         if !normalized.is_empty() {
@@ -11870,6 +11944,7 @@ fn with_optional_none<'a>(
 fn searchable_options_for_kind<'a>(
     data: &'a CalculatorData,
     kind: CalculatorSearchableOptionKind,
+    pet_tier: Option<&str>,
 ) -> (Vec<SelectOption<'a>>, bool) {
     match kind {
         CalculatorSearchableOptionKind::FishingLevel => (
@@ -11905,6 +11980,13 @@ fn searchable_options_for_kind<'a>(
         CalculatorSearchableOptionKind::Backpack => {
             (item_options_by_type(&data.catalog.items, "backpack"), true)
         }
+        CalculatorSearchableOptionKind::Pet => (
+            select_options_from_pet_entries_for_tier(
+                &data.catalog.pets,
+                pet_tier.unwrap_or(data.catalog.defaults.pet1.tier.as_str()),
+            ),
+            true,
+        ),
         CalculatorSearchableOptionKind::PetTier => {
             (select_options_from_catalog(&data.catalog.pets.tiers), false)
         }
@@ -11943,8 +12025,9 @@ fn fuzzy_select_matches<'a>(
     let mut scored = options
         .into_iter()
         .filter_map(|option| {
+            let search_text = render_select_option_search_text(option);
             matcher
-                .fuzzy_match(&normalize_lookup_value(option.label), &normalized_query)
+                .fuzzy_match(&normalize_lookup_value(&search_text), &normalized_query)
                 .map(|score| (option, score))
         })
         .collect::<Vec<_>>();
@@ -12073,6 +12156,21 @@ fn render_calculator_option_search_url(
         locale_param(lang),
         kind.param(),
         results_id,
+    )
+}
+
+fn render_calculator_pet_search_url(
+    api_lang: FishLang,
+    lang: CalculatorLocale,
+    results_id: &str,
+    tier_key: &str,
+) -> String {
+    format!(
+        "/api/v1/calculator/datastar/option-search?lang={}&locale={}&kind=pet&results_id={}&tier={}",
+        lang_param(api_lang),
+        locale_param(lang),
+        results_id,
+        escape_html(tier_key),
     )
 }
 
@@ -12236,6 +12334,78 @@ fn render_local_searchable_select_control(
             value: selected_value,
             search_url: "",
             search_url_root: None,
+            search_placeholder,
+        },
+        &results_html,
+    );
+
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(bind_key),
+        escape_html(selected_value),
+        dropdown,
+    )
+}
+
+fn render_pet_select_control(
+    cdn_base_url: &str,
+    api_lang: FishLang,
+    lang: CalculatorLocale,
+    root_id: &str,
+    input_id: &str,
+    bind_key: &str,
+    selected_value: &str,
+    tier_key: &str,
+    options: &[SelectOption<'_>],
+    search_placeholder: &str,
+) -> String {
+    let results_id = format!("{root_id}-results");
+    let options = with_optional_none(options, true, lang);
+    let selected_option = options
+        .iter()
+        .copied()
+        .find(|option| option.value == selected_value);
+    let none_option = none_select_option(lang);
+    let selected_label = selected_option
+        .map(|option| option.label)
+        .unwrap_or_else(|| {
+            if selected_value.trim().is_empty() {
+                none_option.label
+            } else {
+                selected_value
+            }
+        });
+    let selected_content_html = selected_option
+        .map(|option| render_searchable_dropdown_selected_content_html(lang, cdn_base_url, option))
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let results_html = render_searchable_select_results(
+        lang,
+        cdn_base_url,
+        &results_id,
+        &options,
+        selected_value,
+        "",
+        0,
+    );
+    let search_url = render_calculator_pet_search_url(api_lang, lang, &results_id, tier_key);
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: None,
+            compact: false,
+            trigger_size: SearchableDropdownTriggerSize::Content,
+            trigger_width: Some("12rem"),
+            trigger_min_height: Some("12rem"),
+            panel_width: Some("60rem"),
+            panel_placement: SearchableDropdownPanelPlacement::OverlayAnchor,
+            results_layout: SearchableDropdownResultsLayout::Cards,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: selected_value,
+            search_url: &search_url,
+            search_url_root: Some("api"),
             search_placeholder,
         },
         &results_html,
@@ -12830,6 +13000,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             icon: None,
             grade_tone: "unknown",
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: None,
             lifeskill_level: Some(level),
             presentation: SelectOptionPresentation::Default,
@@ -12850,6 +13021,7 @@ fn item_options_by_type<'a>(
             icon: item.icon.as_deref(),
             grade_tone: item_grade_tone(item.grade.as_deref()),
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: Some(item),
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12872,6 +13044,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             icon: entry.icon.as_deref(),
             grade_tone: item_grade_tone(entry.grade.as_deref()),
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -13018,6 +13191,7 @@ fn select_pet_option_entries_by_keys<'a>(
             icon: None,
             grade_tone: "unknown",
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -13095,7 +13269,7 @@ fn render_pet_tier_header_control(
 
 fn render_pet_cards(
     cdn_base_url: &str,
-    _api_lang: FishLang,
+    api_lang: FishLang,
     lang: CalculatorLocale,
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
@@ -13149,17 +13323,17 @@ fn render_pet_cards(
         )
         .unwrap();
         html.push_str("<fieldset class=\"fieldset min-w-0 max-w-full shrink\">");
-        html.push_str(&render_local_searchable_select_control(
+        html.push_str(&render_pet_select_control(
             cdn_base_url,
+            api_lang,
             lang,
             &format!("calculator-pet{slot}-pet-picker"),
             &format!("calculator-pet{slot}-pet-value"),
             &format!("{}.pet", bind_prefix),
             &pet.pet,
+            &pet.tier,
             &pet_options,
-            true,
             &calculator_route_text(lang, "calculator.server.search.pets"),
-            false,
         ));
         html.push_str("</fieldset></div>");
         html.push_str(&format!(
@@ -13717,7 +13891,6 @@ mod tests {
         assert!(text.contains("flex shrink-0 flex-col items-center"));
         assert!(text.contains("btn btn-ghost btn-xs btn-square"));
         assert!(text.contains("kbd kbd-xl h-12 min-h-12 w-12 text-2xl font-bold"));
-        assert!(text.contains("card-title min-w-0 text-base"));
         assert!(text.contains("#fishy-up-small-fill"));
         assert!(text.contains("#fishy-down-small-fill"));
         assert!(text.contains("http://127.0.0.1:4040/images/pets/pet_hawk_0014.webp"));
@@ -13726,7 +13899,6 @@ mod tests {
         assert!(text.contains("fishy-item-grade-red"));
         assert!(text.contains("fishy-calculator-pet-option__badges"));
         assert!(text.contains("+5% Item DRR"));
-        assert!(text.contains("Durability Reduction Resistance"));
         assert!(!text.contains("calculator-pet1-tier-picker"));
         assert!(text.contains("<fishy-searchable-multiselect"));
         assert!(text.contains("calculator-food-picker"));
@@ -14119,6 +14291,7 @@ mod tests {
                 icon: None,
                 grade_tone: "unknown",
                 pet_variant_talent: None,
+                pet_variant_special: None,
                 item: None,
                 lifeskill_level: None,
                 presentation: SelectOptionPresentation::Default,
@@ -14152,6 +14325,7 @@ mod tests {
                 offset: None,
                 results_id: Some("calculator-rod-picker-results".to_string()),
                 selected: Some("item:16162".to_string()),
+                tier: None,
                 zone: None,
             })),
             Extension(RequestId("req-test".to_string())),
@@ -14194,6 +14368,7 @@ mod tests {
                 offset: None,
                 results_id: Some("calculator-lightstone-picker-results".to_string()),
                 selected: Some("lightstone-set:30".to_string()),
+                tier: None,
                 zone: None,
             })),
             Extension(RequestId("req-test".to_string())),
@@ -14225,6 +14400,7 @@ mod tests {
                 offset: None,
                 results_id: Some("calculator-lifeskill-level-picker-results".to_string()),
                 selected: Some("100".to_string()),
+                tier: None,
                 zone: None,
             })),
             Extension(RequestId("req-test".to_string())),
@@ -14238,6 +14414,39 @@ mod tests {
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("Guru 20"));
         assert!(text.contains("+60% Lv DRR"));
+        assert!(text.contains("Selected"));
+    }
+
+    #[tokio::test]
+    async fn option_search_returns_pet_cards_for_tier() {
+        let response = get_calculator_datastar_option_search(
+            State(test_state()),
+            Ok(Query(CalculatorSearchableOptionQuery {
+                lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
+                r#ref: None,
+                kind: Some("pet".to_string()),
+                q: Some("hawk drr".to_string()),
+                offset: None,
+                results_id: Some("calculator-pet1-pet-picker-results".to_string()),
+                selected: Some("pet:3:1:pet_hawk_0014".to_string()),
+                tier: Some("5".to_string()),
+                zone: None,
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("id=\"calculator-pet1-pet-picker-results\""));
+        assert!(text.contains("data-searchable-dropdown-option"));
+        assert!(text.contains("Hawk"));
+        assert!(text.contains("fishy-calculator-pet-option__badges"));
+        assert!(text.contains("+5% Item DRR"));
         assert!(text.contains("Selected"));
     }
 
@@ -14645,7 +14854,7 @@ mod tests {
 
         assert_eq!(pet.pet, "pet:hawk");
         assert_eq!(pet.tier, "4");
-        assert_eq!(pet.special, "");
+        assert_eq!(pet.special, "special_t4");
         assert_eq!(pet.talent, "talent_t4");
         assert_eq!(pet.skills, vec!["skill_t4".to_string()]);
         assert!(pet.pack_leader);
@@ -15032,6 +15241,7 @@ mod tests {
                 life_exp: Some(0.04),
                 ..CalculatorPetOptionEntry::default()
             }),
+            pet_variant_special: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -15042,6 +15252,33 @@ mod tests {
         assert!(text.contains("Life EXP +4%"));
         assert!(text.contains("life exp"));
         assert!(text.contains("life experience"));
+    }
+
+    #[test]
+    fn render_select_option_search_text_includes_pet_special_label() {
+        let option = SelectOption {
+            value: "pet:penguin",
+            label: "Penguin",
+            icon: Some("/images/pets/pet_penguin_0001.webp"),
+            grade_tone: "red",
+            pet_variant_talent: None,
+            pet_variant_special: Some(&CalculatorPetOptionEntry {
+                key: "pet-special:37".to_string(),
+                label: "Special: Auto-Fishing Time Reduction -30%".to_string(),
+                auto_fishing_time_reduction: Some(0.30),
+                ..CalculatorPetOptionEntry::default()
+            }),
+            item: None,
+            lifeskill_level: None,
+            presentation: SelectOptionPresentation::PetCard,
+        };
+
+        let text = render_select_option_search_text(option);
+        assert!(text.contains("Penguin"));
+        assert!(text.contains("Special: Auto-Fishing Time Reduction -30%"));
+        assert!(text.contains("auto fishing"));
+        assert!(text.contains("auto-fishing"));
+        assert!(text.contains("afr"));
     }
 
     #[test]
@@ -16528,6 +16765,7 @@ mod tests {
             icon: None,
             grade_tone: "unknown",
             pet_variant_talent: None,
+            pet_variant_special: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,

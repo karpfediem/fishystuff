@@ -22,10 +22,17 @@ type CalculatorPetDbRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 type CalculatorPetSkillIndexDbRow = (Option<String>, Option<String>);
 type CalculatorLanguagedataDbRow = (Option<String>, Option<String>);
 type CalculatorPetSkilltypeDbRow = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+type CalculatorPetSpecialSkillDbRow = (
     Option<String>,
     Option<String>,
     Option<String>,
@@ -40,8 +47,17 @@ struct RawPetRow {
     race: String,
     kind: String,
     tier_source: u8,
+    special_skill_no: Option<String>,
     base_skill_index: Option<String>,
     acquire_key: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PetSpecialSkillMeta {
+    skill_no: String,
+    skill_type: String,
+    param0: Option<String>,
+    param1: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -114,6 +130,10 @@ fn trim_optional_string(value: Option<String>) -> Option<String> {
 
 fn parse_u8(value: Option<&str>) -> Option<u8> {
     value?.trim().parse::<u8>().ok()
+}
+
+fn parse_f32(value: Option<&str>) -> Option<f32> {
+    value?.trim().parse::<f32>().ok()
 }
 
 fn is_looting_pet_type(value: Option<&str>) -> bool {
@@ -303,6 +323,7 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
             `Race`, \
             `Kind`, \
             `Tier`, \
+            `Skill_1`, \
             `BaseSkill`, \
             `EquipSkillAquireKey`, \
             `PetType` \
@@ -319,6 +340,7 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
                 race,
                 kind,
                 tier_source,
+                special_skill_no,
                 base_skill_index,
                 acquire_key,
                 pet_type,
@@ -337,6 +359,8 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
                     race,
                     kind,
                     tier_source,
+                    special_skill_no: trim_optional_string(special_skill_no)
+                        .filter(|value| value != "0"),
                     base_skill_index: trim_optional_string(base_skill_index),
                     acquire_key: trim_optional_string(acquire_key).filter(|value| value != "0"),
                 })
@@ -448,6 +472,44 @@ fn query_skilltype_meta(
     Ok(result)
 }
 
+fn query_pet_special_skill_meta(
+    conn: &mut PooledConn,
+    as_of: &str,
+    skill_ids: &HashSet<String>,
+) -> Result<HashMap<String, PetSpecialSkillMeta>, mysql::Error> {
+    let mut values = skill_ids.iter().cloned().collect::<Vec<_>>();
+    values.sort();
+    let mut result = HashMap::new();
+    for chunk in values.chunks(400) {
+        let query = format!(
+            "SELECT `PetSkillNo`, `PetSkillType`, `Param0`, `Param1` \
+             FROM pet_skill_table{as_of} \
+             WHERE `Level` = '1' \
+               AND `PetSkillNo` IN ({})",
+            quoted_sql_values(chunk),
+        );
+        let rows: Vec<CalculatorPetSpecialSkillDbRow> = conn.query(query)?;
+        for (skill_no, skill_type, param0, param1) in rows {
+            let Some(skill_no) = trim_optional_string(skill_no) else {
+                continue;
+            };
+            let Some(skill_type) = trim_optional_string(skill_type) else {
+                continue;
+            };
+            result.insert(
+                skill_no.clone(),
+                PetSpecialSkillMeta {
+                    skill_no,
+                    skill_type,
+                    param0: trim_optional_string(param0),
+                    param1: trim_optional_string(param1),
+                },
+            );
+        }
+    }
+    Ok(result)
+}
+
 fn choose_pet_tier_representative<'a>(rows: &'a [&'a RawPetRow]) -> Option<&'a RawPetRow> {
     rows.iter().copied().min_by(|left, right| {
         let left_has_acquire = left.acquire_key.is_some();
@@ -547,6 +609,13 @@ fn build_tier_entry(
     let mut specials = Vec::new();
     let mut talents = Vec::new();
     let mut skills = Vec::new();
+
+    if let Some(special_skill_no) = representative.special_skill_no.as_ref() {
+        let special_key = pet_special_option_key(special_skill_no);
+        if options_by_key.contains_key(&special_key) {
+            specials.push(special_key);
+        }
+    }
 
     if let Some(skill_index) = representative.base_skill_index.as_ref() {
         if let Some(skill_no) = base_skill_by_index.get(skill_index) {
@@ -693,6 +762,168 @@ fn calculator_pet_option_records(
     records
 }
 
+fn pet_special_option_key(skill_no: &str) -> String {
+    format!("pet-special:{}", skill_no.trim())
+}
+
+fn format_whole_number(value: f32) -> String {
+    if (value - value.round()).abs() < 0.001 {
+        format!("{}", value.round() as i32)
+    } else {
+        format!("{value:.1}")
+    }
+}
+
+fn pet_special_percent(value: Option<&str>) -> Option<f32> {
+    parse_f32(value).map(|raw| raw / 1_000_000.0)
+}
+
+fn pet_special_seconds(value: Option<&str>) -> Option<f32> {
+    parse_f32(value).map(|raw| raw / 1000.0)
+}
+
+fn pet_special_range_meters(value: Option<&str>) -> Option<f32> {
+    parse_f32(value).map(|raw| raw / 100.0)
+}
+
+fn pet_special_interval_suffix(meta: &PetSpecialSkillMeta) -> String {
+    pet_special_seconds(meta.param1.as_deref())
+        .or_else(|| pet_special_seconds(meta.param0.as_deref()))
+        .map(|seconds| format!(" every {}s", format_whole_number(seconds)))
+        .unwrap_or_default()
+}
+
+fn pet_special_detection_suffix(meta: &PetSpecialSkillMeta) -> String {
+    let range = pet_special_range_meters(meta.param0.as_deref());
+    let seconds = pet_special_seconds(meta.param1.as_deref());
+    match (range, seconds) {
+        (Some(range), Some(seconds)) => format!(
+            " ({}m / {}s)",
+            format_whole_number(range),
+            format_whole_number(seconds)
+        ),
+        (Some(range), None) => format!(" ({}m)", format_whole_number(range)),
+        (None, Some(seconds)) => format!(" ({}s)", format_whole_number(seconds)),
+        (None, None) => String::new(),
+    }
+}
+
+fn pet_special_gathering_chance(meta: &PetSpecialSkillMeta) -> Option<f32> {
+    match meta.skill_no.trim() {
+        "41" => Some(0.30),
+        "42" => Some(0.40),
+        "43" => Some(0.50),
+        _ => None,
+    }
+}
+
+fn pet_special_option_label(lang: FishLang, meta: &PetSpecialSkillMeta) -> String {
+    let special = |en: String, ko: String| localized_label(lang, en, ko);
+    match meta.skill_type.trim() {
+        "2" => special(
+            format!(
+                "Special: Resource Detection{}",
+                pet_special_detection_suffix(meta)
+            ),
+            "특기: 자원 탐지".to_string(),
+        ),
+        "3" => special(
+            format!(
+                "Special: Hostility Detection{}",
+                pet_special_detection_suffix(meta)
+            ),
+            "특기: 적대 모험가 감지".to_string(),
+        ),
+        "5" => special(
+            format!(
+                "Special: Monster Taunt{}",
+                pet_special_interval_suffix(meta)
+            ),
+            "특기: 몬스터 도발".to_string(),
+        ),
+        "6" => special(
+            format!(
+                "Special: Rare Monster Detection{}",
+                pet_special_interval_suffix(meta)
+            ),
+            "특기: 희귀 몬스터 탐지".to_string(),
+        ),
+        "7" => {
+            let percent = pet_special_percent(meta.param0.as_deref()).unwrap_or_default() * 100.0;
+            special(
+                format!(
+                    "Special: Auto-Fishing Time Reduction -{}%",
+                    format_whole_number(percent)
+                ),
+                format!(
+                    "특기: 자동 낚시 시간 감소 -{}%",
+                    format_whole_number(percent)
+                ),
+            )
+        }
+        "8" => {
+            let percent = pet_special_percent(meta.param0.as_deref()).unwrap_or_default() * 100.0;
+            special(
+                format!(
+                    "Special: Desert Illness Resistance +{}%",
+                    format_whole_number(percent)
+                ),
+                format!("특기: 사막 질병 저항 +{}%", format_whole_number(percent)),
+            )
+        }
+        "9" => {
+            let percent = pet_special_gathering_chance(meta).unwrap_or_default() * 100.0;
+            special(
+                format!(
+                    "Special: Additional Gathering Resources {}% chance",
+                    format_whole_number(percent)
+                ),
+                format!(
+                    "특기: 채집물 추가 획득 확률 {}%",
+                    format_whole_number(percent)
+                ),
+            )
+        }
+        "10" => special(
+            "Special: Expanded Item Pickup Range".to_string(),
+            "특기: 아이템 줍기 범위 증가".to_string(),
+        ),
+        _ => special(
+            format!("Special: Pet Skill {}", meta.skill_no),
+            format!("특기: 펫 기술 {}", meta.skill_no),
+        ),
+    }
+}
+
+fn calculator_pet_special_option_records(
+    lang: FishLang,
+    meta_by_skill_no: &HashMap<String, PetSpecialSkillMeta>,
+) -> HashMap<String, CalculatorPetOptionRecord> {
+    let mut records = HashMap::new();
+    for meta in meta_by_skill_no.values() {
+        let auto_fishing_time_reduction = (meta.skill_type.trim() == "7")
+            .then(|| pet_special_percent(meta.param0.as_deref()))
+            .flatten();
+        let key = pet_special_option_key(&meta.skill_no);
+        records.insert(
+            key.clone(),
+            CalculatorPetOptionRecord {
+                kind: PetOptionKind::Special,
+                entry: CalculatorPetOptionEntry {
+                    key,
+                    label: pet_special_option_label(lang, meta),
+                    icon: None,
+                    auto_fishing_time_reduction,
+                    durability_reduction_resistance: None,
+                    fishing_exp: None,
+                    life_exp: None,
+                },
+            },
+        );
+    }
+    records
+}
+
 impl DoltMySqlStore {
     pub(super) fn query_calculator_pet_catalog(
         &self,
@@ -751,7 +982,11 @@ impl DoltMySqlStore {
             };
 
         let mut skill_ids = HashSet::new();
+        let mut pet_special_skill_ids = HashSet::new();
         for row in &pet_rows {
+            if let Some(skill_no) = row.special_skill_no.as_ref() {
+                pet_special_skill_ids.insert(skill_no.clone());
+            }
             if let Some(skill_index) = row.base_skill_index.as_ref() {
                 if let Some(skill_no) = base_skill_by_index.get(skill_index) {
                     skill_ids.insert(skill_no.clone());
@@ -779,8 +1014,17 @@ impl DoltMySqlStore {
             Err(err) if is_missing_table(&err, "skilltype_table_new") => HashMap::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
-        let options_by_key =
+        let pet_special_skill_meta =
+            match query_pet_special_skill_meta(&mut conn, &as_of, &pet_special_skill_ids) {
+                Ok(rows) => rows,
+                Err(err) => return Err(db_unavailable(err)),
+            };
+        let mut options_by_key =
             calculator_pet_option_records(lang, &skill_ids, &english_skill_labels, &skilltype_meta);
+        options_by_key.extend(calculator_pet_special_option_records(
+            lang,
+            &pet_special_skill_meta,
+        ));
 
         let mut grouped_rows = BTreeMap::<String, Vec<RawPetRow>>::new();
         for row in pet_rows {
@@ -892,14 +1136,17 @@ impl DoltMySqlStore {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use fishystuff_api::models::calculator::{CalculatorPetEntry, CalculatorPetTierEntry};
 
     use crate::store::FishLang;
 
     use super::{
-        dedupe_built_pet_entries, is_looting_pet_type, localized_pet_option_label,
-        parse_asset_stem, parse_pet_option_effects, pet_image_url, pet_option_kind, BuiltPetEntry,
-        PetOptionKind,
+        calculator_pet_special_option_records, dedupe_built_pet_entries, is_looting_pet_type,
+        localized_pet_option_label, parse_asset_stem, parse_pet_option_effects, pet_image_url,
+        pet_option_kind, pet_special_option_label, BuiltPetEntry, PetOptionKind,
+        PetSpecialSkillMeta,
     };
 
     #[test]
@@ -939,6 +1186,44 @@ mod tests {
                 None,
             ),
             "내구도 감소 저항 +5%"
+        );
+    }
+
+    #[test]
+    fn pet_special_option_label_formats_auto_fishing_time_reduction() {
+        let meta = PetSpecialSkillMeta {
+            skill_no: "37".to_string(),
+            skill_type: "7".to_string(),
+            param0: Some("300000".to_string()),
+            param1: None,
+        };
+
+        assert_eq!(
+            pet_special_option_label(FishLang::En, &meta),
+            "Special: Auto-Fishing Time Reduction -30%"
+        );
+
+        let records = calculator_pet_special_option_records(
+            FishLang::En,
+            &HashMap::from([("37".to_string(), meta)]),
+        );
+        let record = records.get("pet-special:37").expect("special option");
+        assert_eq!(record.kind, PetOptionKind::Special);
+        assert_eq!(record.entry.auto_fishing_time_reduction, Some(0.30));
+    }
+
+    #[test]
+    fn pet_special_option_label_formats_detection_metadata() {
+        let meta = PetSpecialSkillMeta {
+            skill_no: "21".to_string(),
+            skill_type: "2".to_string(),
+            param0: Some("3400".to_string()),
+            param1: Some("10000".to_string()),
+        };
+
+        assert_eq!(
+            pet_special_option_label(FishLang::En, &meta),
+            "Special: Resource Detection (34m / 10s)"
         );
     }
 
