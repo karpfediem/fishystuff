@@ -627,7 +627,9 @@ export class FishySearchableDropdown extends HTMLElement {
             return;
         }
         window.addEventListener("resize", this._handleViewportChange);
-        window.addEventListener("scroll", this._handleViewportChange, true);
+        if (!this._usesOverlayAnchorPlacement()) {
+            window.addEventListener("scroll", this._handleViewportChange, true);
+        }
         this._viewportListenersAttached = true;
     }
 
@@ -728,7 +730,8 @@ export class FishySearchableDropdown extends HTMLElement {
         if (!width) {
             return "";
         }
-        return `min(${width}, calc(100vw - 24px))`;
+        const edgeInset = this._usesOverlayAnchorPlacement() ? "0px" : "24px";
+        return `min(${width}, calc(100vw - ${edgeInset}))`;
     }
 
     _buildSearchUrl(query, offset = null) {
@@ -1399,7 +1402,9 @@ export class FishySearchableDropdown extends HTMLElement {
         if (configuredWidth) {
             panel.style.width = configuredWidth;
             panel.style.minWidth = "0";
-            panel.style.maxWidth = "calc(100vw - 24px)";
+            panel.style.maxWidth = this._usesOverlayAnchorPlacement()
+                ? "100vw"
+                : "calc(100vw - 24px)";
         }
         const rect = panel.getBoundingClientRect();
         panel.hidden = previousHidden;
@@ -1429,6 +1434,10 @@ export class FishySearchableDropdown extends HTMLElement {
         return getStringAttribute(this, "panel-mode") === "detached";
     }
 
+    _usesOverlayAnchorPlacement() {
+        return getStringAttribute(this, "panel-placement") === "overlay-anchor";
+    }
+
     _ownsNode(node) {
         if (!(node instanceof Node)) {
             return false;
@@ -1448,39 +1457,58 @@ export class FishySearchableDropdown extends HTMLElement {
         const anchorRect = anchor.getBoundingClientRect();
         const panelWidth = Math.round(measuredWidth || panel.getBoundingClientRect().width || 0);
         const anchorWidth = Math.round(anchorRect.width || 0);
+        const overlayAnchor = this._usesOverlayAnchorPlacement();
+        const edgeInset = overlayAnchor ? 0 : 12;
+        const originRect = document.documentElement.getBoundingClientRect();
+        const originLeft = Number.isFinite(originRect.left) ? originRect.left : 0;
+        const originTop = Number.isFinite(originRect.top) ? originRect.top : 0;
         const widthSource = getStringAttribute(this, "panel-min-width");
+        const maxWidth = overlayAnchor
+            ? viewportWidth - edgeInset - anchorRect.left
+            : viewportWidth - edgeInset * 2;
         const width = Math.max(
             0,
             Math.min(
                 widthSource === "panel" ? Math.max(anchorWidth, panelWidth) : (anchorWidth || panelWidth),
-                viewportWidth - 24,
+                Math.max(0, maxWidth),
             ),
         );
 
-        panel.style.position = "fixed";
+        panel.style.position = overlayAnchor ? "absolute" : "fixed";
         panel.style.margin = "0";
         panel.style.zIndex = "70";
         panel.style.width = width ? `${width}px` : "";
         panel.style.minWidth = "0";
-        panel.style.maxWidth = `${Math.max(viewportWidth - 24, 160)}px`;
-        panel.style.left = "12px";
-        panel.style.top = "12px";
+        panel.style.maxWidth = `${Math.max(viewportWidth - edgeInset * 2, 160)}px`;
+        panel.style.left = `${edgeInset}px`;
+        panel.style.top = `${edgeInset}px`;
 
         const panelRect = panel.getBoundingClientRect();
-        let left = Math.round(anchorRect.left);
-        if (left + panelRect.width > viewportWidth - 12) {
-            left = Math.max(12, Math.round(viewportWidth - panelRect.width - 12));
+        if (overlayAnchor) {
+            panel.style.left = `${anchorRect.left - originLeft}px`;
+            panel.style.top = `${anchorRect.top - originTop}px`;
+            return;
+        }
+
+        const minLeft = edgeInset - originLeft;
+        let left = anchorRect.left - originLeft;
+        if (left + originLeft + panelRect.width > viewportWidth - edgeInset) {
+            left = Math.max(
+                minLeft,
+                viewportWidth - panelRect.width - edgeInset - originLeft,
+            );
         }
 
         const belowTop = Math.round(anchorRect.bottom + 8);
         const aboveTop = Math.round(anchorRect.top - panelRect.height - 8);
-        const top =
+        const topInViewport =
             belowTop + panelRect.height <= viewportHeight - 12 || aboveTop < 12
                 ? belowTop
                 : aboveTop;
+        const top = topInViewport - originTop;
 
         panel.style.left = `${left}px`;
-        panel.style.top = `${Math.max(12, top)}px`;
+        panel.style.top = `${Math.max(edgeInset - originTop, top)}px`;
     }
 
     _restorePanel() {

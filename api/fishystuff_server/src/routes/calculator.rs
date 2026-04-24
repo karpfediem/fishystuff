@@ -541,6 +541,12 @@ enum SearchableDropdownResultsLayout {
     Cards,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchableDropdownPanelPlacement {
+    Adjacent,
+    OverlayAnchor,
+}
+
 struct SearchableDropdownConfig<'a> {
     catalog_html: Option<&'a str>,
     compact: bool,
@@ -548,6 +554,7 @@ struct SearchableDropdownConfig<'a> {
     trigger_width: Option<&'a str>,
     trigger_min_height: Option<&'a str>,
     panel_width: Option<&'a str>,
+    panel_placement: SearchableDropdownPanelPlacement,
     results_layout: SearchableDropdownResultsLayout,
     root_id: &'a str,
     input_id: &'a str,
@@ -9197,6 +9204,7 @@ fn render_calculator_app(
             trigger_width: None,
             trigger_min_height: None,
             panel_width: None,
+            panel_placement: SearchableDropdownPanelPlacement::Adjacent,
             results_layout: SearchableDropdownResultsLayout::List,
             root_id: "calculator-zone-picker",
             input_id: "calculator-zone-value",
@@ -12118,6 +12126,7 @@ fn render_searchable_select_control(
             trigger_width: None,
             trigger_min_height: None,
             panel_width: None,
+            panel_placement: SearchableDropdownPanelPlacement::Adjacent,
             results_layout: SearchableDropdownResultsLayout::List,
             root_id,
             input_id,
@@ -12208,6 +12217,11 @@ fn render_local_searchable_select_control(
             } else {
                 None
             },
+            panel_placement: if uses_card_results {
+                SearchableDropdownPanelPlacement::OverlayAnchor
+            } else {
+                SearchableDropdownPanelPlacement::Adjacent
+            },
             results_layout: if uses_card_results {
                 SearchableDropdownResultsLayout::Cards
             } else {
@@ -12285,6 +12299,7 @@ fn render_target_fish_select_control(
             trigger_width: None,
             trigger_min_height: None,
             panel_width: None,
+            panel_placement: SearchableDropdownPanelPlacement::Adjacent,
             results_layout: SearchableDropdownResultsLayout::List,
             root_id,
             input_id,
@@ -12708,6 +12723,12 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
             )
         })
         .unwrap_or_default();
+    let panel_placement_attr =
+        if config.panel_placement == SearchableDropdownPanelPlacement::OverlayAnchor {
+            " panel-placement=\"overlay-anchor\""
+        } else {
+            ""
+        };
     let results_layout_attr = if config.results_layout == SearchableDropdownResultsLayout::Cards {
         " results-layout=\"cards\""
     } else {
@@ -12719,6 +12740,11 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         } else {
             ""
         };
+    let results_wrapper_class = if config.results_layout == SearchableDropdownResultsLayout::Cards {
+        "p-0"
+    } else {
+        "px-1 pb-1"
+    };
     let search_url_root_attr = config
         .search_url_root
         .map(|value| format!(" search-url-root=\"{}\"", escape_html(value)))
@@ -12732,7 +12758,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
      label="{label}"
      value="{value}"
      search-url="{search_url}"{search_url_root_attr}
-     placeholder="{search_placeholder}"{trigger_size_attr}{panel_attrs}{results_layout_attr}{trigger_style_attr}>
+     placeholder="{search_placeholder}"{trigger_size_attr}{panel_attrs}{panel_placement_attr}{results_layout_attr}{trigger_style_attr}>
     <button type="button"
             data-role="trigger"
             class="{trigger_class}"
@@ -12756,7 +12782,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
                        autocomplete="off"
                        spellcheck="false">
             </label>
-            <div class="px-1 pb-1">
+            <div class="{results_wrapper_class}">
                 {results_html}
             </div>
         </div>
@@ -12779,8 +12805,10 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         trigger_size_attr = trigger_size_attr,
         trigger_style_attr = trigger_style_attr,
         panel_attrs = panel_attrs,
+        panel_placement_attr = panel_placement_attr,
         results_layout_attr = results_layout_attr,
         panel_results_layout_attr = panel_results_layout_attr,
+        results_wrapper_class = results_wrapper_class,
         results_html = results_html,
         trigger_class = trigger_class,
         icon_sprite_url = CALCULATOR_ICON_SPRITE_URL,

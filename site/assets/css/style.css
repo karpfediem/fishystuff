@@ -638,7 +638,7 @@ fishy-searchable-dropdown[trigger-size="content"] [data-role="selected-content"]
         minmax(var(--fishy-searchable-dropdown-card-min-width, 9rem), 1fr)
     );
     gap: 0.75rem;
-    padding: 0.5rem;
+    padding: 0;
 }
 
 [data-searchable-dropdown-results-layout="cards"] [data-role="results"] > li {
