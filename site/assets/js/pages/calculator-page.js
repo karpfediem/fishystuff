@@ -8,6 +8,10 @@
     /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$)|_preset_manager_ui(?:\.|$))/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
+  const CALCULATOR_PRESET_SIGNAL_FILTER = {
+    exclude:
+      /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$)|_calculator_actions(?:\.|$)|_preset_manager_ui(?:\.|$))/,
+  };
   const CALCULATOR_TOP_LEVEL_TABS = new Set([
     "mode",
     "overview",
@@ -26,6 +30,7 @@
     "debug",
   ]);
   const CALCULATOR_DEFAULT_TOP_LEVEL_TAB = "mode";
+  const CALCULATOR_PRESET_COLLECTION_KEY = "calculator-presets";
   const CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY = "calculator-layouts";
   const CALCULATOR_SECTION_ICON_BY_ID = Object.freeze({
     mode: "fish-fill",
@@ -70,8 +75,11 @@
     persistBinding: null,
     actionBinding: null,
     layoutPresetBinding: null,
+    calculatorPresetBinding: null,
     uiStateRestored: false,
+    calculatorPresetAdapterBound: false,
     layoutPresetAdapterBound: false,
+    pendingCalculatorPresetRestore: false,
     pendingLayoutPresetRestore: false,
   };
   const calculatorPetUiState = {
@@ -339,9 +347,6 @@
         return;
       }
       const patch = event && event.detail ? event.detail : null;
-      if (!patchMatches(patch, { include: CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN })) {
-        return;
-      }
       const signals = signalStore.signalObject();
       if (!signals) {
         return;
@@ -356,10 +361,60 @@
           return;
         }
       }
+      if (!patchMatches(patch, { include: CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN })) {
+        return;
+      }
       trackCalculatorLayoutPresetCurrent(signals);
     };
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     calculatorState.layoutPresetBinding = {
+      dispose() {
+        document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
+  }
+
+  function bindCalculatorPresetListener() {
+    if (calculatorState.calculatorPresetBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    if (!patchMatches) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      if (!calculatorState.uiStateRestored) {
+        return;
+      }
+      const patch = event && event.detail ? event.detail : null;
+      const signals = signalStore.signalObject();
+      if (!signals) {
+        return;
+      }
+      if (calculatorState.pendingCalculatorPresetRestore && calculatorInitPatch(patch)) {
+        calculatorState.pendingCalculatorPresetRestore = false;
+        const applied = applyStoredCalculatorPresetState(signals);
+        if (applied && typeof window.__fishystuffCalculator?.patchSignals === "function") {
+          window.__fishystuffCalculator.patchSignals(
+            calculatorPresetPatch(signals, applied.payload),
+          );
+          return;
+        }
+      }
+      if (calculatorInitPatch(patch)) {
+        trackCalculatorPresetCurrent(signals);
+        return;
+      }
+      if (!patchMatches(patch, CALCULATOR_PRESET_SIGNAL_FILTER)) {
+        return;
+      }
+      trackCalculatorPresetCurrent(signals);
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    calculatorState.calculatorPresetBinding = {
       dispose() {
         document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
       },
@@ -891,6 +946,69 @@
       .attr("pointer-events", "none");
   }
 
+  function bindCalculatorPresetAdapter() {
+    if (calculatorState.calculatorPresetAdapterBound) {
+      return;
+    }
+    const helper = sharedUserPresets();
+    if (!helper) {
+      return;
+    }
+    helper.registerCollectionAdapter(CALCULATOR_PRESET_COLLECTION_KEY, {
+      titleKey: "calculator.presets.title",
+      titleFallback: "Calculator presets",
+      openLabelKey: "calculator.presets.open",
+      openLabelFallback: "Calculator Presets",
+      fileBaseName: "fishystuff-calculator-presets",
+      defaultPresetName(index) {
+        return calculatorText("presets.default_name", {
+          index: String(index),
+        });
+      },
+      fixedPresets() {
+        const signals = signalStore.signalObject();
+        const payload = defaultCalculatorPresetPayload(signals);
+        return Object.keys(payload).length
+          ? [{
+              id: "default",
+              name: calculatorText("presets.default"),
+              payload,
+            }]
+          : [];
+      },
+      normalizePayload: normalizeCalculatorPresetPayload,
+      titleIconAlias({ payload }) {
+        return calculatorPresetTitleIconAlias(payload);
+      },
+      renderPreview(container, context) {
+        renderCalculatorPresetPreview(container, context);
+      },
+      capture() {
+        const signals = signalStore.signalObject();
+        return signals && typeof signals === "object"
+          ? calculatorPresetPayload(signals)
+          : null;
+      },
+      apply(payload) {
+        const signals = signalStore.signalObject();
+        if (!signals || typeof signals !== "object") {
+          return null;
+        }
+        const patch = calculatorPresetPatch(signals, payload);
+        if (typeof window.__fishystuffCalculator?.patchSignals === "function") {
+          window.__fishystuffCalculator.patchSignals(patch);
+        } else {
+          Object.assign(signals, cloneCalculatorSignals(patch));
+        }
+        return calculatorPresetPayload({
+          ...signals,
+          ...patch,
+        });
+      },
+    });
+    calculatorState.calculatorPresetAdapterBound = true;
+  }
+
   function bindCalculatorLayoutPresetAdapter() {
     if (calculatorState.layoutPresetAdapterBound) {
       return;
@@ -959,6 +1077,17 @@
     });
   }
 
+  function trackCalculatorPresetCurrent(signals) {
+    const helper = sharedUserPresets();
+    if (!helper || !calculatorPresetDefaultsReady(signals)) {
+      return null;
+    }
+    const payload = calculatorPresetPayload(signals);
+    return helper.trackCurrentPayload(CALCULATOR_PRESET_COLLECTION_KEY, {
+      payload,
+    });
+  }
+
   function calculatorInitPatch(patch) {
     return Boolean(
       patch
@@ -987,6 +1116,24 @@
     }
     const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedPreset.payload);
     signals._calculator_ui = cloneCalculatorSignals(nextUiState);
+    return selectedPreset;
+  }
+
+  function applyStoredCalculatorPresetState(signals) {
+    const helper = sharedUserPresets();
+    if (!signals || typeof signals !== "object") {
+      return null;
+    }
+    const currentPreset = helper?.current?.(CALCULATOR_PRESET_COLLECTION_KEY);
+    if (currentPreset?.payload) {
+      Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, currentPreset.payload)));
+      return currentPreset;
+    }
+    const selectedPreset = helper?.selectedPreset?.(CALCULATOR_PRESET_COLLECTION_KEY);
+    if (!selectedPreset?.payload) {
+      return null;
+    }
+    Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, selectedPreset.payload)));
     return selectedPreset;
   }
 
@@ -1202,6 +1349,88 @@
       ),
     );
   };
+
+  function calculatorPresetBasePayload(signals = signalStore.signalObject()) {
+    return signals?._defaults && typeof signals._defaults === "object"
+      ? persistedCalculatorSignals(signals._defaults)
+      : {};
+  }
+
+  function calculatorPresetDefaultsReady(signals = signalStore.signalObject()) {
+    return Object.keys(calculatorPresetBasePayload(signals)).length > 0;
+  }
+
+  function normalizeCalculatorPresetPayload(value) {
+    return {
+      ...calculatorPresetBasePayload(),
+      ...persistedCalculatorSignals(value && typeof value === "object" ? value : {}),
+    };
+  }
+
+  function calculatorPresetPayload(signals = signalStore.signalObject()) {
+    return normalizeCalculatorPresetPayload(signals);
+  }
+
+  function defaultCalculatorPresetPayload(signals) {
+    return signals?._defaults && typeof signals._defaults === "object"
+      ? persistedCalculatorSignals(signals._defaults)
+      : calculatorPresetBasePayload(signals);
+  }
+
+  function calculatorPresetPatch(signals, payload) {
+    return {
+      ...defaultCalculatorPresetPayload(signals),
+      ...normalizeCalculatorPresetPayload(payload),
+    };
+  }
+
+  function calculatorPresetTitleIconAlias(payload) {
+    const mode = normalizeFishingMode(payload?.fishingMode);
+    if (mode === "harpoon") {
+      return "wheel-fill";
+    }
+    if (mode === "hotspot") {
+      return "fish-fill";
+    }
+    return "nav-calculator";
+  }
+
+  function renderCalculatorPresetPreview(container, context = {}) {
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+    const payload = normalizeCalculatorPresetPayload(context.payload);
+    container.replaceChildren();
+    const root = document.createElement("div");
+    root.className = "fishy-preset-manager__summary-preview";
+    const mode = normalizeFishingMode(payload.fishingMode);
+    const modeLabel = mode === "harpoon"
+      ? "Harpoon"
+      : mode === "hotspot"
+        ? "Hotspot"
+        : "Rod";
+    const rows = [
+      [modeLabel, payload.active ? "Active" : "AFK"],
+      [`Lv ${Number.parseInt(payload.level ?? 0, 10) || 0}`, `${Number.parseInt(payload.resources ?? 0, 10) || 0}%`],
+      [String(payload.zone || "No zone").trim() || "No zone"],
+      [
+        `${Array.isArray(payload.food) ? payload.food.length : 0} food`,
+        `${Array.isArray(payload.buff) ? payload.buff.length : 0} buffs`,
+      ],
+    ];
+    for (const row of rows) {
+      const rowElement = document.createElement("div");
+      rowElement.className = "fishy-preset-manager__summary-preview-row";
+      for (const part of row) {
+        const chip = document.createElement("span");
+        chip.className = "fishy-preset-manager__summary-preview-chip";
+        chip.textContent = part;
+        rowElement.append(chip);
+      }
+      root.append(rowElement);
+    }
+    container.append(root);
+  }
 
   const persistedCalculatorUiSignals = (signals) => {
     const current = canonicalizeStoredSignals(signals);
@@ -1626,9 +1855,11 @@
 
   function restoreCalculator(signals) {
     signalStore.connect(signals);
+    bindCalculatorPresetAdapter();
     bindCalculatorLayoutPresetAdapter();
     bindPersistListener();
     bindActionListener();
+    bindCalculatorPresetListener();
     bindLayoutPresetListener();
     const currentUi = normalizeCalculatorUiState(signals?._calculator_ui);
     const storedSignals = loadStoredSignals();
@@ -1643,8 +1874,11 @@
       Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
+    const restoredCalculatorPresetState = applyStoredCalculatorPresetState(signals);
     const restoredLayoutPresetState = applyStoredCalculatorLayoutPresetState(signals);
+    calculatorState.pendingCalculatorPresetRestore = Boolean(restoredCalculatorPresetState);
     calculatorState.pendingLayoutPresetRestore = Boolean(restoredLayoutPresetState);
+    trackCalculatorPresetCurrent(signals);
     trackCalculatorLayoutPresetCurrent(signals);
     const appRoot = document.getElementById?.("calculator");
     if (appRoot && languageHelper()) {
@@ -1660,6 +1894,7 @@
       shared.setOverlaySignals(signals.overlay);
       shared.setPriceOverrides(signals.priceOverrides);
     }
+    trackCalculatorPresetCurrent(signals);
     trackCalculatorLayoutPresetCurrent(signals);
     const persistedData = persistedCalculatorSignals(signals);
     const persistedUi = persistedCalculatorUiSignals(signals);
@@ -2537,6 +2772,20 @@
     restore: restoreCalculator,
     liveCalc: liveCalculator,
     assignPinnedUiState,
+    calculatorPresetCollectionKey: CALCULATOR_PRESET_COLLECTION_KEY,
+    calculatorPresetPayload,
+    normalizeCalculatorPresetPayload,
+    applyCalculatorPreset(signals, payload) {
+      const current = signals && typeof signals === "object"
+        ? signals
+        : signalStore.signalObject();
+      if (!current || typeof current !== "object") {
+        return null;
+      }
+      const patch = calculatorPresetPatch(current, payload);
+      Object.assign(current, cloneCalculatorSignals(patch));
+      return calculatorPresetPayload(current);
+    },
     layoutPresetCollectionKey: CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY,
     layoutPresetPayload: calculatorLayoutPresetPayload,
     normalizeLayoutPresetPayload: normalizeCalculatorLayoutPresetPayload,

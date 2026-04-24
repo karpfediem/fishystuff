@@ -5,6 +5,11 @@ map.toolbar.settings = Settings
 map.toolbar.info = Info
 map.toolbar.layers = Layers
 
+map.presets.title = Map presets
+map.presets.open = Map Presets
+map.presets.default = Default map
+map.presets.default_name = Map {$index}
+
 map.search.window_title = Search
 map.search.placeholder = Search fish, zone, filter, or patch
 map.search.results.match_count.one = {$count} match

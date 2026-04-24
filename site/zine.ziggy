@@ -73,6 +73,7 @@ Multilingual {
     "map/map-page-persist.js",
     "map/map-page-derived.js",
     "map/map-page-live.js",
+    "map/map-presets.js",
     "map/map-page-signals.js",
     "map/map-query-state.js",
     "map/map-shell.html",

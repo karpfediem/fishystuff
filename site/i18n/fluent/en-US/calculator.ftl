@@ -33,6 +33,11 @@ calculator.layout_presets.current = Current layout
 calculator.layout_presets.default = Default
 calculator.layout_presets.default_name = Layout {$index}
 
+calculator.presets.title = Calculator presets
+calculator.presets.open = Calculator Presets
+calculator.presets.default = Default calculator
+calculator.presets.default_name = Calculator {$index}
+
 calculator.title.casts_average = Average Casts ({$timespan})
 calculator.title.durability_loss_average = Average Durability Loss ({$timespan})
 calculator.title.expected_catches = Expected Catches ({$timespan})

@@ -131,6 +131,17 @@
     if (!left || !right) {
       return false;
     }
+    const adapter = collectionAdapter(collectionKey);
+    if (adapter && typeof adapter.payloadsEqual === "function") {
+      try {
+        return adapter.payloadsEqual(
+          normalizePresetPayload(collectionKey, left),
+          normalizePresetPayload(collectionKey, right),
+        ) === true;
+      } catch (_error) {
+        return false;
+      }
+    }
     try {
       return stablePresetPayloadJson(collectionKey, left) === stablePresetPayloadJson(collectionKey, right);
     } catch (_error) {
@@ -577,13 +588,17 @@
     return replaceSnapshot({ collections: {} }, "clear-all");
   }
 
-  function capturePayload(collectionKey) {
+  function capturePayload(collectionKey, options = {}) {
     const key = normalizeCollectionKey(collectionKey);
     const adapter = collectionAdapter(key);
     if (!adapter || typeof adapter.capture !== "function") {
       return null;
     }
-    return normalizePresetPayload(key, adapter.capture());
+    const captured = adapter.capture(options);
+    if (!captured || typeof captured !== "object") {
+      return null;
+    }
+    return normalizePresetPayload(key, captured);
   }
 
   function applyPayload(collectionKey, payload) {
@@ -611,9 +626,45 @@
     return null;
   }
 
+  function markSourceAppliedWithoutAdapter(collectionKey, source, payload) {
+    const key = normalizeCollectionKey(collectionKey);
+    const normalizedSource = normalizeSource(source);
+    let result = {
+      action: normalizedSource.kind === "fixed" ? "matched-fixed" : "matched-preset",
+      kind: normalizedSource.kind,
+      source: normalizedSource,
+      current: null,
+      preset: null,
+    };
+    updateSnapshot((draft) => {
+      const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
+      selectCollectionSource(collection, normalizedSource, { clearCurrent: true });
+      assignCollection(draft, key, collection);
+      result = {
+        ...result,
+        preset: normalizedSource.kind === "preset"
+          ? cloneJson(collection.presets.find((preset) => preset.id === normalizedSource.id) || null)
+          : cloneJson(fixedPresets(key).find((preset) => preset.id === normalizedSource.id) || null),
+      };
+    }, "select-applied-source", { collectionKey: key });
+    return cloneJson({
+      ...result,
+      payload: normalizePresetPayload(key, payload),
+    });
+  }
+
+  function sourcePayloadAlreadyApplied(collectionKey, payload) {
+    const key = normalizeCollectionKey(collectionKey);
+    const captured = capturePayload(key);
+    return Boolean(captured && payloadsEqual(key, captured, payload));
+  }
+
   function applyAndTrackSourcePayload(collectionKey, source, payload) {
     const key = normalizeCollectionKey(collectionKey);
     const normalizedPayload = normalizePresetPayload(key, payload);
+    if (sourcePayloadAlreadyApplied(key, normalizedPayload)) {
+      return markSourceAppliedWithoutAdapter(key, source, normalizedPayload);
+    }
     const appliedValue = applyPayload(key, normalizedPayload);
     const observedPayload = observedPayloadAfterApply(key, normalizedPayload, appliedValue);
     if (!observedPayload) {
@@ -771,23 +822,38 @@
     return trackCurrentPayload(collectionKey, options);
   }
 
-  function saveCurrentToSelectedPreset(collectionKey) {
+  function saveCurrentToSelectedPreset(collectionKey, options = {}) {
     const key = normalizeCollectionKey(collectionKey);
     let savedPreset = null;
     updateSnapshot((draft) => {
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       const current = collection.current;
-      if (!current || current.origin.kind !== "preset") {
-        throw new Error("Current preset is not linked to a saved preset.");
+      const targetPresetId = current?.origin?.kind === "preset"
+        ? current.origin.id
+        : collection.selectedPresetId;
+      if (!targetPresetId) {
+        throw new Error("No saved preset is selected.");
       }
-      const presetIndex = collection.presets.findIndex((preset) => preset.id === current.origin.id);
+      const presetIndex = collection.presets.findIndex((preset) => preset.id === targetPresetId);
       if (presetIndex < 0) {
-        throw new Error(`Unknown preset: ${current.origin.id}`);
+        throw new Error(`Unknown preset: ${targetPresetId}`);
+      }
+      const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
+      const adapter = collectionAdapter(key);
+      const requiresLiveSaveCapture = !hasPayload && adapter?.captureOnSave === true;
+      const capturedPayload = hasPayload
+        ? normalizePresetPayload(key, options.payload)
+        : capturePayload(key, { intent: "save" });
+      const nextPayload = capturedPayload || (
+        !requiresLiveSaveCapture && current ? normalizePresetPayload(key, current.payload) : null
+      );
+      if (!nextPayload) {
+        throw new Error("Preset save failed.");
       }
       const previousPreset = collection.presets[presetIndex];
       savedPreset = {
         ...previousPreset,
-        payload: normalizePresetPayload(key, current.payload),
+        payload: nextPayload,
         updatedAt: nowIso(),
       };
       collection.presets[presetIndex] = savedPreset;

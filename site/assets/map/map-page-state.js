@@ -69,6 +69,71 @@ function stripEmptyRestorePatchBranches(patch) {
   return Object.keys(patch).length ? patch : null;
 }
 
+function normalizeLayerBooleanRecord(value) {
+  if (!isPlainObject(value)) {
+    return {};
+  }
+  const normalized = {};
+  for (const [key, enabled] of Object.entries(value)) {
+    if (!String(key || "").trim()) {
+      continue;
+    }
+    if (enabled === true) {
+      normalized[key] = true;
+      continue;
+    }
+    if (isPlainObject(enabled)) {
+      const nested = normalizeLayerBooleanRecord(enabled);
+      if (Object.keys(nested).length) {
+        normalized[key] = nested;
+      }
+    }
+  }
+  return normalized;
+}
+
+function hasMapPresetCamera(view) {
+  if (!isPlainObject(view)) {
+    return false;
+  }
+  const camera = isPlainObject(view.camera) ? view.camera : {};
+  return Object.keys(camera).length > 0;
+}
+
+function mapPresetViewMode(value) {
+  return value === "3d" ? "3d" : "2d";
+}
+
+function normalizeMapPresetView(view) {
+  const source = isPlainObject(view) ? view : {};
+  const camera = {};
+  const sourceCamera = isPlainObject(source.camera) ? source.camera : {};
+  for (const key of [
+    "centerWorldX",
+    "centerWorldZ",
+    "zoom",
+    "pivotWorldX",
+    "pivotWorldY",
+    "pivotWorldZ",
+    "yaw",
+    "pitch",
+    "distance",
+  ]) {
+    const rawValue = sourceCamera[key];
+    if (rawValue == null || rawValue === "") {
+      continue;
+    }
+    const number = Number(rawValue);
+    if (Number.isFinite(number)) {
+      camera[key] = number;
+    }
+  }
+  return {
+    viewMode: mapPresetViewMode(source.viewMode),
+    camera,
+  };
+}
+
 function stripQueryOwnedRestoreFields(patch, locationHref) {
   if (!isPlainObject(patch) || !locationHref) {
     return patch;
@@ -256,9 +321,9 @@ function uiStorageSnapshot(stored) {
       expandedLayerIds: Array.isArray(stored?._map_ui?.layers?.expandedLayerIds)
         ? cloneJson(stored._map_ui.layers.expandedLayerIds)
         : [],
-      hoverFactsVisibleByLayer: isPlainObject(stored?._map_ui?.layers?.hoverFactsVisibleByLayer)
-        ? cloneJson(stored._map_ui.layers.hoverFactsVisibleByLayer)
-        : {},
+      hoverFactsVisibleByLayer: normalizeLayerBooleanRecord(
+        stored?._map_ui?.layers?.hoverFactsVisibleByLayer,
+      ),
     },
     search: {
       query: String(stored?._map_ui?.search?.query || ""),
@@ -322,9 +387,7 @@ function restoreUiPatch(parsed) {
       expandedLayerIds: Array.isArray(parsed.layers.expandedLayerIds)
         ? cloneJson(parsed.layers.expandedLayerIds)
         : [],
-      hoverFactsVisibleByLayer: isPlainObject(parsed.layers.hoverFactsVisibleByLayer)
-        ? cloneJson(parsed.layers.hoverFactsVisibleByLayer)
-        : {},
+      hoverFactsVisibleByLayer: normalizeLayerBooleanRecord(parsed.layers.hoverFactsVisibleByLayer),
     };
   }
   const search = isPlainObject(parsed.search)
@@ -484,6 +547,149 @@ function ensureSessionSnapshot(stored) {
         selection: {},
         filters: {},
       };
+}
+
+function defaultMapPresetSnapshot() {
+  return {
+    windowUi: {
+      search: { open: true, collapsed: false, x: null, y: null },
+      settings: { open: false, collapsed: false, x: null, y: null, autoAdjustView: true },
+      zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+      layers: { open: true, collapsed: false, x: null, y: null },
+      bookmarks: { open: false, collapsed: false, x: null, y: null },
+    },
+    layers: {
+      expandedLayerIds: [],
+      hoverFactsVisibleByLayer: {},
+    },
+    search: {
+      query: "",
+      expression: cloneJson(EMPTY_SEARCH_EXPRESSION),
+      selectedTerms: [],
+    },
+    bridgedUi: {
+      diagnosticsOpen: false,
+      showPoints: true,
+      showPointIcons: true,
+      viewMode: "2d",
+      pointIconScale: FISHYMAP_POINT_ICON_SCALE_DEFAULT,
+    },
+    bridgedFilters: {
+      layerIdsVisible: cloneJson(DEFAULT_ENABLED_LAYER_IDS),
+      layerIdsOrdered: [],
+      layerFilterBindingIdsDisabledByLayer: {},
+      layerOpacities: {},
+      layerClipMasks: { fish_evidence: "zone_mask" },
+      layerWaypointConnectionsVisible: {},
+      layerWaypointLabelsVisible: {},
+      layerPointIconsVisible: {},
+      layerPointIconScales: {},
+    },
+    view: { viewMode: "2d", camera: {} },
+  };
+}
+
+function mergeMapPresetBranch(defaultBranch, sourceBranch) {
+  const merged = cloneJson(defaultBranch);
+  if (!isPlainObject(sourceBranch)) {
+    return merged;
+  }
+  for (const [key, value] of Object.entries(sourceBranch)) {
+    if (value === undefined) {
+      continue;
+    }
+    merged[key] = isPlainObject(value) && isPlainObject(merged[key])
+      ? { ...merged[key], ...cloneJson(value) }
+      : cloneJson(value);
+  }
+  return merged;
+}
+
+export function normalizeMapPresetPayload(value) {
+  const source = isPlainObject(value) ? value : {};
+  const defaults = defaultMapPresetSnapshot();
+  const sourceWindowUi = isPlainObject(source.windowUi)
+    ? source.windowUi
+    : source._map_ui?.windowUi;
+  const sourceLayers = isPlainObject(source.layers)
+    ? source.layers
+    : source._map_ui?.layers;
+  const sourceSearch = isPlainObject(source.search)
+    ? source.search
+    : source._map_ui?.search;
+  const sourceBridgedUi = isPlainObject(source.bridgedUi)
+    ? source.bridgedUi
+    : source._map_bridged?.ui;
+  const sourceBridgedFilters = isPlainObject(source.bridgedFilters)
+    ? source.bridgedFilters
+    : source._map_bridged?.filters;
+  const uiSnapshot = uiStorageSnapshot({
+    _map_ui: {
+      windowUi: mergeMapPresetBranch(defaults.windowUi, sourceWindowUi),
+      layers: mergeMapPresetBranch(defaults.layers, sourceLayers),
+      search: mergeMapPresetBranch(defaults.search, sourceSearch),
+    },
+    _map_bridged: {
+      ui: mergeMapPresetBranch(defaults.bridgedUi, sourceBridgedUi),
+      filters: mergeMapPresetBranch(defaults.bridgedFilters, sourceBridgedFilters),
+    },
+  });
+  const sourceView = isPlainObject(source.view)
+    ? source.view
+    : isPlainObject(source.session?.view)
+      ? source.session.view
+      : isPlainObject(source._map_session?.view)
+        ? source._map_session.view
+        : null;
+  const sessionSnapshot = sessionStorageSnapshot({
+    _map_session: {
+      view: sourceView || defaults.view,
+    },
+  });
+  const view = normalizeMapPresetView(sessionSnapshot.view);
+  if (!Object.keys(view.camera).length) {
+    view.viewMode = mapPresetViewMode(uiSnapshot.bridgedUi.viewMode);
+  }
+  return {
+    version: 1,
+    windowUi: cloneJson(uiSnapshot.windowUi),
+    layers: cloneJson(uiSnapshot.layers),
+    search: cloneJson(uiSnapshot.search),
+    bridgedUi: cloneJson(uiSnapshot.bridgedUi),
+    bridgedFilters: cloneJson(uiSnapshot.bridgedFilters),
+    view,
+  };
+}
+
+export function defaultMapPresetPayload() {
+  return normalizeMapPresetPayload(defaultMapPresetSnapshot());
+}
+
+export function createMapPresetPayload(signals, { includeCamera = false } = {}) {
+  const stored = ensureStoredSignals(storedUiSignals(signals));
+  const uiSnapshot = uiStorageSnapshot(stored);
+  const sessionSnapshot = sessionStorageSnapshot(stored);
+  const view = cloneJson(sessionSnapshot.view);
+  if (!includeCamera) {
+    view.camera = {};
+    view.viewMode = mapPresetViewMode(uiSnapshot.bridgedUi.viewMode);
+  }
+  return normalizeMapPresetPayload({
+    ...uiSnapshot,
+    view,
+  });
+}
+
+export function mapPresetRestorePatch(payload) {
+  const normalized = normalizeMapPresetPayload(payload);
+  const patch = restoreUiPatch(normalized) || {};
+  if (hasMapPresetCamera(normalized.view)) {
+    patch._map_session = {
+      ...(isPlainObject(patch._map_session) ? patch._map_session : {}),
+      view: cloneJson(normalized.view),
+    };
+  }
+  return patch;
 }
 
 function normalizeFallbackFishIds(values) {

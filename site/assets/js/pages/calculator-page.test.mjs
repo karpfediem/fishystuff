@@ -782,6 +782,128 @@ test("calculator layout changes keep the selected saved preset immutable until e
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
 });
 
+test("calculator presets apply durable inputs without changing the layout preset state", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  signals._calculator_ui = defaultCalculatorUiState({
+    top_level_tab: "trade",
+    pinned_layout: [[["overview"]], [["trade"]]],
+    pinned_sections: ["overview", "trade"],
+  });
+  env.window.__fishystuffCalculator.restore(signals);
+
+  const preset = env.window.__fishystuffUserPresets.createPreset("calculator-presets", {
+    name: "Harpoon setup",
+    payload: {
+      active: true,
+      fishingMode: "harpoon",
+      level: 5,
+      resources: 44,
+      zone: "240,74,74",
+      food: ["item:9359", "", "item:9359"],
+      buff: ["item:1"],
+      priceOverrides: {
+        "item:8473": {
+          basePrice: "8800000",
+        },
+      },
+      _calculator_ui: defaultCalculatorUiState(),
+    },
+    select: false,
+  });
+
+  env.window.__fishystuffUserPresets.activatePreset("calculator-presets", preset.id);
+  env.flushTimers();
+
+  assert.equal(signals.active, true);
+  assert.equal(signals.fishingMode, "harpoon");
+  assert.equal(signals.level, 5);
+  assert.equal(signals.resources, 44);
+  assert.deepEqual(Array.from(signals.food), ["item:9359"]);
+  assert.deepEqual(Array.from(signals.buff), ["item:1"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
+    "8473": {
+      basePrice: 8800000,
+    },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
+    top_level_tab: "trade",
+    distribution_tab: "groups",
+    pinned_layout: [[["overview"]], [["trade"]]],
+    pinned_sections: ["overview", "trade"],
+    unpinned_insert_index: [0, 0],
+  });
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), preset.id);
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+});
+
+test("calculator restore reapplies the persisted selected calculator preset after init defaults", () => {
+  const initial = createContext();
+  const initialSignals = defaultSignals();
+  initial.window.__fishystuffCalculator.restore(initialSignals);
+  const preset = initial.window.__fishystuffUserPresets.createPreset("calculator-presets", {
+    name: "AFK setup",
+    payload: {
+      active: false,
+      fishingMode: "rod",
+      level: 4,
+      resources: 33,
+      zone: "10,20,30",
+      timespanAmount: 3,
+      timespanUnit: "hours",
+    },
+    select: true,
+  });
+  const presetStorage = initial.localStorage.getItem(initial.window.__fishystuffUserPresets.STORAGE_KEY);
+
+  const env = createContext({
+    [initial.window.__fishystuffUserPresets.STORAGE_KEY]: presetStorage,
+    "fishystuff.calculator.data.v1": JSON.stringify({
+      active: true,
+      fishingMode: "harpoon",
+      level: 0,
+      resources: 100,
+    }),
+  });
+  const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
+  const initDefaults = cloneTestValue(signals._defaults);
+  Object.assign(signals, cloneTestValue(initDefaults));
+  env.window.__fishystuffCalculator.patchSignals({
+    _loading: false,
+    _defaults: initDefaults,
+  });
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), preset.id);
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  assert.equal(signals.active, false);
+  assert.equal(signals.fishingMode, "rod");
+  assert.equal(signals.level, 4);
+  assert.equal(signals.resources, 33);
+  assert.equal(signals.zone, "10,20,30");
+  assert.equal(signals.timespanAmount, 3);
+  assert.equal(signals.timespanUnit, "hours");
+});
+
+test("calculator presets wait for init defaults before tracking default current state", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  const initDefaults = cloneTestValue(signals._defaults);
+  delete signals._defaults;
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  env.window.__fishystuffCalculator.patchSignals({
+    _loading: false,
+    _defaults: initDefaults,
+  });
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), "");
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+});
+
 test("calculator restore applies the persisted selected layout preset before tracking current state", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();
@@ -802,10 +924,11 @@ test("calculator restore applies the persisted selected layout preset before tra
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
+  const initDefaults = cloneTestValue(signals._defaults);
+  signals._calculator_ui = defaultCalculatorUiState();
   env.window.__fishystuffCalculator.patchSignals({
     _loading: false,
-    _defaults: cloneTestValue(signals._defaults),
-    _calculator_ui: defaultCalculatorUiState(),
+    _defaults: initDefaults,
   });
 
   assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), preset.id);

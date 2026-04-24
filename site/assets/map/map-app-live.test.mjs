@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 const {
   createDeferredBridgeStateRefresher,
   deferAfterAnimationFrames,
+  bridgeSnapshotMatchesRestoreView,
+  restoreViewPatchFromSignalPatch,
   resolveBridgeSnapshot,
   startWhenDomReady,
   start,
@@ -94,6 +96,43 @@ test("resolveBridgeSnapshot falls back to the current full snapshot when event s
   };
 
   assert.deepEqual(resolveBridgeSnapshot({}, () => currentSnapshot), currentSnapshot);
+});
+
+test("restore view helpers normalize signal patches and detect matching bridge snapshots", () => {
+  const restorePatch = restoreViewPatchFromSignalPatch({
+    _map_session: {
+      view: {
+        viewMode: "2d",
+        camera: { centerWorldX: 100, centerWorldZ: 200, zoom: 3 },
+      },
+    },
+  });
+
+  assert.deepEqual(restorePatch?.commands?.restoreView, {
+    viewMode: "2d",
+    camera: { centerWorldX: 100, centerWorldZ: 200, zoom: 3 },
+  });
+  assert.equal(
+    bridgeSnapshotMatchesRestoreView(
+      { view: { viewMode: "2d", camera: { centerWorldX: 100, centerWorldZ: 200, zoom: 3 } } },
+      restorePatch.commands.restoreView,
+    ),
+    true,
+  );
+  assert.equal(
+    bridgeSnapshotMatchesRestoreView(
+      { view: { viewMode: "2d", camera: { centerWorldX: 100, centerWorldZ: 200, zoom: 9.2 } } },
+      restorePatch.commands.restoreView,
+    ),
+    true,
+  );
+  assert.equal(
+    bridgeSnapshotMatchesRestoreView(
+      { view: { viewMode: "2d", camera: { centerWorldX: -1, centerWorldZ: 200, zoom: 3 } } },
+      restorePatch.commands.restoreView,
+    ),
+    false,
+  );
 });
 
 test("buildSearchProjectionPatchForSignalPatch projects selected search terms against the patched signal state", () => {

@@ -1,7 +1,14 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 
-import { createPersistedState, loadRestoreState } from "./map-page-state.js";
+import {
+  createMapPresetPayload,
+  createPersistedState,
+  defaultMapPresetPayload,
+  loadRestoreState,
+  mapPresetRestorePatch,
+  normalizeMapPresetPayload,
+} from "./map-page-state.js";
 
 class MemoryStorage {
   constructor(initial = {}) {
@@ -157,4 +164,121 @@ test("map-page-state createPersistedState captures durable map branches", () => 
     selection: { zoneRgb: "1,2,3" },
     filters: {},
   });
+});
+
+test("map-page-state map preset payload excludes bookmarks and runtime catalog data", () => {
+  const payload = createMapPresetPayload({
+    _map_ui: {
+      windowUi: {
+        search: { open: false, collapsed: true, x: 20, y: 30 },
+      },
+      layers: {
+        expandedLayerIds: ["zone_mask"],
+        hoverFactsVisibleByLayer: {
+          regions: { origin_region: true },
+        },
+      },
+      search: {
+        query: "eel",
+        selectedTerms: [{ type: "fish", fishId: 77 }],
+      },
+    },
+    _map_bridged: {
+      ui: {
+        showPoints: false,
+        viewMode: "3d",
+        pointIconScale: 1.5,
+      },
+      filters: {
+        layerIdsVisible: ["bookmarks", "zone_mask"],
+        layerOpacities: { zone_mask: 0.5 },
+      },
+    },
+    _map_bookmarks: {
+      entries: [{ id: "bookmark:1", label: "Alpha", worldX: 1, worldZ: 2 }],
+    },
+    _map_session: {
+      view: { viewMode: "3d", camera: { zoom: 2 } },
+      selection: { zoneRgb: "1,2,3" },
+    },
+    _map_runtime: {
+      catalog: { layers: [{ layerId: "zone_mask" }] },
+    },
+  });
+
+  assert.equal("bookmarks" in payload, false);
+  assert.equal("_map_runtime" in payload, false);
+  assert.deepEqual(payload.windowUi.search, { open: false, collapsed: true, x: 20, y: 30 });
+  assert.equal(payload.search.query, "eel");
+  assert.deepEqual(payload.bridgedFilters.layerIdsVisible, ["bookmarks", "zone_mask"]);
+  assert.deepEqual(payload.bridgedFilters.layerOpacities, { zone_mask: 0.5 });
+  assert.deepEqual(payload.view, { viewMode: "3d", camera: {} });
+  assert.deepEqual(
+    createMapPresetPayload({
+      _map_session: {
+        view: { viewMode: "3d", camera: { zoom: 2, distance: null } },
+      },
+    }, { includeCamera: true }).view,
+    { viewMode: "3d", camera: { zoom: 2 } },
+  );
+});
+
+test("map-page-state camera-less map preset view mode follows bridge UI state", () => {
+  const payload = createMapPresetPayload({
+    _map_bridged: {
+      ui: { viewMode: "2d" },
+    },
+    _map_session: {
+      view: { viewMode: "3d", camera: { zoom: 2 } },
+    },
+  });
+
+  assert.deepEqual(payload.view, { viewMode: "2d", camera: {} });
+  assert.deepEqual(
+    createMapPresetPayload({
+      _map_bridged: {
+        ui: { viewMode: "2d" },
+      },
+      _map_session: {
+        view: { viewMode: "3d", camera: { zoom: 2 } },
+      },
+    }, { includeCamera: true }).view,
+    { viewMode: "3d", camera: { zoom: 2 } },
+  );
+});
+
+test("map-page-state map preset restore patch applies UI and view without bookmarks", () => {
+  const payload = normalizeMapPresetPayload({
+    ...defaultMapPresetPayload(),
+    search: {
+      query: "tuna",
+      selectedTerms: [{ kind: "fish", fishId: 912 }],
+    },
+    bridgedUi: {
+      showPoints: false,
+      showPointIcons: true,
+      viewMode: "3d",
+      pointIconScale: 1.25,
+    },
+    bridgedFilters: {
+      layerIdsVisible: ["zone_mask"],
+      layerIdsOrdered: ["zone_mask", "bookmarks"],
+      layerClipMasks: { fish_evidence: "zone_mask" },
+    },
+    view: { viewMode: "3d", camera: { zoom: 4 } },
+  });
+
+  const patch = mapPresetRestorePatch(payload);
+
+  assert.equal(patch._map_bookmarks, undefined);
+  assert.equal(patch._map_ui.search.query, "tuna");
+  assert.equal(patch._map_bridged.ui.showPoints, false);
+  assert.deepEqual(patch._map_bridged.filters.layerIdsVisible, ["zone_mask"]);
+  assert.deepEqual(patch._map_session.view, { viewMode: "3d", camera: { zoom: 4 } });
+});
+
+test("map-page-state map default preset restore does not force an empty camera view", () => {
+  const patch = mapPresetRestorePatch(defaultMapPresetPayload());
+
+  assert.equal(patch._map_session, undefined);
 });

@@ -420,6 +420,10 @@ export class FishyPresetManager extends HTMLElementBase {
     return presetHelper()?.capturePayload?.(this.collectionKey) ?? null;
   }
 
+  capturePayload(options = {}) {
+    return presetHelper()?.capturePayload?.(this.collectionKey, options) ?? null;
+  }
+
   activePresetId() {
     return presetHelper()?.selectedPresetId?.(this.collectionKey) ?? "";
   }
@@ -495,7 +499,7 @@ export class FishyPresetManager extends HTMLElementBase {
     }
     const origin = normalizeSource(current.origin);
     const sourceItem = baseItems.find((item) => sourceMatchesCard(origin, item.key)) || null;
-    if (sourceItem && stableJson(sourceItem.payload) === stableJson(payload)) {
+    if (sourceItem && this.payloadsEqual(sourceItem.payload, payload)) {
       return null;
     }
     const sourceName = trimString(sourceItem?.name);
@@ -610,20 +614,19 @@ export class FishyPresetManager extends HTMLElementBase {
     return item?.kind === "fixed"
       && !trimString(activePresetId)
       && currentPayload
-      && stableJson(currentPayload) === stableJson(item.payload);
+      && this.payloadsEqual(currentPayload, item.payload);
   }
 
   isCurrentActive(item, _activePresetId, currentPayload) {
     return item?.kind === "current"
       && currentPayload
-      && stableJson(currentPayload) === stableJson(item.payload);
+      && this.payloadsEqual(currentPayload, item.payload);
   }
 
   isCardApplied(item, activePresetId, currentPayload) {
     if (!item || !currentPayload) {
       return false;
     }
-    const currentJson = stableJson(currentPayload);
     if (item.kind === "current") {
       return this.isCurrentActive(item, activePresetId, currentPayload);
     }
@@ -631,7 +634,7 @@ export class FishyPresetManager extends HTMLElementBase {
       return this.isFixedActive(item, activePresetId, currentPayload);
     }
     return this.isPresetActive(item, activePresetId)
-      && stableJson(item.payload) === currentJson;
+      && this.payloadsEqual(item.payload, currentPayload);
   }
 
   cardBadge(item, activePresetId, currentPayload) {
@@ -687,6 +690,38 @@ export class FishyPresetManager extends HTMLElementBase {
     return item ? cloneJson(item.payload) : null;
   }
 
+  clonePayload(item) {
+    const adapter = this.adapter();
+    if (adapter?.captureOnClone === true) {
+      return this.capturePayload({
+        intent: "clone",
+        source: cloneJson(item?.source || {}),
+        payload: item?.payload ? cloneJson(item.payload) : null,
+      });
+    }
+    return this.copyPayload(item);
+  }
+
+  payloadsEqual(left, right) {
+    if (!left || !right) {
+      return false;
+    }
+    const adapter = this.adapter();
+    const normalizedLeft = normalizePayload(adapter, left);
+    const normalizedRight = normalizePayload(adapter, right);
+    if (!normalizedLeft || !normalizedRight) {
+      return false;
+    }
+    if (adapter && typeof adapter.payloadsEqual === "function") {
+      try {
+        return adapter.payloadsEqual(normalizedLeft, normalizedRight) === true;
+      } catch (_error) {
+        return false;
+      }
+    }
+    return stableJson(normalizedLeft) === stableJson(normalizedRight);
+  }
+
   sync({ refreshNames = false } = {}) {
     const helper = presetHelper();
     const adapter = this.adapter();
@@ -701,6 +736,8 @@ export class FishyPresetManager extends HTMLElementBase {
     const linkedSourceItem = this.sourceItemForCurrent(currentItem, items);
     const copyItem = currentItem || selectedItem;
     const shouldHighlightCopy = Boolean(currentItem && !linkedSavedPreset);
+    const canSaveCurrent = Boolean(currentItem && linkedSavedPreset);
+    const canSaveSelectedSnapshot = Boolean(!currentItem && selectedSavedPreset && adapter?.captureOnSave === true);
 
     setElementText(this.element("open-label"), this.openLabelText());
     setElementText(this.element("manager-title"), this.titleText());
@@ -756,7 +793,7 @@ export class FishyPresetManager extends HTMLElementBase {
     const saveButton = this.button("save");
     if (saveButton) {
       saveButton.innerHTML = `${iconMarkup("check-badge-solid", "size-4")}<span>${this.translate("presets.button.save", "Save")}</span>`;
-      saveButton.disabled = !canInteract || !currentItem || !linkedSavedPreset;
+      saveButton.disabled = !canInteract || (!canSaveCurrent && !canSaveSelectedSnapshot);
     }
 
     const discardButton = this.button("discard");
@@ -769,7 +806,7 @@ export class FishyPresetManager extends HTMLElementBase {
     if (copyButton) {
       copyButton.className = shouldHighlightCopy ? "btn btn-primary" : "btn btn-outline";
       copyButton.innerHTML = `${iconMarkup("copy", "size-4")}<span>${this.translate("presets.button.copy", "Clone")}</span>`;
-      copyButton.disabled = !canInteract || !copyItem || !this.copyPayload(copyItem);
+      copyButton.disabled = !canInteract || !copyItem || !(adapter?.captureOnClone === true || this.copyPayload(copyItem));
     }
 
     const exportButton = this.button("export");
@@ -926,6 +963,10 @@ export class FishyPresetManager extends HTMLElementBase {
     this.sync();
   }
 
+  closeDialogBeforeApply() {
+    setDialogOpen(this.dialogElement(), false);
+  }
+
   applyCardSelection(cardKey) {
     const helper = presetHelper();
     const { items } = this.cardItems();
@@ -940,6 +981,7 @@ export class FishyPresetManager extends HTMLElementBase {
         this.sync({ refreshNames: true });
         return;
       }
+      this.closeDialogBeforeApply();
       if (selectedItem.kind === "preset") {
         helper.activatePreset(this.collectionKey, selectedItem.id);
       } else if (selectedItem.kind === "fixed") {
@@ -1018,6 +1060,7 @@ export class FishyPresetManager extends HTMLElementBase {
       return;
     }
     try {
+      this.closeDialogBeforeApply();
       const result = helper.discardCurrent(this.collectionKey);
       if (result?.source?.kind === "preset") {
         this.selectedCardKey = presetCardKey(result.source.id);
@@ -1046,7 +1089,7 @@ export class FishyPresetManager extends HTMLElementBase {
     const helper = presetHelper();
     const { items, currentItem } = this.cardItems();
     const selectedItem = currentItem || this.selectedItem(items);
-    const payload = this.copyPayload(selectedItem);
+    const payload = this.clonePayload(selectedItem);
     if (!helper || !payload) {
       return;
     }

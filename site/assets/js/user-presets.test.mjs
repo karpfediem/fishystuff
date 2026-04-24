@@ -305,6 +305,93 @@ test("user presets track modified current state from a fixed preset without crea
   assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
 });
 
+test("user presets use adapter payload equality when matching fixed presets", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+    runtimeOnly: "initial-camera",
+  };
+  helper.registerCollectionAdapter("map-presets", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+        runtimeOnly: String(payload?.runtimeOnly ?? ""),
+      };
+    },
+    payloadsEqual(left, right) {
+      return left.row === right.row;
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+          runtimeOnly: "",
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+
+  const fixed = helper.ensurePersistedSelection("map-presets");
+
+  assert.equal(fixed.kind, "fixed");
+  assert.equal(fixed.action, "matched-fixed");
+  assert.equal(helper.selectedFixedId("map-presets"), "default");
+  assert.equal(helper.current("map-presets"), null);
+});
+
+test("user presets do not apply a source through the adapter when the captured payload already matches", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let applyCount = 0;
+  helper.registerCollectionAdapter("map-presets", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+        camera: payload?.camera && typeof payload.camera === "object" ? { ...payload.camera } : {},
+      };
+    },
+    payloadsEqual(left, right) {
+      return left.row === right.row;
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+          camera: {},
+        },
+      }];
+    },
+    capture() {
+      return {
+        row: 0,
+        camera: { zoom: 3 },
+      };
+    },
+    apply() {
+      applyCount += 1;
+      return {
+        row: 0,
+        camera: {},
+      };
+    },
+  });
+
+  const activated = helper.activateFixedPreset("map-presets", "default");
+
+  assert.equal(activated?.id, "default");
+  assert.equal(applyCount, 0);
+  assert.equal(helper.selectedFixedId("map-presets"), "default");
+  assert.equal(helper.current("map-presets"), null);
+});
+
 test("user presets keep selected preset immutable until current changes are explicitly saved", () => {
   const env = createEnv();
   const helper = env.helper;
@@ -497,6 +584,90 @@ test("user presets discard current state by applying the original source payload
   assert.deepEqual(currentPayload, { row: 1 });
   assert.equal(helper.current("calculator-layouts"), null);
   assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+});
+
+test("user presets can save a selected preset from an explicit save capture", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("map-presets", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+        camera: payload?.camera && typeof payload.camera === "object" ? { ...payload.camera } : {},
+      };
+    },
+    capture(options = {}) {
+      return options.intent === "save"
+        ? { row: currentPayload.row, camera: { zoom: 5 } }
+        : currentPayload;
+    },
+  });
+  const preset = helper.createPreset("map-presets", {
+    name: "Camera",
+    payload: {
+      row: 1,
+      camera: {},
+    },
+  });
+
+  const saved = helper.saveCurrentToSelectedPreset("map-presets");
+
+  assert.equal(saved.id, preset.id);
+  assert.deepEqual(saved.payload, { row: 1, camera: { zoom: 5 } });
+  assert.equal(helper.current("map-presets"), null);
+  assert.equal(helper.selectedPresetId("map-presets"), preset.id);
+});
+
+test("user presets do not normalize a failed adapter capture into a default payload", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  helper.registerCollectionAdapter("map-presets", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return null;
+    },
+  });
+
+  assert.equal(helper.capturePayload("map-presets"), null);
+  assert.equal(helper.ensurePersistedSelection("map-presets").action, "cleared");
+});
+
+test("user presets requiring live save capture fail instead of saving stale current payload", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  helper.registerCollectionAdapter("map-presets", {
+    captureOnSave: true,
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return null;
+    },
+  });
+  const preset = helper.createPreset("map-presets", {
+    name: "Needs camera",
+    payload: { row: 1 },
+  });
+  helper.trackCurrentPayload("map-presets", {
+    origin: { kind: "preset", id: preset.id },
+    payload: { row: 9 },
+  });
+
+  assert.throws(
+    () => helper.saveCurrentToSelectedPreset("map-presets"),
+    /Preset save failed\./,
+  );
+  assert.deepEqual(helper.preset("map-presets", preset.id).payload, { row: 1 });
+  assert.deepEqual(helper.current("map-presets").payload, { row: 9 });
 });
 
 test("user presets keep an action log for undo and redo of the current modified preset", () => {

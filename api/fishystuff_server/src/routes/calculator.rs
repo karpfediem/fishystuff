@@ -9250,6 +9250,8 @@ fn render_calculator_app(
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
                         __TEXT_CLEAR__
                     </button>
+                    <fishy-preset-manager class="fishy-calculator-presets"
+                                          data-preset-collection="calculator-presets"></fishy-preset-manager>
                     <fishy-preset-manager class="fishy-calculator-layout-presets"
                                           data-preset-collection="calculator-layouts"></fishy-preset-manager>
                 </div>

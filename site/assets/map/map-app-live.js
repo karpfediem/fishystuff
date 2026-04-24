@@ -4,6 +4,7 @@ import { createMapPageDerivedController } from "./map-page-derived.js";
 import { createMapPageLive } from "./map-page-live.js";
 import { createMapLifecycleMetrics, createMapOtelMetricsReporter } from "./map-otel-metrics.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
+import { bindMapPresetController } from "./map-presets.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
   DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE,
@@ -95,6 +96,41 @@ function buildResetUiPatch() {
     _map_session: cloneJson(DEFAULT_MAP_SESSION_SIGNAL_STATE),
     _map_actions: cloneJson(DEFAULT_MAP_ACTION_SIGNAL_STATE),
   };
+}
+
+function stableJson(value) {
+  return JSON.stringify(value ?? null);
+}
+
+function restoreViewPatchFromSessionView(view) {
+  const patch = snapshotToRestorePatch({ view });
+  return patch?.commands?.restoreView ? patch : null;
+}
+
+export function restoreViewPatchFromSignalPatch(patch) {
+  const view = patch?._map_session?.view;
+  return isPlainObject(view) ? restoreViewPatchFromSessionView(view) : null;
+}
+
+export function bridgeSnapshotMatchesRestoreView(snapshot, restoreView) {
+  if (!restoreView) {
+    return true;
+  }
+  const snapshotRestoreView = restoreViewPatchFromSessionView(snapshot?.view)?.commands?.restoreView;
+  if (!snapshotRestoreView) {
+    return false;
+  }
+  if (stableJson(snapshotRestoreView) === stableJson(restoreView)) {
+    return true;
+  }
+  if (snapshotRestoreView.viewMode !== restoreView.viewMode) {
+    return false;
+  }
+  const snapshotCamera = isPlainObject(snapshotRestoreView.camera) ? snapshotRestoreView.camera : {};
+  const restoreCamera = isPlainObject(restoreView.camera) ? restoreView.camera : {};
+  const stableCameraKeys = Object.keys(restoreCamera).filter((key) => key !== "zoom" && key !== "distance");
+  return stableCameraKeys.length > 0
+    && stableCameraKeys.every((key) => Object.is(snapshotCamera[key], restoreCamera[key]));
 }
 
 export function deferAfterAnimationFrames(
@@ -204,6 +240,13 @@ export async function start() {
     page.patchSignals(patch);
     dispatchShellPatchedSignalEvent(shell, patch);
   }
+  const mapPresetController = bindMapPresetController({
+    shell,
+    readSignals: signals,
+    applyPatch: dispatchSignalPatch,
+    readBridgeState: currentBridgeState,
+  });
+  void mapPresetController;
   const pageDerived = createMapPageDerivedController({
     globalRef: globalThis,
     shell,
@@ -229,6 +272,7 @@ export async function start() {
   let applyingInternalSignalPatch = false;
   let mounted = false;
   let lastBridgePatchJson = "";
+  let pendingBridgeRestoreView = null;
   let actionState = app.readLastActionState();
   const bridgeStateRefresher = createDeferredBridgeStateRefresher({
     bridge,
@@ -289,16 +333,46 @@ export async function start() {
   function patchSignalsFromBridge(snapshot) {
     syncingFromBridge = true;
     try {
+      const sessionPatch = pendingBridgeRestoreView
+        ? (
+            bridgeSnapshotMatchesRestoreView(snapshot, pendingBridgeRestoreView)
+              ? app.projectSessionSnapshot(snapshot)
+              : null
+          )
+        : app.projectSessionSnapshot(snapshot);
+      if (pendingBridgeRestoreView && sessionPatch) {
+        pendingBridgeRestoreView = null;
+      }
       dispatchSignalPatch(
-        combineSignalPatches(app.projectRuntimeSnapshot(snapshot), app.projectSessionSnapshot(snapshot)),
+        combineSignalPatches(app.projectRuntimeSnapshot(snapshot), sessionPatch),
       );
     } finally {
       syncingFromBridge = false;
     }
   }
 
+  function restoreBridgeViewFromSignalPatch(patch) {
+    const restorePatch = restoreViewPatchFromSignalPatch(patch);
+    const restoreView = restorePatch?.commands?.restoreView;
+    if (!restoreView) {
+      return false;
+    }
+    pendingBridgeRestoreView = cloneJson(restoreView);
+    bridge.setState(restorePatch);
+    return true;
+  }
+
   function handleBridgeStateEvent(event) {
     const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
+    if (event?.type === "fishymap:view-changed") {
+      if (
+        pendingBridgeRestoreView &&
+        bridgeSnapshotMatchesRestoreView(snapshot, pendingBridgeRestoreView)
+      ) {
+        pendingBridgeRestoreView = null;
+      }
+      return;
+    }
     patchSignalsFromBridge(snapshot);
     if (event?.type === "fishymap:ready" || snapshot?.ready === true) {
       recordRuntimeReady();
@@ -318,7 +392,9 @@ export async function start() {
     if (applyingInternalSignalPatch) {
       return;
     }
-    if (!patchTouchesLiveBridgeInputs(patch)) {
+    const restoredBridgeView = syncingFromBridge ? false : restoreBridgeViewFromSignalPatch(patch);
+    const touchesLiveBridgeInputs = patchTouchesLiveBridgeInputs(patch);
+    if (!restoredBridgeView && !touchesLiveBridgeInputs) {
       return;
     }
 
@@ -332,7 +408,9 @@ export async function start() {
       applyInternalSignalPatch(buildResetUiPatch());
     }
 
-    patchBridgeFromSignals();
+    if (touchesLiveBridgeInputs) {
+      patchBridgeFromSignals();
+    }
     if (!syncingFromBridge && patch?._map_bookmarks?.entries != null) {
       scheduleBookmarkDetailsRefresh();
     }
@@ -340,6 +418,9 @@ export async function start() {
 
   const initialPatch = app.nextBridgePatch(signals());
   const initialRestorePatch = snapshotToRestorePatch(signals()?._map_session || {});
+  pendingBridgeRestoreView = initialRestorePatch?.commands?.restoreView
+    ? cloneJson(initialRestorePatch.commands.restoreView)
+    : null;
   await bridge.mount(shell, {
     canvas,
     initialState: {

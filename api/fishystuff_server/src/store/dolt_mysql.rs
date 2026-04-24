@@ -1,7 +1,14 @@
 mod calculator;
+mod calculator_defaults;
+mod calculator_effects;
+mod calculator_items;
 mod calculator_loot;
+mod calculator_pets;
+mod calculator_progression;
+mod calculator_sources;
 mod catalog;
 mod fish_best_spots;
+mod item_metadata;
 mod stats;
 mod util;
 mod zone_profile_v2;
@@ -48,6 +55,7 @@ use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
 use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, FishLang, Store};
+use calculator_sources::CalculatorCatalogSourceData;
 use catalog::{
     encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_is_dried,
     item_grade_from_db, merge_fish_catalog_row, parse_positive_i64,
@@ -92,6 +100,9 @@ pub struct DoltMySqlStore {
     event_zone_ring_support_exists_cache: Arc<Mutex<HashMap<String, bool>>>,
     event_zone_support_mode_cache: Arc<Mutex<HashMap<String, Option<EventZoneSupportMode>>>>,
     calculator_catalog_cache: Arc<Mutex<HashMap<String, CalculatorCatalogResponse>>>,
+    calculator_catalog_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    calculator_source_data_cache: Arc<Mutex<HashMap<String, CalculatorCatalogSourceData>>>,
+    calculator_source_data_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     calculator_zone_loot_cache: Arc<Mutex<HashMap<String, Vec<CalculatorZoneLootEntry>>>>,
     calculator_zone_loot_load_state: Arc<(Mutex<CalculatorZoneLootLoadState>, Condvar)>,
     fish_list_cache: Arc<Mutex<HashMap<String, FishListResponse>>>,
@@ -390,6 +401,9 @@ impl DoltMySqlStore {
             event_zone_ring_support_exists_cache: Arc::new(Mutex::new(HashMap::new())),
             event_zone_support_mode_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_catalog_cache: Arc::new(Mutex::new(HashMap::new())),
+            calculator_catalog_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            calculator_source_data_cache: Arc::new(Mutex::new(HashMap::new())),
+            calculator_source_data_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             calculator_zone_loot_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_zone_loot_load_state: Arc::new((
                 Mutex::new(CalculatorZoneLootLoadState::default()),

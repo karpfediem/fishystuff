@@ -890,6 +890,36 @@ fishy-searchable-dropdown[option-density="roomy"] [data-role="results"] > li > [
     background: color-mix(in srgb, var(--color-base-content) 16%, transparent);
 }
 
+.fishy-preset-manager__summary-preview {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.1rem;
+}
+
+.fishy-preset-manager__summary-preview-row {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.fishy-preset-manager__summary-preview-chip {
+    display: inline-flex;
+    max-width: 100%;
+    min-width: 0;
+    align-items: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+    padding: 0.15rem 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 650;
+    line-height: 1.2;
+    color: color-mix(in srgb, var(--color-base-content) 76%, transparent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .fishy-preset-manager [data-role="save"],
 .fishy-preset-manager [data-role="discard"],
 .fishy-preset-manager [data-role="copy"],
