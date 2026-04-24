@@ -269,6 +269,33 @@ function createContext(localStorageInitial = {}, options = {}) {
     },
     apply() {},
   };
+  const toastCalls = [];
+  function recordToast(tone, message, options = {}) {
+    const call = { tone, message, options };
+    toastCalls.push(call);
+    return {
+      close() {
+        call.closed = true;
+      },
+    };
+  }
+  window.__fishystuffToast = {
+    show(options = {}) {
+      return recordToast(options.tone || "info", options.message || "", options);
+    },
+    info(message, options) {
+      return recordToast("info", message, options);
+    },
+    success(message, options) {
+      return recordToast("success", message, options);
+    },
+    warning(message, options) {
+      return recordToast("warning", message, options);
+    },
+    error(message, options) {
+      return recordToast("error", message, options);
+    },
+  };
   const localStorage = new MemoryStorage(localStorageInitial);
   const timers = new Map();
   let nextTimerId = 1;
@@ -339,6 +366,7 @@ function createContext(localStorageInitial = {}, options = {}) {
     location,
     navigator: context.navigator,
     localStorage,
+    toastCalls,
     flushTimers() {
       const pending = Array.from(timers.values());
       timers.clear();
@@ -377,7 +405,6 @@ function defaultSignals() {
       importCaughtToken: 0,
       closeDetailsToken: 0,
     },
-    _status_message: "",
     _api_error_message: "",
     _api_error_hint: "",
   };
@@ -460,7 +487,7 @@ test("fishydex persists panel collapse state in fishydex ui storage", () => {
   );
 });
 
-test("fishydex export action token copies caught ids and updates status", async () => {
+test("fishydex export action token copies caught ids and shows a toast", async () => {
   const env = createContext();
   const signals = defaultSignals();
   let copiedText = "";
@@ -499,7 +526,13 @@ test("fishydex export action token copies caught ids and updates status", async 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(copiedText, JSON.stringify([8473, 8476], null, 2));
-  assert.equal(signals._status_message, "Copied 2 caught fish IDs.");
+  assert.deepEqual(env.toastCalls, [
+    {
+      tone: "success",
+      message: "Copied 2 caught fish IDs.",
+      options: {},
+    },
+  ]);
 });
 
 test("fishydex import action token updates caught ids from prompt input", () => {
@@ -531,16 +564,21 @@ test("fishydex import action token updates caught ids from prompt input", () => 
     caughtIds: [8473, 8476],
     favouriteIds: [],
   });
-  assert.equal(signals._status_message, "Imported 2 caught fish IDs.");
+  assert.deepEqual(env.toastCalls, [
+    {
+      tone: "success",
+      message: "Imported 2 caught fish IDs.",
+      options: {},
+    },
+  ]);
 });
 
-test("fishydex clears transient feedback on filter signal patches", () => {
+test("fishydex clears API feedback on filter signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
 
   env.window.Fishydex.restore(signals);
   Object.assign(signals, {
-    _status_message: "Copied 2 caught fish IDs.",
     _api_error_message: "Fish API request failed.",
     _api_error_hint: "Retry later.",
     search_query: "eel",
@@ -553,7 +591,6 @@ test("fishydex clears transient feedback on filter signal patches", () => {
     },
   });
 
-  assert.equal(signals._status_message, "");
   assert.equal(signals._api_error_message, "");
   assert.equal(signals._api_error_hint, "");
 });

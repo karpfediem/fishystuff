@@ -380,24 +380,14 @@
     }
   }
 
-  .fishydex-status,
   .fishydex-error {
     border-radius: 1rem;
     padding: 0.85rem 1rem;
   }
 
-  .fishydex-status {
-    background: var(--dex-surface);
-    border: 1px solid color-mix(in srgb, var(--color-info, #6b8afd) 30%, transparent);
-  }
-
   .fishydex-error {
     background: var(--dex-surface);
     border: 1px solid color-mix(in srgb, var(--color-error, #d64545) 34%, transparent);
-  }
-
-  .fishydex-status strong {
-    color: color-mix(in oklab, var(--color-info, #6b8afd) 54%, var(--color-base-content, #1f2937) 46%);
   }
 
   .fishydex-error strong {

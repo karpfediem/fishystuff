@@ -52,7 +52,6 @@
          importCaughtToken: 0,
          closeDetailsToken: 0,
        },
-       _status_message: '',
        _api_error_message: '',
        _api_error_hint: '',
      }"
@@ -344,11 +343,6 @@
                       data-on:click="$search_query = ''; $caught_filter = 'all'; $favourite_filter = false; $grade_filters = []; $method_filters = []; $show_dried = false"
                       data-i18n-text="fishydex.filter.clear"></button>
             </div>
-          </div>
-
-          <div class="fishydex-status" data-show="($_status_message || '').length > 0">
-            <strong data-i18n-text="fishydex.filter.status_label"></strong>
-            <span data-text="$_status_message"></span>
           </div>
 
           <div class="fishydex-error" data-show="($_api_error_message || '').length > 0">

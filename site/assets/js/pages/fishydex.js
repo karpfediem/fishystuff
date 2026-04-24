@@ -26,7 +26,7 @@
     importCaughtToken: 0,
     closeDetailsToken: 0,
   });
-  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter|guide_view)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
+  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter|guide_view)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const DEX_FEEDBACK_CLEAR_SIGNAL_PATTERN =
     /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction|catalog_view)(?:\.|$)/;
   const DEX_SYNC_SIGNAL_PATTERN =
@@ -45,6 +45,7 @@
     renderKey: "",
     gridBound: false,
     detailsBound: false,
+    toastKeys: new Set(),
     suppressCardAnimation: false,
     activeDetailsFishId: 0,
     restoreFocusFishId: 0,
@@ -247,15 +248,10 @@
       if (!signals) {
         return;
       }
-      if (
-        !signals._status_message
-        && !signals._api_error_message
-        && !signals._api_error_hint
-      ) {
+      if (!signals._api_error_message && !signals._api_error_hint) {
         return;
       }
       patchSignals({
-        _status_message: "",
         _api_error_message: "",
         _api_error_hint: "",
       });
@@ -416,7 +412,11 @@
       localStorage.setItem(DEX_UI_STORAGE_KEY, json);
       state.persistedUiJson = json;
     } catch (_error) {
-      patchSignals({ _status_message: languageText("fishydex.state.local_storage_unavailable") });
+      showToastOnce(
+        "fishydex.state.local_storage_unavailable",
+        "warning",
+        languageText("fishydex.state.local_storage_unavailable"),
+      );
     }
   }
 
@@ -481,7 +481,11 @@
       return;
     }
     if (!result.ok) {
-      patchSignals({ _status_message: languageText("fishydex.state.local_storage_unavailable") });
+      showToastOnce(
+        "fishydex.state.local_storage_unavailable",
+        "warning",
+        languageText("fishydex.state.local_storage_unavailable"),
+      );
       return;
     }
     state.persistedCaughtJson = result.json;
@@ -496,7 +500,11 @@
       return;
     }
     if (!result.ok) {
-      patchSignals({ _status_message: languageText("fishydex.state.local_storage_unavailable") });
+      showToastOnce(
+        "fishydex.state.local_storage_unavailable",
+        "warning",
+        languageText("fishydex.state.local_storage_unavailable"),
+      );
       return;
     }
     state.persistedFavouriteJson = result.json;
@@ -537,17 +545,17 @@
         importCaughtToken: 0,
         closeDetailsToken: 0,
       },
-      _status_message:
-        uiState.statusMessage
-        || caughtState.statusMessage
-        || favouriteState.statusMessage
-        || "",
     });
+    const initialStatusMessage =
+      uiState.statusMessage || caughtState.statusMessage || favouriteState.statusMessage;
     const appRoot = document.getElementById("fishydex-app");
     if (appRoot && languageHelper()) {
       languageHelper().apply(appRoot);
     }
     state.uiStateRestored = true;
+    if (initialStatusMessage) {
+      showToastOnce("fishydex.restore.status", "warning", initialStatusMessage);
+    }
     sync(signals);
   }
 
@@ -1124,7 +1132,6 @@
         caughtIds: caughtIds,
         favouriteIds: currentSharedFish.favouriteIds,
       },
-      _status_message: "",
     });
   }
 
@@ -1180,7 +1187,6 @@
         caughtIds: currentSharedFish.caughtIds,
         favouriteIds: favouriteIds,
       },
-      _status_message: "",
     });
   }
 
@@ -1823,21 +1829,43 @@
     URL.revokeObjectURL(url);
   }
 
-  function showToast(tone, message) {
+  function showToast(tone, message, options = {}) {
     const toast = window.__fishystuffToast;
     if (!toast || !message) {
       return;
     }
+    const extra = options && typeof options === "object" ? options : {};
     const handler = typeof toast[tone] === "function"
-      ? toast[tone]
+      ? function (value, config) {
+          return toast[tone](value, config);
+        }
       : typeof toast.show === "function"
-        ? function (value) {
-            toast.show({ tone: tone, message: value });
+        ? function (value, config) {
+            return toast.show({
+              tone: tone,
+              message: value,
+              ...(config || {}),
+            });
           }
         : null;
     if (handler) {
-      handler(message);
+      return handler(message, extra);
     }
+    return null;
+  }
+
+  function showToastOnce(key, tone, message, options) {
+    if (!message) {
+      return null;
+    }
+    if (key && state.toastKeys.has(key)) {
+      return null;
+    }
+    const result = showToast(tone, message, options);
+    if (key && result) {
+      state.toastKeys.add(key);
+    }
+    return result;
   }
 
   async function exportCaught(caughtIds) {
@@ -1846,14 +1874,12 @@
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
-        patchSignals({ _status_message: languageText("fishydex.io.copied", { count: normalized.length }) });
         showToast("success", languageText("fishydex.io.copied", { count: normalized.length }));
         return;
       }
     } catch (_error) {
     }
     downloadJson("fishystuff-fishydex-caught.json", text);
-    patchSignals({ _status_message: languageText("fishydex.io.downloaded", { count: normalized.length }) });
     showToast("info", languageText("fishydex.io.downloaded", { count: normalized.length }));
   }
 
@@ -1870,15 +1896,11 @@
           caughtIds: caughtIds,
           favouriteIds: currentSharedFish.favouriteIds,
         },
-        _status_message: languageText("fishydex.io.imported", { count: caughtIds.length }),
         _api_error_message: "",
         _api_error_hint: "",
       });
       showToast("success", languageText("fishydex.io.imported", { count: caughtIds.length }));
     } catch (_error) {
-      patchSignals({
-        _status_message: languageText("fishydex.io.import_failed"),
-      });
       showToast("error", languageText("fishydex.io.import_failed"));
     }
   }

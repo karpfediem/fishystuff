@@ -422,7 +422,6 @@
                                 </div>
                             </div>
 
-                            <div class="alert alert-soft alert-info text-sm" data-reset-feedback hidden></div>
                         </div>
                     </section>
                 </div>
@@ -440,26 +439,24 @@
         <script>
             (function () {
                 var toggle = document.querySelector('[data-telemetry-toggle]');
-                var resetFeedback = document.querySelector('[data-reset-feedback]');
                 var resetButtons = document.querySelectorAll('[data-reset-scope]');
                 var sessionApi = window.__fishystuffClientSession;
                 if (!toggle || !sessionApi || typeof sessionApi.current !== 'function') {
                     return;
                 }
 
-                function setResetFeedback(message, tone) {
-                    if (!resetFeedback) {
-                        return;
+                function showResetToast(tone, message, options) {
+                    var toast = window.__fishystuffToast;
+                    if (!toast || !message) {
+                        return null;
                     }
-                    if (!message) {
-                        resetFeedback.hidden = true;
-                        resetFeedback.textContent = '';
-                        return;
+                    if (typeof toast[tone] === 'function') {
+                        return toast[tone](message, options || {});
                     }
-                    resetFeedback.hidden = false;
-                    resetFeedback.textContent = message;
-                    resetFeedback.classList.remove('alert-info', 'alert-success', 'alert-warning', 'alert-error');
-                    resetFeedback.classList.add(tone || 'alert-info');
+                    if (typeof toast.show === 'function') {
+                        return toast.show(Object.assign({ tone: tone, message: message }, options || {}));
+                    }
+                    return null;
                 }
 
                 function sync(snapshot) {
@@ -515,15 +512,21 @@
                         }
 
                         button.disabled = true;
-                        setResetFeedback(progressText, 'alert-info');
+                        var progressToast = showResetToast('info', progressText, { duration: 0 });
 
                         try {
                             sessionApi.clearLocalDataScope(scope, { reload: shouldReload });
+                            if (!shouldReload && progressToast && typeof progressToast.close === 'function') {
+                                progressToast.close();
+                            }
                             if (!shouldReload) {
-                                setResetFeedback(successText, 'alert-success');
+                                showResetToast('success', successText);
                             }
                         } catch (_error) {
-                            setResetFeedback('Reset is unavailable right now.', 'alert-error');
+                            if (progressToast && typeof progressToast.close === 'function') {
+                                progressToast.close();
+                            }
+                            showResetToast('error', 'Reset is unavailable right now.');
                         } finally {
                             button.disabled = false;
                         }
