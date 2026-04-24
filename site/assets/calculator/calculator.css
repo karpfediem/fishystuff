@@ -90,7 +90,10 @@
     }
 
     .fishy-calculator-pet-option {
+        box-sizing: border-box;
         display: grid;
+        min-width: 0;
+        max-width: 100%;
         width: 100%;
         justify-items: center;
         gap: 0.75rem;
@@ -104,8 +107,10 @@
 
     .fishy-calculator-pet-option__frame {
         display: grid;
+        min-width: 0;
         width: min(100%, 7rem);
         aspect-ratio: 1;
+        align-self: start;
         place-items: center;
         overflow: hidden;
         border: 2px solid var(--fishy-item-grade-color, var(--color-base-300));
@@ -134,7 +139,10 @@
     }
 
     .fishy-calculator-pet-option__label {
+        min-width: 0;
+        max-width: 100%;
         width: 100%;
+        overflow: hidden;
         text-align: center;
         font-size: 0.88rem;
         font-weight: 700;
@@ -148,11 +156,51 @@
     }
 
     .fishy-calculator-pet-option__badges {
+        min-width: 0;
+        max-width: 100%;
         width: 100%;
         display: flex;
-        flex-wrap: wrap;
+        overflow: hidden;
+        flex-wrap: nowrap;
         justify-content: center;
         gap: 0.25rem;
+    }
+
+    .fishy-calculator-pet-option__badges .badge,
+    [data-pet-fixed-option] .badge {
+        display: inline-block;
+        flex: 0 1 auto;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap !important;
+    }
+
+    [data-searchable-dropdown-results-layout="cards"] [data-searchable-dropdown-option],
+    [data-searchable-dropdown-results-layout="cards"] [data-searchable-dropdown-option] > [data-role="option-content"] {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    [data-searchable-dropdown-results-layout="cards"] .fishy-calculator-pet-option:not(.fishy-calculator-pet-option--selected) {
+        height: 14.75rem;
+        align-content: start;
+        grid-template-rows: 7rem minmax(2rem, auto) minmax(1.25rem, auto) minmax(1.25rem, auto);
+        gap: 0.5rem;
+        overflow: hidden;
+        padding: 0.8rem 0.7rem;
+    }
+
+    [data-searchable-dropdown-results-layout="cards"] .fishy-calculator-pet-option:not(.fishy-calculator-pet-option--selected) .fishy-calculator-pet-option__frame {
+        width: min(100%, 7rem);
+    }
+
+    [data-searchable-dropdown-results-layout="cards"] .fishy-calculator-pet-option:not(.fishy-calculator-pet-option--selected) .fishy-calculator-pet-option__label {
+        display: -webkit-box;
+        min-height: 2rem;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
     }
 
     .badge.fishy-calculator-pet-special-badge {

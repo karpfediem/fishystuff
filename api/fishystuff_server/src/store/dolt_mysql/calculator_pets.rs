@@ -597,10 +597,42 @@ fn build_pet_lineage_keys(rows: &[RawPetRow]) -> Vec<String> {
     keys
 }
 
+fn sorted_pet_row_refs<'a>(rows: &[&'a RawPetRow]) -> Vec<&'a RawPetRow> {
+    let mut sorted = rows.to_vec();
+    sorted.sort_by(|left, right| {
+        let left_id = left.character_key.parse::<i64>().unwrap_or(i64::MAX);
+        let right_id = right.character_key.parse::<i64>().unwrap_or(i64::MAX);
+        left_id
+            .cmp(&right_id)
+            .then_with(|| left.character_key.cmp(&right.character_key))
+    });
+    sorted
+}
+
+fn pet_tier_candidate_rows<'a>(
+    representative: &'a RawPetRow,
+    candidates: &[&'a RawPetRow],
+) -> Vec<&'a RawPetRow> {
+    let mut rows = Vec::with_capacity(candidates.len().max(1));
+    rows.push(representative);
+    for candidate in sorted_pet_row_refs(candidates) {
+        if candidate.character_key != representative.character_key {
+            rows.push(candidate);
+        }
+    }
+    rows
+}
+
+fn dedupe_strings_preserve_order(values: &mut Vec<String>) {
+    let mut seen = HashSet::new();
+    values.retain(|value| seen.insert(value.clone()));
+}
+
 fn build_tier_entry(
     lang: FishLang,
     tier_source: u8,
     representative: &RawPetRow,
+    candidates: &[&RawPetRow],
     base_skill_by_index: &HashMap<String, String>,
     acquire_skill_indexes: &HashMap<String, HashSet<String>>,
     equip_skill_by_index: &HashMap<String, String>,
@@ -609,55 +641,68 @@ fn build_tier_entry(
     let mut specials = Vec::new();
     let mut talents = Vec::new();
     let mut skills = Vec::new();
+    let candidate_rows = pet_tier_candidate_rows(representative, candidates);
 
-    if let Some(special_skill_no) = representative.special_skill_no.as_ref() {
-        let special_key = pet_special_option_key(special_skill_no);
-        if options_by_key.contains_key(&special_key) {
-            specials.push(special_key);
-        }
+    if let Some(special_key) = candidate_rows.iter().find_map(|candidate| {
+        candidate.special_skill_no.as_ref().and_then(|skill_no| {
+            let special_key = pet_special_option_key(skill_no);
+            options_by_key
+                .contains_key(&special_key)
+                .then_some(special_key)
+        })
+    }) {
+        specials.push(special_key);
     }
 
-    if let Some(skill_index) = representative.base_skill_index.as_ref() {
-        if let Some(skill_no) = base_skill_by_index.get(skill_index) {
-            if options_by_key.contains_key(skill_no) {
-                talents.push(skill_no.clone());
-            }
-        }
-    }
-
-    if let Some(acquire_key) = representative.acquire_key.as_ref() {
-        if let Some(indexes) = acquire_skill_indexes.get(acquire_key) {
-            let mut option_ids = indexes
-                .iter()
-                .filter_map(|index| equip_skill_by_index.get(index))
+    if let Some(talent_key) = candidate_rows.iter().find_map(|candidate| {
+        candidate.base_skill_index.as_ref().and_then(|skill_index| {
+            base_skill_by_index
+                .get(skill_index)
                 .filter(|skill_no| options_by_key.contains_key(*skill_no))
                 .cloned()
-                .collect::<Vec<_>>();
-            option_ids.sort_by(|left, right| {
-                let left_label = options_by_key
-                    .get(left)
-                    .map(|option| option.entry.label.as_str())
-                    .unwrap_or(left.as_str());
-                let right_label = options_by_key
-                    .get(right)
-                    .map(|option| option.entry.label.as_str())
-                    .unwrap_or(right.as_str());
-                left_label.cmp(right_label).then_with(|| left.cmp(right))
-            });
-            option_ids.dedup();
-            for option_id in option_ids {
-                match options_by_key
-                    .get(&option_id)
-                    .map(|option| option.kind)
-                    .unwrap_or(PetOptionKind::Skill)
-                {
-                    PetOptionKind::Special => specials.push(option_id),
-                    PetOptionKind::Talent => talents.push(option_id),
-                    PetOptionKind::Skill => skills.push(option_id),
+        })
+    }) {
+        talents.push(talent_key);
+    }
+
+    for candidate in candidate_rows {
+        if let Some(acquire_key) = candidate.acquire_key.as_ref() {
+            if let Some(indexes) = acquire_skill_indexes.get(acquire_key) {
+                let mut option_ids = indexes
+                    .iter()
+                    .filter_map(|index| equip_skill_by_index.get(index))
+                    .filter(|skill_no| options_by_key.contains_key(*skill_no))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                option_ids.sort_by(|left, right| {
+                    let left_label = options_by_key
+                        .get(left)
+                        .map(|option| option.entry.label.as_str())
+                        .unwrap_or(left.as_str());
+                    let right_label = options_by_key
+                        .get(right)
+                        .map(|option| option.entry.label.as_str())
+                        .unwrap_or(right.as_str());
+                    left_label.cmp(right_label).then_with(|| left.cmp(right))
+                });
+                option_ids.dedup();
+                for option_id in option_ids {
+                    match options_by_key
+                        .get(&option_id)
+                        .map(|option| option.kind)
+                        .unwrap_or(PetOptionKind::Skill)
+                    {
+                        PetOptionKind::Special => specials.push(option_id),
+                        PetOptionKind::Talent => talents.push(option_id),
+                        PetOptionKind::Skill => skills.push(option_id),
+                    }
                 }
             }
         }
     }
+    dedupe_strings_preserve_order(&mut specials);
+    dedupe_strings_preserve_order(&mut talents);
+    dedupe_strings_preserve_order(&mut skills);
 
     CalculatorPetTierEntry {
         key: (tier_source + 1).to_string(),
@@ -719,6 +764,7 @@ fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
 fn calculator_pet_option_records(
     lang: FishLang,
     skill_ids: &HashSet<String>,
+    base_talent_skill_ids: &HashSet<String>,
     english_labels: &HashMap<String, String>,
     skilltype_meta: &HashMap<String, (Option<String>, Option<String>, Option<String>)>,
 ) -> HashMap<String, CalculatorPetOptionRecord> {
@@ -734,7 +780,11 @@ fn calculator_pet_option_records(
             korean_label.as_deref(),
             korean_description.as_deref(),
         );
-        let Some(kind) = pet_option_kind(&effects) else {
+        let Some(kind) = pet_option_kind(&effects).or_else(|| {
+            base_talent_skill_ids
+                .contains(skill_id)
+                .then_some(PetOptionKind::Talent)
+        }) else {
             continue;
         };
         records.insert(
@@ -982,6 +1032,7 @@ impl DoltMySqlStore {
             };
 
         let mut skill_ids = HashSet::new();
+        let mut base_talent_skill_ids = HashSet::new();
         let mut pet_special_skill_ids = HashSet::new();
         for row in &pet_rows {
             if let Some(skill_no) = row.special_skill_no.as_ref() {
@@ -990,6 +1041,7 @@ impl DoltMySqlStore {
             if let Some(skill_index) = row.base_skill_index.as_ref() {
                 if let Some(skill_no) = base_skill_by_index.get(skill_index) {
                     skill_ids.insert(skill_no.clone());
+                    base_talent_skill_ids.insert(skill_no.clone());
                 }
             }
             if let Some(acquire_key) = row.acquire_key.as_ref() {
@@ -1019,8 +1071,13 @@ impl DoltMySqlStore {
                 Ok(rows) => rows,
                 Err(err) => return Err(db_unavailable(err)),
             };
-        let mut options_by_key =
-            calculator_pet_option_records(lang, &skill_ids, &english_skill_labels, &skilltype_meta);
+        let mut options_by_key = calculator_pet_option_records(
+            lang,
+            &skill_ids,
+            &base_talent_skill_ids,
+            &english_skill_labels,
+            &skilltype_meta,
+        );
         options_by_key.extend(calculator_pet_special_option_records(
             lang,
             &pet_special_skill_meta,
@@ -1060,6 +1117,7 @@ impl DoltMySqlStore {
                                 lang,
                                 tier_source,
                                 representative,
+                                &candidates,
                                 &base_skill_by_index,
                                 &acquire_skill_indexes,
                                 &equip_skill_by_index,
@@ -1136,17 +1194,20 @@ impl DoltMySqlStore {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
-    use fishystuff_api::models::calculator::{CalculatorPetEntry, CalculatorPetTierEntry};
+    use fishystuff_api::models::calculator::{
+        CalculatorPetEntry, CalculatorPetOptionEntry, CalculatorPetTierEntry,
+    };
 
     use crate::store::FishLang;
 
     use super::{
-        calculator_pet_special_option_records, dedupe_built_pet_entries, is_looting_pet_type,
-        localized_pet_option_label, parse_asset_stem, parse_pet_option_effects, pet_image_url,
-        pet_option_kind, pet_special_option_label, BuiltPetEntry, PetOptionKind,
-        PetSpecialSkillMeta,
+        build_tier_entry, calculator_pet_option_records, calculator_pet_special_option_records,
+        dedupe_built_pet_entries, is_looting_pet_type, localized_pet_option_label,
+        parse_asset_stem, parse_pet_option_effects, pet_image_url, pet_option_kind,
+        pet_special_option_label, BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind,
+        PetSpecialSkillMeta, RawPetRow,
     };
 
     #[test]
@@ -1187,6 +1248,95 @@ mod tests {
             ),
             "내구도 감소 저항 +5%"
         );
+    }
+
+    #[test]
+    fn calculator_pet_option_records_keeps_unmodeled_base_talents() {
+        let skill_ids = HashSet::from([
+            "base:combat_exp".to_string(),
+            "equip:ignored".to_string(),
+            "equip:fishing_exp".to_string(),
+        ]);
+        let base_talent_skill_ids = HashSet::from(["base:combat_exp".to_string()]);
+        let english_labels = HashMap::from([
+            ("base:combat_exp".to_string(), "Combat EXP +5%".to_string()),
+            ("equip:ignored".to_string(), "Ignore Me +5%".to_string()),
+            (
+                "equip:fishing_exp".to_string(),
+                "Fishing EXP +7%".to_string(),
+            ),
+        ]);
+
+        let records = calculator_pet_option_records(
+            FishLang::En,
+            &skill_ids,
+            &base_talent_skill_ids,
+            &english_labels,
+            &HashMap::new(),
+        );
+
+        let base_record = records.get("base:combat_exp").expect("base talent");
+        assert_eq!(base_record.kind, PetOptionKind::Talent);
+        assert_eq!(base_record.entry.label, "Combat EXP +5%");
+        assert_eq!(
+            records.get("equip:fishing_exp").unwrap().kind,
+            PetOptionKind::Skill
+        );
+        assert!(!records.contains_key("equip:ignored"));
+    }
+
+    #[test]
+    fn build_tier_entry_scans_all_candidate_rows_for_fixed_talent() {
+        let representative = RawPetRow {
+            character_key: "100".to_string(),
+            skin_key: Some("200".to_string()),
+            icon_image_file: None,
+            race: "3".to_string(),
+            kind: "1".to_string(),
+            tier_source: 4,
+            special_skill_no: None,
+            base_skill_index: None,
+            acquire_key: None,
+        };
+        let candidate_with_talent = RawPetRow {
+            character_key: "101".to_string(),
+            skin_key: Some("200".to_string()),
+            icon_image_file: None,
+            race: "3".to_string(),
+            kind: "1".to_string(),
+            tier_source: 4,
+            special_skill_no: None,
+            base_skill_index: Some("base-index".to_string()),
+            acquire_key: None,
+        };
+        let base_skill_by_index =
+            HashMap::from([("base-index".to_string(), "talent:combat_exp".to_string())]);
+        let options_by_key = HashMap::from([(
+            "talent:combat_exp".to_string(),
+            CalculatorPetOptionRecord {
+                kind: PetOptionKind::Talent,
+                entry: CalculatorPetOptionEntry {
+                    key: "talent:combat_exp".to_string(),
+                    label: "Combat EXP +5%".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            },
+        )]);
+        let candidates = vec![&representative, &candidate_with_talent];
+
+        let tier = build_tier_entry(
+            FishLang::En,
+            4,
+            &representative,
+            &candidates,
+            &base_skill_by_index,
+            &HashMap::new(),
+            &HashMap::new(),
+            &options_by_key,
+        );
+
+        assert_eq!(tier.key, "5");
+        assert_eq!(tier.talents, vec!["talent:combat_exp".to_string()]);
     }
 
     #[test]

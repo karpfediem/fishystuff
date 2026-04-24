@@ -2899,9 +2899,6 @@ fn apply_zone_overlay_to_loot_entries(
     entries
 }
 
-const LEGACY_PET_SPECIAL_AUTO_FISHING: &str = "legacy:pet:special:auto_fishing_time_reduction";
-const LEGACY_PET_TALENT_DRR: &str = "legacy:pet:talent:durability_reduction_resistance";
-const LEGACY_PET_TALENT_LIFE_EXP: &str = "legacy:pet:talent:life_exp";
 const LEGACY_PET_SKILL_FISHING_EXP: &str = "legacy:pet:skill:fishing_exp";
 
 #[derive(Default)]
@@ -2966,18 +2963,6 @@ fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> CalculatorPetAlias
                 .or_insert_with(|| option.key.clone());
         }
     }
-    aliases
-        .options
-        .entry(normalize_lookup_value("Auto-Fishing Time Reduction"))
-        .or_insert_with(|| LEGACY_PET_SPECIAL_AUTO_FISHING.to_string());
-    aliases
-        .options
-        .entry(normalize_lookup_value("Durability Reduction Resistance"))
-        .or_insert_with(|| LEGACY_PET_TALENT_DRR.to_string());
-    aliases
-        .options
-        .entry(normalize_lookup_value("Life EXP"))
-        .or_insert_with(|| LEGACY_PET_TALENT_LIFE_EXP.to_string());
     aliases
         .options
         .entry(normalize_lookup_value("Fishing EXP"))
@@ -3194,46 +3179,8 @@ fn normalize_pet(
         return;
     };
 
-    pet.special = resolve_pet_option_selection(
-        &pet.special,
-        &defaults.special,
-        &tier_entry.specials,
-        &catalog.specials,
-        Some(LEGACY_PET_SPECIAL_AUTO_FISHING),
-        |option| option.auto_fishing_time_reduction,
-        true,
-    );
-    pet.talent = resolve_pet_option_selection(
-        &pet.talent,
-        &defaults.talent,
-        &tier_entry.talents,
-        &catalog.talents,
-        None,
-        |_| None,
-        true,
-    );
-    if pet.talent.is_empty() {
-        pet.talent = resolve_pet_option_selection(
-            &pet.talent,
-            &defaults.talent,
-            &tier_entry.talents,
-            &catalog.talents,
-            Some(LEGACY_PET_TALENT_DRR),
-            |option| option.durability_reduction_resistance,
-            true,
-        );
-    }
-    if pet.talent.is_empty() {
-        pet.talent = resolve_pet_option_selection(
-            &pet.talent,
-            &defaults.talent,
-            &tier_entry.talents,
-            &catalog.talents,
-            Some(LEGACY_PET_TALENT_LIFE_EXP),
-            |option| option.life_exp,
-            true,
-        );
-    }
+    pet.special = resolve_fixed_pet_option_selection(&tier_entry.specials);
+    pet.talent = resolve_fixed_pet_option_selection(&tier_entry.talents);
     pet.skills = resolve_pet_skill_selection(&pet.skills, &tier_entry.skills, &catalog.skills);
 }
 
@@ -3297,49 +3244,11 @@ fn pet_option_by_key<'a>(
     options.iter().find(|option| option.key == key)
 }
 
-fn resolve_pet_option_selection(
-    current_value: &str,
-    default_value: &str,
-    allowed_keys: &[String],
-    options: &[CalculatorPetOptionEntry],
-    legacy_value: Option<&str>,
-    score: impl Fn(&CalculatorPetOptionEntry) -> Option<f32> + Copy,
-    auto_select_single: bool,
-) -> String {
-    if allowed_keys.iter().any(|key| key == current_value) {
-        return current_value.to_string();
+fn resolve_fixed_pet_option_selection(allowed_keys: &[String]) -> String {
+    if allowed_keys.is_empty() {
+        return String::new();
     }
-    if allowed_keys.iter().any(|key| key == default_value) {
-        return default_value.to_string();
-    }
-    if legacy_value.is_some() && legacy_value == Some(current_value) {
-        return allowed_keys
-            .iter()
-            .filter_map(|key| {
-                pet_option_by_key(options, key).map(|option| {
-                    (
-                        key,
-                        score(option).unwrap_or_default(),
-                        option.label.as_str(),
-                    )
-                })
-            })
-            .max_by(
-                |(left_key, left_score, left_label), (right_key, right_score, right_label)| {
-                    left_score
-                        .partial_cmp(right_score)
-                        .unwrap_or(Ordering::Equal)
-                        .then_with(|| left_label.cmp(right_label))
-                        .then_with(|| left_key.cmp(right_key))
-                },
-            )
-            .map(|(key, _, _)| key.clone())
-            .unwrap_or_default();
-    }
-    if auto_select_single && allowed_keys.len() == 1 {
-        return allowed_keys[0].clone();
-    }
-    String::new()
+    allowed_keys[0].clone()
 }
 
 fn resolve_pet_skill_selection(
@@ -11641,19 +11550,122 @@ fn render_pet_talent_badges(lang: CalculatorLocale, talent: &CalculatorPetOption
     )
 }
 
-fn render_pet_special_badges(special: &CalculatorPetOptionEntry) -> String {
-    let class_name = if special
+fn render_pet_effective_talent_badges(
+    lang: CalculatorLocale,
+    pet: &CalculatorPetSignals,
+    catalog: &CalculatorPetCatalog,
+    talent: &CalculatorPetOptionEntry,
+) -> String {
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let mut badges = Vec::new();
+    if talent
+        .durability_reduction_resistance
+        .filter(|value| *value > 0.0)
+        .is_some()
+    {
+        let item_drr = pet_drr(pet, catalog);
+        if item_drr > 0.0 {
+            badges.push(render_effect_badge(
+                &text_with_vars(
+                    "calculator.server.badge.item_drr",
+                    &[("percent", &trim_float(item_drr * 100.0))],
+                ),
+                "border-amber-400 bg-amber-300 text-amber-950",
+            ));
+        }
+    }
+    if talent.life_exp.filter(|value| *value > 0.0).is_some() {
+        let exp_life = pet_life_exp(pet, catalog);
+        if exp_life > 0.0 {
+            badges.push(render_effect_badge(
+                &text_with_vars(
+                    "calculator.server.badge.life_exp",
+                    &[("percent", &trim_float(exp_life * 100.0))],
+                ),
+                "border-green-400 bg-green-300 text-green-950",
+            ));
+        }
+    }
+    if badges.is_empty() {
+        return String::new();
+    }
+    format!(
+        "<span class=\"mt-1 flex flex-wrap gap-1\">{}</span>",
+        badges.join("")
+    )
+}
+
+fn pet_special_badge_class(special: &CalculatorPetOptionEntry) -> &'static str {
+    if special
         .auto_fishing_time_reduction
         .filter(|value| *value > 0.0)
         .is_some()
     {
-        "badge-info fishy-calculator-pet-special-badge"
+        "fishy-calculator-pet-special-badge fishy-item-grade-blue"
     } else {
         "border-base-content/15 bg-base-300 text-base-content"
-    };
+    }
+}
+
+fn render_pet_special_badges(special: &CalculatorPetOptionEntry) -> String {
     format!(
         "<span class=\"fishy-calculator-pet-option__badges\">{}</span>",
-        render_wrapping_effect_badge(&special.label, class_name)
+        render_wrapping_effect_badge(&special.label, pet_special_badge_class(special))
+    )
+}
+
+fn render_pet_fixed_option_empty(lang: CalculatorLocale) -> String {
+    format!(
+        "<span class=\"block min-w-0 font-medium text-base-content/50\">{}</span>",
+        escape_html(none_select_option(lang).label)
+    )
+}
+
+fn render_pet_fixed_special_content(
+    lang: CalculatorLocale,
+    special: Option<&CalculatorPetOptionEntry>,
+) -> String {
+    special
+        .map(|special| {
+            format!(
+                "<span class=\"flex min-h-8 items-center\">{}</span>",
+                render_wrapping_effect_badge(&special.label, pet_special_badge_class(special))
+            )
+        })
+        .unwrap_or_else(|| render_pet_fixed_option_empty(lang))
+}
+
+fn render_pet_fixed_talent_content(
+    lang: CalculatorLocale,
+    pet: &CalculatorPetSignals,
+    catalog: &CalculatorPetCatalog,
+    talent: Option<&CalculatorPetOptionEntry>,
+) -> String {
+    talent
+        .map(|talent| {
+            format!(
+                "<span class=\"block min-w-0 font-medium leading-snug text-base-content\">{}</span>{}",
+                escape_html(&talent.label),
+                render_pet_effective_talent_badges(lang, pet, catalog, talent)
+            )
+        })
+        .unwrap_or_else(|| render_pet_fixed_option_empty(lang))
+}
+
+fn render_pet_fixed_option_control(
+    input_id: &str,
+    bind_key: &str,
+    selected_value: &str,
+    content_html: &str,
+) -> String {
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">\
+         <div class=\"min-h-12 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\" data-pet-fixed-option aria-live=\"polite\">{}</div>",
+        escape_html(input_id),
+        escape_html(bind_key),
+        escape_html(selected_value),
+        content_html,
     )
 }
 
@@ -11756,13 +11768,18 @@ fn render_pet_dropdown_content_html(
                 )
             )
         });
-    let mut badges_html = String::new();
-    if let Some(special) = option.pet_variant_special {
-        badges_html.push_str(&render_pet_special_badges(special));
-    }
-    if let Some(talent) = option.pet_variant_talent {
-        badges_html.push_str(&render_pet_talent_badges(lang, talent));
-    }
+    let badges_html = if selected {
+        String::new()
+    } else {
+        let mut badges_html = String::new();
+        if let Some(special) = option.pet_variant_special {
+            badges_html.push_str(&render_pet_special_badges(special));
+        }
+        if let Some(talent) = option.pet_variant_talent {
+            badges_html.push_str(&render_pet_talent_badges(lang, talent));
+        }
+        badges_html
+    };
     format!(
         "<span class=\"fishy-calculator-pet-option{}\" data-pet-option-card><span class=\"fishy-calculator-pet-option__frame {}\">{}</span><span class=\"fishy-calculator-pet-option__label\">{}</span>{}</span>",
         if selected {
@@ -12235,105 +12252,6 @@ fn render_searchable_select_control(
             value: selected_value,
             search_url: &search_url,
             search_url_root: Some("api"),
-            search_placeholder,
-        },
-        &results_html,
-    );
-
-    format!(
-        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">{}",
-        escape_html(input_id),
-        escape_html(bind_key),
-        escape_html(selected_value),
-        dropdown,
-    )
-}
-
-fn render_local_searchable_select_control(
-    cdn_base_url: &str,
-    lang: CalculatorLocale,
-    root_id: &str,
-    input_id: &str,
-    bind_key: &str,
-    selected_value: &str,
-    options: &[SelectOption<'_>],
-    include_none: bool,
-    search_placeholder: &str,
-    compact: bool,
-) -> String {
-    let results_id = format!("{root_id}-results");
-    let uses_card_results = options
-        .iter()
-        .any(|option| option.presentation == SelectOptionPresentation::PetCard);
-    let options = with_optional_none(options, include_none, lang);
-    let selected_option = options
-        .iter()
-        .copied()
-        .find(|option| option.value == selected_value);
-    let none_option = none_select_option(lang);
-    let selected_label = selected_option
-        .map(|option| option.label)
-        .unwrap_or_else(|| {
-            if selected_value.trim().is_empty() {
-                none_option.label
-            } else {
-                selected_value
-            }
-        });
-    let selected_content_html = selected_option
-        .map(|option| render_searchable_dropdown_selected_content_html(lang, cdn_base_url, option))
-        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
-    let catalog_html = render_searchable_dropdown_catalog_html(lang, cdn_base_url, &options);
-    let results_html = render_searchable_select_results(
-        lang,
-        cdn_base_url,
-        &results_id,
-        &options,
-        selected_value,
-        "",
-        0,
-    );
-    let dropdown = render_searchable_dropdown(
-        &SearchableDropdownConfig {
-            catalog_html: Some(&catalog_html),
-            compact,
-            trigger_size: if uses_card_results {
-                SearchableDropdownTriggerSize::Content
-            } else {
-                SearchableDropdownTriggerSize::Fill
-            },
-            trigger_width: if uses_card_results {
-                Some("12rem")
-            } else {
-                None
-            },
-            trigger_min_height: if uses_card_results {
-                Some("12rem")
-            } else {
-                None
-            },
-            panel_width: if uses_card_results {
-                Some("60rem")
-            } else {
-                None
-            },
-            panel_placement: if uses_card_results {
-                SearchableDropdownPanelPlacement::OverlayAnchor
-            } else {
-                SearchableDropdownPanelPlacement::Adjacent
-            },
-            results_layout: if uses_card_results {
-                SearchableDropdownResultsLayout::Cards
-            } else {
-                SearchableDropdownResultsLayout::List
-            },
-            root_id,
-            input_id,
-            label: selected_label,
-            selected_content_html: &selected_content_html,
-            value: selected_value,
-            search_url: "",
-            search_url_root: None,
             search_placeholder,
         },
         &results_html,
@@ -13290,12 +13208,8 @@ fn render_pet_cards(
         let selected_pet = catalog.pets.iter().find(|entry| entry.key == pet.pet);
         let selected_tier_entry =
             selected_pet.and_then(|entry| entry.tiers.iter().find(|tier| tier.key == pet.tier));
-        let special_options = selected_tier_entry
-            .map(|tier| select_pet_option_entries_by_keys(&tier.specials, &catalog.specials))
-            .unwrap_or_default();
-        let talent_options = selected_tier_entry
-            .map(|tier| select_pet_option_entries_by_keys(&tier.talents, &catalog.talents))
-            .unwrap_or_default();
+        let selected_special = pet_option_by_key(&catalog.specials, &pet.special);
+        let selected_talent = pet_option_by_key(&catalog.talents, &pet.talent);
         let skill_options = selected_tier_entry
             .map(|tier| select_pet_option_entries_by_keys(&tier.skills, &catalog.skills))
             .unwrap_or_default();
@@ -13343,17 +13257,11 @@ fn render_pet_cards(
                 "calculator.server.field.special",
             ))
         ));
-        html.push_str(&render_local_searchable_select_control(
-            cdn_base_url,
-            lang,
-            &format!("calculator-pet{slot}-special-picker"),
+        html.push_str(&render_pet_fixed_option_control(
             &format!("calculator-pet{slot}-special-value"),
             &format!("{}.special", bind_prefix),
             &pet.special,
-            &special_options,
-            true,
-            &calculator_route_text(lang, "calculator.server.search.pet_specials"),
-            true,
+            &render_pet_fixed_special_content(lang, selected_special),
         ));
         html.push_str("</fieldset>");
         html.push_str("<div class=\"grid gap-4 sm:grid-cols-2 sm:items-end\">");
@@ -13364,17 +13272,11 @@ fn render_pet_cards(
                 "calculator.server.field.talent",
             ))
         ));
-        html.push_str(&render_local_searchable_select_control(
-            cdn_base_url,
-            lang,
-            &format!("calculator-pet{slot}-talent-picker"),
+        html.push_str(&render_pet_fixed_option_control(
             &format!("calculator-pet{slot}-talent-value"),
             &format!("{}.talent", bind_prefix),
             &pet.talent,
-            &talent_options,
-            true,
-            &calculator_route_text(lang, "calculator.server.search.pet_talents"),
-            true,
+            &render_pet_fixed_talent_content(lang, pet, catalog, selected_talent),
         ));
         html.push_str("</fieldset>");
         write!(
@@ -13477,7 +13379,9 @@ mod tests {
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
-        poisson_probability_at_least, post_calculator_datastar_eval, render_pet_talent_badges,
+        poisson_probability_at_least, post_calculator_datastar_eval,
+        render_pet_dropdown_option_content_html, render_pet_dropdown_selected_content_html,
+        render_pet_effective_talent_badges, render_pet_talent_badges,
         render_searchable_select_results, render_select_option_search_text,
         render_target_fish_panel, trade_sale_multiplier_for_species, CalculatorData,
         CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
@@ -13900,6 +13804,13 @@ mod tests {
         assert!(text.contains("fishy-calculator-pet-option__badges"));
         assert!(text.contains("+5% Item DRR"));
         assert!(!text.contains("calculator-pet1-tier-picker"));
+        assert!(text.contains("calculator-pet1-special-value"));
+        assert!(text.contains("data-bind=\"pet1.special\""));
+        assert!(!text.contains("calculator-pet1-special-picker"));
+        assert!(text.contains("calculator-pet1-talent-value"));
+        assert!(text.contains("data-bind=\"pet1.talent\""));
+        assert!(!text.contains("calculator-pet1-talent-picker"));
+        assert!(text.contains("data-pet-fixed-option"));
         assert!(text.contains("<fishy-searchable-multiselect"));
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
@@ -14861,6 +14772,82 @@ mod tests {
     }
 
     #[test]
+    fn normalize_pet_forces_fixed_special_and_talent_from_skin() {
+        let catalog = CalculatorPetCatalog {
+            slots: 5,
+            pets: vec![CalculatorPetEntry {
+                key: "pet:fixed".to_string(),
+                label: "Fixed Pet".to_string(),
+                tiers: vec![CalculatorPetTierEntry {
+                    key: "5".to_string(),
+                    label: "Tier 5".to_string(),
+                    specials: vec!["skin_special".to_string(), "other_special".to_string()],
+                    talents: vec!["skin_talent".to_string(), "other_talent".to_string()],
+                    skills: vec!["skill_a".to_string()],
+                }],
+                ..CalculatorPetEntry::default()
+            }],
+            tiers: vec![CalculatorOptionEntry {
+                key: "5".to_string(),
+                label: "Tier 5".to_string(),
+            }],
+            specials: vec![
+                CalculatorPetOptionEntry {
+                    key: "skin_special".to_string(),
+                    label: "Skin Special".to_string(),
+                    auto_fishing_time_reduction: Some(0.1),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "other_special".to_string(),
+                    label: "Other Special".to_string(),
+                    auto_fishing_time_reduction: Some(0.2),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            talents: vec![
+                CalculatorPetOptionEntry {
+                    key: "skin_talent".to_string(),
+                    label: "Skin Talent".to_string(),
+                    durability_reduction_resistance: Some(0.05),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "other_talent".to_string(),
+                    label: "Other Talent".to_string(),
+                    life_exp: Some(0.05),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            skills: vec![CalculatorPetOptionEntry {
+                key: "skill_a".to_string(),
+                label: "Skill A".to_string(),
+                fishing_exp: Some(0.01),
+                ..CalculatorPetOptionEntry::default()
+            }],
+        };
+        let aliases = build_pet_value_aliases(&catalog);
+        let mut pet = CalculatorPetSignals {
+            pet: "pet:fixed".to_string(),
+            tier: "5".to_string(),
+            special: "other_special".to_string(),
+            talent: "other_talent".to_string(),
+            skills: vec!["skill_a".to_string()],
+            ..CalculatorPetSignals::default()
+        };
+
+        normalize_pet(
+            &mut pet,
+            CalculatorPetSignals::default(),
+            &catalog,
+            &aliases,
+        );
+
+        assert_eq!(pet.special, "skin_special");
+        assert_eq!(pet.talent, "skin_talent");
+    }
+
+    #[test]
     fn normalize_pet_follows_lineage_to_target_tier_entry() {
         let lineage_key = "change-look:46001:46:1".to_string();
         let catalog = CalculatorPetCatalog {
@@ -15140,6 +15127,33 @@ mod tests {
     }
 
     #[test]
+    fn render_pet_effective_talent_badges_includes_pack_leader_bonus() {
+        let talent = CalculatorPetOptionEntry {
+            key: "durability_reduction_resistance".to_string(),
+            label: "Durability Reduction Resistance".to_string(),
+            durability_reduction_resistance: Some(0.05),
+            ..CalculatorPetOptionEntry::default()
+        };
+        let catalog = CalculatorPetCatalog {
+            talents: vec![talent.clone()],
+            ..CalculatorPetCatalog::default()
+        };
+        let pet = CalculatorPetSignals {
+            pet: "pet:1".to_string(),
+            tier: "5".to_string(),
+            pack_leader: true,
+            talent: "durability_reduction_resistance".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+
+        let html =
+            render_pet_effective_talent_badges(CalculatorLocale::EnUs, &pet, &catalog, &talent);
+
+        assert!(html.contains("+21% Item DRR"));
+        assert!(!html.contains("+20% Item DRR"));
+    }
+
+    #[test]
     fn normalize_named_array_prefers_higher_buff_category_level() {
         let valid_keys =
             std::collections::HashSet::from(["item:1".to_string(), "item:2".to_string()]);
@@ -15279,6 +15293,46 @@ mod tests {
         assert!(text.contains("auto fishing"));
         assert!(text.contains("auto-fishing"));
         assert!(text.contains("afr"));
+    }
+
+    #[test]
+    fn render_pet_dropdown_selected_content_hides_enriched_badges() {
+        let special = CalculatorPetOptionEntry {
+            key: "pet-special:37".to_string(),
+            label: "Special: Auto-Fishing Time Reduction -30%".to_string(),
+            auto_fishing_time_reduction: Some(0.30),
+            ..CalculatorPetOptionEntry::default()
+        };
+        let talent = CalculatorPetOptionEntry {
+            key: "durability_reduction_resistance".to_string(),
+            label: "Durability Reduction Resistance +5%".to_string(),
+            durability_reduction_resistance: Some(0.05),
+            ..CalculatorPetOptionEntry::default()
+        };
+        let option = SelectOption {
+            value: "pet:hawk",
+            label: "Hawk",
+            icon: Some("/images/pets/pet_hawk_0014.webp"),
+            grade_tone: "red",
+            pet_variant_talent: Some(&talent),
+            pet_variant_special: Some(&special),
+            item: None,
+            lifeskill_level: None,
+            presentation: SelectOptionPresentation::PetCard,
+        };
+
+        let selected_html =
+            render_pet_dropdown_selected_content_html(CalculatorLocale::EnUs, "", option);
+        let result_html =
+            render_pet_dropdown_option_content_html(CalculatorLocale::EnUs, "", option);
+
+        assert!(selected_html.contains("fishy-calculator-pet-option--selected"));
+        assert!(!selected_html.contains("fishy-calculator-pet-option__badges"));
+        assert!(!selected_html.contains("+5% Item DRR"));
+        assert!(!selected_html.contains("Special: Auto-Fishing Time Reduction"));
+        assert!(result_html.contains("fishy-calculator-pet-option__badges"));
+        assert!(result_html.contains("+5% Item DRR"));
+        assert!(result_html.contains("Special: Auto-Fishing Time Reduction"));
     }
 
     #[test]
