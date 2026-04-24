@@ -1454,6 +1454,16 @@ export class FishySearchableDropdown extends HTMLElement {
         }
         const viewportWidth = Math.max(window.innerWidth || 0, 320);
         const viewportHeight = Math.max(window.innerHeight || 0, 240);
+        const visibleViewportRight = Math.max(
+            320,
+            Math.min(
+                window.innerWidth || Number.POSITIVE_INFINITY,
+                document.documentElement.clientWidth || Number.POSITIVE_INFINITY,
+                window.visualViewport
+                    ? window.visualViewport.offsetLeft + window.visualViewport.width
+                    : Number.POSITIVE_INFINITY,
+            ),
+        );
         const anchorRect = anchor.getBoundingClientRect();
         const panelWidth = Math.round(measuredWidth || panel.getBoundingClientRect().width || 0);
         const anchorWidth = Math.round(anchorRect.width || 0);
@@ -1464,8 +1474,8 @@ export class FishySearchableDropdown extends HTMLElement {
         const originTop = Number.isFinite(originRect.top) ? originRect.top : 0;
         const widthSource = getStringAttribute(this, "panel-min-width");
         const maxWidth = overlayAnchor
-            ? viewportWidth - edgeInset - anchorRect.left
-            : viewportWidth - edgeInset * 2;
+            ? visibleViewportRight - edgeInset - anchorRect.left
+            : visibleViewportRight - edgeInset * 2;
         const width = Math.max(
             0,
             Math.min(
@@ -1479,7 +1489,7 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.style.zIndex = "70";
         panel.style.width = width ? `${width}px` : "";
         panel.style.minWidth = "0";
-        panel.style.maxWidth = `${Math.max(viewportWidth - edgeInset * 2, 160)}px`;
+        panel.style.maxWidth = `${Math.max(visibleViewportRight - edgeInset * 2, 160)}px`;
         panel.style.left = `${edgeInset}px`;
         panel.style.top = `${edgeInset}px`;
 
@@ -1492,10 +1502,10 @@ export class FishySearchableDropdown extends HTMLElement {
 
         const minLeft = edgeInset - originLeft;
         let left = anchorRect.left - originLeft;
-        if (left + originLeft + panelRect.width > viewportWidth - edgeInset) {
+        if (left + originLeft + panelRect.width > visibleViewportRight - edgeInset) {
             left = Math.max(
                 minLeft,
-                viewportWidth - panelRect.width - edgeInset - originLeft,
+                visibleViewportRight - panelRect.width - edgeInset - originLeft,
             );
         }
 
