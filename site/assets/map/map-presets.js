@@ -197,12 +197,21 @@ export function applyStoredMapPresetState({
     return currentPreset;
   }
   const selectedPreset = helper?.selectedPreset?.(MAP_PRESET_COLLECTION_KEY);
-  if (!selectedPreset?.payload) {
+  if (selectedPreset?.payload) {
+    applyPatch(mapPresetRestorePatch(selectedPreset.payload));
+    const signals = readSignals();
+    return signals && typeof signals === "object" ? selectedPreset : null;
+  }
+  const selectedFixedId = helper?.selectedFixedId?.(MAP_PRESET_COLLECTION_KEY);
+  const selectedFixedPreset = selectedFixedId
+    ? helper?.fixedPreset?.(MAP_PRESET_COLLECTION_KEY, selectedFixedId)
+    : null;
+  if (!selectedFixedPreset?.payload) {
     return null;
   }
-  applyPatch(mapPresetRestorePatch(selectedPreset.payload));
+  applyPatch(mapPresetRestorePatch(selectedFixedPreset.payload));
   const signals = readSignals();
-  return signals && typeof signals === "object" ? selectedPreset : null;
+  return signals && typeof signals === "object" ? selectedFixedPreset : null;
 }
 
 export function trackMapPresetCurrent(readSignals = () => null) {

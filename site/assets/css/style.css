@@ -928,3 +928,170 @@ fishy-searchable-dropdown[option-density="roomy"] [data-role="results"] > li > [
 .fishy-preset-manager [data-role="delete"] {
     gap: 0.55rem;
 }
+
+.fishy-preset-quick-switch {
+    display: block;
+    width: 100%;
+}
+
+.fishy-preset-quick-switch__rows {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.fishy-preset-quick-switch__row {
+    display: grid;
+    gap: 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
+    border-radius: var(--radius-box);
+    background: var(--color-base-100);
+    padding: 0.6rem;
+}
+
+.fishy-preset-quick-switch__row-header,
+.fishy-preset-quick-switch__trigger,
+.fishy-preset-quick-switch__preset-option {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.fishy-preset-quick-switch__row-header {
+    justify-content: space-between;
+}
+
+.fishy-preset-quick-switch__label,
+.fishy-preset-quick-switch__selected-content,
+.fishy-preset-quick-switch__option-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fishy-preset-quick-switch__label {
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-base-content) 58%, transparent);
+}
+
+.fishy-preset-quick-switch__dropdown {
+    position: relative;
+}
+
+.fishy-preset-quick-switch__trigger {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: calc(var(--radius-box) - 0.15rem);
+    background: color-mix(in srgb, var(--color-base-200) 74%, transparent);
+    padding: 0.45rem 0.55rem;
+    cursor: pointer;
+    border: 0;
+    font-size: 0.82rem;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.fishy-preset-quick-switch__trigger:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary) 72%, transparent);
+    outline-offset: 2px;
+}
+
+.fishy-preset-quick-switch__selected-content {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+}
+
+.fishy-preset-quick-switch__caret {
+    flex: none;
+    color: color-mix(in srgb, var(--color-base-content) 52%, transparent);
+}
+
+.fishy-preset-quick-switch__preset-option {
+    flex: 1 1 auto;
+    gap: 0.55rem;
+}
+
+.fishy-preset-quick-switch__panel {
+    width: 100%;
+    min-width: 0;
+}
+
+.fishy-preset-quick-switch__panel-shell {
+    display: grid;
+    width: 100%;
+    min-width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    background: var(--color-base-100);
+    box-shadow: var(--shadow-lg);
+}
+
+.fishy-preset-quick-switch__search-label {
+    display: flex;
+    min-height: 2.5rem;
+    width: 100%;
+    min-width: 100%;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--color-base-100);
+    padding: 0.55rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.fishy-preset-quick-switch__search-input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    outline: none;
+    box-shadow: none;
+}
+
+.fishy-preset-quick-switch__results-shell {
+    padding: 0 0.25rem 0.25rem;
+}
+
+.fishy-preset-quick-switch__results {
+    width: 100%;
+    max-height: 16rem;
+    gap: 0.2rem;
+    overflow: auto;
+    padding: 0.25rem;
+}
+
+.fishy-preset-quick-switch__panel [data-searchable-dropdown-option] > .badge {
+    display: none;
+}
+
+.fishy-preset-quick-switch__preview {
+    width: 4.25rem;
+    max-width: 4.25rem;
+    flex: none;
+}
+
+.fishy-preset-quick-switch__preview .fishy-preset-manager__preset-preview-viewport {
+    width: 4.25rem;
+    height: 4.25rem;
+    overflow: hidden;
+}
+
+.fishy-preset-quick-switch__preview .fishy-preset-manager__preset-preview {
+    min-height: 0;
+}
+
+.fishy-preset-quick-switch__preview .fishy-preset-manager__preview-fallback {
+    min-width: 0;
+}
+
+.fishy-preset-quick-switch__hint,
+.fishy-preset-quick-switch__empty {
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--color-base-content) 58%, transparent);
+}

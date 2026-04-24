@@ -267,6 +267,19 @@
                                                     </div>
                                                 </details>
                                             </li>
+                                            <li class="w-full">
+                                                <details class="w-full">
+                                                    <summary class="flex w-full items-center justify-between gap-3">
+                                                        <span class="inline-flex items-center gap-2">
+                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-settings-1"></use></svg>
+                                                            <span>Presets</span>
+                                                        </span>
+                                                    </summary>
+                                                    <div class="px-1 pb-1 pt-3">
+                                                        <fishy-preset-quick-switch></fishy-preset-quick-switch>
+                                                    </div>
+                                                </details>
+                                            </li>
                                         </ul>
                                     </div>
                                 </div>

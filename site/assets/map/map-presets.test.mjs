@@ -5,6 +5,7 @@ import vm from "node:vm";
 
 import { applyMapPageSignalsPatch } from "./map-page-signals.js";
 import {
+  applyStoredMapPresetState,
   MAP_PRESET_COLLECTION_KEY,
   patchTouchesMapPreset,
   registerMapPresetAdapter,
@@ -253,6 +254,33 @@ test("map preset adapter applying default ignores stale session-only camera stat
     });
     assert.equal(env.helper.selectedFixedId(MAP_PRESET_COLLECTION_KEY), "default");
     assert.equal(env.helper.current(MAP_PRESET_COLLECTION_KEY), null);
+  } finally {
+    env.restore();
+  }
+});
+
+test("map preset restore applies a fixed preset selected before the adapter loaded", () => {
+  const env = installUserPresetsGlobal();
+  try {
+    env.helper.activateFixedPreset(MAP_PRESET_COLLECTION_KEY, "default");
+    const signals = defaultSignals();
+    signals._map_bridged.ui.viewMode = "3d";
+    signals._map_bridged.ui.showPoints = false;
+    signals._map_ui.search.query = "eel";
+    registerMapPresetAdapter({
+      readSignals: () => signals,
+      applyPatch: (patch) => applyMapPageSignalsPatch(signals, patch),
+    });
+
+    const applied = applyStoredMapPresetState({
+      readSignals: () => signals,
+      applyPatch: (patch) => applyMapPageSignalsPatch(signals, patch),
+    });
+
+    assert.equal(applied.id, "default");
+    assert.equal(signals._map_ui.search.query, "");
+    assert.equal(signals._map_bridged.ui.showPoints, true);
+    assert.equal(signals._map_bridged.ui.viewMode, "2d");
   } finally {
     env.restore();
   }

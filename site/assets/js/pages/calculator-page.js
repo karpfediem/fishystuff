@@ -1111,12 +1111,21 @@
       return currentPreset;
     }
     const selectedPreset = helper?.selectedPreset?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
-    if (!selectedPreset?.payload) {
+    if (selectedPreset?.payload) {
+      const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedPreset.payload);
+      signals._calculator_ui = cloneCalculatorSignals(nextUiState);
+      return selectedPreset;
+    }
+    const selectedFixedId = helper?.selectedFixedId?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
+    const selectedFixedPreset = selectedFixedId
+      ? helper?.fixedPreset?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, selectedFixedId)
+      : null;
+    if (!selectedFixedPreset?.payload) {
       return null;
     }
-    const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedPreset.payload);
+    const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedFixedPreset.payload);
     signals._calculator_ui = cloneCalculatorSignals(nextUiState);
-    return selectedPreset;
+    return selectedFixedPreset;
   }
 
   function applyStoredCalculatorPresetState(signals) {
@@ -1130,11 +1139,19 @@
       return currentPreset;
     }
     const selectedPreset = helper?.selectedPreset?.(CALCULATOR_PRESET_COLLECTION_KEY);
-    if (!selectedPreset?.payload) {
+    if (selectedPreset?.payload) {
+      Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, selectedPreset.payload)));
+      return selectedPreset;
+    }
+    const selectedFixedId = helper?.selectedFixedId?.(CALCULATOR_PRESET_COLLECTION_KEY);
+    const selectedFixedPreset = selectedFixedId
+      ? helper?.fixedPreset?.(CALCULATOR_PRESET_COLLECTION_KEY, selectedFixedId)
+      : null;
+    if (!selectedFixedPreset?.payload) {
       return null;
     }
-    Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, selectedPreset.payload)));
-    return selectedPreset;
+    Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, selectedFixedPreset.payload)));
+    return selectedFixedPreset;
   }
 
   function pinSection(pinnedSections, sectionId) {

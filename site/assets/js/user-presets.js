@@ -454,28 +454,33 @@
     return collection;
   }
 
-  function setSelectedPresetId(collectionKey, presetId) {
+  function setSelectedPresetId(collectionKey, presetId, options = {}) {
     const key = normalizeCollectionKey(collectionKey);
     const normalizedPresetId = trimString(presetId);
+    const clearCurrent = options?.clearCurrent === true;
     return updateSnapshot((draft) => {
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       const source = collection.presets.some((preset) => preset.id === normalizedPresetId)
         ? presetSource(normalizedPresetId)
         : { kind: "none", id: "" };
-      selectCollectionSource(collection, source);
+      selectCollectionSource(collection, source, { clearCurrent });
       assignCollection(draft, key, collection);
     }, "select-preset", { collectionKey: key });
   }
 
-  function setSelectedFixedId(collectionKey, fixedId) {
+  function setSelectedFixedId(collectionKey, fixedId, options = {}) {
     const key = normalizeCollectionKey(collectionKey);
     const normalizedFixedId = trimString(fixedId);
+    const allowUnknown = options?.allowUnknown === true;
+    const clearCurrent = options?.clearCurrent === true;
     return updateSnapshot((draft) => {
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
-      const source = fixedPresets(key).some((preset) => preset.id === normalizedFixedId)
+      const hasFixedSource = Boolean(allowUnknown && normalizedFixedId)
+        || fixedPresets(key).some((preset) => preset.id === normalizedFixedId);
+      const source = hasFixedSource
         ? fixedSource(normalizedFixedId)
         : { kind: "none", id: "" };
-      selectCollectionSource(collection, source);
+      selectCollectionSource(collection, source, { clearCurrent });
       assignCollection(draft, key, collection);
     }, "select-fixed-preset", { collectionKey: key, fixedId: normalizedFixedId });
   }
@@ -626,7 +631,7 @@
     return null;
   }
 
-  function markSourceAppliedWithoutAdapter(collectionKey, source, payload) {
+  function selectSourcePayload(collectionKey, source, payload) {
     const key = normalizeCollectionKey(collectionKey);
     const normalizedSource = normalizeSource(source);
     let result = {
@@ -663,7 +668,11 @@
     const key = normalizeCollectionKey(collectionKey);
     const normalizedPayload = normalizePresetPayload(key, payload);
     if (sourcePayloadAlreadyApplied(key, normalizedPayload)) {
-      return markSourceAppliedWithoutAdapter(key, source, normalizedPayload);
+      return selectSourcePayload(key, source, normalizedPayload);
+    }
+    const adapter = collectionAdapter(key);
+    if (!adapter || typeof adapter.apply !== "function") {
+      return selectSourcePayload(key, source, normalizedPayload);
     }
     const appliedValue = applyPayload(key, normalizedPayload);
     const observedPayload = observedPayloadAfterApply(key, normalizedPayload, appliedValue);
@@ -695,8 +704,20 @@
 
   function activateFixedPreset(collectionKey, fixedId) {
     const key = normalizeCollectionKey(collectionKey);
+    const normalizedFixedId = trimString(fixedId);
     const preset = fixedPreset(key, fixedId);
     if (!preset) {
+      if (!collectionAdapter(key) && normalizedFixedId) {
+        setSelectedFixedId(key, normalizedFixedId, {
+          allowUnknown: true,
+          clearCurrent: true,
+        });
+        return {
+          id: normalizedFixedId,
+          name: normalizedFixedId,
+          payload: null,
+        };
+      }
       setSelectedFixedId(key, "");
       return null;
     }

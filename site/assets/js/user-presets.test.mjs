@@ -470,6 +470,43 @@ test("user presets do not clear current state when source activation does not ch
   assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
 });
 
+test("user presets can select saved presets before their page adapter is loaded", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  const preset = helper.createPreset("map-presets", {
+    name: "Night map",
+    payload: { row: 1 },
+    select: false,
+  });
+  helper.trackCurrentPayload("map-presets", {
+    payload: { row: 2 },
+    origin: { kind: "fixed", id: "default" },
+  });
+
+  const activated = helper.activatePreset("map-presets", preset.id);
+
+  assert.equal(activated.id, preset.id);
+  assert.equal(helper.selectedPresetId("map-presets"), preset.id);
+  assert.equal(helper.selectedFixedId("map-presets"), "");
+  assert.equal(helper.current("map-presets"), null);
+});
+
+test("user presets can select fixed presets before their page adapter is loaded", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  helper.trackCurrentPayload("map-presets", {
+    payload: { row: 2 },
+    origin: { kind: "preset", id: "missing" },
+  });
+
+  const activated = helper.activateFixedPreset("map-presets", "default");
+
+  assert.equal(activated.id, "default");
+  assert.equal(helper.selectedPresetId("map-presets"), "");
+  assert.equal(helper.selectedFixedId("map-presets"), "default");
+  assert.equal(helper.current("map-presets"), null);
+});
+
 test("user presets keep current state when selecting a different source without applying it", () => {
   const env = createEnv();
   const helper = env.helper;

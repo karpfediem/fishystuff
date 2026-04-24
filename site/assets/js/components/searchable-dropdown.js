@@ -6,6 +6,8 @@ const DEFAULT_MORE_RESULTS_LABEL = "Load more results";
 const SEARCH_QUERY_PARAM = "q";
 const OFFSET_QUERY_PARAM = "offset";
 const SELECTED_QUERY_PARAM = "selected";
+export const SEARCHABLE_DROPDOWN_OPEN_EVENT = "fishystuff:searchable-dropdown-open";
+export const SEARCHABLE_DROPDOWN_CLOSE_EVENT = "fishystuff:searchable-dropdown-close";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const URL_SCOPE_RESOLVERS = Object.freeze({
     api: "__fishystuffResolveApiUrl",
@@ -313,6 +315,7 @@ export class FishySearchableDropdown extends HTMLElement {
         if (!(panel instanceof HTMLElement) || !(input instanceof HTMLInputElement)) {
             return;
         }
+        const wasOpen = this.isOpen();
 
         this._cancelClose();
         panel.hidden = false;
@@ -325,6 +328,12 @@ export class FishySearchableDropdown extends HTMLElement {
             this._detachPanel();
             this._attachViewportListeners();
             this._positionPanel(detachedPanelWidth);
+        }
+        if (!wasOpen) {
+            this.dispatchEvent(new CustomEvent(SEARCHABLE_DROPDOWN_OPEN_EVENT, {
+                bubbles: true,
+                detail: { dropdown: this },
+            }));
         }
         input.value = "";
         this._lastSearchKey = "";
@@ -345,6 +354,7 @@ export class FishySearchableDropdown extends HTMLElement {
         this._cancelClose();
 
         const panel = this.panelElement();
+        const wasOpen = this.isOpen();
         if (panel instanceof HTMLElement) {
             panel.hidden = true;
         }
@@ -359,6 +369,12 @@ export class FishySearchableDropdown extends HTMLElement {
         this._setExpanded(false);
         if (this._usesDetachedPanel()) {
             this._restorePanel();
+        }
+        if (wasOpen) {
+            this.dispatchEvent(new CustomEvent(SEARCHABLE_DROPDOWN_CLOSE_EVENT, {
+                bubbles: true,
+                detail: { dropdown: this },
+            }));
         }
     }
 

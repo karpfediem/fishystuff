@@ -4,6 +4,7 @@ import { registerDistributionChart, registerTimelineChart } from "./distribution
 import { registerLootSankey } from "./loot-sankey.js";
 import { registerNoticeDisclosure } from "./notice-disclosure.js";
 import { registerPresetManager } from "./preset-manager.js";
+import { registerPresetQuickSwitch } from "./preset-quick-switch.js";
 import { registerPmfChart } from "./pmf-chart.js";
 import { registerSearchableDropdown } from "./searchable-dropdown.js";
 import { registerSearchableMultiselect } from "./searchable-multiselect.js";
@@ -15,6 +16,7 @@ registerDistributionChart();
 registerLootSankey();
 registerNoticeDisclosure();
 registerPresetManager();
+registerPresetQuickSwitch();
 registerPmfChart();
 registerTimelineChart();
 registerSearchableDropdown();
