@@ -89,6 +89,13 @@ Helper views used by those surfaces:
 - `calculator_item_skill_sources`
 - `calculator_pet_skill_sources`
 
+Localized item display names are projected into the narrow
+`calculator_item_names` table keyed by `(lang, item_id)`. This keeps calculator
+runtime reads away from full `languagedata_*` dumps while still sourcing names
+from original language data. When more client languages are imported, add one
+`lang` slice per source language table rather than building per-language
+calculator catalog assets.
+
 ## Temporary Workflow
 
 ### 1. Ensure the required schema surfaces exist
@@ -143,6 +150,9 @@ What this importer currently reads:
 - `Pet_Grade_Table.xlsx`
 - `Pet_Exp_Table.xlsx`
 - `UpgradePet_Looting_Percent.xlsx`
+
+When `languagedata_en` is imported, the importer also refreshes
+`calculator_item_names` for `lang = 'en'`.
 
 Notes:
 
@@ -216,9 +226,10 @@ The intended direction is:
 ## Next Steps
 
 1. Add narrower derived tables/views on top of the temporary raw effect tables.
-2. Repoint calculator catalog endpoints away from the legacy `items` table.
-3. Fold in unresolved gear categories as soon as their effect source is known.
-4. Replace this temporary workbook import path with decoded original PAZ data.
+2. Add `calculator_item_names` slices for each imported `languagedata_*` table.
+3. Repoint calculator catalog endpoints away from the legacy `items` table.
+4. Fold in unresolved gear categories as soon as their effect source is known.
+5. Replace this temporary workbook import path with decoded original PAZ data.
 
 For the schema workflow around these temporary tables/views, see
 [`docs/dolt-schema-workflow.md`](/home/carp/code/fishystuff/docs/dolt-schema-workflow.md).

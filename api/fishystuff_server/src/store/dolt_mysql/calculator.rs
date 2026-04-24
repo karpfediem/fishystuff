@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use fishystuff_api::models::calculator::CalculatorCatalogResponse;
 
 use crate::error::AppResult;
@@ -64,51 +62,10 @@ impl DoltMySqlStore {
 
         let query_ref = Some(resolved_ref.as_str());
         let result: AppResult<CalculatorCatalogResponse> = (|| {
-            let total_start = Instant::now();
-            let lang_label = match lang {
-                FishLang::En => "en",
-                FishLang::Ko => "ko",
-            };
-            let step_start = Instant::now();
             let items = self.query_calculator_items(lang, query_ref)?;
-            tracing::info!(
-                component = "calculator_catalog",
-                lang = lang_label,
-                revision = revision.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = items.len(),
-                "loaded calculator items"
-            );
-            let step_start = Instant::now();
             let mastery_prize_curve = self.query_calculator_mastery_prize_curve(query_ref)?;
-            tracing::info!(
-                component = "calculator_catalog",
-                lang = lang_label,
-                revision = revision.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = mastery_prize_curve.len(),
-                "loaded calculator mastery curve"
-            );
-            let step_start = Instant::now();
             let zone_group_rates = self.query_calculator_zone_group_rates(query_ref)?;
-            tracing::info!(
-                component = "calculator_catalog",
-                lang = lang_label,
-                revision = revision.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = zone_group_rates.len(),
-                "loaded calculator zone group rates"
-            );
-            let step_start = Instant::now();
             let pets = self.query_calculator_pet_catalog(lang, query_ref)?;
-            tracing::info!(
-                component = "calculator_catalog",
-                lang = lang_label,
-                revision = revision.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = pets.pets.len(),
-                "loaded calculator pets"
-            );
             Ok(CalculatorCatalogResponse {
                 items,
                 lifeskill_levels: build_calculator_lifeskill_levels(),
@@ -120,17 +77,6 @@ impl DoltMySqlStore {
                 session_presets: build_calculator_session_presets(lang),
                 pets,
                 defaults: build_calculator_default_signals(),
-            })
-            .inspect(|catalog| {
-                tracing::info!(
-                    component = "calculator_catalog",
-                    lang = lang_label,
-                    revision = revision.as_str(),
-                    elapsed_ms = total_start.elapsed().as_millis() as u64,
-                    item_count = catalog.items.len(),
-                    pet_count = catalog.pets.pets.len(),
-                    "loaded calculator catalog"
-                );
             })
         })();
 

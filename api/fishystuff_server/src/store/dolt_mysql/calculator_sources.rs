@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-use std::time::Instant;
-
 use mysql::prelude::Queryable;
 use mysql::Row;
+use std::collections::HashMap;
 
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
@@ -1484,8 +1482,6 @@ impl DoltMySqlStore {
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
-        let total_start = Instant::now();
-        let step_start = Instant::now();
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
         for (item_id, effect_line) in self.query_consumable_effect_line_rows(ref_id)? {
             let lines = effect_lines_by_item_id.entry(item_id).or_default();
@@ -1495,34 +1491,13 @@ impl DoltMySqlStore {
                 }
             }
         }
-        tracing::info!(
-            component = "calculator_source_items",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            item_count = effect_lines_by_item_id.len(),
-            "loaded consumable effect lines"
-        );
 
         if effect_lines_by_item_id.is_empty() {
             return Ok(Vec::new());
         }
 
         let item_ids = effect_lines_by_item_id.keys().copied().collect::<Vec<_>>();
-        let step_start = Instant::now();
         let item_rows = self.query_consumable_item_rows(ref_id, &item_ids)?;
-        tracing::info!(
-            component = "calculator_source_items",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = item_rows.len(),
-            "loaded consumable item rows"
-        );
-        let step_start = Instant::now();
-        let item_source_metadata = self.query_item_table_metadata(ref_id, &item_ids)?;
-        tracing::info!(
-            component = "calculator_source_items",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = item_source_metadata.len(),
-            "loaded consumable item metadata"
-        );
         let primary_skill_counts = item_rows
             .iter()
             .filter_map(|row| row.skill_no.clone())
@@ -1535,28 +1510,18 @@ impl DoltMySqlStore {
             .flat_map(|row| [row.skill_no.clone(), row.sub_skill_no.clone()])
             .flatten()
             .collect::<Vec<_>>();
-        let step_start = Instant::now();
         let buff_categories_by_skill =
             self.query_consumable_skill_buff_categories(ref_id, &skill_ids)?;
-        tracing::info!(
-            component = "calculator_source_items",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = buff_categories_by_skill.len(),
-            "loaded consumable buff categories"
-        );
 
         let mut source_backed_rows = item_rows
             .into_iter()
             .filter_map(|row| {
                 let effect_lines = effect_lines_by_item_id.remove(&row.item_id)?;
-                let source_meta = item_source_metadata.get(&row.item_id);
                 let category_metadata = select_consumable_category_metadata(
                     row.skill_no.as_deref(),
                     row.sub_skill_no.as_deref(),
                     &buff_categories_by_skill,
                 );
-                let source_name_en = source_meta.and_then(|meta| meta.name_en.clone());
-                let source_name_ko = source_meta.and_then(|meta| meta.name_ko.clone());
                 let buff_category_key =
                     buff_category_key(category_metadata.category_id).or_else(|| {
                         fallback_consumable_family_key(
@@ -1577,11 +1542,11 @@ impl DoltMySqlStore {
                     buff_category_key,
                     buff_category_id: category_metadata.category_id,
                     buff_category_level: category_metadata.category_level,
-                    source_name_en,
-                    source_name_ko,
+                    source_name_en: None,
+                    source_name_ko: None,
                     item_icon_file: None,
-                    icon_id: source_meta.and_then(|meta| meta.icon_id),
-                    durability: source_meta.and_then(|meta| meta.durability),
+                    icon_id: None,
+                    durability: None,
                     fish_multiplier: None,
                     effect_description_ko: Some(effect_lines.join("\n")),
                     afr: None,
@@ -1594,7 +1559,6 @@ impl DoltMySqlStore {
             })
             .collect::<Vec<_>>();
 
-        let step_start = Instant::now();
         source_backed_rows.extend(self.query_lightstone_source_rows(ref_id)?.into_iter().map(
             |(
                 source_key,
@@ -1631,19 +1595,6 @@ impl DoltMySqlStore {
                 exp_life,
             },
         ));
-        tracing::info!(
-            component = "calculator_source_items",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = source_backed_rows.len(),
-            "loaded lightstone source rows"
-        );
-
-        tracing::info!(
-            component = "calculator_source_items",
-            elapsed_ms = total_start.elapsed().as_millis() as u64,
-            row_count = source_backed_rows.len(),
-            "loaded consumable and lightstone source-backed item rows"
-        );
 
         Ok(source_backed_rows)
     }
@@ -1652,7 +1603,6 @@ impl DoltMySqlStore {
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
-        let total_start = Instant::now();
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -1673,7 +1623,6 @@ impl DoltMySqlStore {
                 exp_fish \
              FROM calculator_enchant_item_effect_entries{as_of}"
         );
-        let step_start = Instant::now();
         let rows: Vec<Row> = match conn.query(query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "calculator_enchant_item_effect_entries") => {
@@ -1681,12 +1630,6 @@ impl DoltMySqlStore {
             }
             Err(err) => return Err(db_unavailable(err)),
         };
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = rows.len(),
-            "loaded calculator enchant effect entry rows"
-        );
 
         let mut chosen_effects =
             HashMap::<(String, String), CalculatorEnchantEffectEntryRow>::new();
@@ -1744,14 +1687,7 @@ impl DoltMySqlStore {
             }
         }
 
-        let step_start = Instant::now();
         let skill_only_candidates = self.query_raw_enchant_skill_only_candidates(ref_id)?;
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = skill_only_candidates.len(),
-            "loaded raw enchant skill-only candidates"
-        );
         for candidate in skill_only_candidates {
             let key = (candidate.item_type.clone(), candidate.item_name_ko.clone());
             match chosen_effects.get_mut(&key) {
@@ -1770,7 +1706,6 @@ impl DoltMySqlStore {
             return Ok(Vec::new());
         }
 
-        let step_start = Instant::now();
         let skill_no_by_item = self.query_raw_enchant_skill_map(
             ref_id,
             &chosen_effects
@@ -1778,13 +1713,6 @@ impl DoltMySqlStore {
                 .map(|row| row.item_name_ko.clone())
                 .collect::<Vec<_>>(),
         )?;
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = skill_no_by_item.len(),
-            "loaded raw enchant skill map"
-        );
-        let step_start = Instant::now();
         let raw_effect_text_by_item = self.query_raw_enchant_effect_text_map(
             ref_id,
             &chosen_effects
@@ -1792,12 +1720,6 @@ impl DoltMySqlStore {
                 .map(|row| row.item_name_ko.clone())
                 .collect::<Vec<_>>(),
         )?;
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = raw_effect_text_by_item.len(),
-            "loaded raw enchant effect text map"
-        );
         for effect_row in &mut chosen_effects {
             effect_row.skill_no = skill_no_by_item
                 .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
@@ -1814,14 +1736,7 @@ impl DoltMySqlStore {
             .iter()
             .filter_map(|row| row.skill_no.clone())
             .collect::<Vec<_>>();
-        let step_start = Instant::now();
         let skill_effects = self.query_skill_buff_effect_bundles(ref_id, &skill_nos)?;
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = skill_effects.len(),
-            "loaded enchant skill effect bundles"
-        );
         for effect_row in &mut chosen_effects {
             let Some(skill_no) = effect_row.skill_no.as_deref() else {
                 continue;
@@ -1840,15 +1755,8 @@ impl DoltMySqlStore {
             .iter()
             .map(|row| row.normalized_item_name_ko.clone())
             .collect::<Vec<_>>();
-        let step_start = Instant::now();
         let metadata_candidates =
             self.query_item_table_metadata_by_names(ref_id, &exact_names, &normalized_names)?;
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = metadata_candidates.len(),
-            "loaded enchant item metadata candidates"
-        );
 
         let mut exact_metadata_by_name = HashMap::<String, Vec<(i32, ItemSourceMetadata)>>::new();
         let mut normalized_metadata_by_name =
@@ -1923,14 +1831,7 @@ impl DoltMySqlStore {
         // the calculator but currently have no recoverable source-backed effect
         // row in the intermediate dump.
         let manual_item_ids = [16153];
-        let step_start = Instant::now();
         let manual_metadata = self.query_item_table_metadata(ref_id, &manual_item_ids)?;
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = step_start.elapsed().as_millis() as u64,
-            row_count = manual_metadata.len(),
-            "loaded manual enchant item metadata"
-        );
         for item_id in manual_item_ids {
             if existing_item_ids.contains(&item_id) {
                 continue;
@@ -1970,13 +1871,6 @@ impl DoltMySqlStore {
             });
         }
 
-        tracing::info!(
-            component = "calculator_source_enchants",
-            elapsed_ms = total_start.elapsed().as_millis() as u64,
-            row_count = source_backed_rows.len(),
-            "loaded source-owned enchant source-backed item rows"
-        );
-
         Ok(source_backed_rows)
     }
 
@@ -2010,48 +1904,15 @@ impl DoltMySqlStore {
 
         let query_ref = Some(resolved_ref.as_str());
         let result: AppResult<CalculatorCatalogSourceData> = (|| {
-            let total_start = Instant::now();
-            let step_start = Instant::now();
             let all_legacy_rows = self.query_legacy_calculator_item_rows(query_ref, &[], &[])?;
-            tracing::info!(
-                component = "calculator_catalog_source_data",
-                revision = cache_key.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = all_legacy_rows.len(),
-                "loaded legacy calculator item rows"
-            );
-            let step_start = Instant::now();
             let mut source_backed_rows =
                 self.query_consumable_source_backed_item_rows(query_ref)?;
-            tracing::info!(
-                component = "calculator_catalog_source_data",
-                revision = cache_key.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = source_backed_rows.len(),
-                "loaded consumable and lightstone source-backed rows"
-            );
-            let step_start = Instant::now();
             source_backed_rows
                 .extend(self.query_source_owned_enchant_source_backed_item_rows(query_ref)?);
-            tracing::info!(
-                component = "calculator_catalog_source_data",
-                revision = cache_key.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = source_backed_rows.len(),
-                "loaded enchant source-backed rows"
-            );
-            let step_start = Instant::now();
             let item_source_metadata = self.query_item_table_metadata(
                 query_ref,
                 &collect_calculator_item_metadata_ids(&all_legacy_rows, &source_backed_rows),
             )?;
-            tracing::info!(
-                component = "calculator_catalog_source_data",
-                revision = cache_key.as_str(),
-                elapsed_ms = step_start.elapsed().as_millis() as u64,
-                row_count = item_source_metadata.len(),
-                "loaded item source metadata"
-            );
 
             let excluded_item_ids = source_backed_rows
                 .iter()
@@ -2087,15 +1948,6 @@ impl DoltMySqlStore {
                 item_source_metadata,
                 source_backed_rows,
             };
-            tracing::info!(
-                component = "calculator_catalog_source_data",
-                revision = cache_key.as_str(),
-                elapsed_ms = total_start.elapsed().as_millis() as u64,
-                legacy_row_count = source_data.legacy_rows.len(),
-                source_backed_row_count = source_data.source_backed_rows.len(),
-                metadata_row_count = source_data.item_source_metadata.len(),
-                "loaded calculator catalog source data"
-            );
             Ok(source_data)
         })();
 

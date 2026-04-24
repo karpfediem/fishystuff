@@ -87,12 +87,16 @@ pub(super) fn build_source_item(
     let name = if matches!(lang, FishLang::Ko) {
         source_name_ko
             .map(ToOwned::to_owned)
+            .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
             .or_else(|| source_name_en.map(ToOwned::to_owned))
+            .or_else(|| metadata.and_then(|metadata| metadata.name_en.clone()))
             .unwrap_or_else(|| format!("item:{item_id}"))
     } else {
         source_name_en
             .map(ToOwned::to_owned)
+            .or_else(|| metadata.and_then(|metadata| metadata.name_en.clone()))
             .or_else(|| source_name_ko.map(ToOwned::to_owned))
+            .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
             .unwrap_or_else(|| format!("item:{item_id}"))
     };
     let (icon_id, icon) =
@@ -108,7 +112,7 @@ pub(super) fn build_source_item(
         afr: override_values.afr,
         bonus_rare: override_values.bonus_rare,
         bonus_big: override_values.bonus_big,
-        durability: source_durability,
+        durability: source_durability.or_else(|| metadata.and_then(|metadata| metadata.durability)),
         item_drr: override_values.item_drr,
         fish_multiplier,
         exp_fish: override_values.exp_fish,

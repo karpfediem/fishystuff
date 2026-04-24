@@ -1,6 +1,5 @@
-use std::collections::{HashMap, HashSet};
-
 use mysql::prelude::Queryable;
+use std::collections::{HashMap, HashSet};
 
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
@@ -94,7 +93,6 @@ impl DoltMySqlStore {
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
                 it.`ItemName`, \
-                l.item_name_en, \
                 it.`EquipType`, \
                 it.`IconImageFile`, \
                 it.`GradeType`, \
@@ -104,21 +102,87 @@ impl DoltMySqlStore {
                     ELSE NULL \
                 END AS endurance_limit \
              FROM item_table{as_of} it \
-             LEFT JOIN ( \
-                 SELECT \
-                     CAST(l.`id` AS SIGNED) AS item_id, \
-                     MAX(NULLIF(TRIM(l.`text`), '')) AS item_name_en \
-                 FROM languagedata_en{as_of} l \
-                 WHERE l.`id` IN ({id_list}) \
-                   AND l.`format` = 'A' \
-                   AND l.`unk` IS NULL \
-                 GROUP BY CAST(l.`id` AS SIGNED) \
-             ) l \
-               ON l.item_id = CAST(it.`Index` AS SIGNED) \
              WHERE it.`Index` IN ({id_list})"
         );
 
-        self.query_item_table_metadata_from_query(query)
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        )> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut metadata = rows
+            .into_iter()
+            .filter_map(
+                |(item_id, name_ko, equip_type, icon_file, grade_type, durability)| {
+                    let item_id = i32::try_from(item_id).ok()?;
+                    let (grade, _, _) = item_grade_from_db(grade_type);
+                    let icon_file = normalize_optional_string(icon_file);
+                    Some((
+                        item_id,
+                        ItemSourceMetadata {
+                            normalized_name_ko: normalize_optional_string(
+                                name_ko.as_ref().cloned(),
+                            )
+                            .map(|value| normalize_source_owned_item_name(&value)),
+                            name_ko: normalize_optional_string(name_ko),
+                            name_en: None,
+                            item_type: item_type_from_equip_type(equip_type.as_deref())
+                                .map(str::to_string),
+                            durability: durability.and_then(|value| i32::try_from(value).ok()),
+                            grade,
+                            icon_path: icon_file.as_deref().and_then(
+                                fishystuff_core::fish_icons::fish_icon_path_from_asset_file,
+                            ),
+                            icon_id: icon_file
+                                .as_deref()
+                                .and_then(fishystuff_core::fish_icons::parse_fish_icon_asset_id),
+                        },
+                    ))
+                },
+            )
+            .collect::<HashMap<_, _>>();
+
+        let language_query = format!(
+            "SELECT \
+                item_id, \
+                name AS item_name_en \
+             FROM calculator_item_names{as_of} \
+             WHERE lang = 'en' \
+               AND item_id IN ({id_list})"
+        );
+        let language_rows: Vec<(i64, Option<String>)> = match conn.query(language_query) {
+            Ok(rows) => rows,
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        for (item_id, name_en) in language_rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
+            let Some(name_en) = normalize_optional_string(name_en) else {
+                continue;
+            };
+            let Some(entry) = metadata.get_mut(&item_id) else {
+                continue;
+            };
+            if entry
+                .name_en
+                .as_ref()
+                .is_none_or(|existing| existing < &name_en)
+            {
+                entry.name_en = Some(name_en);
+            }
+        }
+
+        Ok(metadata)
     }
 
     pub(super) fn query_item_table_metadata_by_names(
@@ -192,58 +256,6 @@ impl DoltMySqlStore {
         let mut item_ids = item_ids.into_iter().collect::<Vec<_>>();
         item_ids.sort_unstable();
         Ok(item_ids)
-    }
-
-    fn query_item_table_metadata_from_query(
-        &self,
-        query: String,
-    ) -> AppResult<HashMap<i32, ItemSourceMetadata>> {
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(
-            i64,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<i64>,
-        )> = match conn.query(query) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
-            Err(err) => return Err(db_unavailable(err)),
-        };
-
-        Ok(rows
-            .into_iter()
-            .filter_map(
-                |(item_id, name_ko, name_en, equip_type, icon_file, grade_type, durability)| {
-                    let item_id = i32::try_from(item_id).ok()?;
-                    let (grade, _, _) = item_grade_from_db(grade_type);
-                    let icon_file = normalize_optional_string(icon_file);
-                    Some((
-                        item_id,
-                        ItemSourceMetadata {
-                            normalized_name_ko: normalize_optional_string(
-                                name_ko.as_ref().cloned(),
-                            )
-                            .map(|value| normalize_source_owned_item_name(&value)),
-                            name_ko: normalize_optional_string(name_ko),
-                            name_en: normalize_optional_string(name_en),
-                            item_type: item_type_from_equip_type(equip_type.as_deref())
-                                .map(str::to_string),
-                            durability: durability.and_then(|value| i32::try_from(value).ok()),
-                            grade,
-                            icon_path: icon_file.as_deref().and_then(
-                                fishystuff_core::fish_icons::fish_icon_path_from_asset_file,
-                            ),
-                            icon_id: icon_file
-                                .as_deref()
-                                .and_then(fishystuff_core::fish_icons::parse_fish_icon_asset_id),
-                        },
-                    ))
-                },
-            )
-            .collect())
     }
 }
 

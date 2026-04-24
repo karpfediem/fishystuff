@@ -883,6 +883,7 @@ fn run_import(command: ImportCommand) -> Result<()> {
         run_dolt_table_import(&dolt_repo, "languagedata_en", &outputs.languagedata_csv)?;
     }
     ensure_calculator_lookup_indexes(&dolt_repo)?;
+    refresh_calculator_item_name_tables(&dolt_repo)?;
 
     if commit {
         let msg = build_commit_message(commit_msg, &digests);
@@ -1634,6 +1635,41 @@ fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
          ON `item_table` (`ItemName`(191));",
     )?;
     Ok(())
+}
+
+fn refresh_calculator_item_name_tables(repo_path: &Path) -> Result<()> {
+    refresh_calculator_item_names(repo_path, "en", "languagedata_en")
+}
+
+fn refresh_calculator_item_names(repo_path: &Path, lang: &str, source_table: &str) -> Result<()> {
+    if !dolt_table_exists(repo_path, source_table)? {
+        return Ok(());
+    }
+    let query = format!(
+        "CREATE TABLE IF NOT EXISTS `calculator_item_names` (\
+            `lang` VARCHAR(16) NOT NULL,\
+            `item_id` BIGINT NOT NULL,\
+            `name` LONGTEXT,\
+            PRIMARY KEY (`lang`, `item_id`),\
+            KEY `idx_calculator_item_names_item_id` (`item_id`)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;\
+         DELETE FROM `calculator_item_names` WHERE `lang` = {lang};\
+         INSERT INTO `calculator_item_names` (`lang`, `item_id`, `name`) \
+         SELECT {lang} AS lang, \
+                CAST(`id` AS SIGNED) AS item_id, \
+                MAX(NULLIF(TRIM(`text`), '')) AS name \
+         FROM {source_table} \
+         WHERE `format` = 'A' \
+           AND `unk` IS NULL \
+         GROUP BY CAST(`id` AS SIGNED);",
+        lang = sql_value(lang),
+        source_table = sql_ident(source_table),
+    );
+    run_dolt_sql_query_or_remote(
+        repo_path,
+        &query,
+        &format!("refresh calculator item names for {lang}"),
+    )
 }
 
 fn dolt_table_exists(repo_path: &Path, table_name: &str) -> Result<bool> {
