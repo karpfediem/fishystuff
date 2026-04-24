@@ -1,4 +1,4 @@
-import test from "node:test";
+import { test as bunTest } from "bun:test";
 import assert from "node:assert/strict";
 
 const originalHTMLElement = globalThis.HTMLElement;
@@ -11,6 +11,29 @@ const originalFetch = globalThis.fetch;
 const originalGetComputedStyle = globalThis.getComputedStyle;
 const originalHTMLInputElement = globalThis.HTMLInputElement;
 const originalHTMLTemplateElement = globalThis.HTMLTemplateElement;
+
+function test(name, optionsOrCallback, maybeCallback) {
+    const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback;
+    const options = typeof optionsOrCallback === "function" ? undefined : optionsOrCallback;
+    const wrapped = async () => {
+        const cleanups = [];
+        const context = {
+            after(cleanup) {
+                if (typeof cleanup === "function") {
+                    cleanups.push(cleanup);
+                }
+            },
+        };
+        try {
+            return await callback(context);
+        } finally {
+            for (const cleanup of cleanups.reverse()) {
+                await cleanup();
+            }
+        }
+    };
+    return options === undefined ? bunTest(name, wrapped) : bunTest(name, options, wrapped);
+}
 
 function datasetKeyToAttributeName(key) {
     return `data-${String(key).replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}`;

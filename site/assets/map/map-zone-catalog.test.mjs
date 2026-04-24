@@ -1,4 +1,4 @@
-import test from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 
 import {
@@ -106,8 +106,8 @@ test("findZoneMatches supports fuzzy zone-name matching", () => {
   const byCompactAlias = findZoneMatches(catalog, "Val D5");
   assert.equal(byCompactAlias[0]?.name, "Valencia Sea - Depth 5");
 
-  assert.equal(findZoneMatches(catalog, "odraxia")[0]?.name, "O'draxxia Bay");
-  assert.equal(findZoneMatches(catalog, "ody")[0]?.name, "O'dyllita Cove");
+  assert.equal(findZoneMatches(catalog, "odraxia")[0]?.name, "O'draxxia (Leaf Spot)");
+  assert.equal(findZoneMatches(catalog, "ody")[0]?.name, "O'dyllita Waters");
 });
 
 test("loadZoneCatalog normalizes the fetched payload", async () => {

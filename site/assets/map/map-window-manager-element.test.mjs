@@ -1,4 +1,4 @@
-import test from "node:test";
+import { afterAll, test } from "bun:test";
 import assert from "node:assert/strict";
 
 const originalHTMLElement = globalThis.HTMLElement;
@@ -28,6 +28,6 @@ test("registerFishyMapWindowManagerElement defines the custom element once", asy
   assert.ok(registry.get("fishymap-window-manager"));
 });
 
-test.after(() => {
+afterAll(() => {
   globalThis.HTMLElement = originalHTMLElement;
 });

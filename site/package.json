@@ -18,6 +18,7 @@
     "tailwindcss": "^4.1.14"
   },
   "scripts": {
+    "test": "bun test",
     "content-shells:build": "bun run ./scripts/build-shell-pages.mjs",
     "i18n:build": "bun run ./scripts/build-i18n.mjs",
     "d3:build": "bun run ./scripts/build-d3.mjs",

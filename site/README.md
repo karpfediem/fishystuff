@@ -29,6 +29,22 @@ same public site base.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
+## Frontend tests
+
+Run the frontend unit suite from `site/` with:
+
+- `bun run test`
+
+The site test runner is Bun only. Test files should import test APIs from
+`bun:test`, not `node:test`; `node:*` modules such as `node:assert/strict`,
+`node:fs`, and `node:vm` remain fine as utility modules.
+
+Map tests that assert user-facing copy should install the shared test i18n
+payload with `installMapTestI18n()` instead of relying on untranslated keys.
+Component tests may use small fake DOM objects where they are enough to cover
+signal projection, rendering decisions, and event dispatch; browser smoke and
+profiling remain separate checks for the integrated `/map` page.
+
 For local site and map development, the repo-root flow is:
 
 - `just up`

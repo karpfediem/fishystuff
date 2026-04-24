@@ -1,6 +1,7 @@
-import test from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { MAP_SEARCH_RESULTS_PAGE_SIZE } from "./map-search-panel.js";
+import { installMapTestI18n } from "./test-i18n.js";
 
 import {
   readMapSearchPanelShellSignals,
@@ -13,6 +14,8 @@ const originalDocument = globalThis.document;
 const originalGetComputedStyle = globalThis.getComputedStyle;
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+
+installMapTestI18n();
 
 class FakeElement extends EventTarget {
   constructor() {
@@ -171,12 +174,12 @@ function createSignals() {
   };
 }
 
-function buildFishCatalog(count) {
+function buildFishCatalog(count, namePrefix = "Fish") {
   return Array.from({ length: count }, (_value, index) => ({
     fishId: index + 1,
     itemId: index + 1,
     encyclopediaId: index + 1,
-    name: `Fish ${index + 1}`,
+    name: `${namePrefix} ${index + 1}`,
     grade: "Blue",
     isPrize: false,
   }));
@@ -325,7 +328,7 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
     /data-fish-filter-term="favourite"/,
   );
   assert.equal(searchCount.hidden, false);
-  assert.equal(searchCount.textContent, "map.search.results.match_count.one");
+  assert.equal(searchCount.textContent, "1 match");
 });
 
 test("FishyMapSearchPanelElement does not match fish by grade for free-text color queries", async () => {
@@ -350,7 +353,7 @@ test("FishyMapSearchPanelElement does not match fish by grade for free-text colo
   assert.doesNotMatch(html, /Mudskipper/);
   assert.match(html, /data-fish-filter-term="white"/);
   assert.equal(searchCount.hidden, false);
-  assert.equal(searchCount.textContent, "map.search.results.match_count.other");
+  assert.equal(searchCount.textContent, "2 matches");
 });
 
 test("FishyMapSearchPanelElement renders zone terms with an RGB indicator", async () => {
@@ -387,7 +390,7 @@ test("FishyMapSearchPanelElement loads another page when the more-results button
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE + 8);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE + 8, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -396,7 +399,7 @@ test("FishyMapSearchPanelElement loads another page when the more-results button
   results.scrollHeight = 640;
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
 
   assert.equal((results.innerHTML.match(/data-fish-id=/g) || []).length, MAP_SEARCH_RESULTS_PAGE_SIZE);
@@ -426,7 +429,7 @@ test("FishyMapSearchPanelElement loads another page when search results are scro
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -435,7 +438,7 @@ test("FishyMapSearchPanelElement loads another page when search results are scro
   results.scrollHeight = 640;
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
 
   results.scrollTop = 320;
@@ -451,7 +454,7 @@ test("FishyMapSearchPanelElement loads more when an ancestor is the actual scrol
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -466,7 +469,7 @@ test("FishyMapSearchPanelElement loads more when an ancestor is the actual scrol
   results.scrollHeight = 240;
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
 
   resultsShell.scrollTop = 320;
@@ -481,7 +484,7 @@ test("FishyMapSearchPanelElement loads more when horizontal overflow reaches the
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -493,7 +496,7 @@ test("FishyMapSearchPanelElement loads more when horizontal overflow reaches the
   results.scrollWidth = 760;
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
 
   results.scrollLeft = 440;
@@ -508,7 +511,7 @@ test("FishyMapSearchPanelElement auto-loads one extra page when the first page d
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -517,7 +520,7 @@ test("FishyMapSearchPanelElement auto-loads one extra page when the first page d
   results.scrollHeight = 640;
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
   await Promise.resolve();
 
@@ -531,7 +534,7 @@ test("FishyMapSearchPanelElement stops after one extra auto-fill when results st
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 4 + 4);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 4 + 4, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -542,7 +545,7 @@ test("FishyMapSearchPanelElement stops after one extra auto-fill when results st
   });
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
   await flushMapRenderWork();
 
@@ -557,7 +560,7 @@ test("FishyMapSearchPanelElement does not treat the top of a short scroll range 
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
   signals._map_runtime.ready = true;
-  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4);
+  signals._map_runtime.catalog.fish = buildFishCatalog(MAP_SEARCH_RESULTS_PAGE_SIZE * 2 + 4, "Result");
   shell.__fishymapLiveSignals = signals;
 
   panel.connectedCallback();
@@ -566,7 +569,7 @@ test("FishyMapSearchPanelElement does not treat the top of a short scroll range 
   results.scrollHeight = 420;
 
   signals._map_ui.search.open = true;
-  signals._map_ui.search.query = "fish";
+  signals._map_ui.search.query = "result";
   panel.setAttribute("data-search-state", JSON.stringify(signals._map_ui.search));
   await Promise.resolve();
 
