@@ -580,6 +580,40 @@ test("FishySearchableDropdown detaches its panel to the document body in detache
     assert.equal(panel.hidden, true);
 });
 
+test("detached fixed panel uses viewport coordinates when the document is scrolled", async (t) => {
+    t.after(restoreGlobals);
+
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement();
+    const panel = new FakeElement();
+    const searchInput = new FakeElement();
+    const results = new FakeElement();
+
+    document.documentElement.setRect({ left: 0, top: -420, width: 1280, height: 1800 });
+    dropdown.setAttribute("panel-mode", "detached");
+    trigger.setRect({ left: 240, top: 120, width: 156, height: 32 });
+    panel.setRect({ left: 0, top: 0, width: 288, height: 220 });
+    dropdown.setQuery('[data-role="trigger"]', trigger);
+    dropdown.setQuery('[data-role="panel"]', panel);
+    panel.setQuery('[data-role="search-input"]', searchInput);
+    panel.setQuery('[data-role="results"]', results);
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(results);
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.open();
+
+    assert.equal(panel.style.position, "fixed");
+    assert.equal(panel.style.left, "240px");
+    assert.equal(panel.style.top, "160px");
+});
+
 test("searchable dropdown accepts valid ISO date custom options", async (t) => {
     t.after(restoreGlobals);
 

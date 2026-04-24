@@ -21,6 +21,10 @@ const USER_PRESETS_SOURCE = fs.readFileSync(
   new URL("../user-presets.js", import.meta.url),
   "utf8",
 );
+const PRESET_PREVIEWS_SOURCE = fs.readFileSync(
+  new URL("../preset-previews.js", import.meta.url),
+  "utf8",
+);
 const CALCULATOR_PAGE_SOURCE = fs.readFileSync(
   new URL("./calculator-page.js", import.meta.url),
   "utf8",
@@ -259,6 +263,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(USER_OVERLAYS_SOURCE, context, { filename: "user-overlays.js" });
+  vm.runInNewContext(PRESET_PREVIEWS_SOURCE, context, { filename: "preset-previews.js" });
   vm.runInNewContext(USER_PRESETS_SOURCE, context, { filename: "user-presets.js" });
   vm.runInNewContext(CALCULATOR_PAGE_SOURCE, context, { filename: "calculator-page.js" });
   return {

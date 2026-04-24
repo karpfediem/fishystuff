@@ -326,13 +326,78 @@
   }
 
   let currentSnapshot = loadSnapshot(globalThis.localStorage);
+  let datastarVersion = 0;
+  const boundDatastarSignals = new Set();
+
+  function datastarCollectionSummary(collectionKey) {
+    const key = normalizeCollectionKey(collectionKey);
+    if (!key) {
+      return null;
+    }
+    const collection = currentCollection(key);
+    const adapterFixedPresets = fixedPresets(key);
+    const previewFixedPresets = globalThis.window?.__fishystuffPresetPreviews?.fixedPresets?.(key) || [];
+    return {
+      selectedPresetId: collection.selectedPresetId,
+      selectedFixedId: collection.selectedFixedId,
+      hasCurrent: Boolean(collection.current),
+      currentOrigin: normalizeSource(collection.current?.origin),
+      presetCount: collection.presets.length,
+      fixedPresetCount: adapterFixedPresets.length || previewFixedPresets.length,
+    };
+  }
+
+  function datastarSnapshot() {
+    const collectionKeys = new Set([
+      ...Object.keys(currentSnapshot.collections || {}),
+      ...Array.from(collectionAdapters.keys()),
+    ]);
+    const collections = {};
+    for (const key of Array.from(collectionKeys).sort()) {
+      const summary = datastarCollectionSummary(key);
+      if (summary) {
+        collections[key] = summary;
+      }
+    }
+    return {
+      version: datastarVersion,
+      collections,
+    };
+  }
+
+  function patchBoundDatastarSignals() {
+    const snapshot = datastarSnapshot();
+    for (const signals of boundDatastarSignals) {
+      if (!signals || typeof signals !== "object") {
+        continue;
+      }
+      signals._user_presets = cloneJson(snapshot);
+    }
+    return snapshot;
+  }
+
+  function bindDatastar(signals) {
+    if (!signals || typeof signals !== "object") {
+      return null;
+    }
+    boundDatastarSignals.add(signals);
+    signals._user_presets = datastarSnapshot();
+    return signals;
+  }
+
+  function unbindDatastar(signals) {
+    boundDatastarSignals.delete(signals);
+  }
 
   function emitChange(reason, detail = {}) {
+    datastarVersion += 1;
+    const datastar = patchBoundDatastarSignals();
     globalThis.window?.dispatchEvent?.(
       new CustomEvent(CHANGED_EVENT, {
         detail: {
           reason: trimString(reason) || "update",
           snapshot: cloneJson(currentSnapshot),
+          datastar,
           ...detail,
         },
       }),
@@ -340,10 +405,13 @@
   }
 
   function emitAdaptersChange(collectionKey) {
+    datastarVersion += 1;
+    const datastar = patchBoundDatastarSignals();
     globalThis.window?.dispatchEvent?.(
       new CustomEvent(ADAPTERS_CHANGED_EVENT, {
         detail: {
           collectionKey: normalizeCollectionKey(collectionKey),
+          datastar,
         },
       }),
     );
@@ -765,6 +833,18 @@
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       const matchedSource = matchingSource(key, collection, payload);
       if (matchedSource) {
+        if (!collection.current && sourcesEqual(selectedSource(collection), matchedSource)) {
+          result = {
+            action: "none",
+            kind: matchedSource.kind,
+            source: matchedSource,
+            current: null,
+            preset: matchedSource.kind === "preset"
+              ? cloneJson(collection.presets.find((preset) => preset.id === matchedSource.id) || null)
+              : cloneJson(fixedPresets(key).find((preset) => preset.id === matchedSource.id) || null),
+          };
+          return;
+        }
         selectCollectionSource(collection, matchedSource, { clearCurrent: true });
         assignCollection(draft, key, collection);
         result = {
@@ -796,6 +876,16 @@
       const events = previousCurrent && sourcesEqual(previousCurrent.origin, origin)
         ? previousCurrent.events.slice()
         : [];
+      if (previousCurrent && sourcesEqual(previousCurrent.origin, origin) && payloadsEqual(key, previousCurrent.payload, payload)) {
+        result = {
+          action: "none",
+          kind: "current",
+          source: origin,
+          current: cloneJson(previousCurrent),
+          preset: null,
+        };
+        return;
+      }
       if (!payloadsEqual(key, previousPayload, payload)) {
         const event = createPayloadEvent(key, "payload-change", origin, previousPayload || payload, payload);
         if (event) {
@@ -1077,6 +1167,9 @@
     CHANGED_EVENT,
     ADAPTERS_CHANGED_EVENT,
     EXPORT_FORMAT,
+    bindDatastar,
+    unbindDatastar,
+    datastarSnapshot,
     snapshot() {
       return cloneJson(currentSnapshot);
     },

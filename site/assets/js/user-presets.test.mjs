@@ -305,6 +305,55 @@ test("user presets track modified current state from a fixed preset without crea
   assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
 });
 
+test("user presets do not emit Datastar updates when tracking unchanged payloads", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const signals = {};
+  helper.bindDatastar(signals);
+  const initialMatch = helper.trackCurrentPayload("calculator-layouts");
+  assert.equal(initialMatch.action, "matched-fixed");
+  const matchedVersion = signals._user_presets.version;
+
+  const repeatedMatch = helper.trackCurrentPayload("calculator-layouts");
+
+  assert.equal(repeatedMatch.action, "none");
+  assert.equal(signals._user_presets.version, matchedVersion);
+
+  currentPayload = {
+    row: 2,
+  };
+  const createdCurrent = helper.trackCurrentPayload("calculator-layouts");
+  assert.equal(createdCurrent.action, "created-current");
+  const currentVersion = signals._user_presets.version;
+
+  const repeatedCurrent = helper.trackCurrentPayload("calculator-layouts");
+
+  assert.equal(repeatedCurrent.action, "none");
+  assert.equal(signals._user_presets.version, currentVersion);
+});
+
 test("user presets use adapter payload equality when matching fixed presets", () => {
   const env = createEnv();
   const helper = env.helper;
@@ -800,4 +849,47 @@ test("user presets snapshot reloads from local storage changes", () => {
 
   assert.equal(env.helper.selectedPresetId("calculator-layouts"), "");
   assert.equal(env.helper.presets("calculator-layouts")[0]?.name, "Beta");
+});
+
+test("user presets patch bound Datastar signals on collection and adapter changes", () => {
+  const env = createEnv();
+  const signals = {};
+  env.helper.bindDatastar(signals);
+
+  assert.deepEqual(signals._user_presets, {
+    version: 0,
+    collections: {},
+  });
+
+  env.helper.registerCollectionAdapter("calculator-layouts", {
+    fixedPresets() {
+      return [{ id: "default", name: "Default", payload: { rows: [] } }];
+    },
+    normalizePayload(payload) {
+      return { rows: Array.isArray(payload?.rows) ? payload.rows : [] };
+    },
+  });
+
+  assert.equal(signals._user_presets.version, 1);
+  assert.deepEqual(signals._user_presets.collections["calculator-layouts"], {
+    selectedPresetId: "",
+    selectedFixedId: "",
+    hasCurrent: false,
+    currentOrigin: { kind: "none", id: "" },
+    presetCount: 0,
+    fixedPresetCount: 1,
+  });
+
+  const preset = env.helper.createPreset("calculator-layouts", {
+    name: "Compact",
+    payload: { rows: [1] },
+  });
+
+  assert.equal(signals._user_presets.version, 2);
+  assert.equal(signals._user_presets.collections["calculator-layouts"].selectedPresetId, preset.id);
+  assert.equal(signals._user_presets.collections["calculator-layouts"].presetCount, 1);
+
+  env.helper.unbindDatastar(signals);
+  env.helper.renamePreset("calculator-layouts", preset.id, "Wide");
+  assert.equal(signals._user_presets.version, 2);
 });

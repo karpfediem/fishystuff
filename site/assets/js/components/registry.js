@@ -16,11 +16,11 @@ registerDistributionChart();
 registerLootSankey();
 registerNoticeDisclosure();
 registerPresetManager();
-registerPresetQuickSwitch();
 registerPmfChart();
 registerTimelineChart();
 registerSearchableDropdown();
 registerSearchableMultiselect();
+registerPresetQuickSwitch();
 if (typeof document !== "undefined") {
     attachStatBreakdownTooltip(document);
 }

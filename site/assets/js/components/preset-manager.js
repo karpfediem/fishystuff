@@ -1,4 +1,3 @@
-import * as d3 from "../d3.js";
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../datastar-signals.js";
 
 const TAG_NAME = "fishy-preset-manager";
@@ -40,6 +39,10 @@ function toastHelper() {
 
 function presetHelper() {
   return globalThis.window?.__fishystuffUserPresets ?? null;
+}
+
+function presetPreviewHelper() {
+  return globalThis.window?.__fishystuffPresetPreviews ?? null;
 }
 
 function iconSpriteUrl() {
@@ -176,8 +179,6 @@ function normalizePayload(adapter, payload) {
 export class FishyPresetManager extends HTMLElementBase {
   constructor() {
     super();
-    this.handlePresetChange = this.handlePresetChange.bind(this);
-    this.handleAdapterChange = this.handleAdapterChange.bind(this);
     this.handleLanguageChange = this.handleLanguageChange.bind(this);
     this.handleSignalPatch = this.handleSignalPatch.bind(this);
     this.selectedCardKey = "";
@@ -190,30 +191,12 @@ export class FishyPresetManager extends HTMLElementBase {
     }
     this.dataset.presetManagerReady = "true";
     this.render();
-    const helper = presetHelper();
-    globalThis.window?.addEventListener?.(
-      helper?.CHANGED_EVENT || "fishystuff:user-presets-changed",
-      this.handlePresetChange,
-    );
-    globalThis.window?.addEventListener?.(
-      helper?.ADAPTERS_CHANGED_EVENT || "fishystuff:user-presets-adapters-changed",
-      this.handleAdapterChange,
-    );
     globalThis.window?.addEventListener?.(LANGUAGE_CHANGE_EVENT, this.handleLanguageChange);
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, this.handleSignalPatch);
     this.sync({ refreshNames: true });
   }
 
   disconnectedCallback() {
-    const helper = presetHelper();
-    globalThis.window?.removeEventListener?.(
-      helper?.CHANGED_EVENT || "fishystuff:user-presets-changed",
-      this.handlePresetChange,
-    );
-    globalThis.window?.removeEventListener?.(
-      helper?.ADAPTERS_CHANGED_EVENT || "fishystuff:user-presets-adapters-changed",
-      this.handleAdapterChange,
-    );
     globalThis.window?.removeEventListener?.(LANGUAGE_CHANGE_EVENT, this.handleLanguageChange);
     document.removeEventListener(DATASTAR_SIGNAL_PATCH_EVENT, this.handleSignalPatch);
   }
@@ -306,6 +289,7 @@ export class FishyPresetManager extends HTMLElementBase {
     this.classList.add("fishy-preset-manager");
     this.innerHTML = `
       <div data-signals='${this.uiSignalsExpression()}'>
+        <div hidden data-effect="window.__fishystuffPresetManager.refresh(el, $_user_presets.version)"></div>
         <button
           type="button"
           class="btn btn-soft btn-secondary"
@@ -433,19 +417,11 @@ export class FishyPresetManager extends HTMLElementBase {
   }
 
   titleIconAlias(item) {
-    const adapter = this.adapter();
-    if (!adapter || typeof adapter.titleIconAlias !== "function") {
-      return "";
-    }
-    try {
-      return trimString(adapter.titleIconAlias({
-        item: cloneJson(item),
-        payload: cloneJson(item?.payload),
-      }));
-    } catch (error) {
-      console.error("fishy preset title icon resolution failed", error);
-      return "";
-    }
+    return presetPreviewHelper()?.titleIconAlias?.(this.collectionKey, {
+      adapter: this.adapter(),
+      item: cloneJson(item),
+      payload: cloneJson(item?.payload),
+    }) || "";
   }
 
   fixedItems() {
@@ -876,19 +852,18 @@ export class FishyPresetManager extends HTMLElementBase {
         header.append(badge);
       }
 
-      const previewShell = document.createElement("div");
-      previewShell.className = "fishy-preset-manager__preset-preview-shell";
-      const previewViewport = document.createElement("div");
-      previewViewport.className = "fishy-preset-manager__preset-preview-viewport";
-      const preview = document.createElement("div");
-      preview.className = "fishy-preset-manager__preset-preview";
-      preview.dataset.cardKey = item.key;
-      previewViewport.append(preview);
-      previewShell.append(previewViewport);
+      const previewShell = presetPreviewHelper()?.createShell?.({
+        cardKey: item.key,
+      });
 
-      card.append(header, previewShell);
+      card.append(header);
+      if (previewShell?.shell) {
+        card.append(previewShell.shell);
+      }
       container.append(card);
-      this.renderPreview(preview, item);
+      if (previewShell?.preview) {
+        this.renderPreview(previewShell.preview, item);
+      }
     }
   }
 
@@ -896,29 +871,15 @@ export class FishyPresetManager extends HTMLElementBase {
     if (!(container instanceof HTMLElement)) {
       return;
     }
-    container.replaceChildren();
-    const adapter = this.adapter();
-    if (adapter && typeof adapter.renderPreview === "function") {
-      try {
-        adapter.renderPreview(container, {
-          item: cloneJson(item),
-          payload: cloneJson(item.payload),
-          d3,
-          previewSize: 200,
-        });
-        return;
-      } catch (error) {
-        console.error("fishy preset preview render failed", error);
-      }
-    }
-    const fallback = document.createElement("div");
-    fallback.className = "fishy-preset-manager__preview-fallback";
-    for (let index = 0; index < 3; index += 1) {
-      const bar = document.createElement("span");
-      bar.className = "fishy-preset-manager__preview-fallback-bar";
-      fallback.append(bar);
-    }
-    container.append(fallback);
+    presetPreviewHelper()?.render?.(container, {
+      collectionKey: this.collectionKey,
+      adapter: this.adapter(),
+      item: cloneJson(item),
+      payload: cloneJson(item?.payload),
+      previewSize: 200,
+      variant: "manager",
+      errorMessage: "fishy preset preview render failed",
+    });
   }
 
   commitSelectedTitleChange(nextValue = null) {
@@ -941,17 +902,6 @@ export class FishyPresetManager extends HTMLElementBase {
       toastHelper()?.error?.(
         error instanceof Error ? error.message : this.translate("presets.error.save", "Preset save failed."),
       );
-    }
-  }
-
-  handlePresetChange() {
-    this.sync();
-  }
-
-  handleAdapterChange(event) {
-    const changedCollectionKey = trimString(event?.detail?.collectionKey);
-    if (!changedCollectionKey || changedCollectionKey === this.collectionKey) {
-      this.sync({ refreshNames: true });
     }
   }
 

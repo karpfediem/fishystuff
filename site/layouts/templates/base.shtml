@@ -265,6 +265,7 @@
   <!-- Keep OTEL parser-inserted so fetch instrumentation can patch before page modules boot. -->
   <script type="module" src="$site.asset('js/otel.js').link()"></script>
 
+  <script src="$site.asset('js/preset-previews.js').link()"></script>
   <script type="module" src="$site.asset('js/components/registry.js').link()"></script>
   <script src="$site.asset('js/theme.js').link()"></script>
   <script src="$site.asset('js/toast.js').link()"></script>

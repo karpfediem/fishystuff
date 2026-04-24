@@ -1,10 +1,9 @@
-import * as d3 from "../d3.js";
+import { registerSearchableDropdown } from "./searchable-dropdown.js";
 
 const TAG_NAME = "fishy-preset-quick-switch";
+const SEARCHABLE_DROPDOWN_TAG_NAME = "fishy-searchable-dropdown";
 const LANGUAGE_CHANGE_EVENT = "fishystuff:languagechange";
 const ENTRIES_CHANGE_EVENT = "fishystuff:preset-quick-switch-entries-changed";
-const USER_PRESETS_CHANGE_EVENT = "fishystuff:user-presets-changed";
-const USER_PRESETS_ADAPTERS_CHANGE_EVENT = "fishystuff:user-presets-adapters-changed";
 const SEARCHABLE_DROPDOWN_OPEN_EVENT = "fishystuff:searchable-dropdown-open";
 const SEARCHABLE_DROPDOWN_CLOSE_EVENT = "fishystuff:searchable-dropdown-close";
 const ICON_SPRITE_FALLBACK_URL = "/img/icons.svg";
@@ -91,6 +90,10 @@ function presetHelper() {
 
 function toastHelper() {
   return globalThis.window?.__fishystuffToast ?? null;
+}
+
+function presetPreviewHelper() {
+  return globalThis.window?.__fishystuffPresetPreviews ?? null;
 }
 
 function iconSpriteUrl() {
@@ -226,6 +229,9 @@ function safeFixedPresets(helper, entry, adapter, translate) {
   let fixed = [];
   if (adapter && typeof helper?.fixedPresets === "function") {
     fixed = helper.fixedPresets(entry.collectionKey);
+  }
+  if ((!Array.isArray(fixed) || !fixed.length) && !adapter) {
+    fixed = presetPreviewHelper()?.fixedPresets?.(entry.collectionKey);
   }
   if ((!Array.isArray(fixed) || !fixed.length) && !adapter) {
     fixed = entry.fixedFallbacks.map((fallback) => ({
@@ -413,6 +419,14 @@ function createTextElement(tagName, className, text) {
   return element;
 }
 
+function appendChildren(parent, children) {
+  for (const child of children) {
+    if (child) {
+      parent.append(child);
+    }
+  }
+}
+
 function createIconElement(alias, className) {
   const normalizedAlias = trimString(alias);
   if (!normalizedAlias) {
@@ -430,65 +444,45 @@ function createIconElement(alias, className) {
   return svg;
 }
 
-function renderFallbackPreview(container) {
-  const fallback = document.createElement("span");
-  fallback.className = "fishy-preset-manager__preview-fallback";
-  for (let index = 0; index < 3; index += 1) {
-    const bar = document.createElement("span");
-    bar.className = "fishy-preset-manager__preview-fallback-bar";
-    fallback.append(bar);
-  }
-  container.replaceChildren(fallback);
-}
-
 function renderPresetOptionPreview(container, row, option) {
   if (!(container instanceof HTMLElement)) {
     return;
   }
-  const adapter = row?.adapter;
-  if (adapter && typeof adapter.renderPreview === "function" && option?.payload) {
-    try {
-      const item = {
-        collectionKey: option.collectionKey,
-        key: option.key,
-        kind: option.kind,
-        id: option.id,
-        name: option.label,
-        source: option.source,
-        payload: option.payload,
-      };
-      adapter.renderPreview(container, {
-        item: cloneJson(item),
-        payload: cloneJson(option.payload),
-        d3,
-        previewSize: 200,
-      });
-      if (container.childNodes.length) {
-        return;
-      }
-    } catch (error) {
-      console.error("fishy preset quick-switch preview render failed", error);
-    }
-  }
-  renderFallbackPreview(container);
+  presetPreviewHelper()?.render?.(container, {
+    collectionKey: option?.collectionKey || row?.collectionKey,
+    adapter: row?.adapter,
+    item: {
+      collectionKey: option?.collectionKey,
+      key: option?.key,
+      kind: option?.kind,
+      id: option?.id,
+      name: option?.label,
+      source: option?.source,
+      payload: cloneJson(option?.payload),
+    },
+    payload: cloneJson(option?.payload),
+    previewSize: 200,
+    variant: "quick-switch",
+    errorMessage: "fishy preset quick-switch preview render failed",
+  });
 }
 
 function createPresetOptionContent(row, option) {
   const root = document.createElement("span");
   root.className = "fishy-preset-quick-switch__preset-option";
-  const previewShell = document.createElement("span");
-  previewShell.className = "fishy-preset-quick-switch__preview fishy-preset-manager__preset-preview-shell";
-  previewShell.setAttribute("aria-hidden", "true");
-  const previewViewport = document.createElement("span");
-  previewViewport.className = "fishy-preset-manager__preset-preview-viewport";
-  const preview = document.createElement("span");
-  preview.className = "fishy-preset-manager__preset-preview";
-  preview.dataset.cardKey = option?.key || "";
-  previewViewport.append(preview);
-  previewShell.append(previewViewport);
-  renderPresetOptionPreview(preview, row, option);
+  const shell = presetPreviewHelper()?.createShell?.({
+    shellTag: "span",
+    viewportTag: "span",
+    previewTag: "span",
+    shellClassName: "fishy-preset-quick-switch__preview",
+    cardKey: option?.key || "",
+    ariaHidden: true,
+  });
+  if (shell?.preview && shell?.shell) {
+    renderPresetOptionPreview(shell.preview, row, option);
+  }
   const label = createTextElement("span", "fishy-preset-quick-switch__option-name", option?.label || "");
-  root.append(previewShell, label);
+  appendChildren(root, [shell?.shell, label]);
   return root;
 }
 
@@ -534,7 +528,6 @@ export class FishyPresetQuickSwitch extends HTMLElementBase {
     this.handleDropdownOpen = this.handleDropdownOpen.bind(this);
     this.handleDropdownClose = this.handleDropdownClose.bind(this);
     this.handleSelectionChange = this.handleSelectionChange.bind(this);
-    this.handlePresetChange = this.handlePresetChange.bind(this);
     this.handleLanguageChange = this.handleLanguageChange.bind(this);
     this.handleEntriesChange = this.handleEntriesChange.bind(this);
   }
@@ -549,11 +542,10 @@ export class FishyPresetQuickSwitch extends HTMLElementBase {
     this.addEventListener(SEARCHABLE_DROPDOWN_OPEN_EVENT, this.handleDropdownOpen);
     this.addEventListener(SEARCHABLE_DROPDOWN_CLOSE_EVENT, this.handleDropdownClose);
     globalThis.document?.addEventListener?.("pointerdown", this.handleDocumentPointerDown, true);
-    globalThis.window?.addEventListener?.(USER_PRESETS_CHANGE_EVENT, this.handlePresetChange);
-    globalThis.window?.addEventListener?.(USER_PRESETS_ADAPTERS_CHANGE_EVENT, this.handlePresetChange);
     globalThis.window?.addEventListener?.(LANGUAGE_CHANGE_EVENT, this.handleLanguageChange);
     globalThis.window?.addEventListener?.(ENTRIES_CHANGE_EVENT, this.handleEntriesChange);
     this.render();
+    this.renderAfterSearchableDropdownUpgrade();
   }
 
   disconnectedCallback() {
@@ -562,8 +554,6 @@ export class FishyPresetQuickSwitch extends HTMLElementBase {
     this.removeEventListener(SEARCHABLE_DROPDOWN_CLOSE_EVENT, this.handleDropdownClose);
     globalThis.document?.removeEventListener?.("pointerdown", this.handleDocumentPointerDown, true);
     this.releaseAllUserMenus();
-    globalThis.window?.removeEventListener?.(USER_PRESETS_CHANGE_EVENT, this.handlePresetChange);
-    globalThis.window?.removeEventListener?.(USER_PRESETS_ADAPTERS_CHANGE_EVENT, this.handlePresetChange);
     globalThis.window?.removeEventListener?.(LANGUAGE_CHANGE_EVENT, this.handleLanguageChange);
     globalThis.window?.removeEventListener?.(ENTRIES_CHANGE_EVENT, this.handleEntriesChange);
   }
@@ -595,6 +585,31 @@ export class FishyPresetQuickSwitch extends HTMLElementBase {
       list.append(this.renderRow(row));
     }
     this.append(list);
+  }
+
+  renderAfterSearchableDropdownUpgrade() {
+    const registry = globalThis.customElements;
+    const DropdownConstructor = registry?.get?.(SEARCHABLE_DROPDOWN_TAG_NAME);
+    if (typeof DropdownConstructor === "function") {
+      const hasStaleDropdown = Array.from(this.querySelectorAll(SEARCHABLE_DROPDOWN_TAG_NAME))
+        .some((node) => !(node instanceof DropdownConstructor));
+      if (hasStaleDropdown) {
+        queueMicrotask(() => {
+          if (this.isConnected) {
+            this.render();
+          }
+        });
+      }
+      return;
+    }
+    if (typeof registry?.whenDefined !== "function") {
+      return;
+    }
+    registry.whenDefined(SEARCHABLE_DROPDOWN_TAG_NAME).then(() => {
+      if (this.isConnected) {
+        this.render();
+      }
+    });
   }
 
   renderRow(row) {
@@ -847,10 +862,6 @@ export class FishyPresetQuickSwitch extends HTMLElementBase {
     this.heldUserMenus.clear();
   }
 
-  handlePresetChange() {
-    this.render();
-  }
-
   handleLanguageChange() {
     this.render();
   }
@@ -870,11 +881,18 @@ function installPresetQuickSwitchRegistry() {
     defaultEntries: DEFAULT_PRESET_QUICK_SWITCH_ENTRIES,
     entries: presetQuickSwitchEntries,
     registerEntry: registerPresetQuickSwitchEntry,
+    sync(node) {
+      const target = node?.matches?.(TAG_NAME) ? node : node?.closest?.(TAG_NAME);
+      target?.render?.();
+    },
   });
 }
 
 export function registerPresetQuickSwitch(registry = globalThis.customElements) {
   installPresetQuickSwitchRegistry();
+  if (globalThis.window?.customElements) {
+    registerSearchableDropdown();
+  }
   if (!registry || typeof registry.define !== "function") {
     return;
   }

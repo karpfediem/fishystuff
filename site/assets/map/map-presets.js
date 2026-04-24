@@ -105,36 +105,19 @@ function sharedUserPresets() {
     : null;
 }
 
-function renderMapPresetPreview(container, context = {}) {
-  if (!(container instanceof HTMLElement)) {
-    return;
-  }
-  const payload = normalizeMapPresetPayload(context.payload);
-  container.replaceChildren();
-  const root = document.createElement("div");
-  root.className = "fishy-preset-manager__summary-preview";
-  const visibleLayers = Array.isArray(payload.bridgedFilters?.layerIdsVisible)
-    ? payload.bridgedFilters.layerIdsVisible.length
-    : 0;
-  const query = trimString(payload.search?.query);
-  const viewMode = payload.bridgedUi?.viewMode === "3d" ? "3D" : "2D";
-  const rows = [
-    [viewMode, `${visibleLayers} layers`],
-    [payload.bridgedUi?.showPoints === false ? "Points off" : "Points on"],
-    [query || "No search"],
-  ];
-  for (const row of rows) {
-    const rowElement = document.createElement("div");
-    rowElement.className = "fishy-preset-manager__summary-preview-row";
-    for (const part of row) {
-      const chip = document.createElement("span");
-      chip.className = "fishy-preset-manager__summary-preview-chip";
-      chip.textContent = part;
-      rowElement.append(chip);
-    }
-    root.append(rowElement);
-  }
-  container.append(root);
+function presetPreviewHelper() {
+  return globalThis.window?.__fishystuffPresetPreviews ?? null;
+}
+
+function presetPreviewTitleIconAlias(payload) {
+  return presetPreviewHelper()?.titleIconAlias?.(MAP_PRESET_COLLECTION_KEY, { payload }) || "";
+}
+
+function renderSharedMapPresetPreview(container, context = {}) {
+  presetPreviewHelper()?.render?.(container, {
+    ...context,
+    collectionKey: MAP_PRESET_COLLECTION_KEY,
+  });
 }
 
 export function registerMapPresetAdapter({
@@ -167,10 +150,10 @@ export function registerMapPresetAdapter({
     normalizePayload: normalizeMapPresetPayload,
     payloadsEqual: mapPresetPayloadsEqual,
     titleIconAlias({ payload }) {
-      return normalizeMapPresetPayload(payload).bridgedUi.viewMode === "3d" ? "cube-view" : "map-view";
+      return presetPreviewTitleIconAlias(payload);
     },
     renderPreview(container, context) {
-      renderMapPresetPreview(container, context);
+      renderSharedMapPresetPreview(container, context);
     },
     capture(options = {}) {
       return mapPresetCapture(readSignals, readBridgeState, options);

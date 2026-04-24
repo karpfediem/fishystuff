@@ -9,6 +9,7 @@ const SELECTED_QUERY_PARAM = "selected";
 export const SEARCHABLE_DROPDOWN_OPEN_EVENT = "fishystuff:searchable-dropdown-open";
 export const SEARCHABLE_DROPDOWN_CLOSE_EVENT = "fishystuff:searchable-dropdown-close";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const URL_SCOPE_RESOLVERS = Object.freeze({
     api: "__fishystuffResolveApiUrl",
     site: "__fishystuffResolveSiteUrl",
@@ -152,7 +153,7 @@ export function resolveScopedUrl(rawUrl, scope) {
     return new URL(normalizedUrl, window.location.href).toString();
 }
 
-export class FishySearchableDropdown extends HTMLElement {
+export class FishySearchableDropdown extends HTMLElementBase {
     static get observedAttributes() {
         return [
             "input-id",
@@ -1485,9 +1486,6 @@ export class FishySearchableDropdown extends HTMLElement {
         const anchorWidth = Math.round(anchorRect.width || 0);
         const overlayAnchor = this._usesOverlayAnchorPlacement();
         const edgeInset = overlayAnchor ? 0 : 12;
-        const originRect = document.documentElement.getBoundingClientRect();
-        const originLeft = Number.isFinite(originRect.left) ? originRect.left : 0;
-        const originTop = Number.isFinite(originRect.top) ? originRect.top : 0;
         const widthSource = getStringAttribute(this, "panel-min-width");
         const maxWidth = overlayAnchor
             ? visibleViewportRight - edgeInset - anchorRect.left
@@ -1511,17 +1509,20 @@ export class FishySearchableDropdown extends HTMLElement {
 
         const panelRect = panel.getBoundingClientRect();
         if (overlayAnchor) {
+            const originRect = document.documentElement.getBoundingClientRect();
+            const originLeft = Number.isFinite(originRect.left) ? originRect.left : 0;
+            const originTop = Number.isFinite(originRect.top) ? originRect.top : 0;
             panel.style.left = `${anchorRect.left - originLeft}px`;
             panel.style.top = `${anchorRect.top - originTop}px`;
             return;
         }
 
-        const minLeft = edgeInset - originLeft;
-        let left = anchorRect.left - originLeft;
-        if (left + originLeft + panelRect.width > visibleViewportRight - edgeInset) {
+        const minLeft = edgeInset;
+        let left = anchorRect.left;
+        if (left + panelRect.width > visibleViewportRight - edgeInset) {
             left = Math.max(
                 minLeft,
-                visibleViewportRight - panelRect.width - edgeInset - originLeft,
+                visibleViewportRight - panelRect.width - edgeInset,
             );
         }
 
@@ -1531,10 +1532,9 @@ export class FishySearchableDropdown extends HTMLElement {
             belowTop + panelRect.height <= viewportHeight - 12 || aboveTop < 12
                 ? belowTop
                 : aboveTop;
-        const top = topInViewport - originTop;
 
         panel.style.left = `${left}px`;
-        panel.style.top = `${Math.max(edgeInset - originTop, top)}px`;
+        panel.style.top = `${Math.max(edgeInset, topInViewport)}px`;
     }
 
     _restorePanel() {

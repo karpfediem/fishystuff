@@ -181,9 +181,14 @@
                                      detail: 'Reports are shared manually.'
                                    }
                                  }
+                               },
+                               _user_presets: {
+                                 version: 0,
+                                 collections: {}
                                }
                              }">
                             <div hidden data-init="window.__fishystuffClientSession.bindDatastar(&#36;)"></div>
+                            <div hidden data-init="window.__fishystuffUserPresets.bindDatastar(&#36;)"></div>
                             <button type="button"
                                     tabindex="0"
                                     class="btn btn-circle btn-sm border border-base-300/70 bg-base-100/90 shadow-sm backdrop-blur hover:border-base-content/25 hover:bg-base-100"
@@ -276,7 +281,7 @@
                                                         </span>
                                                     </summary>
                                                     <div class="px-1 pb-1 pt-3">
-                                                        <fishy-preset-quick-switch></fishy-preset-quick-switch>
+                                                        <fishy-preset-quick-switch data-effect="window.__fishystuffPresetQuickSwitch.sync(el, $_user_presets.version)"></fishy-preset-quick-switch>
                                                     </div>
                                                 </details>
                                             </li>
