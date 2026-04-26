@@ -4471,19 +4471,6 @@ fn calculator_pet_pack_leader_label(lang: CalculatorLocale) -> String {
     calculator_route_text(lang, "calculator.server.field.pack_leader")
 }
 
-fn calculator_pet_skills_hint(lang: CalculatorLocale, skill_limit: usize) -> String {
-    let skill_limit = skill_limit.max(1);
-    if skill_limit == 1 {
-        calculator_route_text(lang, "calculator.server.helper.pet_skills.one")
-    } else {
-        calculator_route_text_with_vars(
-            lang,
-            "calculator.server.helper.pet_skills.many",
-            &[("count", &skill_limit.to_string())],
-        )
-    }
-}
-
 fn pet_talent_breakdown_detail(
     lang: CalculatorLocale,
     pet: &CalculatorPetSignals,
@@ -14068,12 +14055,7 @@ fn render_pet_cards(
             &pet.skills,
             &skill_options,
         ));
-        write!(
-            html,
-            "<p class=\"label\">{}</p></fieldset></div></div></div></section>",
-            escape_html(&calculator_pet_skills_hint(lang, skill_limit)),
-        )
-        .unwrap();
+        html.push_str("</fieldset></div></div></div></section>");
     }
     html.push_str("</div>");
     html
@@ -14947,7 +14929,7 @@ mod tests {
         assert!(html.contains("title=\"Luck +1\""));
         assert!(html.contains("(Selected)</span>"));
         assert!(!html.contains("border-emerald-400"));
-        assert!(html.contains("Choose 1 to 3 skills."));
+        assert!(!html.contains("Choose 1 to 3 skills."));
     }
 
     #[test]
