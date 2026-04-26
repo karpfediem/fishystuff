@@ -609,8 +609,46 @@ fn pet_lineage_key(row: &RawPetRow) -> String {
         })
 }
 
+fn pet_variant_group_label_key(label: &str) -> String {
+    label.trim().to_ascii_lowercase()
+}
+
+fn pet_variant_group_key(row: &RawPetRow, base_label: &str) -> Option<String> {
+    row.skin_key
+        .as_ref()
+        .map(|skin_key| {
+            format!(
+                "change-look:{}:{}:{}",
+                skin_key.trim(),
+                row.race.trim(),
+                row.kind.trim()
+            )
+        })
+        .or_else(|| {
+            let label_key = pet_variant_group_label_key(base_label);
+            (!label_key.is_empty()).then(|| {
+                format!(
+                    "visual-label:{}:{}:{}",
+                    row.race.trim(),
+                    pet_visual_group_key(row),
+                    label_key
+                )
+            })
+        })
+}
+
 fn build_pet_lineage_keys(rows: &[RawPetRow]) -> Vec<String> {
     let mut keys = rows.iter().map(pet_lineage_key).collect::<Vec<_>>();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+fn build_pet_variant_group_keys(rows: &[RawPetRow], base_label: &str) -> Vec<String> {
+    let mut keys = rows
+        .iter()
+        .filter_map(|row| pet_variant_group_key(row, base_label))
+        .collect::<Vec<_>>();
     keys.sort();
     keys.dedup();
     keys
@@ -761,6 +799,10 @@ fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
                     .entry
                     .lineage_keys
                     .extend(built.entry.lineage_keys.clone());
+                existing
+                    .entry
+                    .variant_group_keys
+                    .extend(built.entry.variant_group_keys.clone());
             }
             None => {
                 deduped.insert(signature, built);
@@ -776,6 +818,8 @@ fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
             built.entry.alias_keys = built.alias_keys.clone();
             built.entry.lineage_keys.sort();
             built.entry.lineage_keys.dedup();
+            built.entry.variant_group_keys.sort();
+            built.entry.variant_group_keys.dedup();
             built
         })
         .collect()
@@ -1131,6 +1175,7 @@ impl DoltMySqlStore {
                 let base_label = choose_pet_base_label(&rows, &names_by_character_key);
                 let skin_key = build_pet_skin_key(&rows);
                 let lineage_keys = build_pet_lineage_keys(&rows);
+                let variant_group_keys = build_pet_variant_group_keys(&rows, &base_label);
                 let mut tiers_by_source = BTreeMap::<u8, Vec<&RawPetRow>>::new();
                 for row in &rows {
                     tiers_by_source
@@ -1165,6 +1210,7 @@ impl DoltMySqlStore {
                             .find_map(|row| pet_image_url(row.icon_image_file.as_deref())),
                         alias_keys: Vec::new(),
                         lineage_keys,
+                        variant_group_keys,
                         tiers,
                     },
                     alias_keys: Vec::new(),
@@ -1232,9 +1278,9 @@ mod tests {
     use crate::store::FishLang;
 
     use super::{
-        build_tier_entry, calculator_pet_option_records, calculator_pet_special_option_records,
-        dedupe_built_pet_entries, is_looting_pet_type, localized_pet_option_label,
-        parse_acquire_rate, parse_asset_stem, parse_pet_option_effects,
+        build_pet_variant_group_keys, build_tier_entry, calculator_pet_option_records,
+        calculator_pet_special_option_records, dedupe_built_pet_entries, is_looting_pet_type,
+        localized_pet_option_label, parse_acquire_rate, parse_asset_stem, parse_pet_option_effects,
         pet_acquire_skill_rate_select, pet_image_url, pet_option_kind, pet_special_option_label,
         BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind, PetSpecialSkillMeta, RawPetRow,
     };
@@ -1466,6 +1512,43 @@ mod tests {
     }
 
     #[test]
+    fn build_pet_variant_group_keys_groups_unskinned_same_label_visual_variants() {
+        let rows = vec![
+            RawPetRow {
+                character_key: "56626".to_string(),
+                skin_key: None,
+                icon_image_file: Some(
+                    r#"New_UI_Common_forLua\Window\Stable\Pet\Pet_BlueDragon_0001.dds"#.to_string(),
+                ),
+                race: "38".to_string(),
+                kind: "38".to_string(),
+                tier_source: 4,
+                special_skill_no: Some("26".to_string()),
+                base_skill_index: Some("73".to_string()),
+                acquire_key: Some("304".to_string()),
+            },
+            RawPetRow {
+                character_key: "56631".to_string(),
+                skin_key: None,
+                icon_image_file: Some(
+                    r#"New_UI_Common_forLua\Window\Stable\Pet\Pet_BlueDragon_0001.dds"#.to_string(),
+                ),
+                race: "38".to_string(),
+                kind: "39".to_string(),
+                tier_source: 4,
+                special_skill_no: Some("26".to_string()),
+                base_skill_index: Some("58".to_string()),
+                acquire_key: Some("304".to_string()),
+            },
+        ];
+
+        assert_eq!(
+            build_pet_variant_group_keys(&rows, "Young Azure Dragon"),
+            vec!["visual-label:38:pet_bluedragon_0001:young azure dragon".to_string()]
+        );
+    }
+
+    #[test]
     fn dedupe_built_pet_entries_collapses_identical_pet_variants() {
         let duplicated = vec![
             BuiltPetEntry {
@@ -1474,6 +1557,7 @@ mod tests {
                     label: "Young Azure Dragon".to_string(),
                     image_url: Some("/images/pets/pet_blue_dragon_0001.webp".to_string()),
                     lineage_keys: vec!["change-look:blue:38".to_string()],
+                    variant_group_keys: vec!["variant:38".to_string()],
                     tiers: vec![CalculatorPetTierEntry {
                         key: "5".to_string(),
                         label: "Tier 5".to_string(),
@@ -1492,6 +1576,7 @@ mod tests {
                     label: "Young Azure Dragon".to_string(),
                     image_url: Some("/images/pets/pet_blue_dragon_0001.webp".to_string()),
                     lineage_keys: vec!["change-look:blue:43".to_string()],
+                    variant_group_keys: vec!["variant:43".to_string()],
                     tiers: vec![CalculatorPetTierEntry {
                         key: "5".to_string(),
                         label: "Tier 5".to_string(),
@@ -1519,6 +1604,10 @@ mod tests {
                 "change-look:blue:38".to_string(),
                 "change-look:blue:43".to_string()
             ]
+        );
+        assert_eq!(
+            deduped[0].entry.variant_group_keys,
+            vec!["variant:38".to_string(), "variant:43".to_string()]
         );
     }
 }

@@ -525,6 +525,7 @@ struct SelectOption<'a> {
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
     presentation: SelectOptionPresentation,
+    sort_priority: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -549,6 +550,12 @@ enum SearchableDropdownResultsLayout {
 enum SearchableDropdownPanelPlacement {
     Adjacent,
     OverlayAnchor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PetFixedOptionKind {
+    Special,
+    Talent,
 }
 
 struct SearchableDropdownConfig<'a> {
@@ -615,6 +622,7 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
+    sort_priority: 1,
 });
 
 static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
@@ -631,6 +639,7 @@ static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(||
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
+    sort_priority: 1,
 });
 
 static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(|| SelectOption {
@@ -647,6 +656,7 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
+    sort_priority: 1,
 });
 
 fn none_select_option(lang: CalculatorLocale) -> SelectOption<'static> {
@@ -1036,7 +1046,8 @@ pub async fn get_calculator_datastar_option_search(
         .as_deref()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or("calculator-search-results");
-    let (options, include_none) = searchable_options_for_kind(&data, kind, query.tier.as_deref());
+    let (options, include_none) =
+        searchable_options_for_kind(&data, kind, query.tier.as_deref(), Some(selected_value));
     let fragment = render_searchable_select_results(
         data.lang,
         data.cdn_base_url.as_str(),
@@ -3212,7 +3223,7 @@ fn normalize_pet(
         return;
     };
 
-    let Some(tier_entry) = pet_entry.tiers.iter().find(|tier| tier.key == pet.tier) else {
+    let Some(mut tier_entry) = pet_entry.tiers.iter().find(|tier| tier.key == pet.tier) else {
         pet.pet.clear();
         pet.pack_leader = false;
         pet.special.clear();
@@ -3220,6 +3231,17 @@ fn normalize_pet(
         pet.skills.clear();
         return;
     };
+
+    if let Some((variant_entry, variant_tier)) = find_pet_same_tier_variant_for_requested_options(
+        catalog,
+        pet_entry,
+        &pet.tier,
+        &pet.special,
+        &pet.talent,
+    ) {
+        pet.pet = variant_entry.key.clone();
+        tier_entry = variant_tier;
+    }
 
     pet.special = resolve_fixed_pet_option_selection(&tier_entry.specials);
     pet.talent = resolve_fixed_pet_option_selection(&tier_entry.talents);
@@ -3269,6 +3291,16 @@ fn pet_entries_share_lineage(left: &CalculatorPetEntry, right: &CalculatorPetEnt
         })
 }
 
+fn pet_entries_share_variant_group(left: &CalculatorPetEntry, right: &CalculatorPetEntry) -> bool {
+    !left.variant_group_keys.is_empty()
+        && left.variant_group_keys.iter().any(|left_key| {
+            right
+                .variant_group_keys
+                .iter()
+                .any(|right_key| right_key == left_key)
+        })
+}
+
 fn find_pet_lineage_entry_for_tier<'a>(
     catalog: &'a CalculatorPetCatalog,
     selected_pet: &CalculatorPetEntry,
@@ -3284,6 +3316,99 @@ fn find_pet_lineage_entry_for_tier<'a>(
             left.label
                 .cmp(&right.label)
                 .then_with(|| left.key.cmp(&right.key))
+        })
+}
+
+fn pet_tier_has_fixed_option(
+    tier: &CalculatorPetTierEntry,
+    kind: PetFixedOptionKind,
+    option_key: &str,
+) -> bool {
+    if option_key.trim().is_empty() {
+        return false;
+    }
+    match kind {
+        PetFixedOptionKind::Special => tier.specials.iter().any(|key| key == option_key),
+        PetFixedOptionKind::Talent => tier.talents.iter().any(|key| key == option_key),
+    }
+}
+
+fn pet_same_tier_variant_entries<'a>(
+    catalog: &'a CalculatorPetCatalog,
+    selected_pet: &'a CalculatorPetEntry,
+    tier_key: &str,
+) -> Vec<(&'a CalculatorPetEntry, &'a CalculatorPetTierEntry)> {
+    catalog
+        .pets
+        .iter()
+        .filter(|entry| {
+            entry.key == selected_pet.key || pet_entries_share_variant_group(selected_pet, entry)
+        })
+        .filter_map(|entry| {
+            entry
+                .tiers
+                .iter()
+                .find(|tier| tier.key == tier_key)
+                .map(|tier| (entry, tier))
+        })
+        .collect()
+}
+
+fn find_pet_same_tier_variant_for_requested_options<'a>(
+    catalog: &'a CalculatorPetCatalog,
+    selected_pet: &'a CalculatorPetEntry,
+    tier_key: &str,
+    requested_special: &str,
+    requested_talent: &str,
+) -> Option<(&'a CalculatorPetEntry, &'a CalculatorPetTierEntry)> {
+    let current_tier = selected_pet
+        .tiers
+        .iter()
+        .find(|tier| tier.key == tier_key)?;
+    let needs_special = !requested_special.trim().is_empty()
+        && !pet_tier_has_fixed_option(current_tier, PetFixedOptionKind::Special, requested_special);
+    let needs_talent = !requested_talent.trim().is_empty()
+        && !pet_tier_has_fixed_option(current_tier, PetFixedOptionKind::Talent, requested_talent);
+    if !needs_special && !needs_talent {
+        return None;
+    }
+
+    pet_same_tier_variant_entries(catalog, selected_pet, tier_key)
+        .into_iter()
+        .filter(|(entry, _)| entry.key != selected_pet.key)
+        .filter(|(_, tier)| {
+            (!needs_special
+                || pet_tier_has_fixed_option(tier, PetFixedOptionKind::Special, requested_special))
+                && (!needs_talent
+                    || pet_tier_has_fixed_option(
+                        tier,
+                        PetFixedOptionKind::Talent,
+                        requested_talent,
+                    ))
+        })
+        .max_by(|(left_entry, left_tier), (right_entry, right_tier)| {
+            let left_score = usize::from(pet_tier_has_fixed_option(
+                left_tier,
+                PetFixedOptionKind::Special,
+                requested_special,
+            )) + usize::from(pet_tier_has_fixed_option(
+                left_tier,
+                PetFixedOptionKind::Talent,
+                requested_talent,
+            ));
+            let right_score = usize::from(pet_tier_has_fixed_option(
+                right_tier,
+                PetFixedOptionKind::Special,
+                requested_special,
+            )) + usize::from(pet_tier_has_fixed_option(
+                right_tier,
+                PetFixedOptionKind::Talent,
+                requested_talent,
+            ));
+            left_score
+                .cmp(&right_score)
+                .then_with(|| right_entry.label.cmp(&left_entry.label))
+                .then_with(|| right_entry.key.cmp(&left_entry.key))
         })
 }
 
@@ -10377,6 +10502,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         })
         .collect()
 }
@@ -10395,6 +10521,7 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         })
         .collect()
 }
@@ -10422,9 +10549,12 @@ fn pet_variant_special_option<'a>(
 fn select_options_from_pet_entries_for_tier<'a>(
     catalog: &'a CalculatorPetCatalog,
     tier_key: &str,
+    selected_pet_key: Option<&str>,
 ) -> Vec<SelectOption<'a>> {
     let tier_key = tier_key.trim();
     let tier_grade_tone = pet_tier_grade_tone(tier_key);
+    let selected_pet =
+        selected_pet_key.and_then(|key| catalog.pets.iter().find(|entry| entry.key == key));
     let filtered = if tier_key.is_empty() {
         catalog.pets.iter().collect::<Vec<_>>()
     } else {
@@ -10436,25 +10566,31 @@ fn select_options_from_pet_entries_for_tier<'a>(
     };
     filtered
         .into_iter()
-        .map(|option| SelectOption {
-            value: option.key.as_str(),
-            label: option.label.as_str(),
-            icon: option.image_url.as_deref(),
-            grade_tone: tier_grade_tone,
-            pet_variant_talent: option
-                .tiers
-                .iter()
-                .find(|tier| tier.key == tier_key)
-                .and_then(|tier| pet_variant_talent_option(tier, catalog)),
-            pet_variant_special: option
-                .tiers
-                .iter()
-                .find(|tier| tier.key == tier_key)
-                .and_then(|tier| pet_variant_special_option(tier, catalog)),
-            pet_skill_learn_chance: None,
-            item: None,
-            lifeskill_level: None,
-            presentation: SelectOptionPresentation::PetCard,
+        .map(|option| {
+            let same_variant_group = selected_pet.is_some_and(|selected| {
+                option.key != selected.key && pet_entries_share_variant_group(selected, option)
+            });
+            SelectOption {
+                value: option.key.as_str(),
+                label: option.label.as_str(),
+                icon: option.image_url.as_deref(),
+                grade_tone: tier_grade_tone,
+                pet_variant_talent: option
+                    .tiers
+                    .iter()
+                    .find(|tier| tier.key == tier_key)
+                    .and_then(|tier| pet_variant_talent_option(tier, catalog)),
+                pet_variant_special: option
+                    .tiers
+                    .iter()
+                    .find(|tier| tier.key == tier_key)
+                    .and_then(|tier| pet_variant_special_option(tier, catalog)),
+                pet_skill_learn_chance: None,
+                item: None,
+                lifeskill_level: None,
+                presentation: SelectOptionPresentation::PetCard,
+                sort_priority: if same_variant_group { 0 } else { 1 },
+            }
         })
         .collect()
 }
@@ -12047,6 +12183,7 @@ fn searchable_options_for_kind<'a>(
     data: &'a CalculatorData,
     kind: CalculatorSearchableOptionKind,
     pet_tier: Option<&str>,
+    selected_value: Option<&str>,
 ) -> (Vec<SelectOption<'a>>, bool) {
     match kind {
         CalculatorSearchableOptionKind::FishingLevel => (
@@ -12086,6 +12223,7 @@ fn searchable_options_for_kind<'a>(
             select_options_from_pet_entries_for_tier(
                 &data.catalog.pets,
                 pet_tier.unwrap_or(data.catalog.defaults.pet1.tier.as_str()),
+                selected_value,
             ),
             true,
         ),
@@ -12116,6 +12254,7 @@ fn fuzzy_select_matches<'a>(
         options.sort_by_key(|option| {
             (
                 if option.value == current_value { 0 } else { 1 },
+                option.sort_priority,
                 option.label.to_string(),
             )
         });
@@ -12133,7 +12272,14 @@ fn fuzzy_select_matches<'a>(
                 .map(|score| (option, score))
         })
         .collect::<Vec<_>>();
-    scored.sort_by_key(|(option, score)| (Reverse(*score), option.label.to_string()));
+    scored.sort_by_key(|(option, score)| {
+        (
+            if option.value == current_value { 0 } else { 1 },
+            option.sort_priority,
+            Reverse(*score),
+            option.label.to_string(),
+        )
+    });
     scored.into_iter().map(|(option, _)| option).collect()
 }
 
@@ -12586,6 +12732,98 @@ fn render_pet_skill_selects(
     }
     html.push_str("</div>");
     html
+}
+
+fn pet_same_tier_variant_option_keys(
+    catalog: &CalculatorPetCatalog,
+    selected_pet: &CalculatorPetEntry,
+    tier_key: &str,
+    kind: PetFixedOptionKind,
+) -> Vec<String> {
+    let mut keys = Vec::new();
+    for (_, tier) in pet_same_tier_variant_entries(catalog, selected_pet, tier_key) {
+        match kind {
+            PetFixedOptionKind::Special => keys.extend(tier.specials.iter().cloned()),
+            PetFixedOptionKind::Talent => keys.extend(tier.talents.iter().cloned()),
+        }
+    }
+    let mut seen = HashSet::new();
+    keys.retain(|key| seen.insert(key.clone()));
+    keys
+}
+
+fn select_pet_fixed_option_entries_by_keys<'a>(
+    keys: &[String],
+    options: &'a [CalculatorPetOptionEntry],
+) -> Vec<SelectOption<'a>> {
+    keys.iter()
+        .filter_map(|key| options.iter().find(|option| option.key == *key))
+        .map(|option| SelectOption {
+            value: option.key.as_str(),
+            label: option.label.as_str(),
+            icon: None,
+            grade_tone: "unknown",
+            pet_variant_talent: None,
+            pet_variant_special: None,
+            pet_skill_learn_chance: None,
+            item: None,
+            lifeskill_level: None,
+            presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
+        })
+        .collect()
+}
+
+fn render_pet_variant_fixed_option_select_control(
+    lang: CalculatorLocale,
+    root_id: &str,
+    input_id: &str,
+    bind_key: &str,
+    selected_value: &str,
+    options: &[SelectOption<'_>],
+    selected_content_html: &str,
+    search_placeholder: &str,
+) -> String {
+    let results_id = format!("{root_id}-results");
+    let selected_label = options
+        .iter()
+        .copied()
+        .find(|option| option.value == selected_value)
+        .map(|option| option.label)
+        .unwrap_or(selected_value);
+    let catalog_html = render_searchable_dropdown_catalog_html(lang, "", options);
+    let results_html =
+        render_searchable_select_results(lang, "", &results_id, options, selected_value, "", 0);
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact: true,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: Some("24rem"),
+            panel_placement: SearchableDropdownPanelPlacement::OverlayAnchor,
+            results_layout: SearchableDropdownResultsLayout::List,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html,
+            value: selected_value,
+            search_url: "",
+            search_url_root: None,
+            exclude_selected_inputs: None,
+            search_placeholder,
+        },
+        &results_html,
+    );
+
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(bind_key),
+        escape_html(selected_value),
+        dropdown,
+    )
 }
 
 fn render_target_fish_select_control(
@@ -13180,6 +13418,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             item: None,
             lifeskill_level: Some(level),
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         })
         .collect()
 }
@@ -13202,6 +13441,7 @@ fn item_options_by_type<'a>(
             item: Some(item),
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         })
         .collect()
 }
@@ -13226,6 +13466,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         })
         .collect::<Vec<_>>();
     options.sort_by(|left, right| left.label.cmp(right.label));
@@ -13387,6 +13628,7 @@ fn select_pet_option_entries_by_keys<'a>(
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         })
         .collect()
 }
@@ -13466,12 +13708,42 @@ fn render_pet_cards(
             4 => &signals.pet4,
             _ => &signals.pet5,
         };
-        let pet_options = select_options_from_pet_entries_for_tier(catalog, &pet.tier);
+        let pet_options =
+            select_options_from_pet_entries_for_tier(catalog, &pet.tier, Some(&pet.pet));
         let selected_pet = catalog.pets.iter().find(|entry| entry.key == pet.pet);
         let selected_tier_entry =
             selected_pet.and_then(|entry| entry.tiers.iter().find(|tier| tier.key == pet.tier));
         let selected_special = pet_option_by_key(&catalog.specials, &pet.special);
         let selected_talent = pet_option_by_key(&catalog.talents, &pet.talent);
+        let selected_special_content = render_pet_fixed_special_content(lang, selected_special);
+        let selected_talent_content =
+            render_pet_fixed_talent_content(lang, pet, catalog, selected_talent);
+        let special_variant_options = selected_pet
+            .map(|entry| {
+                select_pet_fixed_option_entries_by_keys(
+                    &pet_same_tier_variant_option_keys(
+                        catalog,
+                        entry,
+                        &pet.tier,
+                        PetFixedOptionKind::Special,
+                    ),
+                    &catalog.specials,
+                )
+            })
+            .unwrap_or_default();
+        let talent_variant_options = selected_pet
+            .map(|entry| {
+                select_pet_fixed_option_entries_by_keys(
+                    &pet_same_tier_variant_option_keys(
+                        catalog,
+                        entry,
+                        &pet.tier,
+                        PetFixedOptionKind::Talent,
+                    ),
+                    &catalog.talents,
+                )
+            })
+            .unwrap_or_default();
         let skill_limit = selected_tier_entry
             .map(|tier| pet_skill_limit_for_tier_key(&tier.key))
             .unwrap_or(1);
@@ -13542,12 +13814,25 @@ fn render_pet_cards(
                 "calculator.server.field.special",
             ))
         ));
-        html.push_str(&render_pet_fixed_option_control(
-            &format!("calculator-pet{slot}-special-value"),
-            &format!("{}.special", bind_prefix),
-            &pet.special,
-            &render_pet_fixed_special_content(lang, selected_special),
-        ));
+        if special_variant_options.len() > 1 {
+            html.push_str(&render_pet_variant_fixed_option_select_control(
+                lang,
+                &format!("calculator-pet{slot}-special-picker"),
+                &format!("calculator-pet{slot}-special-value"),
+                &format!("{}.special", bind_prefix),
+                &pet.special,
+                &special_variant_options,
+                &selected_special_content,
+                &calculator_route_text(lang, "calculator.server.search.pet_specials"),
+            ));
+        } else {
+            html.push_str(&render_pet_fixed_option_control(
+                &format!("calculator-pet{slot}-special-value"),
+                &format!("{}.special", bind_prefix),
+                &pet.special,
+                &selected_special_content,
+            ));
+        }
         html.push_str("</fieldset>");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
@@ -13556,12 +13841,25 @@ fn render_pet_cards(
                 "calculator.server.field.talent",
             ))
         ));
-        html.push_str(&render_pet_fixed_option_control(
-            &format!("calculator-pet{slot}-talent-value"),
-            &format!("{}.talent", bind_prefix),
-            &pet.talent,
-            &render_pet_fixed_talent_content(lang, pet, catalog, selected_talent),
-        ));
+        if talent_variant_options.len() > 1 {
+            html.push_str(&render_pet_variant_fixed_option_select_control(
+                lang,
+                &format!("calculator-pet{slot}-talent-picker"),
+                &format!("calculator-pet{slot}-talent-value"),
+                &format!("{}.talent", bind_prefix),
+                &pet.talent,
+                &talent_variant_options,
+                &selected_talent_content,
+                &calculator_route_text(lang, "calculator.server.search.pet_talents"),
+            ));
+        } else {
+            html.push_str(&render_pet_fixed_option_control(
+                &format!("calculator-pet{slot}-talent-value"),
+                &format!("{}.talent", bind_prefix),
+                &pet.talent,
+                &selected_talent_content,
+            ));
+        }
         html.push_str("</fieldset>");
         html.push_str("</div>");
         html.push_str(&format!(
@@ -13651,10 +13949,11 @@ mod tests {
         render_pet_dropdown_selected_content_html, render_pet_effective_talent_badges,
         render_pet_talent_badges, render_searchable_select_results,
         render_select_option_search_text, render_target_fish_panel,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
-        SelectOption, SelectOptionPresentation, TargetFishSummary,
+        select_options_from_pet_entries_for_tier, trade_sale_multiplier_for_species,
+        CalculatorData, CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
+        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
+        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
+        TargetFishSummary,
     };
 
     struct MockStore;
@@ -13818,6 +14117,7 @@ mod tests {
                         image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
                         alias_keys: Vec::new(),
                         lineage_keys: Vec::new(),
+                        variant_group_keys: Vec::new(),
                         tiers: vec![CalculatorPetTierEntry {
                             key: "5".to_string(),
                             label: "Tier 5".to_string(),
@@ -14456,6 +14756,107 @@ mod tests {
         assert!(html.contains("Choose 1 to 3 skills."));
     }
 
+    #[test]
+    fn render_pet_cards_uses_dropdowns_for_same_tier_skin_variant_fixed_options() {
+        let catalog = CalculatorPetCatalog {
+            slots: 1,
+            pets: vec![
+                CalculatorPetEntry {
+                    key: "pet:skin-a".to_string(),
+                    label: "Pet Skin A".to_string(),
+                    variant_group_keys: vec!["variant:pet".to_string()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        specials: vec!["special_a".to_string()],
+                        talents: vec!["talent_a".to_string()],
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                CalculatorPetEntry {
+                    key: "pet:skin-b".to_string(),
+                    label: "Pet Skin B".to_string(),
+                    variant_group_keys: vec!["variant:pet".to_string()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        specials: vec!["special_b".to_string()],
+                        talents: vec!["talent_b".to_string()],
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                CalculatorPetEntry {
+                    key: "pet:tier-neighbor".to_string(),
+                    label: "Tier Neighbor".to_string(),
+                    lineage_keys: vec!["variant:pet".to_string()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        specials: vec!["special_c".to_string()],
+                        talents: vec!["talent_c".to_string()],
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+            ],
+            specials: vec![
+                CalculatorPetOptionEntry {
+                    key: "special_a".to_string(),
+                    label: "Special A".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "special_b".to_string(),
+                    label: "Special B".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "special_c".to_string(),
+                    label: "Special C".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            talents: vec![
+                CalculatorPetOptionEntry {
+                    key: "talent_a".to_string(),
+                    label: "Talent A".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "talent_b".to_string(),
+                    label: "Talent B".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "talent_c".to_string(),
+                    label: "Talent C".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            ..CalculatorPetCatalog::default()
+        };
+        let signals = CalculatorSignals {
+            pet1: CalculatorPetSignals {
+                pet: "pet:skin-a".to_string(),
+                tier: "4".to_string(),
+                special: "special_a".to_string(),
+                talent: "talent_a".to_string(),
+                ..CalculatorPetSignals::default()
+            },
+            ..CalculatorSignals::default()
+        };
+
+        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+
+        assert!(html.contains("calculator-pet1-special-picker"));
+        assert!(html.contains("calculator-pet1-talent-picker"));
+        assert!(html.contains("data-bind=\"pet1.special\""));
+        assert!(html.contains("data-bind=\"pet1.talent\""));
+        assert!(html.contains("Special B"));
+        assert!(html.contains("Talent B"));
+        assert!(!html.contains("data-value=\"special_c\""));
+        assert!(!html.contains("data-value=\"talent_c\""));
+    }
+
     #[tokio::test]
     async fn derived_signals_include_generic_stat_breakdown_payloads() {
         let state = test_state();
@@ -14658,6 +15059,7 @@ mod tests {
                 item: None,
                 lifeskill_level: None,
                 presentation: SelectOptionPresentation::Default,
+                sort_priority: 1,
             })
             .collect::<Vec<_>>();
         let text = render_searchable_select_results(
@@ -14673,6 +15075,66 @@ mod tests {
         assert!(text.contains("data-next-offset=\"24\""));
         assert!(text.contains("data-searchable-dropdown-more"));
         assert!(text.contains("Load more results"));
+    }
+
+    #[test]
+    fn pet_select_results_prioritize_same_tier_variants_before_pagination() {
+        let tier = CalculatorPetTierEntry {
+            key: "5".to_string(),
+            ..CalculatorPetTierEntry::default()
+        };
+        let mut pets = vec![
+            CalculatorPetEntry {
+                key: "pet:selected".to_string(),
+                label: "Selected Dragon".to_string(),
+                variant_group_keys: vec!["variant:dragon".to_string()],
+                tiers: vec![tier.clone()],
+                ..CalculatorPetEntry::default()
+            },
+            CalculatorPetEntry {
+                key: "pet:variant".to_string(),
+                label: "Z Variant Dragon".to_string(),
+                variant_group_keys: vec!["variant:dragon".to_string()],
+                tiers: vec![tier.clone()],
+                ..CalculatorPetEntry::default()
+            },
+        ];
+        pets.extend((0..30).map(|index| CalculatorPetEntry {
+            key: format!("pet:other-{index:02}"),
+            label: format!("A Other Pet {index:02}"),
+            tiers: vec![tier.clone()],
+            ..CalculatorPetEntry::default()
+        }));
+        let catalog = CalculatorPetCatalog {
+            pets,
+            ..CalculatorPetCatalog::default()
+        };
+        let options = select_options_from_pet_entries_for_tier(&catalog, "5", Some("pet:selected"));
+
+        let text = render_searchable_select_results(
+            CalculatorLocale::EnUs,
+            "",
+            "calculator-pet-search-results",
+            &options,
+            "pet:selected",
+            "",
+            0,
+        );
+
+        let selected_index = text
+            .find("data-value=\"pet:selected\"")
+            .expect("selected pet should be on the first page");
+        let variant_index = text
+            .find("data-value=\"pet:variant\"")
+            .expect("same-tier variant should be on the first page");
+        let other_index = text
+            .find("data-value=\"pet:other-00\"")
+            .expect("other pets should still be listed");
+
+        assert!(selected_index < variant_index);
+        assert!(variant_index < other_index);
+        assert!(text.contains("data-next-offset=\"24\""));
+        assert!(!text.contains("data-value=\"pet:other-29\""));
     }
 
     #[tokio::test]
@@ -15057,6 +15519,7 @@ mod tests {
                 image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
                 alias_keys: Vec::new(),
                 lineage_keys: Vec::new(),
+                variant_group_keys: Vec::new(),
                 tiers: vec![CalculatorPetTierEntry {
                     key: "5".to_string(),
                     label: "Tier 5".to_string(),
@@ -15125,6 +15588,7 @@ mod tests {
                 image_url: Some("/images/pets/pet_hawk_0014.webp".to_string()),
                 alias_keys: Vec::new(),
                 lineage_keys: Vec::new(),
+                variant_group_keys: Vec::new(),
                 tiers: vec![
                     CalculatorPetTierEntry {
                         key: "3".to_string(),
@@ -15295,6 +15759,130 @@ mod tests {
     }
 
     #[test]
+    fn normalize_pet_switches_only_same_tier_skin_variant_for_fixed_options() {
+        let catalog = CalculatorPetCatalog {
+            pets: vec![
+                CalculatorPetEntry {
+                    key: "pet:skin-a".to_string(),
+                    label: "Pet Skin A".to_string(),
+                    lineage_keys: vec!["lineage:pet".to_string()],
+                    variant_group_keys: vec!["variant:pet".to_string()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        specials: vec!["special_a".to_string()],
+                        talents: vec!["talent_a".to_string()],
+                        skills: vec!["skill_shared".to_string()],
+                        skill_chances: Default::default(),
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                CalculatorPetEntry {
+                    key: "pet:skin-b".to_string(),
+                    label: "Pet Skin B".to_string(),
+                    lineage_keys: vec!["lineage:pet".to_string()],
+                    variant_group_keys: vec!["variant:pet".to_string()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        specials: vec!["special_b".to_string()],
+                        talents: vec!["talent_b".to_string()],
+                        skills: vec!["skill_shared".to_string()],
+                        skill_chances: Default::default(),
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+                CalculatorPetEntry {
+                    key: "pet:tier-neighbor".to_string(),
+                    label: "Tier Neighbor".to_string(),
+                    lineage_keys: vec!["lineage:pet".to_string()],
+                    tiers: vec![CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        specials: vec!["special_c".to_string()],
+                        talents: vec!["talent_c".to_string()],
+                        skills: vec!["skill_shared".to_string()],
+                        skill_chances: Default::default(),
+                        ..CalculatorPetTierEntry::default()
+                    }],
+                    ..CalculatorPetEntry::default()
+                },
+            ],
+            specials: vec![
+                CalculatorPetOptionEntry {
+                    key: "special_a".to_string(),
+                    label: "Special A".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "special_b".to_string(),
+                    label: "Special B".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "special_c".to_string(),
+                    label: "Special C".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            talents: vec![
+                CalculatorPetOptionEntry {
+                    key: "talent_a".to_string(),
+                    label: "Talent A".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "talent_b".to_string(),
+                    label: "Talent B".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "talent_c".to_string(),
+                    label: "Talent C".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            skills: vec![CalculatorPetOptionEntry {
+                key: "skill_shared".to_string(),
+                label: "Shared Skill".to_string(),
+                ..CalculatorPetOptionEntry::default()
+            }],
+            ..CalculatorPetCatalog::default()
+        };
+        let aliases = build_pet_value_aliases(&catalog);
+        let defaults = CalculatorPetSignals {
+            tier: "4".to_string(),
+            ..CalculatorPetSignals::default()
+        };
+
+        let mut pet = CalculatorPetSignals {
+            pet: "pet:skin-a".to_string(),
+            tier: "4".to_string(),
+            special: "special_a".to_string(),
+            talent: "talent_b".to_string(),
+            skills: vec!["skill_shared".to_string()],
+            ..CalculatorPetSignals::default()
+        };
+        normalize_pet(&mut pet, defaults.clone(), &catalog, &aliases);
+        assert_eq!(pet.pet, "pet:skin-b");
+        assert_eq!(pet.special, "special_b");
+        assert_eq!(pet.talent, "talent_b");
+        assert_eq!(pet.skills, vec!["skill_shared".to_string()]);
+
+        let mut lineage_only_pet = CalculatorPetSignals {
+            pet: "pet:skin-a".to_string(),
+            tier: "4".to_string(),
+            special: "special_a".to_string(),
+            talent: "talent_c".to_string(),
+            skills: vec!["skill_shared".to_string()],
+            ..CalculatorPetSignals::default()
+        };
+        normalize_pet(&mut lineage_only_pet, defaults, &catalog, &aliases);
+        assert_eq!(lineage_only_pet.pet, "pet:skin-a");
+        assert_eq!(lineage_only_pet.special, "special_a");
+        assert_eq!(lineage_only_pet.talent, "talent_a");
+    }
+
+    #[test]
     fn normalize_pet_follows_lineage_to_target_tier_entry() {
         let lineage_key = "change-look:46001:46:1".to_string();
         let catalog = CalculatorPetCatalog {
@@ -15424,6 +16012,7 @@ mod tests {
                 image_url: None,
                 alias_keys: Vec::new(),
                 lineage_keys: Vec::new(),
+                variant_group_keys: Vec::new(),
                 tiers: vec![CalculatorPetTierEntry {
                     key: "5".to_string(),
                     label: "Tier 5".to_string(),
@@ -15734,6 +16323,7 @@ mod tests {
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
+            sort_priority: 1,
         };
 
         let text = render_select_option_search_text(option);
@@ -15761,6 +16351,7 @@ mod tests {
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
+            sort_priority: 1,
         };
 
         let text = render_select_option_search_text(option);
@@ -15796,6 +16387,7 @@ mod tests {
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
+            sort_priority: 1,
         };
 
         let selected_html =
@@ -17302,6 +17894,7 @@ mod tests {
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
         }];
         let target_fish_summary = TargetFishSummary {
             selected_label: String::new(),
