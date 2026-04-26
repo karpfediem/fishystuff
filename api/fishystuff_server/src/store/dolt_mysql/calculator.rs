@@ -75,8 +75,8 @@ impl DoltMySqlStore {
                 trade_levels: build_calculator_trade_levels(lang),
                 session_units: build_calculator_session_units(lang),
                 session_presets: build_calculator_session_presets(lang),
+                defaults: build_calculator_default_signals(&pets),
                 pets,
-                defaults: build_calculator_default_signals(),
             })
         })();
 
