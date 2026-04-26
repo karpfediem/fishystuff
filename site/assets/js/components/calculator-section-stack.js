@@ -30,7 +30,7 @@ const SECTION_LAYOUT_META = Object.freeze({
     gear: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
     food: { kind: "compact", basis: "24rem", minWidth: "min(100%, 24rem)", shareable: true },
     buffs: { kind: "compact", basis: "26rem", minWidth: "min(100%, 26rem)", shareable: true },
-    pets: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
+    pets: { kind: "wide", basis: "34rem", minWidth: "min(100%, 28rem)", shareable: true },
     overlay: { kind: "wide", basis: "34rem", minWidth: "min(100%, 34rem)", shareable: true },
     debug: { kind: "compact", basis: "26rem", minWidth: "min(100%, 26rem)", shareable: true },
     default: { kind: "wide", basis: "32rem", minWidth: "min(100%, 32rem)", shareable: true },

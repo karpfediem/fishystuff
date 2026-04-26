@@ -101,8 +101,9 @@
     }
 
     .fishy-calculator-pet-option--selected {
-        width: 9.5rem;
-        gap: 0.85rem;
+        width: min(100%, 8.5rem);
+        gap: 0.55rem;
+        padding: 0.6rem 0.55rem;
     }
 
     .fishy-calculator-pet-option__frame {
@@ -120,8 +121,8 @@
     }
 
     .fishy-calculator-pet-option--selected .fishy-calculator-pet-option__frame {
-        width: min(100%, 8rem);
-        border-width: 3px;
+        width: min(100%, 6.75rem);
+        border-width: 2px;
     }
 
     .fishy-calculator-pet-option__image {
@@ -225,17 +226,22 @@
     .fishy-calculator-pet-fixed-options,
     .fishy-calculator-pet-skills-grid {
         display: grid;
-        gap: 1rem;
+        gap: 0.75rem;
+    }
+
+    [data-pet-slot] {
+        container-type: inline-size;
     }
 
     .fishy-calculator-pet-card-layout {
-        grid-template-columns: auto auto minmax(0, 1fr);
+        grid-template-columns: minmax(3.75rem, auto) auto minmax(10rem, 1fr);
         align-items: start;
-        overflow-x: auto;
+        overflow-x: visible;
     }
 
     .fishy-calculator-pet-select-field {
         min-width: 0;
+        justify-self: start;
     }
 
     .fishy-calculator-pet-tier-column {
@@ -243,12 +249,12 @@
         align-content: start;
         justify-items: center;
         gap: 0.5rem;
-        min-width: 5rem;
+        min-width: 4.25rem;
     }
 
     .fishy-calculator-pet-pack-leader {
         display: flex;
-        width: 5rem;
+        width: 4.25rem;
         max-width: 100%;
         min-height: 3rem;
         margin-top: 1.25rem;
@@ -289,7 +295,26 @@
 
     .fishy-calculator-pet-skills-grid {
         gap: 0.5rem;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+    }
+
+    .fishy-calculator-pet-skills-grid .badge {
+        display: inline-block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap !important;
+    }
+
+    @container (max-width: 32rem) {
+        .fishy-calculator-pet-card-layout {
+            grid-template-columns: minmax(3.75rem, auto) minmax(0, 1fr);
+        }
+
+        .fishy-calculator-pet-controls {
+            grid-column: 1 / -1;
+        }
     }
 
     @media (max-width: 640px) {
