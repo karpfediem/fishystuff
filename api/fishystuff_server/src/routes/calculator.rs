@@ -12069,6 +12069,7 @@ fn render_pet_dropdown_content_html(
     cdn_base_url: &str,
     option: SelectOption<'_>,
     selected: bool,
+    include_fixed_badges: bool,
 ) -> String {
     let tone_class = format!("fishy-item-grade-{}", escape_html(option.grade_tone));
     let image_html = option
@@ -12093,25 +12094,27 @@ fn render_pet_dropdown_content_html(
                         .unwrap_or_else(|| "?".to_string())
                 )
             )
-        });
+    });
     let mut badges_html = String::new();
-    if let Some(special) = option.pet_variant_special {
-        badges_html.push_str(&render_pet_special_badges(special));
-    }
-    if let Some(talent) = option.pet_variant_talent {
-        let talent_badges = option
-            .pet_effective_talent_effects
-            .map(|effects| {
-                render_pet_talent_badges_from_effects(
-                    lang,
-                    talent,
-                    effects,
-                    "fishy-calculator-pet-option__badges",
-                    true,
-                )
-            })
-            .unwrap_or_else(|| render_pet_talent_badges(lang, talent));
-        badges_html.push_str(&talent_badges);
+    if include_fixed_badges {
+        if let Some(special) = option.pet_variant_special {
+            badges_html.push_str(&render_pet_special_badges(special));
+        }
+        if let Some(talent) = option.pet_variant_talent {
+            let talent_badges = option
+                .pet_effective_talent_effects
+                .map(|effects| {
+                    render_pet_talent_badges_from_effects(
+                        lang,
+                        talent,
+                        effects,
+                        "fishy-calculator-pet-option__badges",
+                        true,
+                    )
+                })
+                .unwrap_or_else(|| render_pet_talent_badges(lang, talent));
+            badges_html.push_str(&talent_badges);
+        }
     }
     format!(
         "<span class=\"fishy-calculator-pet-option{}\" data-pet-option-card><span class=\"fishy-calculator-pet-option__frame {}\">{}</span><span class=\"fishy-calculator-pet-option__label\">{}</span>{}</span>",
@@ -12132,7 +12135,7 @@ fn render_pet_dropdown_option_content_html(
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
-    render_pet_dropdown_content_html(lang, cdn_base_url, option, false)
+    render_pet_dropdown_content_html(lang, cdn_base_url, option, false, true)
 }
 
 fn render_pet_dropdown_selected_content_html(
@@ -12140,7 +12143,7 @@ fn render_pet_dropdown_selected_content_html(
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
-    render_pet_dropdown_content_html(lang, cdn_base_url, option, true)
+    render_pet_dropdown_content_html(lang, cdn_base_url, option, true, false)
 }
 
 fn render_searchable_dropdown_option_content_html(
@@ -16743,7 +16746,7 @@ mod tests {
     }
 
     #[test]
-    fn render_pet_dropdown_selected_content_shows_enriched_badges() {
+    fn render_pet_dropdown_selected_content_hides_redundant_fixed_badges() {
         let special = CalculatorPetOptionEntry {
             key: "pet-special:37".to_string(),
             label: "Special: Auto-Fishing Time Reduction -30%".to_string(),
@@ -16778,9 +16781,9 @@ mod tests {
             render_pet_dropdown_option_content_html(CalculatorLocale::EnUs, "", option);
 
         assert!(selected_html.contains("fishy-calculator-pet-option--selected"));
-        assert!(selected_html.contains("fishy-calculator-pet-option__badges"));
-        assert!(selected_html.contains("+5% Item DRR"));
-        assert!(selected_html.contains("Special: Auto-Fishing Time Reduction"));
+        assert!(!selected_html.contains("fishy-calculator-pet-option__badges"));
+        assert!(!selected_html.contains("+5% Item DRR"));
+        assert!(!selected_html.contains("Special: Auto-Fishing Time Reduction"));
         assert!(result_html.contains("fishy-calculator-pet-option__badges"));
         assert!(result_html.contains("+5% Item DRR"));
         assert!(result_html.contains("Special: Auto-Fishing Time Reduction"));
