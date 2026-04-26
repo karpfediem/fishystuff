@@ -41,6 +41,7 @@ pub struct CalculatorQuery {
     pub lang: Option<String>,
     pub locale: Option<String>,
     pub r#ref: Option<String>,
+    pub pet_cards: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -842,76 +843,116 @@ pub async fn post_calculator_datastar_eval(
         raw_signals,
     )
     .await?;
-    let items_by_key = data
-        .catalog
-        .items
-        .iter()
-        .map(|item| (item.key.as_str(), item))
-        .collect::<HashMap<_, _>>();
-    let fish_group_chart = derive_fish_group_chart(&normalized_signals, &data, &items_by_key);
-    let loot_chart = derive_loot_chart(
+    let include_pet_cards = query.pet_cards.unwrap_or(true);
+    let mut events = vec![calculator_signals_event(
         &normalized_signals,
-        &data,
-        &fish_group_chart,
-        derived.loot_total_catches_raw,
-        derived.fish_multiplier_raw,
-    );
-    let target_fish_summary = derive_target_fish_summary(
-        &normalized_signals,
-        &data,
-        &fish_group_chart,
-        derived.loot_total_catches_raw,
-        timespan_seconds(
-            normalized_signals.timespan_amount,
-            &normalized_signals.timespan_unit,
-        ),
-    );
-    let target_fishes = target_fish_options(&data);
-    let events = vec![
-        calculator_signals_event(
+        &derived,
+        CalculatorPatchMode::Eval,
+        None,
+    )?
+    .into_datastar_event()];
+    if include_pet_cards {
+        let items_by_key = data
+            .catalog
+            .items
+            .iter()
+            .map(|item| (item.key.as_str(), item))
+            .collect::<HashMap<_, _>>();
+        let fish_group_chart = derive_fish_group_chart(&normalized_signals, &data, &items_by_key);
+        let loot_chart = derive_loot_chart(
             &normalized_signals,
-            &derived,
-            CalculatorPatchMode::Eval,
-            None,
-        )?
-        .into_datastar_event(),
-        PatchElements::new(render_pet_cards(
-            data.cdn_base_url.as_str(),
-            data.api_lang,
+            &data,
+            &fish_group_chart,
+            derived.loot_total_catches_raw,
+            derived.fish_multiplier_raw,
+        );
+        let target_fish_summary = derive_target_fish_summary(
+            &normalized_signals,
+            &data,
+            &fish_group_chart,
+            derived.loot_total_catches_raw,
+            timespan_seconds(
+                normalized_signals.timespan_amount,
+                &normalized_signals.timespan_unit,
+            ),
+        );
+        let target_fishes = target_fish_options(&data);
+        events.push(
+            PatchElements::new(render_pet_cards(
+                data.cdn_base_url.as_str(),
+                data.api_lang,
+                data.lang,
+                &data.catalog.pets,
+                &normalized_signals,
+            ))
+            .selector("#pets")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
+        );
+        events.extend([
+            PatchElements::new(render_fish_group_chart(
+                data.lang,
+                &fish_group_chart,
+                normalized_signals.show_normalized_select_rates,
+            ))
+            .selector("#calculator-fish-group-chart")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
+            PatchElements::new(render_fish_group_silver_chart(data.lang, &loot_chart))
+                .selector("#calculator-fish-group-silver-chart")
+                .mode(ElementPatchMode::Outer)
+                .into_datastar_event(),
+            PatchElements::new(render_target_fish_panel(
+                &data,
+                &normalized_signals,
+                &target_fishes,
+                &target_fish_summary,
+            ))
+            .selector("#calculator-target-fish-panel")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
+            PatchElements::new(render_loot_chart(data.lang, &loot_chart))
+                .selector("#calculator-loot-chart")
+                .mode(ElementPatchMode::Outer)
+                .into_datastar_event(),
+        ]);
+    } else {
+        events.extend(render_pet_talent_fixed_option_patch_events(
             data.lang,
             &data.catalog.pets,
             &normalized_signals,
-        ))
-        .selector("#pets")
-        .mode(ElementPatchMode::Outer)
-        .into_datastar_event(),
-        PatchElements::new(render_fish_group_chart(
-            data.lang,
-            &fish_group_chart,
-            normalized_signals.show_normalized_select_rates,
-        ))
-        .selector("#calculator-fish-group-chart")
-        .mode(ElementPatchMode::Outer)
-        .into_datastar_event(),
-        PatchElements::new(render_fish_group_silver_chart(data.lang, &loot_chart))
-            .selector("#calculator-fish-group-silver-chart")
-            .mode(ElementPatchMode::Outer)
-            .into_datastar_event(),
-        PatchElements::new(render_target_fish_panel(
-            &data,
-            &normalized_signals,
-            &target_fishes,
-            &target_fish_summary,
-        ))
-        .selector("#calculator-target-fish-panel")
-        .mode(ElementPatchMode::Outer)
-        .into_datastar_event(),
-        PatchElements::new(render_loot_chart(data.lang, &loot_chart))
-            .selector("#calculator-loot-chart")
-            .mode(ElementPatchMode::Outer)
-            .into_datastar_event(),
-    ];
+        ));
+    }
     Ok(calculator_datastar_response(events))
+}
+
+fn render_pet_talent_fixed_option_patch_events(
+    lang: CalculatorLocale,
+    catalog: &CalculatorPetCatalog,
+    signals: &CalculatorSignals,
+) -> Vec<DatastarEvent> {
+    let total_slots = catalog.slots.max(1);
+    let mut events = Vec::new();
+    for slot in 1..=total_slots {
+        let pet = match slot {
+            1 => &signals.pet1,
+            2 => &signals.pet2,
+            3 => &signals.pet3,
+            4 => &signals.pet4,
+            _ => &signals.pet5,
+        };
+        let selected_talent = pet_option_by_key(&catalog.talents, &pet.talent);
+        let input_id = format!("calculator-pet{slot}-talent-value");
+        let content_html = render_pet_fixed_talent_content(lang, pet, catalog, selected_talent);
+        let selector = format!("#{}", render_pet_fixed_option_content_id(&input_id));
+        events.push(
+            PatchElements::new(render_pet_fixed_option_display(&input_id, &content_html))
+                .selector(&selector)
+                .mode(ElementPatchMode::Outer)
+                .into_datastar_event(),
+        );
+    }
+    events
 }
 
 pub async fn get_calculator_datastar_zone_search(
@@ -3172,12 +3213,15 @@ fn normalize_pet(
     pet.special = resolve_fixed_pet_option_selection(&tier_entry.specials);
     pet.talent = resolve_fixed_pet_option_selection(&tier_entry.talents);
     pet.skills = resolve_pet_skill_selection(&pet.skills, &tier_entry.skills, &catalog.skills);
+    if tier_entry.key.trim() != "5" {
+        pet.pack_leader = false;
+    }
 }
 
 fn normalize_pack_leader_selection(mut pets: [&mut CalculatorPetSignals; 5]) {
     let first_selected = pets
         .iter()
-        .position(|pet| pet.pack_leader && !pet.pet.trim().is_empty());
+        .position(|pet| pet.pack_leader && !pet.pet.trim().is_empty() && pet.tier.trim() == "5");
     for (index, pet) in pets.iter_mut().enumerate() {
         pet.pack_leader = matches!(first_selected, Some(selected) if selected == index);
     }
@@ -3884,7 +3928,7 @@ fn pet_talent_effect(
     if base <= 0.0 {
         return 0.0;
     }
-    if pet.pack_leader {
+    if pet.pack_leader && pet.tier.trim() == "5" {
         base + 0.01
     } else {
         base
@@ -11639,10 +11683,22 @@ fn render_pet_fixed_option_control(
 ) -> String {
     format!(
         "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">\
-         <div class=\"min-h-12 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\" data-pet-fixed-option aria-live=\"polite\">{}</div>",
+         {}",
         escape_html(input_id),
         escape_html(bind_key),
         escape_html(selected_value),
+        render_pet_fixed_option_display(input_id, content_html),
+    )
+}
+
+fn render_pet_fixed_option_content_id(input_id: &str) -> String {
+    format!("{input_id}-content")
+}
+
+fn render_pet_fixed_option_display(input_id: &str, content_html: &str) -> String {
+    format!(
+        "<div id=\"{}\" class=\"min-h-12 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\" data-pet-fixed-option aria-live=\"polite\">{}</div>",
+        escape_html(&render_pet_fixed_option_content_id(input_id)),
         content_html,
     )
 }
@@ -13097,18 +13153,6 @@ fn select_pet_option_entries_by_keys<'a>(
         .collect()
 }
 
-fn pack_leader_change_expression(slot: usize, total_slots: usize) -> String {
-    let mut expression = format!("if ($pet{slot}.packLeader) {{");
-    for other_slot in 1..=total_slots.max(1) {
-        if other_slot == slot {
-            continue;
-        }
-        write!(expression, " $pet{other_slot}.packLeader = false;").unwrap();
-    }
-    expression.push_str(" }");
-    expression
-}
-
 fn normalized_pet_tier_value(value: &str) -> &str {
     match value.trim() {
         "1" | "2" | "3" | "4" | "5" => value.trim(),
@@ -13198,12 +13242,7 @@ fn render_pet_cards(
         let skills_id = format!("pet{slot}_skills");
         let pack_leader_input_id = format!("calculator-pet{slot}-pack-leader-value");
         let pack_leader_checked = if pet.pack_leader { " checked" } else { "" };
-        let pack_leader_disabled = if selected_pet.is_some() {
-            ""
-        } else {
-            " disabled"
-        };
-        let pack_leader_change = escape_html(&pack_leader_change_expression(slot, total_slots));
+        let show_pack_leader = selected_tier_entry.is_some_and(|tier| tier.key.trim() == "5");
         let tier_header_html = render_pet_tier_header_control(slot, &pet.tier, lang);
         write!(
             html,
@@ -13214,24 +13253,24 @@ fn render_pet_cards(
         html.push_str("<div class=\"fishy-calculator-pet-card-layout\">");
         html.push_str("<div class=\"fishy-calculator-pet-tier-column\">");
         html.push_str(&tier_header_html);
-        write!(
-            html,
-            "<div class=\"fishy-calculator-pet-pack-leader{}\" style=\"display:flex;flex-direction:column;align-items:center;gap:0.55rem;margin-top:1.25rem;text-align:center\"><input id=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><label class=\"fishy-calculator-pet-pack-leader__text\" for=\"{}\">{}</label></div>",
-            if pack_leader_disabled.is_empty() {
-                ""
-            } else {
-                " fishy-calculator-pet-pack-leader--disabled"
-            },
-            escape_html(&pack_leader_input_id),
-            escape_html(&bind_prefix),
-            pack_leader_change,
-            slot,
-            pack_leader_checked,
-            pack_leader_disabled,
-            escape_html(&pack_leader_input_id),
-            escape_html(calculator_pet_pack_leader_label(lang)),
-        )
-        .unwrap();
+        if show_pack_leader {
+            write!(
+                html,
+                "<div class=\"fishy-calculator-pet-pack-leader\" style=\"display:flex;flex-direction:column;align-items:center;gap:0.55rem;margin-top:1.25rem;text-align:center\"><input id=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"window.__fishystuffCalculator.applyPackLeaderChange(el, {})\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}><label class=\"fishy-calculator-pet-pack-leader__text\" for=\"{}\">{}</label></div>",
+                escape_html(&pack_leader_input_id),
+                escape_html(&bind_prefix),
+                slot,
+                slot,
+                pack_leader_checked,
+                escape_html(&pack_leader_input_id),
+                escape_html(calculator_pet_pack_leader_label(lang)),
+            )
+            .unwrap();
+        } else {
+            html.push_str(
+                "<div class=\"fishy-calculator-pet-pack-leader fishy-calculator-pet-pack-leader--placeholder\" aria-hidden=\"true\"></div>",
+            );
+        }
         html.push_str("</div>");
         html.push_str(
             "<fieldset class=\"fieldset fishy-calculator-pet-select-field min-w-0 max-w-full shrink\">",
@@ -13365,7 +13404,7 @@ mod tests {
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
-        poisson_probability_at_least, post_calculator_datastar_eval,
+        poisson_probability_at_least, post_calculator_datastar_eval, render_pet_cards,
         render_pet_dropdown_option_content_html, render_pet_dropdown_selected_content_html,
         render_pet_effective_talent_badges, render_pet_talent_badges,
         render_searchable_select_results, render_select_option_search_text,
@@ -13784,27 +13823,22 @@ mod tests {
         assert!(text.contains("#fishy-up-small-fill"));
         assert!(text.contains("#fishy-down-small-fill"));
         assert!(text.contains("http://127.0.0.1:4040/images/pets/pet_hawk_0014.webp"));
-        assert!(text.contains("data-pet-pack-leader"));
+        assert!(!text.contains("data-pet-pack-leader"));
         assert!(text.contains("<div id=\"pets\" class=\"fishy-calculator-pets\">"));
         assert!(text.contains("fishy-calculator-pet-card-layout"));
         assert!(text.contains("fishy-calculator-pet-tier-column"));
-        assert!(text.contains("fishy-calculator-pet-pack-leader"));
-        assert!(text.contains("id=\"calculator-pet1-pack-leader-value\""));
-        assert!(text.contains("for=\"calculator-pet1-pack-leader-value\""));
+        assert!(text.contains("fishy-calculator-pet-pack-leader--placeholder"));
+        assert!(!text.contains("id=\"calculator-pet1-pack-leader-value\""));
+        assert!(text.contains("id=\"calculator-pet1-talent-value-content\""));
         assert!(text.contains("fishy-calculator-pet-select-field"));
         assert!(text.contains("fishy-calculator-pet-fixed-options"));
         assert!(text.contains("fishy-calculator-pet-skills-grid"));
         let tier_index = text.find("calculator-pet1-tier-value").unwrap();
         let pet_selector_index = text.find("calculator-pet1-pet-value").unwrap();
-        let pack_leader_index = text
-            .find("data-pet-pack-leader data-pet-pack-leader-slot=\"1\"")
-            .unwrap();
         let special_index = text.find("calculator-pet1-special-value").unwrap();
         let talent_index = text.find("calculator-pet1-talent-value").unwrap();
         let skills_index = text.find("id=\"pet1_skills\"").unwrap();
         assert!(tier_index < pet_selector_index);
-        assert!(tier_index < pack_leader_index);
-        assert!(pack_leader_index < pet_selector_index);
         assert!(pet_selector_index < special_index);
         assert!(special_index < talent_index);
         assert!(talent_index < skills_index);
@@ -13982,6 +14016,7 @@ mod tests {
                 lang: Some("en".to_string()),
                 locale: Some("en-US".to_string()),
                 r#ref: None,
+                pet_cards: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -14013,6 +14048,94 @@ mod tests {
         assert!(!text.contains("\"zone\":\"240,74,74\""));
         assert!(!text.contains("\"rod\":\"item:16162\""));
         assert!(!text.contains("\"_resources\":0.0"));
+    }
+
+    #[tokio::test]
+    async fn eval_can_patch_pet_talents_without_replacing_pet_cards() {
+        let response = post_calculator_datastar_eval(
+            State(test_state()),
+            Ok(Query(CalculatorQuery {
+                lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
+                r#ref: None,
+                pet_cards: Some(false),
+            })),
+            Extension(RequestId("req-test".to_string())),
+            Bytes::from_static(
+                br#"{"zone":"Velia Beach","pet1":{"pet":"pet:3:1:pet_hawk_0014","tier":"5","packLeader":true,"talent":"durability_reduction_resistance"}}"#,
+            ),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("event:datastar-patch-signals"));
+        assert!(text.contains("data:selector #calculator-pet1-talent-value-content"));
+        assert!(text.contains("+6% Item DRR"));
+        assert!(!text.contains("data:selector #pets"));
+        assert!(!text.contains("data:selector #calculator-fish-group-chart"));
+        assert!(!text.contains("data:selector #calculator-target-fish-panel"));
+        assert!(!text.contains("data:selector #calculator-loot-chart"));
+    }
+
+    #[test]
+    fn render_pet_cards_shows_pack_leader_only_for_tier_five_selected_pets() {
+        let catalog = CalculatorPetCatalog {
+            slots: 2,
+            pets: vec![CalculatorPetEntry {
+                key: "pet:test".to_string(),
+                label: "Test Pet".to_string(),
+                tiers: vec![
+                    CalculatorPetTierEntry {
+                        key: "4".to_string(),
+                        label: "Tier 4".to_string(),
+                        ..CalculatorPetTierEntry::default()
+                    },
+                    CalculatorPetTierEntry {
+                        key: "5".to_string(),
+                        label: "Tier 5".to_string(),
+                        ..CalculatorPetTierEntry::default()
+                    },
+                ],
+                ..CalculatorPetEntry::default()
+            }],
+            tiers: vec![
+                CalculatorOptionEntry {
+                    key: "4".to_string(),
+                    label: "Tier 4".to_string(),
+                },
+                CalculatorOptionEntry {
+                    key: "5".to_string(),
+                    label: "Tier 5".to_string(),
+                },
+            ],
+            ..CalculatorPetCatalog::default()
+        };
+        let signals = CalculatorSignals {
+            pet1: CalculatorPetSignals {
+                pet: "pet:test".to_string(),
+                tier: "4".to_string(),
+                ..CalculatorPetSignals::default()
+            },
+            pet2: CalculatorPetSignals {
+                pet: "pet:test".to_string(),
+                tier: "5".to_string(),
+                ..CalculatorPetSignals::default()
+            },
+            ..CalculatorSignals::default()
+        };
+
+        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+
+        assert!(!html.contains("calculator-pet1-pack-leader-value"));
+        assert!(html.contains("fishy-calculator-pet-pack-leader--placeholder"));
+        assert!(html.contains("calculator-pet2-pack-leader-value"));
+        assert!(!html.contains("data-pet-pack-leader-slot=\"1\""));
+        assert!(html.contains("data-pet-pack-leader-slot=\"2\""));
+        assert!(html.contains("window.__fishystuffCalculator.applyPackLeaderChange(el, 2)"));
     }
 
     #[tokio::test]
@@ -14127,6 +14250,7 @@ mod tests {
                 lang: Some("en".to_string()),
                 locale: Some("en-US".to_string()),
                 r#ref: None,
+                pet_cards: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"active":true,"rod":"item:16162"}"#),
@@ -15073,20 +15197,28 @@ mod tests {
     fn normalize_pack_leader_selection_keeps_only_first_selected_pet() {
         let mut pet1 = CalculatorPetSignals {
             pet: "pet:1".to_string(),
+            tier: "5".to_string(),
             pack_leader: true,
             ..CalculatorPetSignals::default()
         };
         let mut pet2 = CalculatorPetSignals {
             pet: "pet:2".to_string(),
+            tier: "5".to_string(),
             pack_leader: true,
             ..CalculatorPetSignals::default()
         };
         let mut pet3 = CalculatorPetSignals {
             pet: String::new(),
+            tier: "5".to_string(),
             pack_leader: true,
             ..CalculatorPetSignals::default()
         };
-        let mut pet4 = CalculatorPetSignals::default();
+        let mut pet4 = CalculatorPetSignals {
+            pet: "pet:4".to_string(),
+            tier: "4".to_string(),
+            pack_leader: true,
+            ..CalculatorPetSignals::default()
+        };
         let mut pet5 = CalculatorPetSignals::default();
 
         normalize_pack_leader_selection([&mut pet1, &mut pet2, &mut pet3, &mut pet4, &mut pet5]);
@@ -15094,6 +15226,7 @@ mod tests {
         assert!(pet1.pack_leader);
         assert!(!pet2.pack_leader);
         assert!(!pet3.pack_leader);
+        assert!(!pet4.pack_leader);
     }
 
     #[test]
@@ -15114,6 +15247,13 @@ mod tests {
             talent: "durability_reduction_resistance".to_string(),
             ..CalculatorPetSignals::default()
         };
+        let tier_four_pack_leader_pet = CalculatorPetSignals {
+            pet: "pet:1".to_string(),
+            tier: "4".to_string(),
+            pack_leader: true,
+            talent: "durability_reduction_resistance".to_string(),
+            ..CalculatorPetSignals::default()
+        };
         let pack_leader_pet = CalculatorPetSignals {
             pet: "pet:1".to_string(),
             tier: "5".to_string(),
@@ -15123,6 +15263,7 @@ mod tests {
         };
 
         assert!((pet_drr(&pet, &catalog) - 0.04).abs() < 0.0001);
+        assert!((pet_drr(&tier_four_pack_leader_pet, &catalog) - 0.04).abs() < 0.0001);
         assert!((pet_drr(&pack_leader_pet, &catalog) - 0.05).abs() < 0.0001);
     }
 

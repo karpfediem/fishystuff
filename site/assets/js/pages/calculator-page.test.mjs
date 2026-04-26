@@ -393,6 +393,45 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.equal(env.window.__fishystuffCalculator.signalObject(), signals);
 });
 
+test("pack leader change applies exclusivity without scheduling full pet card replacement", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  signals.pet1 = { tier: "5", packLeader: true, skills: [] };
+  signals.pet2 = { tier: "5", packLeader: false, skills: [] };
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.applyPackLeaderChange({ checked: true }, 2);
+
+  assert.equal(signals.pet1.packLeader, false);
+  assert.equal(signals.pet2.packLeader, true);
+  assert.match(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
+});
+
+test("pack leader change keeps full pet card replacement for other pending pet edits", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  signals.pet1 = { tier: "5", packLeader: true, skills: [] };
+  signals.pet2 = { tier: "5", packLeader: false, skills: [] };
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.patchSignals({ pet1: { tier: "4" } });
+  env.window.__fishystuffCalculator.applyPackLeaderChange({ checked: true }, 2);
+
+  assert.doesNotMatch(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
+});
+
+test("pack leader change clears stale non-tier-five selections", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  signals.pet1 = { tier: "4", packLeader: true, skills: [] };
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.applyPackLeaderChange({ checked: true }, 1);
+
+  assert.equal(signals.pet1.packLeader, false);
+  assert.match(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
+});
+
 test("calculator restore keeps the current tab while restoring trade, food, and buffs UI state", () => {
   const env = createContext({
     "fishystuff.calculator.ui.v1": JSON.stringify({

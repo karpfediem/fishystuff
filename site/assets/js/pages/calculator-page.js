@@ -6,6 +6,7 @@
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN =
     /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$)|_preset_manager_ui(?:\.|$))/;
+  const CALCULATOR_PACK_LEADER_SIGNAL_PATTERN = /^pet[1-5]\.packLeader$/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
   const CALCULATOR_PRESET_SIGNAL_FILTER = {
@@ -56,6 +57,7 @@
 
   const calculatorState = {
     persistBinding: null,
+    evalPatchBinding: null,
     actionBinding: null,
     layoutPresetBinding: null,
     calculatorPresetBinding: null,
@@ -65,6 +67,7 @@
     pendingCalculatorPresetRestore: false,
     pendingLayoutPresetRestore: false,
     pendingCalculatorUiState: null,
+    pendingEvalNeedsPetCards: null,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -255,6 +258,54 @@
       : null;
   }
 
+  const isPlainObject = (value) => value && typeof value === "object" && !Array.isArray(value);
+
+  function signalPatchLeafPaths(patch, prefix = "") {
+    if (!isPlainObject(patch)) {
+      return [];
+    }
+    const paths = [];
+    for (const [key, value] of Object.entries(patch)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (isPlainObject(value)) {
+        paths.push(...signalPatchLeafPaths(value, path));
+      } else {
+        paths.push(path);
+      }
+    }
+    return paths;
+  }
+
+  function patchMatchesCalculatorEvalFilter(patch) {
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    return patchMatches
+      ? patchMatches(patch, calculatorEvalSignalPatchFilter())
+      : signalPatchLeafPaths(patch).some((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
+  }
+
+  function signalPatchOnlyTouchesPackLeader(patch) {
+    const paths = signalPatchLeafPaths(patch)
+      .filter((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
+    return paths.length > 0
+      && paths.every((path) => CALCULATOR_PACK_LEADER_SIGNAL_PATTERN.test(path));
+  }
+
+  function noteCalculatorEvalPatch(patch) {
+    if (!patchMatchesCalculatorEvalFilter(patch)) {
+      return;
+    }
+    if (signalPatchOnlyTouchesPackLeader(patch)) {
+      if (calculatorState.pendingEvalNeedsPetCards !== true) {
+        calculatorState.pendingEvalNeedsPetCards = false;
+      }
+      return;
+    }
+    calculatorState.pendingEvalNeedsPetCards = true;
+  }
+
   function bindPersistListener() {
     if (calculatorState.persistBinding) {
       return;
@@ -280,6 +331,21 @@
       },
     });
     calculatorState.persistBinding.bind();
+  }
+
+  function bindEvalPatchListener() {
+    if (calculatorState.evalPatchBinding) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      noteCalculatorEvalPatch(event && event.detail ? event.detail : null);
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    calculatorState.evalPatchBinding = {
+      dispose() {
+        document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
   }
 
   function bindActionListener() {
@@ -1588,8 +1654,11 @@
 
   function calculatorEvalUrl() {
     const language = calculatorSurfaceLanguage();
+    const includePetCards = calculatorState.pendingEvalNeedsPetCards !== false;
+    calculatorState.pendingEvalNeedsPetCards = null;
+    const petCardsParam = includePetCards ? "" : "&pet_cards=false";
     return window.__fishystuffResolveApiUrl(
-      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}`,
+      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}${petCardsParam}`,
     );
   }
 
@@ -1691,6 +1760,7 @@
     bindCalculatorPresetAdapter();
     bindCalculatorLayoutPresetAdapter();
     bindPersistListener();
+    bindEvalPatchListener();
     bindActionListener();
     bindCalculatorPresetListener();
     bindLayoutPresetListener();
@@ -1746,6 +1816,61 @@
     const activeElement = document.activeElement;
     if (activeElement instanceof HTMLElement && typeof activeElement.blur === "function") {
       activeElement.blur();
+    }
+  }
+
+  function syncPackLeaderInputs(slot, checked) {
+    const selector = "input[data-pet-pack-leader]";
+    const inputs = typeof document.querySelectorAll === "function"
+      ? Array.from(document.querySelectorAll(selector))
+      : [];
+    for (const input of inputs) {
+      if (!(input instanceof HTMLInputElement)) {
+        continue;
+      }
+      const inputSlot = Number.parseInt(input.getAttribute("data-pet-pack-leader-slot") || "", 10);
+      if (checked) {
+        input.checked = inputSlot === slot;
+      } else if (inputSlot === slot) {
+        input.checked = false;
+      }
+    }
+  }
+
+  function applyPackLeaderChange(input, slot) {
+    const normalizedSlot = Number.parseInt(String(slot ?? ""), 10);
+    if (!Number.isInteger(normalizedSlot) || normalizedSlot < 1 || normalizedSlot > 5) {
+      return;
+    }
+    const signals = signalStore.signalObject();
+    if (!signals) {
+      return;
+    }
+    const targetKey = `pet${normalizedSlot}`;
+    const targetPet = signals[targetKey];
+    const tierFiveAvailable = targetPet
+      && typeof targetPet === "object"
+      && !Array.isArray(targetPet)
+      && String(targetPet.tier ?? "").trim() === "5";
+    const checked = tierFiveAvailable && Boolean(input?.checked);
+    syncPackLeaderInputs(normalizedSlot, checked);
+    const patch = {};
+    for (let index = 1; index <= 5; index += 1) {
+      const key = `pet${index}`;
+      const pet = signals[key];
+      if (!pet || typeof pet !== "object" || Array.isArray(pet)) {
+        continue;
+      }
+      const tierFivePet = String(pet.tier ?? "").trim() === "5";
+      const nextValue = tierFivePet
+        ? (index === normalizedSlot ? checked : (checked ? false : Boolean(pet.packLeader)))
+        : false;
+      if (Boolean(pet.packLeader) !== nextValue) {
+        patch[key] = { packLeader: nextValue };
+      }
+    }
+    if (Object.keys(patch).length > 0) {
+      window.__fishystuffCalculator.patchSignals(patch);
     }
   }
 
@@ -2609,6 +2734,7 @@
         detail: cloneCalculatorSignals(patch),
       }));
     },
+    applyPackLeaderChange,
     restore: restoreCalculator,
     liveCalc: liveCalculator,
     assignPinnedUiState,
