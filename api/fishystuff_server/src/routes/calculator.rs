@@ -11921,10 +11921,14 @@ fn pet_special_badge_class(special: &CalculatorPetOptionEntry) -> &'static str {
     }
 }
 
+fn render_pet_special_badge(special: &CalculatorPetOptionEntry) -> String {
+    render_wrapping_effect_badge(&special.label, pet_special_badge_class(special))
+}
+
 fn render_pet_special_badges(special: &CalculatorPetOptionEntry) -> String {
     format!(
         "<span class=\"fishy-calculator-pet-option__badges\">{}</span>",
-        render_wrapping_effect_badge(&special.label, pet_special_badge_class(special))
+        render_pet_special_badge(special)
     )
 }
 
@@ -11956,7 +11960,10 @@ fn render_pet_fixed_talent_content(
 }
 
 fn render_pet_fixed_special_select_content(special: &CalculatorPetOptionEntry) -> String {
-    render_pet_special_badges(special)
+    format!(
+        "<span class=\"flex min-w-0 flex-wrap justify-start gap-1\">{}</span>",
+        render_pet_special_badge(special)
+    )
 }
 
 fn render_pet_fixed_talent_select_content(
@@ -11995,7 +12002,7 @@ fn render_pet_fixed_option_content_id(input_id: &str) -> String {
 
 fn render_pet_fixed_option_display(input_id: &str, content_html: &str) -> String {
     format!(
-        "<div id=\"{}\" class=\"min-h-12 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\" data-pet-fixed-option aria-live=\"polite\">{}</div>",
+        "<div id=\"{}\" class=\"min-h-10 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\" data-pet-fixed-option aria-live=\"polite\">{}</div>",
         escape_html(&render_pet_fixed_option_content_id(input_id)),
         content_html,
     )
@@ -12971,7 +12978,7 @@ fn render_pet_variant_fixed_option_select_control(
             trigger_size: SearchableDropdownTriggerSize::Fill,
             trigger_width: None,
             trigger_min_height: None,
-            panel_width: Some("24rem"),
+            panel_width: Some("18rem"),
             panel_placement: SearchableDropdownPanelPlacement::OverlayAnchor,
             results_layout: SearchableDropdownResultsLayout::List,
             root_id,
