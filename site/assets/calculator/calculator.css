@@ -219,6 +219,72 @@
         color: var(--badge-fg);
     }
 
+    .fishy-calculator-pets,
+    .fishy-calculator-pet-card-layout,
+    .fishy-calculator-pet-controls,
+    .fishy-calculator-pet-fixed-options,
+    .fishy-calculator-pet-skills-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .fishy-calculator-pet-card-layout {
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: start;
+        overflow-x: auto;
+    }
+
+    .fishy-calculator-pet-select-field {
+        min-width: 0;
+    }
+
+    .fishy-calculator-pet-tier-column {
+        display: grid;
+        align-content: start;
+        justify-items: center;
+        gap: 0.5rem;
+    }
+
+    .fishy-calculator-pet-pack-leader {
+        display: flex;
+        width: max-content;
+        max-width: 100%;
+        margin-top: 1.25rem;
+        padding: 0;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.55rem;
+        cursor: pointer;
+        color: var(--color-base-content);
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.1;
+        text-align: center;
+    }
+
+    .fishy-calculator-pet-pack-leader__text {
+        display: block;
+    }
+
+    .fishy-calculator-pet-pack-leader--disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .fishy-calculator-pet-controls {
+        min-width: 0;
+    }
+
+    .fishy-calculator-pet-fixed-options {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: end;
+    }
+
+    .fishy-calculator-pet-skills-grid {
+        gap: 0.5rem;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
     @media (max-width: 640px) {
         .fishy-calculator-pet-option {
             gap: 0.55rem;

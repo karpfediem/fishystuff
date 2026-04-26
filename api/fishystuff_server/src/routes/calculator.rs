@@ -3869,16 +3869,6 @@ fn pet_effect_sum_by_keys<'a>(
         .sum()
 }
 
-fn pet_talent_tier_multiplier(tier_key: &str) -> f64 {
-    match tier_key.trim() {
-        "1" => 1.0,
-        "2" => 2.0,
-        "3" => 3.0,
-        "4" | "5" => 4.0,
-        _ => 0.0,
-    }
-}
-
 fn pet_talent_effect(
     pet: &CalculatorPetSignals,
     catalog: &CalculatorPetCatalog,
@@ -3894,15 +3884,10 @@ fn pet_talent_effect(
     if base <= 0.0 {
         return 0.0;
     }
-    let multiplier = pet_talent_tier_multiplier(&pet.tier);
-    if multiplier <= 0.0 {
-        return 0.0;
-    }
-    let scaled = base * multiplier;
     if pet.pack_leader {
-        scaled + 0.01
+        base + 0.01
     } else {
-        scaled
+        base
     }
 }
 
@@ -10237,6 +10222,7 @@ fn render_calculator_app(
                 &signals.outfit,
                 &outfits,
                 None,
+                None,
             ),
         ),
         (
@@ -12972,6 +12958,7 @@ fn render_checkbox_group(
     selected_values: &[String],
     options: &[SelectOption<'_>],
     change_attr: Option<&str>,
+    option_grid_class: Option<&str>,
 ) -> String {
     let selected = selected_values
         .iter()
@@ -12996,7 +12983,8 @@ fn render_checkbox_group(
     .unwrap();
     write!(
         html,
-        "<div class=\"grid gap-2 sm:grid-cols-2\" {}>",
+        "<div class=\"{}\" {}>",
+        escape_html(option_grid_class.unwrap_or("grid gap-2 sm:grid-cols-2")),
         change_attr,
     )
     .unwrap();
@@ -13187,7 +13175,7 @@ fn render_pet_cards(
     let total_slots = catalog.slots.max(1);
 
     let mut html = String::new();
-    html.push_str("<div id=\"pets\" class=\"grid gap-4 md:grid-cols-2\">");
+    html.push_str("<div id=\"pets\" class=\"fishy-calculator-pets\">");
     for slot in 1..=total_slots {
         let pet = match slot {
             1 => &signals.pet1,
@@ -13208,6 +13196,7 @@ fn render_pet_cards(
         let bind_prefix = format!("pet{slot}");
         let skill_bind = format!("_pet{slot}_skill_slots");
         let skills_id = format!("pet{slot}_skills");
+        let pack_leader_input_id = format!("calculator-pet{slot}-pack-leader-value");
         let pack_leader_checked = if pet.pack_leader { " checked" } else { "" };
         let pack_leader_disabled = if selected_pet.is_some() {
             ""
@@ -13222,13 +13211,31 @@ fn render_pet_cards(
             slot
         )
         .unwrap();
+        html.push_str("<div class=\"fishy-calculator-pet-card-layout\">");
+        html.push_str("<div class=\"fishy-calculator-pet-tier-column\">");
+        html.push_str(&tier_header_html);
         write!(
             html,
-            "<div class=\"flex flex-wrap items-center gap-3\">{}",
-            tier_header_html,
+            "<div class=\"fishy-calculator-pet-pack-leader{}\" style=\"display:flex;flex-direction:column;align-items:center;gap:0.55rem;margin-top:1.25rem;text-align:center\"><input id=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><label class=\"fishy-calculator-pet-pack-leader__text\" for=\"{}\">{}</label></div>",
+            if pack_leader_disabled.is_empty() {
+                ""
+            } else {
+                " fishy-calculator-pet-pack-leader--disabled"
+            },
+            escape_html(&pack_leader_input_id),
+            escape_html(&bind_prefix),
+            pack_leader_change,
+            slot,
+            pack_leader_checked,
+            pack_leader_disabled,
+            escape_html(&pack_leader_input_id),
+            escape_html(calculator_pet_pack_leader_label(lang)),
         )
         .unwrap();
-        html.push_str("<fieldset class=\"fieldset min-w-0 max-w-full shrink\">");
+        html.push_str("</div>");
+        html.push_str(
+            "<fieldset class=\"fieldset fishy-calculator-pet-select-field min-w-0 max-w-full shrink\">",
+        );
         html.push_str(&render_pet_select_control(
             cdn_base_url,
             api_lang,
@@ -13241,7 +13248,9 @@ fn render_pet_cards(
             &pet_options,
             &calculator_route_text(lang, "calculator.server.search.pets"),
         ));
-        html.push_str("</fieldset></div>");
+        html.push_str("</fieldset>");
+        html.push_str("<div class=\"fishy-calculator-pet-controls\">");
+        html.push_str("<div class=\"fishy-calculator-pet-fixed-options\">");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
@@ -13256,7 +13265,6 @@ fn render_pet_cards(
             &render_pet_fixed_special_content(lang, selected_special),
         ));
         html.push_str("</fieldset>");
-        html.push_str("<div class=\"grid gap-4 sm:grid-cols-2 sm:items-end\">");
         html.push_str(&format!(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
@@ -13271,22 +13279,7 @@ fn render_pet_cards(
             &render_pet_fixed_talent_content(lang, pet, catalog, selected_talent),
         ));
         html.push_str("</fieldset>");
-        write!(
-            html,
-            "<label class=\"label min-h-12 cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium{}\"><input type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\" data-bind=\"{}.packLeader\" data-on:change=\"{}\" data-pet-pack-leader data-pet-pack-leader-slot=\"{}\"{}{}><span>{}</span></label></div>",
-            if pack_leader_disabled.is_empty() {
-                ""
-            } else {
-                " opacity-60"
-            },
-            escape_html(&bind_prefix),
-            pack_leader_change,
-            slot,
-            pack_leader_checked,
-            pack_leader_disabled,
-            escape_html(calculator_pet_pack_leader_label(lang)),
-        )
-        .unwrap();
+        html.push_str("</div>");
         html.push_str(&format!(
             "<fieldset class=\"fieldset gap-2\"><legend class=\"fieldset-legend\">{}</legend>",
             escape_html(&calculator_route_text(
@@ -13302,10 +13295,11 @@ fn render_pet_cards(
             &pet.skills,
             &skill_options,
             None,
+            Some("fishy-calculator-pet-skills-grid"),
         ));
         write!(
             html,
-            "<p class=\"label\">{}</p></fieldset></div></section>",
+            "<p class=\"label\">{}</p></fieldset></div></div></div></section>",
             escape_html(calculator_pet_skills_hint(lang)),
         )
         .unwrap();
@@ -13791,6 +13785,29 @@ mod tests {
         assert!(text.contains("#fishy-down-small-fill"));
         assert!(text.contains("http://127.0.0.1:4040/images/pets/pet_hawk_0014.webp"));
         assert!(text.contains("data-pet-pack-leader"));
+        assert!(text.contains("<div id=\"pets\" class=\"fishy-calculator-pets\">"));
+        assert!(text.contains("fishy-calculator-pet-card-layout"));
+        assert!(text.contains("fishy-calculator-pet-tier-column"));
+        assert!(text.contains("fishy-calculator-pet-pack-leader"));
+        assert!(text.contains("id=\"calculator-pet1-pack-leader-value\""));
+        assert!(text.contains("for=\"calculator-pet1-pack-leader-value\""));
+        assert!(text.contains("fishy-calculator-pet-select-field"));
+        assert!(text.contains("fishy-calculator-pet-fixed-options"));
+        assert!(text.contains("fishy-calculator-pet-skills-grid"));
+        let tier_index = text.find("calculator-pet1-tier-value").unwrap();
+        let pet_selector_index = text.find("calculator-pet1-pet-value").unwrap();
+        let pack_leader_index = text
+            .find("data-pet-pack-leader data-pet-pack-leader-slot=\"1\"")
+            .unwrap();
+        let special_index = text.find("calculator-pet1-special-value").unwrap();
+        let talent_index = text.find("calculator-pet1-talent-value").unwrap();
+        let skills_index = text.find("id=\"pet1_skills\"").unwrap();
+        assert!(tier_index < pet_selector_index);
+        assert!(tier_index < pack_leader_index);
+        assert!(pack_leader_index < pet_selector_index);
+        assert!(pet_selector_index < special_index);
+        assert!(special_index < talent_index);
+        assert!(talent_index < skills_index);
         assert!(text.contains("fishy-calculator-pet-option--selected"));
         assert!(text.contains("fishy-item-grade-red"));
         assert!(text.contains("fishy-calculator-pet-option__badges"));
@@ -15080,24 +15097,24 @@ mod tests {
     }
 
     #[test]
-    fn pet_talent_effect_caps_tier_five_and_applies_pack_leader_bonus() {
+    fn pet_talent_effect_uses_catalog_value_and_applies_pack_leader_bonus() {
         let catalog = CalculatorPetCatalog {
             talents: vec![CalculatorPetOptionEntry {
                 key: "durability_reduction_resistance".to_string(),
                 label: "Durability Reduction Resistance".to_string(),
-                durability_reduction_resistance: Some(0.05),
+                durability_reduction_resistance: Some(0.04),
                 ..CalculatorPetOptionEntry::default()
             }],
             ..CalculatorPetCatalog::default()
         };
 
-        let tier_four_pet = CalculatorPetSignals {
+        let pet = CalculatorPetSignals {
             pet: "pet:1".to_string(),
             tier: "4".to_string(),
             talent: "durability_reduction_resistance".to_string(),
             ..CalculatorPetSignals::default()
         };
-        let tier_five_pack_leader_pet = CalculatorPetSignals {
+        let pack_leader_pet = CalculatorPetSignals {
             pet: "pet:1".to_string(),
             tier: "5".to_string(),
             pack_leader: true,
@@ -15105,8 +15122,8 @@ mod tests {
             ..CalculatorPetSignals::default()
         };
 
-        assert!((pet_drr(&tier_four_pet, &catalog) - 0.20).abs() < 0.0001);
-        assert!((pet_drr(&tier_five_pack_leader_pet, &catalog) - 0.21).abs() < 0.0001);
+        assert!((pet_drr(&pet, &catalog) - 0.04).abs() < 0.0001);
+        assert!((pet_drr(&pack_leader_pet, &catalog) - 0.05).abs() < 0.0001);
     }
 
     #[test]
@@ -15114,7 +15131,7 @@ mod tests {
         let talent = CalculatorPetOptionEntry {
             key: "durability_reduction_resistance".to_string(),
             label: "Durability Reduction Resistance".to_string(),
-            durability_reduction_resistance: Some(0.05),
+            durability_reduction_resistance: Some(0.04),
             ..CalculatorPetOptionEntry::default()
         };
         let catalog = CalculatorPetCatalog {
@@ -15132,8 +15149,8 @@ mod tests {
         let html =
             render_pet_effective_talent_badges(CalculatorLocale::EnUs, &pet, &catalog, &talent);
 
-        assert!(html.contains("+21% Item DRR"));
-        assert!(!html.contains("+20% Item DRR"));
+        assert!(html.contains("+5% Item DRR"));
+        assert!(!html.contains("+16% Item DRR"));
     }
 
     #[test]
