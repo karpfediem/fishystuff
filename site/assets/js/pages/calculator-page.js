@@ -64,6 +64,7 @@
     layoutPresetAdapterBound: false,
     pendingCalculatorPresetRestore: false,
     pendingLayoutPresetRestore: false,
+    pendingCalculatorUiState: null,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -334,18 +335,30 @@
       if (!signals) {
         return;
       }
-      if (calculatorState.pendingLayoutPresetRestore && calculatorInitPatch(patch)) {
+      if (
+        (calculatorState.pendingLayoutPresetRestore || calculatorState.pendingCalculatorUiState)
+        && calculatorInitPatch(patch)
+      ) {
         calculatorState.pendingLayoutPresetRestore = false;
+        const pendingUiState = calculatorState.pendingCalculatorUiState;
+        calculatorState.pendingCalculatorUiState = null;
+        if (pendingUiState) {
+          signals._calculator_ui = cloneCalculatorSignals(pendingUiState);
+        }
         const applied = applyStoredCalculatorLayoutPresetState(signals);
-        if (applied && typeof window.__fishystuffCalculator?.patchSignals === "function") {
+        if ((applied || pendingUiState) && typeof window.__fishystuffCalculator?.patchSignals === "function") {
           window.__fishystuffCalculator.patchSignals({
             _calculator_ui: cloneCalculatorSignals(signals._calculator_ui),
           });
           return;
         }
       }
-      if (!patchMatches(patch, { include: CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN })) {
+      const layoutPatch = patchMatches(patch, { include: CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN });
+      if (!layoutPatch) {
         return;
+      }
+      if (calculatorState.pendingCalculatorUiState) {
+        calculatorState.pendingCalculatorUiState = cloneCalculatorSignals(signals._calculator_ui);
       }
       trackCalculatorLayoutPresetCurrent(signals);
     };
@@ -1683,6 +1696,7 @@
     bindLayoutPresetListener();
     const currentUi = normalizeCalculatorUiState(signals?._calculator_ui);
     const storedSignals = loadStoredSignals();
+    let restoredUiState = null;
     if (storedSignals && typeof storedSignals === "object") {
       const restoredSignals = canonicalizeStoredSignals(storedSignals);
       if (currentUi.top_level_tab !== CALCULATOR_DEFAULT_TOP_LEVEL_TAB) {
@@ -1691,15 +1705,21 @@
           top_level_tab: currentUi.top_level_tab,
         };
       }
+      restoredUiState = normalizeCalculatorUiState(restoredSignals._calculator_ui);
       Object.assign(signals, restoredSignals);
     }
     syncSignalsFromSharedUserOverlays(signals);
     const restoredCalculatorPresetState = applyStoredCalculatorPresetState(signals);
     const restoredLayoutPresetState = applyStoredCalculatorLayoutPresetState(signals);
-    calculatorState.pendingCalculatorPresetRestore = Boolean(restoredCalculatorPresetState);
-    calculatorState.pendingLayoutPresetRestore = Boolean(restoredLayoutPresetState);
-    trackCalculatorPresetCurrent(signals);
-    trackCalculatorLayoutPresetCurrent(signals);
+    const trackedCalculatorPresetState = trackCalculatorPresetCurrent(signals);
+    const trackedLayoutPresetState = trackCalculatorLayoutPresetCurrent(signals);
+    calculatorState.pendingCalculatorPresetRestore = Boolean(restoredCalculatorPresetState)
+      || trackedCalculatorPresetState?.kind === "current";
+    calculatorState.pendingLayoutPresetRestore = Boolean(restoredLayoutPresetState)
+      || trackedLayoutPresetState?.kind === "current";
+    calculatorState.pendingCalculatorUiState = restoredUiState
+      ? cloneCalculatorSignals(signals._calculator_ui)
+      : null;
     const appRoot = document.getElementById?.("calculator");
     if (appRoot && languageHelper()) {
       languageHelper().apply(appRoot);

@@ -944,6 +944,49 @@ test("calculator restore applies the persisted selected layout preset before tra
   });
 });
 
+test("calculator restore keeps selected layout preset and tab after init", () => {
+  const initial = createContext();
+  const initialSignals = defaultSignals();
+  initial.window.__fishystuffCalculator.restore(initialSignals);
+  const preset = initial.window.__fishystuffUserPresets.createPreset("calculator-layouts", {
+    name: "Distribution layout",
+    payload: {
+      pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+      unpinned_insert_index: [2, 1],
+    },
+    select: true,
+  });
+  const presetStorage = initial.localStorage.getItem(initial.window.__fishystuffUserPresets.STORAGE_KEY);
+
+  const env = createContext({
+    [initial.window.__fishystuffUserPresets.STORAGE_KEY]: presetStorage,
+    "fishystuff.calculator.ui.v1": JSON.stringify({
+      top_level_tab: "distribution",
+      distribution_tab: "target_fish",
+      pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+      pinned_sections: ["overview", "distribution", "loot"],
+      unpinned_insert_index: [2, 1],
+    }),
+  });
+  const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.patchSignals({
+    _loading: false,
+    _defaults: cloneTestValue(signals._defaults),
+  });
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), preset.id);
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "");
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
+    top_level_tab: "distribution",
+    distribution_tab: "target_fish",
+    pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+    pinned_sections: ["overview", "distribution", "loot"],
+    unpinned_insert_index: [2, 1],
+  });
+});
+
 test("calculator restore preserves a persisted modified current layout preset", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();
@@ -985,6 +1028,41 @@ test("calculator restore preserves a persisted modified current layout preset", 
   assert.deepEqual(JSON.parse(JSON.stringify(env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui))), {
     pinned_layout: [[["overview"]], [["trade"]]],
     unpinned_insert_index: [1, 0],
+  });
+});
+
+test("calculator restore reapplies persisted calculator UI after init defaults", () => {
+  const env = createContext({
+    "fishystuff.calculator.ui.v1": JSON.stringify({
+      top_level_tab: "trade",
+      distribution_tab: "target_fish",
+      pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+      pinned_sections: ["overview", "distribution", "loot"],
+      unpinned_insert_index: [2, 1],
+    }),
+  });
+  const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.patchSignals({
+    _loading: false,
+    _defaults: cloneTestValue(signals._defaults),
+    _calculator_ui: defaultCalculatorUiState(),
+  });
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "default");
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(env.window.__fishystuffUserPresets.current("calculator-layouts")?.payload)),
+    {
+      pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+      unpinned_insert_index: [2, 1],
+    },
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
+    top_level_tab: "trade",
+    distribution_tab: "target_fish",
+    pinned_layout: [[["overview"], ["distribution"]], [["loot"]]],
+    pinned_sections: ["overview", "distribution", "loot"],
+    unpinned_insert_index: [2, 1],
   });
 });
 

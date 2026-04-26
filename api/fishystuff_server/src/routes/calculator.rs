@@ -2988,16 +2988,6 @@ fn init_signals_patch_map(
     let mut patch = signals_patch_map(signals)?;
     mirror_resources_signal(&mut patch);
     patch_checkbox_transport_signals(signals, &mut patch);
-    patch.insert(
-        "_calculator_ui".to_string(),
-        json!({
-            "top_level_tab": "mode",
-            "distribution_tab": "groups",
-            "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
-            "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
-            "unpinned_insert_index": [0, 0],
-        }),
-    );
     Ok(patch)
 }
 
@@ -14510,16 +14500,7 @@ mod tests {
         assert_eq!(patch.get("_food_slots"), Some(&json!(["item:9359"])));
         assert_eq!(patch.get("buff"), Some(&json!(["item:721092"])));
         assert_eq!(patch.get("_buff_slots"), Some(&json!(["item:721092"])));
-        assert_eq!(
-            patch.get("_calculator_ui"),
-            Some(&json!({
-                "top_level_tab": "mode",
-                "distribution_tab": "groups",
-                "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
-                "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
-                "unpinned_insert_index": [0, 0],
-            }))
-        );
+        assert_eq!(patch.get("_calculator_ui"), None);
     }
 
     #[test]
