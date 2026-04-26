@@ -712,6 +712,29 @@
   const cloneCalculatorSignals = (value) => JSON.parse(JSON.stringify(value));
   const normalizeBooleanFlag = (value, fallback = false) =>
     value == null ? fallback : value === true || value === "true" || value === 1 || value === "1";
+  const petSkillLimitForTier = (tier) => {
+    switch (String(tier ?? "").trim()) {
+      case "3":
+        return 2;
+      case "4":
+      case "5":
+        return 3;
+      default:
+        return 1;
+    }
+  };
+
+  function petSkillSlots(tier, ...values) {
+    const selected = [];
+    const limit = petSkillLimitForTier(tier);
+    for (const value of values.slice(0, limit)) {
+      const normalized = String(value ?? "").trim();
+      if (normalized && !selected.includes(normalized)) {
+        selected.push(normalized);
+      }
+    }
+    return selected;
+  }
 
   function normalizeSectionId(sectionId) {
     return String(sectionId ?? "").trim();
@@ -1284,6 +1307,9 @@
       normalizedPet.packLeader = normalizedPet.packLeader && !packLeaderSeen;
       packLeaderSeen ||= normalizedPet.packLeader;
       current[petKey] = normalizedPet;
+      for (let index = 0; index < 3; index += 1) {
+        current[`_${petKey}_skill_slot${index + 1}`] = String(normalizedPet.skills?.[index] ?? "");
+      }
     }
     return current;
   };
@@ -2735,6 +2761,7 @@
       }));
     },
     applyPackLeaderChange,
+    petSkillSlots,
     restore: restoreCalculator,
     liveCalc: liveCalculator,
     assignPinnedUiState,

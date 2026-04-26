@@ -102,6 +102,8 @@ pub struct CalculatorPetTierEntry {
     pub talents: Vec<String>,
     #[serde(default)]
     pub skills: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub skill_chances: BTreeMap<String, f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

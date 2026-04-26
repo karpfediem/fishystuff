@@ -184,6 +184,7 @@ calculator.server.search.loot_rows = Beutezeilen an diesem Spot suchen
 calculator.server.search.pet_tiers = Haustierstufen suchen
 calculator.server.search.pet_specials = Haustier-Spezialisierungen suchen
 calculator.server.search.pet_talents = Haustier-Talente suchen
+calculator.server.search.pet_skills = Haustierfähigkeiten suchen
 calculator.server.search.pets = Haustiere suchen
 
 calculator.server.section.mode = Modus
@@ -222,6 +223,7 @@ calculator.server.field.tier = Stufe
 calculator.server.field.special = Spezial
 calculator.server.field.talent = Talent
 calculator.server.field.skills = Fähigkeiten
+calculator.server.field.pack_leader = Rudelanführer
 calculator.server.field.pet = Haustier
 calculator.server.field.mastery = Meisterschaft
 calculator.server.field.target_fish = Zielfisch / Beuteobjekt
@@ -285,6 +287,8 @@ calculator.server.helper.fish_only_notice = Gilt nur für Fische. Nicht-Fisch-Be
 calculator.server.helper.using = verwendet
 calculator.server.helper.per_cast = pro Wurf
 calculator.server.helper.sale = Verkauf
+calculator.server.helper.pet_skills.one = Wähle 1 Fähigkeit.
+calculator.server.helper.pet_skills.many = Wähle 1 bis {$count} Fähigkeiten.
 
 calculator.server.tab.groups = Gruppen
 calculator.server.tab.silver = Silber

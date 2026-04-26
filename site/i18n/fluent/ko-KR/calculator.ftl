@@ -79,6 +79,7 @@ calculator.server.search.loot_rows = 이 지역의 전리품 항목 검색
 calculator.server.search.pet_tiers = 펫 세대 검색
 calculator.server.search.pet_specials = 펫 특기 검색
 calculator.server.search.pet_talents = 펫 재능 검색
+calculator.server.search.pet_skills = 펫 기술 검색
 calculator.server.search.pets = 펫 검색
 
 calculator.server.section.mode = 모드
@@ -117,6 +118,7 @@ calculator.server.field.tier = 세대
 calculator.server.field.special = 특기
 calculator.server.field.talent = 재능
 calculator.server.field.skills = 기술
+calculator.server.field.pack_leader = 우두머리
 calculator.server.field.pet = 펫
 calculator.server.field.mastery = 숙련도
 calculator.server.field.target_fish = 대상 물고기 / 전리품
@@ -180,6 +182,8 @@ calculator.server.helper.fish_only_notice = 물고기에만 적용됩니다. 물
 calculator.server.helper.using = 사용
 calculator.server.helper.per_cast = 회당
 calculator.server.helper.sale = 판매
+calculator.server.helper.pet_skills.one = 기술은 1개 선택합니다.
+calculator.server.helper.pet_skills.many = 기술은 1개부터 {$count}개까지 선택합니다.
 
 calculator.server.tab.groups = 그룹
 calculator.server.tab.silver = 은화

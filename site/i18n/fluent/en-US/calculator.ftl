@@ -403,6 +403,7 @@ calculator.server.search.loot_rows = Search loot rows at this spot
 calculator.server.search.pet_tiers = Search pet tiers
 calculator.server.search.pet_specials = Search pet specials
 calculator.server.search.pet_talents = Search pet talents
+calculator.server.search.pet_skills = Search pet skills
 calculator.server.search.pets = Search pets
 
 calculator.server.section.mode = Mode
@@ -441,6 +442,7 @@ calculator.server.field.tier = Tier
 calculator.server.field.special = Special
 calculator.server.field.talent = Talent
 calculator.server.field.skills = Skills
+calculator.server.field.pack_leader = Pack leader
 calculator.server.field.pet = Pet
 calculator.server.field.mastery = Mastery
 calculator.server.field.target_fish = Target Fish / Loot Item
@@ -504,6 +506,8 @@ calculator.server.helper.fish_only_notice = Fish only. Non-fish loot stays. Red 
 calculator.server.helper.using = using
 calculator.server.helper.per_cast = per cast
 calculator.server.helper.sale = sale
+calculator.server.helper.pet_skills.one = Choose 1 skill.
+calculator.server.helper.pet_skills.many = Choose 1 to {$count} skills.
 
 calculator.server.tab.groups = Groups
 calculator.server.tab.silver = Silver

@@ -162,6 +162,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
             "search-url",
             "search-url-root",
             "value",
+            "exclude-selected-inputs",
         ];
     }
 
@@ -259,6 +260,14 @@ export class FishySearchableDropdown extends HTMLElementBase {
         setStringAttribute(this, "value", value);
     }
 
+    get excludeSelectedInputs() {
+        return getStringAttribute(this, "exclude-selected-inputs");
+    }
+
+    set excludeSelectedInputs(value) {
+        setStringAttribute(this, "exclude-selected-inputs", value);
+    }
+
     connectedCallback() {
         upgradeProperty(this, "inputId");
         upgradeProperty(this, "label");
@@ -266,6 +275,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
         upgradeProperty(this, "searchUrl");
         upgradeProperty(this, "searchUrlRoot");
         upgradeProperty(this, "value");
+        upgradeProperty(this, "excludeSelectedInputs");
         this._ensurePanelReference();
         this._attachPanelEvents();
         this._attachResultsEvents();
@@ -402,7 +412,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const selectedValue = String(
             this.boundInputElement()?.value ?? this.value,
         );
-        const searchKey = `${selectedValue}\n${query}`;
+        const excludedValues = this._excludedSelectedInputValues(selectedValue);
+        const searchKey = `${selectedValue}\n${Array.from(excludedValues).sort().join("\n")}\n${query}`;
         if (this._lastSearchKey === searchKey) {
             return;
         }
@@ -422,7 +433,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const searchUrl = this._buildSearchUrl(query);
         if (!searchUrl) {
             this._activeSearchMode = "local";
-            this._renderLocalResults(query, selectedValue);
+            this._renderLocalResults(query, selectedValue, excludedValues);
             return;
         }
 
@@ -1048,7 +1059,35 @@ export class FishySearchableDropdown extends HTMLElementBase {
             .every((part) => haystack.includes(part));
     }
 
-    _renderLocalResults(rawQuery, selectedValue) {
+    _excludedSelectedInputValues(selectedValue) {
+        const selector = this.excludeSelectedInputs;
+        if (!selector) {
+            return new Set();
+        }
+
+        let inputs = [];
+        try {
+            inputs = Array.from(document.querySelectorAll(selector) ?? []);
+        } catch (_) {
+            return new Set();
+        }
+
+        const ownInput = this.boundInputElement();
+        const normalizedSelectedValue = String(selectedValue ?? "").trim();
+        return new Set(
+            inputs
+                .filter((input) => input !== ownInput)
+                .map((input) => String(input?.value ?? "").trim())
+                .filter((value) => value && value !== normalizedSelectedValue),
+        );
+    }
+
+    _localTemplateExcluded(template, selectedValue, excludedValues) {
+        const value = String(template.getAttribute("data-value") ?? "").trim();
+        return value !== String(selectedValue ?? "").trim() && excludedValues.has(value);
+    }
+
+    _renderLocalResults(rawQuery, selectedValue, excludedValues = null) {
         const results = this.resultsElement();
         if (!(results instanceof HTMLElement)) {
             return;
@@ -1061,7 +1100,11 @@ export class FishySearchableDropdown extends HTMLElementBase {
         }
 
         const normalizedQuery = normalizeSearchText(rawQuery);
+        const excluded = excludedValues instanceof Set
+            ? excludedValues
+            : this._excludedSelectedInputValues(selectedValue);
         const matches = templates
+            .filter((template) => !this._localTemplateExcluded(template, selectedValue, excluded))
             .filter((template) => this._localTemplateMatches(template, normalizedQuery))
             .sort((left, right) => {
                 const leftValue = String(left.getAttribute("data-value") ?? "");

@@ -13,7 +13,7 @@ import {
 
 export class FishyCheckboxGroup extends HTMLElement {
     static get observedAttributes() {
-        return ["bound-select-id"];
+        return ["bound-select-id", "max-selected"];
     }
 
     constructor() {
@@ -34,8 +34,22 @@ export class FishyCheckboxGroup extends HTMLElement {
         setStringAttribute(this, "bound-select-id", value);
     }
 
+    get maxSelected() {
+        const value = Number.parseInt(this.getAttribute("max-selected") || "", 10);
+        return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    set maxSelected(value) {
+        if (value === null || value === undefined || value === "") {
+            this.removeAttribute("max-selected");
+            return;
+        }
+        this.setAttribute("max-selected", String(value));
+    }
+
     connectedCallback() {
         upgradeProperty(this, "boundSelectId");
+        upgradeProperty(this, "maxSelected");
         this._bindInputs();
         queueMicrotask(() => {
             if (!this.isConnected) {
@@ -55,6 +69,8 @@ export class FishyCheckboxGroup extends HTMLElement {
         }
         if (name === "bound-select-id") {
             this._bindInputs();
+            this._syncSelection();
+        } else if (name === "max-selected") {
             this._syncSelection();
         }
     }
@@ -102,6 +118,18 @@ export class FishyCheckboxGroup extends HTMLElement {
             return;
         }
 
+        const maxSelected = this.maxSelected;
+        if (
+            target.checked &&
+            maxSelected !== null &&
+            this.checkboxElements().filter((checkbox) => checkbox.checked).length > maxSelected
+        ) {
+            target.checked = false;
+            option.selected = false;
+            dispatchValueEvents(select);
+            return;
+        }
+
         option.selected = target.checked;
         dispatchValueEvents(select);
     }
@@ -111,11 +139,20 @@ export class FishyCheckboxGroup extends HTMLElement {
     }
 
     _syncSelection() {
-        const selectedValues = new Set(
-            this.boundOptionElements()
-                .filter((option) => option.selected)
-                .map((option) => option.value),
-        );
+        const options = this.boundOptionElements();
+        const maxSelected = this.maxSelected;
+        let selectedOptions = options.filter((option) => option.selected);
+        if (maxSelected !== null && selectedOptions.length > maxSelected) {
+            for (const option of selectedOptions.slice(maxSelected)) {
+                option.selected = false;
+            }
+            selectedOptions = selectedOptions.slice(0, maxSelected);
+            const select = this.boundSelectElement();
+            if (select instanceof HTMLSelectElement) {
+                dispatchValueEvents(select);
+            }
+        }
+        const selectedValues = new Set(selectedOptions.map((option) => option.value));
 
         for (const checkbox of this.checkboxElements()) {
             checkbox.checked = selectedValues.has(checkbox.value);

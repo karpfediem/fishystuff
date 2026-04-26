@@ -1,5 +1,5 @@
 use std::cmp::{Ordering, Reverse};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Write as _;
 use std::sync::LazyLock;
@@ -521,6 +521,7 @@ struct SelectOption<'a> {
     grade_tone: &'a str,
     pet_variant_talent: Option<&'a CalculatorPetOptionEntry>,
     pet_variant_special: Option<&'a CalculatorPetOptionEntry>,
+    pet_skill_learn_chance: Option<f32>,
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
     presentation: SelectOptionPresentation,
@@ -566,6 +567,7 @@ struct SearchableDropdownConfig<'a> {
     value: &'a str,
     search_url: &'a str,
     search_url_root: Option<&'a str>,
+    exclude_selected_inputs: Option<&'a str>,
     search_placeholder: &'a str,
 }
 
@@ -609,6 +611,7 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
     grade_tone: "unknown",
     pet_variant_talent: None,
     pet_variant_special: None,
+    pet_skill_learn_chance: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -624,6 +627,7 @@ static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(||
     grade_tone: "unknown",
     pet_variant_talent: None,
     pet_variant_special: None,
+    pet_skill_learn_chance: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -639,6 +643,7 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     grade_tone: "unknown",
     pet_variant_talent: None,
     pet_variant_special: None,
+    pet_skill_learn_chance: None,
     item: None,
     lifeskill_level: None,
     presentation: SelectOptionPresentation::Default,
@@ -3110,6 +3115,12 @@ fn patch_checkbox_transport_signals(
                     .collect::<Vec<_>>(),
             ),
         );
+        for index in 0..3 {
+            patch.insert(
+                format!("_{slot}_skill_slot{}", index + 1),
+                Value::String(pet.skills.get(index).cloned().unwrap_or_default()),
+            );
+        }
     }
 }
 
@@ -3125,7 +3136,7 @@ fn render_canonical_checkbox_signal_computeds(pet_slots: usize) -> String {
         write!(
             html,
             r#"
-         data-computed:pet{slot}.skills="Array.isArray($_pet{slot}_skill_slots) ? $_pet{slot}_skill_slots : []""#,
+         data-computed:pet{slot}.skills="window.__fishystuffCalculator.petSkillSlots($pet{slot}.tier, $_pet{slot}_skill_slot1, $_pet{slot}_skill_slot2, $_pet{slot}_skill_slot3)""#,
         )
         .unwrap();
     }
@@ -3212,7 +3223,12 @@ fn normalize_pet(
 
     pet.special = resolve_fixed_pet_option_selection(&tier_entry.specials);
     pet.talent = resolve_fixed_pet_option_selection(&tier_entry.talents);
-    pet.skills = resolve_pet_skill_selection(&pet.skills, &tier_entry.skills, &catalog.skills);
+    pet.skills = resolve_pet_skill_selection(
+        &pet.skills,
+        &tier_entry.skills,
+        &catalog.skills,
+        pet_skill_limit_for_tier_key(&tier_entry.key),
+    );
     if tier_entry.key.trim() != "5" {
         pet.pack_leader = false;
     }
@@ -3289,11 +3305,13 @@ fn resolve_pet_skill_selection(
     current_values: &[String],
     allowed_keys: &[String],
     options: &[CalculatorPetOptionEntry],
+    skill_limit: usize,
 ) -> Vec<String> {
-    let selected_lookup = current_values.iter().collect::<HashSet<_>>();
-    let mut selected = allowed_keys
+    let skill_limit = skill_limit.max(1);
+    let allowed_lookup = allowed_keys.iter().collect::<HashSet<_>>();
+    let mut selected = current_values
         .iter()
-        .filter(|key| selected_lookup.contains(key))
+        .filter(|key| allowed_lookup.contains(key))
         .cloned()
         .collect::<Vec<_>>();
     if selected.is_empty()
@@ -3329,8 +3347,17 @@ fn resolve_pet_skill_selection(
     if selected.is_empty() && !allowed_keys.is_empty() {
         selected.push(allowed_keys[0].clone());
     }
-    selected.truncate(3);
+    selected.truncate(skill_limit);
     selected
+}
+
+fn pet_skill_limit_for_tier_key(tier_key: &str) -> usize {
+    match tier_key.trim() {
+        "1" | "2" => 1,
+        "3" => 2,
+        "4" | "5" => 3,
+        _ => 1,
+    }
 }
 
 fn normalize_named_value(
@@ -4286,19 +4313,20 @@ fn pet_slot_name(lang: CalculatorLocale, slot_idx: usize) -> String {
     )
 }
 
-fn calculator_pet_pack_leader_label(lang: CalculatorLocale) -> &'static str {
-    match lang {
-        CalculatorLocale::EnUs => "Pack leader",
-        CalculatorLocale::DeDe => "Rudelanführer",
-        CalculatorLocale::KoKr => "우두머리",
-    }
+fn calculator_pet_pack_leader_label(lang: CalculatorLocale) -> String {
+    calculator_route_text(lang, "calculator.server.field.pack_leader")
 }
 
-fn calculator_pet_skills_hint(lang: CalculatorLocale) -> &'static str {
-    match lang {
-        CalculatorLocale::EnUs => "Choose 1 to 3 skills.",
-        CalculatorLocale::DeDe => "Wähle 1 bis 3 Fähigkeiten.",
-        CalculatorLocale::KoKr => "기술은 1개부터 3개까지 선택합니다.",
+fn calculator_pet_skills_hint(lang: CalculatorLocale, skill_limit: usize) -> String {
+    let skill_limit = skill_limit.max(1);
+    if skill_limit == 1 {
+        calculator_route_text(lang, "calculator.server.helper.pet_skills.one")
+    } else {
+        calculator_route_text_with_vars(
+            lang,
+            "calculator.server.helper.pet_skills.many",
+            &[("count", &skill_limit.to_string())],
+        )
     }
 }
 
@@ -9149,6 +9177,7 @@ fn render_calculator_app(
             value: &signals.zone,
             search_url: &zone_search_url,
             search_url_root: Some("api"),
+            exclude_selected_inputs: None,
             search_placeholder: &calculator_route_text(data.lang, "calculator.server.search.zones"),
         },
         &zone_results,
@@ -10267,6 +10296,7 @@ fn render_calculator_app(
                 &outfits,
                 None,
                 None,
+                None,
             ),
         ),
         (
@@ -10343,6 +10373,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             grade_tone: "unknown",
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -10360,6 +10391,7 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
             grade_tone: "unknown",
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -10419,6 +10451,7 @@ fn select_options_from_pet_entries_for_tier<'a>(
                 .iter()
                 .find(|tier| tier.key == tier_key)
                 .and_then(|tier| pet_variant_special_option(tier, catalog)),
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -11535,6 +11568,21 @@ fn render_item_effect_badges(lang: CalculatorLocale, item: &CalculatorItemEntry)
     )
 }
 
+fn pet_skill_learn_chance_text(chance: f32) -> String {
+    let percent = trim_float(f64::from(chance.max(0.0)) * 100.0);
+    format!("{percent}%")
+}
+
+fn render_pet_skill_option_content_html(option: SelectOption<'_>) -> Option<String> {
+    let chance = option.pet_skill_learn_chance?;
+    let chance_text = pet_skill_learn_chance_text(chance);
+    Some(format!(
+        "<span class=\"flex min-w-0 flex-1 items-center gap-2\"><span class=\"w-10 shrink-0 text-right font-medium tabular-nums text-base-content/70\">{}</span><span class=\"shrink-0 text-base-content/30\">|</span><span class=\"min-w-0 flex-1 truncate font-medium text-base-content\">{}</span></span>",
+        escape_html(&chance_text),
+        escape_html(option.label),
+    ))
+}
+
 fn render_pet_talent_badges(lang: CalculatorLocale, talent: &CalculatorPetOptionEntry) -> String {
     let text_with_vars =
         |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
@@ -11852,6 +11900,9 @@ fn render_searchable_dropdown_option_content_html(
     if matches!(option.presentation, SelectOptionPresentation::PetCard) {
         return render_pet_dropdown_option_content_html(lang, cdn_base_url, option);
     }
+    if let Some(html) = render_pet_skill_option_content_html(option) {
+        return html;
+    }
 
     let uses_item_presentation = option.icon.is_some();
     let grade_tone = escape_html(option.grade_tone);
@@ -12161,14 +12212,20 @@ fn render_searchable_select_results(
             let is_selected = option.value == current_value;
             let selected_content_html =
                 render_searchable_dropdown_selected_content_html(lang, cdn_base_url, option);
-            let selected_badge = if is_selected {
-                format!(
-                    "<span class=\"badge badge-soft badge-primary badge-xs\">{}</span>",
-                    escape_html(&calculator_route_text(
-                        lang,
-                        "calculator.server.result.selected",
-                    )),
-                )
+            let selected_marker = if is_selected {
+                let selected_text =
+                    calculator_route_text(lang, "calculator.server.result.selected");
+                if option.pet_skill_learn_chance.is_some() {
+                    format!(
+                        "<span class=\"shrink-0 text-xs text-base-content/60\">({})</span>",
+                        escape_html(&selected_text),
+                    )
+                } else {
+                    format!(
+                        "<span class=\"badge badge-soft badge-primary badge-xs\">{}</span>",
+                        escape_html(&selected_text),
+                    )
+                }
             } else {
                 String::new()
             };
@@ -12180,7 +12237,7 @@ fn render_searchable_select_results(
                 escape_html(option.label),
                 render_searchable_dropdown_option_content_html(lang, cdn_base_url, option),
                 selected_content_html,
-                selected_badge
+                selected_marker
             )
             .unwrap();
         }
@@ -12286,6 +12343,7 @@ fn render_searchable_select_control(
             value: selected_value,
             search_url: &search_url,
             search_url_root: Some("api"),
+            exclude_selected_inputs: None,
             search_placeholder,
         },
         &results_html,
@@ -12358,6 +12416,7 @@ fn render_pet_select_control(
             value: selected_value,
             search_url: &search_url,
             search_url_root: Some("api"),
+            exclude_selected_inputs: None,
             search_placeholder,
         },
         &results_html,
@@ -12370,6 +12429,163 @@ fn render_pet_select_control(
         escape_html(selected_value),
         dropdown,
     )
+}
+
+fn pet_skill_slot_values(selected_values: &[String]) -> Vec<String> {
+    (0..3)
+        .map(|index| selected_values.get(index).cloned().unwrap_or_default())
+        .collect()
+}
+
+fn pet_skill_options_for_slot<'a>(
+    options: &[SelectOption<'a>],
+    selected_values: &[String],
+    slot_index: usize,
+) -> Vec<SelectOption<'a>> {
+    let own_value = selected_values
+        .get(slot_index)
+        .map(|value| value.as_str())
+        .unwrap_or_default();
+    let excluded = selected_values
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != slot_index)
+        .map(|(_, value)| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .collect::<HashSet<_>>();
+
+    options
+        .iter()
+        .copied()
+        .filter(|option| option.value == own_value || !excluded.contains(option.value))
+        .collect()
+}
+
+fn render_pet_skill_select_control(
+    lang: CalculatorLocale,
+    root_id: &str,
+    input_id: &str,
+    bind_key: &str,
+    selected_value: &str,
+    options: &[SelectOption<'_>],
+    include_none: bool,
+    input_group: &str,
+    exclude_selected_inputs: &str,
+    search_placeholder: &str,
+) -> String {
+    let results_id = format!("{root_id}-results");
+    let options = with_optional_none(options, include_none, lang);
+    let selected_option = options
+        .iter()
+        .copied()
+        .find(|option| option.value == selected_value);
+    let none_option = none_select_option(lang);
+    let selected_label = selected_option
+        .map(|option| option.label)
+        .unwrap_or_else(|| {
+            if selected_value.trim().is_empty() {
+                none_option.label
+            } else {
+                selected_value
+            }
+        });
+    let selected_content_html = selected_option
+        .map(|option| render_searchable_dropdown_selected_content_html(lang, "", option))
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let catalog_html = render_searchable_dropdown_catalog_html(lang, "", &options);
+    let results_html =
+        render_searchable_select_results(lang, "", &results_id, &options, selected_value, "", 0);
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact: true,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: Some("32rem"),
+            panel_placement: SearchableDropdownPanelPlacement::OverlayAnchor,
+            results_layout: SearchableDropdownResultsLayout::List,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: selected_value,
+            search_url: "",
+            search_url_root: None,
+            exclude_selected_inputs: Some(exclude_selected_inputs),
+            search_placeholder,
+        },
+        &results_html,
+    );
+
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" data-pet-skill-input data-pet-skill-input-group=\"{}\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(bind_key),
+        escape_html(input_group),
+        escape_html(selected_value),
+        dropdown,
+    )
+}
+
+fn render_pet_skill_selects(
+    lang: CalculatorLocale,
+    pet_slot: usize,
+    skill_limit: usize,
+    selected_values: &[String],
+    options: &[SelectOption<'_>],
+) -> String {
+    let mut sorted_options = options.to_vec();
+    sorted_options.sort_by(|left, right| left.label.cmp(right.label));
+
+    let selected_values = pet_skill_slot_values(selected_values);
+    let group_key = format!("pet{pet_slot}");
+    let exclude_selector = format!(r#"[data-pet-skill-input-group="{group_key}"]"#);
+    let search_placeholder = calculator_route_text(lang, "calculator.server.search.pet_skills");
+    let active_slots = skill_limit.clamp(1, 3);
+    let mut html = String::new();
+    write!(
+        html,
+        "<div id=\"pet{}_skills\" class=\"fishy-calculator-pet-skills-grid grid gap-2\">",
+        pet_slot
+    )
+    .unwrap();
+    for skill_slot in 1..=3 {
+        let bind_key = format!("_pet{pet_slot}_skill_slot{skill_slot}");
+        let input_id = format!("calculator-pet{pet_slot}-skill-slot{skill_slot}-value");
+        if skill_slot > active_slots {
+            write!(
+                html,
+                "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" data-pet-skill-input data-pet-skill-input-group=\"{}\" value=\"\">",
+                escape_html(&input_id),
+                escape_html(&bind_key),
+                escape_html(&group_key),
+            )
+            .unwrap();
+            continue;
+        }
+
+        let slot_index = skill_slot - 1;
+        let slot_options =
+            pet_skill_options_for_slot(&sorted_options, &selected_values, slot_index);
+        html.push_str(&render_pet_skill_select_control(
+            lang,
+            &format!("calculator-pet{pet_slot}-skill-slot{skill_slot}-picker"),
+            &input_id,
+            &bind_key,
+            selected_values
+                .get(slot_index)
+                .map(|value| value.as_str())
+                .unwrap_or_default(),
+            &slot_options,
+            skill_slot > 1,
+            &group_key,
+            &exclude_selector,
+            &search_placeholder,
+        ));
+    }
+    html.push_str("</div>");
+    html
 }
 
 fn render_target_fish_select_control(
@@ -12432,6 +12648,7 @@ fn render_target_fish_select_control(
             value: &signals.target_fish,
             search_url: &search_url,
             search_url_root: Some("api"),
+            exclude_selected_inputs: None,
             search_placeholder: &calculator_route_text(
                 data.lang,
                 "calculator.server.search.loot_rows",
@@ -12873,6 +13090,10 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         .search_url_root
         .map(|value| format!(" search-url-root=\"{}\"", escape_html(value)))
         .unwrap_or_default();
+    let exclude_selected_inputs_attr = config
+        .exclude_selected_inputs
+        .map(|value| format!(" exclude-selected-inputs=\"{}\"", escape_html(value)))
+        .unwrap_or_default();
     let mut html = String::new();
     write!(
         html,
@@ -12882,6 +13103,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
      label="{label}"
      value="{value}"
      search-url="{search_url}"{search_url_root_attr}
+     {exclude_selected_inputs_attr}
      placeholder="{search_placeholder}"{trigger_size_attr}{panel_attrs}{panel_placement_attr}{results_layout_attr}{trigger_style_attr}>
     <button type="button"
             data-role="trigger"
@@ -12923,6 +13145,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         value = escape_html(config.value),
         search_url = escape_html(config.search_url),
         search_url_root_attr = search_url_root_attr,
+        exclude_selected_inputs_attr = exclude_selected_inputs_attr,
         panel_id = escape_html(&panel_id),
         search_input_id = escape_html(&search_input_id),
         search_placeholder = escape_html(config.search_placeholder),
@@ -12953,6 +13176,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             grade_tone: "unknown",
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: Some(level),
             presentation: SelectOptionPresentation::Default,
@@ -12974,6 +13198,7 @@ fn item_options_by_type<'a>(
             grade_tone: item_grade_tone(item.grade.as_deref()),
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: Some(item),
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -12997,6 +13222,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             grade_tone: item_grade_tone(entry.grade.as_deref()),
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -13015,6 +13241,7 @@ fn render_checkbox_group(
     options: &[SelectOption<'_>],
     change_attr: Option<&str>,
     option_grid_class: Option<&str>,
+    max_selected: Option<usize>,
 ) -> String {
     let selected = selected_values
         .iter()
@@ -13022,6 +13249,10 @@ fn render_checkbox_group(
         .collect::<std::collections::HashSet<_>>();
     let mut html = String::new();
     let change_attr = change_attr.unwrap_or("");
+    let max_selected_attr = max_selected
+        .filter(|value| *value > 0)
+        .map(|value| format!(" max-selected=\"{value}\""))
+        .unwrap_or_default();
     let bound_inputs_id = format!("{id}-bound-inputs");
     write!(html, "<div id=\"{}\" class=\"block\">", escape_html(id)).unwrap();
     write!(
@@ -13033,8 +13264,9 @@ fn render_checkbox_group(
     .unwrap();
     write!(
         html,
-        "<fishy-checkbox-group class=\"block\" bound-select-id=\"{}\">",
-        escape_html(&bound_inputs_id)
+        "<fishy-checkbox-group class=\"block\" bound-select-id=\"{}\"{}>",
+        escape_html(&bound_inputs_id),
+        max_selected_attr,
     )
     .unwrap();
     write!(
@@ -13063,6 +13295,10 @@ fn render_checkbox_group(
             category_key_attr,
         )
         .unwrap();
+        if let Some(skill_content) = render_pet_skill_option_content_html(*option) {
+            write!(html, "{}</label>", skill_content).unwrap();
+            continue;
+        }
         let uses_item_presentation = option.icon.is_some();
         let grade_tone = escape_html(option.grade_tone);
         let tone_class = format!("fishy-item-grade-{grade_tone}");
@@ -13136,6 +13372,7 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
 fn select_pet_option_entries_by_keys<'a>(
     keys: &[String],
     options: &'a [CalculatorPetOptionEntry],
+    skill_chances: &BTreeMap<String, f32>,
 ) -> Vec<SelectOption<'a>> {
     keys.iter()
         .filter_map(|key| options.iter().find(|option| option.key == *key))
@@ -13146,6 +13383,7 @@ fn select_pet_option_entries_by_keys<'a>(
             grade_tone: "unknown",
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: skill_chances.get(&option.key).copied(),
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,
@@ -13234,12 +13472,19 @@ fn render_pet_cards(
             selected_pet.and_then(|entry| entry.tiers.iter().find(|tier| tier.key == pet.tier));
         let selected_special = pet_option_by_key(&catalog.specials, &pet.special);
         let selected_talent = pet_option_by_key(&catalog.talents, &pet.talent);
+        let skill_limit = selected_tier_entry
+            .map(|tier| pet_skill_limit_for_tier_key(&tier.key))
+            .unwrap_or(1);
         let skill_options = selected_tier_entry
-            .map(|tier| select_pet_option_entries_by_keys(&tier.skills, &catalog.skills))
+            .map(|tier| {
+                select_pet_option_entries_by_keys(
+                    &tier.skills,
+                    &catalog.skills,
+                    &tier.skill_chances,
+                )
+            })
             .unwrap_or_default();
         let bind_prefix = format!("pet{slot}");
-        let skill_bind = format!("_pet{slot}_skill_slots");
-        let skills_id = format!("pet{slot}_skills");
         let pack_leader_input_id = format!("calculator-pet{slot}-pack-leader-value");
         let pack_leader_checked = if pet.pack_leader { " checked" } else { "" };
         let show_pack_leader = selected_tier_entry.is_some_and(|tier| tier.key.trim() == "5");
@@ -13263,7 +13508,7 @@ fn render_pet_cards(
                 slot,
                 pack_leader_checked,
                 escape_html(&pack_leader_input_id),
-                escape_html(calculator_pet_pack_leader_label(lang)),
+                escape_html(&calculator_pet_pack_leader_label(lang)),
             )
             .unwrap();
         } else {
@@ -13326,20 +13571,17 @@ fn render_pet_cards(
                 "calculator.server.field.skills",
             ))
         ));
-        html.push_str(&render_checkbox_group(
+        html.push_str(&render_pet_skill_selects(
             lang,
-            "",
-            &skills_id,
-            &skill_bind,
+            slot,
+            skill_limit,
             &pet.skills,
             &skill_options,
-            None,
-            Some("fishy-calculator-pet-skills-grid"),
         ));
         write!(
             html,
             "<p class=\"label\">{}</p></fieldset></div></div></div></section>",
-            escape_html(calculator_pet_skills_hint(lang)),
+            escape_html(&calculator_pet_skills_hint(lang, skill_limit)),
         )
         .unwrap();
     }
@@ -13403,16 +13645,16 @@ mod tests {
         loot_species_presence_source_kind, loot_species_presence_text,
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
-        parse_calculator_signals_value, pet_drr, pmf_bucket_contains_target,
-        poisson_probability_at_least, post_calculator_datastar_eval, render_pet_cards,
-        render_pet_dropdown_option_content_html, render_pet_dropdown_selected_content_html,
-        render_pet_effective_talent_badges, render_pet_talent_badges,
-        render_searchable_select_results, render_select_option_search_text,
-        render_target_fish_panel, trade_sale_multiplier_for_species, CalculatorData,
-        CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
-        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
-        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
-        TargetFishSummary,
+        parse_calculator_signals_value, pet_drr, pet_skill_limit_for_tier_key,
+        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
+        render_pet_cards, render_pet_dropdown_option_content_html,
+        render_pet_dropdown_selected_content_html, render_pet_effective_talent_badges,
+        render_pet_talent_badges, render_searchable_select_results,
+        render_select_option_search_text, render_target_fish_panel,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorLocale, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
+        SelectOption, SelectOptionPresentation, TargetFishSummary,
     };
 
     struct MockStore;
@@ -13582,6 +13824,7 @@ mod tests {
                             specials: vec!["auto_fishing_time_reduction".to_string()],
                             talents: vec!["durability_reduction_resistance".to_string()],
                             skills: vec!["fishing_exp".to_string()],
+                            skill_chances: Default::default(),
                         }],
                     }],
                     tiers: (1..=5)
@@ -14138,6 +14381,81 @@ mod tests {
         assert!(html.contains("window.__fishystuffCalculator.applyPackLeaderChange(el, 2)"));
     }
 
+    #[test]
+    fn render_pet_cards_renders_searchable_skill_slots_and_shows_learn_chances() {
+        let catalog = CalculatorPetCatalog {
+            slots: 1,
+            pets: vec![CalculatorPetEntry {
+                key: "pet:test".to_string(),
+                label: "Test Pet".to_string(),
+                tiers: vec![CalculatorPetTierEntry {
+                    key: "4".to_string(),
+                    label: "Tier 4".to_string(),
+                    skills: vec![
+                        "skill_a".to_string(),
+                        "skill_b".to_string(),
+                        "skill_c".to_string(),
+                    ],
+                    skill_chances: [
+                        ("skill_a".to_string(), 0.15_f32),
+                        ("skill_b".to_string(), 0.03_f32),
+                        ("skill_c".to_string(), 0.01_f32),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    ..CalculatorPetTierEntry::default()
+                }],
+                ..CalculatorPetEntry::default()
+            }],
+            skills: vec![
+                CalculatorPetOptionEntry {
+                    key: "skill_a".to_string(),
+                    label: "Combat EXP +7%".to_string(),
+                    fishing_exp: Some(0.07),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_b".to_string(),
+                    label: "Luck +1".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+                CalculatorPetOptionEntry {
+                    key: "skill_c".to_string(),
+                    label: "Fishing EXP +7%".to_string(),
+                    ..CalculatorPetOptionEntry::default()
+                },
+            ],
+            ..CalculatorPetCatalog::default()
+        };
+        let signals = CalculatorSignals {
+            pet1: CalculatorPetSignals {
+                pet: "pet:test".to_string(),
+                tier: "4".to_string(),
+                skills: vec!["skill_a".to_string(), "skill_b".to_string()],
+                ..CalculatorPetSignals::default()
+            },
+            ..CalculatorSignals::default()
+        };
+
+        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+
+        assert!(html.contains("calculator-pet1-skill-slot1-picker"));
+        assert!(html.contains("calculator-pet1-skill-slot2-picker"));
+        assert!(html.contains("calculator-pet1-skill-slot3-picker"));
+        assert!(html.contains("data-bind=\"_pet1_skill_slot1\""));
+        assert!(html.contains("data-bind=\"_pet1_skill_slot2\""));
+        assert!(html.contains("data-bind=\"_pet1_skill_slot3\""));
+        assert!(html
+            .contains("exclude-selected-inputs=\"[data-pet-skill-input-group=&quot;pet1&quot;]\""));
+        assert!(html.contains("15%"));
+        assert!(html.contains("3%"));
+        assert!(html.contains("1%"));
+        assert!(html.contains("15%</span><span class=\"shrink-0 text-base-content/30\">|</span><span class=\"min-w-0 flex-1 truncate font-medium text-base-content\">Combat EXP +7%</span>"));
+        assert!(html.contains("(Selected)</span>"));
+        assert!(!html.contains("border-emerald-400"));
+        assert!(html.contains("Choose 1 to 3 skills."));
+    }
+
     #[tokio::test]
     async fn derived_signals_include_generic_stat_breakdown_payloads() {
         let state = test_state();
@@ -14336,6 +14654,7 @@ mod tests {
                 grade_tone: "unknown",
                 pet_variant_talent: None,
                 pet_variant_special: None,
+                pet_skill_learn_chance: None,
                 item: None,
                 lifeskill_level: None,
                 presentation: SelectOptionPresentation::Default,
@@ -14744,6 +15063,7 @@ mod tests {
                     specials: vec!["auto_fishing_time_reduction".to_string()],
                     talents: vec!["durability_reduction_resistance".to_string()],
                     skills: vec!["fishing_exp".to_string()],
+                    skill_chances: Default::default(),
                 }],
             }],
             tiers: (1..=5)
@@ -14812,6 +15132,7 @@ mod tests {
                         specials: vec!["special_t3".to_string()],
                         talents: vec!["talent_t3".to_string()],
                         skills: vec!["skill_t3".to_string()],
+                        skill_chances: Default::default(),
                     },
                     CalculatorPetTierEntry {
                         key: "4".to_string(),
@@ -14819,6 +15140,7 @@ mod tests {
                         specials: vec!["special_t4".to_string()],
                         talents: vec!["talent_t4".to_string()],
                         skills: vec!["skill_t4".to_string()],
+                        skill_chances: Default::default(),
                     },
                 ],
             }],
@@ -14892,7 +15214,7 @@ mod tests {
         assert_eq!(pet.special, "special_t4");
         assert_eq!(pet.talent, "talent_t4");
         assert_eq!(pet.skills, vec!["skill_t4".to_string()]);
-        assert!(pet.pack_leader);
+        assert!(!pet.pack_leader);
     }
 
     #[test]
@@ -14908,6 +15230,7 @@ mod tests {
                     specials: vec!["skin_special".to_string(), "other_special".to_string()],
                     talents: vec!["skin_talent".to_string(), "other_talent".to_string()],
                     skills: vec!["skill_a".to_string()],
+                    skill_chances: Default::default(),
                 }],
                 ..CalculatorPetEntry::default()
             }],
@@ -15074,7 +15397,7 @@ mod tests {
         assert_eq!(descendant_to_ancestor.tier, "3");
         assert_eq!(descendant_to_ancestor.talent, "talent_t3");
         assert_eq!(descendant_to_ancestor.skills, vec!["skill_t3".to_string()]);
-        assert!(descendant_to_ancestor.pack_leader);
+        assert!(!descendant_to_ancestor.pack_leader);
 
         let mut ancestor_to_descendant = CalculatorPetSignals {
             pet: "pet:arctic:tier3".to_string(),
@@ -15112,6 +15435,7 @@ mod tests {
                         "skill_c".to_string(),
                         "skill_d".to_string(),
                     ],
+                    skill_chances: Default::default(),
                 }],
             }],
             tiers: vec![CalculatorOptionEntry {
@@ -15176,9 +15500,9 @@ mod tests {
         assert_eq!(
             pet.skills,
             vec![
-                "skill_a".to_string(),
-                "skill_b".to_string(),
                 "skill_c".to_string(),
+                "skill_a".to_string(),
+                "skill_d".to_string(),
             ]
         );
 
@@ -15191,6 +15515,15 @@ mod tests {
         };
         normalize_pet(&mut empty_skill_pet, defaults, &catalog, &aliases);
         assert_eq!(empty_skill_pet.skills, vec!["skill_a".to_string()]);
+    }
+
+    #[test]
+    fn pet_skill_limit_tracks_pet_tier() {
+        assert_eq!(pet_skill_limit_for_tier_key("1"), 1);
+        assert_eq!(pet_skill_limit_for_tier_key("2"), 1);
+        assert_eq!(pet_skill_limit_for_tier_key("3"), 2);
+        assert_eq!(pet_skill_limit_for_tier_key("4"), 3);
+        assert_eq!(pet_skill_limit_for_tier_key("5"), 3);
     }
 
     #[test]
@@ -15397,6 +15730,7 @@ mod tests {
                 ..CalculatorPetOptionEntry::default()
             }),
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -15423,6 +15757,7 @@ mod tests {
                 auto_fishing_time_reduction: Some(0.30),
                 ..CalculatorPetOptionEntry::default()
             }),
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -15457,6 +15792,7 @@ mod tests {
             grade_tone: "red",
             pet_variant_talent: Some(&talent),
             pet_variant_special: Some(&special),
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::PetCard,
@@ -16962,6 +17298,7 @@ mod tests {
             grade_tone: "unknown",
             pet_variant_talent: None,
             pet_variant_special: None,
+            pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
             presentation: SelectOptionPresentation::Default,

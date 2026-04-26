@@ -400,7 +400,12 @@ async function loadModule(options = {}) {
     globalThis.getComputedStyle = window.getComputedStyle;
     globalThis.HTMLInputElement = FakeElement;
     globalThis.HTMLTemplateElement = FakeTemplateElement;
-    return import(`./searchable-dropdown.js?test=${Date.now()}-${Math.random()}`);
+    return {
+        ...(await import(`./searchable-dropdown.js?test=${Date.now()}-${Math.random()}`)),
+        document,
+        window,
+        customElementsRegistry,
+    };
 }
 
 function restoreGlobals() {
@@ -762,6 +767,80 @@ test("searchable dropdown paginates local catalog results instead of silently tr
     assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
     assert.equal(results.getAttribute("data-next-offset"), null);
     assert.equal(results.querySelector("[data-searchable-dropdown-more]"), null);
+});
+
+test("searchable dropdown excludes values selected in sibling inputs from local results", async (t) => {
+    const { FishySearchableDropdown, document } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const results = new FakeElement("ul");
+    const catalog = new FakeElement("div");
+    const ownInput = new FakeElement("input");
+    const siblingInput = new FakeElement("input");
+
+    ownInput.value = "skill-a";
+    siblingInput.value = "skill-b";
+    document.getElementById = (id) => (id === "skill-slot-one" ? ownInput : null);
+    document.querySelectorAll = (selector) => (
+        selector === '[data-pet-skill-input-group="pet1"]'
+            ? [ownInput, siblingInput]
+            : []
+    );
+
+    dropdown.setAttribute("input-id", "skill-slot-one");
+    dropdown.setAttribute("exclude-selected-inputs", '[data-pet-skill-input-group="pet1"]');
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+    results.setAttribute("data-role", "results");
+    catalog.setAttribute("data-role", "selected-content-catalog");
+
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    dropdown.append(catalog);
+    panel.append(searchInput);
+    panel.append(results);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    for (const [value, label] of [
+        ["skill-a", "Skill A"],
+        ["skill-b", "Skill B"],
+        ["skill-c", "Skill C"],
+    ]) {
+        const template = new FakeTemplateElement();
+        const content = new FakeElement("span");
+        content.textContent = label;
+        template.setAttribute("data-role", "selected-content");
+        template.setAttribute("data-value", value);
+        template.setAttribute("data-label", label);
+        template.setAttribute("data-search-text", label);
+        template.content.append(content);
+        catalog.append(template);
+    }
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.search("");
+
+    assert.deepEqual(
+        Array.from(results.querySelectorAll("[data-searchable-dropdown-option]"), (option) => option.getAttribute("data-value")),
+        ["skill-a", "skill-c"],
+    );
+
+    siblingInput.value = "skill-c";
+    dropdown.search("");
+
+    assert.deepEqual(
+        Array.from(results.querySelectorAll("[data-searchable-dropdown-option]"), (option) => option.getAttribute("data-value")),
+        ["skill-a", "skill-b"],
+    );
 });
 
 test("searchable dropdown loads more when an ancestor is the actual scroll host", async (t) => {

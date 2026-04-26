@@ -4,12 +4,12 @@ use fishystuff_api::models::calculator::{
     CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetEntry, CalculatorPetOptionEntry,
     CalculatorPetTierEntry,
 };
-use mysql::{prelude::Queryable, PooledConn, Row};
+use mysql::{prelude::Queryable, PooledConn};
 
 use crate::error::AppResult;
 use crate::store::{validate_dolt_ref, FishLang};
 
-use super::util::{db_unavailable, is_missing_table, row_string};
+use super::util::{db_unavailable, is_missing_table};
 use super::DoltMySqlStore;
 
 type CalculatorPetDbRow = (
@@ -25,6 +25,7 @@ type CalculatorPetDbRow = (
     Option<String>,
 );
 type CalculatorPetSkillIndexDbRow = (Option<String>, Option<String>);
+type CalculatorPetAcquireSkillRateDbRow = (Option<String>, Option<String>, Option<String>);
 type CalculatorLanguagedataDbRow = (Option<String>, Option<String>);
 type CalculatorPetSkilltypeDbRow = (
     Option<String>,
@@ -77,7 +78,6 @@ enum PetOptionKind {
 
 #[derive(Debug, Clone)]
 struct CalculatorPetOptionRecord {
-    kind: PetOptionKind,
     entry: CalculatorPetOptionEntry,
 }
 
@@ -179,10 +179,11 @@ fn pet_visual_group_key(row: &RawPetRow) -> String {
         .unwrap_or_else(|| row.character_key.to_ascii_lowercase())
 }
 
-fn parse_nonzero_rate(value: Option<&str>) -> bool {
+fn parse_acquire_rate(value: Option<&str>) -> Option<f32> {
     value
         .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .is_some_and(|rate| rate > 0.0)
+        .filter(|rate| *rate > 0.0)
+        .map(|rate| (rate / 1_000_000.0) as f32)
 }
 
 fn parse_first_number(value: &str) -> Option<f32> {
@@ -386,22 +387,40 @@ fn query_skill_map(
         .collect())
 }
 
-fn query_acquire_skill_indexes(
+fn pet_acquire_skill_rate_select(rate_index: usize, as_of: &str) -> String {
+    let equip_index = rate_index.saturating_sub(1);
+    format!(
+        "SELECT `Key`, '{equip_index}', `AquireRate_{rate_index}` \
+         FROM pet_equipskill_aquire_table{as_of} \
+         WHERE `AquireRate_{rate_index}` IS NOT NULL \
+           AND `AquireRate_{rate_index}` <> '' \
+           AND `AquireRate_{rate_index}` <> '0'",
+    )
+}
+
+fn query_acquire_skill_rates(
     conn: &mut PooledConn,
     as_of: &str,
-) -> Result<HashMap<String, HashSet<String>>, mysql::Error> {
-    let query = format!("SELECT * FROM pet_equipskill_aquire_table{as_of}");
-    let rows: Vec<Row> = conn.query(query)?;
-    let mut result = HashMap::<String, HashSet<String>>::new();
-    for row in rows {
-        let Some(acquire_key) = row_string(&row, 0).filter(|value| !value.is_empty()) else {
+) -> Result<HashMap<String, HashMap<String, f32>>, mysql::Error> {
+    let query = (1..=42)
+        .map(|rate_index| pet_acquire_skill_rate_select(rate_index, as_of))
+        .collect::<Vec<_>>()
+        .join(" UNION ALL ");
+    let rows: Vec<CalculatorPetAcquireSkillRateDbRow> = conn.query(query)?;
+    let mut result = HashMap::<String, HashMap<String, f32>>::new();
+    for (acquire_key, equip_index, raw_rate) in rows {
+        let Some(acquire_key) = trim_optional_string(acquire_key) else {
             continue;
         };
-        let entry = result.entry(acquire_key).or_default();
-        for equip_index in 0..=42 {
-            if parse_nonzero_rate(row_string(&row, equip_index + 2).as_deref()) {
-                entry.insert(equip_index.to_string());
-            }
+        let Some(equip_index) = trim_optional_string(equip_index) else {
+            continue;
+        };
+        if let Some(chance) = parse_acquire_rate(trim_optional_string(raw_rate).as_deref()) {
+            result
+                .entry(acquire_key)
+                .or_default()
+                .entry(equip_index)
+                .or_insert(chance);
         }
     }
     Ok(result)
@@ -634,13 +653,14 @@ fn build_tier_entry(
     representative: &RawPetRow,
     candidates: &[&RawPetRow],
     base_skill_by_index: &HashMap<String, String>,
-    acquire_skill_indexes: &HashMap<String, HashSet<String>>,
+    acquire_skill_rates: &HashMap<String, HashMap<String, f32>>,
     equip_skill_by_index: &HashMap<String, String>,
     options_by_key: &HashMap<String, CalculatorPetOptionRecord>,
 ) -> CalculatorPetTierEntry {
     let mut specials = Vec::new();
     let mut talents = Vec::new();
     let mut skills = Vec::new();
+    let mut skill_chances = BTreeMap::new();
     let candidate_rows = pet_tier_candidate_rows(representative, candidates);
 
     if let Some(special_key) = candidate_rows.iter().find_map(|candidate| {
@@ -667,35 +687,34 @@ fn build_tier_entry(
 
     for candidate in candidate_rows {
         if let Some(acquire_key) = candidate.acquire_key.as_ref() {
-            if let Some(indexes) = acquire_skill_indexes.get(acquire_key) {
-                let mut option_ids = indexes
+            if let Some(rates) = acquire_skill_rates.get(acquire_key) {
+                let mut option_ids = rates
                     .iter()
-                    .filter_map(|index| equip_skill_by_index.get(index))
-                    .filter(|skill_no| options_by_key.contains_key(*skill_no))
-                    .cloned()
+                    .filter_map(|(index, chance)| {
+                        equip_skill_by_index
+                            .get(index)
+                            .map(|skill_no| (skill_no, *chance))
+                    })
+                    .filter(|(skill_no, _)| options_by_key.contains_key(*skill_no))
+                    .map(|(skill_no, chance)| (skill_no.clone(), chance))
                     .collect::<Vec<_>>();
                 option_ids.sort_by(|left, right| {
                     let left_label = options_by_key
-                        .get(left)
+                        .get(&left.0)
                         .map(|option| option.entry.label.as_str())
-                        .unwrap_or(left.as_str());
+                        .unwrap_or(left.0.as_str());
                     let right_label = options_by_key
-                        .get(right)
+                        .get(&right.0)
                         .map(|option| option.entry.label.as_str())
-                        .unwrap_or(right.as_str());
-                    left_label.cmp(right_label).then_with(|| left.cmp(right))
+                        .unwrap_or(right.0.as_str());
+                    left_label
+                        .cmp(right_label)
+                        .then_with(|| left.0.cmp(&right.0))
                 });
-                option_ids.dedup();
-                for option_id in option_ids {
-                    match options_by_key
-                        .get(&option_id)
-                        .map(|option| option.kind)
-                        .unwrap_or(PetOptionKind::Skill)
-                    {
-                        PetOptionKind::Special => specials.push(option_id),
-                        PetOptionKind::Talent => talents.push(option_id),
-                        PetOptionKind::Skill => skills.push(option_id),
-                    }
+                option_ids.dedup_by(|left, right| left.0 == right.0);
+                for (option_id, chance) in option_ids {
+                    skill_chances.entry(option_id.clone()).or_insert(chance);
+                    skills.push(option_id);
                 }
             }
         }
@@ -714,6 +733,7 @@ fn build_tier_entry(
         specials,
         talents,
         skills,
+        skill_chances,
     }
 }
 
@@ -765,6 +785,7 @@ fn calculator_pet_option_records(
     lang: FishLang,
     skill_ids: &HashSet<String>,
     base_talent_skill_ids: &HashSet<String>,
+    equip_skill_ids: &HashSet<String>,
     english_labels: &HashMap<String, String>,
     skilltype_meta: &HashMap<String, (Option<String>, Option<String>, Option<String>)>,
 ) -> HashMap<String, CalculatorPetOptionRecord> {
@@ -780,17 +801,23 @@ fn calculator_pet_option_records(
             korean_label.as_deref(),
             korean_description.as_deref(),
         );
-        let Some(kind) = pet_option_kind(&effects).or_else(|| {
-            base_talent_skill_ids
-                .contains(skill_id)
-                .then_some(PetOptionKind::Talent)
-        }) else {
+        let Some(_kind) = pet_option_kind(&effects)
+            .or_else(|| {
+                base_talent_skill_ids
+                    .contains(skill_id)
+                    .then_some(PetOptionKind::Talent)
+            })
+            .or_else(|| {
+                equip_skill_ids
+                    .contains(skill_id)
+                    .then_some(PetOptionKind::Skill)
+            })
+        else {
             continue;
         };
         records.insert(
             skill_id.clone(),
             CalculatorPetOptionRecord {
-                kind,
                 entry: CalculatorPetOptionEntry {
                     key: skill_id.clone(),
                     label: localized_pet_option_label(
@@ -958,7 +985,6 @@ fn calculator_pet_special_option_records(
         records.insert(
             key.clone(),
             CalculatorPetOptionRecord {
-                kind: PetOptionKind::Special,
                 entry: CalculatorPetOptionEntry {
                     key,
                     label: pet_special_option_label(lang, meta),
@@ -1014,7 +1040,7 @@ impl DoltMySqlStore {
             Err(err) if is_missing_table(&err, "pet_equipskill_table") => HashMap::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
-        let acquire_skill_indexes = match query_acquire_skill_indexes(&mut conn, &as_of) {
+        let acquire_skill_rates = match query_acquire_skill_rates(&mut conn, &as_of) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "pet_equipskill_aquire_table") => HashMap::new(),
             Err(err) => return Err(db_unavailable(err)),
@@ -1033,6 +1059,7 @@ impl DoltMySqlStore {
 
         let mut skill_ids = HashSet::new();
         let mut base_talent_skill_ids = HashSet::new();
+        let mut equip_skill_ids = HashSet::new();
         let mut pet_special_skill_ids = HashSet::new();
         for row in &pet_rows {
             if let Some(skill_no) = row.special_skill_no.as_ref() {
@@ -1045,10 +1072,11 @@ impl DoltMySqlStore {
                 }
             }
             if let Some(acquire_key) = row.acquire_key.as_ref() {
-                if let Some(indexes) = acquire_skill_indexes.get(acquire_key) {
-                    for index in indexes {
+                if let Some(rates) = acquire_skill_rates.get(acquire_key) {
+                    for index in rates.keys() {
                         if let Some(skill_no) = equip_skill_by_index.get(index) {
                             skill_ids.insert(skill_no.clone());
+                            equip_skill_ids.insert(skill_no.clone());
                         }
                     }
                 }
@@ -1075,6 +1103,7 @@ impl DoltMySqlStore {
             lang,
             &skill_ids,
             &base_talent_skill_ids,
+            &equip_skill_ids,
             &english_skill_labels,
             &skilltype_meta,
         );
@@ -1119,7 +1148,7 @@ impl DoltMySqlStore {
                                 representative,
                                 &candidates,
                                 &base_skill_by_index,
-                                &acquire_skill_indexes,
+                                &acquire_skill_rates,
                                 &equip_skill_by_index,
                                 &options_by_key,
                             )
@@ -1205,10 +1234,28 @@ mod tests {
     use super::{
         build_tier_entry, calculator_pet_option_records, calculator_pet_special_option_records,
         dedupe_built_pet_entries, is_looting_pet_type, localized_pet_option_label,
-        parse_asset_stem, parse_pet_option_effects, pet_image_url, pet_option_kind,
-        pet_special_option_label, BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind,
-        PetSpecialSkillMeta, RawPetRow,
+        parse_acquire_rate, parse_asset_stem, parse_pet_option_effects,
+        pet_acquire_skill_rate_select, pet_image_url, pet_option_kind, pet_special_option_label,
+        BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind, PetSpecialSkillMeta, RawPetRow,
     };
+
+    #[test]
+    fn parse_acquire_rate_normalizes_source_weight_to_chance() {
+        let chance = parse_acquire_rate(Some("150000")).expect("chance");
+        assert!((chance - 0.15).abs() < 0.0001);
+        assert_eq!(parse_acquire_rate(Some("0")), None);
+        assert_eq!(parse_acquire_rate(Some("")), None);
+    }
+
+    #[test]
+    fn pet_acquire_skill_rate_select_maps_one_based_rate_columns_to_zero_based_equip_indexes() {
+        let query = pet_acquire_skill_rate_select(1, " AS OF 'test'");
+        assert!(query.contains("SELECT `Key`, '0', `AquireRate_1`"));
+        assert!(query.contains("pet_equipskill_aquire_table AS OF 'test'"));
+
+        let query = pet_acquire_skill_rate_select(4, "");
+        assert!(query.contains("SELECT `Key`, '3', `AquireRate_4`"));
+    }
 
     #[test]
     fn parse_pet_option_effects_reads_percent_and_seconds_sources() {
@@ -1271,18 +1318,38 @@ mod tests {
             FishLang::En,
             &skill_ids,
             &base_talent_skill_ids,
+            &HashSet::new(),
             &english_labels,
             &HashMap::new(),
         );
 
         let base_record = records.get("base:combat_exp").expect("base talent");
-        assert_eq!(base_record.kind, PetOptionKind::Talent);
         assert_eq!(base_record.entry.label, "Combat EXP +5%");
         assert_eq!(
-            records.get("equip:fishing_exp").unwrap().kind,
-            PetOptionKind::Skill
+            records.get("equip:fishing_exp").unwrap().entry.label,
+            "Fishing EXP +7%"
         );
         assert!(!records.contains_key("equip:ignored"));
+    }
+
+    #[test]
+    fn calculator_pet_option_records_keeps_source_backed_equip_skills_without_modeled_effects() {
+        let skill_ids = HashSet::from(["equip:combat_exp".to_string()]);
+        let equip_skill_ids = HashSet::from(["equip:combat_exp".to_string()]);
+        let english_labels =
+            HashMap::from([("equip:combat_exp".to_string(), "Combat EXP +7%".to_string())]);
+
+        let records = calculator_pet_option_records(
+            FishLang::En,
+            &skill_ids,
+            &HashSet::new(),
+            &equip_skill_ids,
+            &english_labels,
+            &HashMap::new(),
+        );
+
+        let record = records.get("equip:combat_exp").expect("source equip skill");
+        assert_eq!(record.entry.label, "Combat EXP +7%");
     }
 
     #[test]
@@ -1314,7 +1381,6 @@ mod tests {
         let options_by_key = HashMap::from([(
             "talent:combat_exp".to_string(),
             CalculatorPetOptionRecord {
-                kind: PetOptionKind::Talent,
                 entry: CalculatorPetOptionEntry {
                     key: "talent:combat_exp".to_string(),
                     label: "Combat EXP +5%".to_string(),
@@ -1358,7 +1424,6 @@ mod tests {
             &HashMap::from([("37".to_string(), meta)]),
         );
         let record = records.get("pet-special:37").expect("special option");
-        assert_eq!(record.kind, PetOptionKind::Special);
         assert_eq!(record.entry.auto_fishing_time_reduction, Some(0.30));
     }
 
@@ -1415,6 +1480,7 @@ mod tests {
                         specials: vec!["special_a".to_string()],
                         talents: vec!["talent_a".to_string()],
                         skills: vec!["skill_a".to_string()],
+                        skill_chances: Default::default(),
                     }],
                     ..CalculatorPetEntry::default()
                 },
@@ -1432,6 +1498,7 @@ mod tests {
                         specials: vec!["special_a".to_string()],
                         talents: vec!["talent_a".to_string()],
                         skills: vec!["skill_a".to_string()],
+                        skill_chances: Default::default(),
                     }],
                     ..CalculatorPetEntry::default()
                 },
