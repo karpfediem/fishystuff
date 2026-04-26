@@ -12412,7 +12412,6 @@ fn fuzzy_select_matches<'a>(
                 1
             }),
         )
-        .then_with(|| left_option.sort_priority.cmp(&right_option.sort_priority))
         .then_with(|| right_score.cmp(left_score))
         .then_with(|| compare_pet_skill_chance_desc(*left_option, *right_option))
         .then_with(|| left_option.label.cmp(right_option.label))
@@ -15467,6 +15466,47 @@ mod tests {
         assert!(variant_index < other_index);
         assert!(text.contains("data-next-offset=\"24\""));
         assert!(!text.contains("data-value=\"pet:other-29\""));
+    }
+
+    #[test]
+    fn pet_select_search_ranks_text_match_before_same_tier_variant_priority() {
+        let options = vec![
+            SelectOption {
+                value: "pet:variant",
+                label: "Dire Cat Variant",
+                icon: None,
+                grade_tone: "unknown",
+                pet_variant_talent: None,
+                pet_variant_special: None,
+                pet_skill: None,
+                pet_effective_talent_effects: None,
+                pet_skill_learn_chance: None,
+                item: None,
+                lifeskill_level: None,
+                presentation: SelectOptionPresentation::Default,
+                sort_priority: 0,
+            },
+            SelectOption {
+                value: "pet:direct",
+                label: "Direct Match",
+                icon: None,
+                grade_tone: "unknown",
+                pet_variant_talent: None,
+                pet_variant_special: None,
+                pet_skill: None,
+                pet_effective_talent_effects: None,
+                pet_skill_learn_chance: None,
+                item: None,
+                lifeskill_level: None,
+                presentation: SelectOptionPresentation::Default,
+                sort_priority: 1,
+            },
+        ];
+
+        let matches = super::fuzzy_select_matches(&options, "direct", "");
+
+        assert_eq!(matches[0].value, "pet:direct");
+        assert_eq!(matches[1].value, "pet:variant");
     }
 
     #[tokio::test]
