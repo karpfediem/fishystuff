@@ -6,6 +6,7 @@ import vm from "node:vm";
 import { applyMapPageSignalsPatch } from "./map-page-signals.js";
 import {
   applyStoredMapPresetState,
+  bindMapPresetController,
   MAP_PRESET_COLLECTION_KEY,
   patchTouchesMapPreset,
   registerMapPresetAdapter,
@@ -54,6 +55,32 @@ function createWindowStub() {
         listener(event);
       }
       return true;
+    },
+  };
+}
+
+function createTimerRef() {
+  const timers = new Map();
+  let nextTimerId = 1;
+  return {
+    clearTimeout(id) {
+      timers.delete(id);
+    },
+    setTimeout(callback) {
+      const id = nextTimerId;
+      nextTimerId += 1;
+      timers.set(id, callback);
+      return id;
+    },
+    flushTimers() {
+      const pending = Array.from(timers.values());
+      timers.clear();
+      for (const callback of pending) {
+        callback();
+      }
+    },
+    pendingCount() {
+      return timers.size;
     },
   };
 }
@@ -317,6 +344,51 @@ test("map preset adapter ignores camera for automatic tracking but captures it f
     assert.deepEqual(
       env.helper.capturePayload(MAP_PRESET_COLLECTION_KEY, { intent: "save" }).view,
       { viewMode: "2d", camera: { centerWorldX: 10, centerWorldZ: 20, zoom: 4 } },
+    );
+  } finally {
+    env.restore();
+  }
+});
+
+test("map preset controller defers current tracking for interactive patches", () => {
+  const env = installUserPresetsGlobal();
+  try {
+    const signals = defaultSignals();
+    const shell = createWindowStub();
+    const timers = createTimerRef();
+    bindMapPresetController({
+      shell,
+      readSignals: () => signals,
+      applyPatch: (patch) => applyMapPageSignalsPatch(signals, patch),
+      globalRef: timers,
+      trackDelayMs: 160,
+    });
+    assert.equal(env.helper.selectedFixedId(MAP_PRESET_COLLECTION_KEY), "default");
+    assert.equal(env.helper.current(MAP_PRESET_COLLECTION_KEY), null);
+
+    const opacityPatch = {
+      _map_bridged: {
+        filters: {
+          layerOpacities: {
+            zone_mask: 0.4,
+          },
+        },
+      },
+    };
+    applyMapPageSignalsPatch(signals, opacityPatch);
+    shell.dispatchEvent({
+      type: "fishymap:signal-patched",
+      detail: opacityPatch,
+    });
+
+    assert.equal(timers.pendingCount(), 1);
+    assert.equal(env.helper.current(MAP_PRESET_COLLECTION_KEY), null);
+
+    timers.flushTimers();
+
+    assert.deepEqual(
+      env.helper.current(MAP_PRESET_COLLECTION_KEY)?.payload?.bridgedFilters?.layerOpacities,
+      { zone_mask: 0.4 },
     );
   } finally {
     env.restore();

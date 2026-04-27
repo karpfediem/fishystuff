@@ -156,6 +156,13 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+export function patchTouchesPresetManager(patch) {
+  if (!isPlainObject(patch)) {
+    return false;
+  }
+  return patch._user_presets != null || patch._preset_manager_ui != null;
+}
+
 function isFocused(element) {
   return Boolean(element) && globalThis.document?.activeElement === element;
 }
@@ -909,7 +916,10 @@ export class FishyPresetManager extends HTMLElementBase {
     this.sync({ refreshNames: true });
   }
 
-  handleSignalPatch() {
+  handleSignalPatch(event) {
+    if (!patchTouchesPresetManager(event?.detail || null)) {
+      return;
+    }
     this.sync();
   }
 

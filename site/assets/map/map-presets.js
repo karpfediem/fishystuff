@@ -10,6 +10,7 @@ import { patchMatchesSignalFilter } from "./map-page-signals.js";
 export const MAP_PRESET_COLLECTION_KEY = "map-presets";
 export const MAP_PRESET_SIGNAL_FILTER =
   /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.(?:query|selectedTerms|expression))|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:layerIdsVisible|layerIdsOrdered|layerFilterBindingIdsDisabledByLayer|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales))(?:\.|$)/;
+const MAP_PRESET_TRACK_DELAY_MS = 160;
 
 const boundShells = new WeakSet();
 
@@ -208,6 +209,49 @@ export function trackMapPresetCurrent(readSignals = () => null) {
   });
 }
 
+function createMapPresetTrackScheduler({
+  readSignals = () => null,
+  globalRef = globalThis,
+  delayMs = MAP_PRESET_TRACK_DELAY_MS,
+} = {}) {
+  const state = {
+    timer: 0,
+  };
+
+  function clear() {
+    if (!state.timer) {
+      return false;
+    }
+    globalRef.clearTimeout?.(state.timer);
+    state.timer = 0;
+    return true;
+  }
+
+  function flush() {
+    clear();
+    return trackMapPresetCurrent(readSignals);
+  }
+
+  function schedule() {
+    clear();
+    const timeoutDelayMs = Math.max(0, Number.isFinite(delayMs) ? delayMs : MAP_PRESET_TRACK_DELAY_MS);
+    state.timer = globalRef.setTimeout?.(() => {
+      state.timer = 0;
+      trackMapPresetCurrent(readSignals);
+    }, timeoutDelayMs) || 0;
+    if (!state.timer) {
+      flush();
+    }
+    return Boolean(state.timer);
+  }
+
+  return Object.freeze({
+    clear,
+    flush,
+    schedule,
+  });
+}
+
 export function patchTouchesMapPreset(patch) {
   return patchMatchesSignalFilter(patch, { include: MAP_PRESET_SIGNAL_FILTER });
 }
@@ -217,17 +261,24 @@ export function bindMapPresetController({
   readSignals = () => null,
   applyPatch = () => {},
   readBridgeState = () => null,
+  globalRef = globalThis,
+  trackDelayMs = MAP_PRESET_TRACK_DELAY_MS,
 } = {}) {
   const adapter = registerMapPresetAdapter({ readSignals, applyPatch, readBridgeState });
   if (!adapter) {
     return null;
   }
+  const tracker = createMapPresetTrackScheduler({
+    readSignals,
+    globalRef,
+    delayMs: trackDelayMs,
+  });
   const applied = applyStoredMapPresetState({ readSignals, applyPatch });
   trackMapPresetCurrent(readSignals);
   if (shell && typeof shell.addEventListener === "function" && !boundShells.has(shell)) {
     shell.addEventListener("fishymap:signal-patched", (event) => {
       if (patchTouchesMapPreset(event?.detail || null)) {
-        trackMapPresetCurrent(readSignals);
+        tracker.schedule();
       }
     });
     boundShells.add(shell);
@@ -235,5 +286,6 @@ export function bindMapPresetController({
   return {
     adapter,
     applied,
+    flushTrackedCurrent: tracker.flush,
   };
 }

@@ -102,6 +102,35 @@ function stableJson(value) {
   return JSON.stringify(value ?? null);
 }
 
+export function changedSignalPatch(projectedPatch, currentSignals) {
+  if (!isPlainObject(projectedPatch)) {
+    return null;
+  }
+  const nextPatch = {};
+  for (const [rootKey, branch] of Object.entries(projectedPatch)) {
+    if (!isPlainObject(branch)) {
+      if (!Object.is(branch, currentSignals?.[rootKey])) {
+        nextPatch[rootKey] = cloneJson(branch);
+      }
+      continue;
+    }
+    const currentBranch = isPlainObject(currentSignals?.[rootKey])
+      ? currentSignals[rootKey]
+      : {};
+    const nextBranch = {};
+    for (const [key, value] of Object.entries(branch)) {
+      if (stableJson(value) === stableJson(currentBranch[key])) {
+        continue;
+      }
+      nextBranch[key] = cloneJson(value);
+    }
+    if (Object.keys(nextBranch).length) {
+      nextPatch[rootKey] = nextBranch;
+    }
+  }
+  return Object.keys(nextPatch).length ? nextPatch : null;
+}
+
 function restoreViewPatchFromSessionView(view) {
   const patch = snapshotToRestorePatch({ view });
   return patch?.commands?.restoreView ? patch : null;
@@ -333,6 +362,7 @@ export async function start() {
   function patchSignalsFromBridge(snapshot) {
     syncingFromBridge = true;
     try {
+      const currentSignals = signals();
       const sessionPatch = pendingBridgeRestoreView
         ? (
             bridgeSnapshotMatchesRestoreView(snapshot, pendingBridgeRestoreView)
@@ -343,9 +373,11 @@ export async function start() {
       if (pendingBridgeRestoreView && sessionPatch) {
         pendingBridgeRestoreView = null;
       }
-      dispatchSignalPatch(
-        combineSignalPatches(app.projectRuntimeSnapshot(snapshot), sessionPatch),
-      );
+      const projectedPatch = combineSignalPatches(app.projectRuntimeSnapshot(snapshot), sessionPatch);
+      const changedPatch = changedSignalPatch(projectedPatch, currentSignals);
+      if (changedPatch) {
+        dispatchSignalPatch(changedPatch);
+      }
     } finally {
       syncingFromBridge = false;
     }

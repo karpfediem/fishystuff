@@ -5,12 +5,77 @@ const {
   createDeferredBridgeStateRefresher,
   deferAfterAnimationFrames,
   bridgeSnapshotMatchesRestoreView,
+  changedSignalPatch,
   restoreViewPatchFromSignalPatch,
   resolveBridgeSnapshot,
   startWhenDomReady,
   start,
 } = await import("./map-app-live.js");
 const { buildSearchProjectionPatchForSignalPatch } = await import("./map-page-derived.js");
+
+test("changedSignalPatch omits unchanged runtime branches", () => {
+  const currentSignals = {
+    _map_runtime: {
+      ready: true,
+      catalog: {
+        layers: [{ layerId: "zone_mask" }],
+        fish: [{ itemId: 1, name: "Yellow Corvina" }],
+      },
+      effectiveFilters: {
+        layerOpacities: { zone_mask: 0.4 },
+      },
+      selection: { zoneRgb: "1,2,3" },
+    },
+    _map_session: {
+      view: { viewMode: "2d", camera: { zoom: 3 } },
+      selection: { zoneRgb: "1,2,3" },
+    },
+  };
+
+  assert.deepEqual(
+    changedSignalPatch({
+      _map_runtime: {
+        ready: true,
+        catalog: {
+          layers: [{ layerId: "zone_mask" }],
+          fish: [{ itemId: 1, name: "Yellow Corvina" }],
+        },
+        effectiveFilters: {
+          layerOpacities: { zone_mask: 0.6 },
+        },
+        selection: { zoneRgb: "1,2,3" },
+      },
+      _map_session: {
+        view: { viewMode: "2d", camera: { zoom: 3 } },
+        selection: { zoneRgb: "1,2,3" },
+      },
+    }, currentSignals),
+    {
+      _map_runtime: {
+        effectiveFilters: {
+          layerOpacities: { zone_mask: 0.6 },
+        },
+      },
+    },
+  );
+
+  assert.equal(
+    changedSignalPatch({
+      _map_runtime: {
+        ready: true,
+        catalog: {
+          layers: [{ layerId: "zone_mask" }],
+          fish: [{ itemId: 1, name: "Yellow Corvina" }],
+        },
+        effectiveFilters: {
+          layerOpacities: { zone_mask: 0.4 },
+        },
+        selection: { zoneRgb: "1,2,3" },
+      },
+    }, currentSignals),
+    null,
+  );
+});
 
 test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge events", () => {
   const currentSnapshot = {
