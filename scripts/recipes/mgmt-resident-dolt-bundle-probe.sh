@@ -12,9 +12,9 @@ bundle_path="$(normalize_named_arg bundle_path "${3-}")"
 gcroot_path="$(normalize_named_arg gcroot_path "${4-/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current}")"
 remote_mgmt_bin="$(normalize_named_arg remote_mgmt_bin "${5-/usr/local/bin/mgmt}")"
 mgmt_bin="$(normalize_named_arg mgmt_bin "${6-}")"
-mgmt_flake="$(normalize_named_arg mgmt_flake "${7-/home/carp/code/playground/mgmt-missing-features}")"
+mgmt_flake="$(normalize_named_arg mgmt_flake "${7-/home/carp/code/mgmt-fishystuff-beta}")"
 mgmt_package="$(normalize_named_arg mgmt_package "${8-minimal}")"
-mgmt_modules_dir="$(normalize_named_arg mgmt_modules_dir "${9-/home/carp/code/mgmt/modules}")"
+mgmt_modules_dir="$(normalize_named_arg mgmt_modules_dir "${9-/home/carp/code/mgmt-fishystuff-beta/modules}")"
 
 require_value "$target" "missing target=... for mgmt-resident-dolt-bundle-probe"
 

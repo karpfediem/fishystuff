@@ -9,19 +9,29 @@ class public_ipv4($st) {
 	} else {
 		""
 	}
+	$static_ip str = $st->static_ip || ""
 
 	panic($server == "", "hetzner-vm-observed public_ipv4 requires server")
 	panic($value_name == "", fmt.printf("missing observed value name for server %s", $server))
 
-	value $value_name {
-		any => "",
+	if $static_ip == "" {
+		value $value_name {
+			any => "",
+		}
+
+		if $enabled {
+			Hetzner:Vm[$server].publicipv4 -> Value[$value_name].any
+		}
 	}
 
-	if $enabled {
-		Hetzner:Vm[$server].publicipv4 -> Value[$value_name].any
+	$ready = if $static_ip == "" {
+		value.get_str($value_name)->ready
+	} else {
+		true
 	}
-
-	$state = value.get_str($value_name)
-	$ready = $state->ready
-	$ip = $state->value
+	$ip = if $static_ip == "" {
+		value.get_str($value_name)->value
+	} else {
+		$static_ip
+	}
 }

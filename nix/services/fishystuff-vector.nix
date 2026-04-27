@@ -124,17 +124,17 @@ let
           }
 
           if .logger == "systemd" {
-            if parse_regex(.message, r'^Starting ') != null {
+            if match!(.message, r'^Starting ') {
               .service_state = "starting"
-            } else if parse_regex(.message, r'^Started ') != null {
+            } else if match!(.message, r'^Started ') {
               .service_state = "started"
-            } else if parse_regex(.message, r'^Stopping ') != null {
+            } else if match!(.message, r'^Stopping ') {
               .service_state = "stopping"
-            } else if parse_regex(.message, r'^Stopped ') != null {
+            } else if match!(.message, r'^Stopped ') {
               .service_state = "stopped"
-            } else if parse_regex(.message, r'^Scheduled restart job') != null {
+            } else if match!(.message, r'^Scheduled restart job') {
               .service_state = "restarting"
-            } else if parse_regex(.message, r'^Main process exited') != null || parse_regex(.message, r'Failed with result') != null || parse_regex(.message, r'^Failed ') != null {
+            } else if match!(.message, r'^Main process exited') || match!(.message, r'Failed with result') || match!(.message, r'^Failed ') {
               .service_state = "failed"
             }
           }

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -eu
+
+install -d -m 0700 -o root -g root /root/.ssh
+cat > /root/.ssh/fishystuff-mgmt-control <<'FISHYSTUFF_MGMT_CONTROL_KEY'
+{{ .private_key }}
+FISHYSTUFF_MGMT_CONTROL_KEY
+chmod 0600 /root/.ssh/fishystuff-mgmt-control
+chown root:root /root/.ssh/fishystuff-mgmt-control

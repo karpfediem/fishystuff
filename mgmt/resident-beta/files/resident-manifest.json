@@ -1,6 +1,8 @@
 {
   "cluster": "beta",
-  "hostname": "",
+  "hostname": "site-nbg1-beta",
+  "telemetry_hostname": "telemetry-nbg1",
+  "prod_hostname": "site-nbg1-prod",
   "public_urls": {
     "site_base_url": "https://beta.fishystuff.fish",
     "api_base_url": "https://api.beta.fishystuff.fish",
@@ -37,7 +39,7 @@
   },
   "tls": {
     "enabled": false,
-    "certificate_name": "beta-nbg1-api-db-edge-tls",
+    "certificate_name": "site-nbg1-beta-edge-tls",
     "acme_email": "acme@karpfen.dev",
     "challenge": "http-01",
     "dns_provider": "",

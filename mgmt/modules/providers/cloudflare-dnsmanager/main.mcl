@@ -1,0 +1,40 @@
+import "fmt"
+
+class record($st) {
+	$name str = $st->name
+	$apitoken str = $st->apitoken || ""
+	$state str = $st->state || "exists"
+	$zone str = $st->zone
+	$type str = $st->type
+	$record_name str = $st->record_name || $name
+	$content str = $st->content || ""
+	$ttl int = $st->ttl || 1
+	$proxied bool = $st->proxied || false
+	$comment str = $st->comment || ""
+	$poll_raw int = $st->poll || 60
+	$poll int = if $poll_raw < 60 {
+		60
+	} else {
+		$poll_raw
+	}
+
+	panic($name == "", "cloudflare-dnsmanager provider requires name")
+	panic($apitoken == "", fmt.printf("missing Cloudflare API token for record %s", $name))
+	panic($zone == "", fmt.printf("missing zone for record %s", $name))
+	panic($type == "", fmt.printf("missing dns record type for record %s", $name))
+	panic(($state != "absent") and ($content == ""), fmt.printf("missing dns record content for record %s", $name))
+
+	cloudflare:dnsmanager $name {
+		apitoken => $apitoken,
+		state => $state,
+		zone => $zone,
+		record_name => $record_name,
+		type => $type,
+		content => $content,
+		ttl => $ttl,
+		proxied => $proxied,
+		purge => false,
+		comment => $comment,
+		Meta:poll => $poll,
+	}
+}

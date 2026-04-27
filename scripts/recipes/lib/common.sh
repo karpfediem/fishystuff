@@ -291,7 +291,7 @@ deployment_resident_hostname() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
-    beta) printf '%s' "$(deployment_env_or_default "$deployment" "resident_hostname" "beta-nbg1-api-db")" ;;
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "resident_hostname" "site-nbg1-beta")" ;;
     production) printf '%s' "$(deployment_env_value "$deployment" "resident_hostname")" ;;
     local) printf '%s' "" ;;
   esac
@@ -303,6 +303,46 @@ deployment_resident_target() {
   case "$deployment" in
     beta) printf '%s' "$(deployment_env_or_default "$deployment" "resident_target" "root@beta.fishystuff.fish")" ;;
     production) printf '%s' "$(deployment_env_value "$deployment" "resident_target")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_telemetry_target() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "telemetry_target" "root@telemetry.beta.fishystuff.fish")" ;;
+    production) printf '%s' "$(deployment_env_value "$deployment" "telemetry_target")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_control_target() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "mgmt-root")" ;;
+    production) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "$(deployment_resident_target "$deployment")")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_telemetry_hostname() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "telemetry_hostname" "telemetry-nbg1")" ;;
+    production) printf '%s' "$(deployment_env_value "$deployment" "telemetry_hostname")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_prod_hostname() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "prod_hostname" "site-nbg1-prod")" ;;
+    production) printf '%s' "$(deployment_env_value "$deployment" "prod_hostname")" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -346,8 +386,28 @@ deployment_tls_challenge() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
-    beta) printf '%s' "$(deployment_env_or_default "$deployment" "tls_challenge" "http-01")" ;;
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "tls_challenge" "dns-01")" ;;
     production) printf '%s' "$(deployment_env_or_default "$deployment" "tls_challenge" "http-01")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_tls_dns_provider() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "tls_dns_provider" "cloudflare")" ;;
+    production) printf '%s' "$(deployment_env_value "$deployment" "tls_dns_provider")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_tls_dns_zone() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "tls_dns_zone" "fishystuff.fish")" ;;
+    production) printf '%s' "$(deployment_env_value "$deployment" "tls_dns_zone")" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -713,10 +773,20 @@ copy_resident_common_modules() {
   local module_name=""
 
   mkdir -p "$deploy_dir/modules/lib" "$deploy_dir/modules/providers"
-  for module_name in fishystuff-beta-access hetzner-firewall-gate systemd-daemon-reload; do
+  for module_name in fishystuff-beta-access fishystuff-beta-layout fishystuff-mgmt-control-key hetzner-location hetzner-vm-observed systemd-daemon-reload; do
     cp -a "$RECIPE_REPO_ROOT/mgmt/modules/lib/$module_name" "$deploy_dir/modules/lib/"
   done
+  for module_name in fishystuff-beta fishystuff-beta-dns fishystuff-beta-region; do
+    cp -a "$RECIPE_REPO_ROOT/mgmt/modules/$module_name" "$deploy_dir/modules/"
+  done
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/cloudflare-dnsmanager" "$deploy_dir/modules/providers/"
   cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-firewall" "$deploy_dir/modules/providers/"
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-network" "$deploy_dir/modules/providers/"
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-ssh-key" "$deploy_dir/modules/providers/"
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-vm" "$deploy_dir/modules/providers/"
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-vm-network" "$deploy_dir/modules/providers/"
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-volume" "$deploy_dir/modules/providers/"
+  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-vm-volume" "$deploy_dir/modules/providers/"
   mkdir -p "$deploy_dir/modules/github.com/purpleidea/mgmt/modules"
   cp -a "$mgmt_modules_dir/misc" "$deploy_dir/modules/github.com/purpleidea/mgmt/modules/"
 }

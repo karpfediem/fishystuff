@@ -1,11 +1,15 @@
 import "deploy"
 import "encoding"
+import "sys"
 import "modules/fishystuff-beta-resident/"
 
 $manifest struct{
 	cluster str;
 	hostname str;
+	telemetry_hostname str;
+	prod_hostname str;
 	public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
+	host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 	deployment_environment str;
 	startup_mode str;
 	dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
@@ -19,6 +23,25 @@ $manifest struct{
 
 panic($manifest->hostname == "", "missing resident beta hostname in /files/resident-manifest.json")
 
-include fishystuff_beta_resident.host(struct {
-	manifest => $manifest,
-})
+$control_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_CONTROL_HOSTNAME", "mgmt-root")
+$telemetry_hostname = $manifest->telemetry_hostname || "telemetry-nbg1"
+$prod_hostname = $manifest->prod_hostname || "site-nbg1-prod"
+$runtime_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_RUNTIME_HOSTNAME", sys.hostname())
+
+if $runtime_hostname == $control_hostname {
+	include fishystuff_beta_resident.infra_control(struct {
+		manifest => $manifest,
+	})
+
+	include fishystuff_beta_resident.acme_control(struct {
+		manifest => $manifest,
+		control_hostname => $control_hostname,
+	})
+}
+
+if ($runtime_hostname == $manifest->hostname) or ($runtime_hostname == $telemetry_hostname) or ($runtime_hostname == $prod_hostname) {
+	include fishystuff_beta_resident.host(struct {
+		manifest => $manifest,
+		hostname => $runtime_hostname,
+	})
+}

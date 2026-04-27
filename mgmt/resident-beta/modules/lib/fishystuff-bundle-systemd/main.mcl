@@ -56,7 +56,11 @@ class unit($st) {
 		Notify => Exec["${reload_name}"],
 	}
 
-	include systemd_daemon_reload.reload($reload_name)
+	include systemd_daemon_reload.unit_reload(struct {
+		name => $reload_name,
+		unit_name => $unit_name,
+		install_path => $install_path,
+	})
 
 	include fishystuff_systemd.service(struct {
 		name => $service_name,

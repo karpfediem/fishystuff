@@ -10,12 +10,15 @@ cd "$RECIPE_REPO_ROOT"
 exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$@"
 
 target=""
-host="beta-nbg1-api-db"
+deploy_target=""
+host="site-nbg1-beta"
+telemetry_host="telemetry-nbg1"
+prod_host="site-nbg1-prod"
 timeout="120"
 remote_mgmt_bin="/usr/local/bin/mgmt"
 api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
 dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current"
-mgmt_modules_dir="/home/carp/code/mgmt/modules"
+mgmt_modules_dir="/home/carp/code/mgmt-fishystuff-beta/modules"
 remote_nix_max_jobs="0"
 deployment_environment="beta"
 tls_enabled="false"
@@ -34,7 +37,10 @@ for arg in "${overrides[@]}"; do
   [[ -n "$arg" ]] || continue
   case "$arg" in
     target=*) target="${arg#target=}" ;;
+    deploy_target=*) deploy_target="${arg#deploy_target=}" ;;
     host=*) host="${arg#host=}" ;;
+    telemetry_host=*) telemetry_host="${arg#telemetry_host=}" ;;
+    prod_host=*) prod_host="${arg#prod_host=}" ;;
     timeout=*) timeout="${arg#timeout=}" ;;
     remote_mgmt_bin=*) remote_mgmt_bin="${arg#remote_mgmt_bin=}" ;;
     api_gcroot=*) api_gcroot="${arg#api_gcroot=}" ;;
@@ -77,6 +83,7 @@ if [[ -z "$tls_domains_json" ]]; then
 fi
 
 require_value "$target" "missing target=... for mgmt-resident-push-api-db"
+deploy_target="${deploy_target:-$target}"
 
 api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
 dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
@@ -89,6 +96,8 @@ copy_resident_common_modules "$deploy_dir" "$mgmt_modules_dir"
 jq -n \
   --arg cluster "beta" \
   --arg hostname "$host" \
+  --arg telemetry_hostname "$telemetry_host" \
+  --arg prod_hostname "$prod_host" \
   --arg site_base_url "$site_base_url" \
   --arg api_base_url "$api_base_url" \
   --arg cdn_base_url "$cdn_base_url" \
@@ -134,6 +143,8 @@ jq -n \
   '{
     cluster: $cluster,
     hostname: $hostname,
+    telemetry_hostname: $telemetry_hostname,
+    prod_hostname: $prod_hostname,
     public_urls: {
       site_base_url: $site_base_url,
       api_base_url: $api_base_url,
@@ -190,7 +201,8 @@ bash -lc '
     remote_mgmt_bin=/usr/local/bin/mgmt
   fi
   remote_nix_max_jobs="${6:?}"
-  shift 6
+  deploy_target="${7:?}"
+  shift 7
   tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-mgmt-ssh.XXXXXX)"
   trap '\''rm -f "$tmp_key"'\'' EXIT
   remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
@@ -208,8 +220,8 @@ bash -lc '
   SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
   bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
       "$deploy_dir" \
-      "$ssh_target" \
+      "$deploy_target" \
       "$deploy_timeout" \
       "$remote_mgmt_bin"
 ' \
--- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$api_bundle" "$dolt_bundle"
+-- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$deploy_target" "$api_bundle" "$dolt_bundle"

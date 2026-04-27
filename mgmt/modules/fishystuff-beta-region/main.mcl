@@ -6,6 +6,7 @@ import "../providers/hetzner-vm/"
 import "../providers/hetzner-vm-network/"
 import "../providers/hetzner-volume/"
 import "../providers/hetzner-vm-volume/"
+import "../lib/fishystuff-mgmt-control-key/" as fishystuff_mgmt_control_key
 
 class region($st) {
 	include hetzner_location.catalog as locations
@@ -31,6 +32,7 @@ class region($st) {
 	$private_network_zone str = $st->private_network_zone || $location_defaults.network_zone
 	$api_db_enabled bool = $st->api_db_enabled || false
 	$api_db_name str = $st->api_db_name || fmt.printf("%s-api-db", $name_prefix)
+	$api_db_role str = $st->api_db_role || "site"
 	$api_db_servertype str = $st->api_db_servertype || $location_defaults.default_api_db_servertype
 	$api_db_private_ip str = $st->api_db_private_ip || ""
 	$dolt_volume_enabled bool = $st->dolt_volume_enabled || false
@@ -51,6 +53,9 @@ class region($st) {
 	$server_rescue_mode str = $st->server_rescue_mode || ""
 	$server_rescue_keys []str = $st->server_rescue_keys || []
 	$server_ssh_keys = if $ssh_key_name != "" { [$ssh_key_name,] } else { [] }
+	$mgmt_control_enabled bool = $st->mgmt_control_enabled || false
+	$mgmt_control_key_dir str = $st->mgmt_control_key_dir || "/var/lib/fishystuff/mgmt/control-keys"
+	$mgmt_control_open_addr str = $st->mgmt_control_open_addr || "127.0.0.1:2379"
 
 	panic($api_token == "", "missing Hetzner API token; run with SecretSpec profile beta-deploy or set HETZNER_API_TOKEN")
 	panic($private_network_enabled and ($private_network_ip_range == ""), fmt.printf("missing private network ip range for region %s", $name_prefix))
@@ -92,18 +97,24 @@ class region($st) {
 	}
 
 	if $api_db_enabled {
-		include access.host($api_db_name, "api-db", $region_name) as api_db_host
+		include access.host($api_db_name, $api_db_role, $region_name) as api_db_host
+		include fishystuff_mgmt_control_key.subscriber(struct {
+			name => $api_db_name,
+			enabled => $mgmt_control_enabled and ($infra_state != "absent"),
+			key_dir => $mgmt_control_key_dir,
+			open_addr => $mgmt_control_open_addr,
+		}) as api_db_mgmt_control
 
 		include hetzner_vm.server(struct {
 			name => $api_db_name,
-			role => "api-db",
+			role => $api_db_role,
 			apitoken => $api_token,
 			state => $state,
 			allowrebuild => $allow_rebuild,
 			servertype => $api_db_servertype,
 			datacenter => $location_defaults.datacenter,
 			image => $image,
-			userdata => "",
+			userdata => $api_db_mgmt_control.userdata,
 			sshkeys => $server_ssh_keys,
 			labels => $api_db_host.labels,
 			serverrescuemode => $server_rescue_mode,
@@ -143,6 +154,12 @@ class region($st) {
 
 	if $cdn_enabled {
 		include access.host($cdn_name, "cdn", $region_name) as cdn_host
+		include fishystuff_mgmt_control_key.subscriber(struct {
+			name => $cdn_name,
+			enabled => $mgmt_control_enabled and ($infra_state != "absent"),
+			key_dir => $mgmt_control_key_dir,
+			open_addr => $mgmt_control_open_addr,
+		}) as cdn_mgmt_control
 
 		include hetzner_vm.server(struct {
 			name => $cdn_name,
@@ -153,7 +170,7 @@ class region($st) {
 			servertype => $cdn_servertype,
 			datacenter => $location_defaults.datacenter,
 			image => $image,
-			userdata => "",
+			userdata => $cdn_mgmt_control.userdata,
 			sshkeys => $server_ssh_keys,
 			labels => $cdn_host.labels,
 			serverrescuemode => $server_rescue_mode,
@@ -180,6 +197,12 @@ class region($st) {
 
 	if $telemetry_enabled {
 		include access.host($telemetry_name, "telemetry", $region_name) as telemetry_host
+		include fishystuff_mgmt_control_key.subscriber(struct {
+			name => $telemetry_name,
+			enabled => $mgmt_control_enabled and ($infra_state != "absent"),
+			key_dir => $mgmt_control_key_dir,
+			open_addr => $mgmt_control_open_addr,
+		}) as telemetry_mgmt_control
 
 		include hetzner_vm.server(struct {
 			name => $telemetry_name,
@@ -190,7 +213,7 @@ class region($st) {
 			servertype => $telemetry_servertype,
 			datacenter => $location_defaults.datacenter,
 			image => $image,
-			userdata => "",
+			userdata => $telemetry_mgmt_control.userdata,
 			sshkeys => $server_ssh_keys,
 			labels => $telemetry_host.labels,
 			serverrescuemode => $server_rescue_mode,

@@ -25,3 +25,23 @@ class reload($name) {
 		ifshell => "/usr/bin/bash",
 	}
 }
+
+class unit_reload($st) {
+	$name str = $st->name
+	$unit_name str = $st->unit_name
+	$install_path str = $st->install_path
+
+	exec "${name}" {
+		cmd => "/usr/bin/systemctl",
+		args => [
+			"daemon-reload",
+		],
+
+		watchfiles => [
+			$install_path,
+		],
+
+		ifcmd => "/usr/bin/test \"$(/usr/bin/systemctl show -P NeedDaemonReload '${unit_name}' 2>/dev/null || true)\" = yes || ! /usr/bin/systemctl cat '${unit_name}' >/dev/null 2>&1",
+		ifshell => "/usr/bin/bash",
+	}
+}

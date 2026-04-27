@@ -10,37 +10,35 @@ class catalog($st) {
 
 class catalog:host($host_name) {
 	$hostname = $host_name
-	$api_db_name = fmt.printf("%s-nbg1-api-db", $cluster)
-	$ash_cdn_name = fmt.printf("%s-ash-cdn", $cluster)
-	$sin_cdn_name = fmt.printf("%s-sin-cdn", $cluster)
-	$region = if $hostname == $api_db_name {
+	$site_beta_name = "site-nbg1-beta"
+	$site_prod_name = "site-nbg1-prod"
+	$telemetry_name = "telemetry-nbg1"
+	$region = if ($hostname == $site_beta_name) or ($hostname == $site_prod_name) or ($hostname == $telemetry_name) {
 		"nbg1"
 	} else {
-		if $hostname == $ash_cdn_name {
-			"ash"
+		""
+	}
+	$role = if $hostname == $site_beta_name {
+		"site-beta"
+	} else {
+		if $hostname == $site_prod_name {
+			"site-prod"
 		} else {
-			if $hostname == $sin_cdn_name {
-				"sin"
+			if $hostname == $telemetry_name {
+				"telemetry"
 			} else {
 				""
 			}
 		}
 	}
-	$role = if $hostname == $api_db_name {
-		"api-db"
-	} else {
-		if ($hostname == $ash_cdn_name) or ($hostname == $sin_cdn_name) {
-			"cdn"
-		} else {
-			""
-		}
-	}
-	$api_enabled = $hostname == $api_db_name
-	$dolt_enabled = $hostname == $api_db_name
-	$cdn_expected = ($hostname == $ash_cdn_name) or ($hostname == $sin_cdn_name)
-	$telemetry_expected = $hostname == $api_db_name
-	$dolt_volume_device = if $hostname == $api_db_name {
-		fmt.printf("/dev/disk/by-id/scsi-0HC_Volume_%s-nbg1-dolt-data", $cluster)
+	$api_enabled = $hostname == $site_beta_name
+	$dolt_enabled = $hostname == $site_beta_name
+	$site_beta_expected = $hostname == $site_beta_name
+	$site_prod_expected = $hostname == $site_prod_name
+	$telemetry_expected = $hostname == $telemetry_name
+	$cdn_expected = false
+	$dolt_volume_device = if $hostname == $site_beta_name {
+		fmt.printf("/dev/disk/by-id/scsi-0HC_Volume_%s-dolt-data", $site_beta_name)
 	} else {
 		""
 	}

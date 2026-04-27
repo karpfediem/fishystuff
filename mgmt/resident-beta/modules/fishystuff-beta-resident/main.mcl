@@ -1,12 +1,18 @@
 import "fmt"
+import "sys"
 import "../lib/fishystuff-beta-resident-layout/" as fishystuff_beta_resident_layout
+import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
 import "../fishystuff-beta-resident-core/"
+import "../fishystuff-beta/" as fishystuff_beta
 
 class host($st) {
 	$manifest struct{
 		cluster str;
 		hostname str;
+		telemetry_hostname str;
+		prod_hostname str;
 		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
+		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
 		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
@@ -15,7 +21,8 @@ class host($st) {
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
 		services map{str: struct{bundle_path str; gcroot_path str}}
 	} = $st->manifest
-	$hostname str = $manifest->hostname
+	$hostname_arg str = $st->hostname
+	$hostname str = if $hostname_arg != "" { $hostname_arg } else { $manifest->hostname }
 	$cluster str = $manifest->cluster || "beta"
 	$deployment_environment str = $manifest->deployment_environment || "beta"
 
@@ -23,44 +30,149 @@ class host($st) {
 		cluster => $cluster,
 	}) as layout
 	include layout.host($hostname) as host_layout
-	$api_db_host bool = $host_layout.api_enabled or $host_layout.dolt_enabled
+	$site_host bool = $host_layout.api_enabled or $host_layout.dolt_enabled
+	$telemetry_host bool = $host_layout.telemetry_expected
+	$prod_deferred bool = $host_layout.site_prod_expected
 
-	panic(not $api_db_host, fmt.printf("host %s is not an api-db resident host in the current beta topology", $hostname))
+	if $site_host {
+		include fishystuff_beta_resident_core.api_db_host(struct {
+			manifest => $manifest,
+			hostname => $hostname,
+			site_base_url => $manifest->public_urls->site_base_url || $host_layout.site_base_url,
+			api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
+			cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
+			telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
+			deployment_environment => $deployment_environment,
+			startup_mode => $manifest->startup_mode || "enabled",
+			dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
+			dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
+			dolt_database_name => $manifest->dolt->database_name || "fishystuff",
+			dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
+			dolt_clone_depth => $manifest->dolt->clone_depth || "1",
+			dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
+			dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",
+			dolt_port => $manifest->dolt->port || "3306",
+			site_root_dir => $manifest->content_roots->site_root_dir || "/srv/fishystuff/site",
+			cdn_root_dir => $manifest->content_roots->cdn_root_dir || "/srv/fishystuff/cdn",
+		})
+	}
 
-	include fishystuff_beta_resident_core.api_db_host(struct {
-		manifest => $manifest,
-		hostname => $hostname,
-		site_base_url => $manifest->public_urls->site_base_url || $host_layout.site_base_url,
-		api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
-		cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
-		telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
-		deployment_environment => $deployment_environment,
-		startup_mode => $manifest->startup_mode || "enabled",
-		dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
-		dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
-		dolt_database_name => $manifest->dolt->database_name || "fishystuff",
-		dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
-		dolt_clone_depth => $manifest->dolt->clone_depth || "1",
-		dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
-		dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",
-		dolt_port => $manifest->dolt->port || "3306",
-		site_root_dir => $manifest->content_roots->site_root_dir || "/srv/fishystuff/site",
-		cdn_root_dir => $manifest->content_roots->cdn_root_dir || "/srv/fishystuff/cdn",
+	if $telemetry_host {
+		include fishystuff_beta_resident_core.telemetry_host(struct {
+			manifest => $manifest,
+			hostname => $hostname,
+			startup_mode => $manifest->startup_mode || "enabled",
+		})
+	}
+
+	panic(
+		(not $site_host) and (not $telemetry_host) and (not $prod_deferred),
+		fmt.printf(
+			"host %s is not active in the current beta resident topology",
+			$hostname
+		)
+	)
+}
+
+class infra_control($st) {
+	$manifest struct{
+		cluster str;
+		hostname str;
+		telemetry_hostname str;
+		prod_hostname str;
+		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
+		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
+		deployment_environment str;
+		startup_mode str;
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		content_roots struct{site_root_dir str; cdn_root_dir str};
+		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
+		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
+		services map{str: struct{bundle_path str; gcroot_path str}}
+	} = $st->manifest
+	$cluster str = $manifest->cluster || "beta"
+	$api_token str = sys.getenv("HETZNER_API_TOKEN")
+	$ssh_key_name str = sys.defaultenv("HETZNER_SSH_KEY_NAME", fmt.printf("fishystuff-%s-deploy", $cluster))
+	$ssh_public_key str = sys.defaultenv("HETZNER_SSH_PUBLIC_KEY", "")
+	$cloudflare_api_token str = sys.defaultenv("CLOUDFLARE_API_TOKEN", "")
+	$state_env str = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "")
+	$state str = if $state_env != "" { $state_env } else { "running" }
+	$allow_rebuild str = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
+	$image_env str = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "")
+	$image str = if $image_env != "" { $image_env } else { "debian-13" }
+	$http01_host str = sys.defaultenv("FISHYSTUFF_HETZNER_HTTP01_HOST", "")
+	$https_host str = sys.defaultenv("FISHYSTUFF_HETZNER_HTTPS_HOST", "")
+	$mgmt_control_env str = sys.defaultenv("FISHYSTUFF_HETZNER_MGMT_CONTROL", "")
+	$mgmt_control_enabled bool = (if $mgmt_control_env != "" { $mgmt_control_env } else { "true" }) == "true"
+	$mgmt_control_key_dir_env str = sys.defaultenv("FISHYSTUFF_HETZNER_MGMT_CONTROL_KEY_DIR", "")
+	$mgmt_control_key_dir str = if $mgmt_control_key_dir_env != "" { $mgmt_control_key_dir_env } else { "/var/lib/fishystuff/mgmt/control-keys" }
+
+	include fishystuff_beta.topology(struct {
+		cluster => $cluster,
+		api_token => $api_token,
+		ssh_key_name => $ssh_key_name,
+		ssh_public_key => $ssh_public_key,
+		cloudflare_api_token => $cloudflare_api_token,
+		state => $state,
+		allow_rebuild => $allow_rebuild,
+		image => $image,
+		http01_host => $http01_host,
+		https_host => $https_host,
+		mgmt_control_enabled => $mgmt_control_enabled,
+		mgmt_control_key_dir => $mgmt_control_key_dir,
+		site_public_ipv4_hint => $manifest->host_hints->site_public_ipv4 || "",
+		telemetry_public_ipv4_hint => $manifest->host_hints->telemetry_public_ipv4 || "",
+		poll_seconds => 60,
+		wait_interval_seconds => 5,
+		wait_timeout_seconds => 600,
 	})
+}
 
-	panic(
-		(not $api_db_host) and $host_layout.cdn_expected,
-		fmt.printf(
-			"host %s is a CDN edge in the current beta topology, but fishystuff-cdn resident bundle activation is not implemented yet",
-			$hostname
-		)
-	)
+class acme_control($st) {
+	$manifest struct{
+		cluster str;
+		hostname str;
+		telemetry_hostname str;
+		prod_hostname str;
+		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
+		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
+		deployment_environment str;
+		startup_mode str;
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		content_roots struct{site_root_dir str; cdn_root_dir str};
+		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
+		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
+		services map{str: struct{bundle_path str; gcroot_path str}}
+	} = $st->manifest
+	$control_hostname str = $st->control_hostname || "mgmt-root"
+	$cluster str = $manifest->cluster || "beta"
+	$tls_certificate_name str = if $manifest->tls->certificate_name != "" {
+		$manifest->tls->certificate_name
+	} else {
+		fmt.printf("%s-edge-tls", $manifest->hostname)
+	}
+	$tls_acme_email str = $manifest->tls->acme_email
+	$tls_challenge str = $manifest->tls->challenge
+	$tls_dns_provider str = $manifest->tls->dns_provider || ""
+	$tls_dns_env map{str: str} = $manifest->tls->dns_env || {}
+	$tls_directory_url str = $manifest->tls->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
+	$tls_domains []str = $manifest->tls->domains
 
-	panic(
-		(not $api_db_host) and $host_layout.telemetry_expected,
-		fmt.printf(
-			"host %s is a telemetry host in the current beta topology, but resident telemetry bundle activation is not implemented yet",
-			$hostname
-		)
-	)
+	if $manifest->tls->enabled {
+		include fishystuff_edge_tls.certificate(struct {
+			cluster => $cluster,
+			hostname => $control_hostname,
+			materialize => false,
+			solve => true,
+			present_dns => false,
+			service_name => "fishystuff-edge",
+			certificate_name => $tls_certificate_name,
+			acme_email => $tls_acme_email,
+			challenge => $tls_challenge,
+			dns_provider => $tls_dns_provider,
+			dns_env => $tls_dns_env,
+			directory_url => $tls_directory_url,
+			domains => $tls_domains,
+		})
+	}
 }

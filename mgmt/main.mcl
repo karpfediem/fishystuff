@@ -6,11 +6,18 @@ $ssh_key_name = sys.defaultenv("HETZNER_SSH_KEY_NAME", "fishystuff-beta-deploy")
 $ssh_public_key = sys.defaultenv("HETZNER_SSH_PUBLIC_KEY", "")
 $cloudflare_api_token = sys.defaultenv("CLOUDFLARE_API_TOKEN", "")
 $cluster = sys.defaultenv("FISHYSTUFF_HETZNER_CLUSTER", "beta")
-$state = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "absent")
+$state_env = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "")
+$state = if $state_env != "" { $state_env } else { "absent" }
 $allow_rebuild = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
-$image = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "debian-13")
+$image_env = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "")
+$image = if $image_env != "" { $image_env } else { "debian-13" }
 $http01_host = sys.defaultenv("FISHYSTUFF_HETZNER_HTTP01_HOST", "")
 $https_host = sys.defaultenv("FISHYSTUFF_HETZNER_HTTPS_HOST", "")
+$mgmt_control_default = if sys.hostname() == "mgmt-root" { "true" } else { "false" }
+$mgmt_control_env = sys.defaultenv("FISHYSTUFF_HETZNER_MGMT_CONTROL", "")
+$mgmt_control_enabled = (if $mgmt_control_env != "" { $mgmt_control_env } else { $mgmt_control_default }) == "true"
+$mgmt_control_key_dir_env = sys.defaultenv("FISHYSTUFF_HETZNER_MGMT_CONTROL_KEY_DIR", "")
+$mgmt_control_key_dir = if $mgmt_control_key_dir_env != "" { $mgmt_control_key_dir_env } else { "/var/lib/fishystuff/mgmt/control-keys" }
 
 include fishystuff_beta.topology(struct {
 	cluster => $cluster,
@@ -23,6 +30,8 @@ include fishystuff_beta.topology(struct {
 	image => $image,
 	http01_host => $http01_host,
 	https_host => $https_host,
+	mgmt_control_enabled => $mgmt_control_enabled,
+	mgmt_control_key_dir => $mgmt_control_key_dir,
 	poll_seconds => 60,
 	wait_interval_seconds => 5,
 	wait_timeout_seconds => 600,

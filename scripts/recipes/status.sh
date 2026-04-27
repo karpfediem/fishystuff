@@ -40,6 +40,7 @@ else
 fi
 
 resident_target="$(deployment_resident_target "$deployment")"
+telemetry_target="$(deployment_telemetry_target "$deployment")"
 resident_host="$(deployment_resident_hostname "$deployment")"
 
 declare -A remote_unit_active=()
@@ -154,10 +155,35 @@ EOF
   done <<< "$remote_output"
 }
 
+status_target_for_service() {
+  local service
+  service="$(canonical_public_service_name "$1")"
+  case "$service" in
+    dashboard | grafana | jaeger | loki | logs | loki-status | otel-collector | prometheus | telemetry | vector)
+      if [[ -n "$telemetry_target" ]]; then
+        printf '%s' "$telemetry_target"
+      else
+        printf '%s' "$resident_target"
+      fi
+      ;;
+    *)
+      printf '%s' "$resident_target"
+      ;;
+  esac
+}
+
 if [[ "$deployment" != "local" ]]; then
   require_value "$resident_target" "deployment $deployment does not define a resident target"
   require_value "$resident_host" "deployment $deployment does not define a resident hostname"
-  load_remote_state "$resident_target" "${requested_services[@]}"
+  declare -A services_by_target=()
+  for service in "${requested_services[@]}"; do
+    target_for_service="$(status_target_for_service "$service")"
+    services_by_target["$target_for_service"]+="${service} "
+  done
+  for target_for_service in "${!services_by_target[@]}"; do
+    read -r -a target_services <<< "${services_by_target[$target_for_service]}"
+    load_remote_state "$target_for_service" "${target_services[@]}"
+  done
 fi
 
 print_service_status() {
@@ -230,6 +256,9 @@ print_service_status() {
 printf 'deployment: %s\n' "$deployment"
 if [[ "$deployment" != "local" ]]; then
   printf 'resident_target: %s\n' "$resident_target"
+  if [[ -n "$telemetry_target" ]]; then
+    printf 'telemetry_target: %s\n' "$telemetry_target"
+  fi
   printf 'resident_host: %s\n' "$resident_host"
 fi
 

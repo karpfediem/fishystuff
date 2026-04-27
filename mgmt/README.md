@@ -17,11 +17,13 @@ mgmt/
     fishystuff-beta-dns/
     fishystuff-beta-region/
     lib/
+      fishystuff-beta-access/
       fishystuff-beta-layout/
+      fishystuff-mgmt-control-key/
       hetzner-vm-observed/
       hetzner-location/
     providers/
-      cloudflare-dns-record/
+      cloudflare-dnsmanager/
       hetzner-firewall/
       hetzner-network/
       hetzner-ssh-key/
@@ -48,9 +50,14 @@ Shared helper module:
     `catalog:sin`
 - `modules/lib/fishystuff-beta-access/`
   - exports `catalog`
-  - exports nested firewall policy classes `catalog:ssh` and
-    `catalog:public_http`
+  - exports nested firewall policy classes `catalog:ssh`, `catalog:http_01`,
+    and `catalog:https`
   - exports nested host label class `catalog:host(<role>, <region>)`
+- `modules/lib/fishystuff-mgmt-control-key/`
+  - exports `subscriber(<host>)`
+  - generates per-subscriber SSH tunnel keys on the control host
+  - renders VM userdata that installs the matching private key on subscribers
+  - installs restricted `authorized_keys` entries on `mgmt-root`
 - `modules/lib/hetzner-vm-observed/`
   - exports `public_ipv4(<server>)`
 - `modules/lib/hetzner-location/`
@@ -59,7 +66,7 @@ Shared helper module:
 
 Internal provider wrapper:
 
-- `modules/providers/cloudflare-dns-record/`
+- `modules/providers/cloudflare-dnsmanager/`
 - `modules/providers/hetzner-firewall/`
 - `modules/providers/hetzner-network/`
 - `modules/providers/hetzner-ssh-key/`
@@ -70,22 +77,25 @@ Internal provider wrapper:
 
 Current scope:
 
-- manage the named beta VPS inventory in Hetzner across three regions
+- manage the named beta VPS inventory in Hetzner for the current `nbg1`
+  topology
 - manage the project SSH key used for bootstrap access on new hosts
 - manage cluster-scoped Hetzner firewalls for SSH and public HTTP/HTTPS access
 - manage the `nbg1` private core network in Hetzner
-- manage the Dolt data volume on `beta-nbg1-api-db`
+- manage the Dolt data volume on `site-nbg1-beta`
 - attach the `nbg1` core hosts to the private network
 - optionally manage beta Cloudflare DNS records for `beta`, `api.beta`,
   `cdn.beta`, and `telemetry.beta`
 - label each managed server with cluster, region, role, and firewall selector
   labels
+- generate and install per-subscriber mgmt control SSH tunnel keys
 - bootstrap a resident `mgmt` service on a host over SSH after the VM exists
 - support future host-local `mgmt deploy` updates over SSH without exposing etcd
-- keep the desired first stable beta topology explicit:
-  - `beta-nbg1-api-db`
-  - `beta-ash-cdn`
-  - `beta-sin-cdn`
+- keep the desired first beta topology explicit:
+  - `mgmt-root` as the single embedded etcd node
+  - `site-nbg1-beta` as the beta site/API/Dolt host
+  - `telemetry-nbg1` as shared telemetry for beta and later prod traffic
+  - `site-nbg1-prod` as a deferred prod host
 - provide a local bootstrap entrypoint that reads `HETZNER_API_TOKEN` from the
   SecretSpec `beta-deploy` profile
 - keep the initial beta inventory within the current project primary-IP ceiling
@@ -110,12 +120,12 @@ first-class post-create lifecycle or the full edge-hardening story.
 
 Current compact beta shape:
 
-- `beta-nbg1-api-db` is the single `nbg1` core host
-- that core host is intended to carry Dolt, the API, and telemetry service
-  placement in the first beta
-- `beta-ash-cdn` and `beta-sin-cdn` are the public CDN edge hosts
-- there is intentionally no dedicated `beta-nbg1-cdn` or
-  `beta-nbg1-telemetry` host in this initial shape
+- `mgmt-root` is the only embedded etcd member and also runs ACME solvers
+- `site-nbg1-beta` carries beta site, API, Dolt, and edge serving
+- `telemetry-nbg1` carries the shared telemetry stack and its public edge route
+- `site-nbg1-prod` is modeled but intentionally disabled until beta works again
+- `ash` and `sin` CDN hosts are disabled until we have real geo-routing such as
+  GeoDNS or BGP
 
 Safety defaults:
 
@@ -136,7 +146,7 @@ At the moment, validation and apply runs for this topology require an `mgmt`
 binary that includes the local `hetzner:ssh_key` and `hetzner:firewall`
 resource work. Until that lands in your default `mgmt` checkout, point
 `mgmt-beta-unify` and `mgmt-beta-bootstrap` at a binary built from
-`/home/carp/code/playground/mgmt-missing-features`.
+`/home/carp/code/mgmt-fishystuff-beta`.
 
 Typical local bootstrap run:
 
@@ -176,13 +186,17 @@ Resident host kickstart over SSH:
 
 ```bash
 just mgmt-resident-kickstart-remote \
-  target=root@<host-ip> \
-  host=beta-nbg1-api-db
+  target=mgmt-root \
+  host=mgmt-root
+
+just mgmt-resident-kickstart-remote \
+  target=root@<beta-nbg1-public-ip-or-name> \
+  host=site-nbg1-beta
 ```
 
 The default resident handoff now builds `mgmt` from
-`/home/carp/code/playground/mgmt-missing-features#minimal`, which keeps the
-remote closure small enough for weak Hetzner VPS targets. Override
+`/home/carp/code/mgmt-fishystuff-beta#minimal`, which keeps the remote closure
+small enough for weak Hetzner VPS targets. Override
 `mgmt_flake=` or `mgmt_package=` if you need a different checkout or package
 output.
 
@@ -192,6 +206,14 @@ Routine operator entrypoints:
 just deploy beta
 just status beta
 ```
+
+The beta control target defaults to `mgmt-root`, so routine deploys
+write the resident graph once through `mgmt-root`. Nix closures are copied to
+the beta site target and telemetry target before deployment; GC-root reuse is
+looked up on the host that owns each service family. The resident graph is
+scoped by the runtime hostname before activating workload resources, so
+`mgmt-root` can participate in the world without applying the `site-nbg1-beta`
+workload.
 
 Deploy only a selected service while reusing the currently rooted remote store
 paths for the rest of the resident manifest:
@@ -253,26 +275,27 @@ Default topology inputs:
   - `CLOUDFLARE_API_TOKEN`
 - beta DNS targets are now derived inside the MCL graph from observed
   `hetzner:vm.publicipv4` metadata:
-  - `beta` follows `beta-nbg1-api-db`
-  - `api.beta` follows `beta-nbg1-api-db`
-  - `telemetry.beta` follows `beta-nbg1-api-db` unless a dedicated telemetry
-    host is enabled later
-  - `cdn.beta` is a multi-value record set assembled from the enabled CDN hosts
+  - `beta` follows `site-nbg1-beta`
+  - `api.beta` follows `site-nbg1-beta`
+  - `cdn.beta` follows `site-nbg1-beta` for now
+  - `telemetry.beta` follows `telemetry-nbg1`, falling back to
+    `site-nbg1-beta` only while telemetry has no observed public IPv4
 - `nbg1` core region:
   - private network: `beta-nbg1-private`
-  - private network range: `10.42.0.0/16`
-  - private subnet range: `10.42.0.0/24`
+  - private network range: `10.0.0.0/16`
+  - private subnet range: `10.0.0.0/24`
   - private IPs:
-    - `beta-nbg1-api-db`: `10.42.0.10`
-  - Dolt data volume: `beta-nbg1-dolt-data` at `20 GB`
+    - `mgmt-root`: `10.0.0.2`
+    - `site-nbg1-beta`: `10.0.0.3`
+    - `telemetry-nbg1`: `10.0.0.4`
+    - `site-nbg1-prod`: `10.0.0.5` when prod is enabled later
+  - Dolt data volume: `site-nbg1-beta-dolt-data` at `20 GB`
   - server plans:
-    - `beta-nbg1-api-db`: `cx33`
-- `ash` edge region:
-  - server plan:
-    - `beta-ash-cdn`: `cpx11`
-- `sin` edge region:
-  - server plan:
-    - `beta-sin-cdn`: `cpx12`
+    - `site-nbg1-beta`: `cx33`
+    - `telemetry-nbg1`: `cx33`
+    - `site-nbg1-prod`: `cx33` when prod is enabled later
+- `ash` and `sin` edge regions are known to the layout library but disabled in
+  the current beta topology
 
 Current region guidance:
 
@@ -288,13 +311,12 @@ Current region guidance:
 
 Topology constraint:
 
-- the current topology is intentionally split into separate regional instances
-- only `nbg1` carries the private core network and Dolt state volume
-- only `beta-nbg1-api-db` is created in the `nbg1` region in the current
-  compact beta shape
-- `ash` and `sin` are currently public CDN edge hosts only
-- this avoids trying to stretch one Hetzner private network across different
-  network zones
+- the current topology is intentionally restricted to the `nbg1` region
+- only `mgmt-root` exposes an embedded etcd member, and only on loopback
+- workload hosts subscribe over SSH tunnels to `mgmt-root`
+- only `nbg1` carries the private network and Dolt state volume
+- geo-replicated CDN hosts are intentionally out of scope until a real
+  geo-routing mechanism exists
 - if we later add API or telemetry capacity outside `nbg1`, that should be done
   by adding another regional instance with its own local network and state
   resources, not by sharing the `nbg1` private network
@@ -304,12 +326,19 @@ That bootstrap path intentionally uses mgmt's `--converged-timeout` option and
 
 Resident mgmt operation:
 
-- each host runs one loopback-only resident `mgmt` service under systemd
-- the service starts embedded etcd on `127.0.0.1:2379` and `127.0.0.1:2380`
-- later updates are pushed by SSHing to the host and running `mgmt deploy`
+- `mgmt-root` is the only embedded etcd member and listens on loopback:
+  `127.0.0.1:2379` and `127.0.0.1:2380`
+- `site-nbg1-beta`, `telemetry-nbg1`, and later `site-nbg1-prod` are
+  SSH-tunneled subscribers with `--ssh-url=root@204.168.223.57` and
+  `--seeds=http://127.0.0.1:2379`; they do not expose etcd ports
+- ACME solver resources are scoped to `mgmt-root`; workload hosts materialize
+  the finalized certificate bundle from shared world state
+- later updates are pushed by SSHing to `mgmt-root` and running `mgmt deploy`
   against `--seeds=http://127.0.0.1:2379`
 - this keeps the control surface SSH-only for now and avoids exposing etcd on
   the public internet
+- the subscriber path uses MCL-generated per-host SSH identities installed by
+  VM userdata and restricted by `permitopen="127.0.0.1:2379"` on `mgmt-root`
 - the current resident bootstrap assumes a systemd-based Linux host because
   mgmt's `svc` resource is systemd-specific
 - `--converged-timeout` is a bootstrap-time `mgmt run` concern; the current

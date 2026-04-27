@@ -11,10 +11,16 @@ class resident($st) {
 	$service_name str = $st->service_name || "fishystuff-mgmt"
 	$state_root str = $st->state_root || "/var/lib/fishystuff/mgmt"
 	$unit_dir str = $st->unit_dir || "/etc/systemd/system"
-	$client_urls str = $st->client_urls || "http://127.0.0.1:2379"
-	$server_urls str = $st->server_urls || "http://127.0.0.1:2380"
+	$client_urls str = $st->client_urls || ""
+	$server_urls str = $st->server_urls || ""
 	$advertise_client_urls str = $st->advertise_client_urls || $client_urls
 	$advertise_server_urls str = $st->advertise_server_urls || $server_urls
+	$seeds str = $st->seeds || ""
+	$ssh_url str = $st->ssh_url || ""
+	$ssh_hostkey str = $st->ssh_hostkey || ""
+	$ssh_id str = $st->ssh_id || ""
+	$ssh_id_dir str = $st->ssh_id_dir || "/root/.ssh"
+	$ssh_id_content str = $st->ssh_id_content || ""
 	$startup_mode str = $st->startup_mode || "enabled"
 	$environment_dir str = $st->environment_dir || "/etc/fishystuff"
 	$environment_file str = $st->environment_file || ""
@@ -26,9 +32,18 @@ class resident($st) {
 	$state_root_path = fmt.printf("%s/", $state_root)
 	$unit_dir_path = fmt.printf("%s/", $unit_dir)
 	$environment_dir_path = fmt.printf("%s/", $environment_dir)
+	$ssh_id_dir_path = fmt.printf("%s/", $ssh_id_dir)
 	$service_path = fmt.printf("%s/%s.service", $unit_dir, $service_name)
 	$reload_name = fmt.printf("systemd-daemon-reload-%s", $service_name)
-	$mgmt_exec_start = fmt.printf("%s run --prefix=%s --hostname=%s --client-urls=%s --server-urls=%s --advertise-client-urls=%s --advertise-server-urls=%s --converged-timeout=-1 --max-runtime=0 --no-pgp empty", $mgmt_exec, $state_root, $hostname, $client_urls, $server_urls, $advertise_client_urls, $advertise_server_urls)
+	$seeds_arg = if $seeds != "" { fmt.printf(" --seeds=%s", $seeds) } else { "" }
+	$ssh_url_arg = if $ssh_url != "" { fmt.printf(" --ssh-url=%s", $ssh_url) } else { "" }
+	$ssh_hostkey_arg = if $ssh_hostkey != "" { fmt.printf(" --ssh-hostkey=%s", $ssh_hostkey) } else { "" }
+	$ssh_id_arg = if $ssh_id != "" { fmt.printf(" --ssh-id=%s", $ssh_id) } else { "" }
+	$client_urls_arg = if $client_urls != "" { fmt.printf(" --client-urls=%s", $client_urls) } else { "" }
+	$server_urls_arg = if $server_urls != "" { fmt.printf(" --server-urls=%s", $server_urls) } else { "" }
+	$advertise_client_urls_arg = if $advertise_client_urls != "" { fmt.printf(" --advertise-client-urls=%s", $advertise_client_urls) } else { "" }
+	$advertise_server_urls_arg = if $advertise_server_urls != "" { fmt.printf(" --advertise-server-urls=%s", $advertise_server_urls) } else { "" }
+	$mgmt_exec_start = fmt.printf("%s run --prefix=%s --hostname=%s%s%s%s%s%s%s%s%s --converged-timeout=-1 --max-runtime=0 --no-pgp empty", $mgmt_exec, $state_root, $hostname, $seeds_arg, $ssh_url_arg, $ssh_hostkey_arg, $ssh_id_arg, $client_urls_arg, $server_urls_arg, $advertise_client_urls_arg, $advertise_server_urls_arg)
 	$service_content = golang.template(deploy.readfile("/files/fishystuff-mgmt.service.tmpl"), struct {
 		hostname => $hostname,
 		state_root => $state_root,
@@ -40,6 +55,8 @@ class resident($st) {
 	panic($mgmt_exec_source == "", "resident bootstrap requires mgmt_exec_source")
 	panic(($startup_mode != "enabled") and ($startup_mode != "disabled") and ($startup_mode != "none"), fmt.printf("unknown startup_mode %s", $startup_mode))
 	panic(($environment_file == "") and ($environment_file_content != ""), "resident bootstrap environment_file is required when environment_file_content is set")
+	panic(($ssh_url != "") and ($seeds == ""), "resident bootstrap requires seeds when ssh_url is set")
+	panic(($ssh_id == "") and ($ssh_id_content != ""), "resident bootstrap ssh_id is required when ssh_id_content is set")
 
 	include nix_bootstrap.install(struct {
 		state_parent => $state_parent,
@@ -75,6 +92,26 @@ class resident($st) {
 		file "${environment_file}" {
 			state => "exists",
 			content => fmt.printf("%s\n", $environment_file_content),
+			mode => "u=rw,go=",
+			owner => "root",
+			group => "root",
+			Notify => Svc["${service_name}"],
+		}
+	}
+
+	if $ssh_id_content != "" {
+		file "${ssh_id_dir_path}" {
+			state => "exists",
+			mode => "u=rwx,go=",
+			owner => "root",
+			group => "root",
+		}
+	}
+
+	if $ssh_id_content != "" {
+		file "${ssh_id}" {
+			state => "exists",
+			content => fmt.printf("%s\n", $ssh_id_content),
 			mode => "u=rw,go=",
 			owner => "root",
 			group => "root",
@@ -133,5 +170,10 @@ class resident($st) {
 	if $environment_file_content != "" {
 		File["${environment_dir_path}"] -> File["${environment_file}"]
 		File["${environment_file}"] -> Exec["${reload_name}"]
+	}
+
+	if $ssh_id_content != "" {
+		File["${ssh_id_dir_path}"] -> File["${ssh_id}"]
+		File["${ssh_id}"] -> Exec["${reload_name}"]
 	}
 }

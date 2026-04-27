@@ -13,16 +13,27 @@ class catalog:nbg1 {
 	$name_prefix = fmt.printf("%s-%s", $cluster, $region_name)
 
 	$private_network_enabled = true
-	$private_network_name = fmt.printf("%s-private", $name_prefix)
-	$private_network_ip_range = "10.42.0.0/16"
-	$private_subnet_ip_range = "10.42.0.0/24"
+	$private_network_name = fmt.printf("fishystuff-%s-private", $name_prefix)
+	$private_network_ip_range = "10.0.0.0/16"
+	$private_subnet_ip_range = "10.0.0.0/24"
 
-	$api_db_enabled = true
-	$api_db_private_ip = "10.42.0.10"
-	$api_db_servertype = "cx33"
+	$site_beta_enabled = true
+	$site_beta_name = "site-nbg1-beta"
+	$site_beta_private_ip = "10.0.0.3"
+	$site_beta_servertype = "cx33"
+
+	$site_prod_enabled = false
+	$site_prod_name = "site-nbg1-prod"
+	$site_prod_private_ip = "10.0.0.5"
+	$site_prod_servertype = "cx33"
+
+	$api_db_enabled = $site_beta_enabled
+	$api_db_name = $site_beta_name
+	$api_db_private_ip = $site_beta_private_ip
+	$api_db_servertype = $site_beta_servertype
 
 	$dolt_volume_enabled = true
-	$dolt_volume_name = fmt.printf("%s-dolt-data", $name_prefix)
+	$dolt_volume_name = fmt.printf("%s-dolt-data", $site_beta_name)
 	$dolt_volume_size = 20
 	$dolt_volume_format = "ext4"
 
@@ -30,8 +41,9 @@ class catalog:nbg1 {
 	$cdn_servertype = "cx23"
 	$cdn_private_ip = ""
 
-	$telemetry_enabled = false
-	$telemetry_private_ip = "10.42.0.30"
+	$telemetry_enabled = true
+	$telemetry_name = "telemetry-nbg1"
+	$telemetry_private_ip = "10.0.0.4"
 	$telemetry_servertype = "cx33"
 }
 
@@ -54,7 +66,7 @@ class catalog:ash {
 	$dolt_volume_size = 0
 	$dolt_volume_format = ""
 
-	$cdn_enabled = true
+	$cdn_enabled = false
 	$cdn_servertype = "cpx11"
 	$cdn_private_ip = ""
 
@@ -82,7 +94,7 @@ class catalog:sin {
 	$dolt_volume_size = 0
 	$dolt_volume_format = ""
 
-	$cdn_enabled = true
+	$cdn_enabled = false
 	$cdn_servertype = "cpx12"
 	$cdn_private_ip = ""
 

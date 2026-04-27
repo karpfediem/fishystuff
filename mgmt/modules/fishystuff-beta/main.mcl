@@ -1,7 +1,6 @@
 import "fmt"
 import "../lib/fishystuff-beta-layout/" as fishystuff_beta_layout
 import "../lib/fishystuff-beta-access/" as fishystuff_beta_access
-import "../lib/hetzner-vm-observed/" as hetzner_vm_observed
 import "../providers/hetzner-ssh-key/"
 import "../providers/hetzner-firewall/"
 import "../fishystuff-beta-dns/"
@@ -19,6 +18,11 @@ class topology($st) {
 	$image str = $st->image || "debian-13"
 	$http01_host str = $st->http01_host || ""
 	$https_host str = $st->https_host || ""
+	$mgmt_control_enabled bool = $st->mgmt_control_enabled || false
+	$mgmt_control_key_dir str = $st->mgmt_control_key_dir || "/var/lib/fishystuff/mgmt/control-keys"
+	$mgmt_control_open_addr str = $st->mgmt_control_open_addr || "127.0.0.1:2379"
+	$site_public_ipv4_hint str = $st->site_public_ipv4_hint || ""
+	$telemetry_public_ipv4_hint str = $st->telemetry_public_ipv4_hint || ""
 	$poll_seconds int = $st->poll_seconds || 60
 	$wait_interval_seconds int = $st->wait_interval_seconds || 5
 	$wait_timeout_seconds int = $st->wait_timeout_seconds || 600
@@ -41,63 +45,30 @@ class topology($st) {
 	include layout.nbg1 as nbg1
 	include layout.ash as ash
 	include layout.sin as sin
-	$nbg1_api_db_name str = fmt.printf("%s-api-db", $nbg1.name_prefix)
-	$nbg1_cdn_name str = fmt.printf("%s-cdn", $nbg1.name_prefix)
-	$nbg1_telemetry_name str = fmt.printf("%s-telemetry", $nbg1.name_prefix)
-	$ash_cdn_name str = fmt.printf("%s-cdn", $ash.name_prefix)
-	$sin_cdn_name str = fmt.printf("%s-cdn", $sin.name_prefix)
+	$site_beta_name str = $nbg1.site_beta_name
+	$telemetry_name str = $nbg1.telemetry_name
 
-	include hetzner_vm_observed.public_ipv4(struct {
-		server => $nbg1_api_db_name,
-		enabled => $nbg1.api_db_enabled,
-		value_name => fmt.printf("%s-dns-publicipv4", $nbg1_api_db_name),
-	}) as nbg1_api_db_public_ipv4
-
-	include hetzner_vm_observed.public_ipv4(struct {
-		server => $nbg1_cdn_name,
-		enabled => $nbg1.cdn_enabled,
-		value_name => fmt.printf("%s-dns-publicipv4", $nbg1_cdn_name),
-	}) as nbg1_cdn_public_ipv4
-
-	include hetzner_vm_observed.public_ipv4(struct {
-		server => $nbg1_telemetry_name,
-		enabled => $nbg1.telemetry_enabled,
-		value_name => fmt.printf("%s-dns-publicipv4", $nbg1_telemetry_name),
-	}) as nbg1_telemetry_public_ipv4
-
-	include hetzner_vm_observed.public_ipv4(struct {
-		server => $ash_cdn_name,
-		enabled => $ash.cdn_enabled,
-		value_name => fmt.printf("%s-dns-publicipv4", $ash_cdn_name),
-	}) as ash_cdn_public_ipv4
-
-	include hetzner_vm_observed.public_ipv4(struct {
-		server => $sin_cdn_name,
-		enabled => $sin.cdn_enabled,
-		value_name => fmt.printf("%s-dns-publicipv4", $sin_cdn_name),
-	}) as sin_cdn_public_ipv4
-
-	$core_public_ipv4 str = $nbg1_api_db_public_ipv4.ip
-	$site_dns_targets []str = if $core_public_ipv4 != "" {
-		[$core_public_ipv4,]
+	$site_public_ipv4 str = $site_public_ipv4_hint
+	$site_dns_targets []str = if $site_public_ipv4 != "" {
+		[$site_public_ipv4,]
 	} else {
 		[]
 	}
-	$api_dns_targets []str = if $core_public_ipv4 != "" {
-		[$core_public_ipv4,]
+	$api_dns_targets []str = if $site_public_ipv4 != "" {
+		[$site_public_ipv4,]
 	} else {
 		[]
 	}
-	$cdn_dns_targets []str = if $core_public_ipv4 != "" {
-		[$core_public_ipv4,]
+	$cdn_dns_targets []str = if $site_public_ipv4 != "" {
+		[$site_public_ipv4,]
 	} else {
 		[]
 	}
-	$telemetry_dns_targets []str = if $nbg1_telemetry_public_ipv4.ip != "" {
-		[$nbg1_telemetry_public_ipv4.ip,]
+	$telemetry_dns_targets []str = if $telemetry_public_ipv4_hint != "" {
+		[$telemetry_public_ipv4_hint,]
 	} else {
-		if $core_public_ipv4 != "" {
-			[$core_public_ipv4,]
+		if $site_public_ipv4 != "" {
+			[$site_public_ipv4,]
 		} else {
 			[]
 		}
@@ -184,6 +155,8 @@ class topology($st) {
 		private_network_ip_range => $nbg1.private_network_ip_range,
 		private_subnet_ip_range => $nbg1.private_subnet_ip_range,
 		api_db_enabled => $nbg1.api_db_enabled,
+		api_db_name => $nbg1.api_db_name,
+		api_db_role => "site",
 		api_db_private_ip => $nbg1.api_db_private_ip,
 		api_db_servertype => $nbg1.api_db_servertype,
 		dolt_volume_enabled => $nbg1.dolt_volume_enabled,
@@ -194,8 +167,12 @@ class topology($st) {
 		cdn_servertype => $nbg1.cdn_servertype,
 		cdn_private_ip => $nbg1.cdn_private_ip,
 		telemetry_enabled => $nbg1.telemetry_enabled,
+		telemetry_name => $nbg1.telemetry_name,
 		telemetry_private_ip => $nbg1.telemetry_private_ip,
 		telemetry_servertype => $nbg1.telemetry_servertype,
+		mgmt_control_enabled => $mgmt_control_enabled,
+		mgmt_control_key_dir => $mgmt_control_key_dir,
+		mgmt_control_open_addr => $mgmt_control_open_addr,
 		poll_seconds => $layout.poll_seconds,
 		wait_interval_seconds => $layout.wait_interval_seconds,
 		wait_timeout_seconds => $layout.wait_timeout_seconds,
@@ -228,6 +205,9 @@ class topology($st) {
 		telemetry_enabled => $ash.telemetry_enabled,
 		telemetry_private_ip => $ash.telemetry_private_ip,
 		telemetry_servertype => $ash.telemetry_servertype,
+		mgmt_control_enabled => $mgmt_control_enabled,
+		mgmt_control_key_dir => $mgmt_control_key_dir,
+		mgmt_control_open_addr => $mgmt_control_open_addr,
 		poll_seconds => $layout.poll_seconds,
 		wait_interval_seconds => $layout.wait_interval_seconds,
 		wait_timeout_seconds => $layout.wait_timeout_seconds,
@@ -260,6 +240,9 @@ class topology($st) {
 		telemetry_enabled => $sin.telemetry_enabled,
 		telemetry_private_ip => $sin.telemetry_private_ip,
 		telemetry_servertype => $sin.telemetry_servertype,
+		mgmt_control_enabled => $mgmt_control_enabled,
+		mgmt_control_key_dir => $mgmt_control_key_dir,
+		mgmt_control_open_addr => $mgmt_control_open_addr,
 		poll_seconds => $layout.poll_seconds,
 		wait_interval_seconds => $layout.wait_interval_seconds,
 		wait_timeout_seconds => $layout.wait_timeout_seconds,

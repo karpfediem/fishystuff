@@ -10,7 +10,11 @@ cd "$RECIPE_REPO_ROOT"
 exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$@"
 
 target=""
-host="beta-nbg1-api-db"
+telemetry_target=""
+deploy_target=""
+host="site-nbg1-beta"
+telemetry_host="telemetry-nbg1"
+prod_host="site-nbg1-prod"
 timeout="180"
 remote_mgmt_bin="/usr/local/bin/mgmt"
 api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
@@ -23,8 +27,8 @@ prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current"
 jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current"
 grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current"
 cdn_content_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/cdn-content-current"
-cdn_content_mode="local"
-mgmt_modules_dir="/home/carp/code/mgmt/modules"
+cdn_content_mode="realise"
+mgmt_modules_dir="/home/carp/code/mgmt-fishystuff-beta/modules"
 remote_nix_max_jobs="0"
 services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana"
 deployment_environment="beta"
@@ -39,14 +43,18 @@ jaeger_bundle_override=""
 grafana_bundle_override=""
 site_content_override=""
 cdn_content_override=""
-tls_enabled="true"
+tls_enabled="${FISHYSTUFF_BETA_TLS_ENABLED:-true}"
 tls_certificate_name=""
-tls_acme_email="acme@karpfen.dev"
-tls_challenge="http-01"
-tls_dns_provider=""
-tls_dns_env_json="{}"
+tls_acme_email="${FISHYSTUFF_BETA_TLS_ACME_EMAIL:-acme@karpfen.dev}"
+tls_challenge="${FISHYSTUFF_BETA_TLS_CHALLENGE:-dns-01}"
+tls_dns_provider="${FISHYSTUFF_BETA_TLS_DNS_PROVIDER:-cloudflare}"
+tls_dns_env_json="$(
+  jq -cn \
+    --arg zone "${FISHYSTUFF_BETA_TLS_DNS_ZONE:-fishystuff.fish}" \
+    '{CLOUDFLARE_ZONE_NAME: $zone}'
+)"
 tls_dns_env_keys_csv=""
-tls_directory_url="https://acme-v02.api.letsencrypt.org/directory"
+tls_directory_url="${FISHYSTUFF_BETA_TLS_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}"
 tls_domains_json=""
 site_base_url_override=""
 api_base_url_override=""
@@ -59,7 +67,11 @@ for arg in "${overrides[@]}"; do
   [[ -n "$arg" ]] || continue
   case "$arg" in
     target=*) target="${arg#target=}" ;;
+    telemetry_target=*) telemetry_target="${arg#telemetry_target=}" ;;
+    deploy_target=*) deploy_target="${arg#deploy_target=}" ;;
     host=*) host="${arg#host=}" ;;
+    telemetry_host=*) telemetry_host="${arg#telemetry_host=}" ;;
+    prod_host=*) prod_host="${arg#prod_host=}" ;;
     timeout=*) timeout="${arg#timeout=}" ;;
     remote_mgmt_bin=*) remote_mgmt_bin="${arg#remote_mgmt_bin=}" ;;
     api_gcroot=*) api_gcroot="${arg#api_gcroot=}" ;;
@@ -138,6 +150,9 @@ site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
 api_base_url="${api_base_url_override:-https://api.$deployment_domain_name}"
 cdn_base_url="${cdn_base_url_override:-https://cdn.$deployment_domain_name}"
 telemetry_base_url="${telemetry_base_url_override:-https://telemetry.$deployment_domain_name}"
+if [[ "$tls_challenge" == "dns-01" && "$tls_dns_provider" == "cloudflare" && -z "$tls_dns_env_keys_csv" && -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  tls_dns_env_keys_csv="CLOUDFLARE_API_TOKEN"
+fi
 tls_dns_env_json="$(merge_json_env_from_keys "$tls_dns_env_json" "$tls_dns_env_keys_csv")"
 if [[ -z "$tls_domains_json" ]]; then
   site_tls_domain="${site_base_url#https://}"
@@ -160,6 +175,26 @@ fi
 
 services_csv="${services_csv//[[:space:]]/}"
 require_value "$target" "missing target=... for mgmt-resident-push-full-stack"
+deploy_target="${deploy_target:-$target}"
+
+extract_ipv4_from_ssh_target() {
+  local ssh_target="$1"
+  local host_part=""
+
+  host_part="${ssh_target#ssh://}"
+  host_part="${host_part#*@}"
+  host_part="${host_part%%/*}"
+  host_part="${host_part%%:*}"
+  if [[ "$host_part" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    printf '%s' "$host_part"
+  fi
+}
+
+site_public_ipv4_hint="$(extract_ipv4_from_ssh_target "$target")"
+telemetry_public_ipv4_hint=""
+if [[ -n "$telemetry_target" ]]; then
+  telemetry_public_ipv4_hint="$(extract_ipv4_from_ssh_target "$telemetry_target")"
+fi
 
 operator_repo_root="$PWD"
 declare -A selected_services=()
@@ -336,47 +371,89 @@ if service_selected grafana && [[ -z "$grafana_bundle" ]]; then
   grafana_bundle="$(nix build .#grafana-service-bundle --no-link --print-out-paths)"
 fi
 
-push_paths=()
-for bundle_path in \
-  "$api_bundle" \
-  "$dolt_bundle" \
-  "$edge_bundle" \
-  "$loki_bundle" \
-  "$otel_collector_bundle" \
-  "$vector_bundle" \
-  "$prometheus_bundle" \
-  "$jaeger_bundle" \
-  "$grafana_bundle"; do
-  [[ -n "$bundle_path" ]] || continue
+site_push_paths=()
+telemetry_push_paths=()
+declare -A site_push_seen=()
+declare -A telemetry_push_seen=()
+
+add_push_path() {
+  local array_name="$1"
+  local seen_name="$2"
+  local path="$3"
+  local -n push_array="$array_name"
+  local -n seen_paths="$seen_name"
+
+  [[ -n "$path" ]] || return 0
+  if [[ -n "${seen_paths[$path]+x}" ]]; then
+    return 0
+  fi
+  seen_paths["$path"]=1
+  push_array+=("$path")
+}
+
+add_bundle_push_path() {
+  local array_name="$1"
+  local seen_name="$2"
+  local bundle_path="$3"
+
+  [[ -n "$bundle_path" ]] || return 0
   if bundle_is_remote_only "$bundle_path"; then
     echo "[resident-push] reusing existing remote bundle path without local push: $bundle_path"
-    continue
+    return 0
   fi
   if [[ -e "$bundle_path" ]]; then
-    push_paths+=("$bundle_path")
-    continue
+    add_push_path "$array_name" "$seen_name" "$bundle_path"
+    return 0
   fi
   echo "bundle path does not exist locally: $bundle_path" >&2
   exit 2
-done
-for path_to_push in \
-  "$site_content" \
-  "$cdn_content" \
-  "$cdn_base_content" \
-  "$minimap_display_tiles" \
-  "$minimap_source_tiles" \
-  "$cdn_content_drv"; do
-  [[ -n "$path_to_push" ]] || continue
+}
+
+add_content_push_path() {
+  local array_name="$1"
+  local seen_name="$2"
+  local path_to_push="$3"
+
+  [[ -n "$path_to_push" ]] || return 0
   if content_is_remote_only "$path_to_push"; then
     echo "[resident-push] reusing existing remote content path without local push: $path_to_push"
-    continue
+    return 0
   fi
   if [[ ! -e "$path_to_push" ]]; then
     echo "content path does not exist locally: $path_to_push" >&2
     exit 2
   fi
-  push_paths+=("$path_to_push")
-done
+  add_push_path "$array_name" "$seen_name" "$path_to_push"
+}
+
+add_bundle_push_path site_push_paths site_push_seen "$api_bundle"
+add_bundle_push_path site_push_paths site_push_seen "$dolt_bundle"
+add_bundle_push_path site_push_paths site_push_seen "$edge_bundle"
+add_content_push_path site_push_paths site_push_seen "$site_content"
+add_content_push_path site_push_paths site_push_seen "$cdn_base_content"
+add_content_push_path site_push_paths site_push_seen "$minimap_display_tiles"
+add_content_push_path site_push_paths site_push_seen "$minimap_source_tiles"
+add_content_push_path site_push_paths site_push_seen "$cdn_content_drv"
+if [[ -n "$cdn_content" && -z "$cdn_content_drv" ]]; then
+  if content_is_remote_only "$cdn_content"; then
+    echo "[resident-push] reusing existing remote content path without local push: $cdn_content"
+  elif [[ -e "$cdn_content" ]]; then
+    add_push_path site_push_paths site_push_seen "$cdn_content"
+  else
+    echo "content path does not exist locally: $cdn_content" >&2
+    exit 2
+  fi
+fi
+
+if [[ -n "$telemetry_target" ]]; then
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$edge_bundle"
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$loki_bundle"
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$otel_collector_bundle"
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$vector_bundle"
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$prometheus_bundle"
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$jaeger_bundle"
+  add_bundle_push_path telemetry_push_paths telemetry_push_seen "$grafana_bundle"
+fi
 
 deploy_dir="$(mktemp -d /tmp/fishystuff-resident-full-stack.XXXXXX)"
 trap 'rm -rf "$deploy_dir"' EXIT
@@ -387,10 +464,14 @@ copy_resident_common_modules "$deploy_dir" "$mgmt_modules_dir"
 jq -n \
   --arg cluster "beta" \
   --arg hostname "$host" \
+  --arg telemetry_hostname "$telemetry_host" \
+  --arg prod_hostname "$prod_host" \
   --arg site_base_url "$site_base_url" \
   --arg api_base_url "$api_base_url" \
   --arg cdn_base_url "$cdn_base_url" \
   --arg telemetry_base_url "$telemetry_base_url" \
+  --arg site_public_ipv4_hint "$site_public_ipv4_hint" \
+  --arg telemetry_public_ipv4_hint "$telemetry_public_ipv4_hint" \
   --arg deployment_environment "$deployment_environment" \
   --arg startup_mode "enabled" \
   --arg dolt_data_dir "/var/lib/fishystuff/dolt" \
@@ -437,11 +518,17 @@ jq -n \
   '{
     cluster: $cluster,
     hostname: $hostname,
+    telemetry_hostname: $telemetry_hostname,
+    prod_hostname: $prod_hostname,
     public_urls: {
       site_base_url: $site_base_url,
       api_base_url: $api_base_url,
       cdn_base_url: $cdn_base_url,
       telemetry_base_url: $telemetry_base_url
+    },
+    host_hints: {
+      site_public_ipv4: $site_public_ipv4_hint,
+      telemetry_public_ipv4: $telemetry_public_ipv4_hint
     },
     deployment_environment: $deployment_environment,
     startup_mode: $startup_mode,
@@ -497,34 +584,65 @@ jq -n \
 bash -lc '
   set -euo pipefail
   source "$1/scripts/recipes/lib/common.sh"
-  ssh_target="${2:?}"
-  deploy_dir="${3:?}"
-  deploy_timeout="${4:?}"
-  remote_mgmt_bin="${5:-/usr/local/bin/mgmt}"
+  site_ssh_target="${2:?}"
+  telemetry_ssh_target="${3:-}"
+  deploy_dir="${4:?}"
+  deploy_timeout="${5:?}"
+  remote_mgmt_bin="${6:-/usr/local/bin/mgmt}"
   if [[ "$remote_mgmt_bin" != /* ]]; then
     remote_mgmt_bin=/usr/local/bin/mgmt
   fi
-  remote_nix_max_jobs="${6:?}"
-  shift 6
+  remote_nix_max_jobs="${7:?}"
+  deploy_target="${8:?}"
+  site_push_count="${9:?}"
+  telemetry_push_count="${10:?}"
+  shift 10
+  site_push_paths=()
+  for (( idx = 0; idx < site_push_count; idx++ )); do
+    site_push_paths+=("${1:?missing site push path}")
+    shift
+  done
+  telemetry_push_paths=()
+  for (( idx = 0; idx < telemetry_push_count; idx++ )); do
+    telemetry_push_paths+=("${1:?missing telemetry push path}")
+    shift
+  done
   tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-mgmt-ssh.XXXXXX)"
   trap '\''rm -f "$tmp_key"'\'' EXIT
-  remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
-  if [[ -z "$remote_nix_daemon_path" ]]; then
-    echo "could not detect remote nix-daemon path on $ssh_target" >&2
-    exit 1
+
+  push_paths_to_target() {
+    local ssh_target="${1:?missing ssh target}"
+    shift
+    if (( $# == 0 )); then
+      echo "[resident-push] no local paths to push for $ssh_target"
+      return 0
+    fi
+    remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
+    if [[ -z "$remote_nix_daemon_path" ]]; then
+      echo "could not detect remote nix-daemon path on $ssh_target" >&2
+      exit 1
+    fi
+    SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+    NIX_SSH_KEY_PATH="$tmp_key" \
+    NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
+    FISHYSTUFF_REMOTE_NIX_MAX_JOBS="$remote_nix_max_jobs" \
+    bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
+        "$ssh_target" \
+        "$@"
+  }
+
+  push_paths_to_target "$site_ssh_target" "${site_push_paths[@]}"
+  if [[ -n "$telemetry_ssh_target" && "$telemetry_ssh_target" != "$site_ssh_target" ]]; then
+    push_paths_to_target "$telemetry_ssh_target" "${telemetry_push_paths[@]}"
+  elif [[ -n "$telemetry_ssh_target" ]]; then
+    push_paths_to_target "$telemetry_ssh_target" "${telemetry_push_paths[@]}"
   fi
+
   SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-  NIX_SSH_KEY_PATH="$tmp_key" \
-  NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
-  FISHYSTUFF_REMOTE_NIX_MAX_JOBS="$remote_nix_max_jobs" \
-  bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
-      "$ssh_target" \
-      "$@"
-  SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes" \
-  bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
+      bash mgmt/scripts/deploy-fishystuff-resident-remote.sh \
       "$deploy_dir" \
-      "$ssh_target" \
+      "$deploy_target" \
       "$deploy_timeout" \
       "$remote_mgmt_bin"
 ' \
--- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "${push_paths[@]}"
+-- "$RECIPE_REPO_ROOT" "$target" "$telemetry_target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$deploy_target" "${#site_push_paths[@]}" "${#telemetry_push_paths[@]}" "${site_push_paths[@]}" "${telemetry_push_paths[@]}"

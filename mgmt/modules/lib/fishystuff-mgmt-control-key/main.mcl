@@ -1,0 +1,96 @@
+import "deploy"
+import "fmt"
+import "golang"
+import "golang/strings" as golang_strings
+import "os"
+import "strings"
+
+class subscriber($st) {
+	$name str = $st->name
+	$enabled bool = $st->enabled || false
+	$key_dir str = $st->key_dir || "/var/lib/fishystuff/mgmt/control-keys"
+	$open_addr str = $st->open_addr || "127.0.0.1:2379"
+	$key_comment str = $st->key_comment || fmt.printf("fishystuff-mgmt-control:%s", $name)
+	$key_dir_path = fmt.printf("%s/", $key_dir)
+	$key_path = fmt.printf("%s/%s", $key_dir, $name)
+	$public_key_path = fmt.printf("%s.pub", $key_path)
+	$key_ready = if $enabled {
+		golang_strings.trim_space(os.system(fmt.printf("/usr/bin/install -d -m 0700 '%s' && ( /usr/bin/test -f '%s' || /usr/bin/ssh-keygen -t ed25519 -f '%s' -N '' -C '%s' >/dev/null ) && /usr/bin/chmod 0600 '%s' && /usr/bin/chmod 0644 '%s.pub' && echo ready || echo failed", $key_dir, $key_path, $key_path, $key_comment, $key_path, $key_path)))
+	} else {
+		""
+	}
+	$public_key_line = if $enabled {
+		golang_strings.trim_space(os.readfilewait($public_key_path))
+	} else {
+		""
+	}
+	$public_key_parts = if $enabled {
+		strings.split($public_key_line, " ")
+	} else {
+		[]
+	}
+	$key_type = if $enabled {
+		$public_key_parts[0]
+	} else {
+		""
+	}
+	$key = if $enabled {
+		$public_key_parts[1]
+	} else {
+		""
+	}
+	$private_key = if $enabled {
+		os.readfilewait($key_path)
+	} else {
+		""
+	}
+	$userdata = if $enabled {
+		golang.template(deploy.readfile("/files/subscriber-userdata.sh.tmpl"), struct {
+			private_key => $private_key,
+		})
+	} else {
+		""
+	}
+
+	panic($enabled and ($name == ""), "mgmt control subscriber key requires name")
+	panic($enabled and ($key_ready != "ready"), fmt.printf("mgmt control subscriber key setup failed for %s", $name))
+
+	if $enabled {
+		file "${key_dir_path}" {
+			state => "exists",
+			mode => "u=rwx,go=",
+			owner => "root",
+			group => "root",
+		}
+
+		file "${key_path}" {
+			state => "exists",
+			mode => "u=rw,go=",
+			owner => "root",
+			group => "root",
+		}
+
+		file "${public_key_path}" {
+			state => "exists",
+			mode => "u=rw,go=r",
+			owner => "root",
+			group => "root",
+		}
+
+		ssh:authorized_key "fishystuff-mgmt-control-${name}" {
+			user => "root",
+			options => [
+				"command=\"echo 'mgmt control tunnel only'; exit 1\"",
+				"no-agent-forwarding",
+				"no-X11-forwarding",
+				"no-pty",
+				"no-user-rc",
+				fmt.printf("permitopen=\"%s\"", $open_addr),
+			],
+			type => $key_type,
+			key => $key,
+			comment => $key_comment,
+			state => "exists",
+		}
+	}
+}
