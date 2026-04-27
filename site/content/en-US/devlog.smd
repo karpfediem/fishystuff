@@ -9,13 +9,40 @@
   .layout = "log.xml",
   .output = "index.xml",
 }],
-.custom = { .updated = @date("2026-03-15T00:00:00") },
+.custom = { .updated = @date("2026-04-27T00:00:00") },
 .draft = false,
 --- 
 []($section.id('about'))
 This is a non-exhaustive, curated list of changes meant to help users quickly see what has improved since they last checked.
 
 You can <a href="index.xml">subscribe to this page via RSS</a>.
+
+[]($section.id('v2.0.0').data('date','2026-04-27'))
+# Calculator overhaul, map rewrite, Fish Guide and source-backed data
+- Calculator moved to API-backed data and Datastar state
+  - Source-backed items, buffs, lightstones, gear effects, pets, pet skills and item/pet icons
+  - Saved calculator presets, saved layout presets, pinned sections, share links and searchable selectors
+  - Bite Time, Loot Flow, group distribution, silver distribution and Target Fish views
+- Map shell and interaction model were rebuilt
+  - Movable windows, bookmarks, map presets and persisted UI state
+  - Search expressions for fish, zones, grades, favourites, missing fish and patch date ranges
+  - Zone catch profile summaries, provenance details and semantic region/territory details
+  - 3D mode was removed (for now...)
+- Fishydex was expanded
+  - Fish Guide view
+  - Favourites, progress charts, filters, sorting and details modal
+  - Evidence-backed best spot lists
+- Data paths moved toward source-backed inputs
+  - Original/source files for map layers, item icons, pet icons, localized names and calculator catalogs
+  - Provenance markers for zone loot and fish evidence data where available
+- Site localization was rebuilt around Fluent
+  - German UI work
+  - Korean data-name support
+  - Translation fallback notices and profile language settings
+- Hosting/deployment changed direction
+  - Self-hosted services instead of relying on Fly.io
+  - Nix/mgmt service bundles for API, Dolt, CDN, edge and opt-in telemetry services
+  - Grafana, Jaeger, Loki, Prometheus and Vector observability plumbing
 
 []($section.id('v1.0.0').data('date','2026-03-15'))
 # Interactive Map, data pipeline, Fishydex and complete site overhaul
