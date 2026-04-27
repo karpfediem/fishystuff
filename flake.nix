@@ -182,6 +182,7 @@
           otelCollectorServiceBundle = mkServiceBundle {
             name = "fishystuff-otel-collector";
             serviceModule = serviceModules."otel-collector";
+            configuration.fishystuff.otelCollector.listenAddress = "0.0.0.0";
           };
           vectorServiceBundle = mkServiceBundle {
             name = "fishystuff-vector";

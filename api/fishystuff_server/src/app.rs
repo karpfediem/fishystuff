@@ -6,7 +6,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use opentelemetry::global;
 use opentelemetry::propagation::Extractor;
-use opentelemetry::trace::TraceContextExt;
+use opentelemetry::trace::{Status, TraceContextExt};
 use std::time::Instant;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -475,6 +475,12 @@ async fn request_trace_middleware<B>(request: Request<B>, next: Next<B>) -> Resp
         tracing::field::display(response.status().as_u16()),
     );
     span.record("duration.ms", tracing::field::display(elapsed_ms));
+    if response.status().is_server_error() {
+        span.set_status(Status::error(format!(
+            "HTTP {}",
+            response.status().as_u16()
+        )));
+    }
     let (trace_id, span_id) = sync_span_context_fields(&span);
     let request_id = response
         .headers()

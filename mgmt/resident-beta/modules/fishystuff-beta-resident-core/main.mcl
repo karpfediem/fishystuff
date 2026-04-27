@@ -15,6 +15,7 @@ class api_db_host($st) {
 	$hostname str = $st->hostname
 	$manifest struct{
 		cluster str;
+		deployment_marker str;
 		hostname str;
 		telemetry_hostname str;
 		prod_hostname str;
@@ -42,6 +43,7 @@ class api_db_host($st) {
 	$site_content struct{store_path str; drv_path str; gcroot_path str} = $content["site"]
 	$cdn_content struct{store_path str; drv_path str; gcroot_path str} = $content["cdn"]
 	$cluster str = $manifest->cluster || "beta"
+	$deployment_marker str = $manifest->deployment_marker || ""
 	$api_token str = sys.getenv("HETZNER_API_TOKEN")
 	$api_bundle_path str = $api_service->bundle_path || ""
 	$dolt_bundle_path str = $dolt_service->bundle_path || ""
@@ -74,6 +76,7 @@ class api_db_host($st) {
 	$api_base_url str = $st->api_base_url || "https://api.beta.fishystuff.fish"
 	$cdn_base_url str = $st->cdn_base_url || "https://cdn.beta.fishystuff.fish"
 	$telemetry_base_url str = $st->telemetry_base_url || "https://telemetry.beta.fishystuff.fish"
+	$telemetry_traces_endpoint str = $st->telemetry_traces_endpoint || fmt.printf("%s/v1/traces", golang_strings.trim_suffix($telemetry_base_url, "/"))
 	$deployment_environment str = $st->deployment_environment || "beta"
 	$startup_mode str = $st->startup_mode || "enabled"
 	$tls_enabled bool = $manifest->tls->enabled
@@ -113,6 +116,8 @@ class api_db_host($st) {
 		dolt_database_name => $dolt_database_name,
 		site_base_url => $site_base_url,
 		cdn_base_url => $cdn_base_url,
+		telemetry_base_url => $telemetry_base_url,
+		telemetry_traces_endpoint => $telemetry_traces_endpoint,
 		deployment_environment => $deployment_environment,
 	})
 
@@ -276,17 +281,31 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 		startup_mode => $startup_mode,
 	})
 
+	file "/run/fishystuff/deployment-marker" {
+		state => "exists",
+		content => fmt.printf("%s\n", $deployment_marker),
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+	}
+
 	File["/run/fishystuff/"] -> File["/run/fishystuff/api/"]
 	File["/run/fishystuff/api/"] -> File["${api_env_file}"]
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
+	File["/run/fishystuff/"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["${api_service_name}"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["${dolt_service_name}"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
 
 	Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
 	Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
 	File["/srv/fishystuff/"] -> File["${site_root_dir}"]
+	File["${site_root_dir}"] -> File["/run/fishystuff/deployment-marker"]
 	Nix:Closure["${cdn_closure_name}"] -> File["${cdn_root_dir}"] -> Svc["fishystuff-edge"]
 	Nix:Closure["${cdn_closure_name}"] -> Nix:Gcroot["${cdn_content_gcroot_path}"] -> File["${cdn_root_dir}"]
 	File["/srv/fishystuff/"] -> File["${cdn_root_dir}"]
+	File["${cdn_root_dir}"] -> File["/run/fishystuff/deployment-marker"]
 
 	if $dolt_volume_device != "" {
 		File["/var/lib/fishystuff/"] -> File["${dolt_data_dir}/"] -> Mount["${dolt_data_dir}"] -> Svc["${dolt_service_name}"]
@@ -297,6 +316,7 @@ class telemetry_host($st) {
 	$hostname str = $st->hostname
 	$manifest struct{
 		cluster str;
+		deployment_marker str;
 		hostname str;
 		telemetry_hostname str;
 		prod_hostname str;
@@ -319,6 +339,7 @@ class telemetry_host($st) {
 	$jaeger_service struct{bundle_path str; gcroot_path str} = $services["jaeger"]
 	$grafana_service struct{bundle_path str; gcroot_path str} = $services["grafana"]
 	$cluster str = $manifest->cluster || "beta"
+	$deployment_marker str = $manifest->deployment_marker || ""
 	$api_token str = sys.getenv("HETZNER_API_TOKEN")
 	$edge_bundle_path str = $edge_service->bundle_path || ""
 	$loki_bundle_path str = $loki_service->bundle_path || ""
@@ -356,6 +377,13 @@ class telemetry_host($st) {
 	panic(not $tls_enabled, fmt.printf("host %s requires tls.enabled in resident manifest", $hostname))
 
 	file "/var/lib/fishystuff/" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "/run/fishystuff/" {
 		state => "exists",
 		mode => "u=rwx,go=rx",
 		owner => "root",
@@ -400,6 +428,16 @@ class telemetry_host($st) {
 		rules => $https_firewall.rules,
 		applyto => $https_firewall.applyto,
 		labels => $https_firewall.labels,
+	})
+
+	include access.otel_ingest($hostname) as otel_ingest_firewall
+
+	include hetzner_firewall.firewall(struct {
+		name => $otel_ingest_firewall.name,
+		apitoken => $api_token,
+		rules => $otel_ingest_firewall.rules,
+		applyto => $otel_ingest_firewall.applyto,
+		labels => $otel_ingest_firewall.labels,
 	})
 
 	include fishystuff_edge_tls.certificate(struct {
@@ -460,6 +498,23 @@ class telemetry_host($st) {
 		gcroot_path => $grafana_service->gcroot_path || "",
 		startup_mode => $startup_mode,
 	})
+
+	file "/run/fishystuff/deployment-marker" {
+		state => "exists",
+		content => fmt.printf("%s\n", $deployment_marker),
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+	}
+
+	File["/run/fishystuff/"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-loki"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-otel-collector"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-vector"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-prometheus"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-jaeger"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-grafana"] -> File["/run/fishystuff/deployment-marker"]
 
 	File["/srv/fishystuff/"] -> File["/srv/fishystuff/site/"]
 	File["/srv/fishystuff/"] -> File["/srv/fishystuff/cdn/"]

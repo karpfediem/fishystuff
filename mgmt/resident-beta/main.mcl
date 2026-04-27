@@ -5,6 +5,7 @@ import "modules/fishystuff-beta-resident/"
 
 $manifest struct{
 	cluster str;
+	deployment_marker str;
 	hostname str;
 	telemetry_hostname str;
 	prod_hostname str;

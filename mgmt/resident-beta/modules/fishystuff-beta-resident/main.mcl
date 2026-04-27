@@ -8,6 +8,7 @@ import "../fishystuff-beta/" as fishystuff_beta
 class host($st) {
 	$manifest struct{
 		cluster str;
+		deployment_marker str;
 		hostname str;
 		telemetry_hostname str;
 		prod_hostname str;
@@ -42,6 +43,7 @@ class host($st) {
 			api_base_url => $manifest->public_urls->api_base_url || $host_layout.api_base_url,
 			cdn_base_url => $manifest->public_urls->cdn_base_url || $host_layout.cdn_base_url,
 			telemetry_base_url => $manifest->public_urls->telemetry_base_url || $host_layout.telemetry_base_url,
+			telemetry_traces_endpoint => $layout.telemetry_traces_endpoint,
 			deployment_environment => $deployment_environment,
 			startup_mode => $manifest->startup_mode || "enabled",
 			dolt_data_dir => $manifest->dolt->data_dir || "/var/lib/fishystuff/dolt",
@@ -77,6 +79,7 @@ class host($st) {
 class infra_control($st) {
 	$manifest struct{
 		cluster str;
+		deployment_marker str;
 		hostname str;
 		telemetry_hostname str;
 		prod_hostname str;
@@ -131,6 +134,7 @@ class infra_control($st) {
 class acme_control($st) {
 	$manifest struct{
 		cluster str;
+		deployment_marker str;
 		hostname str;
 		telemetry_hostname str;
 		prod_hostname str;

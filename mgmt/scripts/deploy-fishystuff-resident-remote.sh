@@ -66,7 +66,7 @@ as_root() {
 }
 
 tar -C "$remote_tmp" -xf "$remote_tar"
-as_root env \
+as_root timeout --foreground "$timeout_secs" env \
 	HETZNER_API_TOKEN="$hetzner_api_token" \
 	HETZNER_SSH_KEY_NAME="$hetzner_ssh_key_name" \
 	HETZNER_SSH_PUBLIC_KEY="$hetzner_ssh_public_key" \

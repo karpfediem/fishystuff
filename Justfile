@@ -15,6 +15,10 @@ open deployment *services:
 status deployment *services:
   bash scripts/recipes/status.sh "{{deployment}}" {{services}}
 
+# Smoke-test the selected deployment through its public URLs.
+smoke deployment:
+  bash scripts/recipes/smoke.sh "{{deployment}}"
+
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
     dolt clone fishystuff/fishystuff .

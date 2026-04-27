@@ -110,6 +110,11 @@ backend_args=(
   "tls_directory_url=$(deployment_tls_directory_url "$deployment")"
   "services_csv=$backend_services_csv"
 )
+expected_manifest=""
+if [[ "${FISHYSTUFF_DEPLOY_SMOKE:-true}" == "true" ]]; then
+  expected_manifest="$(mktemp /tmp/fishystuff-deploy-manifest.XXXXXX.json)"
+  trap 'rm -f "$expected_manifest"' EXIT
+fi
 
 if [[ "$tls_challenge" == "dns-01" ]]; then
   require_value "$tls_dns_provider" "deployment $deployment uses DNS-01 but does not define a TLS DNS provider"
@@ -132,4 +137,10 @@ for service in "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"; do
   backend_args+=("$(deploy_service_override_arg_name "$service")=$remote_store_path")
 done
 
-exec bash "${SCRIPT_DIR}/mgmt-resident-push-full-stack.sh" "${backend_args[@]}"
+FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST="$expected_manifest" \
+  bash "${SCRIPT_DIR}/mgmt-resident-push-full-stack.sh" "${backend_args[@]}"
+
+if [[ "${FISHYSTUFF_DEPLOY_SMOKE:-true}" == "true" ]]; then
+  bash "${SCRIPT_DIR}/wait-deployment.sh" "$deployment" "$expected_manifest"
+  bash "${SCRIPT_DIR}/smoke.sh" "$deployment"
+fi

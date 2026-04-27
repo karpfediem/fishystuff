@@ -111,3 +111,31 @@ class catalog:https($hostname) {
 		},
 	]
 }
+
+class catalog:otel_ingest($hostname) {
+	$name = fmt.printf("fishystuff-%s-%s-otel-ingest", $cluster, $hostname)
+	$labels = {
+		$managed_by_label_key => $managed_by_label_value,
+		$project_label_key => $project_label_value,
+		$cluster_label_key => $cluster,
+		"purpose" => "internal-otel-ingest",
+		$hostname_label_key => $hostname,
+	}
+	$rules = [
+		struct {
+			direction => "in",
+			sourceips => ["10.0.0.0/16",],
+			destinationips => $empty_ips,
+			protocol => "tcp",
+			port => "4818",
+			description => "Allow private-network OTLP HTTP ingestion",
+		},
+	]
+	$applyto = [
+		struct {
+			type => "label_selector",
+			server => "",
+			labelselector => fmt.printf("%s=%s", $hostname_label_key, $hostname),
+		},
+	]
+}

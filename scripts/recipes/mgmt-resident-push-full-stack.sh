@@ -32,6 +32,7 @@ mgmt_modules_dir="/home/carp/code/mgmt-fishystuff-beta/modules"
 remote_nix_max_jobs="0"
 services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana"
 deployment_environment="beta"
+deployment_marker=""
 api_bundle_override=""
 dolt_bundle_override=""
 edge_bundle_override=""
@@ -90,6 +91,7 @@ for arg in "${overrides[@]}"; do
     remote_nix_max_jobs=*) remote_nix_max_jobs="${arg#remote_nix_max_jobs=}" ;;
     services_csv=*) services_csv="${arg#services_csv=}" ;;
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
+    deployment_marker=*) deployment_marker="${arg#deployment_marker=}" ;;
     api_bundle=*) api_bundle_override="${arg#api_bundle=}" ;;
     dolt_bundle=*) dolt_bundle_override="${arg#dolt_bundle=}" ;;
     edge_bundle=*) edge_bundle_override="${arg#edge_bundle=}" ;;
@@ -145,6 +147,9 @@ build_release_map_runtime() {
 }
 
 deployment_environment="$(normalize_deployment_environment "$deployment_environment")"
+if [[ -z "$deployment_marker" ]]; then
+  deployment_marker="$(date -u +%Y%m%dT%H%M%SZ)-$deployment_environment-$RANDOM-$RANDOM"
+fi
 deployment_domain_name="$(deployment_domain "$deployment_environment")"
 site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
 api_base_url="${api_base_url_override:-https://api.$deployment_domain_name}"
@@ -463,6 +468,7 @@ copy_resident_common_modules "$deploy_dir" "$mgmt_modules_dir"
 
 jq -n \
   --arg cluster "beta" \
+  --arg deployment_marker "$deployment_marker" \
   --arg hostname "$host" \
   --arg telemetry_hostname "$telemetry_host" \
   --arg prod_hostname "$prod_host" \
@@ -517,6 +523,7 @@ jq -n \
   --arg cdn_content_gcroot "$cdn_content_gcroot" \
   '{
     cluster: $cluster,
+    deployment_marker: $deployment_marker,
     hostname: $hostname,
     telemetry_hostname: $telemetry_hostname,
     prod_hostname: $prod_hostname,
@@ -580,6 +587,10 @@ jq -n \
       grafana: {bundle_path: $grafana_bundle, gcroot_path: $grafana_gcroot}
     }
   }' > "$deploy_dir/files/resident-manifest.json"
+
+if [[ -n "${FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST:-}" ]]; then
+  cp "$deploy_dir/files/resident-manifest.json" "$FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST"
+fi
 
 bash -lc '
   set -euo pipefail
