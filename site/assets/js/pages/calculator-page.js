@@ -438,7 +438,12 @@
         if (pendingUiState) {
           signals._calculator_ui = cloneCalculatorSignals(pendingUiState);
         }
-        const applied = applyStoredCalculatorLayoutPresetState(signals);
+        const applied = pendingUiState
+          ? null
+          : applyStoredCalculatorLayoutPresetState(signals);
+        if (pendingUiState) {
+          trackCalculatorLayoutPresetCurrent(signals);
+        }
         if ((applied || pendingUiState) && typeof window.__fishystuffCalculator?.patchSignals === "function") {
           window.__fishystuffCalculator.patchSignals({
             _calculator_ui: cloneCalculatorSignals(signals._calculator_ui),
@@ -1842,7 +1847,9 @@
     }
     syncSignalsFromSharedUserOverlays(signals);
     const restoredCalculatorPresetState = applyStoredCalculatorPresetState(signals);
-    const restoredLayoutPresetState = applyStoredCalculatorLayoutPresetState(signals);
+    const restoredLayoutPresetState = restoredUiState
+      ? null
+      : applyStoredCalculatorLayoutPresetState(signals);
     const trackedCalculatorPresetState = trackCalculatorPresetCurrent(signals);
     const trackedLayoutPresetState = trackCalculatorLayoutPresetCurrent(signals);
     calculatorState.pendingCalculatorPresetRestore = Boolean(restoredCalculatorPresetState)
