@@ -343,6 +343,7 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 	Exec["fishystuff-edge-site-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-cdn-ready"]
 	Exec["fishystuff-edge-cdn-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Acme:Certificate["${tls_certificate_name}"] -> Exec["fishystuff-edge-caddy-validate"]
 	Exec["fishystuff-edge-caddy-validate"] -> File["/etc/systemd/system/fishystuff-edge.service"]
 
 	Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]

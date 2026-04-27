@@ -5,6 +5,7 @@ import "../../providers/cloudflare-dnsmanager/" as cloudflare_dnsmanager
 import "../../providers/hetzner-firewall/" as hetzner_firewall
 import "os"
 import "strings" as core_strings
+import "golang/strings" as golang_strings
 import "sys"
 import "world"
 
@@ -13,57 +14,18 @@ class attempt_state($st) {
 	$certificate_name str = $st->certificate_name
 	$attempt_key str = fmt.printf("%s/%s/attempt", $request_namespace, $certificate_name)
 	$raw = world.getval($attempt_key)
-	$attempt_type str = "struct{version int; certificate str; attempt_id str; owner str; phase str; challenge_type str; expires_at int; port int; domain str; dns_zone str; dns_name str; dns_value str;}"
-	$empty struct{
-		version int;
-		certificate str;
-		attempt_id str;
-		owner str;
-		phase str;
-		challenge_type str;
-		expires_at int;
-		port int;
-		domain str;
-		dns_zone str;
-		dns_name str;
-		dns_value str
-	} = struct {
-		version => 0,
-		certificate => "",
-		attempt_id => "",
-		owner => "",
-		phase => "",
-		challenge_type => "",
-		expires_at => 0,
-		port => 0,
-		domain => "",
-		dns_zone => "",
-		dns_name => "",
-		dns_value => "",
-	}
-	$attempt struct{
-		version int;
-		certificate str;
-		attempt_id str;
-		owner str;
-		phase str;
-		challenge_type str;
-		expires_at int;
-		port int;
-		domain str;
-		dns_zone str;
-		dns_name str;
-		dns_value str
-	} = if $raw->exists and ($raw->value != "") {
-		encoding.decode_json_flexible($raw->value, $attempt_type)
-	} else {
-		$empty
-	}
-	$presenting bool = $raw->exists and ($attempt->phase == "presenting")
-	$challenge_type str = $attempt->challenge_type
-	$dns_zone str = $attempt->dns_zone
-	$dns_name str = $attempt->dns_name
-	$dns_value str = $attempt->dns_value
+	$raw_value str = golang_strings.trim_space($raw->value)
+	$phase_tail []str = core_strings.split(fmt.printf("%s\"phase\": \"\"", $raw_value), "\"phase\": \"")
+	$challenge_tail []str = core_strings.split(fmt.printf("%s\"challenge_type\": \"\"", $raw_value), "\"challenge_type\": \"")
+	$dns_zone_tail []str = core_strings.split(fmt.printf("%s\"dns_zone\": \"\"", $raw_value), "\"dns_zone\": \"")
+	$dns_name_tail []str = core_strings.split(fmt.printf("%s\"dns_name\": \"\"", $raw_value), "\"dns_name\": \"")
+	$dns_value_tail []str = core_strings.split(fmt.printf("%s\"dns_value\": \"\"", $raw_value), "\"dns_value\": \"")
+	$phase str = core_strings.split($phase_tail[1], "\"")[0]
+	$challenge_type str = core_strings.split($challenge_tail[1], "\"")[0]
+	$dns_zone str = core_strings.split($dns_zone_tail[1], "\"")[0]
+	$dns_name str = core_strings.split($dns_name_tail[1], "\"")[0]
+	$dns_value str = core_strings.split($dns_value_tail[1], "\"")[0]
+	$presenting bool = $raw->exists and ($phase == "presenting")
 }
 
 class certificate($st) {
@@ -227,7 +189,10 @@ class certificate($st) {
 			request_namespace => $request_namespace,
 			certificates => [$certificate_name,],
 			zones => [$cloudflare_zone,],
-			resolvers => ["1.1.1.1:53", "8.8.8.8:53",],
+			resolvers => ["8.8.8.8:53", "1.1.1.1:53",],
+			attempt_ttl => 2400,
+			presentation_timeout => 1800,
+			presentation_settle => 60,
 
 			Depend => Acme:Account["${account_name}"],
 		}
