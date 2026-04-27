@@ -7,10 +7,33 @@
 let
   helpers = import ./helpers.nix { inherit lib; };
   systemdBackend = import ./systemd-backend.nix { inherit lib pkgs; };
-  inherit (lib) mkOption optional types;
+  inherit (lib) mkOption optional optionals optionalString types;
   cfg = config.fishystuff.vector;
+  isAggregator = cfg.role == "aggregator";
+  isAgent = cfg.role == "agent";
   journalUnitsYaml =
-    lib.concatMapStringsSep "\n" (unit: "      - ${unit}") cfg.journalUnits;
+    lib.concatMapStringsSep "\n" (unit: "        - ${unit}") cfg.journalUnits;
+  hostMetricsSource =
+    optionalString cfg.enableHostMetrics
+      "\n      host_metrics:\n        type: host_metrics\n        scrape_interval_secs: ${toString cfg.hostMetricsScrapeIntervalSecs}\n        collectors:\n          - cpu\n          - disk\n          - filesystem\n          - load\n          - host\n          - memory\n          - network";
+  internalMetricsSource =
+    optionalString cfg.enableInternalMetrics
+      "\n      vector_internal_metrics:\n        type: internal_metrics\n        namespace: vector\n        scrape_interval_secs: ${toString cfg.internalMetricsScrapeIntervalSecs}";
+  vectorIngressSource =
+    optionalString isAggregator
+      "\n      vector_ingress:\n        type: vector\n        address: \"${cfg.vectorIngressAddress}\"";
+  upstreamMetricsSources =
+    optionalString isAggregator
+      "\n      otel_spanmetrics:\n        type: prometheus_scrape\n        endpoints:\n          - \"http://${cfg.otelCollectorAddress}:${toString cfg.otelCollectorSpanmetricsPort}/metrics\"\n        scrape_interval_secs: ${toString cfg.upstreamMetricsScrapeIntervalSecs}\n        scrape_timeout_secs: ${toString cfg.upstreamMetricsScrapeTimeoutSecs}\n      jaeger_metrics:\n        type: prometheus_scrape\n        endpoints:\n          - \"http://${cfg.jaegerMetricsAddress}:${toString cfg.jaegerMetricsPort}/metrics\"\n        scrape_interval_secs: ${toString cfg.upstreamMetricsScrapeIntervalSecs}\n        scrape_timeout_secs: ${toString cfg.upstreamMetricsScrapeTimeoutSecs}";
+  vectorIngressTransforms =
+    optionalString isAggregator
+      "\n      vector_ingress_logs_only:\n        type: filter\n        inputs:\n          - vector_ingress\n        condition:\n          type: is_log\n      vector_ingress_metrics_only:\n        type: filter\n        inputs:\n          - vector_ingress\n        condition:\n          type: is_metric\n      vector_ingress_traces_only:\n        type: filter\n        inputs:\n          - vector_ingress\n        condition:\n          type: is_trace";
+  agentForwardSink =
+    optionalString isAgent
+      "\n      agent_forward_to_telemetry_vector:\n        type: vector\n        inputs:\n          - normalized_process_logs\n          - normalized_telemetry_logs\n          - telemetry_metrics_only\n          - telemetry_traces_only\n${optionalString cfg.enableHostMetrics "          - host_metrics\n"}${optionalString cfg.enableInternalMetrics "          - vector_internal_metrics\n"}        address: \"${cfg.vectorSinkAddress}\"\n        compression: true\n        healthcheck:\n          enabled: false";
+  aggregatorSinks =
+    optionalString isAggregator
+      "\n      logs_archive:\n        type: file\n        inputs:\n          - normalized_process_logs\n        path: \"${cfg.dataDir}/archive/logs/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json\n\n      logs_loki:\n        type: loki\n        inputs:\n          - normalized_process_logs\n          - normalized_telemetry_logs\n          - vector_ingress_logs_only\n        endpoint: \"http://${cfg.lokiAddress}:${toString cfg.lokiPort}\"\n        encoding:\n          codec: json\n        labels:\n          app: \"{{ app }}\"\n          env: \"{{ deployment_environment }}\"\n          host: \"{{ host }}\"\n          process: \"{{ process }}\"\n          service: \"{{ service }}\"\n          service_state: \"{{ service_state }}\"\n          level: \"{{ level }}\"\n        structured_metadata:\n          log_schema: \"{{ log_schema }}\"\n          '\"correlation_*\"': \"{{ correlation }}\"\n          '\"http_*\"': \"{{ http }}\"\n          '\"browser_*\"': \"{{ browser }}\"\n        healthcheck:\n          enabled: false\n\n      traces_archive:\n        type: file\n        inputs:\n          - telemetry_traces_only\n          - vector_ingress_traces_only\n        path: \"${cfg.dataDir}/archive/traces/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json\n\n      telemetry_ingress_traces_to_collector:\n        type: opentelemetry\n        inputs:\n          - telemetry_traces_only\n          - vector_ingress_traces_only\n        protocol:\n          type: http\n          uri: \"http://${cfg.otelCollectorAddress}:${toString cfg.otelCollectorPort}/v1/traces\"\n          encoding:\n            codec: otlp\n        healthcheck:\n          enabled: false\n\n      telemetry_ingress_metrics_prometheus:\n        type: prometheus_exporter\n        inputs:\n          - telemetry_metrics_only\n          - vector_ingress_metrics_only\n          - otel_spanmetrics\n          - jaeger_metrics\n${optionalString cfg.enableHostMetrics "          - host_metrics\n"}${optionalString cfg.enableInternalMetrics "          - vector_internal_metrics\n"}        address: \"${cfg.metricsListenAddress}:${toString cfg.metricsPort}\"\n        healthcheck:\n          enabled: false\n\n      telemetry_ingress_logs_archive:\n        type: file\n        inputs:\n          - telemetry_logs_only\n        path: \"${cfg.dataDir}/archive/otel-logs/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json";
   configSource = pkgs.writeText "fishystuff-vector.yaml" ''
     data_dir: "${cfg.dataDir}/state"
 
@@ -23,8 +46,12 @@ let
         type: journald
         current_boot_only: true
         include_units:
-    ${journalUnitsYaml}
+${journalUnitsYaml}
         data_dir: "${cfg.dataDir}/journal"
+${hostMetricsSource}
+${internalMetricsSource}
+${vectorIngressSource}
+${upstreamMetricsSources}
       telemetry_logs_ingress:
         type: http_server
         address: "${cfg.telemetryLogsListenAddress}:${toString cfg.telemetryLogsPort}"
@@ -68,6 +95,7 @@ let
           - telemetry_otlp_ingress
         condition:
           type: is_trace
+${vectorIngressTransforms}
       normalized_process_logs:
         type: remap
         inputs:
@@ -124,17 +152,17 @@ let
           }
 
           if .logger == "systemd" {
-            if match!(.message, r'^Starting ') {
+            if match(.message, r'^Starting ') {
               .service_state = "starting"
-            } else if match!(.message, r'^Started ') {
+            } else if match(.message, r'^Started ') {
               .service_state = "started"
-            } else if match!(.message, r'^Stopping ') {
+            } else if match(.message, r'^Stopping ') {
               .service_state = "stopping"
-            } else if match!(.message, r'^Stopped ') {
+            } else if match(.message, r'^Stopped ') {
               .service_state = "stopped"
-            } else if match!(.message, r'^Scheduled restart job') {
+            } else if match(.message, r'^Scheduled restart job') {
               .service_state = "restarting"
-            } else if match!(.message, r'^Main process exited') || match!(.message, r'Failed with result') || match!(.message, r'^Failed ') {
+            } else if match(.message, r'^Main process exited') || match(.message, r'Failed with result') || match(.message, r'^Failed ') {
               .service_state = "failed"
             }
           }
@@ -278,77 +306,8 @@ let
           }
 
     sinks:
-      logs_archive:
-        type: file
-        inputs:
-          - normalized_process_logs
-        path: "${cfg.dataDir}/archive/logs/%Y-%m-%d.ndjson"
-        encoding:
-          codec: json
-
-      logs_loki:
-        type: loki
-        inputs:
-          - normalized_process_logs
-          - normalized_telemetry_logs
-        endpoint: "http://${cfg.lokiAddress}:${toString cfg.lokiPort}"
-        encoding:
-          codec: json
-        labels:
-          app: "{{ app }}"
-          env: "{{ deployment_environment }}"
-          host: "{{ host }}"
-          process: "{{ process }}"
-          service: "{{ service }}"
-          service_state: "{{ service_state }}"
-          level: "{{ level }}"
-        structured_metadata:
-          log_schema: "{{ log_schema }}"
-          '"correlation_*"': "{{ correlation }}"
-          '"http_*"': "{{ http }}"
-          '"browser_*"': "{{ browser }}"
-        healthcheck:
-          enabled: false
-
-      traces_archive:
-        type: file
-        inputs:
-          - telemetry_traces_only
-        path: "${cfg.dataDir}/archive/traces/%Y-%m-%d.ndjson"
-        encoding:
-          codec: json
-
-      telemetry_ingress_traces_to_collector:
-        type: opentelemetry
-        inputs:
-          - telemetry_traces_only
-        protocol:
-          type: http
-          uri: "http://${cfg.otelCollectorAddress}:${toString cfg.otelCollectorPort}/v1/traces"
-          encoding:
-            codec: otlp
-        healthcheck:
-          enabled: false
-
-      telemetry_ingress_metrics_to_collector:
-        type: opentelemetry
-        inputs:
-          - telemetry_metrics_only
-        protocol:
-          type: http
-          uri: "http://${cfg.otelCollectorAddress}:${toString cfg.otelCollectorPort}/v1/metrics"
-          encoding:
-            codec: otlp
-        healthcheck:
-          enabled: false
-
-      telemetry_ingress_logs_archive:
-        type: file
-        inputs:
-          - telemetry_logs_only
-        path: "${cfg.dataDir}/archive/otel-logs/%Y-%m-%d.ndjson"
-        encoding:
-          codec: json
+${aggregatorSinks}
+${agentForwardSink}
   '';
   serviceArgv = [
     (lib.getExe' cfg.package "vector")
@@ -366,11 +325,15 @@ let
     workingDirectory = cfg.dataDir;
     after = [
       "network-online.target"
+    ] ++ optionals isAggregator [
+      "fishystuff-jaeger.service"
       "fishystuff-loki.service"
       "fishystuff-otel-collector.service"
     ];
     wants = [
       "network-online.target"
+    ] ++ optionals isAggregator [
+      "fishystuff-jaeger.service"
       "fishystuff-loki.service"
       "fishystuff-otel-collector.service"
     ];
@@ -401,6 +364,12 @@ in
   imports = [ ./bundle-module.nix ];
 
   options.fishystuff.vector = {
+    role = mkOption {
+      type = types.enum [ "aggregator" "agent" ];
+      default = "aggregator";
+      description = "Whether this Vector instance aggregates telemetry or forwards local host telemetry to an aggregator.";
+    };
+
     package = mkOption {
       type = types.package;
       default = pkgs.vector;
@@ -430,6 +399,30 @@ in
       type = types.str;
       default = "beta";
       description = "Deployment environment label written into normalized events.";
+    };
+
+    enableHostMetrics = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether to collect host metrics with Vector.";
+    };
+
+    hostMetricsScrapeIntervalSecs = mkOption {
+      type = types.ints.positive;
+      default = 10;
+      description = "Host metrics scrape interval.";
+    };
+
+    enableInternalMetrics = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether to export Vector's own internal metrics through the metrics sink.";
+    };
+
+    internalMetricsScrapeIntervalSecs = mkOption {
+      type = types.ints.positive;
+      default = 10;
+      description = "Vector internal metrics scrape interval.";
     };
 
     apiListenAddress = mkOption {
@@ -468,6 +461,30 @@ in
       description = "TCP port for browser OTLP metrics and traces.";
     };
 
+    vectorIngressAddress = mkOption {
+      type = types.str;
+      default = "0.0.0.0:6000";
+      description = "Native Vector protocol listen address used by aggregators.";
+    };
+
+    vectorSinkAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1:6000";
+      description = "Native Vector protocol upstream address used by agents.";
+    };
+
+    metricsListenAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      description = "Address for Vector's Prometheus metrics exporter.";
+    };
+
+    metricsPort = mkOption {
+      type = types.port;
+      default = 9598;
+      description = "TCP port for Vector-exported host and browser metrics.";
+    };
+
     lokiAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
@@ -490,6 +507,36 @@ in
       type = types.port;
       default = 4818;
       description = "OTEL collector upstream HTTP port.";
+    };
+
+    otelCollectorSpanmetricsPort = mkOption {
+      type = types.port;
+      default = 8889;
+      description = "OTEL collector Prometheus spanmetrics port scraped by Vector.";
+    };
+
+    jaegerMetricsAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      description = "Jaeger Prometheus metrics address scraped by Vector.";
+    };
+
+    jaegerMetricsPort = mkOption {
+      type = types.port;
+      default = 8888;
+      description = "Jaeger Prometheus metrics port scraped by Vector.";
+    };
+
+    upstreamMetricsScrapeIntervalSecs = mkOption {
+      type = types.ints.positive;
+      default = 5;
+      description = "Scrape interval for collector and Jaeger metrics scraped by Vector.";
+    };
+
+    upstreamMetricsScrapeTimeoutSecs = mkOption {
+      type = types.ints.positive;
+      default = 5;
+      description = "Scrape timeout for collector and Jaeger metrics scraped by Vector.";
     };
 
     journalUnits = mkOption {

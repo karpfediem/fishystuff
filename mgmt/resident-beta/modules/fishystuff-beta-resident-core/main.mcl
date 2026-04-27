@@ -37,6 +37,7 @@ class api_db_host($st) {
 	$loki_service struct{bundle_path str; gcroot_path str} = $services["loki"]
 	$otel_collector_service struct{bundle_path str; gcroot_path str} = $services["otel_collector"]
 	$vector_service struct{bundle_path str; gcroot_path str} = $services["vector"]
+	$vector_agent_service struct{bundle_path str; gcroot_path str} = $services["vector_agent"]
 	$prometheus_service struct{bundle_path str; gcroot_path str} = $services["prometheus"]
 	$jaeger_service struct{bundle_path str; gcroot_path str} = $services["jaeger"]
 	$grafana_service struct{bundle_path str; gcroot_path str} = $services["grafana"]
@@ -51,6 +52,7 @@ class api_db_host($st) {
 	$loki_bundle_path str = $loki_service->bundle_path || ""
 	$otel_collector_bundle_path str = $otel_collector_service->bundle_path || ""
 	$vector_bundle_path str = $vector_service->bundle_path || ""
+	$vector_agent_bundle_path str = $vector_agent_service->bundle_path || ""
 	$prometheus_bundle_path str = $prometheus_service->bundle_path || ""
 	$jaeger_bundle_path str = $jaeger_service->bundle_path || ""
 	$grafana_bundle_path str = $grafana_service->bundle_path || ""
@@ -76,7 +78,7 @@ class api_db_host($st) {
 	$api_base_url str = $st->api_base_url || "https://api.beta.fishystuff.fish"
 	$cdn_base_url str = $st->cdn_base_url || "https://cdn.beta.fishystuff.fish"
 	$telemetry_base_url str = $st->telemetry_base_url || "https://telemetry.beta.fishystuff.fish"
-	$telemetry_traces_endpoint str = $st->telemetry_traces_endpoint || fmt.printf("%s/v1/traces", golang_strings.trim_suffix($telemetry_base_url, "/"))
+	$telemetry_traces_endpoint str = $st->telemetry_traces_endpoint || "http://127.0.0.1:4821/v1/traces"
 	$deployment_environment str = $st->deployment_environment || "beta"
 	$startup_mode str = $st->startup_mode || "enabled"
 	$tls_enabled bool = $manifest->tls->enabled
@@ -129,6 +131,7 @@ class api_db_host($st) {
 	panic($api_bundle_path == "", fmt.printf("host %s requires services.api.bundle_path in resident manifest", $hostname))
 	panic($dolt_bundle_path == "", fmt.printf("host %s requires services.dolt.bundle_path in resident manifest", $hostname))
 	panic($edge_bundle_path == "", fmt.printf("host %s requires services.edge.bundle_path in resident manifest", $hostname))
+	panic($vector_agent_bundle_path == "", fmt.printf("host %s requires services.vector_agent.bundle_path in resident manifest", $hostname))
 	panic(not $tls_enabled, fmt.printf("host %s requires tls.enabled in resident manifest", $hostname))
 	panic($site_content_store_path == "", fmt.printf("host %s requires content.site.store_path in resident manifest", $hostname))
 	panic($site_content_gcroot_path == "", fmt.printf("host %s requires content.site.gcroot_path in resident manifest", $hostname))
@@ -281,6 +284,12 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 		startup_mode => $startup_mode,
 	})
 
+	include fishystuff_bundle_systemd.unit(struct {
+		bundle_path => $vector_agent_bundle_path,
+		gcroot_path => $vector_agent_service->gcroot_path || "",
+		startup_mode => $startup_mode,
+	})
+
 	file "/run/fishystuff/deployment-marker" {
 		state => "exists",
 		content => fmt.printf("%s\n", $deployment_marker),
@@ -292,11 +301,13 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 	File["/run/fishystuff/"] -> File["/run/fishystuff/api/"]
 	File["/run/fishystuff/api/"] -> File["${api_env_file}"]
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
+	Svc["fishystuff-vector"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
 	File["/run/fishystuff/"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${api_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${dolt_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-vector"] -> File["/run/fishystuff/deployment-marker"]
 
 	Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
 	Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
@@ -430,14 +441,14 @@ class telemetry_host($st) {
 		labels => $https_firewall.labels,
 	})
 
-	include access.otel_ingest($hostname) as otel_ingest_firewall
+	include access.vector_ingest($hostname) as vector_ingest_firewall
 
 	include hetzner_firewall.firewall(struct {
-		name => $otel_ingest_firewall.name,
+		name => $vector_ingest_firewall.name,
 		apitoken => $api_token,
-		rules => $otel_ingest_firewall.rules,
-		applyto => $otel_ingest_firewall.applyto,
-		labels => $otel_ingest_firewall.labels,
+		rules => $vector_ingest_firewall.rules,
+		applyto => $vector_ingest_firewall.applyto,
+		labels => $vector_ingest_firewall.labels,
 	})
 
 	include fishystuff_edge_tls.certificate(struct {

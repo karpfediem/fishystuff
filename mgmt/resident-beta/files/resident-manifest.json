@@ -77,6 +77,10 @@
       "bundle_path": "",
       "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/vector-current"
     },
+    "vector_agent": {
+      "bundle_path": "",
+      "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/vector-current"
+    },
     "prometheus": {
       "bundle_path": "",
       "gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current"

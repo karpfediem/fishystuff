@@ -17,18 +17,10 @@ let
     };
     scrape_configs = [
       {
-        job_name = "otel-spanmetrics";
+        job_name = "vector-metrics";
         static_configs = [
           {
-            targets = [ "${cfg.spanmetricsAddress}:${toString cfg.spanmetricsPort}" ];
-          }
-        ];
-      }
-      {
-        job_name = "jaeger";
-        static_configs = [
-          {
-            targets = [ "${cfg.jaegerMetricsAddress}:${toString cfg.jaegerMetricsPort}" ];
+            targets = [ "${cfg.vectorMetricsAddress}:${toString cfg.vectorMetricsPort}" ];
           }
         ];
       }
@@ -54,8 +46,14 @@ let
     dynamicUser = cfg.dynamicUser;
     supplementaryGroups = cfg.supplementaryGroups;
     workingDirectory = cfg.dataDir;
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "fishystuff-vector.service"
+    ];
+    wants = [
+      "network-online.target"
+      "fishystuff-vector.service"
+    ];
     restartPolicy = "on-failure";
     restartDelaySeconds = 5;
     serviceLines = [
@@ -124,28 +122,16 @@ in
       description = "Prometheus retention duration.";
     };
 
-    spanmetricsAddress = mkOption {
+    vectorMetricsAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
-      description = "OTEL spanmetrics address.";
+      description = "Vector Prometheus exporter address.";
     };
 
-    spanmetricsPort = mkOption {
+    vectorMetricsPort = mkOption {
       type = types.port;
-      default = 8889;
-      description = "OTEL spanmetrics port.";
-    };
-
-    jaegerMetricsAddress = mkOption {
-      type = types.str;
-      default = "127.0.0.1";
-      description = "Jaeger metrics address.";
-    };
-
-    jaegerMetricsPort = mkOption {
-      type = types.port;
-      default = 8888;
-      description = "Jaeger metrics port.";
+      default = 9598;
+      description = "Vector Prometheus exporter port.";
     };
 
     dynamicUser = mkOption {

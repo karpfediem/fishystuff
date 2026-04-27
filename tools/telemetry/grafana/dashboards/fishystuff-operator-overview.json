@@ -49,7 +49,7 @@
       },
       "id": 1,
       "options": {
-        "content": "### Fishystuff Operator Overview\nUse this as the first-stop dashboard for beta or production traffic.\n\n- `Service Instances With Errors` and `Service Errors By Instance` come from deployment-host Vector logs.\n- `Recent Service Lifecycle Events` surfaces restarts, stops, and failed units from systemd journal entries.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.",
+        "content": "### Fishystuff Operator Overview\nUse this as the first-stop dashboard for beta or production traffic.\n\n- `Service Instances With Errors` and `Service Errors By Instance` come from deployment-host Vector logs.\n- `Recent Service Lifecycle Events` surfaces restarts, stops, and failed units from systemd journal entries.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.\n- Prometheus scrapes Vector for spanmetrics, service metrics and host metrics.",
         "mode": "markdown"
       },
       "title": "Overview",
@@ -965,6 +965,156 @@
     },
     {
       "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 40
+      },
+      "id": 20,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * (1 - avg by (host) (rate(host_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "{{host}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Host CPU Busy",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 40
+      },
+      "id": 21,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * sum by (host) (host_memory_used_bytes) / sum by (host) (host_memory_total_bytes)",
+          "legendFormat": "{{host}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Host Memory Used",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 40
+      },
+      "id": 22,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * sum by (host, mountpoint) (host_filesystem_used_bytes{filesystem!=\"tmpfs\"}) / sum by (host, mountpoint) (host_filesystem_total_bytes{filesystem!=\"tmpfs\"})",
+          "legendFormat": "{{host}} {{mountpoint}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Host Filesystem Used",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
         "type": "loki",
         "uid": "fishystuff-loki"
       },
@@ -972,7 +1122,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "id": 17,
       "options": {
@@ -1019,6 +1169,6 @@
   "timezone": "browser",
   "title": "Fishystuff Operator Overview",
   "uid": "fishystuff-operator-overview",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

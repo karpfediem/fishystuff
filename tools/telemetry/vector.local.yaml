@@ -10,6 +10,33 @@ sources:
     include:
       - "./data/vector/process/*.log"
     read_from: beginning
+  host_metrics:
+    type: host_metrics
+    scrape_interval_secs: 10
+    collectors:
+      - cpu
+      - disk
+      - filesystem
+      - load
+      - host
+      - memory
+      - network
+  vector_internal_metrics:
+    type: internal_metrics
+    namespace: vector
+    scrape_interval_secs: 10
+  otel_spanmetrics:
+    type: prometheus_scrape
+    endpoints:
+      - "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_SPANMETRICS_PORT:-8889}/metrics"
+    scrape_interval_secs: 5
+    scrape_timeout_secs: 5
+  jaeger_metrics:
+    type: prometheus_scrape
+    endpoints:
+      - "http://127.0.0.1:${FISHYSTUFF_DEV_JAEGER_METRICS_PORT:-8888}/metrics"
+    scrape_interval_secs: 5
+    scrape_timeout_secs: 5
   telemetry_logs_ingress:
     type: http_server
     address: "127.0.0.1:4820"
@@ -331,15 +358,15 @@ sinks:
     healthcheck:
       enabled: false
 
-  telemetry_ingress_metrics_to_collector:
-    type: opentelemetry
+  telemetry_ingress_metrics_prometheus:
+    type: prometheus_exporter
     inputs:
       - telemetry_metrics_only
-    protocol:
-      type: http
-      uri: "http://127.0.0.1:${FISHYSTUFF_DEV_OTEL_COLLECTOR_HTTP_PORT:-4818}/v1/metrics"
-      encoding:
-        codec: otlp
+      - host_metrics
+      - vector_internal_metrics
+      - otel_spanmetrics
+      - jaeger_metrics
+    address: "127.0.0.1:9598"
     healthcheck:
       enabled: false
 

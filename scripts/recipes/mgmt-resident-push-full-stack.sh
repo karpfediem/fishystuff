@@ -23,6 +23,7 @@ edge_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/edge-current"
 loki_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/loki-current"
 otel_collector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/otel-collector-current"
 vector_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current"
+vector_agent_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/vector-current"
 prometheus_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/prometheus-current"
 jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current"
 grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current"
@@ -39,6 +40,7 @@ edge_bundle_override=""
 loki_bundle_override=""
 otel_collector_bundle_override=""
 vector_bundle_override=""
+vector_agent_bundle_override=""
 prometheus_bundle_override=""
 jaeger_bundle_override=""
 grafana_bundle_override=""
@@ -81,6 +83,7 @@ for arg in "${overrides[@]}"; do
     loki_gcroot=*) loki_gcroot="${arg#loki_gcroot=}" ;;
     otel_collector_gcroot=*) otel_collector_gcroot="${arg#otel_collector_gcroot=}" ;;
     vector_gcroot=*) vector_gcroot="${arg#vector_gcroot=}" ;;
+    vector_agent_gcroot=*) vector_agent_gcroot="${arg#vector_agent_gcroot=}" ;;
     prometheus_gcroot=*) prometheus_gcroot="${arg#prometheus_gcroot=}" ;;
     jaeger_gcroot=*) jaeger_gcroot="${arg#jaeger_gcroot=}" ;;
     grafana_gcroot=*) grafana_gcroot="${arg#grafana_gcroot=}" ;;
@@ -98,6 +101,7 @@ for arg in "${overrides[@]}"; do
     loki_bundle=*) loki_bundle_override="${arg#loki_bundle=}" ;;
     otel_collector_bundle=*) otel_collector_bundle_override="${arg#otel_collector_bundle=}" ;;
     vector_bundle=*) vector_bundle_override="${arg#vector_bundle=}" ;;
+    vector_agent_bundle=*) vector_agent_bundle_override="${arg#vector_agent_bundle=}" ;;
     prometheus_bundle=*) prometheus_bundle_override="${arg#prometheus_bundle=}" ;;
     jaeger_bundle=*) jaeger_bundle_override="${arg#jaeger_bundle=}" ;;
     grafana_bundle=*) grafana_bundle_override="${arg#grafana_bundle=}" ;;
@@ -231,6 +235,7 @@ bundle_is_remote_only() {
     "$loki_bundle_override" \
     "$otel_collector_bundle_override" \
     "$vector_bundle_override" \
+    "$vector_agent_bundle_override" \
     "$prometheus_bundle_override" \
     "$jaeger_bundle_override" \
     "$grafana_bundle_override"; do
@@ -263,6 +268,7 @@ edge_bundle="$edge_bundle_override"
 loki_bundle="$loki_bundle_override"
 otel_collector_bundle="$otel_collector_bundle_override"
 vector_bundle="$vector_bundle_override"
+vector_agent_bundle="$vector_agent_bundle_override"
 prometheus_bundle="$prometheus_bundle_override"
 jaeger_bundle="$jaeger_bundle_override"
 grafana_bundle="$grafana_bundle_override"
@@ -366,6 +372,9 @@ fi
 if service_selected vector && [[ -z "$vector_bundle" ]]; then
   vector_bundle="$(nix build .#vector-service-bundle --no-link --print-out-paths)"
 fi
+if [[ -z "$vector_agent_bundle" ]]; then
+  vector_agent_bundle="$(nix build .#vector-agent-service-bundle --no-link --print-out-paths)"
+fi
 if service_selected prometheus && [[ -z "$prometheus_bundle" ]]; then
   prometheus_bundle="$(nix build .#prometheus-service-bundle --no-link --print-out-paths)"
 fi
@@ -434,6 +443,7 @@ add_content_push_path() {
 add_bundle_push_path site_push_paths site_push_seen "$api_bundle"
 add_bundle_push_path site_push_paths site_push_seen "$dolt_bundle"
 add_bundle_push_path site_push_paths site_push_seen "$edge_bundle"
+add_bundle_push_path site_push_paths site_push_seen "$vector_agent_bundle"
 add_content_push_path site_push_paths site_push_seen "$site_content"
 add_content_push_path site_push_paths site_push_seen "$cdn_base_content"
 add_content_push_path site_push_paths site_push_seen "$minimap_display_tiles"
@@ -512,6 +522,8 @@ jq -n \
   --arg otel_collector_gcroot "$otel_collector_gcroot" \
   --arg vector_bundle "$vector_bundle" \
   --arg vector_gcroot "$vector_gcroot" \
+  --arg vector_agent_bundle "$vector_agent_bundle" \
+  --arg vector_agent_gcroot "$vector_agent_gcroot" \
   --arg prometheus_bundle "$prometheus_bundle" \
   --arg prometheus_gcroot "$prometheus_gcroot" \
   --arg jaeger_bundle "$jaeger_bundle" \
@@ -582,6 +594,7 @@ jq -n \
       loki: {bundle_path: $loki_bundle, gcroot_path: $loki_gcroot},
       otel_collector: {bundle_path: $otel_collector_bundle, gcroot_path: $otel_collector_gcroot},
       vector: {bundle_path: $vector_bundle, gcroot_path: $vector_gcroot},
+      vector_agent: {bundle_path: $vector_agent_bundle, gcroot_path: $vector_agent_gcroot},
       prometheus: {bundle_path: $prometheus_bundle, gcroot_path: $prometheus_gcroot},
       jaeger: {bundle_path: $jaeger_bundle, gcroot_path: $jaeger_gcroot},
       grafana: {bundle_path: $grafana_bundle, gcroot_path: $grafana_gcroot}

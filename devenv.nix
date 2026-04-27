@@ -381,7 +381,7 @@ in {
         --storage.tsdb.retention.time 24h \
         --web.listen-address 127.0.0.1:${toString prometheusPort}
     '';
-    after = [ "devenv:processes:otel-collector@started" ];
+    after = [ "devenv:processes:vector@started" ];
   };
 
   processes.grafana = {

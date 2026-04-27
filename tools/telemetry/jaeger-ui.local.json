@@ -8,9 +8,9 @@
     "emptyState": {
       "mainTitle": "Get started with Service Performance Monitoring",
       "subTitle": "No RED metrics available yet",
-      "description": "Local RED metrics appear after the OTEL collector exports span metrics and Prometheus scrapes them.",
+      "description": "Local RED metrics appear after the OTEL collector exports span metrics, Vector scrapes them, and Prometheus scrapes Vector.",
       "alert": {
-        "message": "This local stack expects Prometheus on http://127.0.0.1:9090 and the collector spanmetrics endpoint on http://127.0.0.1:8889/metrics.",
+        "message": "This local stack expects Prometheus on http://127.0.0.1:9090 and Vector's Prometheus exporter on http://127.0.0.1:9598/metrics.",
         "type": "info"
       }
     }

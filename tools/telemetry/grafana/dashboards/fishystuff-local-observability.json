@@ -49,7 +49,7 @@
       },
       "id": 1,
       "options": {
-        "content": "### Fishystuff Local Observability\nUse this dashboard as the local entrypoint for the repo-managed telemetry stack.\n\n- `Loki` is the default datasource for correlated logs.\n- `Prometheus` shows spanmetrics plus browser runtime metrics.\n- `Jaeger` is still the best view for trace detail and Service Performance Monitoring.\n\nOpen the map page, then keep this dashboard and Jaeger side by side while tracing requests and runtime metrics.",
+        "content": "### Fishystuff Local Observability\nUse this dashboard as the local entrypoint for the repo-managed telemetry stack.\n\n- `Loki` is the default datasource for correlated logs.\n- `Prometheus` scrapes Vector for spanmetrics, service metrics and host metrics.\n- `Jaeger` is still the best view for trace detail and Service Performance Monitoring.\n\nOpen the map page, then keep this dashboard and Jaeger side by side while tracing requests and runtime metrics.",
         "mode": "markdown"
       },
       "title": "Overview",
@@ -121,7 +121,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "max(up{job=\"otel-spanmetrics\"})",
+          "expr": "max(up{job=\"vector-metrics\", endpoint=~\".*:8889/metrics\"})",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -196,7 +196,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "max(up{job=\"jaeger\"})",
+          "expr": "max(up{job=\"vector-metrics\", endpoint=~\".*:8888/metrics\"})",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -560,6 +560,158 @@
     },
     {
       "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 18
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "count(count by (host) (host_cpu_seconds_total))",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts Reporting",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 4,
+        "y": 18
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * (1 - avg by (host) (rate(host_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "{{host}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Host CPU Busy",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 18
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * sum by (host) (host_memory_used_bytes) / sum by (host) (host_memory_total_bytes)",
+          "legendFormat": "{{host}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Host Memory Used",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
         "type": "loki",
         "uid": "fishystuff-loki"
       },
@@ -567,7 +719,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "id": 11,
       "options": {
@@ -614,6 +766,6 @@
   "timezone": "browser",
   "title": "Fishystuff Local Observability",
   "uid": "fishystuff-local-observability",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
