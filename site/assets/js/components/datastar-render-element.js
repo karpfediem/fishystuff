@@ -4,7 +4,58 @@ import {
 } from "../datastar-signals.js";
 
 export function readCalculatorSignal(path) {
-    return readObjectPath(window.__fishystuffCalculator?.signalObject?.() ?? null, path);
+    return cloneSignalValue(readObjectPath(
+        window.__fishystuffCalculator?.signalObject?.() ?? null,
+        path,
+    ));
+}
+
+export function cloneSignalValue(value, seen = new WeakMap()) {
+    if (!value || typeof value !== "object") {
+        return value;
+    }
+    if (seen.has(value)) {
+        return seen.get(value);
+    }
+    const clone = Array.isArray(value) ? [] : {};
+    seen.set(value, clone);
+    let keys = [];
+    try {
+        keys = Object.keys(value);
+    } catch (_error) {
+        return clone;
+    }
+    for (const key of keys) {
+        try {
+            clone[key] = cloneSignalValue(value[key], seen);
+        } catch (_error) {
+            // Keep snapshots detached from live Datastar proxies even if a field
+            // becomes unavailable while the signal tree is being patched.
+        }
+    }
+    return clone;
+}
+
+function isPlainObject(value) {
+    return Boolean(value) && Object.prototype.toString.call(value) === "[object Object]";
+}
+
+export function patchTouchesSignalPath(patch, path) {
+    const parts = String(path ?? "")
+        .split(".")
+        .filter(Boolean);
+    if (!parts.length || !isPlainObject(patch)) {
+        return true;
+    }
+
+    let current = patch;
+    for (const part of parts) {
+        if (!isPlainObject(current) || !(part in current)) {
+            return false;
+        }
+        current = current[part];
+    }
+    return true;
 }
 
 export class FishyDatastarRenderElement extends HTMLElement {
@@ -13,7 +64,11 @@ export class FishyDatastarRenderElement extends HTMLElement {
         this._rafId = 0;
         this._childObserver = null;
         this._resizeObserver = null;
-        this._handleSignalPatchBound = () => this.scheduleRender();
+        this._handleSignalPatchBound = (event) => {
+            if (patchTouchesSignalPath(event?.detail, this.signalPath())) {
+                this.scheduleRender();
+            }
+        };
     }
 
     connectedCallback() {
@@ -64,6 +119,10 @@ export class FishyDatastarRenderElement extends HTMLElement {
 
     observeResize() {
         return false;
+    }
+
+    signalPath() {
+        return this.getAttribute("signal-path") || "";
     }
 
     scheduleRender() {

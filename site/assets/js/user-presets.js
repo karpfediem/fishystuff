@@ -367,8 +367,12 @@
 
   function patchBoundDatastarSignals() {
     const snapshot = datastarSnapshot();
+    const serializedSnapshot = JSON.stringify(snapshot);
     for (const signals of boundDatastarSignals) {
       if (!signals || typeof signals !== "object") {
+        continue;
+      }
+      if (JSON.stringify(signals._user_presets ?? null) === serializedSnapshot) {
         continue;
       }
       signals._user_presets = cloneJson(snapshot);

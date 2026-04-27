@@ -42,6 +42,7 @@ pub struct CalculatorQuery {
     pub locale: Option<String>,
     pub r#ref: Option<String>,
     pub pet_cards: Option<bool>,
+    pub target_fish_select: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,9 +125,14 @@ struct CalculatorDerivedSignals {
     target_fish_pmf_chart: PmfChartSignal,
     loot_sankey_chart: LootSankeySignal,
     target_fish_selected_label: String,
+    target_fish_pmf_count_hint: String,
+    target_fish_expected_title: String,
     target_fish_expected_count: String,
     target_fish_per_day: String,
     target_fish_time_to_target: String,
+    target_fish_time_to_target_helper: String,
+    target_fish_probability_at_least_title: String,
+    target_fish_probability_at_least: String,
     target_fish_status_text: String,
     stat_breakdowns: CalculatorStatBreakdownSignals,
     fishing_timeline_chart: TimelineChartSignal,
@@ -874,6 +880,7 @@ pub async fn post_calculator_datastar_eval(
     )
     .await?;
     let include_pet_cards = query.pet_cards.unwrap_or(true);
+    let include_target_fish_select = query.target_fish_select.unwrap_or(false);
     let mut events = vec![calculator_signals_event(
         &normalized_signals,
         &derived,
@@ -882,31 +889,6 @@ pub async fn post_calculator_datastar_eval(
     )?
     .into_datastar_event()];
     if include_pet_cards {
-        let items_by_key = data
-            .catalog
-            .items
-            .iter()
-            .map(|item| (item.key.as_str(), item))
-            .collect::<HashMap<_, _>>();
-        let fish_group_chart = derive_fish_group_chart(&normalized_signals, &data, &items_by_key);
-        let loot_chart = derive_loot_chart(
-            &normalized_signals,
-            &data,
-            &fish_group_chart,
-            derived.loot_total_catches_raw,
-            derived.fish_multiplier_raw,
-        );
-        let target_fish_summary = derive_target_fish_summary(
-            &normalized_signals,
-            &data,
-            &fish_group_chart,
-            derived.loot_total_catches_raw,
-            timespan_seconds(
-                normalized_signals.timespan_amount,
-                &normalized_signals.timespan_unit,
-            ),
-        );
-        let target_fishes = target_fish_options(&data);
         events.push(
             PatchElements::new(render_pet_cards(
                 data.cdn_base_url.as_str(),
@@ -919,34 +901,21 @@ pub async fn post_calculator_datastar_eval(
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
         );
-        events.extend([
-            PatchElements::new(render_fish_group_chart(
-                data.lang,
-                &fish_group_chart,
-                normalized_signals.show_normalized_select_rates,
-            ))
-            .selector("#calculator-fish-group-chart")
-            .mode(ElementPatchMode::Outer)
-            .into_datastar_event(),
-            PatchElements::new(render_fish_group_silver_chart(data.lang, &loot_chart))
-                .selector("#calculator-fish-group-silver-chart")
-                .mode(ElementPatchMode::Outer)
-                .into_datastar_event(),
-            PatchElements::new(render_target_fish_panel(
+    }
+    if include_target_fish_select {
+        let target_fishes = target_fish_options(&data);
+        events.push(
+            PatchElements::new(render_target_fish_select_control(
                 &data,
                 &normalized_signals,
                 &target_fishes,
-                &target_fish_summary,
             ))
-            .selector("#calculator-target-fish-panel")
-            .mode(ElementPatchMode::Outer)
+            .selector("#calculator-target-fish-control")
+            .mode(ElementPatchMode::Inner)
             .into_datastar_event(),
-            PatchElements::new(render_loot_chart(data.lang, &loot_chart))
-                .selector("#calculator-loot-chart")
-                .mode(ElementPatchMode::Outer)
-                .into_datastar_event(),
-        ]);
-    } else {
+        );
+    }
+    if !include_pet_cards {
         events.extend(render_pet_talent_fixed_option_patch_events(
             data.lang,
             &data.catalog.pets,
@@ -4063,11 +4032,35 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         fish_group_silver_distribution_chart,
         target_fish_pmf_chart,
         loot_sankey_chart,
-        target_fish_selected_label: target_fish_summary.selected_label,
-        target_fish_expected_count: target_fish_summary.expected_count_text,
-        target_fish_per_day: target_fish_summary.per_day_text,
-        target_fish_time_to_target: target_fish_summary.time_to_target_text,
-        target_fish_status_text: target_fish_summary.status_text,
+        target_fish_selected_label: target_fish_summary.selected_label.clone(),
+        target_fish_pmf_count_hint: target_fish_summary.pmf_count_hint_text.clone(),
+        target_fish_expected_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.server.target.expected",
+            &[("timespan", &timespan_text)],
+        ),
+        target_fish_expected_count: target_fish_summary.expected_count_text.clone(),
+        target_fish_per_day: target_fish_summary.per_day_text.clone(),
+        target_fish_time_to_target: target_fish_summary.time_to_target_text.clone(),
+        target_fish_time_to_target_helper: if target_fish_summary.selected_label.is_empty() {
+            calculator_route_text(data.lang, "calculator.server.helper.select_target_fish")
+        } else {
+            calculator_route_text_with_vars(
+                data.lang,
+                "calculator.server.helper.target_status_per_day",
+                &[
+                    ("label", &target_fish_summary.selected_label),
+                    ("per_day", &target_fish_summary.per_day_text),
+                ],
+            )
+        },
+        target_fish_probability_at_least_title: calculator_route_text_with_vars(
+            data.lang,
+            "calculator.server.target.chance_at_least",
+            &[("amount", &target_fish_summary.target_amount_text)],
+        ),
+        target_fish_probability_at_least: target_fish_summary.probability_at_least_text.clone(),
+        target_fish_status_text: target_fish_summary.status_text.clone(),
         stat_breakdowns,
         fishing_timeline_chart,
         overlay_editor,
@@ -9329,7 +9322,7 @@ fn render_calculator_app(
 <div id="calculator-app" class="grid gap-6">
     __CANONICAL_SIGNAL_COMPUTEDS__
     <div class="hidden"
-         data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"
+         data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl(patch))"
          data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
 
     <section class="card card-border bg-base-100">
@@ -11172,7 +11165,7 @@ fn render_target_fish_panel(
             <div class=\"grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem]\">\
                 <fieldset class=\"fieldset\">\
                     <legend class=\"fieldset-legend\">{}</legend>\
-                    {}\
+                    <div id=\"calculator-target-fish-control\">{}</div>\
                 </fieldset>\
                 <fieldset class=\"fieldset\">\
                     <legend class=\"fieldset-legend\">{}</legend>\
@@ -11182,23 +11175,23 @@ fn render_target_fish_panel(
                 <fieldset class=\"fieldset\">\
                     <legend class=\"fieldset-legend\">{}</legend>\
                     <input type=\"number\" min=\"0\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"targetFishPmfCount\">\
-                    <span class=\"label text-xs\">{}</span>\
+                    <span class=\"label text-xs\" data-text=\"$_calc.target_fish_pmf_count_hint\">{}</span>\
                 </fieldset>\
             </div>\
             <div class=\"grid gap-3 lg:grid-cols-3\">\
                 <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_expected_count || ''\" data-fishy-stat-color=\"var(--color-info)\">\
-                    <div class=\"text-sm font-medium whitespace-normal leading-snug\">{}</div>\
-                    <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
-                    <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
+                    <div class=\"text-sm font-medium whitespace-normal leading-snug\" data-text=\"$_calc.target_fish_expected_title\">{}</div>\
+                    <div class=\"mt-2 text-2xl font-semibold\" data-text=\"$_calc.target_fish_expected_count\">{}</div>\
+                    <div class=\"mt-1 text-xs text-base-content/70\" data-text=\"$_calc.target_fish_status_text\">{}</div>\
                 </div>\
                 <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_time_to_target || ''\" data-fishy-stat-color=\"var(--color-info)\">\
                     <div class=\"text-sm font-medium\">{}</div>\
-                    <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
-                    <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
+                    <div class=\"mt-2 text-2xl font-semibold\" data-text=\"$_calc.target_fish_time_to_target\">{}</div>\
+                    <div class=\"mt-1 text-xs text-base-content/70\" data-text=\"$_calc.target_fish_time_to_target_helper\">{}</div>\
                 </div>\
                 <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_probability_at_least || ''\" data-fishy-stat-color=\"var(--color-info)\">\
-                    <div class=\"text-sm font-medium\">{}</div>\
-                    <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
+                    <div class=\"text-sm font-medium\" data-text=\"$_calc.target_fish_probability_at_least_title\">{}</div>\
+                    <div class=\"mt-2 text-2xl font-semibold\" data-text=\"$_calc.target_fish_probability_at_least\">{}</div>\
                     <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
             </div>\
@@ -14736,6 +14729,7 @@ mod tests {
                 locale: Some("en-US".to_string()),
                 r#ref: None,
                 pet_cards: None,
+                target_fish_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -14758,9 +14752,10 @@ mod tests {
         assert!(text.contains("event:datastar-patch-signals"));
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #pets"));
-        assert!(text.contains("data:selector #calculator-fish-group-chart"));
-        assert!(text.contains("data:selector #calculator-target-fish-panel"));
-        assert!(text.contains("data:selector #calculator-loot-chart"));
+        assert!(!text.contains("data:selector #calculator-fish-group-chart"));
+        assert!(!text.contains("data:selector #calculator-fish-group-silver-chart"));
+        assert!(!text.contains("data:selector #calculator-target-fish-panel"));
+        assert!(!text.contains("data:selector #calculator-loot-chart"));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
         assert!(text.contains("\"raw_prize_rate_text\":\""));
         assert!(text.contains("\"raw_prize_mastery_text\":\""));
@@ -14778,6 +14773,7 @@ mod tests {
                 locale: Some("en-US".to_string()),
                 r#ref: None,
                 pet_cards: Some(false),
+                target_fish_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -14797,6 +14793,35 @@ mod tests {
         assert!(!text.contains("data:selector #pets"));
         assert!(!text.contains("data:selector #calculator-fish-group-chart"));
         assert!(!text.contains("data:selector #calculator-target-fish-panel"));
+        assert!(!text.contains("data:selector #calculator-loot-chart"));
+    }
+
+    #[tokio::test]
+    async fn eval_can_patch_target_fish_control_without_replacing_distribution_panels() {
+        let response = post_calculator_datastar_eval(
+            State(test_state()),
+            Ok(Query(CalculatorQuery {
+                lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
+                r#ref: None,
+                pet_cards: Some(false),
+                target_fish_select: Some(true),
+            })),
+            Extension(RequestId("req-test".to_string())),
+            Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("event:datastar-patch-signals"));
+        assert!(text.contains("data:selector #calculator-target-fish-control"));
+        assert!(!text.contains("data:selector #calculator-target-fish-panel"));
+        assert!(!text.contains("data:selector #calculator-fish-group-chart"));
+        assert!(!text.contains("data:selector #calculator-fish-group-silver-chart"));
         assert!(!text.contains("data:selector #calculator-loot-chart"));
     }
 
@@ -15301,6 +15326,7 @@ mod tests {
                 locale: Some("en-US".to_string()),
                 r#ref: None,
                 pet_cards: None,
+                target_fish_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"active":true,"rod":"item:16162"}"#),

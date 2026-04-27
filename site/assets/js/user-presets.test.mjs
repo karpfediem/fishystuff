@@ -354,6 +354,53 @@ test("user presets do not emit Datastar updates when tracking unchanged payloads
   assert.equal(signals._user_presets.version, currentVersion);
 });
 
+test("user presets do not reassign unchanged bound Datastar snapshots", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const assignmentProps = [];
+  const signals = new Proxy({}, {
+    set(target, property, value) {
+      assignmentProps.push(String(property));
+      target[property] = value;
+      return true;
+    },
+  });
+  helper.bindDatastar(signals);
+  helper.trackCurrentPayload("calculator-layouts");
+  const assignmentCount = assignmentProps.filter((property) => property === "_user_presets").length;
+
+  helper.trackCurrentPayload("calculator-layouts");
+  currentPayload = { row: 0 };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  assert.equal(
+    assignmentProps.filter((property) => property === "_user_presets").length,
+    assignmentCount,
+  );
+});
+
 test("user presets use adapter payload equality when matching fixed presets", () => {
   const env = createEnv();
   const helper = env.helper;

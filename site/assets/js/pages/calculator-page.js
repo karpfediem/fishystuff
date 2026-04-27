@@ -3,10 +3,12 @@
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
-  const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
-  const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN =
-    /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$)|_preset_manager_ui(?:\.|$))/;
+  const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN =
+    /^_(?:loading|calc|live|defaults|user_presets|preset_manager_ui)(?:\.|$)/;
+  const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN = /^_/;
   const CALCULATOR_PACK_LEADER_SIGNAL_PATTERN = /^pet[1-5]\.packLeader$/;
+  const CALCULATOR_PET_CARD_SIGNAL_PATTERN = /^pet[1-5](?:\.|$)/;
+  const CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN = /^zone$/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
   const CALCULATOR_PRESET_SIGNAL_FILTER = {
@@ -68,6 +70,7 @@
     pendingLayoutPresetRestore: false,
     pendingCalculatorUiState: null,
     pendingEvalNeedsPetCards: null,
+    pendingEvalNeedsTargetFishSelect: null,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -286,18 +289,42 @@
       : signalPatchLeafPaths(patch).some((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
   }
 
-  function signalPatchOnlyTouchesPackLeader(patch) {
-    const paths = signalPatchLeafPaths(patch)
+  function calculatorEvalPatchPaths(patch) {
+    return signalPatchLeafPaths(patch)
       .filter((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
-    return paths.length > 0
-      && paths.every((path) => CALCULATOR_PACK_LEADER_SIGNAL_PATTERN.test(path));
+  }
+
+  function clearPendingEvalElementPatches() {
+    calculatorState.pendingEvalNeedsPetCards = null;
+    calculatorState.pendingEvalNeedsTargetFishSelect = null;
+  }
+
+  function calculatorEvalOptionsForPatch(patch) {
+    const paths = calculatorEvalPatchPaths(patch);
+    const touchesPetCards = paths.some((path) => CALCULATOR_PET_CARD_SIGNAL_PATTERN.test(path))
+      && !paths.every((path) => CALCULATOR_PACK_LEADER_SIGNAL_PATTERN.test(path));
+    return {
+      includePetCards: touchesPetCards,
+      includeTargetFishSelect: paths.some((path) => CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN.test(path)),
+    };
   }
 
   function noteCalculatorEvalPatch(patch) {
+    if (!calculatorState.uiStateRestored) {
+      return;
+    }
     if (!patchMatchesCalculatorEvalFilter(patch)) {
       return;
     }
-    if (signalPatchOnlyTouchesPackLeader(patch)) {
+    const paths = calculatorEvalPatchPaths(patch);
+    if (!paths.length) {
+      return;
+    }
+    const options = calculatorEvalOptionsForPatch(patch);
+    if (options.includeTargetFishSelect) {
+      calculatorState.pendingEvalNeedsTargetFishSelect = true;
+    }
+    if (!options.includePetCards) {
       if (calculatorState.pendingEvalNeedsPetCards !== true) {
         calculatorState.pendingEvalNeedsPetCards = false;
       }
@@ -1678,13 +1705,22 @@
     );
   }
 
-  function calculatorEvalUrl() {
+  function calculatorEvalUrl(patch = null) {
     const language = calculatorSurfaceLanguage();
-    const includePetCards = calculatorState.pendingEvalNeedsPetCards !== false;
-    calculatorState.pendingEvalNeedsPetCards = null;
+    const patchOptions = patch && typeof patch === "object"
+      ? calculatorEvalOptionsForPatch(patch)
+      : null;
+    const includePetCards = patchOptions
+      ? patchOptions.includePetCards
+      : calculatorState.pendingEvalNeedsPetCards !== false;
+    const includeTargetFishSelect = patchOptions
+      ? patchOptions.includeTargetFishSelect
+      : calculatorState.pendingEvalNeedsTargetFishSelect === true;
+    clearPendingEvalElementPatches();
     const petCardsParam = includePetCards ? "" : "&pet_cards=false";
+    const targetFishSelectParam = includeTargetFishSelect ? "&target_fish_select=true" : "";
     return window.__fishystuffResolveApiUrl(
-      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}${petCardsParam}`,
+      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}${petCardsParam}${targetFishSelectParam}`,
     );
   }
 
@@ -1822,6 +1858,7 @@
     }
     bindPetImageFallbackListener();
     calculatorState.uiStateRestored = true;
+    clearPendingEvalElementPatches();
   }
 
   function persistCalculator(signals) {

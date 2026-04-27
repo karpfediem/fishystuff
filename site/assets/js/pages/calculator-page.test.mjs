@@ -432,6 +432,49 @@ test("pack leader change clears stale non-tier-five selections", () => {
   assert.match(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
 });
 
+test("session duration changes request signal-only eval updates", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.patchSignals({ timespanAmount: 3 });
+
+  const url = env.window.__fishystuffCalculator.evalUrl();
+  assert.match(url, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
+});
+
+test("zone changes request only the zone-dependent target fish control", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.patchSignals({ zone: "240,74,74" });
+
+  const url = env.window.__fishystuffCalculator.evalUrl();
+  assert.match(url, /[?&]pet_cards=false\b/);
+  assert.match(url, /[?&]target_fish_select=true\b/);
+});
+
+test("calculator eval URL classifies direct Datastar patch payloads", () => {
+  const env = createContext();
+
+  const durationUrl = env.window.__fishystuffCalculator.evalUrl({ timespanAmount: 10 });
+  assert.match(durationUrl, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(durationUrl, /[?&]target_fish_select=true\b/);
+
+  const zoneUrl = env.window.__fishystuffCalculator.evalUrl({ zone: "240,74,74" });
+  assert.match(zoneUrl, /[?&]pet_cards=false\b/);
+  assert.match(zoneUrl, /[?&]target_fish_select=true\b/);
+
+  const petUrl = env.window.__fishystuffCalculator.evalUrl({ pet1: { tier: "4" } });
+  assert.doesNotMatch(petUrl, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(petUrl, /[?&]target_fish_select=true\b/);
+
+  const packLeaderUrl = env.window.__fishystuffCalculator.evalUrl({ pet1: { packLeader: true } });
+  assert.match(packLeaderUrl, /[?&]pet_cards=false\b/);
+});
+
 test("calculator restore keeps the current tab while restoring trade, food, and buffs UI state", () => {
   const env = createContext({
     "fishystuff.calculator.ui.v1": JSON.stringify({
@@ -1153,6 +1196,18 @@ test("calculator API URLs keep locale and apiLang separate", () => {
   assert.equal(mixed.window.__fishystuffCalculator.apiLang, "ko");
   assert.match(mixed.window.__fishystuffCalculator.initUrl(), /\?lang=ko&locale=de-DE$/);
   assert.match(mixed.window.__fishystuffCalculator.evalUrl(), /\?lang=ko&locale=de-DE$/);
+});
+
+test("calculator eval filter ignores internal signal branches", () => {
+  const env = createContext();
+  const exclude = env.window.__fishystuffCalculator.evalSignalPatchFilter().exclude;
+
+  assert.equal(exclude.test("_user_presets.version"), true);
+  assert.equal(exclude.test("_calculator_actions.clearToken"), true);
+  assert.equal(exclude.test("_calculator_ui.pinned_sections.0"), true);
+  assert.equal(exclude.test("_food_slots.0"), true);
+  assert.equal(exclude.test("food.0"), false);
+  assert.equal(exclude.test("timespanAmount"), false);
 });
 
 test("calculator persist stores canonical page state and excludes transient branches", () => {

@@ -82,6 +82,17 @@ function positiveNumber(value) {
     return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
+function ownFieldValue(row, key) {
+    return row && typeof row === "object" && Object.prototype.hasOwnProperty.call(row, key)
+        ? row[key]
+        : undefined;
+}
+
+function optionalString(row, key) {
+    const value = ownFieldValue(row, key);
+    return value == null ? "" : String(value);
+}
+
 function stackedHeight(rows, scale, gap) {
     if (!rows.length) {
         return 0;
@@ -434,7 +445,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             const groupNode = applyStatBreakdownAttrs(
                 leftNodes.append("g"),
-                row.count_breakdown,
+                optionalString(row, "count_breakdown"),
                 "var(--color-info)",
             );
 
@@ -511,7 +522,8 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             const itemLabelColor = gradeLabelColor(row.icon_grade_tone);
             const itemSurfaceFill = gradeSurfaceFill(row.icon_grade_tone);
             const itemSurfaceStroke = gradeSurfaceStroke(row.icon_grade_tone);
-            const hasIcon = Boolean(row.icon_url);
+            const iconUrl = optionalString(row, "icon_url");
+            const hasIcon = Boolean(iconUrl);
             const leftBoxX = labelX;
             const centerBoxX = leftBoxX + SPECIES_METRIC_WIDTH + SPECIES_BOX_CONNECTOR_GAP;
             const rightBoxX =
@@ -532,9 +544,9 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 rateSourceKind: String(row.drop_rate_source_kind ?? ""),
                 rateDetail: String(row.drop_rate_tooltip ?? ""),
                 rateValueText: dropMetricText,
-                presenceSourceKind: String(row.presence_source_kind ?? ""),
-                presenceDetail: String(row.presence_tooltip ?? ""),
-                presenceValueText: String(row.presence_text ?? ""),
+                presenceSourceKind: optionalString(row, "presence_source_kind"),
+                presenceDetail: optionalString(row, "presence_tooltip"),
+                presenceValueText: optionalString(row, "presence_text"),
             });
             const provenanceRailX =
                 centerBoxX + speciesCenterWidth - PROVENANCE_RAIL_INSET - PROVENANCE_RAIL_WIDTH;
@@ -616,7 +628,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             const countMetric = applyStatBreakdownAttrs(
                 rightNodes.append("g"),
-                row.count_breakdown,
+                optionalString(row, "count_breakdown"),
                 "var(--color-info)",
             );
 
@@ -684,7 +696,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                     .attr("y", iconFrameY + 5)
                     .attr("width", iconFrameSize - 10)
                     .attr("height", iconFrameSize - 10)
-                    .attr("href", row.icon_url)
+                    .attr("href", iconUrl)
                     .attr("preserveAspectRatio", "xMidYMid meet");
             }
 
@@ -724,7 +736,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             const silverMetric = applyStatBreakdownAttrs(
                 rightNodes.append("g"),
-                row.silver_breakdown,
+                optionalString(row, "silver_breakdown"),
                 "var(--color-success)",
             );
 
@@ -794,7 +806,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             const groupNode = applyStatBreakdownAttrs(
                 profitGroups.append("g"),
-                row.silver_breakdown,
+                optionalString(row, "silver_breakdown"),
                 "var(--color-success)",
             );
 
