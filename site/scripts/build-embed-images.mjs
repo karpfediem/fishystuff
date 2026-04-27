@@ -13,7 +13,7 @@ const siteDir = path.resolve(path.dirname(scriptPath), "..");
 
 const EMBED_WIDTH = 900;
 const EMBED_HEIGHT = 300;
-const BRAND_TEXT = "Fishy Stuff";
+const BRAND_TEXT = "FishyStuff";
 const DEFAULT_TAGLINE = "Everything you need to get fishing";
 
 const assetsDir = path.join(siteDir, "assets");
@@ -108,7 +108,7 @@ function buildHtmlDocument({ locale, tagline, logoPath }) {
     .replace("__LOGO_HREF__", logoHref)
     .replace("__TAGLINE__", escapeHtml(tagline))
     .replace("__TITLE_FONT_SIZE__", resolveTitleFontSize(tagline))
-    .replace("Fishy Stuff", BRAND_TEXT);
+    .replace("FishyStuff", BRAND_TEXT);
 }
 
 function renderLocaleEmbed({ locale, tagline, outputPaths, logoPath }) {

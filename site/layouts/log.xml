@@ -1,8 +1,8 @@
 <rss version="2.0">
  <channel>
-  <title>Fishy Stuff Changelog</title>
+  <title>FishyStuff Changelog</title>
   <link :text="$site.host_url"></link>
-  <description>Curated list of changes to Fishy Stuff</description>
+  <description>Curated list of changes to FishyStuff</description>
   <generator>Zine -- https://zine-ssg.io</generator>
   <language>en-us</language>
   <lastBuildDate :text="$build.generated.formatHTTP()"></lastBuildDate>

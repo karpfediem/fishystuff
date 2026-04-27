@@ -1334,7 +1334,7 @@ test("calculator action listener handles copy and clear tokens once without clea
   assert.match(env.toastCalls[0].text, /\?preset=lz:/);
   assert.equal(env.toastCalls[0].options.success, calculatorMessage("toast.preset_url_copied"));
   assert.equal(env.toastCalls[1].type, "copyText");
-  assert.match(env.toastCalls[1].text, /Fishy Stuff Calculator Preset/);
+  assert.match(env.toastCalls[1].text, /FishyStuff Calculator Preset/);
   assert.equal(env.toastCalls[1].options.success, calculatorMessage("toast.share_copied"));
   assert.equal(env.toastCalls[2].type, "info");
   assert.equal(env.toastCalls[2].message, calculatorMessage("toast.cleared"));

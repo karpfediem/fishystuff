@@ -9,14 +9,14 @@ Multilingual {
     {
       .code = "en-US",
       .name = "English",
-      .site_title = "Fishy Stuff",
+      .site_title = "FishyStuff",
       .content_dir_path = "content/en-US",
       .output_prefix_override = "", // default variant at site root
     },
     {
       .code = "de-DE",
       .name = "Deutsch",
-      .site_title = "Fishy Stuff",
+      .site_title = "FishyStuff",
       .content_dir_path = "content/de-DE",
       // prefix defaults to "de-DE/"
     },

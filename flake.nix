@@ -1,5 +1,5 @@
 {
-  description = "Fishy Stuff - Fishing Guides and Tools for Black Desert";
+  description = "FishyStuff - Fishing Guides and Tools for Black Desert";
 
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";

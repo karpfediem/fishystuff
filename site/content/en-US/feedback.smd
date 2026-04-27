@@ -1,6 +1,6 @@
 ---
 .title = "Feedback",
-.description = "Share feedback, bug reports, and feature requests for Fishy Stuff.",
+.description = "Share feedback, bug reports, and feature requests for FishyStuff.",
 .date = @date("2026-04-19T00:00:00"),
 .author = "Karpfen",
 .layout = "index.shtml",

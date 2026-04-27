@@ -18,7 +18,7 @@
   "calculator.timeline.time_saved": "Gesparte Zeit",
   "calculator.share.active_lead": "Aktiv | ",
   "calculator.share.afr_lead": "{$afr} AFR | ",
-  "calculator.share.link": "[Fishy Stuff-Rechner-Preset | {$lead}{$item_drr} Gegenstands-DRR | {$zone}]({$url})",
+  "calculator.share.link": "[FishyStuff-Rechner-Preset | {$lead}{$item_drr} Gegenstands-DRR | {$zone}]({$url})",
   "calculator.toast.preset_url_copied": "Preset-URL kopiert.",
   "calculator.toast.share_copied": "Freigabetext kopiert.",
   "calculator.toast.cleared": "Rechner zurückgesetzt.",

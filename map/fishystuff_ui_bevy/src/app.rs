@@ -86,7 +86,7 @@ pub fn run_browser() {
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: "Fishy Stuff Zones".to_string(),
+                        title: "FishyStuff Zones".to_string(),
                         canvas: Some("#bevy".to_string()),
                         resolution: initial_resolution(),
                         ..default()
@@ -136,7 +136,7 @@ fn build_windowed_native_app(options: &NativeAppOptions) -> App {
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Fishy Stuff Zones Profiling".to_string(),
+                    title: "FishyStuff Zones Profiling".to_string(),
                     resolution: (options.width, options.height).into(),
                     visible: options.visible,
                     ..default()
@@ -169,7 +169,7 @@ fn build_headless_native_app(options: &NativeAppOptions) -> App {
         BevyInputPlugin,
         WindowPlugin {
             primary_window: Some(Window {
-                title: "Fishy Stuff Zones Profiling".to_string(),
+                title: "FishyStuff Zones Profiling".to_string(),
                 resolution: (options.width, options.height).into(),
                 visible: false,
                 ..default()

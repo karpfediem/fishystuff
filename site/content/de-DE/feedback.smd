@@ -1,6 +1,6 @@
 ---
 .title = "Feedback",
-.description = "Teile Feedback, Fehlermeldungen und Funktionswuensche fuer Fishy Stuff.",
+.description = "Teile Feedback, Fehlermeldungen und Funktionswuensche fuer FishyStuff.",
 .date = @date("2026-04-19T00:00:00"),
 .author = "Karpfen",
 .layout = "index.shtml",

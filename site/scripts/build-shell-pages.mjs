@@ -14,7 +14,7 @@ const siteDir = path.resolve(path.dirname(scriptPath), "..");
 const TRANSLATION_HELP_ROUTE_KEY = "/community/";
 const GITHUB_REPOSITORY_URL = "https://github.com/karpfediem/fishystuff";
 const GITHUB_DEFAULT_BRANCH = "main";
-const DEFAULT_PAGE_DESCRIPTION = "Fishy Stuff: Fishing Guides and Tools for Black Desert";
+const DEFAULT_PAGE_DESCRIPTION = "FishyStuff: Fishing Guides and Tools for Black Desert";
 
 function parseArgs(argv) {
   const args = {

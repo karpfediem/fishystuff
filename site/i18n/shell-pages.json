@@ -11,12 +11,12 @@
         "en-US": {
           "slug": "",
           "title": "Home",
-          "description": "Fishy Stuff offers fishing guides, an interactive map, calculators, and trackers for Black Desert."
+          "description": "FishyStuff offers fishing guides, an interactive map, calculators, and trackers for Black Desert."
         },
         "de-DE": {
           "slug": "",
           "title": "Startseite",
-          "description": "Fishy Stuff bietet Angelguides, eine interaktive Karte, Rechner und Tracker für Black Desert."
+          "description": "FishyStuff bietet Angelguides, eine interaktive Karte, Rechner und Tracker für Black Desert."
         }
       }
     },
@@ -31,12 +31,12 @@
         "en-US": {
           "slug": "map",
           "title": "Map",
-          "description": "Explore Black Desert fishing zones, hotspots, region groups, and verified evidence points on the interactive Fishy Stuff map."
+          "description": "Explore Black Desert fishing zones, hotspots, region groups, and verified evidence points on the interactive FishyStuff map."
         },
         "de-DE": {
           "slug": "karte",
           "title": "Karte",
-          "description": "Erkunde Angelzonen, Hotspots, Regionen und nachgewiesene Fundpunkte auf der interaktiven Fishy Stuff Karte für Black Desert."
+          "description": "Erkunde Angelzonen, Hotspots, Regionen und nachgewiesene Fundpunkte auf der interaktiven FishyStuff Karte für Black Desert."
         }
       }
     },
@@ -51,12 +51,12 @@
         "en-US": {
           "slug": "dex",
           "title": "Fishydex",
-          "description": "Track your Black Desert fishing progress and collect all prize fish with the Fishy Stuff Fishydex."
+          "description": "Track your Black Desert fishing progress and collect all prize fish with the FishyStuff Fishydex."
         },
         "de-DE": {
           "slug": "dex",
           "title": "Fishydex",
-          "description": "Verfolge deinen Angel-Fortschritt und sammle alle außergewöhnlichen Fische in Black Desert mit dem Fishydex von Fishy Stuff."
+          "description": "Verfolge deinen Angel-Fortschritt und sammle alle außergewöhnlichen Fische in Black Desert mit dem Fishydex von FishyStuff."
         }
       }
     },
@@ -90,12 +90,12 @@
         "en-US": {
           "slug": "profile",
           "title": "Profile",
-          "description": "Manage your profile and preferences for Fishy Stuff."
+          "description": "Manage your profile and preferences for FishyStuff."
         },
         "de-DE": {
           "slug": "profil",
           "title": "Profil",
-          "description": "Verwalte dein Profil und deine Einstellungen für Fishy Stuff."
+          "description": "Verwalte dein Profil und deine Einstellungen für FishyStuff."
         }
       }
     }
