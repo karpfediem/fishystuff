@@ -3,6 +3,19 @@ import {
     readObjectPath,
 } from "../datastar-signals.js";
 
+const LIVE_CALC_SOURCE_SIGNAL_PATHS = Object.freeze([
+    "_calc",
+    "level",
+    "_resources",
+    "resources",
+    "fishingMode",
+    "active",
+    "catchTimeActive",
+    "catchTimeAfk",
+    "timespanAmount",
+    "timespanUnit",
+]);
+
 export function readCalculatorSignal(path) {
     return cloneSignalValue(readObjectPath(
         window.__fishystuffCalculator?.signalObject?.() ?? null,
@@ -40,14 +53,10 @@ function isPlainObject(value) {
     return Boolean(value) && Object.prototype.toString.call(value) === "[object Object]";
 }
 
-export function patchTouchesSignalPath(patch, path) {
-    const parts = String(path ?? "")
-        .split(".")
-        .filter(Boolean);
+function patchContainsSignalPath(patch, parts) {
     if (!parts.length || !isPlainObject(patch)) {
         return true;
     }
-
     let current = patch;
     for (const part of parts) {
         if (!isPlainObject(current) || !(part in current)) {
@@ -56,6 +65,18 @@ export function patchTouchesSignalPath(patch, path) {
         current = current[part];
     }
     return true;
+}
+
+export function patchTouchesSignalPath(patch, path) {
+    const parts = String(path ?? "")
+        .split(".")
+        .filter(Boolean);
+    if (parts[0] === "_live") {
+        return LIVE_CALC_SOURCE_SIGNAL_PATHS.some((sourcePath) => (
+            patchContainsSignalPath(patch, sourcePath.split("."))
+        ));
+    }
+    return patchContainsSignalPath(patch, parts);
 }
 
 export class FishyDatastarRenderElement extends HTMLElement {

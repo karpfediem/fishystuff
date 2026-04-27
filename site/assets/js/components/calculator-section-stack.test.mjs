@@ -107,3 +107,37 @@ test("normalizePinnedLayout preserves an explicit empty layout", async () => {
         [],
     );
 });
+
+test("patchTouchesCalculatorSectionLayout ignores non-layout signal patches", async () => {
+    const { patchTouchesCalculatorSectionLayout } = await loadModule();
+
+    assert.equal(patchTouchesCalculatorSectionLayout({ _resources: 50 }), false);
+    assert.equal(patchTouchesCalculatorSectionLayout({ _calc: { zone_name: "Ahrmo Sea" } }), false);
+    assert.equal(patchTouchesCalculatorSectionLayout({ _user_presets: { version: 8 } }), false);
+    assert.equal(
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { distribution_tab: "loot_flow" } }),
+        false,
+    );
+});
+
+test("patchTouchesCalculatorSectionLayout matches order-affecting layout patches", async () => {
+    const { patchTouchesCalculatorSectionLayout } = await loadModule();
+
+    assert.equal(
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { top_level_tab: "distribution" } }),
+        true,
+    );
+    assert.equal(
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { pinned_sections: ["overview"] } }),
+        true,
+    );
+    assert.equal(
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { pinned_layout: [[["overview"]]] } }),
+        true,
+    );
+    assert.equal(
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { unpinned_insert_index: [1, 0] } }),
+        true,
+    );
+    assert.equal(patchTouchesCalculatorSectionLayout({ _calculator_ui: null }), true);
+});

@@ -18,6 +18,12 @@ const DROPZONE_EMPTY_HEIGHT_PX = 96;
 const PLACEHOLDER_MIN_HEIGHT_PX = 120;
 const INLINE_PLACEHOLDER_SELECTOR = "[data-calculator-inline-placeholder]";
 const DEFAULT_UNPINNED_INSERT_INDEX = Object.freeze([0, 0]);
+const LAYOUT_SIGNAL_KEYS = Object.freeze([
+    "pinned_layout",
+    "pinned_sections",
+    "top_level_tab",
+    "unpinned_insert_index",
+]);
 const SECTION_LAYOUT_META = Object.freeze({
     overview: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
     zone: { kind: "wide", basis: "34rem", minWidth: "min(100%, 34rem)", shareable: true },
@@ -171,6 +177,24 @@ function calculatorUi() {
     return current && typeof current === "object" ? current : {};
 }
 
+function isObject(value) {
+    return Boolean(value) && typeof value === "object";
+}
+
+export function patchTouchesCalculatorSectionLayout(patch) {
+    if (!isObject(patch)) {
+        return true;
+    }
+    if (!Object.prototype.hasOwnProperty.call(patch, "_calculator_ui")) {
+        return false;
+    }
+    const uiPatch = patch._calculator_ui;
+    if (!isObject(uiPatch)) {
+        return true;
+    }
+    return LAYOUT_SIGNAL_KEYS.some((key) => Object.prototype.hasOwnProperty.call(uiPatch, key));
+}
+
 function patchPinnedLayout(pinnedLayout) {
     if (typeof globalThis.window?.__fishystuffCalculator?.patchSignals !== "function") {
         return;
@@ -304,7 +328,12 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._handlePointerMove = (event) => this.handlePointerMove(event);
         this._handlePointerUp = (event) => this.handlePointerUp(event);
         this._handlePointerCancel = (event) => this.handlePointerCancel(event);
-        this._handleSignalPatch = () => this.scheduleSync();
+        this._handleResize = () => this.scheduleSync();
+        this._handleSignalPatch = (event) => {
+            if (patchTouchesCalculatorSectionLayout(event?.detail)) {
+                this.scheduleSync();
+            }
+        };
         this._handleLanguageChange = () => applyTranslations(this);
     }
 
@@ -313,7 +342,7 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         globalThis.addEventListener?.("pointermove", this._handlePointerMove);
         globalThis.addEventListener?.("pointerup", this._handlePointerUp);
         globalThis.addEventListener?.("pointercancel", this._handlePointerCancel);
-        globalThis.addEventListener?.("resize", this._handleSignalPatch);
+        globalThis.addEventListener?.("resize", this._handleResize);
         globalThis.window?.addEventListener?.(LANGUAGE_CHANGE_EVENT, this._handleLanguageChange);
         globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatch);
         this._observer = new MutationObserver(() => {
@@ -340,7 +369,7 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         globalThis.removeEventListener?.("pointermove", this._handlePointerMove);
         globalThis.removeEventListener?.("pointerup", this._handlePointerUp);
         globalThis.removeEventListener?.("pointercancel", this._handlePointerCancel);
-        globalThis.removeEventListener?.("resize", this._handleSignalPatch);
+        globalThis.removeEventListener?.("resize", this._handleResize);
         globalThis.window?.removeEventListener?.(LANGUAGE_CHANGE_EVENT, this._handleLanguageChange);
         globalThis.document?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatch);
         this.finishDrag({ commit: false });

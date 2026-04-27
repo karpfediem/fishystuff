@@ -11,10 +11,6 @@
         object-fit: contain;
     }
 
-    #calculator {
-        overflow-anchor: none;
-    }
-
     .fishy-calculator-mode-choice {
         display: flex;
         min-height: 8.5rem;

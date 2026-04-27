@@ -90,3 +90,30 @@ test("patchTouchesSignalPath only matches patches for the observed signal branch
         false,
     );
 });
+
+test("patchTouchesSignalPath invalidates live charts from live calculation dependencies", async () => {
+    const { patchTouchesSignalPath } = await loadModule();
+
+    assert.equal(
+        patchTouchesSignalPath({ _resources: 50 }, "_live.fishing_timeline_chart"),
+        true,
+    );
+    assert.equal(
+        patchTouchesSignalPath(
+            { _calc: { fishing_timeline_chart: { segments: [] } } },
+            "_live.fishing_timeline_chart",
+        ),
+        true,
+    );
+    assert.equal(
+        patchTouchesSignalPath({ _user_presets: { version: 8 } }, "_live.fishing_timeline_chart"),
+        false,
+    );
+    assert.equal(
+        patchTouchesSignalPath(
+            { _calculator_ui: { top_level_tab: "distribution" } },
+            "_live.fishing_timeline_chart",
+        ),
+        false,
+    );
+});
