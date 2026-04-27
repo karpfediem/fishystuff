@@ -773,20 +773,9 @@ copy_resident_common_modules() {
   local module_name=""
 
   mkdir -p "$deploy_dir/modules/lib" "$deploy_dir/modules/providers"
-  for module_name in fishystuff-beta-access fishystuff-beta-layout fishystuff-mgmt-control-key hetzner-location hetzner-vm-observed systemd-daemon-reload; do
+  for module_name in fishystuff-beta-access systemd-daemon-reload; do
     cp -a "$RECIPE_REPO_ROOT/mgmt/modules/lib/$module_name" "$deploy_dir/modules/lib/"
-  done
-  for module_name in fishystuff-beta fishystuff-beta-dns fishystuff-beta-region; do
-    cp -a "$RECIPE_REPO_ROOT/mgmt/modules/$module_name" "$deploy_dir/modules/"
   done
   cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/cloudflare-dnsmanager" "$deploy_dir/modules/providers/"
   cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-firewall" "$deploy_dir/modules/providers/"
-  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-network" "$deploy_dir/modules/providers/"
-  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-ssh-key" "$deploy_dir/modules/providers/"
-  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-vm" "$deploy_dir/modules/providers/"
-  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-vm-network" "$deploy_dir/modules/providers/"
-  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-volume" "$deploy_dir/modules/providers/"
-  cp -a "$RECIPE_REPO_ROOT/mgmt/modules/providers/hetzner-vm-volume" "$deploy_dir/modules/providers/"
-  mkdir -p "$deploy_dir/modules/github.com/purpleidea/mgmt/modules"
-  cp -a "$mgmt_modules_dir/misc" "$deploy_dir/modules/github.com/purpleidea/mgmt/modules/"
 }

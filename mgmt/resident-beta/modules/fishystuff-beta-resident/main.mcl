@@ -1,9 +1,7 @@
 import "fmt"
-import "sys"
 import "../lib/fishystuff-beta-resident-layout/" as fishystuff_beta_resident_layout
 import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
 import "../fishystuff-beta-resident-core/"
-import "../fishystuff-beta/" as fishystuff_beta
 
 class host($st) {
 	$manifest struct{
@@ -74,61 +72,6 @@ class host($st) {
 			$hostname
 		)
 	)
-}
-
-class infra_control($st) {
-	$manifest struct{
-		cluster str;
-		deployment_marker str;
-		hostname str;
-		telemetry_hostname str;
-		prod_hostname str;
-		public_urls struct{site_base_url str; api_base_url str; cdn_base_url str; telemetry_base_url str};
-		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
-		deployment_environment str;
-		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
-		content_roots struct{site_root_dir str; cdn_root_dir str};
-		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
-		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
-		services map{str: struct{bundle_path str; gcroot_path str}}
-	} = $st->manifest
-	$cluster str = $manifest->cluster || "beta"
-	$api_token str = sys.getenv("HETZNER_API_TOKEN")
-	$ssh_key_name str = sys.defaultenv("HETZNER_SSH_KEY_NAME", fmt.printf("fishystuff-%s-deploy", $cluster))
-	$ssh_public_key str = sys.defaultenv("HETZNER_SSH_PUBLIC_KEY", "")
-	$cloudflare_api_token str = sys.defaultenv("CLOUDFLARE_API_TOKEN", "")
-	$state_env str = sys.defaultenv("FISHYSTUFF_HETZNER_STATE", "")
-	$state str = if $state_env != "" { $state_env } else { "running" }
-	$allow_rebuild str = sys.defaultenv("FISHYSTUFF_HETZNER_ALLOW_REBUILD", "")
-	$image_env str = sys.defaultenv("FISHYSTUFF_HETZNER_IMAGE", "")
-	$image str = if $image_env != "" { $image_env } else { "debian-13" }
-	$http01_host str = sys.defaultenv("FISHYSTUFF_HETZNER_HTTP01_HOST", "")
-	$https_host str = sys.defaultenv("FISHYSTUFF_HETZNER_HTTPS_HOST", "")
-	$mgmt_control_env str = sys.defaultenv("FISHYSTUFF_HETZNER_MGMT_CONTROL", "")
-	$mgmt_control_enabled bool = (if $mgmt_control_env != "" { $mgmt_control_env } else { "true" }) == "true"
-	$mgmt_control_key_dir_env str = sys.defaultenv("FISHYSTUFF_HETZNER_MGMT_CONTROL_KEY_DIR", "")
-	$mgmt_control_key_dir str = if $mgmt_control_key_dir_env != "" { $mgmt_control_key_dir_env } else { "/var/lib/fishystuff/mgmt/control-keys" }
-
-	include fishystuff_beta.topology(struct {
-		cluster => $cluster,
-		api_token => $api_token,
-		ssh_key_name => $ssh_key_name,
-		ssh_public_key => $ssh_public_key,
-		cloudflare_api_token => $cloudflare_api_token,
-		state => $state,
-		allow_rebuild => $allow_rebuild,
-		image => $image,
-		http01_host => $http01_host,
-		https_host => $https_host,
-		mgmt_control_enabled => $mgmt_control_enabled,
-		mgmt_control_key_dir => $mgmt_control_key_dir,
-		site_public_ipv4_hint => $manifest->host_hints->site_public_ipv4 || "",
-		telemetry_public_ipv4_hint => $manifest->host_hints->telemetry_public_ipv4 || "",
-		poll_seconds => 60,
-		wait_interval_seconds => 5,
-		wait_timeout_seconds => 600,
-	})
 }
 
 class acme_control($st) {

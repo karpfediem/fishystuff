@@ -207,13 +207,14 @@ just deploy beta
 just status beta
 ```
 
-The beta control target defaults to `mgmt-root`, so routine deploys
-write the resident graph once through `mgmt-root`. Nix closures are copied to
-the beta site target and telemetry target before deployment; GC-root reuse is
-looked up on the host that owns each service family. The resident graph is
-scoped by the runtime hostname before activating workload resources, so
-`mgmt-root` can participate in the world without applying the `site-nbg1-beta`
-workload.
+The beta control target defaults to `mgmt-root`, so routine deploys write the
+resident workload and ACME graph once through `mgmt-root`. Nix closures are
+copied to the beta site target and telemetry target before deployment; GC-root
+reuse is looked up on the host that owns each service family. The resident
+graph is scoped by the runtime hostname before activating workload resources,
+so `mgmt-root` can run ACME/control work without applying the
+`site-nbg1-beta` workload. VM, network, volume, and base DNS reconciliation
+stays in the separate one-shot `mgmt/main.mcl` bootstrap graph.
 
 Deploy only a selected service while reusing the currently rooted remote store
 paths for the rest of the resident manifest:
@@ -257,6 +258,11 @@ converge. Site hosts check the API readiness endpoint and the local edge routes
 for site, API, and CDN traffic. Telemetry hosts check Vector, the collector,
 Prometheus, Grafana, and the local telemetry edge route. This makes deploy
 success mean more than "systemd started the processes".
+
+Bundle-backed systemd units are preflighted with `systemd-analyze verify`
+before their active unit file is replaced. Edge bundles also run
+`caddy validate` against the bundled Caddyfile before the edge unit can be
+activated.
 
 Bundle push behavior:
 
@@ -339,6 +345,8 @@ Resident mgmt operation:
   `--seeds=http://127.0.0.1:2379`; they do not expose etcd ports
 - ACME solver resources are scoped to `mgmt-root`; workload hosts materialize
   the finalized certificate bundle from shared world state
+- VM, network, volume, and base DNS resources are reconciled by the one-shot
+  `mgmt/main.mcl` bootstrap graph instead of the hot resident deployment graph
 - later updates are pushed by SSHing to `mgmt-root` and running `mgmt deploy`
   against `--seeds=http://127.0.0.1:2379`
 - this keeps the control surface SSH-only for now and avoids exposing etcd on

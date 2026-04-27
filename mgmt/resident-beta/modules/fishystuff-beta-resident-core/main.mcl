@@ -9,6 +9,7 @@ import "os"
 import "sys"
 import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
 import "../lib/fishystuff-deploy-health/" as fishystuff_deploy_health
+import "../lib/fishystuff-edge-preflight/" as fishystuff_edge_preflight
 import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
 import "../lib/fishystuff-host-ssh/" as fishystuff_host_ssh
 
@@ -278,6 +279,11 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 		startup_mode => $startup_mode,
 	})
 
+	include fishystuff_edge_preflight.caddy(struct {
+		name => "fishystuff-edge-caddy-validate",
+		bundle_path => $edge_bundle_path,
+	})
+
 	include fishystuff_bundle_systemd.unit(struct {
 		bundle_path => $vector_agent_bundle_path,
 		gcroot_path => $vector_agent_service->gcroot_path || "",
@@ -337,6 +343,7 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 	Exec["fishystuff-edge-site-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-cdn-ready"]
 	Exec["fishystuff-edge-cdn-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Exec["fishystuff-edge-caddy-validate"] -> File["/etc/systemd/system/fishystuff-edge.service"]
 
 	Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
 	Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
@@ -507,6 +514,11 @@ class telemetry_host($st) {
 		startup_mode => $startup_mode,
 	})
 
+	include fishystuff_edge_preflight.caddy(struct {
+		name => "fishystuff-edge-caddy-validate",
+		bundle_path => $edge_bundle_path,
+	})
+
 	include fishystuff_bundle_systemd.unit(struct {
 		bundle_path => $loki_bundle_path,
 		gcroot_path => $loki_service->gcroot_path || "",
@@ -599,6 +611,7 @@ class telemetry_host($st) {
 	Exec["fishystuff-telemetry-grafana-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-telemetry-edge-ready"]
 	Exec["fishystuff-telemetry-edge-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Exec["fishystuff-edge-caddy-validate"] -> File["/etc/systemd/system/fishystuff-edge.service"]
 
 	File["/srv/fishystuff/"] -> File["/srv/fishystuff/site/"]
 	File["/srv/fishystuff/"] -> File["/srv/fishystuff/cdn/"]

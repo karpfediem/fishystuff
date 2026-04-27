@@ -1,5 +1,4 @@
 import "encoding"
-import "datetime"
 import "fmt"
 import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "../../providers/cloudflare-dnsmanager/" as cloudflare_dnsmanager
@@ -60,9 +59,7 @@ class attempt_state($st) {
 	} else {
 		$empty
 	}
-	$presenting bool = $raw->exists and
-		($attempt->phase == "presenting") and
-		($attempt->expires_at > datetime.now())
+	$presenting bool = $raw->exists and ($attempt->phase == "presenting")
 	$challenge_type str = $attempt->challenge_type
 	$dns_zone str = $attempt->dns_zone
 	$dns_name str = $attempt->dns_name

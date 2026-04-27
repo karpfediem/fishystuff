@@ -1,0 +1,44 @@
+import "encoding"
+import "fmt"
+import "local"
+import "os"
+
+class caddy($st) {
+	$name str = $st->name || "fishystuff-edge-caddy-validate"
+	$bundle_path str = $st->bundle_path
+	$credentials_directory str = $st->credentials_directory || "/run/fishystuff/edge/tls"
+	$bundle struct{id str; artifacts map{str: struct{kind str; store_path str; executable bool}}} = encoding.decode_json_flexible(
+		os.readfile(fmt.printf("%s/bundle.json", $bundle_path))
+	)
+	$artifacts map{str: struct{kind str; store_path str; executable bool}} = $bundle->artifacts
+	$caddy_artifact struct{kind str; store_path str; executable bool} = $artifacts["exe/main"]
+	$config_artifact struct{kind str; store_path str; executable bool} = $artifacts["config/base"]
+	$caddy_exec str = $caddy_artifact->store_path
+	$config_path str = $config_artifact->store_path
+	$validation_key str = fmt.printf("%s %s", $caddy_exec, $config_path)
+	$vardir = local.vardir(fmt.printf("fishystuff-edge-preflight-%s/", $name))
+	$stamp_path str = fmt.printf("%svalidation-key", $vardir)
+
+	panic($bundle_path == "", "edge caddy preflight requires bundle_path")
+	panic($caddy_artifact->kind != "binary", fmt.printf("edge bundle %s exe/main artifact must be a binary", $bundle->id))
+	panic($config_artifact->kind != "config", fmt.printf("edge bundle %s config/base artifact must be a config", $bundle->id))
+	panic($caddy_exec == "", fmt.printf("edge bundle %s is missing exe/main store_path", $bundle->id))
+	panic($config_path == "", fmt.printf("edge bundle %s is missing config/base store_path", $bundle->id))
+
+	exec "${name}" {
+		cmd => "/usr/bin/env",
+		args => [
+			fmt.printf("CREDENTIALS_DIRECTORY=%s", $credentials_directory),
+			$caddy_exec,
+			"validate",
+			"--config",
+			$config_path,
+			"--adapter",
+			"caddyfile",
+		],
+		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $validation_key, $stamp_path),
+		doneshell => "/usr/bin/bash",
+		ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $stamp_path, $validation_key),
+		ifshell => "/usr/bin/bash",
+	}
+}

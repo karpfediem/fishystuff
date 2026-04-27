@@ -2,6 +2,7 @@ import "encoding"
 import "fmt"
 import "git:///lib/systemd-daemon-reload/" as systemd_daemon_reload
 import "golang/strings" as golang_strings
+import "local"
 import "os"
 import "../fishystuff-bundle-nix/" as fishystuff_bundle_nix
 import "../fishystuff-systemd/" as fishystuff_systemd
@@ -36,6 +37,9 @@ class unit($st) {
 		"running"
 	}
 	$closure_name str = fmt.printf("nix-closure-%s", $bundle->id)
+	$verify_name str = fmt.printf("systemd-unit-verify-%s", $bundle->id)
+	$verify_vardir = local.vardir(fmt.printf("fishystuff-bundle-systemd-verify-%s/", $bundle->id))
+	$verify_stamp_path str = fmt.printf("%sunit-source", $verify_vardir)
 	$reload_name str = fmt.printf("systemd-daemon-reload-%s", $bundle->id)
 
 	panic($bundle_path == "", "missing bundle_path for fishystuff bundle-backed systemd unit")
@@ -47,6 +51,18 @@ class unit($st) {
 		bundle_path => $bundle_path,
 		gcroot_path => $gcroot_path,
 	})
+
+	exec "${verify_name}" {
+		cmd => "/usr/bin/systemd-analyze",
+		args => [
+			"verify",
+			$unit_source_path,
+		],
+		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $unit_source_path, $verify_stamp_path),
+		doneshell => "/usr/bin/bash",
+		ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $verify_stamp_path, $unit_source_path),
+		ifshell => "/usr/bin/bash",
+	}
 
 	file "${install_path}" {
 		state => "exists",
@@ -72,7 +88,7 @@ class unit($st) {
 	})
 
 	File["${install_path}"] -> Exec["${reload_name}"]
-	Nix:Closure["${closure_name}"] -> File["${install_path}"]
+	Nix:Closure["${closure_name}"] -> Exec["${verify_name}"] -> File["${install_path}"]
 	if $gcroot_path != "" {
 		Nix:Closure["${closure_name}"] -> Nix:Gcroot["${gcroot_path}"]
 	}

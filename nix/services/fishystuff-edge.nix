@@ -27,10 +27,11 @@ let
   tlsDirective = optionalString cfg.tlsEnable ''
     tls {$CREDENTIALS_DIRECTORY}/fullchain.pem {$CREDENTIALS_DIRECTORY}/privkey.pem
   '';
+  adminAddress = "127.0.0.1:2019";
   caddyfile = pkgs.writeText "fishystuff-edge.Caddyfile" ''
     {
       auto_https off
-      admin off
+      admin ${adminAddress}
     }
 
     ${cfg.siteAddress} {
@@ -111,6 +112,17 @@ let
     "--adapter"
     "caddyfile"
   ];
+  reloadArgv = [
+    caddyExe
+    "reload"
+    "--config"
+    "${caddyfile}"
+    "--adapter"
+    "caddyfile"
+    "--address"
+    adminAddress
+    "--force"
+  ];
   systemdUnit = systemdBackend.mkSystemdUnit {
     unitName = "fishystuff-edge.service";
     description = "Fishystuff public edge";
@@ -127,6 +139,7 @@ let
     ];
     restartPolicy = "on-failure";
     restartDelaySeconds = 5;
+    execReloadArgv = reloadArgv;
     serviceLines =
       lib.optionals cfg.tlsEnable [
         "LoadCredential=fullchain.pem:${cfg.tlsCertificatePath}"
@@ -350,9 +363,9 @@ in
           delaySeconds = 5;
         };
         reload = {
-          mode = "restart";
+          mode = "command";
           signal = null;
-          argv = [ ];
+          argv = reloadArgv;
         };
         stop = {
           mode = "signal";

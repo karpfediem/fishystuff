@@ -58,6 +58,7 @@ in
       wantedBy ? [ "multi-user.target" ],
       restartPolicy ? "on-failure",
       restartDelaySeconds ? 5,
+      execReloadArgv ? [ ],
       readWritePaths ? [ ],
       unitLines ? [ ],
       serviceLines ? [ ],
@@ -84,6 +85,10 @@ in
         ++ map (path: "EnvironmentFile=${path}") environmentFiles
         ++ [
           "ExecStart=${lib.concatStringsSep " " (map renderExecArg argv)}"
+        ]
+        ++ lib.optional (execReloadArgv != [ ])
+          "ExecReload=${lib.concatStringsSep " " (map renderExecArg execReloadArgv)}"
+        ++ [
           "Restart=${restartPolicy}"
           "RestartSec=${toString restartDelaySeconds}s"
         ]

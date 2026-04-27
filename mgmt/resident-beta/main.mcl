@@ -30,10 +30,6 @@ $prod_hostname = $manifest->prod_hostname || "site-nbg1-prod"
 $runtime_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_RUNTIME_HOSTNAME", sys.hostname())
 
 if $runtime_hostname == $control_hostname {
-	include fishystuff_beta_resident.infra_control(struct {
-		manifest => $manifest,
-	})
-
 	include fishystuff_beta_resident.acme_control(struct {
 		manifest => $manifest,
 		control_hostname => $control_hostname,
