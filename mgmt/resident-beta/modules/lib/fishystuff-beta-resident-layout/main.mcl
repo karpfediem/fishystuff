@@ -32,8 +32,8 @@ class catalog:host($host_name) {
 			}
 		}
 	}
-	$api_enabled = $hostname == $site_beta_name
-	$dolt_enabled = $hostname == $site_beta_name
+	$api_enabled = ($hostname == $site_beta_name) or ($hostname == $site_prod_name)
+	$dolt_enabled = ($hostname == $site_beta_name) or ($hostname == $site_prod_name)
 	$site_beta_expected = $hostname == $site_beta_name
 	$site_prod_expected = $hostname == $site_prod_name
 	$telemetry_expected = $hostname == $telemetry_name

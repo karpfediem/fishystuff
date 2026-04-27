@@ -35,6 +35,10 @@ class region($st) {
 	$api_db_role str = $st->api_db_role || "site"
 	$api_db_servertype str = $st->api_db_servertype || $location_defaults.default_api_db_servertype
 	$api_db_private_ip str = $st->api_db_private_ip || ""
+	$site_prod_enabled bool = $st->site_prod_enabled || false
+	$site_prod_name str = $st->site_prod_name || fmt.printf("%s-site-prod", $name_prefix)
+	$site_prod_servertype str = $st->site_prod_servertype || $location_defaults.default_api_db_servertype
+	$site_prod_private_ip str = $st->site_prod_private_ip || ""
 	$dolt_volume_enabled bool = $st->dolt_volume_enabled || false
 	$dolt_volume_name str = $st->dolt_volume_name || fmt.printf("%s-dolt-data", $name_prefix)
 	$dolt_volume_size int = $st->dolt_volume_size || 20
@@ -145,6 +149,49 @@ class region($st) {
 				state => $infra_state,
 				server => $api_db_name,
 				volume => $dolt_volume_name,
+				waitinterval => $wait_interval_seconds,
+				waittimeout => $wait_timeout_seconds,
+				poll => $poll_seconds,
+			})
+		}
+	}
+
+	if $site_prod_enabled {
+		include access.host($site_prod_name, "site-prod", $region_name) as site_prod_host
+		include fishystuff_mgmt_control_key.subscriber(struct {
+			name => $site_prod_name,
+			enabled => $mgmt_control_enabled and ($infra_state != "absent"),
+			key_dir => $mgmt_control_key_dir,
+			open_addr => $mgmt_control_open_addr,
+		}) as site_prod_mgmt_control
+
+		include hetzner_vm.server(struct {
+			name => $site_prod_name,
+			role => "site-prod",
+			apitoken => $api_token,
+			state => $state,
+			allowrebuild => $allow_rebuild,
+			servertype => $site_prod_servertype,
+			datacenter => $location_defaults.datacenter,
+			image => $image,
+			userdata => $site_prod_mgmt_control.userdata,
+			sshkeys => $server_ssh_keys,
+			labels => $site_prod_host.labels,
+			serverrescuemode => $server_rescue_mode,
+			serverrescuekeys => $server_rescue_keys,
+			waitinterval => $wait_interval_seconds,
+			waittimeout => $wait_timeout_seconds,
+			poll => $poll_seconds,
+		})
+
+		if $private_network_enabled and ($site_prod_private_ip != "") {
+			include hetzner_vm_network.attachment(struct {
+				name => fmt.printf("%s-private", $site_prod_name),
+				apitoken => $api_token,
+				state => $infra_state,
+				server => $site_prod_name,
+				network => $private_network_name,
+				ip => $site_prod_private_ip,
 				waitinterval => $wait_interval_seconds,
 				waittimeout => $wait_timeout_seconds,
 				poll => $poll_seconds,
