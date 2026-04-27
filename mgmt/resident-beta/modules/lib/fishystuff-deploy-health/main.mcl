@@ -1,0 +1,39 @@
+import "fmt"
+import "local"
+
+class gate($st) {
+	$name str = $st->name
+	$marker str = $st->marker
+	$check_cmd str = $st->check_cmd
+	$timeout_secs int = $st->timeout_secs || 60
+	$interval_secs int = $st->interval_secs || 2
+	$bash_exec str = $st->bash_exec || "/usr/bin/bash"
+	$vardir = local.vardir(fmt.printf("fishystuff-deploy-health-%s/", $name))
+	$stamp_path str = fmt.printf("%sready.marker", $vardir)
+	$script str = fmt.printf(
+		"deadline=$((SECONDS + %d)); while true; do if %s; then exit 0; fi; if [ \"$SECONDS\" -ge \"$deadline\" ]; then exit 1; fi; sleep %d; done",
+		$timeout_secs,
+		$check_cmd,
+		$interval_secs
+	)
+
+	panic($name == "", "deploy health gate requires name")
+	panic($marker == "", fmt.printf("deploy health gate %s requires marker", $name))
+	panic($check_cmd == "", fmt.printf("deploy health gate %s requires check_cmd", $name))
+
+	exec "${name}" {
+		cmd => $bash_exec,
+		args => [
+			"-e",
+			"-u",
+			"-o",
+			"pipefail",
+			"-c",
+			$script,
+		],
+		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $marker, $stamp_path),
+		doneshell => $bash_exec,
+		ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $stamp_path, $marker),
+		ifshell => $bash_exec,
+	}
+}

@@ -35,6 +35,7 @@ class unit($st) {
 	} else {
 		"running"
 	}
+	$closure_name str = fmt.printf("nix-closure-%s", $bundle->id)
 	$reload_name str = fmt.printf("systemd-daemon-reload-%s", $bundle->id)
 
 	panic($bundle_path == "", "missing bundle_path for fishystuff bundle-backed systemd unit")
@@ -71,5 +72,9 @@ class unit($st) {
 	})
 
 	File["${install_path}"] -> Exec["${reload_name}"]
+	Nix:Closure["${closure_name}"] -> File["${install_path}"]
+	if $gcroot_path != "" {
+		Nix:Closure["${closure_name}"] -> Nix:Gcroot["${gcroot_path}"]
+	}
 	Exec["${reload_name}"] -> Svc["${service_name}"]
 }

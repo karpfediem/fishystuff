@@ -8,6 +8,7 @@ import "golang/strings" as golang_strings
 import "os"
 import "sys"
 import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
+import "../lib/fishystuff-deploy-health/" as fishystuff_deploy_health
 import "../lib/fishystuff-edge-tls/" as fishystuff_edge_tls
 import "../lib/fishystuff-host-ssh/" as fishystuff_host_ssh
 
@@ -93,6 +94,9 @@ class api_db_host($st) {
 	$tls_dns_env map{str: str} = $manifest->tls->dns_env || {}
 	$tls_directory_url str = $manifest->tls->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
 	$tls_domains []str = $manifest->tls->domains
+	$site_tls_domain str = $tls_domains[0]
+	$api_tls_domain str = $tls_domains[1]
+	$cdn_tls_domain str = $tls_domains[2]
 	$dolt_data_dir str = $st->dolt_data_dir || "/var/lib/fishystuff/dolt"
 	$dolt_database_name str = $st->dolt_database_name || "fishystuff"
 	$dolt_volume_device str = $st->dolt_volume_device || ""
@@ -280,6 +284,30 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 		startup_mode => $startup_mode,
 	})
 
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-api-ready",
+		marker => $deployment_marker,
+		check_cmd => "/usr/bin/curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:8080/readyz' >/dev/null",
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-edge-site-ready",
+		marker => $deployment_marker,
+		check_cmd => fmt.printf("/usr/bin/curl --fail --silent --show-error --max-time 5 --resolve '%s:443:127.0.0.1' '%s/' >/dev/null", $site_tls_domain, $site_base_url),
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-edge-api-ready",
+		marker => $deployment_marker,
+		check_cmd => fmt.printf("/usr/bin/curl --fail --silent --show-error --max-time 5 --resolve '%s:443:127.0.0.1' '%s/readyz' >/dev/null", $api_tls_domain, $api_base_url),
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-edge-cdn-ready",
+		marker => $deployment_marker,
+		check_cmd => fmt.printf("/usr/bin/curl --fail --silent --show-error --max-time 5 --resolve '%s:443:127.0.0.1' '%s/map/runtime-manifest.json' >/dev/null", $cdn_tls_domain, $cdn_base_url),
+	})
+
 	file "/run/fishystuff/deployment-marker" {
 		state => "exists",
 		content => fmt.printf("%s\n", $deployment_marker),
@@ -298,15 +326,28 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 	Svc["${dolt_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-vector"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["${api_service_name}"] -> Exec["fishystuff-api-ready"]
+	Svc["${dolt_service_name}"] -> Exec["fishystuff-api-ready"]
+	Exec["fishystuff-api-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-api-ready"]
+	Svc["${api_service_name}"] -> Exec["fishystuff-edge-api-ready"]
+	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-api-ready"]
+	Exec["fishystuff-edge-api-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-site-ready"]
+	Exec["fishystuff-edge-site-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-cdn-ready"]
+	Exec["fishystuff-edge-cdn-ready"] -> File["/run/fishystuff/deployment-marker"]
 
 	Nix:Closure["${site_closure_name}"] -> File["${site_root_dir}"] -> Svc["fishystuff-edge"]
 	Nix:Closure["${site_closure_name}"] -> Nix:Gcroot["${site_content_gcroot_path}"] -> File["${site_root_dir}"]
 	File["/srv/fishystuff/"] -> File["${site_root_dir}"]
 	File["${site_root_dir}"] -> File["/run/fishystuff/deployment-marker"]
+	File["${site_root_dir}"] -> Exec["fishystuff-edge-site-ready"]
 	Nix:Closure["${cdn_closure_name}"] -> File["${cdn_root_dir}"] -> Svc["fishystuff-edge"]
 	Nix:Closure["${cdn_closure_name}"] -> Nix:Gcroot["${cdn_content_gcroot_path}"] -> File["${cdn_root_dir}"]
 	File["/srv/fishystuff/"] -> File["${cdn_root_dir}"]
 	File["${cdn_root_dir}"] -> File["/run/fishystuff/deployment-marker"]
+	File["${cdn_root_dir}"] -> Exec["fishystuff-edge-cdn-ready"]
 
 	if $dolt_volume_device != "" {
 		File["/var/lib/fishystuff/"] -> File["${dolt_data_dir}/"] -> Mount["${dolt_data_dir}"] -> Svc["${dolt_service_name}"]
@@ -362,6 +403,8 @@ class telemetry_host($st) {
 	$tls_dns_env map{str: str} = $manifest->tls->dns_env || {}
 	$tls_directory_url str = $manifest->tls->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
 	$tls_domains []str = $manifest->tls->domains
+	$telemetry_tls_domain str = $tls_domains[3]
+	$telemetry_base_url str = $manifest->public_urls->telemetry_base_url
 
 	include fishystuff_beta_access.catalog(struct {
 		cluster => $cluster,
@@ -500,6 +543,36 @@ class telemetry_host($st) {
 		startup_mode => $startup_mode,
 	})
 
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-telemetry-vector-ready",
+		marker => $deployment_marker,
+		check_cmd => "/usr/bin/curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:8686/health' >/dev/null",
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-telemetry-otel-ready",
+		marker => $deployment_marker,
+		check_cmd => "/usr/bin/curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:13133/' >/dev/null",
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-telemetry-prometheus-ready",
+		marker => $deployment_marker,
+		check_cmd => "/usr/bin/curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:9090/-/ready' >/dev/null",
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-telemetry-grafana-ready",
+		marker => $deployment_marker,
+		check_cmd => "/usr/bin/curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:3000/api/health' >/dev/null",
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-telemetry-edge-ready",
+		marker => $deployment_marker,
+		check_cmd => fmt.printf("/usr/bin/curl --fail --silent --show-error --max-time 5 --request OPTIONS --resolve '%s:443:127.0.0.1' '%s/v1/traces' >/dev/null", $telemetry_tls_domain, $telemetry_base_url),
+	})
+
 	file "/run/fishystuff/deployment-marker" {
 		state => "exists",
 		content => fmt.printf("%s\n", $deployment_marker),
@@ -516,6 +589,16 @@ class telemetry_host($st) {
 	Svc["fishystuff-prometheus"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-jaeger"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-grafana"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-vector"] -> Exec["fishystuff-telemetry-vector-ready"]
+	Exec["fishystuff-telemetry-vector-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-otel-collector"] -> Exec["fishystuff-telemetry-otel-ready"]
+	Exec["fishystuff-telemetry-otel-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-prometheus"] -> Exec["fishystuff-telemetry-prometheus-ready"]
+	Exec["fishystuff-telemetry-prometheus-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-grafana"] -> Exec["fishystuff-telemetry-grafana-ready"]
+	Exec["fishystuff-telemetry-grafana-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> Exec["fishystuff-telemetry-edge-ready"]
+	Exec["fishystuff-telemetry-edge-ready"] -> File["/run/fishystuff/deployment-marker"]
 
 	File["/srv/fishystuff/"] -> File["/srv/fishystuff/site/"]
 	File["/srv/fishystuff/"] -> File["/srv/fishystuff/cdn/"]

@@ -252,6 +252,12 @@ temporary deploy graph contents. A repeated deploy of the same Nix outputs and
 MCL therefore reuses the same marker instead of forcing every host to chase a
 new random value.
 
+The marker is written only after the resident graph's service and health gates
+converge. Site hosts check the API readiness endpoint and the local edge routes
+for site, API, and CDN traffic. Telemetry hosts check Vector, the collector,
+Prometheus, Grafana, and the local telemetry edge route. This makes deploy
+success mean more than "systemd started the processes".
+
 Bundle push behavior:
 
 - each bundle now carries planner-facing `materialization.json` plus
