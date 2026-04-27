@@ -25,7 +25,6 @@ type CalculatorPetDbRow = (
     Option<String>,
 );
 type CalculatorPetSkillIndexDbRow = (Option<String>, Option<String>);
-type CalculatorPetEquipSkillDbRow = (Option<String>, Option<String>, Option<String>);
 type CalculatorPetAcquireSkillRateDbRow = (Option<String>, Option<String>, Option<String>);
 type CalculatorLanguagedataDbRow = (Option<String>, Option<String>);
 type CalculatorPetSkilltypeDbRow = (
@@ -60,13 +59,6 @@ struct PetSpecialSkillMeta {
     skill_type: String,
     param0: Option<String>,
     param1: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct PetEquipSkillRow {
-    index: String,
-    group_no: String,
-    skill_no: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -395,74 +387,9 @@ fn query_skill_map(
         .collect())
 }
 
-fn query_pet_equip_skill_rows(
-    conn: &mut PooledConn,
-    as_of: &str,
-) -> Result<Vec<PetEquipSkillRow>, mysql::Error> {
-    let query = format!("SELECT `Index`, `GroupNo`, `SkillNo` FROM pet_equipskill_table{as_of}");
-    let rows: Vec<CalculatorPetEquipSkillDbRow> = conn.query(query)?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(index, group_no, skill_no)| {
-            Some(PetEquipSkillRow {
-                index: trim_optional_string(index)?,
-                group_no: trim_optional_string(group_no)?,
-                skill_no: trim_optional_string(skill_no)?,
-            })
-        })
-        .collect())
-}
-
-fn pet_equip_skill_row_sort_key(row: &PetEquipSkillRow) -> (i64, &str) {
-    (
-        row.index.parse::<i64>().unwrap_or(i64::MAX),
-        row.index.as_str(),
-    )
-}
-
-fn pet_main_learned_skill_slot(row_count: usize) -> Option<usize> {
-    match row_count {
-        0 => None,
-        1 => Some(0),
-        _ => Some(1),
-    }
-}
-
-fn build_pet_learned_skill_by_index(
-    equip_skill_rows: &[PetEquipSkillRow],
-) -> HashMap<String, String> {
-    let mut rows_by_group = HashMap::<String, Vec<&PetEquipSkillRow>>::new();
-    for row in equip_skill_rows {
-        rows_by_group
-            .entry(row.group_no.clone())
-            .or_default()
-            .push(row);
-    }
-    for rows in rows_by_group.values_mut() {
-        rows.sort_by(|left, right| {
-            pet_equip_skill_row_sort_key(left).cmp(&pet_equip_skill_row_sort_key(right))
-        });
-    }
-
-    let mut result = HashMap::new();
-    for row in equip_skill_rows {
-        let Some(group_rows) = rows_by_group.get(&row.group_no) else {
-            continue;
-        };
-        let Some(skill_row) =
-            pet_main_learned_skill_slot(group_rows.len()).and_then(|slot| group_rows.get(slot))
-        else {
-            continue;
-        };
-        result.insert(row.index.clone(), skill_row.skill_no.clone());
-    }
-    result
-}
-
 fn pet_acquire_skill_rate_select(rate_index: usize, as_of: &str) -> String {
-    let equip_index = rate_index.saturating_sub(1);
     format!(
-        "SELECT `Key`, '{equip_index}', `AquireRate_{rate_index}` \
+        "SELECT `Key`, '{rate_index}', `AquireRate_{rate_index}` \
          FROM pet_equipskill_aquire_table{as_of} \
          WHERE `AquireRate_{rate_index}` IS NOT NULL \
            AND `AquireRate_{rate_index}` <> '' \
@@ -474,7 +401,7 @@ fn query_acquire_skill_rates(
     conn: &mut PooledConn,
     as_of: &str,
 ) -> Result<HashMap<String, HashMap<String, f32>>, mysql::Error> {
-    let query = (1..=42)
+    let query = (0..=42)
         .map(|rate_index| pet_acquire_skill_rate_select(rate_index, as_of))
         .collect::<Vec<_>>()
         .join(" UNION ALL ");
@@ -764,7 +691,7 @@ fn build_tier_entry(
     candidates: &[&RawPetRow],
     base_skill_by_index: &HashMap<String, String>,
     acquire_skill_rates: &HashMap<String, HashMap<String, f32>>,
-    equip_skill_rows: &[PetEquipSkillRow],
+    equip_skill_by_index: &HashMap<String, String>,
     options_by_key: &HashMap<String, CalculatorPetOptionRecord>,
 ) -> CalculatorPetTierEntry {
     let mut specials = Vec::new();
@@ -772,7 +699,6 @@ fn build_tier_entry(
     let mut skills = Vec::new();
     let mut skill_chances = BTreeMap::new();
     let candidate_rows = pet_tier_candidate_rows(representative, candidates);
-    let learned_skill_by_index = build_pet_learned_skill_by_index(equip_skill_rows);
 
     if let Some(special_key) = candidate_rows.iter().find_map(|candidate| {
         candidate.special_skill_no.as_ref().and_then(|skill_no| {
@@ -803,7 +729,7 @@ fn build_tier_entry(
                 for (skill_no, chance) in rates
                     .iter()
                     .filter_map(|(index, chance)| {
-                        learned_skill_by_index
+                        equip_skill_by_index
                             .get(index)
                             .map(|skill_no| (skill_no, *chance))
                     })
@@ -1153,9 +1079,10 @@ impl DoltMySqlStore {
             Err(err) if is_missing_table(&err, "pet_base_skill_table") => HashMap::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
-        let equip_skill_rows = match query_pet_equip_skill_rows(&mut conn, &as_of) {
+        let equip_skill_by_index = match query_skill_map(&mut conn, &as_of, "pet_equipskill_table")
+        {
             Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "pet_equipskill_table") => Vec::new(),
+            Err(err) if is_missing_table(&err, "pet_equipskill_table") => HashMap::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
         let acquire_skill_rates = match query_acquire_skill_rates(&mut conn, &as_of) {
@@ -1179,7 +1106,6 @@ impl DoltMySqlStore {
         let mut base_talent_skill_ids = HashSet::new();
         let mut learned_skill_ids = HashSet::new();
         let mut pet_special_skill_ids = HashSet::new();
-        let learned_skill_by_index = build_pet_learned_skill_by_index(&equip_skill_rows);
         for row in &pet_rows {
             if let Some(skill_no) = row.special_skill_no.as_ref() {
                 pet_special_skill_ids.insert(skill_no.clone());
@@ -1193,7 +1119,7 @@ impl DoltMySqlStore {
             if let Some(acquire_key) = row.acquire_key.as_ref() {
                 if let Some(rates) = acquire_skill_rates.get(acquire_key) {
                     for index in rates.keys() {
-                        if let Some(skill_no) = learned_skill_by_index.get(index) {
+                        if let Some(skill_no) = equip_skill_by_index.get(index) {
                             skill_ids.insert(skill_no.clone());
                             learned_skill_ids.insert(skill_no.clone());
                         }
@@ -1269,7 +1195,7 @@ impl DoltMySqlStore {
                                 &candidates,
                                 &base_skill_by_index,
                                 &acquire_skill_rates,
-                                &equip_skill_rows,
+                                &equip_skill_by_index,
                                 &options_by_key,
                             )
                         })
@@ -1353,13 +1279,11 @@ mod tests {
     use crate::store::FishLang;
 
     use super::{
-        build_pet_learned_skill_by_index, build_pet_variant_group_keys, build_tier_entry,
-        calculator_pet_option_records, calculator_pet_special_option_records,
-        dedupe_built_pet_entries, is_looting_pet_type, localized_pet_option_label,
-        parse_acquire_rate, parse_asset_stem, parse_pet_option_effects,
-        pet_acquire_skill_rate_select, pet_image_url, pet_main_learned_skill_slot, pet_option_kind,
-        pet_special_option_label, BuiltPetEntry, CalculatorPetOptionRecord, PetEquipSkillRow,
-        PetOptionKind, PetSpecialSkillMeta, RawPetRow,
+        build_pet_variant_group_keys, build_tier_entry, calculator_pet_option_records,
+        calculator_pet_special_option_records, dedupe_built_pet_entries, is_looting_pet_type,
+        localized_pet_option_label, parse_acquire_rate, parse_asset_stem, parse_pet_option_effects,
+        pet_acquire_skill_rate_select, pet_image_url, pet_option_kind, pet_special_option_label,
+        BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind, PetSpecialSkillMeta, RawPetRow,
     };
 
     #[test]
@@ -1371,61 +1295,16 @@ mod tests {
     }
 
     #[test]
-    fn pet_acquire_skill_rate_select_maps_one_based_rate_columns_to_zero_based_equip_indexes() {
-        let query = pet_acquire_skill_rate_select(1, " AS OF 'test'");
-        assert!(query.contains("SELECT `Key`, '0', `AquireRate_1`"));
+    fn pet_acquire_skill_rate_select_maps_rate_columns_to_matching_equip_indexes() {
+        let query = pet_acquire_skill_rate_select(0, " AS OF 'test'");
+        assert!(query.contains("SELECT `Key`, '0', `AquireRate_0`"));
         assert!(query.contains("pet_equipskill_aquire_table AS OF 'test'"));
 
         let query = pet_acquire_skill_rate_select(4, "");
-        assert!(query.contains("SELECT `Key`, '3', `AquireRate_4`"));
-    }
+        assert!(query.contains("SELECT `Key`, '4', `AquireRate_4`"));
 
-    #[test]
-    fn pet_main_learned_skill_slot_uses_source_main_row() {
-        assert_eq!(pet_main_learned_skill_slot(0), None);
-        assert_eq!(pet_main_learned_skill_slot(1), Some(0));
-        assert_eq!(pet_main_learned_skill_slot(2), Some(1));
-        assert_eq!(pet_main_learned_skill_slot(3), Some(1));
-    }
-
-    #[test]
-    fn learned_skill_indexes_resolve_through_main_skill_group() {
-        let rows = vec![
-            PetEquipSkillRow {
-                index: "3".to_string(),
-                group_no: "2".to_string(),
-                skill_no: "combat_exp_passive".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "4".to_string(),
-                group_no: "2".to_string(),
-                skill_no: "combat_exp_main".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "5".to_string(),
-                group_no: "2".to_string(),
-                skill_no: "combat_exp_duplicate".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "10".to_string(),
-                group_no: "5".to_string(),
-                skill_no: "fishing_speed".to_string(),
-            },
-        ];
-
-        let learned_skill_by_index = build_pet_learned_skill_by_index(&rows);
-        assert_eq!(
-            learned_skill_by_index.get("3").map(String::as_str),
-            Some("combat_exp_main")
-        );
-        assert_eq!(
-            learned_skill_by_index.get("4").map(String::as_str),
-            Some("combat_exp_main")
-        );
-        assert_eq!(
-            learned_skill_by_index.get("10").map(String::as_str),
-            Some("fishing_speed")
-        );
+        let query = pet_acquire_skill_rate_select(15, "");
+        assert!(query.contains("SELECT `Key`, '15', `AquireRate_15`"));
     }
 
     #[test]
@@ -1570,7 +1449,7 @@ mod tests {
             &candidates,
             &base_skill_by_index,
             &HashMap::new(),
-            &[],
+            &HashMap::new(),
             &options_by_key,
         );
 
@@ -1579,7 +1458,7 @@ mod tests {
     }
 
     #[test]
-    fn build_tier_entry_uses_main_learned_skill_rows_and_sums_duplicate_effect_odds() {
+    fn build_tier_entry_uses_direct_learned_skill_indexes() {
         let representative = RawPetRow {
             character_key: "100".to_string(),
             skin_key: None,
@@ -1591,44 +1470,19 @@ mod tests {
             base_skill_index: None,
             acquire_key: Some("301".to_string()),
         };
-        let equip_skill_rows = vec![
-            PetEquipSkillRow {
-                index: "6".to_string(),
-                group_no: "3".to_string(),
-                skill_no: "gathering_exp_passive".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "7".to_string(),
-                group_no: "3".to_string(),
-                skill_no: "gathering_exp_main".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "8".to_string(),
-                group_no: "3".to_string(),
-                skill_no: "gathering_exp_duplicate".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "14".to_string(),
-                group_no: "8".to_string(),
-                skill_no: "fishing_exp_passive".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "15".to_string(),
-                group_no: "8".to_string(),
-                skill_no: "fishing_exp_main".to_string(),
-            },
-            PetEquipSkillRow {
-                index: "16".to_string(),
-                group_no: "8".to_string(),
-                skill_no: "fishing_exp_duplicate".to_string(),
-            },
-        ];
+        let equip_skill_by_index = HashMap::from([
+            ("6".to_string(), "gathering_exp_passive".to_string()),
+            ("7".to_string(), "gathering_exp_main".to_string()),
+            ("9".to_string(), "luck".to_string()),
+            ("14".to_string(), "fishing_exp_passive".to_string()),
+            ("15".to_string(), "fishing_exp_main".to_string()),
+        ]);
         let acquire_skill_rates = HashMap::from([(
             "301".to_string(),
             HashMap::from([
-                ("6".to_string(), 0.15),
-                ("8".to_string(), 0.03),
-                ("14".to_string(), 0.15),
+                ("7".to_string(), 0.15),
+                ("9".to_string(), 0.03),
+                ("15".to_string(), 0.15),
             ]),
         )]);
         let options_by_key = HashMap::from([
@@ -1638,6 +1492,16 @@ mod tests {
                     entry: CalculatorPetOptionEntry {
                         key: "gathering_exp_main".to_string(),
                         label: "Gathering EXP +5%".to_string(),
+                        ..CalculatorPetOptionEntry::default()
+                    },
+                },
+            ),
+            (
+                "luck".to_string(),
+                CalculatorPetOptionRecord {
+                    entry: CalculatorPetOptionEntry {
+                        key: "luck".to_string(),
+                        label: "Luck +1".to_string(),
                         ..CalculatorPetOptionEntry::default()
                     },
                 },
@@ -1662,7 +1526,7 @@ mod tests {
             &candidates,
             &HashMap::new(),
             &acquire_skill_rates,
-            &equip_skill_rows,
+            &equip_skill_by_index,
             &options_by_key,
         );
 
@@ -1670,11 +1534,13 @@ mod tests {
             tier.skills,
             vec![
                 "fishing_exp_main".to_string(),
-                "gathering_exp_main".to_string()
+                "gathering_exp_main".to_string(),
+                "luck".to_string()
             ]
         );
         assert_eq!(tier.skill_chances.get("fishing_exp_main"), Some(&0.15));
-        assert!((tier.skill_chances["gathering_exp_main"] - 0.18).abs() < 0.0001);
+        assert_eq!(tier.skill_chances.get("gathering_exp_main"), Some(&0.15));
+        assert_eq!(tier.skill_chances.get("luck"), Some(&0.03));
     }
 
     #[test]
