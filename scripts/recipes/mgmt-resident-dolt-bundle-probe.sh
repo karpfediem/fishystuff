@@ -14,7 +14,8 @@ remote_mgmt_bin="$(normalize_named_arg remote_mgmt_bin "${5-/usr/local/bin/mgmt}
 mgmt_bin="$(normalize_named_arg mgmt_bin "${6-}")"
 mgmt_flake="$(normalize_named_arg mgmt_flake "${7-/home/carp/code/mgmt-fishystuff-beta}")"
 mgmt_package="$(normalize_named_arg mgmt_package "${8-minimal}")"
-mgmt_modules_dir="$(normalize_named_arg mgmt_modules_dir "${9-/home/carp/code/mgmt-fishystuff-beta/modules}")"
+default_mgmt_modules_dir="${FISHYSTUFF_MGMT_MODULES_DIR:-/home/carp/code/mgmt-fishystuff-beta/modules}"
+mgmt_modules_dir="$(normalize_named_arg mgmt_modules_dir "${9-$default_mgmt_modules_dir}")"
 
 require_value "$target" "missing target=... for mgmt-resident-dolt-bundle-probe"
 

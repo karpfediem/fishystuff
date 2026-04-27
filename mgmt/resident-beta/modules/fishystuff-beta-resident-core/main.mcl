@@ -170,16 +170,6 @@ class api_db_host($st) {
 		permit_root_login => "prohibit-password",
 	})
 
-	include access.https($hostname) as https_firewall
-
-	include hetzner_firewall.firewall(struct {
-		name => $https_firewall.name,
-		apitoken => $api_token,
-		rules => $https_firewall.rules,
-		applyto => $https_firewall.applyto,
-		labels => $https_firewall.labels,
-	})
-
 	file "/srv/fishystuff/" {
 		state => "exists",
 		mode => "u=rwx,go=rx",
