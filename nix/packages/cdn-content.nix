@@ -8,5 +8,6 @@ runCommand "cdn-content" { } ''
   ln -sfn ${cdnBaseContent}/waypoints "$out/waypoints"
   mkdir -p "$out/images"
   ln -sfn ${cdnBaseContent}/images/items "$out/images/items"
+  ln -sfn ${cdnBaseContent}/images/pets "$out/images/pets"
   ln -sfn ${cdnMinimapVisual} "$out/images/tiles/minimap_visual"
 ''

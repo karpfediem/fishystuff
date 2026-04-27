@@ -21,6 +21,10 @@ let
     path = cdnRoot + "/images/items";
     name = "cdn-item-images";
   };
+  petImages = builtins.path {
+    path = cdnRoot + "/images/pets";
+    name = "cdn-pet-images";
+  };
 in
 runCommandLocal "cdn-base-content" { } ''
   mkdir -p "$out/images"
@@ -30,4 +34,5 @@ runCommandLocal "cdn-base-content" { } ''
   ln -sfn ${map} "$out/map"
   ln -sfn ${waypoints} "$out/waypoints"
   ln -sfn ${itemImages} "$out/images/items"
+  ln -sfn ${petImages} "$out/images/pets"
 ''
