@@ -10,6 +10,20 @@ let
   inherit (lib) mkOption optional optionalString types;
   cfg = config.fishystuff.edge;
   caddyExe = lib.getExe' cfg.package "caddy";
+  cdnImmutablePaths = lib.concatStringsSep " " [
+    "/map/runtime-manifest.*.json"
+    "/map/fishystuff_ui_bevy.*.js"
+    "/map/fishystuff_ui_bevy_bg.*.wasm"
+    "/images/items/*.webp"
+    "/images/pets/*.webp"
+    "/images/tiles/*"
+    "/images/terrain/*"
+    "/images/terrain_drape/*"
+    "/images/terrain_height/*"
+    "/images/terrain_fullres/*"
+    "/fields/*"
+    "/waypoints/*"
+  ];
   tlsDirective = optionalString cfg.tlsEnable ''
     tls {$CREDENTIALS_DIRECTORY}/fullchain.pem {$CREDENTIALS_DIRECTORY}/privkey.pem
   '';
@@ -37,8 +51,8 @@ let
       ${tlsDirective}
       root * ${cfg.cdnRoot}
 
-      @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
-      @immutable path /map/fishystuff_ui_bevy.*.js /map/fishystuff_ui_bevy_bg.*.wasm
+      @runtime_manifest path /map/runtime-manifest.json
+      @immutable path ${cdnImmutablePaths}
 
       header Access-Control-Allow-Origin "*"
 

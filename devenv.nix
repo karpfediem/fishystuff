@@ -29,6 +29,20 @@ let
   sitePort = 1990;
   telemetryHost = "telemetry.localhost";
   toString = builtins.toString;
+  cdnImmutablePaths = lib.concatStringsSep " " [
+    "/map/runtime-manifest.*.json"
+    "/map/fishystuff_ui_bevy.*.js"
+    "/map/fishystuff_ui_bevy_bg.*.wasm"
+    "/images/items/*.webp"
+    "/images/pets/*.webp"
+    "/images/tiles/*"
+    "/images/terrain/*"
+    "/images/terrain_drape/*"
+    "/images/terrain_height/*"
+    "/images/terrain_fullres/*"
+    "/fields/*"
+    "/waypoints/*"
+  ];
   logTimestampRunner =
     "${pkgs.bash}/bin/bash ${config.devenv.root}/tools/scripts/with_log_timestamps.sh";
   rustHookToolchain = pkgs.symlinkJoin {
@@ -254,8 +268,8 @@ in {
     virtualHosts."http://${cdnHost}:${toString cdnPort}".extraConfig = ''
       root * ${config.devenv.root}/data/cdn/public
 
-      @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
-      @immutable path /map/fishystuff_ui_bevy.*.js /map/fishystuff_ui_bevy_bg.*.wasm
+      @runtime_manifest path /map/runtime-manifest.json
+      @immutable path ${cdnImmutablePaths}
 
       header Access-Control-Allow-Origin "*"
 
@@ -277,8 +291,8 @@ in {
     virtualHosts."http://localhost:${toString cdnPort}".extraConfig = ''
       root * ${config.devenv.root}/data/cdn/public
 
-      @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
-      @immutable path /map/fishystuff_ui_bevy.*.js /map/fishystuff_ui_bevy_bg.*.wasm
+      @runtime_manifest path /map/runtime-manifest.json
+      @immutable path ${cdnImmutablePaths}
 
       header Access-Control-Allow-Origin "*"
 

@@ -2607,6 +2607,56 @@ test("loadMapRuntimeManifest uses the stable manifest directly on local loopback
   );
 });
 
+test("loadMapRuntimeManifest lets cache-keyed manifests use browser cache", async () => {
+  const requests = [];
+  const manifest = await loadMapRuntimeManifest({
+    locationLike: { hostname: "fishystuff.fish", protocol: "https:", href: "https://fishystuff.fish/map/" },
+    cacheKey: "deploy-456",
+    fetchImpl: async (input, init) => {
+      requests.push({ cache: init?.cache, url: String(input) });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+      };
+    },
+  });
+
+  assert.deepEqual(requests, [
+    {
+      cache: "default",
+      url: "https://cdn.fishystuff.fish/map/runtime-manifest.deploy-456.json",
+    },
+  ]);
+  assert.equal(
+    manifest.moduleUrl,
+    "https://cdn.fishystuff.fish/map/fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+  );
+});
+
+test("loadMapRuntimeManifest bypasses browser cache for stable manifests", async () => {
+  const requests = [];
+  await loadMapRuntimeManifest({
+    locationLike: { hostname: "fishystuff.fish", protocol: "https:", href: "https://fishystuff.fish/map/" },
+    cacheKey: "",
+    fetchImpl: async (input, init) => {
+      requests.push({ cache: init?.cache, url: String(input) });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+      };
+    },
+  });
+
+  assert.deepEqual(requests, [
+    {
+      cache: "no-store",
+      url: "https://cdn.fishystuff.fish/map/runtime-manifest.json",
+    },
+  ]);
+});
+
 test("loadMapRuntimeManifest does not fall back off loopback", async () => {
   await assert.rejects(
     loadMapRuntimeManifest({

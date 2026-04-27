@@ -2165,6 +2165,19 @@ function shouldUseStableMapRuntimeManifest(
   }
 }
 
+function runtimeManifestFetchCacheMode(
+  locationLike = globalThis.location,
+  explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
+  cacheKey = runtimeConfigValue("mapAssetCacheKey"),
+) {
+  if (!normalizeMapRuntimeManifestCacheKey(cacheKey)) {
+    return "no-store";
+  }
+  return shouldUseStableMapRuntimeManifest(locationLike, explicitBaseUrl, cacheKey)
+    ? "no-store"
+    : "default";
+}
+
 export function resolveMapRuntimeManifestUrl(
   locationLike = globalThis.location,
   cacheKey = runtimeConfigValue("mapAssetCacheKey"),
@@ -2199,7 +2212,9 @@ export async function loadMapRuntimeManifest({
     throw new Error("FishyMapBridge requires fetch() to load the runtime manifest");
   }
   let manifestUrl = resolveMapRuntimeManifestUrl(locationLike, cacheKey, cdnBaseUrl);
-  let response = await fetchImpl(manifestUrl, { cache: "no-store" });
+  let response = await fetchImpl(manifestUrl, {
+    cache: runtimeManifestFetchCacheMode(locationLike, cdnBaseUrl, cacheKey),
+  });
   if (!response?.ok) {
     const shouldRetry =
       response?.status === 404
