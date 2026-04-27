@@ -30,7 +30,6 @@ grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current"
 cdn_content_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/cdn-content-current"
 cdn_content_mode="realise"
 mgmt_modules_dir="${FISHYSTUFF_MGMT_MODULES_DIR:-/home/carp/code/mgmt-fishystuff-beta/modules}"
-remote_nix_max_jobs="0"
 services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana"
 deployment_environment="beta"
 deployment_marker=""
@@ -91,7 +90,6 @@ for arg in "${overrides[@]}"; do
     cdn_content=*) cdn_content_override="${arg#cdn_content=}" ;;
     cdn_content_mode=*) cdn_content_mode="${arg#cdn_content_mode=}" ;;
     mgmt_modules_dir=*) mgmt_modules_dir="${arg#mgmt_modules_dir=}" ;;
-    remote_nix_max_jobs=*) remote_nix_max_jobs="${arg#remote_nix_max_jobs=}" ;;
     services_csv=*) services_csv="${arg#services_csv=}" ;;
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
     deployment_marker=*) deployment_marker="${arg#deployment_marker=}" ;;
@@ -151,9 +149,6 @@ build_release_map_runtime() {
 }
 
 deployment_environment="$(normalize_deployment_environment "$deployment_environment")"
-if [[ -z "$deployment_marker" ]]; then
-  deployment_marker="$(date -u +%Y%m%dT%H%M%SZ)-$deployment_environment-$RANDOM-$RANDOM"
-fi
 deployment_domain_name="$(deployment_domain "$deployment_environment")"
 site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
 api_base_url="${api_base_url_override:-https://api.$deployment_domain_name}"
@@ -475,6 +470,35 @@ trap 'rm -rf "$deploy_dir"' EXIT
 cp -a mgmt/resident-beta/. "$deploy_dir/"
 mkdir -p "$deploy_dir/files"
 copy_resident_common_modules "$deploy_dir" "$mgmt_modules_dir"
+manifest_tmp="$deploy_dir/files/resident-manifest.json.tmp"
+
+compute_deployment_marker() {
+  local root_dir="$1"
+  local manifest_path="$2"
+  local environment="$3"
+  local hash
+  local file_hash
+  local file_path
+  local rel_path
+
+  hash="$(
+    {
+      jq -S -c 'del(.deployment_marker)' "$manifest_path"
+      while IFS= read -r -d '' file_path; do
+        rel_path="${file_path#"$root_dir"/}"
+        file_hash="$(sha256sum "$file_path" | awk '{print $1}')"
+        printf '%s  %s\n' "$file_hash" "$rel_path"
+      done < <(
+        find "$root_dir" -type f \
+          ! -path "$manifest_path" \
+          ! -path "$root_dir/files/resident-manifest.json" \
+          -print0 | sort -z
+      )
+    } | sha256sum | awk '{print $1}'
+  )"
+
+  printf '%s-%s' "$environment" "${hash:0:20}"
+}
 
 jq -n \
   --arg cluster "beta" \
@@ -599,7 +623,16 @@ jq -n \
       jaeger: {bundle_path: $jaeger_bundle, gcroot_path: $jaeger_gcroot},
       grafana: {bundle_path: $grafana_bundle, gcroot_path: $grafana_gcroot}
     }
-  }' > "$deploy_dir/files/resident-manifest.json"
+  }' > "$manifest_tmp"
+
+if [[ -z "$deployment_marker" ]]; then
+  deployment_marker="$(compute_deployment_marker "$deploy_dir" "$manifest_tmp" "$deployment_environment")"
+fi
+jq --arg deployment_marker "$deployment_marker" \
+  '.deployment_marker = $deployment_marker' \
+  "$manifest_tmp" > "$deploy_dir/files/resident-manifest.json"
+rm -f "$manifest_tmp"
+echo "[resident-push] deployment marker: $deployment_marker"
 
 if [[ -n "${FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST:-}" ]]; then
   cp "$deploy_dir/files/resident-manifest.json" "$FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST"
@@ -616,11 +649,10 @@ bash -lc '
   if [[ "$remote_mgmt_bin" != /* ]]; then
     remote_mgmt_bin=/usr/local/bin/mgmt
   fi
-  remote_nix_max_jobs="${7:?}"
-  deploy_target="${8:?}"
-  site_push_count="${9:?}"
-  telemetry_push_count="${10:?}"
-  shift 10
+  deploy_target="${7:?}"
+  site_push_count="${8:?}"
+  telemetry_push_count="${9:?}"
+  shift 9
   site_push_paths=()
   for (( idx = 0; idx < site_push_count; idx++ )); do
     site_push_paths+=("${1:?missing site push path}")
@@ -649,7 +681,6 @@ bash -lc '
     SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
     NIX_SSH_KEY_PATH="$tmp_key" \
     NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
-    FISHYSTUFF_REMOTE_NIX_MAX_JOBS="$remote_nix_max_jobs" \
     bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
         "$ssh_target" \
         "$@"
@@ -669,4 +700,4 @@ bash -lc '
       "$deploy_timeout" \
       "$remote_mgmt_bin"
 ' \
--- "$RECIPE_REPO_ROOT" "$target" "$telemetry_target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$deploy_target" "${#site_push_paths[@]}" "${#telemetry_push_paths[@]}" "${site_push_paths[@]}" "${telemetry_push_paths[@]}"
+-- "$RECIPE_REPO_ROOT" "$target" "$telemetry_target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$deploy_target" "${#site_push_paths[@]}" "${#telemetry_push_paths[@]}" "${site_push_paths[@]}" "${telemetry_push_paths[@]}"

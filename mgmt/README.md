@@ -247,23 +247,23 @@ loads it via `deploy.readfile(...)`, and the resident core loops the manifest's
 deploy filesystem instead of installing a separate host-local config file or
 expanding one environment variable per service input.
 
+The generated deployment marker is derived from the manifest contents and the
+temporary deploy graph contents. A repeated deploy of the same Nix outputs and
+MCL therefore reuses the same marker instead of forcing every host to chase a
+new random value.
+
 Bundle push behavior:
 
 - each bundle now carries planner-facing `materialization.json` plus
   `mode-substitute.txt`, `mode-realise.txt`, and `mode-verify.txt`
-- `push-fishystuff-bundles-remote.sh` pre-materializes `substitute` roots on
-  the target with `nix-store --realise --max-jobs 0`
-- `substitute-or-build` roots are driven through `mode-realise.txt`, which now
-  prefers a derivation path when the bundle exports one
-- the final transfer uses `nix copy --substitute-on-destination`, so cacheable
+- `push-fishystuff-bundles-remote.sh` transfers all selected bundle paths,
+  store paths, and derivations in one `nix copy --substitute-on-destination`
+  call per target, so cacheable
   dependencies can still be fetched by the target instead of uploaded from the
   builder
-- resident mgmt now owns bundle liveness and selection through
-  `nix:closure` plus `nix:gcroot`; the push helper no longer mutates GC roots
-  itself
-- override `remote_nix_max_jobs=` in the resident push helpers when calling
-  them directly if you want target-side builds for the `substitute-or-build`
-  class; `0` means fetch-only
+- resident mgmt owns materialization, bundle liveness, and selection through
+  `nix:closure` plus `nix:gcroot`; the push helper does not realize paths or
+  mutate GC roots itself
 
 Default topology inputs:
 

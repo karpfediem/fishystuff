@@ -61,7 +61,7 @@ expand_requested_service() {
 gcroot_lookup_target_for_service() {
   local service="$1"
   case "$service" in
-    grafana | jaeger | loki | otel_collector | prometheus | vector)
+    grafana | jaeger | loki | otel-collector | prometheus | vector)
       if [[ -n "$telemetry_target" ]]; then
         printf '%s' "$telemetry_target"
       else
@@ -135,6 +135,14 @@ for service in "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"; do
     exit 1
   fi
   backend_args+=("$(deploy_service_override_arg_name "$service")=$remote_store_path")
+  if [[ "$service" == "vector" ]]; then
+    vector_agent_store_path="$(bash "$SCRIPT_DIR/remote-gcroot-target.sh" "$resident_target" "$gcroot_path")"
+    if [[ -z "$vector_agent_store_path" ]]; then
+      echo "remote gcroot is empty for vector agent on $resident_target: $gcroot_path" >&2
+      exit 1
+    fi
+    backend_args+=("vector_agent_bundle=$vector_agent_store_path")
+  fi
 done
 
 FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST="$expected_manifest" \

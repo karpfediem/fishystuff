@@ -19,7 +19,6 @@ remote_mgmt_bin="/usr/local/bin/mgmt"
 api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
 dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current"
 mgmt_modules_dir="${FISHYSTUFF_MGMT_MODULES_DIR:-/home/carp/code/mgmt-fishystuff-beta/modules}"
-remote_nix_max_jobs="0"
 deployment_environment="beta"
 tls_enabled="false"
 tls_certificate_name=""
@@ -46,7 +45,6 @@ for arg in "${overrides[@]}"; do
     api_gcroot=*) api_gcroot="${arg#api_gcroot=}" ;;
     dolt_gcroot=*) dolt_gcroot="${arg#dolt_gcroot=}" ;;
     mgmt_modules_dir=*) mgmt_modules_dir="${arg#mgmt_modules_dir=}" ;;
-    remote_nix_max_jobs=*) remote_nix_max_jobs="${arg#remote_nix_max_jobs=}" ;;
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
     tls_enabled=*) tls_enabled="${arg#tls_enabled=}" ;;
     tls_certificate_name=*) tls_certificate_name="${arg#tls_certificate_name=}" ;;
@@ -200,9 +198,8 @@ bash -lc '
   if [[ "$remote_mgmt_bin" != /* ]]; then
     remote_mgmt_bin=/usr/local/bin/mgmt
   fi
-  remote_nix_max_jobs="${6:?}"
-  deploy_target="${7:?}"
-  shift 7
+  deploy_target="${6:?}"
+  shift 6
   tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-mgmt-ssh.XXXXXX)"
   trap '\''rm -f "$tmp_key"'\'' EXIT
   remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
@@ -213,7 +210,6 @@ bash -lc '
   SSH_OPTS="-i $tmp_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
   NIX_SSH_KEY_PATH="$tmp_key" \
   NIX_REMOTE_PROGRAM_PATH="$remote_nix_daemon_path" \
-  FISHYSTUFF_REMOTE_NIX_MAX_JOBS="$remote_nix_max_jobs" \
   bash mgmt/scripts/push-fishystuff-bundles-remote.sh \
       "$ssh_target" \
       "$@"
@@ -224,4 +220,4 @@ bash -lc '
       "$deploy_timeout" \
       "$remote_mgmt_bin"
 ' \
--- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$remote_nix_max_jobs" "$deploy_target" "$api_bundle" "$dolt_bundle"
+-- "$RECIPE_REPO_ROOT" "$target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$deploy_target" "$api_bundle" "$dolt_bundle"
