@@ -38,6 +38,16 @@ pub struct CalculatorZoneLootEvidence {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct CalculatorZoneLootRateContribution {
+    pub source_family: String,
+    pub item_main_group_key: Option<i64>,
+    pub option_idx: Option<u32>,
+    pub subgroup_key: Option<i64>,
+    pub group_conditions_raw: Vec<String>,
+    pub weight: f64,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct CalculatorZoneLootOverlayMeta {
     pub added: bool,
     pub slot_overlay_active: bool,
@@ -56,6 +66,7 @@ pub struct CalculatorZoneLootEntry {
     pub catch_methods: Vec<String>,
     pub group_conditions_raw: Vec<String>,
     pub within_group_rate: f64,
+    pub rate_contributions: Vec<CalculatorZoneLootRateContribution>,
     pub evidence: Vec<CalculatorZoneLootEvidence>,
     pub overlay: CalculatorZoneLootOverlayMeta,
 }

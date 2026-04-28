@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::error::{AppError, AppResult};
 use crate::store::{
     queries, validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence,
-    CalculatorZoneLootOverlayMeta, DataLang,
+    CalculatorZoneLootOverlayMeta, CalculatorZoneLootRateContribution, DataLang,
 };
 
 use super::catalog::{item_grade_from_db, parse_positive_i64};
@@ -70,6 +70,27 @@ struct CommunityPresenceMeta {
 struct RankingPresenceMeta {
     full_count: u32,
     partial_count: u32,
+}
+
+#[derive(Debug, Clone)]
+struct MainGroupOption {
+    option_idx: u32,
+    select_rate: i64,
+    condition_raw: Option<String>,
+    subgroup_key: i64,
+}
+
+#[derive(Debug, Clone)]
+struct SlotSubgroupOptionMeta {
+    item_main_group_key: i64,
+    option_idx: u32,
+    conditions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CommunityGuessWeight {
+    subgroup_key: Option<i64>,
+    weight: f64,
 }
 
 fn parse_community_support_notes(notes: &str) -> CommunitySupportMeta {
@@ -270,6 +291,44 @@ fn calculator_zone_loot_retry_delay(failures: u32) -> Duration {
         .min(CALCULATOR_ZONE_LOOT_RETRY_MAX_DELAY)
 }
 
+fn community_guess_weight(
+    slot_idx: u8,
+    guess: CommunityPrizeGuessMeta,
+    slot_subgroup_select_rate: &HashMap<(u8, i64), i64>,
+    slot_option_count: &HashMap<u8, usize>,
+) -> Option<CommunityGuessWeight> {
+    let (subgroup_key, select_rate) = guess
+        .subgroup_key
+        .and_then(|subgroup_key| {
+            slot_subgroup_select_rate
+                .get(&(slot_idx, subgroup_key))
+                .copied()
+                .map(|select_rate| (Some(subgroup_key), select_rate))
+        })
+        .or_else(|| {
+            if slot_option_count
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default()
+                == 1
+            {
+                slot_subgroup_select_rate.iter().find_map(
+                    |((candidate_slot_idx, subgroup_key), select_rate)| {
+                        (*candidate_slot_idx == slot_idx)
+                            .then_some((Some(*subgroup_key), *select_rate))
+                    },
+                )
+            } else {
+                None
+            }
+        })?;
+    let guessed_weight = guess.guessed_rate * GROUP_RATE_SCALE * (select_rate as f64);
+    (guessed_weight > 0.0).then_some(CommunityGuessWeight {
+        subgroup_key,
+        weight: guessed_weight,
+    })
+}
+
 fn apply_community_guess_weights(
     aggregate_weights: &HashMap<(u8, i32), f64>,
     community_guess_by_key: &HashMap<(u8, i32), CommunityPrizeGuessMeta>,
@@ -278,36 +337,34 @@ fn apply_community_guess_weights(
 ) -> HashMap<(u8, i32), f64> {
     let mut effective_weights = aggregate_weights.clone();
     for ((slot_idx, item_id), guess) in community_guess_by_key {
-        let select_rate = guess
-            .subgroup_key
-            .and_then(|subgroup_key| {
-                slot_subgroup_select_rate
-                    .get(&(*slot_idx, subgroup_key))
-                    .copied()
-            })
-            .or_else(|| {
-                if slot_option_count.get(slot_idx).copied().unwrap_or_default() == 1 {
-                    slot_subgroup_select_rate.iter().find_map(
-                        |((candidate_slot_idx, _), select_rate)| {
-                            (*candidate_slot_idx == *slot_idx).then_some(*select_rate)
-                        },
-                    )
-                } else {
-                    None
-                }
-            });
-        let Some(select_rate) = select_rate else {
+        let Some(guessed_weight) = community_guess_weight(
+            *slot_idx,
+            *guess,
+            slot_subgroup_select_rate,
+            slot_option_count,
+        ) else {
             continue;
         };
-        let guessed_weight = guess.guessed_rate * GROUP_RATE_SCALE * (select_rate as f64);
-        if guessed_weight <= 0.0 {
-            continue;
-        }
         effective_weights
             .entry((*slot_idx, *item_id))
-            .or_insert(guessed_weight);
+            .or_insert(guessed_weight.weight);
     }
     effective_weights
+}
+
+fn push_unique_subgroup_variant(
+    subgroup_variants: &mut HashMap<i64, Vec<(i32, i64)>>,
+    seen_variants: &mut HashSet<(i64, i32, i64)>,
+    item_sub_group_key: i64,
+    item_id: i32,
+    select_rate: i64,
+) {
+    if seen_variants.insert((item_sub_group_key, item_id, select_rate)) {
+        subgroup_variants
+            .entry(item_sub_group_key)
+            .or_default()
+            .push((item_id, select_rate));
+    }
 }
 
 impl DoltMySqlStore {
@@ -477,7 +534,7 @@ impl DoltMySqlStore {
             .map(|(slot_idx, _, method)| (*slot_idx, (*method).to_string()))
             .collect::<HashMap<u8, String>>();
 
-        let mut subgroup_options = HashMap::<i64, Vec<(i64, i64)>>::new();
+        let mut subgroup_options = HashMap::<i64, Vec<MainGroupOption>>::new();
         let mut group_conditions_raw = HashMap::<i64, Vec<String>>::new();
         if !slot_rows.is_empty() {
             let main_group_ids = slot_rows
@@ -494,6 +551,7 @@ impl DoltMySqlStore {
             let main_group_query = format!(
                 "SELECT \
                     CAST(item_main_group_key AS SIGNED), \
+                    CAST(option_idx AS SIGNED), \
                     CAST(select_rate AS SIGNED), \
                     NULLIF(TRIM(condition_raw), '') AS condition_raw, \
                     CAST(item_sub_group_key AS SIGNED) \
@@ -501,16 +559,23 @@ impl DoltMySqlStore {
                  WHERE item_main_group_key IN ({main_group_id_csv}) \
                  ORDER BY item_main_group_key, option_idx"
             );
-            let main_group_rows: Vec<(i64, Option<i64>, Option<String>, Option<i64>)> =
+            let main_group_rows: Vec<(i64, Option<i64>, Option<i64>, Option<String>, Option<i64>)> =
                 conn.query(main_group_query).map_err(db_unavailable)?;
 
-            for (item_main_group_key, select_rate, condition_raw, subgroup_key) in main_group_rows {
-                if let Some(condition_raw) = normalize_optional_string(condition_raw) {
+            for (item_main_group_key, option_idx, select_rate, condition_raw, subgroup_key) in
+                main_group_rows
+            {
+                let condition_raw = normalize_optional_string(condition_raw);
+                if let Some(condition_raw) = condition_raw.as_ref() {
                     let conditions = group_conditions_raw.entry(item_main_group_key).or_default();
-                    if !conditions.contains(&condition_raw) {
-                        conditions.push(condition_raw);
+                    if !conditions.contains(condition_raw) {
+                        conditions.push(condition_raw.clone());
                     }
                 }
+                let Some(option_idx) = option_idx.and_then(|value| u32::try_from(value).ok())
+                else {
+                    continue;
+                };
                 let Some(select_rate) = select_rate else {
                     continue;
                 };
@@ -523,15 +588,21 @@ impl DoltMySqlStore {
                 subgroup_options
                     .entry(item_main_group_key)
                     .or_default()
-                    .push((select_rate, subgroup_key));
+                    .push(MainGroupOption {
+                        option_idx,
+                        select_rate,
+                        condition_raw,
+                        subgroup_key,
+                    });
             }
         }
 
         let subgroup_ids = subgroup_options
             .values()
-            .flat_map(|options| options.iter().map(|(_, subgroup_key)| *subgroup_key))
+            .flat_map(|options| options.iter().map(|option| option.subgroup_key))
             .collect::<Vec<_>>();
         let mut subgroup_variants = HashMap::<i64, Vec<(i32, i64)>>::new();
+        let mut seen_subgroup_variants = HashSet::<(i64, i32, i64)>::new();
         if !subgroup_ids.is_empty() {
             let subgroup_id_csv = subgroup_ids
                 .iter()
@@ -559,44 +630,73 @@ impl DoltMySqlStore {
                 let Some(select_rate) = select_rate.filter(|value| *value > 0) else {
                     continue;
                 };
-                subgroup_variants
-                    .entry(item_sub_group_key)
-                    .or_default()
-                    .push((item_id, select_rate));
+                push_unique_subgroup_variant(
+                    &mut subgroup_variants,
+                    &mut seen_subgroup_variants,
+                    item_sub_group_key,
+                    item_id,
+                    select_rate,
+                );
             }
         }
 
         let mut aggregate_weights = HashMap::<(u8, i32), f64>::new();
+        let mut rate_contributions_by_key =
+            HashMap::<(u8, i32), Vec<CalculatorZoneLootRateContribution>>::new();
         let mut slot_item_subgroups = HashMap::<(u8, i32), Vec<i64>>::new();
         for (slot_idx, item_main_group_key, _) in &slot_rows {
             let Some(options) = subgroup_options.get(item_main_group_key) else {
                 continue;
             };
-            for (select_rate, subgroup_key) in options {
-                let Some(variants) = subgroup_variants.get(subgroup_key) else {
+            for option in options {
+                let Some(variants) = subgroup_variants.get(&option.subgroup_key) else {
                     continue;
                 };
                 for (item_id, variant_rate) in variants {
-                    let weight = (*select_rate as f64) * (*variant_rate as f64);
-                    *aggregate_weights.entry((*slot_idx, *item_id)).or_default() += weight;
-                    let subgroup_keys = slot_item_subgroups
-                        .entry((*slot_idx, *item_id))
-                        .or_default();
-                    if !subgroup_keys.contains(subgroup_key) {
-                        subgroup_keys.push(*subgroup_key);
+                    let weight = (option.select_rate as f64) * (*variant_rate as f64);
+                    let key = (*slot_idx, *item_id);
+                    *aggregate_weights.entry(key).or_default() += weight;
+                    rate_contributions_by_key.entry(key).or_default().push(
+                        CalculatorZoneLootRateContribution {
+                            source_family: "database".to_string(),
+                            item_main_group_key: Some(*item_main_group_key),
+                            option_idx: Some(option.option_idx),
+                            subgroup_key: Some(option.subgroup_key),
+                            group_conditions_raw: option
+                                .condition_raw
+                                .iter()
+                                .cloned()
+                                .collect::<Vec<_>>(),
+                            weight,
+                        },
+                    );
+                    let subgroup_keys = slot_item_subgroups.entry(key).or_default();
+                    if !subgroup_keys.contains(&option.subgroup_key) {
+                        subgroup_keys.push(option.subgroup_key);
                     }
                 }
             }
         }
         let mut slot_subgroup_select_rate = HashMap::<(u8, i64), i64>::new();
+        let mut slot_subgroup_option_meta = HashMap::<(u8, i64), SlotSubgroupOptionMeta>::new();
         let mut slot_option_count = HashMap::<u8, usize>::new();
         for (slot_idx, item_main_group_key, _) in &slot_rows {
             let Some(options) = subgroup_options.get(item_main_group_key) else {
                 continue;
             };
             slot_option_count.insert(*slot_idx, options.len());
-            for (select_rate, subgroup_key) in options {
-                slot_subgroup_select_rate.insert((*slot_idx, *subgroup_key), *select_rate);
+            for option in options {
+                let key = (*slot_idx, option.subgroup_key);
+                slot_subgroup_select_rate.insert(key, option.select_rate);
+                let conditions = option.condition_raw.iter().cloned().collect::<Vec<_>>();
+                slot_subgroup_option_meta.insert(
+                    key,
+                    SlotSubgroupOptionMeta {
+                        item_main_group_key: *item_main_group_key,
+                        option_idx: option.option_idx,
+                        conditions: conditions.clone(),
+                    },
+                );
             }
         }
 
@@ -713,6 +813,39 @@ impl DoltMySqlStore {
             &slot_subgroup_select_rate,
             &slot_option_count,
         );
+        for (key @ (slot_idx, item_id), (_, guess)) in &community_guess_by_key {
+            if aggregate_weights.contains_key(key) {
+                continue;
+            }
+            let Some(weight) = community_guess_weight(
+                *slot_idx,
+                *guess,
+                &slot_subgroup_select_rate,
+                &slot_option_count,
+            ) else {
+                continue;
+            };
+            let option_meta = weight.subgroup_key.and_then(|subgroup_key| {
+                slot_subgroup_option_meta
+                    .get(&(*slot_idx, subgroup_key))
+                    .cloned()
+            });
+            let conditions = option_meta
+                .as_ref()
+                .map(|meta| meta.conditions.clone())
+                .unwrap_or_default();
+            rate_contributions_by_key
+                .entry((*slot_idx, *item_id))
+                .or_default()
+                .push(CalculatorZoneLootRateContribution {
+                    source_family: "community".to_string(),
+                    item_main_group_key: option_meta.as_ref().map(|meta| meta.item_main_group_key),
+                    option_idx: option_meta.as_ref().map(|meta| meta.option_idx),
+                    subgroup_key: weight.subgroup_key,
+                    group_conditions_raw: conditions,
+                    weight: weight.weight,
+                });
+        }
 
         let mut slot_totals = HashMap::<u8, f64>::new();
         for ((slot_idx, _), weight) in &effective_weights {
@@ -869,10 +1002,18 @@ impl DoltMySqlStore {
                     .get(&slot_idx)
                     .copied()
                     .unwrap_or_default();
-                let group_conditions_raw = group_conditions_raw
-                    .get(&item_main_group_key)
+                let rate_contributions = rate_contributions_by_key
+                    .get(&(slot_idx, item_id))
                     .cloned()
                     .unwrap_or_default();
+                let mut group_conditions_raw = Vec::<String>::new();
+                for contribution in &rate_contributions {
+                    for condition in &contribution.group_conditions_raw {
+                        if !group_conditions_raw.contains(condition) {
+                            group_conditions_raw.push(condition.clone());
+                        }
+                    }
+                }
                 let subgroup_keys = slot_item_subgroups
                     .get(&(slot_idx, item_id))
                     .map(Vec::as_slice)
@@ -921,6 +1062,7 @@ impl DoltMySqlStore {
                     catch_methods,
                     group_conditions_raw,
                     within_group_rate,
+                    rate_contributions,
                     evidence,
                     overlay: CalculatorZoneLootOverlayMeta::default(),
                 })
@@ -1009,6 +1151,7 @@ impl DoltMySqlStore {
                     .cloned()
                     .unwrap_or_default(),
                 within_group_rate: 0.0,
+                rate_contributions: Vec::new(),
                 evidence,
                 overlay: CalculatorZoneLootOverlayMeta::default(),
             });
@@ -1031,7 +1174,7 @@ impl DoltMySqlStore {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::time::Duration;
 
     use crate::error::AppError;
@@ -1246,6 +1389,39 @@ mod tests {
         assert!((blue - 0.2325581395).abs() < 1e-9);
         assert!((mud - 0.0232558139).abs() < 1e-9);
         assert!((silver - 0.0465116279).abs() < 1e-9);
+    }
+
+    #[test]
+    fn subgroup_variant_loader_collapses_exact_duplicate_source_rows() {
+        let mut subgroup_variants = HashMap::<i64, Vec<(i32, i64)>>::new();
+        let mut seen_variants = HashSet::<(i64, i32, i64)>::new();
+
+        super::push_unique_subgroup_variant(
+            &mut subgroup_variants,
+            &mut seen_variants,
+            11152,
+            8261,
+            473_500,
+        );
+        super::push_unique_subgroup_variant(
+            &mut subgroup_variants,
+            &mut seen_variants,
+            11152,
+            8261,
+            473_500,
+        );
+        super::push_unique_subgroup_variant(
+            &mut subgroup_variants,
+            &mut seen_variants,
+            11152,
+            8261,
+            472_500,
+        );
+
+        assert_eq!(
+            subgroup_variants.get(&11152).cloned().unwrap_or_default(),
+            vec![(8261, 473_500), (8261, 472_500)]
+        );
     }
 
     #[test]

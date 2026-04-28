@@ -33,7 +33,8 @@ use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::state::{RequestId, SharedState};
 use crate::store::{
-    CalculatorZoneLootEntry, CalculatorZoneLootEvidence, CalculatorZoneLootOverlayMeta, DataLang,
+    CalculatorZoneLootEntry, CalculatorZoneLootEvidence, CalculatorZoneLootOverlayMeta,
+    CalculatorZoneLootRateContribution, DataLang,
 };
 
 #[derive(Debug, Deserialize)]
@@ -465,6 +466,7 @@ struct CalculatorData {
 const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-3";
 const CALCULATOR_MODE_ROD_TEXTURE_URL: &str = "/img/calculator/fishing-mode-rod.png";
 const CALCULATOR_MODE_HARPOON_TEXTURE_URL: &str = "/img/calculator/fishing-mode-harpoon.png";
+const CALCULATOR_COMBINED_GROUP_RATE_SCALE: f64 = 1_000_000.0 * 1_000_000.0;
 type CalculatorRouteCatalog = HashMap<String, String>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1675,6 +1677,8 @@ async fn load_calculator_runtime_data(
     .await
     .map_err(|err| map_request_id(err, request_id))?;
     data.zone_loot_entries =
+        apply_calculator_condition_context_to_loot_entries(&signals, &data.zone_loot_entries);
+    data.zone_loot_entries =
         apply_zone_overlay_to_loot_entries(&signals, &signals.zone, &data.zone_loot_entries);
     normalize_zone_target_fish(&mut signals, &data);
     let derived = derive_signals(&signals, &data);
@@ -1717,6 +1721,8 @@ async fn load_zone_loot_summary_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
+    data.zone_loot_entries =
+        apply_calculator_condition_context_to_loot_entries(&signals, &data.zone_loot_entries);
     data.zone_loot_entries =
         apply_zone_overlay_to_loot_entries(&signals, &signals.zone, &data.zone_loot_entries);
 
@@ -2384,6 +2390,378 @@ fn overlay_editor_percent_value_text(value_pct: f64) -> String {
     }
 }
 
+fn parse_calculator_condition_comparison<'a>(
+    predicate: &'a str,
+    subject: &str,
+) -> Option<(&'a str, f64)> {
+    let rest = predicate.trim().strip_prefix(subject)?.trim();
+    for op in [">=", "<=", "==", "!=", ">", "<", "="] {
+        if let Some(value) = rest.strip_prefix(op) {
+            return value.trim().parse::<f64>().ok().map(|value| (op, value));
+        }
+    }
+    None
+}
+
+fn calculator_condition_comparison_matches(actual: f64, op: &str, expected: f64) -> bool {
+    match op {
+        ">" => actual > expected,
+        ">=" => actual >= expected,
+        "<" => actual < expected,
+        "<=" => actual <= expected,
+        "=" | "==" => (actual - expected).abs() <= f64::EPSILON,
+        "!=" => (actual - expected).abs() > f64::EPSILON,
+        _ => true,
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorLootBranchOption {
+    option_idx: u32,
+    conditions: Vec<String>,
+}
+
+fn calculator_lifeskill_level_index(signals: &CalculatorSignals) -> f64 {
+    signals
+        .lifeskill_level
+        .trim()
+        .parse::<f64>()
+        .unwrap_or_default()
+        .max(0.0)
+}
+
+fn calculator_condition_predicate_matches(predicate: &str, signals: &CalculatorSignals) -> bool {
+    let predicate = predicate.trim();
+    if predicate.is_empty() {
+        return true;
+    }
+    if let Some((op, value)) = parse_calculator_condition_comparison(predicate, "lifestat(1,1)") {
+        return calculator_condition_comparison_matches(signals.mastery.max(0.0), op, value);
+    }
+    if let Some((op, value)) = parse_calculator_condition_comparison(predicate, "getLifeLevel(1)") {
+        return calculator_condition_comparison_matches(
+            calculator_lifeskill_level_index(signals),
+            op,
+            value,
+        );
+    }
+
+    // Other source predicates are content/global gates, not current calculator user inputs.
+    // Keep them active here so only evaluable user-state predicates affect personalized rates.
+    true
+}
+
+fn calculator_condition_has_mastery_predicate(condition_raw: &str) -> bool {
+    condition_raw.split(';').any(|predicate| {
+        parse_calculator_condition_comparison(predicate, "lifestat(1,1)").is_some()
+    })
+}
+
+fn calculator_condition_has_lifeskill_predicate(condition_raw: &str) -> bool {
+    condition_raw.split(';').any(|predicate| {
+        parse_calculator_condition_comparison(predicate, "getLifeLevel(1)").is_some()
+    })
+}
+
+fn calculator_condition_lifeskill_lower_bound(condition_raw: &str) -> Option<f64> {
+    condition_raw.split(';').find_map(|predicate| {
+        let (op, value) = parse_calculator_condition_comparison(predicate, "getLifeLevel(1)")?;
+        matches!(op, ">" | ">=" | "=" | "==").then_some(value)
+    })
+}
+
+fn calculator_condition_matches(condition_raw: &str, signals: &CalculatorSignals) -> bool {
+    condition_raw
+        .split(';')
+        .all(|predicate| calculator_condition_predicate_matches(predicate, signals))
+}
+
+fn calculator_branch_option_matches(
+    option: &CalculatorLootBranchOption,
+    signals: &CalculatorSignals,
+) -> bool {
+    option
+        .conditions
+        .iter()
+        .all(|condition| calculator_condition_matches(condition, signals))
+}
+
+fn calculator_branch_option_has_mastery(option: &CalculatorLootBranchOption) -> bool {
+    option
+        .conditions
+        .iter()
+        .any(|condition| calculator_condition_has_mastery_predicate(condition))
+}
+
+fn calculator_branch_option_has_lifeskill(option: &CalculatorLootBranchOption) -> bool {
+    option
+        .conditions
+        .iter()
+        .any(|condition| calculator_condition_has_lifeskill_predicate(condition))
+}
+
+fn calculator_branch_option_lifeskill_lower_bound(
+    option: &CalculatorLootBranchOption,
+) -> Option<f64> {
+    option
+        .conditions
+        .iter()
+        .filter_map(|condition| calculator_condition_lifeskill_lower_bound(condition))
+        .max_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal))
+}
+
+fn calculator_selected_branch_option_idx(
+    options: &[CalculatorLootBranchOption],
+    signals: &CalculatorSignals,
+) -> Option<u32> {
+    let has_user_state_options = options.iter().any(|option| {
+        calculator_branch_option_has_mastery(option)
+            || calculator_branch_option_has_lifeskill(option)
+    });
+    if !has_user_state_options {
+        return None;
+    }
+
+    let mut ordered = options.to_vec();
+    ordered.sort_by_key(|option| option.option_idx);
+    ordered.dedup_by_key(|option| option.option_idx);
+
+    if let Some(option) = ordered.iter().find(|option| {
+        calculator_branch_option_has_mastery(option)
+            && calculator_branch_option_matches(option, signals)
+    }) {
+        return Some(option.option_idx);
+    }
+
+    if let Some(option) = ordered
+        .iter()
+        .filter(|option| {
+            calculator_branch_option_has_lifeskill(option)
+                && calculator_branch_option_matches(option, signals)
+        })
+        .max_by(|left, right| {
+            calculator_branch_option_lifeskill_lower_bound(left)
+                .partial_cmp(&calculator_branch_option_lifeskill_lower_bound(right))
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| right.option_idx.cmp(&left.option_idx))
+        })
+    {
+        return Some(option.option_idx);
+    }
+
+    ordered
+        .iter()
+        .find(|option| option.conditions.is_empty())
+        .map(|option| option.option_idx)
+}
+
+fn calculator_loot_branch_options(
+    base_entries: &[CalculatorZoneLootEntry],
+) -> HashMap<(u8, i64), Vec<CalculatorLootBranchOption>> {
+    let mut branch_options = HashMap::<(u8, i64), Vec<CalculatorLootBranchOption>>::new();
+    for entry in base_entries {
+        for contribution in &entry.rate_contributions {
+            let (Some(item_main_group_key), Some(option_idx)) =
+                (contribution.item_main_group_key, contribution.option_idx)
+            else {
+                continue;
+            };
+            let options = branch_options
+                .entry((entry.slot_idx, item_main_group_key))
+                .or_default();
+            if options.iter().any(|option| option.option_idx == option_idx) {
+                continue;
+            }
+            options.push(CalculatorLootBranchOption {
+                option_idx,
+                conditions: contribution.group_conditions_raw.clone(),
+            });
+        }
+    }
+    branch_options
+}
+
+fn calculator_selected_loot_branch_options(
+    signals: &CalculatorSignals,
+    base_entries: &[CalculatorZoneLootEntry],
+) -> HashMap<(u8, i64), u32> {
+    calculator_loot_branch_options(base_entries)
+        .into_iter()
+        .filter_map(|(branch_key, options)| {
+            calculator_selected_branch_option_idx(&options, signals)
+                .map(|option_idx| (branch_key, option_idx))
+        })
+        .collect()
+}
+
+fn calculator_rate_contribution_active(
+    slot_idx: u8,
+    contribution: &CalculatorZoneLootRateContribution,
+    signals: &CalculatorSignals,
+    selected_branch_options: &HashMap<(u8, i64), u32>,
+) -> bool {
+    if !contribution
+        .group_conditions_raw
+        .iter()
+        .all(|condition| calculator_condition_matches(condition, signals))
+    {
+        return false;
+    }
+
+    if let (Some(item_main_group_key), Some(option_idx)) =
+        (contribution.item_main_group_key, contribution.option_idx)
+    {
+        if let Some(selected_option_idx) =
+            selected_branch_options.get(&(slot_idx, item_main_group_key))
+        {
+            return option_idx == *selected_option_idx;
+        }
+    }
+
+    true
+}
+
+fn calculator_active_contribution_conditions(
+    contributions: &[CalculatorZoneLootRateContribution],
+) -> Vec<String> {
+    let mut conditions = Vec::new();
+    for contribution in contributions {
+        for condition in &contribution.group_conditions_raw {
+            if !condition.trim().is_empty() && !conditions.contains(condition) {
+                conditions.push(condition.clone());
+            }
+        }
+    }
+    conditions
+}
+
+fn update_calculator_rate_evidence(
+    entry: &mut CalculatorZoneLootEntry,
+    active_weight: f64,
+    total_weight: f64,
+) {
+    let db_weight = entry
+        .rate_contributions
+        .iter()
+        .filter(|contribution| contribution.source_family == "database")
+        .map(|contribution| contribution.weight.max(0.0))
+        .sum::<f64>();
+    let community_weight = entry
+        .rate_contributions
+        .iter()
+        .filter(|contribution| contribution.source_family == "community")
+        .map(|contribution| contribution.weight.max(0.0))
+        .sum::<f64>();
+    let normalized = if total_weight > 0.0 {
+        active_weight / total_weight
+    } else {
+        0.0
+    };
+    let unique_subgroup = {
+        let mut subgroup_keys = entry
+            .rate_contributions
+            .iter()
+            .filter_map(|contribution| contribution.subgroup_key)
+            .collect::<Vec<_>>();
+        subgroup_keys.sort_unstable();
+        subgroup_keys.dedup();
+        (subgroup_keys.len() == 1).then_some(subgroup_keys[0])
+    };
+
+    entry.within_group_rate = normalized;
+    for evidence in &mut entry.evidence {
+        if evidence.source_family == "database" && evidence.claim_kind == "in_group_rate" {
+            if db_weight > 0.0 {
+                evidence.rate = Some(db_weight / CALCULATOR_COMBINED_GROUP_RATE_SCALE);
+                evidence.normalized_rate = Some(db_weight / total_weight);
+                evidence.subgroup_key = evidence.subgroup_key.or(unique_subgroup);
+            }
+        } else if evidence.source_family == "community"
+            && evidence.claim_kind == "guessed_in_group_rate"
+            && community_weight > 0.0
+        {
+            evidence.normalized_rate = Some(community_weight / total_weight);
+            evidence.subgroup_key = evidence.subgroup_key.or(unique_subgroup);
+        }
+    }
+}
+
+fn apply_calculator_condition_context_to_loot_entries(
+    signals: &CalculatorSignals,
+    base_entries: &[CalculatorZoneLootEntry],
+) -> Vec<CalculatorZoneLootEntry> {
+    let mut entries_with_weights = Vec::<(CalculatorZoneLootEntry, Option<f64>)>::new();
+    let mut slot_totals = HashMap::<u8, f64>::new();
+    let selected_branch_options = calculator_selected_loot_branch_options(signals, base_entries);
+
+    for base_entry in base_entries {
+        if base_entry.rate_contributions.is_empty() {
+            entries_with_weights.push((base_entry.clone(), None));
+            continue;
+        }
+
+        let active_contributions = base_entry
+            .rate_contributions
+            .iter()
+            .filter(|contribution| {
+                calculator_rate_contribution_active(
+                    base_entry.slot_idx,
+                    contribution,
+                    signals,
+                    &selected_branch_options,
+                )
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let active_weight = active_contributions
+            .iter()
+            .map(|contribution| contribution.weight.max(0.0))
+            .sum::<f64>();
+        if active_weight <= 0.0 {
+            continue;
+        }
+
+        let mut entry = base_entry.clone();
+        entry.group_conditions_raw =
+            calculator_active_contribution_conditions(&active_contributions);
+        entry.rate_contributions = active_contributions;
+        *slot_totals.entry(entry.slot_idx).or_default() += active_weight;
+        entries_with_weights.push((entry, Some(active_weight)));
+    }
+
+    let mut entries = entries_with_weights
+        .into_iter()
+        .filter_map(|(mut entry, active_weight)| {
+            let Some(active_weight) = active_weight else {
+                return Some(entry);
+            };
+            let total_weight = slot_totals
+                .get(&entry.slot_idx)
+                .copied()
+                .unwrap_or_default();
+            if total_weight <= 0.0 {
+                return None;
+            }
+            update_calculator_rate_evidence(&mut entry, active_weight, total_weight);
+            Some(entry)
+        })
+        .collect::<Vec<_>>();
+
+    entries.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| {
+                right
+                    .within_group_rate
+                    .partial_cmp(&left.within_group_rate)
+                    .unwrap_or(Ordering::Equal)
+            })
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+            .then_with(|| left.item_id.cmp(&right.item_id))
+    });
+    entries
+}
+
 fn overlay_editor_group_input_rows(
     row: &FishGroupChartRow,
     lang: CalculatorLocale,
@@ -2885,6 +3263,7 @@ fn apply_zone_overlay_to_loot_entries(
             catch_methods: vec!["rod".to_string()],
             group_conditions_raw: Vec::new(),
             within_group_rate: 0.0,
+            rate_contributions: Vec::new(),
             evidence: Vec::new(),
             overlay: CalculatorZoneLootOverlayMeta {
                 added: true,
@@ -14080,13 +14459,17 @@ mod tests {
     use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::error::AppResult;
     use crate::state::{AppState, RequestId};
-    use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, DataLang, Store};
+    use crate::store::{
+        CalculatorZoneLootEntry, CalculatorZoneLootEvidence, CalculatorZoneLootRateContribution,
+        DataLang, Store,
+    };
 
     use super::{
-        auto_target_fish_pmf_tail_count, base_price_for_species, buff_category_label,
-        build_pet_value_aliases, default_reset_signals_patch_map, derive_fish_group_chart,
-        derive_loot_chart, derive_target_fish_summary, derive_zone_loot_summary_response,
-        discard_grade_enabled, filtered_loot_flow_rows, get_calculator_datastar_init,
+        apply_calculator_condition_context_to_loot_entries, auto_target_fish_pmf_tail_count,
+        base_price_for_species, buff_category_label, build_pet_value_aliases,
+        default_reset_signals_patch_map, derive_fish_group_chart, derive_loot_chart,
+        derive_target_fish_summary, derive_zone_loot_summary_response, discard_grade_enabled,
+        filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         init_signals_patch_map, load_calculator_runtime_data, loot_species_evidence_text,
         loot_species_presence_source_kind, loot_species_presence_text,
@@ -17850,6 +18233,269 @@ mod tests {
             "Mastery 200-699 · Mastery 700-1199 · Mastery 1200+ · Fishing Level Guru 1+"
         );
         assert_eq!(summary.groups[0].catch_methods, vec!["harpoon".to_string()]);
+    }
+
+    #[test]
+    fn loot_condition_context_filters_guru_locked_rate_contributions() {
+        let base_entries = vec![
+            CalculatorZoneLootEntry {
+                slot_idx: 2,
+                item_id: 8201,
+                name: "Regular rare".to_string(),
+                within_group_rate: 0.99995,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    subgroup_key: Some(12001),
+                    weight: 999_950_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 2,
+                item_id: 820985,
+                name: "Mystical fish".to_string(),
+                within_group_rate: 0.00005,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    subgroup_key: Some(12002),
+                    group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
+                    weight: 50_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+        ];
+
+        let below_guru = CalculatorSignals {
+            lifeskill_level: "80".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let below_entries =
+            apply_calculator_condition_context_to_loot_entries(&below_guru, &base_entries);
+
+        assert_eq!(below_entries.len(), 1);
+        assert_eq!(below_entries[0].item_id, 8201);
+        assert!((below_entries[0].within_group_rate - 1.0).abs() < 1e-12);
+
+        let guru_one = CalculatorSignals {
+            lifeskill_level: "81".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let guru_entries =
+            apply_calculator_condition_context_to_loot_entries(&guru_one, &base_entries);
+        let mystical = guru_entries
+            .iter()
+            .find(|entry| entry.item_id == 820985)
+            .expect("Guru 1 should activate mystical fish contribution");
+
+        assert!((mystical.within_group_rate - 0.00005).abs() < 1e-12);
+        assert_eq!(
+            mystical.group_conditions_raw,
+            vec!["getLifeLevel(1)>80;".to_string()]
+        );
+        assert_eq!(
+            mystical.evidence[0].rate,
+            Some(0.00005),
+            "raw DB rate remains non-normalized"
+        );
+    }
+
+    #[test]
+    fn loot_condition_context_treats_main_group_options_as_user_state_branches() {
+        let base_entries = vec![
+            CalculatorZoneLootEntry {
+                slot_idx: 2,
+                item_id: 8261,
+                name: "Grunt".to_string(),
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                rate_contributions: vec![
+                    CalculatorZoneLootRateContribution {
+                        source_family: "database".to_string(),
+                        item_main_group_key: Some(10990),
+                        option_idx: Some(0),
+                        subgroup_key: Some(11152),
+                        group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
+                        weight: 473_500_000_000.0,
+                    },
+                    CalculatorZoneLootRateContribution {
+                        source_family: "database".to_string(),
+                        item_main_group_key: Some(10990),
+                        option_idx: Some(1),
+                        subgroup_key: Some(10990),
+                        weight: 473_500_000_000.0,
+                        ..CalculatorZoneLootRateContribution::default()
+                    },
+                ],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 2,
+                item_id: 42281,
+                name: "Mystical fish".to_string(),
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    item_main_group_key: Some(10990),
+                    option_idx: Some(0),
+                    subgroup_key: Some(11152),
+                    group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
+                    weight: 50_000_000.0,
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+        ];
+
+        let guru_one = CalculatorSignals {
+            lifeskill_level: "81".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let guru_entries =
+            apply_calculator_condition_context_to_loot_entries(&guru_one, &base_entries);
+        let grunt = guru_entries
+            .iter()
+            .find(|entry| entry.item_id == 8261)
+            .expect("Guru branch should include Grunt once");
+        let mystical = guru_entries
+            .iter()
+            .find(|entry| entry.item_id == 42281)
+            .expect("Guru branch should include Mystical fish");
+
+        assert!((grunt.within_group_rate - 0.999894414).abs() < 1e-9);
+        assert!((mystical.within_group_rate - 0.000105585).abs() < 1e-9);
+        assert_eq!(grunt.rate_contributions.len(), 1);
+        assert_eq!(grunt.rate_contributions[0].subgroup_key, Some(11152));
+        assert_eq!(grunt.evidence[0].rate, Some(0.4735));
+        assert_eq!(mystical.evidence[0].rate, Some(0.00005));
+
+        let below_guru = CalculatorSignals {
+            lifeskill_level: "80".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let below_entries =
+            apply_calculator_condition_context_to_loot_entries(&below_guru, &base_entries);
+        assert_eq!(below_entries.len(), 1);
+        assert_eq!(below_entries[0].item_id, 8261);
+        assert_eq!(
+            below_entries[0].rate_contributions[0].subgroup_key,
+            Some(10990)
+        );
+        assert!((below_entries[0].within_group_rate - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn loot_condition_context_applies_harpoon_mastery_brackets() {
+        let base_entries = vec![
+            CalculatorZoneLootEntry {
+                slot_idx: 6,
+                item_id: 820115,
+                name: "Lower bracket harpoon fish".to_string(),
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    item_main_group_key: Some(10901),
+                    option_idx: Some(0),
+                    subgroup_key: Some(10916),
+                    group_conditions_raw: vec!["lifestat(1,1)>199;lifestat(1,1)<700;".to_string()],
+                    weight: 1_000_000_000_000.0,
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 6,
+                item_id: 820116,
+                name: "Middle bracket harpoon fish".to_string(),
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    item_main_group_key: Some(10901),
+                    option_idx: Some(1),
+                    subgroup_key: Some(10917),
+                    group_conditions_raw: vec!["lifestat(1,1)>699;lifestat(1,1)<1200;".to_string()],
+                    weight: 1_000_000_000_000.0,
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 6,
+                item_id: 820117,
+                name: "Lifeskill fallback harpoon fish".to_string(),
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    item_main_group_key: Some(10901),
+                    option_idx: Some(3),
+                    subgroup_key: Some(10901),
+                    group_conditions_raw: vec!["getLifeLevel(1)>34;".to_string()],
+                    weight: 1_000_000_000_000.0,
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+        ];
+
+        let mastery_699 = CalculatorSignals {
+            mastery: 699.0,
+            lifeskill_level: "100".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let mastery_699_entries =
+            apply_calculator_condition_context_to_loot_entries(&mastery_699, &base_entries);
+        assert_eq!(
+            mastery_699_entries
+                .iter()
+                .map(|entry| entry.item_id)
+                .collect::<Vec<_>>(),
+            vec![820115]
+        );
+
+        let mastery_700 = CalculatorSignals {
+            mastery: 700.0,
+            lifeskill_level: "100".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let mastery_700_entries =
+            apply_calculator_condition_context_to_loot_entries(&mastery_700, &base_entries);
+        assert_eq!(
+            mastery_700_entries
+                .iter()
+                .map(|entry| entry.item_id)
+                .collect::<Vec<_>>(),
+            vec![820116]
+        );
+
+        let below_mastery = CalculatorSignals {
+            mastery: 0.0,
+            lifeskill_level: "35".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let below_mastery_entries =
+            apply_calculator_condition_context_to_loot_entries(&below_mastery, &base_entries);
+        assert_eq!(
+            below_mastery_entries
+                .iter()
+                .map(|entry| entry.item_id)
+                .collect::<Vec<_>>(),
+            vec![820117]
+        );
     }
 
     #[test]
