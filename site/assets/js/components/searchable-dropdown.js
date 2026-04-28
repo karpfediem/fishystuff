@@ -471,6 +471,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
                 currentResults.replaceWith(nextResults);
                 this._attachResultsEvents();
                 this._syncMoreResultsObserver();
+                this._positionOpenDetachedPanel();
             })
             .catch((error) => {
                 if (error?.name === "AbortError") {
@@ -658,6 +659,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
         if (!this._usesOverlayAnchorPlacement()) {
             window.addEventListener("scroll", this._handleViewportChange, true);
         }
+        window.visualViewport?.addEventListener?.("resize", this._handleViewportChange);
+        window.visualViewport?.addEventListener?.("scroll", this._handleViewportChange);
         this._viewportListenersAttached = true;
     }
 
@@ -749,8 +752,20 @@ export class FishySearchableDropdown extends HTMLElementBase {
         panel.style.width = "";
         panel.style.minWidth = "";
         panel.style.maxWidth = "";
+        panel.style.maxHeight = "";
+        panel.style.overflowY = "";
+        panel.style.overscrollBehavior = "";
         panel.style.zIndex = "";
         panel.style.margin = "";
+        this._clearDetachedResultsStyles();
+    }
+
+    _clearDetachedResultsStyles() {
+        const results = this.resultsElement();
+        if (!(results instanceof HTMLElement)) {
+            return;
+        }
+        results.style.maxHeight = "";
     }
 
     _configuredPanelWidthStyle() {
@@ -862,6 +877,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
         }
         window.removeEventListener("resize", this._handleViewportChange);
         window.removeEventListener("scroll", this._handleViewportChange, true);
+        window.visualViewport?.removeEventListener?.("resize", this._handleViewportChange);
+        window.visualViewport?.removeEventListener?.("scroll", this._handleViewportChange);
         this._viewportListenersAttached = false;
         if (this._panelPositionFrame) {
             window.cancelAnimationFrame?.(this._panelPositionFrame);
@@ -1025,6 +1042,13 @@ export class FishySearchableDropdown extends HTMLElementBase {
         }) || 0;
     }
 
+    _positionOpenDetachedPanel() {
+        if (!this.isOpen() || !this._usesDetachedPanel()) {
+            return;
+        }
+        this._positionPanel();
+    }
+
     _scheduleClose() {
         this._cancelClose();
         this._closeTimer = window.setTimeout(() => {
@@ -1096,6 +1120,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const templates = this._catalogTemplates();
         if (!templates.length) {
             this._setResultsNextOffset(results, null);
+            this._positionOpenDetachedPanel();
             return;
         }
 
@@ -1128,6 +1153,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
             item.append(label);
             results.replaceChildren(item);
             this._setResultsNextOffset(results, null);
+            this._positionOpenDetachedPanel();
             return;
         }
 
@@ -1162,6 +1188,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
         }
         this._syncMoreResultsObserver();
         this._scheduleAutoFillIfNeeded();
+        this._positionOpenDetachedPanel();
     }
 
     _buildLocalResultItem(template, selectedValue) {
@@ -1294,6 +1321,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
                 currentResults.replaceChildren(...mergedChildren);
                 this._setResultsNextOffset(currentResults, this._resultsNextOffset(nextResults));
                 this._syncMoreResultsObserver();
+                this._positionOpenDetachedPanel();
             })
             .catch((error) => {
                 if (error?.name === "AbortError") {
@@ -1456,9 +1484,20 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const previousWidth = panel.style.width;
         const previousMinWidth = panel.style.minWidth;
         const previousMaxWidth = panel.style.maxWidth;
+        const previousMaxHeight = panel.style.maxHeight;
+        const previousOverflowY = panel.style.overflowY;
+        const previousOverscrollBehavior = panel.style.overscrollBehavior;
+        const results = this.resultsElement();
+        const previousResultsMaxHeight = results instanceof HTMLElement ? results.style.maxHeight : "";
         const configuredWidth = this._configuredPanelWidthStyle();
         panel.hidden = false;
         panel.style.visibility = "hidden";
+        panel.style.maxHeight = "";
+        panel.style.overflowY = "";
+        panel.style.overscrollBehavior = "";
+        if (results instanceof HTMLElement) {
+            results.style.maxHeight = "";
+        }
         if (configuredWidth) {
             panel.style.width = configuredWidth;
             panel.style.minWidth = "0";
@@ -1472,6 +1511,12 @@ export class FishySearchableDropdown extends HTMLElementBase {
         panel.style.width = previousWidth;
         panel.style.minWidth = previousMinWidth;
         panel.style.maxWidth = previousMaxWidth;
+        panel.style.maxHeight = previousMaxHeight;
+        panel.style.overflowY = previousOverflowY;
+        panel.style.overscrollBehavior = previousOverscrollBehavior;
+        if (results instanceof HTMLElement) {
+            results.style.maxHeight = previousResultsMaxHeight;
+        }
         return rect;
     }
 
@@ -1498,6 +1543,29 @@ export class FishySearchableDropdown extends HTMLElementBase {
         return getStringAttribute(this, "panel-placement") === "overlay-anchor";
     }
 
+    _constrainPanelHeight(panel, maxHeight) {
+        const constrainedHeight = Math.floor(Number(maxHeight) || 0);
+        if (!(panel instanceof HTMLElement) || constrainedHeight <= 0) {
+            return;
+        }
+
+        const results = this.resultsElement();
+        const panelRect = panel.getBoundingClientRect();
+        if (results instanceof HTMLElement) {
+            const resultsRect = results.getBoundingClientRect();
+            const reservedHeight = Math.max(
+                0,
+                Math.round((panelRect.height || 0) - (resultsRect.height || 0)),
+            );
+            const resultsMaxHeight = Math.max(48, constrainedHeight - reservedHeight);
+            results.style.maxHeight = `${resultsMaxHeight}px`;
+        }
+
+        panel.style.maxHeight = `${constrainedHeight}px`;
+        panel.style.overflowY = "auto";
+        panel.style.overscrollBehavior = "contain";
+    }
+
     _ownsNode(node) {
         if (!(node instanceof Node)) {
             return false;
@@ -1514,6 +1582,12 @@ export class FishySearchableDropdown extends HTMLElementBase {
         }
         const viewportWidth = Math.max(window.innerWidth || 0, 320);
         const viewportHeight = Math.max(window.innerHeight || 0, 240);
+        const visualViewportLeft = window.visualViewport
+            ? Math.max(0, window.visualViewport.offsetLeft || 0)
+            : 0;
+        const visualViewportTop = window.visualViewport
+            ? Math.max(0, window.visualViewport.offsetTop || 0)
+            : 0;
         const visibleViewportRight = Math.max(
             320,
             Math.min(
@@ -1521,6 +1595,16 @@ export class FishySearchableDropdown extends HTMLElementBase {
                 document.documentElement.clientWidth || Number.POSITIVE_INFINITY,
                 window.visualViewport
                     ? window.visualViewport.offsetLeft + window.visualViewport.width
+                    : Number.POSITIVE_INFINITY,
+            ),
+        );
+        const visibleViewportBottom = Math.max(
+            240,
+            Math.min(
+                viewportHeight,
+                document.documentElement.clientHeight || Number.POSITIVE_INFINITY,
+                window.visualViewport
+                    ? window.visualViewport.offsetTop + window.visualViewport.height
                     : Number.POSITIVE_INFINITY,
             ),
         );
@@ -1532,7 +1616,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const widthSource = getStringAttribute(this, "panel-min-width");
         const maxWidth = overlayAnchor
             ? visibleViewportRight - edgeInset - anchorRect.left
-            : visibleViewportRight - edgeInset * 2;
+            : visibleViewportRight - visualViewportLeft - edgeInset * 2;
         const width = Math.max(
             0,
             Math.min(
@@ -1540,15 +1624,22 @@ export class FishySearchableDropdown extends HTMLElementBase {
                 Math.max(0, maxWidth),
             ),
         );
+        this._clearDetachedResultsStyles();
 
         panel.style.position = overlayAnchor ? "absolute" : "fixed";
         panel.style.margin = "0";
         panel.style.zIndex = "70";
         panel.style.width = width ? `${width}px` : "";
         panel.style.minWidth = "0";
-        panel.style.maxWidth = `${Math.max(visibleViewportRight - edgeInset * 2, 160)}px`;
-        panel.style.left = `${edgeInset}px`;
-        panel.style.top = `${edgeInset}px`;
+        panel.style.maxWidth = `${Math.max(
+            visibleViewportRight - visualViewportLeft - edgeInset * 2,
+            160,
+        )}px`;
+        panel.style.maxHeight = "";
+        panel.style.overflowY = "";
+        panel.style.overscrollBehavior = "";
+        panel.style.left = `${visualViewportLeft + edgeInset}px`;
+        panel.style.top = `${visualViewportTop + edgeInset}px`;
 
         const panelRect = panel.getBoundingClientRect();
         if (overlayAnchor) {
@@ -1560,8 +1651,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
             return;
         }
 
-        const minLeft = edgeInset;
-        let left = anchorRect.left;
+        const minLeft = visualViewportLeft + edgeInset;
+        let left = Math.max(minLeft, anchorRect.left);
         if (left + panelRect.width > visibleViewportRight - edgeInset) {
             left = Math.max(
                 minLeft,
@@ -1569,15 +1660,38 @@ export class FishySearchableDropdown extends HTMLElementBase {
             );
         }
 
+        const viewportBottom = Math.max(
+            visualViewportTop + edgeInset + 1,
+            visibleViewportBottom - edgeInset,
+        );
+        const minTop = visualViewportTop + edgeInset;
+        const gap = 8;
         const belowTop = Math.round(anchorRect.bottom + 8);
-        const aboveTop = Math.round(anchorRect.top - panelRect.height - 8);
-        const topInViewport =
-            belowTop + panelRect.height <= viewportHeight - 12 || aboveTop < 12
-                ? belowTop
-                : aboveTop;
+        const naturalHeight = Math.round(panelRect.height || 0);
+        const spaceBelow = Math.max(0, viewportBottom - belowTop);
+        const spaceAbove = Math.max(0, anchorRect.top - gap - minTop);
+        const placeBelow =
+            spaceBelow >= naturalHeight
+            || (spaceAbove < naturalHeight && spaceBelow >= spaceAbove);
+        let topInViewport;
+        let availableHeight;
+        if (placeBelow) {
+            topInViewport = Math.max(minTop, belowTop);
+            availableHeight = Math.max(0, viewportBottom - topInViewport);
+        } else {
+            availableHeight = spaceAbove;
+            const panelHeight = naturalHeight
+                ? Math.min(naturalHeight, availableHeight)
+                : availableHeight;
+            topInViewport = Math.max(minTop, Math.round(anchorRect.top - gap - panelHeight));
+        }
 
         panel.style.left = `${left}px`;
-        panel.style.top = `${Math.max(edgeInset, topInViewport)}px`;
+        panel.style.top = `${topInViewport}px`;
+        this._constrainPanelHeight(
+            panel,
+            Math.min(naturalHeight || availableHeight, availableHeight),
+        );
     }
 
     _restorePanel() {

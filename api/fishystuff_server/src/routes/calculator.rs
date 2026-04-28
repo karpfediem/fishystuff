@@ -9301,7 +9301,7 @@ fn render_calculator_app(
             trigger_size: SearchableDropdownTriggerSize::Fill,
             trigger_width: None,
             trigger_min_height: None,
-            panel_width: None,
+            panel_width: Some("32rem"),
             panel_placement: SearchableDropdownPanelPlacement::Adjacent,
             results_layout: SearchableDropdownResultsLayout::List,
             root_id: "calculator-zone-picker",
@@ -11123,11 +11123,8 @@ fn render_target_fish_panel(
         );
     }
 
-    let session_distribution_html = if target_fish_summary.session_distribution.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\">\
+    let session_distribution_html = format!(
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\" data-show=\"($_calc.target_fish_pmf_chart.bars || []).length > 0\">\
                 <div class=\"mb-3 flex items-center justify-between gap-3\">\
                     <div>\
                         <div class=\"text-sm font-medium\">{}</div>\
@@ -11157,8 +11154,7 @@ fn render_target_fish_panel(
                 ),
                 "_calc.target_fish_pmf_chart",
             )
-        )
-    };
+    );
 
     format!(
         "<div id=\"calculator-target-fish-panel\" class=\"grid gap-4\">\
@@ -13035,7 +13031,7 @@ fn render_target_fish_select_control(
             trigger_size: SearchableDropdownTriggerSize::Fill,
             trigger_width: None,
             trigger_min_height: None,
-            panel_width: None,
+            panel_width: Some("34rem"),
             panel_placement: SearchableDropdownPanelPlacement::Adjacent,
             results_layout: SearchableDropdownResultsLayout::List,
             root_id,
@@ -14515,6 +14511,9 @@ mod tests {
         assert!(text.contains("placeholder=\"Search zones\""));
         assert!(text.contains("<fishy-searchable-dropdown"));
         assert!(text.contains("input-id=\"calculator-zone-value\""));
+        assert!(text.contains("id=\"calculator-zone-picker\""));
+        assert!(text
+            .contains("panel-mode=\"detached\" panel-min-width=\"panel\" panel-width=\"32rem\""));
         assert!(text.contains(
             "search-url=\"/api/v1/calculator/datastar/zone-search?lang=en&amp;locale=en-US\""
         ));
@@ -18332,6 +18331,10 @@ mod tests {
             .find("data-bind=\"targetFishAmount\"")
             .expect("target amount input should render");
         assert!(target_fish_picker < target_amount_input);
+        assert!(html
+            .contains("panel-mode=\"detached\" panel-min-width=\"panel\" panel-width=\"34rem\""));
+        assert!(html.contains("id=\"target-fish-pmf-chart\""));
+        assert!(html.contains("data-show=\"($_calc.target_fish_pmf_chart.bars || []).length > 0\""));
     }
 
     #[test]

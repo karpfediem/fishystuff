@@ -619,6 +619,54 @@ test("detached fixed panel uses viewport coordinates when the document is scroll
     assert.equal(panel.style.top, "160px");
 });
 
+test("detached fixed panel stays inside the viewport when neither side fully fits", async (t) => {
+    t.after(restoreGlobals);
+
+    const { FishySearchableDropdown } = await loadModule();
+
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    document.documentElement.clientWidth = 390;
+    document.documentElement.clientHeight = 844;
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement();
+    const panel = new FakeElement();
+    const searchInput = new FakeElement();
+    const results = new FakeElement();
+
+    dropdown.setAttribute("panel-mode", "detached");
+    trigger.setRect({ left: 12, top: 459, width: 366, height: 45 });
+    panel.setRect({ left: 0, top: 0, width: 366, height: 481 });
+    results.setRect({ left: 0, top: 97, width: 366, height: 384 });
+    dropdown.setQuery('[data-role="trigger"]', trigger);
+    dropdown.setQuery('[data-role="panel"]', panel);
+    panel.setQuery('[data-role="search-input"]', searchInput);
+    panel.setQuery('[data-role="results"]', results);
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(results);
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.open();
+
+    assert.equal(panel.style.position, "fixed");
+    assert.equal(panel.style.left, "12px");
+    assert.equal(panel.style.top, "12px");
+    assert.equal(panel.style.maxHeight, "439px");
+    assert.equal(panel.style.overflowY, "auto");
+    assert.equal(results.style.maxHeight, "342px");
+
+    dropdown.close();
+
+    assert.equal(panel.style.maxHeight, "");
+    assert.equal(panel.style.overflowY, "");
+    assert.equal(results.style.maxHeight, "");
+});
+
 test("searchable dropdown accepts valid ISO date custom options", async (t) => {
     t.after(restoreGlobals);
 
