@@ -54,7 +54,7 @@ mod tests {
     use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::error::AppResult;
     use crate::state::{AppState, RequestId};
-    use crate::store::{FishLang, Store};
+    use crate::store::{DataLang, Store};
 
     use super::zone_profile_v2;
 
@@ -75,7 +75,7 @@ mod tests {
 
         async fn list_fish(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<FishListResponse> {
             panic!("unused in test")
@@ -83,7 +83,7 @@ mod tests {
 
         async fn calculator_catalog(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<CalculatorCatalogResponse> {
             panic!("unused in test")

@@ -33,7 +33,7 @@ use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::state::{RequestId, SharedState};
 use crate::store::{
-    CalculatorZoneLootEntry, CalculatorZoneLootEvidence, CalculatorZoneLootOverlayMeta, FishLang,
+    CalculatorZoneLootEntry, CalculatorZoneLootEvidence, CalculatorZoneLootOverlayMeta, DataLang,
 };
 
 #[derive(Debug, Deserialize)]
@@ -456,7 +456,7 @@ struct CalculatorData {
     catalog: CalculatorCatalogResponse,
     cdn_base_url: String,
     lang: CalculatorLocale,
-    api_lang: FishLang,
+    api_lang: DataLang,
     zones: Vec<ZoneEntry>,
     zone_group_rates: HashMap<String, CalculatorZoneGroupRateEntry>,
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
@@ -477,13 +477,11 @@ enum CalculatorLocale {
 impl CalculatorLocale {
     fn from_query(locale: Option<&str>, _lang: Option<&str>) -> Self {
         let value = locale.unwrap_or_default().trim().to_ascii_lowercase();
-        if value.starts_with("ko") || value == "kr" || value == "korean" {
-            return Self::KoKr;
+        match value.split(['-', '_']).next().unwrap_or_default() {
+            "ko" => Self::KoKr,
+            "de" => Self::DeDe,
+            _ => Self::EnUs,
         }
-        if value.starts_with("de") || value == "german" || value == "deutsch" {
-            return Self::DeDe;
-        }
-        Self::EnUs
     }
 }
 
@@ -747,7 +745,7 @@ pub async fn get_calculator_catalog(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let catalog = with_timeout(
         state.config.request_timeout_secs,
         state.store.calculator_catalog(lang, query.r#ref),
@@ -773,7 +771,7 @@ pub async fn post_zone_loot_summary(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let summary = load_zone_loot_summary_data(
         &state,
@@ -796,7 +794,7 @@ pub async fn get_calculator_datastar_init(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
@@ -832,7 +830,7 @@ pub async fn post_calculator_datastar_init(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
@@ -859,7 +857,7 @@ pub async fn post_calculator_datastar_eval(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
@@ -957,7 +955,7 @@ pub async fn get_calculator_datastar_zone_search(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
@@ -996,7 +994,7 @@ pub async fn get_calculator_datastar_option_search(
             AppError::invalid_argument("missing or invalid calculator searchable option kind")
                 .with_request_id(request_id.0.clone())
         })?;
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let mut data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
@@ -1613,7 +1611,7 @@ fn coerce_value_bool(value: &mut Value) {
 
 async fn load_calculator_data(
     state: &SharedState,
-    api_lang: &FishLang,
+    api_lang: &DataLang,
     lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
@@ -1659,7 +1657,7 @@ async fn load_calculator_data(
 
 async fn load_calculator_runtime_data(
     state: &SharedState,
-    api_lang: FishLang,
+    api_lang: DataLang,
     lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
@@ -1685,7 +1683,7 @@ async fn load_calculator_runtime_data(
 
 async fn load_zone_loot_summary_data(
     state: &SharedState,
-    api_lang: FishLang,
+    api_lang: DataLang,
     lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
@@ -1725,8 +1723,12 @@ async fn load_zone_loot_summary_data(
     Ok(derive_zone_loot_summary_response(&signals, &data, &zone))
 }
 
-fn lang_param(lang: &FishLang) -> &str {
+fn lang_param(lang: &DataLang) -> &str {
     lang.code()
+}
+
+fn data_lang_from_query(lang: Option<&str>, request_id: &RequestId) -> AppResult<DataLang> {
+    DataLang::from_param(lang).map_err(|err| map_request_id(err, request_id))
 }
 
 fn locale_param(lang: CalculatorLocale) -> &'static str {
@@ -12529,7 +12531,7 @@ fn render_searchable_select_results(
 }
 
 fn render_calculator_option_search_url(
-    api_lang: &FishLang,
+    api_lang: &DataLang,
     lang: CalculatorLocale,
     kind: CalculatorSearchableOptionKind,
     results_id: &str,
@@ -12544,7 +12546,7 @@ fn render_calculator_option_search_url(
 }
 
 fn render_calculator_pet_search_url(
-    api_lang: &FishLang,
+    api_lang: &DataLang,
     lang: CalculatorLocale,
     results_id: &str,
     tier_key: &str,
@@ -12562,7 +12564,7 @@ fn render_calculator_pet_search_url(
 
 fn render_searchable_select_control(
     cdn_base_url: &str,
-    api_lang: &FishLang,
+    api_lang: &DataLang,
     lang: CalculatorLocale,
     root_id: &str,
     input_id: &str,
@@ -12638,7 +12640,7 @@ fn render_searchable_select_control(
 
 fn render_pet_select_control(
     cdn_base_url: &str,
-    api_lang: &FishLang,
+    api_lang: &DataLang,
     lang: CalculatorLocale,
     root_id: &str,
     input_id: &str,
@@ -13836,7 +13838,7 @@ fn render_pet_tier_header_control(
 
 fn render_pet_cards(
     cdn_base_url: &str,
-    api_lang: &FishLang,
+    api_lang: &DataLang,
     lang: CalculatorLocale,
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
@@ -14078,7 +14080,7 @@ mod tests {
     use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::error::AppResult;
     use crate::state::{AppState, RequestId};
-    use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang, Store};
+    use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, DataLang, Store};
 
     use super::{
         auto_target_fish_pmf_tail_count, base_price_for_species, buff_category_label,
@@ -14120,7 +14122,7 @@ mod tests {
 
         async fn list_fish(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<FishListResponse> {
             panic!("unused in test")
@@ -14128,7 +14130,7 @@ mod tests {
 
         async fn calculator_catalog(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<CalculatorCatalogResponse> {
             Ok(CalculatorCatalogResponse {
@@ -14855,7 +14857,7 @@ mod tests {
 
         let html = render_pet_cards(
             "",
-            &FishLang::En,
+            &DataLang::En,
             CalculatorLocale::EnUs,
             &catalog,
             &signals,
@@ -14927,7 +14929,7 @@ mod tests {
 
         let html = render_pet_cards(
             "",
-            &FishLang::En,
+            &DataLang::En,
             CalculatorLocale::EnUs,
             &catalog,
             &signals,
@@ -15133,7 +15135,7 @@ mod tests {
 
         let html = render_pet_cards(
             "",
-            &FishLang::En,
+            &DataLang::En,
             CalculatorLocale::EnUs,
             &catalog,
             &signals,
@@ -15206,7 +15208,7 @@ mod tests {
 
         let html = render_pet_cards(
             "",
-            &FishLang::En,
+            &DataLang::En,
             CalculatorLocale::EnUs,
             &catalog,
             &signals,
@@ -15222,13 +15224,13 @@ mod tests {
     async fn derived_signals_include_generic_stat_breakdown_payloads() {
         let state = test_state();
         let defaults = MockStore
-            .calculator_catalog(FishLang::En, None)
+            .calculator_catalog(DataLang::En, None)
             .await
             .unwrap()
             .defaults;
         let (_, _, derived) = load_calculator_runtime_data(
             &state,
-            FishLang::En,
+            DataLang::En,
             CalculatorLocale::EnUs,
             None,
             &RequestId("req-test".to_string()),
@@ -15793,7 +15795,7 @@ mod tests {
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: Vec::new(),
@@ -16970,7 +16972,7 @@ mod tests {
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: Vec::new(),
@@ -16997,7 +16999,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: Vec::new(),
@@ -17303,7 +17305,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: vec![ZoneEntry {
                 rgb_key: fishystuff_api::ids::RgbKey("240,74,74".to_string()),
                 name: Some("Velia Beach".to_string()),
@@ -17407,7 +17409,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: vec![ZoneEntry {
                 rgb_key: fishystuff_api::ids::RgbKey("overlay_group_zone".to_string()),
                 name: Some("Overlay Bay".to_string()),
@@ -17509,7 +17511,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -17571,7 +17573,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![
@@ -17616,7 +17618,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -17673,7 +17675,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "edania_longing_lake".to_string(),
@@ -17737,7 +17739,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "valencia_depth_5".to_string(),
@@ -17808,7 +17810,7 @@ mod tests {
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -18128,7 +18130,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -18253,7 +18255,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![
@@ -18295,7 +18297,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: Vec::new(),
@@ -18378,7 +18380,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -18436,7 +18438,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -18494,7 +18496,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
             zone_loot_entries: vec![CalculatorZoneLootEntry {
@@ -18551,7 +18553,7 @@ mod tests {
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "240,74,74".to_string(),
@@ -18622,7 +18624,7 @@ mod tests {
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "bonus_zone".to_string(),
@@ -18747,7 +18749,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "overlay_zone".to_string(),
@@ -18835,7 +18837,7 @@ mod tests {
             },
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::from([(
                 "prize_overlay_zone".to_string(),
@@ -18880,7 +18882,7 @@ mod tests {
             catalog: CalculatorCatalogResponse::default(),
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: CalculatorLocale::EnUs,
-            api_lang: FishLang::En,
+            api_lang: DataLang::En,
             zones: vec![ZoneEntry {
                 rgb_key: fishystuff_api::ids::RgbKey("prize_editor_zone".to_string()),
                 name: Some("Prize Coast".to_string()),

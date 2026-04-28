@@ -129,16 +129,17 @@
     const current = languageHelper()?.current?.() || {};
     const locale = String(current.locale || document.documentElement.lang || "en-US").trim();
     const localeKey = locale.toLowerCase();
+    const localeBase = localeKey.split(/[-_]/)[0];
     const apiLang = String(current.apiLang || "").trim().toLowerCase();
-    const resolvedApiLang = apiLang || localeKey.split(/[-_]/)[0] || "en";
-    if (localeKey.startsWith("ko")) {
+    const resolvedApiLang = apiLang || "en";
+    if (localeBase === "ko") {
       return {
         locale: "ko-KR",
         apiLang: resolvedApiLang,
         lang: resolvedApiLang,
       };
     }
-    if (localeKey.startsWith("de")) {
+    if (localeBase === "de") {
       return {
         locale: "de-DE",
         apiLang: resolvedApiLang,

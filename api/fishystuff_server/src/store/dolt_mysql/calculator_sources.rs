@@ -3,7 +3,7 @@ use mysql::Row;
 use std::collections::HashMap;
 
 use crate::error::AppResult;
-use crate::store::{validate_dolt_ref, FishLang};
+use crate::store::{validate_dolt_ref, DataLang};
 
 use super::calculator_effects::{
     normalized_effect_lines, parse_unique_calculator_effect_text, CalculatorItemEffectValues,
@@ -774,7 +774,7 @@ impl DoltMySqlStore {
 
     fn query_lightstone_source_rows(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<
         Vec<(
@@ -1310,7 +1310,7 @@ impl DoltMySqlStore {
 
     fn query_raw_enchant_skill_only_candidates(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorEnchantEffectEntryRow>> {
         let as_of = if let Some(ref_id) = ref_id {
@@ -1493,7 +1493,7 @@ impl DoltMySqlStore {
 
     fn query_consumable_source_backed_item_rows(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
@@ -1619,7 +1619,7 @@ impl DoltMySqlStore {
 
     fn query_source_owned_enchant_source_backed_item_rows(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
         let as_of = if let Some(ref_id) = ref_id {
@@ -1895,7 +1895,7 @@ impl DoltMySqlStore {
 
     pub(super) fn query_calculator_catalog_source_data(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogSourceData> {
         let (revision, resolved_ref) = self.resolve_calculator_catalog_ref(ref_id)?;

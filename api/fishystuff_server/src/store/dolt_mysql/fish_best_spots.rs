@@ -9,7 +9,7 @@ use fishystuff_api::models::fish::{
 use mysql::prelude::Queryable;
 
 use crate::error::AppResult;
-use crate::store::{validate_dolt_ref, FishLang};
+use crate::store::{validate_dolt_ref, DataLang};
 
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::{DoltMySqlStore, EventZoneSupportMode, SOURCE_KIND_RANKING};
@@ -200,7 +200,7 @@ impl DoltMySqlStore {
         })
     }
 
-    fn fish_best_spots_cache_key(lang: &FishLang, ref_id: Option<&str>, item_id: i32) -> String {
+    fn fish_best_spots_cache_key(lang: &DataLang, ref_id: Option<&str>, item_id: i32) -> String {
         let lang = lang.code();
         match ref_id {
             Some(ref_id) => format!("{lang}:{ref_id}:{item_id}"),
@@ -210,10 +210,11 @@ impl DoltMySqlStore {
 
     pub(super) fn query_fish_best_spots_cached(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<&str>,
         item_id: i32,
     ) -> AppResult<FishBestSpotsResponse> {
+        self.validate_data_lang_available(&lang, ref_id)?;
         let cache_key = Self::fish_best_spots_cache_key(&lang, ref_id, item_id);
         loop {
             if let Ok(cache) = self.fish_best_spots_cache.lock() {
@@ -582,10 +583,11 @@ impl DoltMySqlStore {
 
     pub(super) fn query_fish_best_spots(
         &self,
-        _lang: FishLang,
+        lang: DataLang,
         ref_id: Option<&str>,
         item_id: i32,
     ) -> AppResult<FishBestSpotsResponse> {
+        self.validate_data_lang_available(&lang, ref_id)?;
         let spots = self
             .query_fish_best_spots_index_cached(ref_id)?
             .get(&item_id)

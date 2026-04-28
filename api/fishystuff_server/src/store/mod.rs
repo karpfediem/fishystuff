@@ -15,7 +15,7 @@ use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZoneEntry;
 
 use crate::config::ZoneStatusConfig;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
 pub mod dolt_mysql;
 pub mod queries;
@@ -61,28 +61,31 @@ pub struct CalculatorZoneLootEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FishLang(Cow<'static, str>);
+pub struct DataLang(Cow<'static, str>);
 
-impl FishLang {
+impl DataLang {
     #[allow(non_upper_case_globals)]
     pub const En: Self = Self(Cow::Borrowed("en"));
-    #[allow(dead_code, non_upper_case_globals)]
-    pub const Ko: Self = Self(Cow::Borrowed("ko"));
 
-    pub fn from_param(lang: Option<&str>) -> Self {
-        Self::from_code(lang.unwrap_or("en")).unwrap_or(Self::En)
+    pub fn from_param(lang: Option<&str>) -> AppResult<Self> {
+        match lang {
+            Some(value) => Self::from_code(value).ok_or_else(|| {
+                AppError::invalid_argument(format!("invalid data language code: {value}"))
+            }),
+            None => Ok(Self::En),
+        }
     }
 
     pub fn from_code(value: &str) -> Option<Self> {
-        let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
-        if normalized.is_empty()
-            || !normalized
+        let code = value.trim();
+        if code.is_empty()
+            || !code
                 .chars()
                 .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
         {
             return None;
         }
-        Some(Self(Cow::Owned(normalized)))
+        Some(Self(Cow::Owned(code.to_string())))
     }
 
     pub fn code(&self) -> &str {
@@ -103,7 +106,7 @@ pub trait Store: Send + Sync {
     ) -> AppResult<RegionGroupsResponse>;
     async fn list_fish(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<String>,
     ) -> AppResult<FishListResponse>;
     async fn community_fish_zone_support(
@@ -114,7 +117,7 @@ pub trait Store: Send + Sync {
     }
     async fn fish_best_spots(
         &self,
-        _lang: FishLang,
+        _lang: DataLang,
         _ref_id: Option<String>,
         item_id: i32,
     ) -> AppResult<FishBestSpotsResponse> {
@@ -125,12 +128,12 @@ pub trait Store: Send + Sync {
     }
     async fn calculator_catalog(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<String>,
     ) -> AppResult<CalculatorCatalogResponse>;
     async fn calculator_zone_loot(
         &self,
-        _lang: FishLang,
+        _lang: DataLang,
         _ref_id: Option<String>,
         _zone_rgb_key: String,
     ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
@@ -171,4 +174,17 @@ pub fn validate_dolt_ref(value: &str) -> AppResult<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DataLang;
+
+    #[test]
+    fn data_lang_does_not_normalize_locale_tags() {
+        assert_eq!(DataLang::from_code("ko").unwrap().code(), "ko");
+        assert!(DataLang::from_code("KO").is_none());
+        assert!(DataLang::from_code("ko-KR").is_none());
+        assert!(DataLang::from_param(Some("ko-KR")).is_err());
+    }
 }

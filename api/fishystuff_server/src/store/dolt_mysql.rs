@@ -54,7 +54,7 @@ use tracing::instrument;
 use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
-use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, FishLang, Store};
+use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, DataLang, Store};
 use calculator_sources::CalculatorCatalogSourceData;
 use catalog::{
     encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_is_dried,
@@ -743,11 +743,36 @@ impl DoltMySqlStore {
         Some(revision)
     }
 
+    pub(super) fn validate_data_lang_available(
+        &self,
+        lang: &DataLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<()> {
+        let table_name = format!("languagedata_{}", lang.code());
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let query = format!("SELECT 1 FROM `{table_name}`{as_of} LIMIT 1");
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        match conn.query_first::<u8, _>(query) {
+            Ok(_) => Ok(()),
+            Err(err) if is_missing_table(&err, &table_name) => Err(AppError::invalid_argument(
+                format!("unsupported data language code: {}", lang.code()),
+            )),
+            Err(err) => Err(db_unavailable(err)),
+        }
+    }
+
     fn query_fish_names(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<HashMap<i32, String>> {
+        self.validate_data_lang_available(lang, ref_id)?;
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -785,9 +810,10 @@ impl DoltMySqlStore {
 
     fn query_fish_catalog(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<FishCatalogRow>> {
+        self.validate_data_lang_available(lang, ref_id)?;
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -887,7 +913,7 @@ impl DoltMySqlStore {
         Ok(out.into_values().collect())
     }
 
-    fn fish_list_cache_key(lang: &FishLang, ref_id: Option<&str>) -> String {
+    fn fish_list_cache_key(lang: &DataLang, ref_id: Option<&str>) -> String {
         let lang = lang.code();
         match ref_id {
             Some(ref_id) => format!("{lang}:{ref_id}"),
@@ -897,9 +923,10 @@ impl DoltMySqlStore {
 
     fn query_fish_list_cached(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<FishListResponse> {
+        self.validate_data_lang_available(&lang, ref_id)?;
         let cache_key = Self::fish_list_cache_key(&lang, ref_id);
         loop {
             if let Ok(cache) = self.fish_list_cache.lock() {
@@ -2043,7 +2070,7 @@ impl Store for DoltMySqlStore {
     #[instrument(name = "store.list_fish", skip_all)]
     async fn list_fish(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<String>,
     ) -> AppResult<FishListResponse> {
         let this = self.clone();
@@ -2055,7 +2082,7 @@ impl Store for DoltMySqlStore {
     #[instrument(name = "store.fish_best_spots", skip_all)]
     async fn fish_best_spots(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<String>,
         item_id: i32,
     ) -> AppResult<FishBestSpotsResponse> {
@@ -2083,7 +2110,7 @@ impl Store for DoltMySqlStore {
     #[instrument(name = "store.calculator_catalog", skip_all)]
     async fn calculator_catalog(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<String>,
     ) -> AppResult<CalculatorCatalogResponse> {
         let this = self.clone();
@@ -2095,7 +2122,7 @@ impl Store for DoltMySqlStore {
     #[instrument(name = "store.calculator_zone_loot", skip_all)]
     async fn calculator_zone_loot(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<String>,
         zone_rgb_key: String,
     ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
@@ -2148,7 +2175,7 @@ impl Store for DoltMySqlStore {
             };
             params.validate()?;
 
-            let lang = FishLang::from_param(request.lang.as_deref());
+            let lang = DataLang::from_param(request.lang.as_deref())?;
             let fish_names = this.query_fish_names(&lang, request.ref_id.as_deref())?;
             let fish_table = this.query_fish_identities(request.ref_id.as_deref())?;
             let zones_vec = this.query_zones(request.ref_id.as_deref())?;

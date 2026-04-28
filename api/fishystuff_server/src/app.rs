@@ -147,7 +147,7 @@ mod tests {
 
     use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
     use crate::state::AppState;
-    use crate::store::{FishLang, Store};
+    use crate::store::{DataLang, Store};
 
     use super::build_router;
 
@@ -169,14 +169,14 @@ mod tests {
         }
         async fn list_fish(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<FishListResponse> {
             Ok(FishListResponse::default())
         }
         async fn calculator_catalog(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<CalculatorCatalogResponse> {
             Ok(CalculatorCatalogResponse::default())
@@ -236,14 +236,14 @@ mod tests {
         }
         async fn list_fish(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<FishListResponse> {
             Ok(FishListResponse::default())
         }
         async fn calculator_catalog(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<CalculatorCatalogResponse> {
             Ok(CalculatorCatalogResponse::default())

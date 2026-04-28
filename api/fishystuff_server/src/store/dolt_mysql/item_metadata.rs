@@ -2,7 +2,7 @@ use mysql::prelude::Queryable;
 use std::collections::{HashMap, HashSet};
 
 use crate::error::AppResult;
-use crate::store::{validate_dolt_ref, FishLang};
+use crate::store::{validate_dolt_ref, DataLang};
 
 use super::catalog::item_grade_from_db;
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
@@ -78,7 +78,7 @@ fn quote_sql_string_list(values: &[String]) -> String {
 impl DoltMySqlStore {
     pub(super) fn query_item_table_metadata(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
         item_ids: &[i32],
     ) -> AppResult<HashMap<i32, ItemSourceMetadata>> {
@@ -195,7 +195,7 @@ impl DoltMySqlStore {
 
     pub(super) fn query_item_table_metadata_by_names(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
         exact_names: &[String],
         normalized_names: &[String],

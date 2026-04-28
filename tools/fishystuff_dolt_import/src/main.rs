@@ -676,7 +676,7 @@ fn infer_languagedata_lang(path: &Path) -> std::result::Result<String, String> {
 }
 
 fn normalize_languagedata_lang(value: &str) -> std::result::Result<String, String> {
-    let lang = value.trim().to_ascii_lowercase().replace('-', "_");
+    let lang = value.trim().to_string();
     if lang.is_empty() {
         return Err("language code cannot be empty".to_string());
     }
@@ -971,7 +971,9 @@ fn run_import(command: ImportCommand) -> Result<()> {
         run_dolt_table_import(&dolt_repo, "patches", &outputs.patches_csv)?;
     }
     for (lang, output_path) in &outputs.languagedata_csvs {
-        run_dolt_table_import(&dolt_repo, &languagedata_table_name(lang), output_path)?;
+        let table_name = languagedata_table_name(lang);
+        ensure_languagedata_table(&dolt_repo, &table_name)?;
+        run_dolt_table_import(&dolt_repo, &table_name, output_path)?;
     }
     ensure_calculator_lookup_indexes(&dolt_repo)?;
     refresh_calculator_item_name_tables(&dolt_repo)?;
@@ -1701,6 +1703,19 @@ fn ensure_community_zone_fish_support_table(repo_path: &Path) -> Result<()> {
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
         "ensure community_zone_fish_support table",
     )
+}
+
+fn ensure_languagedata_table(repo_path: &Path, table_name: &str) -> Result<()> {
+    let query = format!(
+        "CREATE TABLE IF NOT EXISTS {} (\
+            `id` BIGINT,\
+            `unk` VARCHAR(64),\
+            `text` LONGTEXT,\
+            `format` VARCHAR(8)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        sql_ident(table_name)
+    );
+    run_dolt_sql_query_or_remote(repo_path, &query, &format!("ensure {table_name} table"))
 }
 
 fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
@@ -4223,6 +4238,14 @@ mod tests {
         let parsed = parse_languagedata_csv_arg("/tmp/languagedata_fr.csv").unwrap();
         assert_eq!(parsed.lang, "fr");
         assert_eq!(parsed.path, PathBuf::from("/tmp/languagedata_fr.csv"));
+    }
+
+    #[test]
+    fn parse_languagedata_csv_arg_rejects_locale_aliases() {
+        let err = parse_languagedata_csv_arg("pt-BR=/tmp/languagedata_pt_br.csv").unwrap_err();
+        assert!(err.contains("unsupported language code"));
+        let err = parse_languagedata_csv_arg("DE=/tmp/languagedata_de.csv").unwrap_err();
+        assert!(err.contains("unsupported language code"));
     }
 
     #[test]

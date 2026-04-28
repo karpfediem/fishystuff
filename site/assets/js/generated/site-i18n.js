@@ -20,9 +20,7 @@
       "ko-KR"
     ],
     "apiLanguages": [
-      "en",
-      "de",
-      "ko"
+      "en"
     ]
   },
   "catalogs": {

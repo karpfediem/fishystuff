@@ -10,7 +10,7 @@ use fishystuff_api::models::fish::{
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::state::{RequestId, SharedState};
-use crate::store::FishLang;
+use crate::store::DataLang;
 
 #[derive(Debug, Deserialize)]
 pub struct FishQuery {
@@ -32,7 +32,7 @@ pub async fn list_fish(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let response = load_fish_response(&state, lang, query.r#ref, &request_id).await?;
 
     let mut response_headers = HeaderMap::new();
@@ -50,7 +50,7 @@ pub async fn fish_best_spots(
         AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
     })?;
 
-    let lang = FishLang::from_param(query.lang.as_deref());
+    let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let response =
         load_fish_best_spots_response(&state, lang, query.r#ref, item_id, &request_id).await?;
 
@@ -78,7 +78,7 @@ pub async fn community_fish_zone_support(
 
 async fn load_fish_response(
     state: &SharedState,
-    lang: FishLang,
+    lang: DataLang,
     ref_id: Option<String>,
     request_id: &RequestId,
 ) -> AppResult<FishListResponse> {
@@ -92,7 +92,7 @@ async fn load_fish_response(
 
 async fn load_fish_best_spots_response(
     state: &SharedState,
-    lang: FishLang,
+    lang: DataLang,
     ref_id: Option<String>,
     item_id: i32,
     request_id: &RequestId,
@@ -116,6 +116,10 @@ async fn load_community_fish_zone_support_response(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))
+}
+
+fn data_lang_from_query(lang: Option<&str>, request_id: &RequestId) -> AppResult<DataLang> {
+    DataLang::from_param(lang).map_err(|err| map_request_id(err, request_id))
 }
 
 #[cfg(test)]
@@ -162,7 +166,7 @@ mod tests {
 
         async fn list_fish(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<FishListResponse> {
             Ok(FishListResponse {
@@ -197,7 +201,7 @@ mod tests {
 
         async fn fish_best_spots(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
             item_id: i32,
         ) -> AppResult<FishBestSpotsResponse> {
@@ -242,7 +246,7 @@ mod tests {
 
         async fn calculator_catalog(
             &self,
-            _lang: FishLang,
+            _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<CalculatorCatalogResponse> {
             panic!("unused in test")

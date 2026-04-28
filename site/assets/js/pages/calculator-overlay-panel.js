@@ -38,10 +38,11 @@
       || globalThis.document?.documentElement?.lang
       || "en-US",
     ).toLowerCase();
-    if (locale.startsWith("ko")) {
+    const localeBase = locale.split(/[-_]/)[0];
+    if (localeBase === "ko") {
       return "ko-KR";
     }
-    if (locale.startsWith("de")) {
+    if (localeBase === "de") {
       return "de-DE";
     }
     return "en-US";

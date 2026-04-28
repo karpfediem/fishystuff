@@ -7,7 +7,7 @@ use fishystuff_api::models::calculator::{
 use mysql::{prelude::Queryable, PooledConn};
 
 use crate::error::AppResult;
-use crate::store::{validate_dolt_ref, FishLang};
+use crate::store::{validate_dolt_ref, DataLang};
 
 use super::util::{db_unavailable, is_missing_table};
 use super::DoltMySqlStore;
@@ -87,7 +87,7 @@ struct BuiltPetEntry {
     alias_keys: Vec<String>,
 }
 
-fn localized_label(lang: &FishLang, en: impl Into<String>, ko: impl Into<String>) -> String {
+fn localized_label(lang: &DataLang, en: impl Into<String>, ko: impl Into<String>) -> String {
     if lang.is_korean() {
         ko.into()
     } else {
@@ -95,7 +95,7 @@ fn localized_label(lang: &FishLang, en: impl Into<String>, ko: impl Into<String>
     }
 }
 
-fn build_calculator_pet_catalog(lang: &FishLang) -> CalculatorPetCatalog {
+fn build_calculator_pet_catalog(lang: &DataLang) -> CalculatorPetCatalog {
     let tiers = (1..=5)
         .map(|tier| CalculatorOptionEntry {
             key: tier.to_string(),
@@ -289,7 +289,7 @@ fn pet_option_kind(effects: &PetOptionEffects) -> Option<PetOptionKind> {
 }
 
 fn localized_pet_option_label(
-    lang: &FishLang,
+    lang: &DataLang,
     skill_no: &str,
     english_label: Option<&str>,
     korean_label: Option<&str>,
@@ -688,7 +688,7 @@ fn dedupe_strings_preserve_order(values: &mut Vec<String>) {
 }
 
 fn build_tier_entry(
-    lang: &FishLang,
+    lang: &DataLang,
     tier_source: u8,
     representative: &RawPetRow,
     candidates: &[&RawPetRow],
@@ -830,7 +830,7 @@ fn dedupe_built_pet_entries(entries: Vec<BuiltPetEntry>) -> Vec<BuiltPetEntry> {
 }
 
 fn calculator_pet_option_records(
-    lang: &FishLang,
+    lang: &DataLang,
     skill_ids: &HashSet<String>,
     base_talent_skill_ids: &HashSet<String>,
     learned_skill_ids: &HashSet<String>,
@@ -942,7 +942,7 @@ fn pet_special_gathering_chance(meta: &PetSpecialSkillMeta) -> Option<f32> {
     }
 }
 
-fn pet_special_option_label(lang: &FishLang, meta: &PetSpecialSkillMeta) -> String {
+fn pet_special_option_label(lang: &DataLang, meta: &PetSpecialSkillMeta) -> String {
     let special = |en: String, ko: String| localized_label(lang, en, ko);
     match meta.skill_type.trim() {
         "2" => special(
@@ -1021,7 +1021,7 @@ fn pet_special_option_label(lang: &FishLang, meta: &PetSpecialSkillMeta) -> Stri
 }
 
 fn calculator_pet_special_option_records(
-    lang: &FishLang,
+    lang: &DataLang,
     meta_by_skill_no: &HashMap<String, PetSpecialSkillMeta>,
 ) -> HashMap<String, CalculatorPetOptionRecord> {
     let mut records = HashMap::new();
@@ -1051,7 +1051,7 @@ fn calculator_pet_special_option_records(
 impl DoltMySqlStore {
     pub(super) fn query_calculator_pet_catalog(
         &self,
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorPetCatalog> {
         let mut catalog = build_calculator_pet_catalog(lang);
@@ -1279,7 +1279,7 @@ mod tests {
         CalculatorPetEntry, CalculatorPetOptionEntry, CalculatorPetTierEntry,
     };
 
-    use crate::store::FishLang;
+    use crate::store::DataLang;
 
     use super::{
         build_pet_variant_group_keys, build_tier_entry, calculator_pet_option_records,
@@ -1288,6 +1288,10 @@ mod tests {
         pet_acquire_skill_rate_select, pet_image_url, pet_option_kind, pet_special_option_label,
         BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind, PetSpecialSkillMeta, RawPetRow,
     };
+
+    fn ko_data_lang() -> DataLang {
+        DataLang::from_code("ko").expect("valid test data language")
+    }
 
     #[test]
     fn parse_acquire_rate_normalizes_source_weight_to_chance() {
@@ -1330,7 +1334,7 @@ mod tests {
     fn localized_pet_option_label_prefers_requested_language() {
         assert_eq!(
             localized_pet_option_label(
-                &FishLang::En,
+                &DataLang::En,
                 "49022",
                 Some("Fishing EXP +5%"),
                 Some("낚시 경험치 획득량 증가 +5%"),
@@ -1340,7 +1344,7 @@ mod tests {
         );
         assert_eq!(
             localized_pet_option_label(
-                &FishLang::Ko,
+                &ko_data_lang(),
                 "49085",
                 Some("Durability Reduction Resistance +5%"),
                 Some("내구도 감소 저항 +5%"),
@@ -1368,7 +1372,7 @@ mod tests {
         ]);
 
         let records = calculator_pet_option_records(
-            &FishLang::En,
+            &DataLang::En,
             &skill_ids,
             &base_talent_skill_ids,
             &HashSet::new(),
@@ -1393,7 +1397,7 @@ mod tests {
             HashMap::from([("skill:combat_exp".to_string(), "Combat EXP +5%".to_string())]);
 
         let records = calculator_pet_option_records(
-            &FishLang::En,
+            &DataLang::En,
             &skill_ids,
             &HashSet::new(),
             &learned_skill_ids,
@@ -1446,7 +1450,7 @@ mod tests {
         let candidates = vec![&representative, &candidate_with_talent];
 
         let tier = build_tier_entry(
-            &FishLang::En,
+            &DataLang::En,
             4,
             &representative,
             &candidates,
@@ -1523,7 +1527,7 @@ mod tests {
         let candidates = vec![&representative];
 
         let tier = build_tier_entry(
-            &FishLang::En,
+            &DataLang::En,
             0,
             &representative,
             &candidates,
@@ -1556,12 +1560,12 @@ mod tests {
         };
 
         assert_eq!(
-            pet_special_option_label(&FishLang::En, &meta),
+            pet_special_option_label(&DataLang::En, &meta),
             "Special: Auto-Fishing Time Reduction -30%"
         );
 
         let records = calculator_pet_special_option_records(
-            &FishLang::En,
+            &DataLang::En,
             &HashMap::from([("37".to_string(), meta)]),
         );
         let record = records.get("pet-special:37").expect("special option");
@@ -1578,7 +1582,7 @@ mod tests {
         };
 
         assert_eq!(
-            pet_special_option_label(&FishLang::En, &meta),
+            pet_special_option_label(&DataLang::En, &meta),
             "Special: Resource Detection (34m / 10s)"
         );
     }

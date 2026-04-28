@@ -11,7 +11,7 @@ use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV
 
 use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
-use crate::store::FishLang;
+use crate::store::DataLang;
 
 use super::{DoltMySqlStore, QueryParams};
 use response::build_zone_profile_v2_response;
@@ -50,7 +50,7 @@ impl DoltMySqlStore {
         };
         params.validate()?;
 
-        let lang = FishLang::from_param(request.lang.as_deref());
+        let lang = DataLang::from_param(request.lang.as_deref())?;
         let fish_names = self.query_fish_names(&lang, request.ref_id.as_deref())?;
         let fish_table = self.query_fish_identities(request.ref_id.as_deref())?;
         let zones_vec = self.query_zones(request.ref_id.as_deref())?;

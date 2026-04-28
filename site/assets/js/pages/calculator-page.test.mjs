@@ -208,7 +208,7 @@ function createContext(localStorageInitial = {}, options = {}) {
         return {
           contentLang: options.contentLang || options.lang || "en-US",
           locale,
-          apiLang: options.apiLang || String(locale).toLowerCase().split(/[-_]/)[0] || "en",
+          apiLang: options.apiLang || "en",
         };
       },
       apply() {},
@@ -1413,25 +1413,18 @@ test("calculator layout preset title icon follows the first pinned section", () 
 
 test("calculator API URLs keep locale and apiLang separate", () => {
   const korean = createContext({}, { locale: "ko-KR", lang: "en-US" });
-  assert.equal(korean.window.__fishystuffCalculator.lang, "ko");
+  assert.equal(korean.window.__fishystuffCalculator.lang, "en");
   assert.equal(korean.window.__fishystuffCalculator.locale, "ko-KR");
-  assert.equal(korean.window.__fishystuffCalculator.apiLang, "ko");
-  assert.match(korean.window.__fishystuffCalculator.initUrl(), /\?lang=ko&locale=ko-KR$/);
-  assert.match(korean.window.__fishystuffCalculator.evalUrl(), /\?lang=ko&locale=ko-KR$/);
+  assert.equal(korean.window.__fishystuffCalculator.apiLang, "en");
+  assert.match(korean.window.__fishystuffCalculator.initUrl(), /\?lang=en&locale=ko-KR$/);
+  assert.match(korean.window.__fishystuffCalculator.evalUrl(), /\?lang=en&locale=ko-KR$/);
 
   const german = createContext({}, { locale: "de-DE", lang: "en-US" });
-  assert.equal(german.window.__fishystuffCalculator.lang, "de");
+  assert.equal(german.window.__fishystuffCalculator.lang, "en");
   assert.equal(german.window.__fishystuffCalculator.locale, "de-DE");
-  assert.equal(german.window.__fishystuffCalculator.apiLang, "de");
-  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=de&locale=de-DE$/);
-  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=de&locale=de-DE$/);
-
-  const mixed = createContext({}, { locale: "de-DE", apiLang: "ko", lang: "en-US" });
-  assert.equal(mixed.window.__fishystuffCalculator.lang, "ko");
-  assert.equal(mixed.window.__fishystuffCalculator.locale, "de-DE");
-  assert.equal(mixed.window.__fishystuffCalculator.apiLang, "ko");
-  assert.match(mixed.window.__fishystuffCalculator.initUrl(), /\?lang=ko&locale=de-DE$/);
-  assert.match(mixed.window.__fishystuffCalculator.evalUrl(), /\?lang=ko&locale=de-DE$/);
+  assert.equal(german.window.__fishystuffCalculator.apiLang, "en");
+  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=en&locale=de-DE$/);
+  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=en&locale=de-DE$/);
 });
 
 test("calculator eval filter ignores internal signal branches", () => {

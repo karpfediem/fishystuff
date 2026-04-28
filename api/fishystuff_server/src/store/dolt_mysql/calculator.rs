@@ -1,7 +1,7 @@
 use fishystuff_api::models::calculator::CalculatorCatalogResponse;
 
 use crate::error::AppResult;
-use crate::store::FishLang;
+use crate::store::DataLang;
 
 use super::calculator_defaults::{
     build_calculator_default_signals, build_calculator_fishing_levels,
@@ -11,7 +11,7 @@ use super::calculator_defaults::{
 use super::DoltMySqlStore;
 
 impl DoltMySqlStore {
-    fn calculator_catalog_cache_key(lang: &FishLang, revision: &str) -> String {
+    fn calculator_catalog_cache_key(lang: &DataLang, revision: &str) -> String {
         format!("{}:{revision}", lang.code())
     }
 
@@ -29,10 +29,11 @@ impl DoltMySqlStore {
 
     pub(super) fn query_calculator_catalog(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogResponse> {
         let (revision, resolved_ref) = self.resolve_calculator_catalog_ref(ref_id)?;
+        self.validate_data_lang_available(&lang, Some(resolved_ref.as_str()))?;
         let cache_key = Self::calculator_catalog_cache_key(&lang, &revision);
         loop {
             if let Ok(cache) = self.calculator_catalog_cache.lock() {

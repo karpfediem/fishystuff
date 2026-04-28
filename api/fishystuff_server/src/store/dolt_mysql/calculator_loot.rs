@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::error::{AppError, AppResult};
 use crate::store::{
     queries, validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence,
-    CalculatorZoneLootOverlayMeta, FishLang,
+    CalculatorZoneLootOverlayMeta, DataLang,
 };
 
 use super::catalog::{item_grade_from_db, parse_positive_i64};
@@ -312,7 +312,7 @@ fn apply_community_guess_weights(
 
 impl DoltMySqlStore {
     fn calculator_zone_loot_cache_key(
-        lang: &FishLang,
+        lang: &DataLang,
         ref_id: Option<&str>,
         zone_rgb_key: &str,
     ) -> String {
@@ -325,10 +325,11 @@ impl DoltMySqlStore {
 
     pub(super) fn query_calculator_zone_loot_cached(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<&str>,
         zone_rgb_key: &str,
     ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
+        self.validate_data_lang_available(&lang, ref_id)?;
         let cache_key = Self::calculator_zone_loot_cache_key(&lang, ref_id, zone_rgb_key);
         loop {
             if let Ok(cache) = self.calculator_zone_loot_cache.lock() {
@@ -416,10 +417,11 @@ impl DoltMySqlStore {
 
     fn query_calculator_zone_loot(
         &self,
-        lang: FishLang,
+        lang: DataLang,
         ref_id: Option<&str>,
         zone_rgb_key: &str,
     ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
+        self.validate_data_lang_available(&lang, ref_id)?;
         let zone_rgb = zone_rgb_key
             .parse::<RgbKey>()
             .map_err(AppError::invalid_argument)?

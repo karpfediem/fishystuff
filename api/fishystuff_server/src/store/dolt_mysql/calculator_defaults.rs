@@ -6,7 +6,7 @@ use fishystuff_api::models::calculator::{
     CalculatorSessionPresetEntry, CalculatorSignals,
 };
 
-use crate::store::FishLang;
+use crate::store::DataLang;
 
 pub(super) fn lifeskill_level_drr_from_index(index: i32) -> f32 {
     (0.1 + 0.005 * index as f32).min(0.6)
@@ -115,7 +115,7 @@ fn build_calculator_default_lahtron_pet(
     pet
 }
 
-fn localized_label(lang: &FishLang, en: impl Into<String>, ko: impl Into<String>) -> String {
+fn localized_label(lang: &DataLang, en: impl Into<String>, ko: impl Into<String>) -> String {
     if lang.is_korean() {
         ko.into()
     } else {
@@ -171,7 +171,7 @@ pub(super) fn build_calculator_default_signals(pets: &CalculatorPetCatalog) -> C
     }
 }
 
-pub(super) fn build_calculator_fishing_levels(lang: &FishLang) -> Vec<CalculatorOptionEntry> {
+pub(super) fn build_calculator_fishing_levels(lang: &DataLang) -> Vec<CalculatorOptionEntry> {
     (0..=5)
         .map(|level| CalculatorOptionEntry {
             key: level.to_string(),
@@ -184,7 +184,7 @@ pub(super) fn build_calculator_fishing_levels(lang: &FishLang) -> Vec<Calculator
         .collect()
 }
 
-pub(super) fn build_calculator_session_units(lang: &FishLang) -> Vec<CalculatorOptionEntry> {
+pub(super) fn build_calculator_session_units(lang: &DataLang) -> Vec<CalculatorOptionEntry> {
     [
         ("minutes", "Minutes", "분"),
         ("hours", "Hours", "시간"),
@@ -199,7 +199,7 @@ pub(super) fn build_calculator_session_units(lang: &FishLang) -> Vec<CalculatorO
     .collect()
 }
 
-pub(super) fn build_calculator_trade_levels(lang: &FishLang) -> Vec<CalculatorOptionEntry> {
+pub(super) fn build_calculator_trade_levels(lang: &DataLang) -> Vec<CalculatorOptionEntry> {
     const TIERS: [(&str, &str, i32); 7] = [
         ("Beginner", "초급", 10),
         ("Apprentice", "견습", 10),
@@ -229,7 +229,7 @@ pub(super) fn build_calculator_trade_levels(lang: &FishLang) -> Vec<CalculatorOp
 }
 
 pub(super) fn build_calculator_session_presets(
-    lang: &FishLang,
+    lang: &DataLang,
 ) -> Vec<CalculatorSessionPresetEntry> {
     [
         ("1 hour", "1시간", 1.0, "hours"),
