@@ -87,8 +87,8 @@ function createContext(options = {}) {
       },
       catalogs: {
         "en-US": {
-          "language.option.api.en": "English names",
-          "language.option.api.kr": "Korean names",
+          "language.option.api.en": "English",
+          "language.option.api.kr": "Korean",
         },
       },
       pageManifest: {},

@@ -32,11 +32,11 @@ language.option.content.de-DE = Deutsch
 language.option.locale.en-US = English (US)
 language.option.locale.de-DE = Deutsch
 language.option.locale.ko-KR = Korean
-language.option.api.en = English names
-language.option.api.de = German names
-language.option.api.fr = French names
-language.option.api.kr = Korean names
-language.option.api.sp = Spanish names
+language.option.api.en = English
+language.option.api.de = German
+language.option.api.fr = French
+language.option.api.kr = Korean
+language.option.api.sp = Spanish
 
 translation_notice.title = Translation help wanted
 translation_notice.body = This page has not been translated yet. You are currently viewing the English source content.
