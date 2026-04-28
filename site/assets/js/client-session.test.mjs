@@ -333,7 +333,7 @@ test("client session can clear scoped local app data without touching unrelated 
                 id: "preset_a",
                 name: "Alpha",
                 payload: {
-                  pinned_layout: [],
+                  custom_layout: [],
                 },
               },
             ],
@@ -488,7 +488,7 @@ test("client session can clear all local user state and start a fresh browser pr
                 id: "preset_a",
                 name: "Alpha",
                 payload: {
-                  pinned_layout: [],
+                  custom_layout: [],
                 },
               },
             ],

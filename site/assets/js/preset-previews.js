@@ -5,7 +5,7 @@
   const CALCULATOR_PRESET_COLLECTION_KEY = "calculator-presets";
   const MAP_PRESET_COLLECTION_KEY = "map-presets";
 
-  const CALCULATOR_TOP_LEVEL_TABS = Object.freeze([
+  const CALCULATOR_SECTION_TABS = Object.freeze([
     "mode",
     "overview",
     "zone",
@@ -38,19 +38,18 @@
     overlay: "edit-4-fill",
     debug: "bug-fill",
   });
-  const CALCULATOR_DEFAULT_PINNED_SECTIONS = Object.freeze([
+  const CALCULATOR_DEFAULT_CUSTOM_SECTIONS = Object.freeze([
     "overview",
     "zone",
     "session",
     "bite_time",
     "loot",
   ]);
-  const CALCULATOR_DEFAULT_PINNED_LAYOUT = Object.freeze([
+  const CALCULATOR_DEFAULT_CUSTOM_LAYOUT = Object.freeze([
     Object.freeze([Object.freeze(["overview"])]),
     Object.freeze([Object.freeze(["zone"]), Object.freeze(["session"])]),
     Object.freeze([Object.freeze(["bite_time"]), Object.freeze(["loot"])]),
   ]);
-  const CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX = Object.freeze([0, 0]);
   const DEFAULT_CALCULATOR_PRESET_PREVIEW_PAYLOAD = Object.freeze({
     active: false,
     fishingMode: "rod",
@@ -161,7 +160,7 @@
     return { id, name, payload: cloneJson(payload) };
   }
 
-  function normalizeUniqueSectionIds(sectionIds, availableSectionIds = CALCULATOR_TOP_LEVEL_TABS) {
+  function normalizeUniqueSectionIds(sectionIds, availableSectionIds = CALCULATOR_SECTION_TABS) {
     const available = new Set((Array.isArray(availableSectionIds) ? availableSectionIds : [])
       .map(trimString)
       .filter(Boolean));
@@ -178,7 +177,7 @@
     return normalized;
   }
 
-  function normalizePinnedLayout(layout, fallback = CALCULATOR_DEFAULT_PINNED_LAYOUT) {
+  function normalizeCustomLayout(layout, fallback = CALCULATOR_DEFAULT_CUSTOM_LAYOUT) {
     const fallbackRows = Array.isArray(fallback?.[0]?.[0])
       ? fallback
       : normalizeUniqueSectionIds(fallback).map((sectionId) => [[sectionId]]);
@@ -197,7 +196,7 @@
         const normalizedColumn = [];
         for (const entry of column) {
           const sectionId = trimString(entry);
-          if (!sectionId || seen.has(sectionId) || !CALCULATOR_TOP_LEVEL_TABS.includes(sectionId)) {
+          if (!sectionId || seen.has(sectionId) || !CALCULATOR_SECTION_TABS.includes(sectionId)) {
             continue;
           }
           seen.add(sectionId);
@@ -217,38 +216,25 @@
     if (normalized.length) {
       return normalized;
     }
-    return normalizeUniqueSectionIds(CALCULATOR_DEFAULT_PINNED_SECTIONS).map((sectionId) => [[sectionId]]);
-  }
-
-  function normalizeUnpinnedInsertIndex(value, fallback = CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX) {
-    const fallbackRow = Number.parseInt(fallback?.[0] ?? CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX[0], 10);
-    const fallbackColumn = Number.parseInt(fallback?.[1] ?? CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX[1], 10);
-    const rowCandidate = Number.parseInt(Array.isArray(value) ? value[0] : fallbackRow, 10);
-    const columnCandidate = Number.parseInt(Array.isArray(value) ? value[1] : fallbackColumn, 10);
-    return [
-      Math.max(0, Number.isFinite(rowCandidate) ? rowCandidate : fallbackRow),
-      Math.max(0, Number.isFinite(columnCandidate) ? columnCandidate : fallbackColumn),
-    ];
+    return normalizeUniqueSectionIds(CALCULATOR_DEFAULT_CUSTOM_SECTIONS).map((sectionId) => [[sectionId]]);
   }
 
   function normalizeCalculatorLayoutPresetPayload(value) {
     const source = isPlainObject(value) ? value : {};
     return {
-      pinned_layout: normalizePinnedLayout(source.pinned_layout),
-      unpinned_insert_index: normalizeUnpinnedInsertIndex(source.unpinned_insert_index),
+      custom_layout: normalizeCustomLayout(source.custom_layout),
     };
   }
 
   function defaultCalculatorLayoutPresetPayload() {
     return normalizeCalculatorLayoutPresetPayload({
-      pinned_layout: CALCULATOR_DEFAULT_PINNED_LAYOUT,
-      unpinned_insert_index: CALCULATOR_DEFAULT_UNPINNED_INSERT_INDEX,
+      custom_layout: CALCULATOR_DEFAULT_CUSTOM_LAYOUT,
     });
   }
 
   function calculatorLayoutPresetTitleIconAlias(payload) {
     const layoutPreset = normalizeCalculatorLayoutPresetPayload(payload);
-    for (const row of layoutPreset.pinned_layout) {
+    for (const row of layoutPreset.custom_layout) {
       for (const column of Array.isArray(row) ? row : []) {
         for (const sectionId of Array.isArray(column) ? column : []) {
           const alias = CALCULATOR_SECTION_ICON_BY_ID[trimString(sectionId)];
@@ -263,8 +249,7 @@
 
   function calculatorLayoutPreviewModel(payload) {
     const layoutPreset = normalizeCalculatorLayoutPresetPayload(payload);
-    const layout = Array.isArray(layoutPreset.pinned_layout) ? layoutPreset.pinned_layout : [];
-    const [slotRowIndex] = normalizeUnpinnedInsertIndex(layoutPreset.unpinned_insert_index);
+    const layout = Array.isArray(layoutPreset.custom_layout) ? layoutPreset.custom_layout : [];
     const previewWidth = 96;
     const paddingX = 4;
     const paddingY = 4;
@@ -277,7 +262,6 @@
     const iconSize = 8;
     const innerWidth = previewWidth - paddingX * 2;
     const boxes = [];
-    const rowFrames = [];
     let cursorY = paddingY + topGutter;
 
     for (const row of layout) {
@@ -309,23 +293,11 @@
         rowHeight = Math.max(rowHeight, columnHeight || cardHeight);
         cursorX += boxWidth + columnGap;
       }
-      rowFrames.push({ top: cursorY, bottom: cursorY + rowHeight });
       cursorY += rowHeight + rowGap;
     }
 
-    let slotY = paddingY + topGutter / 2;
-    if (rowFrames.length) {
-      if (slotRowIndex <= 0) {
-        slotY = paddingY + topGutter / 2;
-      } else if (slotRowIndex >= rowFrames.length) {
-        slotY = rowFrames[rowFrames.length - 1].bottom + bottomGutter / 2;
-      } else {
-        slotY = (rowFrames[slotRowIndex - 1].bottom + rowFrames[slotRowIndex].top) / 2;
-      }
-    }
-
-    const lastRowBottom = rowFrames.length
-      ? rowFrames[rowFrames.length - 1].bottom
+    const lastRowBottom = boxes.length
+      ? boxes.reduce((bottom, box) => Math.max(bottom, box.y + box.height), 0)
       : paddingY + topGutter + cardHeight;
     return {
       previewWidth,
@@ -334,7 +306,6 @@
         lastRowBottom + bottomGutter + paddingY,
       ),
       paddingX,
-      slotY,
       boxes,
       iconSize,
     };
@@ -356,15 +327,6 @@
     svg.setAttribute("height", model.contentHeight);
     svg.setAttribute("viewBox", `0 0 ${model.previewWidth} ${model.contentHeight}`);
     svg.setAttribute("pointer-events", "none");
-
-    const slot = createSvgElement(doc, "line");
-    slot.setAttribute("class", "fishy-preset-manager__preview-slot");
-    slot.setAttribute("x1", model.paddingX);
-    slot.setAttribute("x2", model.previewWidth - model.paddingX);
-    slot.setAttribute("y1", model.slotY);
-    slot.setAttribute("y2", model.slotY);
-    slot.setAttribute("pointer-events", "none");
-    svg.append(slot);
 
     for (const box of model.boxes) {
       const group = createSvgElement(doc, "g");

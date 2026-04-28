@@ -878,13 +878,6 @@ fishy-searchable-dropdown[option-density="roomy"] [data-role="results"] > li > [
     color: color-mix(in srgb, var(--color-base-content) 48%, transparent);
 }
 
-.fishy-preset-manager__preview-slot {
-    stroke: color-mix(in srgb, var(--color-base-content) 42%, transparent);
-    stroke-width: 1.5;
-    stroke-dasharray: 5 4;
-    stroke-linecap: round;
-}
-
 .fishy-preset-manager__preview-fallback {
     display: grid;
     min-width: 5rem;

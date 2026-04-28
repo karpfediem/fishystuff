@@ -19,24 +19,23 @@ async function loadModule() {
     }
 }
 
-test("buildCalculatorSectionRenderOrder keeps pinned rows first and selected section next", async () => {
+test("buildCalculatorSectionRenderOrder keeps custom rows first", async () => {
     const { buildCalculatorSectionRenderOrder } = await loadModule();
 
     assert.deepEqual(
         buildCalculatorSectionRenderOrder(
             ["overview", "zone", "distribution", "gear"],
-            "gear",
             [[["overview"], ["distribution"]]],
         ),
-        ["overview", "distribution", "gear", "zone"],
+        ["overview", "distribution", "zone", "gear"],
     );
 });
 
-test("flattenPinnedLayout preserves row, column, and stack order while removing duplicates", async () => {
-    const { flattenPinnedLayout } = await loadModule();
+test("flattenCustomLayout preserves row, column, and stack order while removing duplicates", async () => {
+    const { flattenCustomLayout } = await loadModule();
 
     assert.deepEqual(
-        flattenPinnedLayout([
+        flattenCustomLayout([
             [["overview"], ["distribution"]],
             [["distribution", "gear"]],
             [["missing"], ["food"]],
@@ -45,11 +44,11 @@ test("flattenPinnedLayout preserves row, column, and stack order while removing 
     );
 });
 
-test("normalizePinnedLayout keeps rows and columns while filtering unknown sections", async () => {
-    const { normalizePinnedLayout } = await loadModule();
+test("normalizeCustomLayout keeps rows and columns while filtering unknown sections", async () => {
+    const { normalizeCustomLayout } = await loadModule();
 
     assert.deepEqual(
-        normalizePinnedLayout(
+        normalizeCustomLayout(
             [
                 [["overview", "missing"]],
                 [["distribution"], ["gear", "distribution"]],
@@ -64,11 +63,11 @@ test("normalizePinnedLayout keeps rows and columns while filtering unknown secti
     );
 });
 
-test("normalizePinnedLayout falls back to one-item rows for legacy pinned sections", async () => {
-    const { normalizePinnedLayout } = await loadModule();
+test("normalizeCustomLayout falls back to one-item rows for custom sections", async () => {
+    const { normalizeCustomLayout } = await loadModule();
 
     assert.deepEqual(
-        normalizePinnedLayout(
+        normalizeCustomLayout(
             undefined,
             ["overview", "zone", "distribution"],
             ["overview", "distribution"],
@@ -80,11 +79,11 @@ test("normalizePinnedLayout falls back to one-item rows for legacy pinned sectio
     );
 });
 
-test("normalizePinnedLayout rejects row-only layout values as non-current UI state", async () => {
-    const { normalizePinnedLayout } = await loadModule();
+test("normalizeCustomLayout rejects row-only layout values as non-current UI state", async () => {
+    const { normalizeCustomLayout } = await loadModule();
 
     assert.deepEqual(
-        normalizePinnedLayout(
+        normalizeCustomLayout(
             [
                 ["overview", "distribution"],
             ],
@@ -95,11 +94,11 @@ test("normalizePinnedLayout rejects row-only layout values as non-current UI sta
     );
 });
 
-test("normalizePinnedLayout preserves an explicit empty layout", async () => {
-    const { normalizePinnedLayout } = await loadModule();
+test("normalizeCustomLayout preserves an explicit empty layout", async () => {
+    const { normalizeCustomLayout } = await loadModule();
 
     assert.deepEqual(
-        normalizePinnedLayout(
+        normalizeCustomLayout(
             [],
             ["overview", "zone", "distribution"],
             ["overview", "distribution"],
@@ -124,19 +123,15 @@ test("patchTouchesCalculatorSectionLayout matches order-affecting layout patches
     const { patchTouchesCalculatorSectionLayout } = await loadModule();
 
     assert.equal(
-        patchTouchesCalculatorSectionLayout({ _calculator_ui: { top_level_tab: "distribution" } }),
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { workspace_tab: "loadout" } }),
         true,
     );
     assert.equal(
-        patchTouchesCalculatorSectionLayout({ _calculator_ui: { pinned_sections: ["overview"] } }),
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { custom_sections: ["overview"] } }),
         true,
     );
     assert.equal(
-        patchTouchesCalculatorSectionLayout({ _calculator_ui: { pinned_layout: [[["overview"]]] } }),
-        true,
-    );
-    assert.equal(
-        patchTouchesCalculatorSectionLayout({ _calculator_ui: { unpinned_insert_index: [1, 0] } }),
+        patchTouchesCalculatorSectionLayout({ _calculator_ui: { custom_layout: [[["overview"]]] } }),
         true,
     );
     assert.equal(patchTouchesCalculatorSectionLayout({ _calculator_ui: null }), true);

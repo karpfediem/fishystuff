@@ -153,20 +153,19 @@ calculator.server.action.copy_url = URL kopieren
 calculator.server.action.copy_share = Freigabe kopieren
 calculator.server.action.reset_layout = Layout zurücksetzen
 calculator.server.action.clear = Leeren
-calculator.server.action.pin_section = {$label} anheften
-calculator.server.action.unpin_section = {$label} lösen
+calculator.server.action.remove_custom_card = {$label} aus Custom entfernen
 calculator.server.action.drag_section = {$label} ziehen
 calculator.server.action.drag_section_generic = Abschnitt ziehen
-calculator.server.action.drag_unpinned_slot = Slot für nicht angehefteten Abschnitt ziehen
-calculator.server.action.pin_dropzone_title = Hier ablegen zum Anheften
-calculator.server.action.pin_dropzone_detail = Angeheftete Abschnitte bleiben über dem ausgewählten Tab.
-calculator.server.action.unpinned_dropzone_title = Hier ablegen, um den Slot für nicht angeheftete Abschnitte zu verschieben
-calculator.server.action.unpinned_dropzone_detail = Künftige nicht angeheftete Tabs erscheinen hier.
-calculator.server.action.move_pinned_section_up = {$label} nach oben
-calculator.server.action.move_pinned_section_down = {$label} nach unten
 
 calculator.server.toggle.active_fishing = Aktives Fischen
 calculator.server.toggle.debug = Debug
+
+calculator.server.workspace.fishing = Fischen
+calculator.server.workspace.timing = Zeiten
+calculator.server.workspace.loadout = Ausrüstung & Buffs
+calculator.server.workspace.loot_trade = Beute & Handel
+calculator.server.workspace.advanced = Erweitert
+calculator.server.workspace.custom = Custom
 
 calculator.server.search.zones = Zonen suchen
 calculator.server.search.fishing_levels = Angelstufen suchen
@@ -327,7 +326,8 @@ calculator.server.chart.aria.loot_flow = Erwarteter Beutefluss von Gruppen zu Be
 calculator.server.chart.aria.target_distribution = Zielfisch-Sitzungsverteilung
 calculator.server.chart.aria.timeline = Angelzyklus-Zeitachse
 calculator.server.chart.aria.distribution_tabs = Verteilungs-Tabs
-calculator.server.chart.aria.top_level_tabs = Rechnerabschnitte
+calculator.server.chart.aria.workspace_tabs = Rechnerabschnitte
+calculator.server.chart.aria.custom_tabs = Custom-Arbeitsbereichskarten
 
 calculator.server.badge.aft = -{$percent}% AFT
 calculator.server.badge.rare = +{$percent}% Selten

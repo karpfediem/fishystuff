@@ -148,20 +148,20 @@ test("user presets export and import collection payloads while preserving select
   helper.registerCollectionAdapter("calculator-layouts", {
     normalizePayload(payload) {
       return {
-        pinned_layout: Array.isArray(payload?.pinned_layout) ? payload.pinned_layout : [],
+        custom_layout: Array.isArray(payload?.custom_layout) ? payload.custom_layout : [],
       };
     },
   });
   const alpha = helper.createPreset("calculator-layouts", {
     name: "Alpha",
     payload: {
-      pinned_layout: [[["overview"]]],
+      custom_layout: [[["overview"]]],
     },
   });
   const beta = helper.createPreset("calculator-layouts", {
     name: "Beta",
     payload: {
-      pinned_layout: [[["zone"]]],
+      custom_layout: [[["zone"]]],
     },
   });
   helper.setSelectedPresetId("calculator-layouts", beta.id);
@@ -172,7 +172,7 @@ test("user presets export and import collection payloads while preserving select
   importedHelper.registerCollectionAdapter("calculator-layouts", {
     normalizePayload(payload) {
       return {
-        pinned_layout: Array.isArray(payload?.pinned_layout) ? payload.pinned_layout : [],
+        custom_layout: Array.isArray(payload?.custom_layout) ? payload.custom_layout : [],
       };
     },
   });
@@ -862,7 +862,7 @@ test("user presets snapshot reloads from local storage changes", () => {
               id: "preset_a",
               name: "Alpha",
               payload: {
-                pinned_layout: [],
+                custom_layout: [],
               },
             },
           ],
@@ -882,7 +882,7 @@ test("user presets snapshot reloads from local storage changes", () => {
             id: "preset_b",
             name: "Beta",
             payload: {
-              pinned_layout: [[["overview"]]],
+              custom_layout: [[["overview"]]],
             },
           },
         ],

@@ -93,7 +93,7 @@ test("preset preview registry exposes built-in fixed preset payloads", () => {
   const helper = window.__fishystuffPresetPreviews;
 
   assert.deepEqual(
-    helper.fixedPresets("calculator-layouts").map((preset) => [preset.id, preset.payload.pinned_layout.length]),
+    helper.fixedPresets("calculator-layouts").map((preset) => [preset.id, preset.payload.custom_layout.length]),
     [["default", 3]],
   );
   assert.deepEqual(
@@ -107,7 +107,7 @@ test("preset preview registry resolves title icons without page adapters", () =>
   const helper = window.__fishystuffPresetPreviews;
 
   assert.equal(
-    helper.titleIconAlias("calculator-layouts", { payload: { pinned_layout: [[["trade"]]] } }),
+    helper.titleIconAlias("calculator-layouts", { payload: { custom_layout: [[["trade"]]] } }),
     "wheel-fill",
   );
   assert.equal(
@@ -131,7 +131,7 @@ test("preset preview registry renders the shared layout preview shell", () => {
 
   const rendered = helper.render(container, {
     collectionKey: "calculator-layouts",
-    payload: { pinned_layout: [[["overview"]]], unpinned_insert_index: [1, 0] },
+    payload: { custom_layout: [[["overview"]]] },
   });
 
   assert.equal(rendered, true);

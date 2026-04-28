@@ -111,7 +111,7 @@ test("patchTouchesSignalPath invalidates live charts from live calculation depen
     );
     assert.equal(
         patchTouchesSignalPath(
-            { _calculator_ui: { top_level_tab: "distribution" } },
+            { _calculator_ui: { workspace_tab: "loot_trade" } },
             "_live.fishing_timeline_chart",
         ),
         false,

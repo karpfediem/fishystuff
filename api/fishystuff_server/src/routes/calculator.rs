@@ -1803,6 +1803,18 @@ fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
     }
 }
 
+fn calculator_workspace_icon_alias(workspace_id: &str) -> Option<&'static str> {
+    match workspace_id {
+        "fishing" => Some("fish-fill"),
+        "timing" => Some("stopwatch-2-fill"),
+        "loadout" => Some("adjustments-horizontal"),
+        "loot_trade" => Some("trending-up-fill"),
+        "advanced" => Some("settings-1"),
+        "custom" => Some("layout-fill"),
+        _ => None,
+    }
+}
+
 fn normalize_calculator_fishing_mode(value: &str, default: &str) -> String {
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
@@ -1830,7 +1842,23 @@ fn render_calculator_icon(alias: &str, size_class: &str) -> String {
     )
 }
 
-fn render_calculator_tab_label(section_id: &str, title: &str) -> String {
+fn render_calculator_workspace_tab_label(workspace_id: &str, title: &str) -> String {
+    let title = escape_html(title);
+    let workspace_icon = calculator_workspace_icon_alias(workspace_id)
+        .map(|icon_alias| {
+            format!(
+                r#"<span class="fishy-calculator-tab-icon shrink-0">{}</span>"#,
+                render_calculator_icon(icon_alias, "size-4"),
+            )
+        })
+        .unwrap_or_default();
+    format!(
+        r#"<span class="fishy-calculator-tab-label inline-flex items-center gap-2"><span class="fishy-calculator-tab-main inline-flex min-w-0 items-center gap-2">{}<span>{}</span></span></span>"#,
+        workspace_icon, title,
+    )
+}
+
+fn render_calculator_section_tab_label(section_id: &str, title: &str) -> String {
     let title = escape_html(title);
     let section_icon = calculator_section_icon_alias(section_id)
         .map(|icon_alias| {
@@ -1840,10 +1868,9 @@ fn render_calculator_tab_label(section_id: &str, title: &str) -> String {
             )
         })
         .unwrap_or_default();
-    let pin_icon = render_calculator_icon("pin", "size-3");
     format!(
-        r#"<span class="fishy-calculator-tab-label inline-flex items-center gap-2"><span class="fishy-calculator-tab-main inline-flex min-w-0 items-center gap-2">{}<span>{}</span></span><span class="fishy-calculator-tab-pin shrink-0" aria-hidden="true">{}</span></span>"#,
-        section_icon, title, pin_icon,
+        r#"<span class="fishy-calculator-tab-label inline-flex items-center gap-2"><span class="fishy-calculator-tab-main inline-flex min-w-0 items-center gap-2">{}<span>{}</span></span></span>"#,
+        section_icon, title,
     )
 }
 
@@ -1857,14 +1884,9 @@ fn render_calculator_panel_legend(
         lang,
         "calculator.server.action.drag_section_generic",
     ));
-    let pin_label = escaped_js_string_literal(&calculator_route_text_with_vars(
+    let remove_label = escaped_js_string_literal(&calculator_route_text_with_vars(
         lang,
-        "calculator.server.action.pin_section",
-        &[("label", title)],
-    ));
-    let unpin_label = escaped_js_string_literal(&calculator_route_text_with_vars(
-        lang,
-        "calculator.server.action.unpin_section",
+        "calculator.server.action.remove_custom_card",
         &[("label", title)],
     ));
     let label_icon = icon_alias
@@ -1874,7 +1896,8 @@ fn render_calculator_panel_legend(
         });
     let section_id = escape_html(section_id);
     format!(
-        r#"<legend class="fishy-calculator-panel-legend fishy-calculator-panel-legend--split fieldset-legend ml-6 px-2">
+        r#"<legend class="fishy-calculator-panel-legend fieldset-legend ml-6 px-2"
+                 data-class:fishy-calculator-panel-legend--split="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, '{}')">
             <span class="fishy-calculator-panel-heading">
                 <span class="fishy-calculator-panel-label">{}<span>{}</span></span>
                 <span class="fishy-calculator-panel-controls">
@@ -1882,27 +1905,31 @@ fn render_calculator_panel_legend(
                             class="fishy-calculator-panel-control fishy-calculator-panel-control--drag btn btn-ghost btn-xs btn-circle"
                             data-calculator-section-drag
                             data-calculator-section-id="{}"
+                            data-show="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, '{}')"
                             aria-label="{}"
                             title="{}"
                             data-i18n-attr-aria-label="calculator.server.action.drag_section_generic"
                             data-i18n-attr-title="calculator.server.action.drag_section_generic"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-drag-handle"></use></svg></button>
                 </span>
             </span>
-            <span class="fishy-calculator-panel-rule" aria-hidden="true"></span>
-            <span class="fishy-calculator-panel-pin-slot">
+            <span class="fishy-calculator-panel-rule" aria-hidden="true"
+                  data-show="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, '{}')"></span>
+            <span class="fishy-calculator-panel-action-slot"
+                  data-show="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, '{}')">
                 <button type="button"
-                        class="fishy-calculator-panel-control fishy-calculator-panel-control--pin btn btn-ghost btn-xs btn-circle"
+                        class="fishy-calculator-panel-control fishy-calculator-panel-control--remove btn btn-ghost btn-xs btn-circle"
                         data-calculator-section-id="{}"
-                        data-class:fishy-calculator-panel-control--active="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}')"
-                        data-attr:aria-pressed="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}').toString()"
-                        data-attr:aria-label="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}') ? {} : {}"
-                        data-attr:title="window.__fishystuffCalculator.isPinnedSection($_calculator_ui, '{}') ? {} : {}"
-                        data-on:click="window.__fishystuffCalculator.blurActiveElement(); window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-pin"></use></svg></button>
+                        data-show="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, '{}')"
+                        data-attr:aria-label="{}"
+                        data-attr:title="{}"
+                        data-on:click="window.__fishystuffCalculator.blurActiveElement(); window.__fishystuffCalculator.removeCustomSectionInPlace($_calculator_ui, '{}')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-trash"></use></svg></button>
             </span>
         </legend>"#,
+        section_id,
         label_icon,
         escape_html(title),
         section_id,
+        section_id,
         drag_label,
         drag_label,
         CALCULATOR_ICON_SPRITE_URL,
@@ -1910,35 +1937,10 @@ fn render_calculator_panel_legend(
         section_id,
         section_id,
         section_id,
-        unpin_label,
-        pin_label,
-        section_id,
-        unpin_label,
-        pin_label,
+        remove_label,
+        remove_label,
         section_id,
         CALCULATOR_ICON_SPRITE_URL,
-    )
-}
-
-fn render_calculator_unpinned_slot_handle(lang: CalculatorLocale) -> String {
-    let drag_label = escape_html(&calculator_route_text(
-        lang,
-        "calculator.server.action.drag_unpinned_slot",
-    ));
-    format!(
-        r#"<button type="button"
-                  class="fishy-calculator-unpinned-slot-handle"
-                  data-calculator-unpinned-slot-drag
-                  aria-label="{}"
-                  title="{}"
-                  data-i18n-attr-aria-label="calculator.server.action.drag_unpinned_slot"
-                  data-i18n-attr-title="calculator.server.action.drag_unpinned_slot"
-                  hidden><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-dots-fill"></use></svg></button>
-           <div class="fishy-calculator-unpinned-slot-handle fishy-calculator-unpinned-slot-handle--projection"
-                data-calculator-unpinned-slot-projection
-                aria-hidden="true"
-                hidden><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="{}#fishy-dots-fill"></use></svg></div>"#,
-        drag_label, drag_label, CALCULATOR_ICON_SPRITE_URL, CALCULATOR_ICON_SPRITE_URL,
     )
 }
 
@@ -2051,11 +2053,11 @@ fn render_calculator_mode_window(lang: CalculatorLocale) -> String {
     .join("");
 
     format!(
-        r#"<div data-show="window.__fishystuffCalculator.sectionVisible('mode', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+        r#"<div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('mode', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="mode"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'mode')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'mode')">
         <fieldset class="card card-border bg-base-100">
             {}
             <div class="card-body gap-5 pt-0">
@@ -3479,11 +3481,10 @@ fn default_reset_signals_patch_map(
     patch.insert(
         "_calculator_ui".to_string(),
         json!({
-            "top_level_tab": "mode",
+            "workspace_tab": "fishing",
             "distribution_tab": "groups",
-            "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
-            "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
-            "unpinned_insert_index": [0, 0],
+            "custom_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
+            "custom_sections": ["overview", "zone", "session", "bite_time", "loot"],
         }),
     );
     Ok(patch)
@@ -9996,53 +9997,47 @@ fn render_calculator_app(
             </div>
             <div class="pb-1">
                 <div role="tablist"
-                     class="fishy-calculator-top-tabs tabs tabs-box tabs-sm md:tabs-md w-full max-w-full bg-base-200/80 p-1"
-                     aria-label="__TOP_LEVEL_TABS_ARIA__">
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'mode'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'mode')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'mode').toString()" data-on:click="$_calculator_ui.top_level_tab = 'mode'">__TAB_MODE__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overview'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overview').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overview'">__TAB_OVERVIEW__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'zone'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'zone')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'zone').toString()" data-on:click="$_calculator_ui.top_level_tab = 'zone'">__TAB_ZONE__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'bite_time'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'bite_time')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'bite_time').toString()" data-on:click="$_calculator_ui.top_level_tab = 'bite_time'">__TAB_BITE_TIME__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'catch_time'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'catch_time')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'catch_time').toString()" data-on:click="$_calculator_ui.top_level_tab = 'catch_time'">__TAB_CATCH_TIME__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'session'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'session')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'session').toString()" data-on:click="$_calculator_ui.top_level_tab = 'session'">__TAB_SESSION__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'distribution'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'distribution')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'distribution').toString()" data-on:click="$_calculator_ui.top_level_tab = 'distribution'">__SECTION_DISTRIBUTION__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'loot'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'loot')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'loot').toString()" data-on:click="$_calculator_ui.top_level_tab = 'loot'">__SECTION_LOOT__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'trade'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'trade')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'trade').toString()" data-on:click="$_calculator_ui.top_level_tab = 'trade'">__SECTION_TRADE__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'gear'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'gear')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'gear').toString()" data-on:click="$_calculator_ui.top_level_tab = 'gear'">__SECTION_GEAR__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'food'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'food')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'food').toString()" data-on:click="$_calculator_ui.top_level_tab = 'food'">__SECTION_FOOD__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'buffs'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'buffs')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'buffs').toString()" data-on:click="$_calculator_ui.top_level_tab = 'buffs'">__SECTION_BUFFS__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'pets'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'pets')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'pets').toString()" data-on:click="$_calculator_ui.top_level_tab = 'pets'">__SECTION_PETS__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'overlay'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overlay')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'overlay').toString()" data-on:click="$_calculator_ui.top_level_tab = 'overlay'">__TAB_OVERLAY__</button>
-                    <button type="button" class="tab fishy-calculator-tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.top_level_tab === 'debug'" data-class:fishy-calculator-tab--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'debug')" data-attr:aria-selected="($_calculator_ui.top_level_tab === 'debug').toString()" data-on:click="$_calculator_ui.top_level_tab = 'debug'">__TAB_DEBUG__</button>
+                     class="fishy-calculator-top-tabs tabs tabs-box w-full max-w-full"
+                     aria-label="__WORKSPACE_TABS_ARIA__">
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'fishing'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'fishing').toString()" data-on:click="$_calculator_ui.workspace_tab = 'fishing'">__WORKSPACE_FISHING__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'timing'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'timing').toString()" data-on:click="$_calculator_ui.workspace_tab = 'timing'">__WORKSPACE_TIMING__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loadout'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loadout').toString()" data-on:click="$_calculator_ui.workspace_tab = 'loadout'">__WORKSPACE_LOADOUT__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loot_trade'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loot_trade').toString()" data-on:click="$_calculator_ui.workspace_tab = 'loot_trade'">__WORKSPACE_LOOT_TRADE__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'advanced'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'advanced').toString()" data-on:click="$_calculator_ui.workspace_tab = 'advanced'">__WORKSPACE_ADVANCED__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom').toString()" data-on:click="$_calculator_ui.workspace_tab = 'custom'">__WORKSPACE_CUSTOM__</button>
+                </div>
+            </div>
+            <div class="pb-1" data-show="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom'">
+                <div role="tablist"
+                     class="fishy-calculator-custom-tabs tabs tabs-box w-full max-w-full"
+                     aria-label="__CUSTOM_TABS_ARIA__">
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'mode')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'mode').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'mode')">__CUSTOM_TAB_MODE__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'overview')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'overview').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'overview')">__CUSTOM_TAB_OVERVIEW__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'zone')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'zone').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'zone')">__CUSTOM_TAB_ZONE__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'bite_time')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'bite_time').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'bite_time')">__CUSTOM_TAB_BITE_TIME__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'catch_time')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'catch_time').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'catch_time')">__CUSTOM_TAB_CATCH_TIME__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'session')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'session').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'session')">__CUSTOM_TAB_SESSION__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'distribution')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'distribution').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'distribution')">__CUSTOM_TAB_DISTRIBUTION__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'loot')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'loot').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'loot')">__CUSTOM_TAB_LOOT__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'trade')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'trade').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'trade')">__CUSTOM_TAB_TRADE__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'gear')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'gear').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'gear')">__CUSTOM_TAB_GEAR__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'food')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'food').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'food')">__CUSTOM_TAB_FOOD__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'buffs')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'buffs').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'buffs')">__CUSTOM_TAB_BUFFS__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'pets')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'pets').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'pets')">__CUSTOM_TAB_PETS__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'overlay')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'overlay').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'overlay')">__CUSTOM_TAB_OVERLAY__</button>
+                    <button type="button" class="tab fishy-calculator-custom-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'debug')" data-attr:aria-pressed="window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'debug').toString()" data-on:click="window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'debug')">__CUSTOM_TAB_DEBUG__</button>
                 </div>
             </div>
         </div>
     </section>
 
     <fishy-calculator-section-stack class="fishy-calculator-section-stack flex flex-col gap-6">
-    __UNPINNED_SLOT_HANDLE__
-    <div class="fishy-calculator-pin-dropzone rounded-box border border-dashed border-base-300 bg-base-100/85 px-4 py-3"
-         data-calculator-pin-dropzone>
-        <div class="fishy-calculator-pin-dropzone__body">
-            <span class="fishy-calculator-pin-dropzone__icon fishy-calculator-pin-dropzone__icon--pin" aria-hidden="true"><svg class="fishy-icon size-5" viewBox="0 0 24 24"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-pin"></use></svg></span>
-            <span class="fishy-calculator-pin-dropzone__icon fishy-calculator-pin-dropzone__icon--slot" aria-hidden="true"><svg class="fishy-icon size-5" viewBox="0 0 24 24"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-arrow-to-down-fill"></use></svg></span>
-            <div class="fishy-calculator-pin-dropzone__copy">
-                <div class="fishy-calculator-pin-dropzone__copy-mode fishy-calculator-pin-dropzone__copy-mode--pin">
-                    <div class="fishy-calculator-pin-dropzone__title" data-i18n-text="calculator.server.action.pin_dropzone_title">__PIN_DROPZONE_TITLE__</div>
-                    <div class="fishy-calculator-pin-dropzone__detail" data-i18n-text="calculator.server.action.pin_dropzone_detail">__PIN_DROPZONE_DETAIL__</div>
-                </div>
-                <div class="fishy-calculator-pin-dropzone__copy-mode fishy-calculator-pin-dropzone__copy-mode--slot">
-                    <div class="fishy-calculator-pin-dropzone__title" data-i18n-text="calculator.server.action.unpinned_dropzone_title">__UNPINNED_DROPZONE_TITLE__</div>
-                    <div class="fishy-calculator-pin-dropzone__detail" data-i18n-text="calculator.server.action.unpinned_dropzone_detail">__UNPINNED_DROPZONE_DETAIL__</div>
-                </div>
-            </div>
-        </div>
-    </div>
     __MODE_WINDOW__
-    <div data-show="window.__fishystuffCalculator.sectionVisible('overview', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('overview', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="overview"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'overview')">
         <fieldset class="card card-border bg-base-100">
             __OVERVIEW_LEGEND__
             <div class="card-body gap-5 pt-0">
@@ -10100,11 +10095,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('zone', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('zone', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="zone"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'zone')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'zone')">
         <fieldset class="card card-border bg-base-100">
             __ZONE_LEGEND__
             <div class="card-body gap-4 pt-0">
@@ -10133,11 +10128,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('bite_time', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('bite_time', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="bite_time"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'bite_time')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'bite_time')">
         <fieldset class="card card-border bg-base-100">
             __BITE_TIME_LEGEND__
             <div class="card-body gap-4 pt-0">
@@ -10173,11 +10168,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('catch_time', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('catch_time', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="catch_time"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'catch_time')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'catch_time')">
         <fieldset class="card card-border bg-base-100">
             __CATCH_TIME_LEGEND__
             <div class="card-body gap-4 pt-0">
@@ -10197,11 +10192,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('session', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('session', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="session"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'session')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'session')">
         <fieldset class="card card-border bg-base-100">
             __SESSION_LEGEND__
             <div class="card-body gap-3 pt-0">
@@ -10223,35 +10218,35 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('distribution', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('distribution', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="distribution"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'distribution')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'distribution')">
         __FISH_GROUP_WINDOW__
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('loot', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('loot', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="loot"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'loot')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'loot')">
         __LOOT_WINDOW__
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('trade', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('trade', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="trade"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'trade')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'trade')">
         __TRADE_WINDOW__
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('gear', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('gear', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="gear"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'gear')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'gear')">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             __GEAR_LEGEND__
             <div class="card-body pt-0">
@@ -10295,11 +10290,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('food', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('food', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="food"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'food')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'food')">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             __FOOD_LEGEND__
             <div class="card-body pt-0">
@@ -10308,11 +10303,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('buffs', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('buffs', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="buffs"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'buffs')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'buffs')">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             __BUFFS_LEGEND__
             <div class="card-body pt-0">
@@ -10321,11 +10316,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('pets', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('pets', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="pets"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'pets')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'pets')">
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             __PETS_LEGEND__
             <div class="card-body pt-0">
@@ -10334,11 +10329,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('overlay', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('overlay', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="overlay"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overlay')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'overlay')">
         <fieldset class="card card-border bg-base-100">
             __OVERLAY_LEGEND__
             <div class="card-body pt-0">
@@ -10347,11 +10342,11 @@ fn render_calculator_app(
         </fieldset>
     </div>
 
-    <div data-show="window.__fishystuffCalculator.sectionVisible('debug', $_calculator_ui.top_level_tab, $_calculator_ui.pinned_sections)"
+    <div data-show="window.__fishystuffCalculator.sectionVisibleInWorkspace('debug', $_calculator_ui)"
          class="grid gap-6 fishy-calculator-section-card"
          data-calculator-section-card
          data-calculator-section-id="debug"
-         data-class:fishy-calculator-section-card--pinned="window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'debug')">
+         data-class:fishy-calculator-section-card--custom="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom' && window.__fishystuffCalculator.isCustomSection($_calculator_ui, 'debug')">
         <fieldset class="card card-border bg-base-100">
             __DEBUG_LEGEND__
             <div class="card-body gap-4 pt-0">
@@ -10369,44 +10364,12 @@ fn render_calculator_app(
     let replacements = [
         ("__ZONE_SEARCH_DROPDOWN__", zone_dropdown),
         ("__ZONE_VALUE__", escape_html(&signals.zone)),
-        (
-            "__UNPINNED_SLOT_HANDLE__",
-            render_calculator_unpinned_slot_handle(data.lang),
-        ),
         ("__MODE_WINDOW__", render_calculator_mode_window(data.lang)),
         (
             "__TEXT_COPY_URL__",
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.action.copy_url",
-            )),
-        ),
-        (
-            "__PIN_DROPZONE_TITLE__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.action.pin_dropzone_title",
-            )),
-        ),
-        (
-            "__PIN_DROPZONE_DETAIL__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.action.pin_dropzone_detail",
-            )),
-        ),
-        (
-            "__UNPINNED_DROPZONE_TITLE__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.action.unpinned_dropzone_title",
-            )),
-        ),
-        (
-            "__UNPINNED_DROPZONE_DETAIL__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.action.unpinned_dropzone_detail",
             )),
         ),
         (
@@ -10431,24 +10394,164 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__TOP_LEVEL_TABS_ARIA__",
+            "__WORKSPACE_TABS_ARIA__",
             escape_html(&calculator_route_text(
                 data.lang,
-                "calculator.server.chart.aria.top_level_tabs",
+                "calculator.server.chart.aria.workspace_tabs",
             )),
         ),
         (
-            "__TAB_MODE__",
-            render_calculator_tab_label(
+            "__WORKSPACE_FISHING__",
+            render_calculator_workspace_tab_label(
+                "fishing",
+                &calculator_route_text(data.lang, "calculator.server.workspace.fishing"),
+            ),
+        ),
+        (
+            "__WORKSPACE_TIMING__",
+            render_calculator_workspace_tab_label(
+                "timing",
+                &calculator_route_text(data.lang, "calculator.server.workspace.timing"),
+            ),
+        ),
+        (
+            "__WORKSPACE_LOADOUT__",
+            render_calculator_workspace_tab_label(
+                "loadout",
+                &calculator_route_text(data.lang, "calculator.server.workspace.loadout"),
+            ),
+        ),
+        (
+            "__WORKSPACE_LOOT_TRADE__",
+            render_calculator_workspace_tab_label(
+                "loot_trade",
+                &calculator_route_text(data.lang, "calculator.server.workspace.loot_trade"),
+            ),
+        ),
+        (
+            "__WORKSPACE_ADVANCED__",
+            render_calculator_workspace_tab_label(
+                "advanced",
+                &calculator_route_text(data.lang, "calculator.server.workspace.advanced"),
+            ),
+        ),
+        (
+            "__WORKSPACE_CUSTOM__",
+            render_calculator_workspace_tab_label(
+                "custom",
+                &calculator_route_text(data.lang, "calculator.server.workspace.custom"),
+            ),
+        ),
+        (
+            "__CUSTOM_TABS_ARIA__",
+            escape_html(&calculator_route_text(
+                data.lang,
+                "calculator.server.chart.aria.custom_tabs",
+            )),
+        ),
+        (
+            "__CUSTOM_TAB_MODE__",
+            render_calculator_section_tab_label(
                 "mode",
                 &calculator_route_text(data.lang, "calculator.server.section.mode"),
             ),
         ),
         (
-            "__TAB_OVERVIEW__",
-            render_calculator_tab_label(
+            "__CUSTOM_TAB_OVERVIEW__",
+            render_calculator_section_tab_label(
                 "overview",
                 &calculator_route_text(data.lang, "calculator.server.tab.overview"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_ZONE__",
+            render_calculator_section_tab_label(
+                "zone",
+                &calculator_route_text(data.lang, "calculator.server.section.zone"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_BITE_TIME__",
+            render_calculator_section_tab_label(
+                "bite_time",
+                &calculator_route_text(data.lang, "calculator.server.section.bite_time"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_CATCH_TIME__",
+            render_calculator_section_tab_label(
+                "catch_time",
+                &calculator_route_text(data.lang, "calculator.server.section.catch_time"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_SESSION__",
+            render_calculator_section_tab_label(
+                "session",
+                &calculator_route_text(data.lang, "calculator.server.section.session"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_DISTRIBUTION__",
+            render_calculator_section_tab_label(
+                "distribution",
+                &calculator_route_text(data.lang, "calculator.server.section.distribution"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_LOOT__",
+            render_calculator_section_tab_label(
+                "loot",
+                &calculator_route_text(data.lang, "calculator.server.section.loot"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_TRADE__",
+            render_calculator_section_tab_label(
+                "trade",
+                &calculator_route_text(data.lang, "calculator.server.section.trade"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_GEAR__",
+            render_calculator_section_tab_label(
+                "gear",
+                &calculator_route_text(data.lang, "calculator.server.section.gear"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_FOOD__",
+            render_calculator_section_tab_label(
+                "food",
+                &calculator_route_text(data.lang, "calculator.server.field.food"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_BUFFS__",
+            render_calculator_section_tab_label(
+                "buffs",
+                &calculator_route_text(data.lang, "calculator.server.field.buffs"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_PETS__",
+            render_calculator_section_tab_label(
+                "pets",
+                &calculator_route_text(data.lang, "calculator.server.section.pets"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_OVERLAY__",
+            render_calculator_section_tab_label(
+                "overlay",
+                &calculator_route_text(data.lang, "calculator.server.tab.overlay"),
+            ),
+        ),
+        (
+            "__CUSTOM_TAB_DEBUG__",
+            render_calculator_section_tab_label(
+                "debug",
+                &calculator_route_text(data.lang, "calculator.server.tab.debug"),
             ),
         ),
         (
@@ -10461,26 +10564,12 @@ fn render_calculator_app(
             ),
         ),
         (
-            "__TAB_ZONE__",
-            render_calculator_tab_label(
-                "zone",
-                &calculator_route_text(data.lang, "calculator.server.section.zone"),
-            ),
-        ),
-        (
             "__ZONE_LEGEND__",
             render_calculator_panel_legend(
                 data.lang,
                 "zone",
                 &calculator_route_text(data.lang, "calculator.server.section.zone"),
                 None,
-            ),
-        ),
-        (
-            "__TAB_BITE_TIME__",
-            render_calculator_tab_label(
-                "bite_time",
-                &calculator_route_text(data.lang, "calculator.server.section.bite_time"),
             ),
         ),
         (
@@ -10493,13 +10582,6 @@ fn render_calculator_app(
             ),
         ),
         (
-            "__TAB_CATCH_TIME__",
-            render_calculator_tab_label(
-                "catch_time",
-                &calculator_route_text(data.lang, "calculator.server.section.catch_time"),
-            ),
-        ),
-        (
             "__CATCH_TIME_LEGEND__",
             render_calculator_panel_legend(
                 data.lang,
@@ -10509,54 +10591,12 @@ fn render_calculator_app(
             ),
         ),
         (
-            "__TAB_SESSION__",
-            render_calculator_tab_label(
-                "session",
-                &calculator_route_text(data.lang, "calculator.server.section.session"),
-            ),
-        ),
-        (
             "__SESSION_LEGEND__",
             render_calculator_panel_legend(
                 data.lang,
                 "session",
                 &calculator_route_text(data.lang, "calculator.server.section.session"),
                 None,
-            ),
-        ),
-        (
-            "__SECTION_DISTRIBUTION__",
-            render_calculator_tab_label(
-                "distribution",
-                &calculator_route_text(data.lang, "calculator.server.section.distribution"),
-            ),
-        ),
-        (
-            "__SECTION_LOOT__",
-            render_calculator_tab_label(
-                "loot",
-                &calculator_route_text(data.lang, "calculator.server.section.loot"),
-            ),
-        ),
-        (
-            "__SECTION_TRADE__",
-            render_calculator_tab_label(
-                "trade",
-                &calculator_route_text(data.lang, "calculator.server.section.trade"),
-            ),
-        ),
-        (
-            "__TAB_OVERLAY__",
-            render_calculator_tab_label(
-                "overlay",
-                &calculator_route_text(data.lang, "calculator.server.tab.overlay"),
-            ),
-        ),
-        (
-            "__TAB_DEBUG__",
-            render_calculator_tab_label(
-                "debug",
-                &calculator_route_text(data.lang, "calculator.server.tab.debug"),
             ),
         ),
         (
@@ -10620,13 +10660,6 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__SECTION_ZONE__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.zone",
-            )),
-        ),
-        (
             "__STAT_MIN__",
             escape_html(&calculator_route_text(
                 data.lang,
@@ -10645,13 +10678,6 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.stat.max",
-            )),
-        ),
-        (
-            "__SECTION_BITE_TIME__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.bite_time",
             )),
         ),
         (
@@ -10697,13 +10723,6 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__SECTION_CATCH_TIME__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.catch_time",
-            )),
-        ),
-        (
             "__FIELD_ACTIVE__",
             escape_html(&calculator_route_text(
                 data.lang,
@@ -10715,13 +10734,6 @@ fn render_calculator_app(
             escape_html(&calculator_route_text(
                 data.lang,
                 "calculator.server.field.afk",
-            )),
-        ),
-        (
-            "__SECTION_SESSION__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.session",
             )),
         ),
         (
@@ -10741,27 +10753,6 @@ fn render_calculator_app(
                 data.lang,
                 "calculator.server.field.unit",
             )),
-        ),
-        (
-            "__SECTION_GEAR__",
-            render_calculator_tab_label(
-                "gear",
-                &calculator_route_text(data.lang, "calculator.server.section.gear"),
-            ),
-        ),
-        (
-            "__SECTION_FOOD__",
-            render_calculator_tab_label(
-                "food",
-                &calculator_route_text(data.lang, "calculator.server.field.food"),
-            ),
-        ),
-        (
-            "__SECTION_BUFFS__",
-            render_calculator_tab_label(
-                "buffs",
-                &calculator_route_text(data.lang, "calculator.server.field.buffs"),
-            ),
         ),
         (
             "__GEAR_LEGEND__",
@@ -10861,13 +10852,6 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__SECTION_PETS__",
-            render_calculator_tab_label(
-                "pets",
-                &calculator_route_text(data.lang, "calculator.server.section.pets"),
-            ),
-        ),
-        (
             "__PETS_LEGEND__",
             render_calculator_panel_legend(
                 data.lang,
@@ -10875,13 +10859,6 @@ fn render_calculator_app(
                 &calculator_route_text(data.lang, "calculator.server.section.pets"),
                 None,
             ),
-        ),
-        (
-            "__SECTION_OVERLAY_PROPOSAL__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.section.overlay_proposal",
-            )),
         ),
         (
             "__OVERLAY_LEGEND__",
@@ -11956,7 +11933,7 @@ fn render_fish_group_window(
                                 <div class=\"mt-2 text-xs text-base-content/70\">{}</div>\
                             </div>\
                         </div>\
-                        <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"{}\">\
+                        <div role=\"tablist\" class=\"tabs tabs-box\" aria-label=\"{}\">\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'groups'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'groups').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'groups'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'silver'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'silver').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'silver'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">{}</button>\
@@ -15150,7 +15127,13 @@ mod tests {
         assert!(text.contains("\"active\":false"));
         assert!(text.contains("\"fishingMode\":\"rod\""));
         assert!(text.contains("\"_resources\":0.0"));
-        assert!(text.contains("\"unpinned_insert_index\":[0,0]"));
+        assert!(text.contains("\"workspace_tab\":\"fishing\""));
+        assert!(text.contains(
+            "\"custom_layout\":[[[\"overview\"]],[[\"zone\"],[\"session\"]],[[\"bite_time\"],[\"loot\"]]]"
+        ));
+        assert!(text.contains(
+            "\"custom_sections\":[\"overview\",\"zone\",\"session\",\"bite_time\",\"loot\"]"
+        ));
         assert!(text.contains("\"chair\":\"item:705539\""));
         assert!(text.contains("\"zone_name\":\"Velia Beach"));
         assert!(text.contains("event:datastar-patch-elements"));
@@ -15231,36 +15214,34 @@ mod tests {
         assert!(text.contains("<fishy-preset-manager"));
         assert!(text.contains("data-preset-collection=\"calculator-layouts\""));
         assert!(text.contains(
-            "window.__fishystuffCalculator.blurActiveElement(); window.__fishystuffCalculator.togglePinnedSectionInPlace($_calculator_ui, 'overview')"
+            "window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'overview')"
         ));
         assert!(text.contains("<fishy-calculator-section-stack"));
-        assert!(text.contains("data-calculator-unpinned-slot-drag"));
-        assert!(text.contains("data-calculator-unpinned-slot-projection"));
-        assert!(text.contains("data-calculator-pin-dropzone"));
         assert!(text.contains("data-calculator-section-drag"));
-        assert!(text.contains("fishy-calculator-panel-pin-slot"));
-        assert!(text.contains("fishy-calculator-panel-control--pin"));
-        assert!(text.contains("fishy-calculator-unpinned-slot-handle"));
-        assert!(text.contains("fishy-calculator-tab--pinned"));
+        assert!(text.contains("fishy-calculator-section-card--custom"));
+        assert!(text.contains("fishy-calculator-panel-action-slot"));
+        assert!(text.contains("fishy-calculator-panel-control--remove"));
+        assert!(text.contains(
+            "window.__fishystuffCalculator.removeCustomSectionInPlace($_calculator_ui, 'overview')"
+        ));
+        assert!(text.contains("fishy-calculator-workspace-tab"));
+        assert!(text.contains("fishy-calculator-custom-tab"));
         assert!(text.contains("fishy-calculator-tab-label"));
         assert!(text.contains("fishy-calculator-tab-main"));
-        assert!(text.contains("fishy-calculator-tab-pin"));
-        assert!(text.contains(
-            "data-class:fishy-calculator-tab--pinned=\"window.__fishystuffCalculator.isPinnedSection($_calculator_ui.pinned_sections, 'overview')\""
-        ));
+        assert!(text
+            .contains("window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom'"));
+        assert!(text.contains("Custom"));
+        assert!(text.contains("Gear &amp; Buffs"));
+        assert!(text.contains("Loot &amp; Trade"));
         assert!(text.contains("calculator.server.action.drag_section_generic"));
-        assert!(text.contains("calculator.server.action.drag_unpinned_slot"));
-        assert!(text.contains("calculator.server.action.unpinned_dropzone_title"));
-        assert!(text.contains("calculator.server.action.unpinned_dropzone_detail"));
-        assert!(text.contains("#fishy-pin"));
-        assert!(text.contains("#fishy-arrow-to-down-fill"));
+        assert!(text.contains("Remove Overview from Custom"));
+        assert!(text.contains("#fishy-trash"));
         assert!(text.contains("#fishy-drag-handle"));
         assert!(!text.contains("window.__fishystuffCalculator.persist("));
         assert!(!text.contains("window.__fishystuffCalculator.persistSignalPatchFilter()"));
         assert!(!text.contains("window.__fishystuffCalculator.presetUrl("));
         assert!(!text.contains("window.__fishystuffCalculator.shareText("));
         assert!(!text.contains("window.__fishystuffCalculator.clear("));
-        assert!(!text.contains("window.__fishystuffCalculator.movePinnedSection($_calculator_ui.pinned_sections, 'overview', 1)"));
         assert!(text.contains(
             "data-computed:outfit=\"Array.isArray($_outfit_slots) ? $_outfit_slots : []\""
         ));
@@ -15294,14 +15275,18 @@ mod tests {
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'mode'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'zone'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'bite_time'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'catch_time'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'session'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'trade'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'food'"));
-        assert!(text.contains("$_calculator_ui.top_level_tab === 'buffs'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'fishing'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'timing'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'loadout'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'loot_trade'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'advanced'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'custom'"));
+        assert!(text.contains(
+            "window.__fishystuffCalculator.sectionVisibleInWorkspace('mode', $_calculator_ui)"
+        ));
+        assert!(text.contains(
+            "window.__fishystuffCalculator.sectionVisibleInWorkspace('trade', $_calculator_ui)"
+        ));
         assert!(text.contains("data-calculator-section-id=\"mode\""));
         assert!(text.contains("data-calculator-section-id=\"zone\""));
         assert!(text.contains("data-calculator-section-id=\"bite_time\""));
@@ -16533,11 +16518,10 @@ mod tests {
         assert_eq!(
             patch.get("_calculator_ui"),
             Some(&json!({
-                "top_level_tab": "mode",
+                "workspace_tab": "fishing",
                 "distribution_tab": "groups",
-                "pinned_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
-                "pinned_sections": ["overview", "zone", "session", "bite_time", "loot"],
-                "unpinned_insert_index": [0, 0],
+                "custom_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
+                "custom_sections": ["overview", "zone", "session", "bite_time", "loot"],
             }))
         );
     }
@@ -17531,7 +17515,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_calculator_signals_value_coerces_top_level_string_arrays() {
+    fn parse_calculator_signals_value_coerces_root_string_arrays() {
         let parsed = parse_calculator_signals_value(
             serde_json::json!({
                 "outfit": "effect:mainhand-weapon-outfit",
@@ -17541,7 +17525,7 @@ mod tests {
             &CalculatorSignals::default(),
             &RequestId("req-test".to_string()),
         )
-        .expect("top-level arrays should coerce");
+        .expect("root arrays should coerce");
 
         assert_eq!(
             parsed.outfit,
