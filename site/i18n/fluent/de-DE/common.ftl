@@ -34,7 +34,9 @@ language.option.locale.de-DE = Deutsch
 language.option.locale.ko-KR = Koreanisch
 language.option.api.en = Englische Namen
 language.option.api.de = Deutsche Namen
+language.option.api.fr = Französische Namen
 language.option.api.kr = Koreanische Namen
+language.option.api.sp = Spanische Namen
 
 translation_notice.title = Übersetzung gesucht
 translation_notice.body = Diese Seite wurde noch nicht übersetzt. Du siehst gerade den englischen Quellinhalt.

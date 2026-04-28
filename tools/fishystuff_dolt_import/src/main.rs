@@ -12,6 +12,7 @@ use anyhow::{bail, Context, Result};
 use calamine::{open_workbook_auto, Data, Range, Reader};
 use clap::{Parser, Subcommand, ValueEnum};
 use csv::{QuoteStyle, Writer, WriterBuilder};
+use fishystuff_core::loc::scan_loc_records;
 use sha2::{Digest, Sha256};
 
 use effect_table_headers::{
@@ -210,6 +211,18 @@ enum Commands {
         #[arg(long)]
         commit_msg: Option<String>,
     },
+    ImportLanguagedataLoc {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long = "loc", value_parser = parse_languagedata_loc_arg)]
+        locs: Vec<LanguageDataLocArg>,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
     ImportCommunityPrizeFishXlsx {
         #[arg(long)]
         dolt_repo: PathBuf,
@@ -383,6 +396,12 @@ struct LanguageDataCsvArg {
     path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+struct LanguageDataLocArg {
+    lang: String,
+    path: PathBuf,
+}
+
 struct FishTableImport {
     row_count: usize,
 }
@@ -403,6 +422,14 @@ struct ImportCommand {
     languagedata_csvs: Vec<LanguageDataCsvArg>,
     output_dir: Option<PathBuf>,
     subset: SubsetMode,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct ImportLanguageDataLocCommand {
+    dolt_repo: PathBuf,
+    locs: Vec<LanguageDataLocArg>,
+    output_dir: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
 }
@@ -664,14 +691,45 @@ fn parse_languagedata_csv_arg(value: &str) -> std::result::Result<LanguageDataCs
     Ok(LanguageDataCsvArg { lang, path })
 }
 
+fn parse_languagedata_loc_arg(value: &str) -> std::result::Result<LanguageDataLocArg, String> {
+    let (raw_lang, raw_path) = value
+        .split_once('=')
+        .or_else(|| value.split_once(':'))
+        .map(|(lang, path)| (Some(lang), path))
+        .unwrap_or((None, value));
+    let path = PathBuf::from(raw_path);
+    let lang = match raw_lang {
+        Some(lang) => normalize_languagedata_lang(lang)?,
+        None => infer_languagedata_lang_with_extension(&path, "loc")?,
+    };
+    Ok(LanguageDataLocArg { lang, path })
+}
+
 fn infer_languagedata_lang(path: &Path) -> std::result::Result<String, String> {
+    infer_languagedata_lang_with_extension(path, "csv")
+}
+
+fn infer_languagedata_lang_with_extension(
+    path: &Path,
+    extension: &str,
+) -> std::result::Result<String, String> {
     let stem = path
         .file_stem()
         .and_then(|value| value.to_str())
         .ok_or_else(|| format!("cannot infer language from {}", path.display()))?;
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| !value.eq_ignore_ascii_case(extension))
+    {
+        return Err(format!(
+            "expected .{extension} file for languagedata input: {}",
+            path.display()
+        ));
+    }
     let lang = stem
         .strip_prefix("languagedata_")
-        .ok_or_else(|| format!("expected filename like languagedata_<lang>.csv: {stem}"))?;
+        .ok_or_else(|| format!("expected filename like languagedata_<lang>.{extension}: {stem}"))?;
     normalize_languagedata_lang(lang)
 }
 
@@ -712,6 +770,21 @@ fn collect_languagedata_inputs(
     Ok(inputs)
 }
 
+fn collect_languagedata_loc_inputs(
+    locs: Vec<LanguageDataLocArg>,
+) -> Result<BTreeMap<String, PathBuf>> {
+    let mut inputs = BTreeMap::<String, PathBuf>::new();
+    for input in locs {
+        if inputs
+            .insert(input.lang.clone(), input.path.clone())
+            .is_some()
+        {
+            bail!("duplicate languagedata LOC for language {}", input.lang);
+        }
+    }
+    Ok(inputs)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -741,6 +814,19 @@ fn main() -> Result<()> {
             languagedata_csvs,
             output_dir,
             subset,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportLanguagedataLoc {
+            dolt_repo,
+            locs,
+            output_dir,
+            commit,
+            commit_msg,
+        } => run_languagedata_loc_import(ImportLanguageDataLocCommand {
+            dolt_repo,
+            locs,
+            output_dir,
             commit,
             commit_msg,
         }),
@@ -973,7 +1059,7 @@ fn run_import(command: ImportCommand) -> Result<()> {
     for (lang, output_path) in &outputs.languagedata_csvs {
         let table_name = languagedata_table_name(lang);
         ensure_languagedata_table(&dolt_repo, &table_name)?;
-        run_dolt_table_import(&dolt_repo, &table_name, output_path)?;
+        run_dolt_table_replace(&dolt_repo, &table_name, output_path)?;
     }
     ensure_calculator_lookup_indexes(&dolt_repo)?;
     refresh_calculator_item_name_tables(&dolt_repo)?;
@@ -994,6 +1080,62 @@ fn run_import(command: ImportCommand) -> Result<()> {
         languagedata: &languagedata_stats,
         outputs: &outputs,
     });
+
+    Ok(())
+}
+
+fn run_languagedata_loc_import(command: ImportLanguageDataLocCommand) -> Result<()> {
+    let ImportLanguageDataLocCommand {
+        dolt_repo,
+        locs,
+        output_dir,
+        commit,
+        commit_msg,
+    } = command;
+    let loc_inputs = collect_languagedata_loc_inputs(locs)?;
+    if loc_inputs.is_empty() {
+        bail!("at least one --loc input is required");
+    }
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    let mut loc_shas = BTreeMap::<String, String>::new();
+    let mut stats = BTreeMap::<String, LanguageDataImport>::new();
+    let mut outputs = BTreeMap::<String, PathBuf>::new();
+    for (lang, input_path) in &loc_inputs {
+        loc_shas.insert(lang.clone(), sha256_file(input_path)?);
+        let output_path = output_dir.join(format!("{}.csv", languagedata_table_name(lang)));
+        stats.insert(
+            lang.clone(),
+            import_languagedata_loc(input_path, &output_path)?,
+        );
+        outputs.insert(lang.clone(), output_path);
+    }
+
+    for (lang, output_path) in &outputs {
+        let table_name = languagedata_table_name(lang);
+        ensure_languagedata_table(&dolt_repo, &table_name)?;
+        run_dolt_table_replace(&dolt_repo, &table_name, output_path)?;
+    }
+    ensure_calculator_lookup_indexes(&dolt_repo)?;
+    refresh_calculator_item_name_tables(&dolt_repo)?;
+
+    if commit {
+        let message = build_languagedata_loc_commit_message(commit_msg, &loc_shas);
+        run_dolt_commit(&dolt_repo, &message)?;
+    }
+
+    for (lang, stat) in &stats {
+        println!("languagedata_{lang} rows emitted: {}", stat.row_count);
+    }
+    for (lang, output) in &outputs {
+        println!("output languagedata_{lang} csv: {}", output.display());
+    }
 
     Ok(())
 }
@@ -3072,6 +3214,32 @@ fn import_languagedata_csv(
     Ok(LanguageDataImport { row_count })
 }
 
+fn import_languagedata_loc(path: &Path, output_csv: &Path) -> Result<LanguageDataImport> {
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(LANGUAGEDATA_HEADERS)?;
+
+    let mut row_count = 0usize;
+    scan_loc_records(path, 100_000, |record| {
+        let id = record.key.to_string();
+        let unk = record
+            .namespace
+            .map(|namespace| namespace.to_string())
+            .unwrap_or_default();
+        writer.write_record([
+            id.as_str(),
+            unk.as_str(),
+            record.text.as_str(),
+            record.format.as_str(),
+        ])?;
+        row_count += 1;
+        Ok(())
+    })
+    .with_context(|| format!("decode languagedata loc: {}", path.display()))?;
+
+    writer.flush()?;
+    Ok(LanguageDataImport { row_count })
+}
+
 fn append_community_prize_guess_rows(
     _dolt_repo: &Path,
     workbook_xlsx: &Path,
@@ -3632,6 +3800,27 @@ fn run_dolt_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> Resu
     bail!("dolt table import failed for {table}: {stderr}");
 }
 
+fn run_dolt_table_replace(repo_path: &Path, table: &str, csv_path: &Path) -> Result<()> {
+    let output = Command::new("dolt")
+        .current_dir(repo_path)
+        .args([
+            "table",
+            "import",
+            "-r",
+            table,
+            csv_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("invalid csv path"))?,
+        ])
+        .output()
+        .with_context(|| format!("run dolt table replace import for {table}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    bail!("dolt table replace import failed for {table}: {stderr}");
+}
+
 fn run_dolt_table_import_or_sql_server(
     repo_path: &Path,
     table: &str,
@@ -4049,6 +4238,21 @@ fn build_commit_message(base: Option<String>, digests: &ImportDigests) -> String
     }
 }
 
+fn build_languagedata_loc_commit_message(
+    base: Option<String>,
+    loc_shas: &BTreeMap<String, String>,
+) -> String {
+    let parts = loc_shas
+        .iter()
+        .map(|(lang, sha)| format!("LanguageData_{}={sha}", lang.to_uppercase()))
+        .collect::<Vec<_>>();
+    let suffix = format!("({})", parts.join(", "));
+    match base {
+        Some(msg) => format!("{msg} {suffix}"),
+        None => format!("Import languagedata loc files {suffix}"),
+    }
+}
+
 fn build_calculator_effects_commit_message(
     base: Option<String>,
     digests: &CalculatorEffectsDigests,
@@ -4241,10 +4445,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_languagedata_loc_arg_infers_language_from_filename() {
+        let parsed = parse_languagedata_loc_arg("/tmp/languagedata_sp.loc").unwrap();
+        assert_eq!(parsed.lang, "sp");
+        assert_eq!(parsed.path, PathBuf::from("/tmp/languagedata_sp.loc"));
+    }
+
+    #[test]
+    fn parse_languagedata_loc_arg_accepts_explicit_language() {
+        let parsed = parse_languagedata_loc_arg("fr=/tmp/source.loc").unwrap();
+        assert_eq!(parsed.lang, "fr");
+        assert_eq!(parsed.path, PathBuf::from("/tmp/source.loc"));
+    }
+
+    #[test]
     fn parse_languagedata_csv_arg_rejects_locale_aliases() {
         let err = parse_languagedata_csv_arg("pt-BR=/tmp/languagedata_pt_br.csv").unwrap_err();
         assert!(err.contains("unsupported language code"));
         let err = parse_languagedata_csv_arg("DE=/tmp/languagedata_de.csv").unwrap_err();
+        assert!(err.contains("unsupported language code"));
+        let err = parse_languagedata_loc_arg("de-DE=/tmp/languagedata_de.loc").unwrap_err();
         assert!(err.contains("unsupported language code"));
     }
 

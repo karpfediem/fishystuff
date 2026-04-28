@@ -3125,6 +3125,7 @@ dependencies = [
  "calamine",
  "clap",
  "csv",
+ "fishystuff_core",
  "sha2",
 ]
 

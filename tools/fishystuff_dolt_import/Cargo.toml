@@ -9,4 +9,5 @@ anyhow.workspace = true
 calamine = "0.24"
 clap.workspace = true
 csv.workspace = true
+fishystuff_core = { path = "../../lib/fishystuff_core" }
 sha2 = "0.10"
