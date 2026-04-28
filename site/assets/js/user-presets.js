@@ -335,13 +335,17 @@
       return null;
     }
     const collection = currentCollection(key);
+    const actionState = collectionCurrentActionState(key, collection);
     const adapterFixedPresets = fixedPresets(key);
     const previewFixedPresets = globalThis.window?.__fishystuffPresetPreviews?.fixedPresets?.(key) || [];
     return {
       selectedPresetId: collection.selectedPresetId,
       selectedFixedId: collection.selectedFixedId,
-      hasCurrent: Boolean(collection.current),
-      currentOrigin: normalizeSource(collection.current?.origin),
+      hasCurrent: actionState.hasCurrent,
+      currentOrigin: actionState.currentOrigin,
+      canSave: actionState.canSave,
+      canDiscard: actionState.canDiscard,
+      saveAction: actionState.saveAction,
       presetCount: collection.presets.length,
       fixedPresetCount: adapterFixedPresets.length || previewFixedPresets.length,
     };
@@ -491,6 +495,82 @@
       return fixedSource(collection.selectedFixedId);
     }
     return normalizeSource(collection?.current?.origin);
+  }
+
+  function collectionCurrentActionState(collectionKey, value = null) {
+    const key = normalizeCollectionKey(collectionKey);
+    const collection = value
+      ? normalizeCollectionSnapshot(key, value)
+      : currentCollection(key);
+    const current = collection.current || null;
+    const currentOrigin = normalizeSource(current?.origin);
+    const selected = selectedSource(collection);
+    const originPayload = current ? sourcePayload(key, collection, currentOrigin) : null;
+    const originPreset = currentOrigin.kind === "preset"
+      ? collection.presets.find((preset) => preset.id === currentOrigin.id) || null
+      : null;
+    const selectedPreset = collection.selectedPresetId
+      ? collection.presets.find((preset) => preset.id === collection.selectedPresetId) || null
+      : null;
+    const selectedSnapshotCanSave = Boolean(
+      !current
+      && selectedPreset
+      && collectionAdapter(key)?.captureOnSave === true,
+    );
+    const saveAction = current
+      ? (originPreset ? "saved" : "created")
+      : (selectedSnapshotCanSave ? "saved" : "none");
+    return {
+      hasCurrent: Boolean(current),
+      current: cloneJson(current),
+      currentOrigin,
+      selectedSource: selected,
+      canSave: Boolean(current || selectedSnapshotCanSave),
+      canDiscard: Boolean(current && originPayload),
+      saveAction,
+      saveTargetPresetId: originPreset?.id || (!current ? selectedPreset?.id : "") || "",
+      discardSource: originPayload ? currentOrigin : { kind: "none", id: "" },
+    };
+  }
+
+  function refreshCurrentForAction(collectionKey, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    if (!key || options.refreshCurrent === false) {
+      return currentCollection(key);
+    }
+    const adapter = collectionAdapter(key);
+    const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
+    if (!hasPayload && (!adapter || typeof adapter.capture !== "function")) {
+      return currentCollection(key);
+    }
+    const payload = hasPayload ? options.payload : capturePayload(key);
+    if (!payload) {
+      return currentCollection(key);
+    }
+    trackCurrentPayload(key, {
+      payload,
+      ...(Object.prototype.hasOwnProperty.call(options, "origin") ? { origin: options.origin } : {}),
+    });
+    return currentCollection(key);
+  }
+
+  function currentActionState(collectionKey, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    if (!key) {
+      return collectionCurrentActionState(key);
+    }
+    const collection = options.refresh === true
+      ? refreshCurrentForAction(key, options)
+      : currentCollection(key);
+    return collectionCurrentActionState(key, collection);
+  }
+
+  function canSaveCurrent(collectionKey, options = {}) {
+    return currentActionState(collectionKey, options).canSave;
+  }
+
+  function canDiscardCurrent(collectionKey, options = {}) {
+    return currentActionState(collectionKey, options).canDiscard;
   }
 
   function matchingSource(collectionKey, collection, payload) {
@@ -797,8 +877,11 @@
     return preset;
   }
 
-  function discardCurrent(collectionKey) {
+  function discardCurrent(collectionKey, options = {}) {
     const key = normalizeCollectionKey(collectionKey);
+    if (options.refreshCurrent !== false) {
+      refreshCurrentForAction(key, options);
+    }
     const collection = currentCollection(key);
     const current = collection.current;
     if (!current) {
@@ -976,6 +1059,57 @@
       assignCollection(draft, key, collection);
     }, "save-current", { collectionKey: key });
     return cloneJson(savedPreset);
+  }
+
+  function saveCurrent(collectionKey, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    if (options.refreshCurrent !== false) {
+      refreshCurrentForAction(key, options);
+    }
+    const collection = currentCollection(key);
+    const current = collection.current;
+    const origin = normalizeSource(current?.origin);
+    const originPresetExists = origin.kind === "preset"
+      && collection.presets.some((preset) => preset.id === origin.id);
+    const actionState = collectionCurrentActionState(key, collection);
+    if (!actionState.canSave) {
+      throw new Error("Preset save failed.");
+    }
+    if (!current || originPresetExists) {
+      const preset = saveCurrentToSelectedPreset(key, options);
+      return {
+        action: "saved",
+        kind: "preset",
+        source: presetSource(preset.id),
+        current: null,
+        preset,
+      };
+    }
+
+    const hasPayload = Object.prototype.hasOwnProperty.call(options, "payload");
+    const adapter = collectionAdapter(key);
+    const requiresLiveSaveCapture = !hasPayload && adapter?.captureOnSave === true;
+    const capturedPayload = hasPayload
+      ? normalizePresetPayload(key, options.payload)
+      : capturePayload(key, { intent: "save" });
+    const payload = capturedPayload || (
+      !requiresLiveSaveCapture && current ? normalizePresetPayload(key, current.payload) : null
+    );
+    if (!payload) {
+      throw new Error("Preset save failed.");
+    }
+    const preset = createPreset(key, {
+      name: trimString(options.name) || defaultPresetName(key, collection.presets.length + 1),
+      payload,
+      select: true,
+    });
+    return {
+      action: "created",
+      kind: "preset",
+      source: presetSource(preset.id),
+      current: null,
+      preset,
+    };
   }
 
   function currentHistoryState(collectionKey) {
@@ -1205,7 +1339,11 @@
     activateFixedPreset,
     discardCurrent,
     trackCurrentPayload,
+    saveCurrent,
     saveCurrentToSelectedPreset,
+    currentActionState,
+    canSaveCurrent,
+    canDiscardCurrent,
     undoCurrent,
     redoCurrent,
     currentHistoryState,

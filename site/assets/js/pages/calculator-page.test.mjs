@@ -95,7 +95,9 @@ function defaultCalculatorActionState(overrides = {}) {
   return {
     copyUrlToken: 0,
     copyShareToken: 0,
+    saveCalculatorToken: 0,
     discardCalculatorToken: 0,
+    saveLayoutToken: 0,
     discardLayoutToken: 0,
     ...cloneTestValue(overrides),
   };
@@ -1565,7 +1567,9 @@ test("calculator action listener handles copy and discard tokens once", () => {
       _calculator_actions: {
         copyUrlToken: 1,
         copyShareToken: 1,
+        saveCalculatorToken: 0,
         discardCalculatorToken: 1,
+        saveLayoutToken: 0,
         discardLayoutToken: 0,
       },
     },
@@ -1576,7 +1580,9 @@ test("calculator action listener handles copy and discard tokens once", () => {
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
+        saveCalculatorToken: 0,
         discardCalculatorToken: 0,
+        saveLayoutToken: 0,
         discardLayoutToken: 0,
       },
     },
@@ -1619,7 +1625,9 @@ test("calculator action listener discards calculator preset current when default
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
+        saveCalculatorToken: 0,
         discardCalculatorToken: 1,
+        saveLayoutToken: 0,
         discardLayoutToken: 0,
       },
     },
@@ -1629,6 +1637,92 @@ test("calculator action listener discards calculator preset current when default
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
   assert.equal(signals.level, 0);
   assert.deepEqual(Array.from(signals.food), []);
+});
+
+test("calculator action listener saves modified default calculator preset as a new preset", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  signals.level = 42;
+  signals.food = ["item:9359"];
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  signals._calculator_actions = defaultCalculatorActionState({
+    saveCalculatorToken: 1,
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_actions: {
+        copyUrlToken: 0,
+        copyShareToken: 0,
+        saveCalculatorToken: 1,
+        discardCalculatorToken: 0,
+        saveLayoutToken: 0,
+        discardLayoutToken: 0,
+      },
+    },
+  });
+
+  const presets = env.window.__fishystuffUserPresets.presets("calculator-presets");
+  assert.equal(presets.length, 1);
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), presets[0].id);
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "");
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  assert.equal(presets[0].payload.level, 42);
+  assert.deepEqual(Array.from(presets[0].payload.food), ["item:9359"]);
+  assert.equal(env.toastCalls.length, 1);
+  assert.equal(env.toastCalls[0].type, "info");
+  assert.equal(env.toastCalls[0].message, "presets.toast.created");
+});
+
+test("calculator action listener saves modified layout preset back to its saved preset", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  const preset = env.window.__fishystuffUserPresets.createPreset("calculator-layouts", {
+    name: "Workspace 1",
+    payload: env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui),
+    select: true,
+  });
+  signals._calculator_ui = {
+    workspace_tab: "basics",
+    distribution_tab: "target_fish",
+    custom_layout: [[["overview"], ["distribution"]]],
+    custom_sections: ["overview", "distribution"],
+  };
+  env.window.__fishystuffUserPresets.trackCurrentPayload("calculator-layouts", {
+    payload: env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui),
+    origin: { kind: "preset", id: preset.id },
+  });
+  signals._calculator_actions = defaultCalculatorActionState({
+    saveLayoutToken: 1,
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_actions: {
+        copyUrlToken: 0,
+        copyShareToken: 0,
+        saveCalculatorToken: 0,
+        discardCalculatorToken: 0,
+        saveLayoutToken: 1,
+        discardLayoutToken: 0,
+      },
+    },
+  });
+
+  assert.equal(env.window.__fishystuffUserPresets.presets("calculator-layouts").length, 1);
+  assert.deepEqual(env.window.__fishystuffUserPresets.preset("calculator-layouts", preset.id).payload, {
+    custom_layout: [[["overview"], ["distribution"]]],
+  });
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
+  assert.equal(env.toastCalls.length, 1);
+  assert.equal(env.toastCalls[0].type, "info");
+  assert.equal(env.toastCalls[0].message, "presets.toast.saved");
 });
 
 test("calculator action listener discards only layout preset modifications", () => {
@@ -1657,7 +1751,9 @@ test("calculator action listener discards only layout preset modifications", () 
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
+        saveCalculatorToken: 0,
         discardCalculatorToken: 0,
+        saveLayoutToken: 0,
         discardLayoutToken: 1,
       },
     },

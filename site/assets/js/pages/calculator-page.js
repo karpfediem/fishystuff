@@ -66,7 +66,9 @@
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
     copyShareToken: 0,
+    saveCalculatorToken: 0,
     discardCalculatorToken: 0,
+    saveLayoutToken: 0,
     discardLayoutToken: 0,
   });
   const DEFAULT_CALCULATOR_LOCALE = "en-US";
@@ -272,6 +274,7 @@
       && typeof helper.capturePayload === "function"
       && typeof helper.activatePreset === "function"
       && typeof helper.trackCurrentPayload === "function"
+      && typeof helper.currentActionState === "function"
       ? helper
       : null;
   }
@@ -990,7 +993,7 @@
       },
       capture() {
         const signals = signalStore.signalObject();
-        return signals && typeof signals === "object"
+        return signals && typeof signals === "object" && calculatorPresetDefaultsReady(signals)
           ? calculatorPresetPayload(signals)
           : null;
       },
@@ -1094,20 +1097,21 @@
     });
   }
 
-  function presetCollectionHasCurrent(userPresetsSnapshot, collectionKey) {
+  function presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey) {
     const key = String(collectionKey ?? "").trim();
     if (!key) {
-      return false;
+      return null;
     }
     const collections = userPresetsSnapshot?.collections;
-    const collection = collections && typeof collections === "object" ? collections[key] : null;
-    return Boolean(collection?.hasCurrent && collection?.currentOrigin?.kind !== "none");
+    return collections && typeof collections === "object" ? collections[key] || null : null;
   }
 
-  function presetCollectionHasLiveCurrent(collectionKey) {
-    const helper = sharedUserPresets();
-    const current = helper?.current?.(collectionKey);
-    return Boolean(current?.origin?.kind && current.origin.kind !== "none");
+  function presetCollectionCanSave(userPresetsSnapshot, collectionKey) {
+    return Boolean(presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey)?.canSave);
+  }
+
+  function presetCollectionCanDiscard(userPresetsSnapshot, collectionKey) {
+    return Boolean(presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey)?.canDiscard);
   }
 
   function discardPresetCurrent(collectionKey) {
@@ -1115,11 +1119,24 @@
     if (!helper || typeof helper.discardCurrent !== "function") {
       return null;
     }
-    if (!presetCollectionHasLiveCurrent(collectionKey)) {
+    const actionState = helper.currentActionState(collectionKey, { refresh: true });
+    if (!actionState.canDiscard) {
       return null;
     }
     const result = helper.discardCurrent(collectionKey);
     return result?.current ? null : result;
+  }
+
+  function savePresetCurrent(collectionKey) {
+    const helper = sharedUserPresets();
+    if (!helper || typeof helper.saveCurrent !== "function") {
+      return null;
+    }
+    const actionState = helper.currentActionState(collectionKey, { refresh: true });
+    if (!actionState.canSave) {
+      return null;
+    }
+    return helper.saveCurrent(collectionKey);
   }
 
   function presetText(key, vars = {}) {
@@ -1131,6 +1148,31 @@
     return helper.t(normalizedKey, vars, {
       locale: calculatorSurfaceLanguage().locale,
     });
+  }
+
+  function showPresetSaveToast(result) {
+    const savedPreset = result?.preset;
+    if (!savedPreset) {
+      return;
+    }
+    const key = result.action === "created" ? "presets.toast.created" : "presets.toast.saved";
+    const message = presetText(key, { name: savedPreset.name || "" });
+    const toast = window.__fishystuffToast;
+    if (typeof toast?.success === "function") {
+      toast.success(message);
+      return;
+    }
+    toast?.info?.(message);
+  }
+
+  function showPresetActionError(_error, fallbackKey) {
+    const message = presetText(fallbackKey);
+    const toast = window.__fishystuffToast;
+    if (typeof toast?.error === "function") {
+      toast.error(message);
+      return;
+    }
+    toast?.info?.(message);
   }
 
   function calculatorInitPatch(patch) {
@@ -1792,14 +1834,36 @@
             success: calculatorText("toast.share_copied"),
           });
         },
+        saveCalculatorToken: () => {
+          try {
+            showPresetSaveToast(savePresetCurrent(CALCULATOR_PRESET_COLLECTION_KEY));
+          } catch (error) {
+            showPresetActionError(error, "presets.error.save");
+          }
+        },
         discardCalculatorToken: () => {
-          if (discardPresetCurrent(CALCULATOR_PRESET_COLLECTION_KEY)) {
-            window.__fishystuffToast.info(presetText("presets.toast.discarded"));
+          try {
+            if (discardPresetCurrent(CALCULATOR_PRESET_COLLECTION_KEY)) {
+              window.__fishystuffToast.info(presetText("presets.toast.discarded"));
+            }
+          } catch (error) {
+            showPresetActionError(error, "presets.error.discard");
+          }
+        },
+        saveLayoutToken: () => {
+          try {
+            showPresetSaveToast(savePresetCurrent(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY));
+          } catch (error) {
+            showPresetActionError(error, "presets.error.save");
           }
         },
         discardLayoutToken: () => {
-          if (discardPresetCurrent(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY)) {
-            window.__fishystuffToast.info(presetText("presets.toast.discarded"));
+          try {
+            if (discardPresetCurrent(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY)) {
+              window.__fishystuffToast.info(presetText("presets.toast.discarded"));
+            }
+          } catch (error) {
+            showPresetActionError(error, "presets.error.discard");
           }
         },
       },
@@ -2828,7 +2892,8 @@
     layoutPresetTitleIconAlias(payload) {
       return presetPreviewTitleIconAlias(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, payload);
     },
-    presetCollectionHasCurrent,
+    presetCollectionCanSave,
+    presetCollectionCanDiscard,
     applyLayoutPreset: applyCalculatorLayoutPreset,
     applyLayoutPresetInPlace: applyCalculatorLayoutPresetInPlace,
     toggleCustomSection,

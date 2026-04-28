@@ -558,13 +558,6 @@ export class FishyPresetManager extends HTMLElementBase {
     return presetId ? (presetHelper()?.preset?.(this.collectionKey, presetId) ?? null) : null;
   }
 
-  sourceItemForCurrent(currentItem, items = this.cardItems().items) {
-    if (!currentItem) {
-      return null;
-    }
-    return items.find((item) => sourceMatchesCard(currentItem.source, item.key)) || null;
-  }
-
   linkedSavedPresetForCurrent(currentItem = this.cardItems().currentItem) {
     if (!currentItem || currentItem.source?.kind !== "preset") {
       return null;
@@ -722,6 +715,12 @@ export class FishyPresetManager extends HTMLElementBase {
     const helper = presetHelper();
     const adapter = this.adapter();
     const canInteract = Boolean(helper && adapter && this.collectionKey);
+    const actionState = canInteract && typeof helper.currentActionState === "function"
+      ? helper.currentActionState(this.collectionKey, { refresh: true })
+      : {
+          canSave: false,
+          canDiscard: false,
+        };
     const { items, presetItems, currentPayload, currentItem } = this.cardItems();
     const activePresetId = this.activePresetId();
     const activeFixedId = this.activeFixedId();
@@ -729,11 +728,10 @@ export class FishyPresetManager extends HTMLElementBase {
     const selectedItem = this.selectedItem(items);
     const selectedSavedPreset = this.selectedSavedPreset();
     const linkedSavedPreset = this.linkedSavedPresetForCurrent(currentItem);
-    const linkedSourceItem = this.sourceItemForCurrent(currentItem, items);
     const copyItem = currentItem || selectedItem;
     const shouldHighlightCopy = Boolean(currentItem && !linkedSavedPreset);
-    const canSaveCurrent = Boolean(currentItem && linkedSavedPreset);
-    const canSaveSelectedSnapshot = Boolean(!currentItem && selectedSavedPreset && adapter?.captureOnSave === true);
+    const canSave = canInteract && Boolean(actionState.canSave);
+    const canDiscard = canInteract && Boolean(actionState.canDiscard);
     const managerIconAlias = this.managerIconAlias();
 
     setIconElementAlias(this.element("open-icon"), managerIconAlias);
@@ -792,13 +790,15 @@ export class FishyPresetManager extends HTMLElementBase {
     const saveButton = this.button("save");
     if (saveButton) {
       saveButton.innerHTML = `${iconMarkup("check-badge-solid", "size-4")}<span>${this.translate("presets.button.save", "Save")}</span>`;
-      saveButton.disabled = !canInteract || (!canSaveCurrent && !canSaveSelectedSnapshot);
+      saveButton.hidden = !canSave;
+      saveButton.disabled = !canSave;
     }
 
     const discardButton = this.button("discard");
     if (discardButton) {
       discardButton.innerHTML = `${iconMarkup("clear", "size-4")}<span>${this.translate("presets.button.discard", "Discard")}</span>`;
-      discardButton.disabled = !canInteract || !currentItem || !linkedSourceItem;
+      discardButton.hidden = !canDiscard;
+      discardButton.disabled = !canDiscard;
     }
 
     const copyButton = this.button("copy");
@@ -920,7 +920,7 @@ export class FishyPresetManager extends HTMLElementBase {
     try {
       helper.renamePreset(this.collectionKey, selectedPreset.id, nextName);
       input.value = nextName;
-    } catch (error) {
+    } catch (_error) {
       input.value = selectedPreset.name;
       toastHelper()?.error?.(
         error instanceof Error ? error.message : this.translate("presets.error.save", "Preset save failed."),
@@ -1011,21 +1011,23 @@ export class FishyPresetManager extends HTMLElementBase {
 
   handleSaveClick() {
     const helper = presetHelper();
-    if (!helper || typeof helper.saveCurrentToSelectedPreset !== "function") {
+    if (!helper || typeof helper.saveCurrent !== "function") {
       return;
     }
     try {
-      const saved = helper.saveCurrentToSelectedPreset(this.collectionKey);
+      const result = helper.saveCurrent(this.collectionKey);
+      const saved = result?.preset;
       if (saved?.id) {
         this.selectedCardKey = presetCardKey(saved.id);
       }
+      const toastKey = result?.action === "created" ? "presets.toast.created" : "presets.toast.saved";
       toastHelper()?.success?.(
-        this.translate("presets.toast.saved", 'Saved "{$name}".', { name: saved?.name || "" }),
+        this.translate(toastKey, toastKey, { name: saved?.name || "" }),
       );
       this.sync({ refreshNames: true });
-    } catch (error) {
+    } catch (_error) {
       toastHelper()?.error?.(
-        error instanceof Error ? error.message : this.translate("presets.error.save", "Preset save failed."),
+        this.translate("presets.error.save", "presets.error.save"),
       );
     }
   }
@@ -1056,7 +1058,7 @@ export class FishyPresetManager extends HTMLElementBase {
       this.sync({ refreshNames: true });
     } catch (error) {
       toastHelper()?.error?.(
-        error instanceof Error ? error.message : this.translate("presets.error.discard", "Preset discard failed."),
+        this.translate("presets.error.discard", "presets.error.discard"),
       );
     }
   }

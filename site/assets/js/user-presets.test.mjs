@@ -305,6 +305,103 @@ test("user presets track modified current state from a fixed preset without crea
   assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
 });
 
+test("user presets save modified fixed presets by creating and selecting a saved preset", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+    defaultPresetName(index) {
+      return `Workspace ${index}`;
+    },
+  });
+
+  helper.ensurePersistedSelection("calculator-layouts");
+  currentPayload = {
+    row: 4,
+  };
+  helper.ensurePersistedSelection("calculator-layouts");
+
+  const saved = helper.saveCurrent("calculator-layouts");
+
+  assert.equal(saved.action, "created");
+  assert.equal(saved.preset.name, "Workspace 1");
+  assert.deepEqual(saved.preset.payload, { row: 4 });
+  assert.equal(helper.presets("calculator-layouts").length, 1);
+  assert.equal(helper.selectedPresetId("calculator-layouts"), saved.preset.id);
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "");
+  assert.equal(helper.current("calculator-layouts"), null);
+});
+
+test("user presets can save untracked live modifications through shared current actions", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
+    },
+    defaultPresetName(index) {
+      return `Workspace ${index}`;
+    },
+  });
+
+  helper.activateFixedPreset("calculator-layouts", "default");
+  currentPayload = {
+    row: 6,
+  };
+
+  const actionState = helper.currentActionState("calculator-layouts", { refresh: true });
+  assert.equal(actionState.canSave, true);
+  assert.equal(actionState.canDiscard, true);
+  assert.equal(actionState.saveAction, "created");
+
+  const saved = helper.saveCurrent("calculator-layouts");
+
+  assert.equal(saved.action, "created");
+  assert.deepEqual(saved.preset.payload, { row: 6 });
+  assert.equal(helper.selectedPresetId("calculator-layouts"), saved.preset.id);
+  assert.equal(helper.current("calculator-layouts"), null);
+});
+
 test("user presets do not emit Datastar updates when tracking unchanged payloads", () => {
   const env = createEnv();
   const helper = env.helper;
@@ -772,6 +869,38 @@ test("user presets do not normalize a failed adapter capture into a default payl
   assert.equal(helper.ensurePersistedSelection("map-presets").action, "cleared");
 });
 
+test("user presets shared action refresh preserves selection when live capture is unavailable", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  helper.registerCollectionAdapter("calculator-presets", {
+    normalizePayload(payload) {
+      return {
+        level: Number.parseInt(payload?.level ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          level: 0,
+        },
+      }];
+    },
+    capture() {
+      return null;
+    },
+  });
+  helper.activateFixedPreset("calculator-presets", "default");
+
+  const actionState = helper.currentActionState("calculator-presets", { refresh: true });
+
+  assert.equal(actionState.canSave, false);
+  assert.equal(actionState.canDiscard, false);
+  assert.equal(helper.selectedFixedId("calculator-presets"), "default");
+  assert.equal(helper.current("calculator-presets"), null);
+});
+
 test("user presets requiring live save capture fail instead of saving stale current payload", () => {
   const env = createEnv();
   const helper = env.helper;
@@ -923,6 +1052,9 @@ test("user presets patch bound Datastar signals on collection and adapter change
     selectedFixedId: "",
     hasCurrent: false,
     currentOrigin: { kind: "none", id: "" },
+    canSave: false,
+    canDiscard: false,
+    saveAction: "none",
     presetCount: 0,
     fixedPresetCount: 1,
   });

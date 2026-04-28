@@ -9972,12 +9972,15 @@ fn render_calculator_app(
                 <div class="flex flex-wrap gap-2" data-calculator-action-group="main">
                     <fishy-preset-manager class="fishy-calculator-presets"
                                           data-preset-collection="calculator-presets"></fishy-preset-manager>
-                    <button class="btn"
-                            data-class:btn-warning="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')"
-                            data-class:btn-outline="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')"
-                            data-class:btn-disabled="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')"
-                            data-attr:aria-disabled="(!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')).toString()"
-                            data-on:click="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets') && ($_calculator_actions.discardCalculatorToken = (($_calculator_actions && $_calculator_actions.discardCalculatorToken) || 0) + 1)">
+                    <button class="btn btn-primary"
+                            data-show="window.__fishystuffCalculator.presetCollectionCanSave($_user_presets, 'calculator-presets')"
+                            data-on:click="window.__fishystuffCalculator.presetCollectionCanSave($_user_presets, 'calculator-presets') && ($_calculator_actions.saveCalculatorToken = (($_calculator_actions && $_calculator_actions.saveCalculatorToken) || 0) + 1)">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-check-badge-solid"></use></svg>
+                        __TEXT_SAVE__
+                    </button>
+                    <button class="btn btn-warning btn-outline"
+                            data-show="window.__fishystuffCalculator.presetCollectionCanDiscard($_user_presets, 'calculator-presets')"
+                            data-on:click="window.__fishystuffCalculator.presetCollectionCanDiscard($_user_presets, 'calculator-presets') && ($_calculator_actions.discardCalculatorToken = (($_calculator_actions && $_calculator_actions.discardCalculatorToken) || 0) + 1)">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
                         __TEXT_DISCARD__
                     </button>
@@ -10011,12 +10014,15 @@ fn render_calculator_app(
                 <div class="mb-3 flex flex-wrap gap-2" data-calculator-action-group="custom-layout">
                     <fishy-preset-manager class="fishy-calculator-layout-presets"
                                           data-preset-collection="calculator-layouts"></fishy-preset-manager>
-                    <button class="btn"
-                            data-class:btn-warning="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"
-                            data-class:btn-outline="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"
-                            data-class:btn-disabled="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"
-                            data-attr:aria-disabled="(!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')).toString()"
-                            data-on:click="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts') && ($_calculator_actions.discardLayoutToken = (($_calculator_actions && $_calculator_actions.discardLayoutToken) || 0) + 1)">
+                    <button class="btn btn-primary"
+                            data-show="window.__fishystuffCalculator.presetCollectionCanSave($_user_presets, 'calculator-layouts')"
+                            data-on:click="window.__fishystuffCalculator.presetCollectionCanSave($_user_presets, 'calculator-layouts') && ($_calculator_actions.saveLayoutToken = (($_calculator_actions && $_calculator_actions.saveLayoutToken) || 0) + 1)">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-check-badge-solid"></use></svg>
+                        __TEXT_SAVE__
+                    </button>
+                    <button class="btn btn-warning btn-outline"
+                            data-show="window.__fishystuffCalculator.presetCollectionCanDiscard($_user_presets, 'calculator-layouts')"
+                            data-on:click="window.__fishystuffCalculator.presetCollectionCanDiscard($_user_presets, 'calculator-layouts') && ($_calculator_actions.discardLayoutToken = (($_calculator_actions && $_calculator_actions.discardLayoutToken) || 0) + 1)">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
                         __TEXT_DISCARD__
                     </button>
@@ -10391,6 +10397,10 @@ fn render_calculator_app(
                 data.lang,
                 "calculator.server.action.copy_share",
             )),
+        ),
+        (
+            "__TEXT_SAVE__",
+            escape_html(&calculator_route_text(data.lang, "presets.button.save")),
         ),
         (
             "__TEXT_DISCARD__",
@@ -15228,10 +15238,16 @@ mod tests {
         assert!(text.contains("bound-select-id=\"outfits-bound-inputs\""));
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
+        assert!(text.contains("$_calculator_actions.saveLayoutToken = (($_calculator_actions && $_calculator_actions.saveLayoutToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.discardLayoutToken = (($_calculator_actions && $_calculator_actions.discardLayoutToken) || 0) + 1"));
+        assert!(text.contains("$_calculator_actions.saveCalculatorToken = (($_calculator_actions && $_calculator_actions.saveCalculatorToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.discardCalculatorToken = (($_calculator_actions && $_calculator_actions.discardCalculatorToken) || 0) + 1"));
-        assert!(text.contains("presetCollectionHasCurrent($_user_presets, 'calculator-presets')"));
-        assert!(text.contains("presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"));
+        assert!(text.contains("presetCollectionCanSave($_user_presets, 'calculator-presets')"));
+        assert!(text.contains("presetCollectionCanDiscard($_user_presets, 'calculator-presets')"));
+        assert!(text.contains("presetCollectionCanSave($_user_presets, 'calculator-layouts')"));
+        assert!(text.contains("presetCollectionCanDiscard($_user_presets, 'calculator-layouts')"));
+        assert!(text.contains("data-show=\"window.__fishystuffCalculator.presetCollectionCanSave($_user_presets, 'calculator-presets')\""));
+        assert!(text.contains("data-show=\"window.__fishystuffCalculator.presetCollectionCanDiscard($_user_presets, 'calculator-layouts')\""));
         assert!(text.contains("<fishy-preset-manager"));
         assert!(text.contains("data-calculator-action-group=\"main\""));
         assert!(text.contains("data-calculator-action-group=\"share\""));
@@ -15277,6 +15293,7 @@ mod tests {
         assert!(text.contains("Remove Overview from Custom"));
         assert!(text.contains("#fishy-trash"));
         assert!(text.contains("#fishy-drag-handle"));
+        assert!(text.contains("#fishy-check-badge-solid"));
         assert!(!text.contains("window.__fishystuffCalculator.persist("));
         assert!(!text.contains("window.__fishystuffCalculator.persistSignalPatchFilter()"));
         assert!(!text.contains("window.__fishystuffCalculator.presetUrl("));

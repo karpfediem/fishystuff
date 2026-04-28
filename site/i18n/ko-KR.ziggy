@@ -1101,6 +1101,7 @@
   "presets.toast.applied": "\"{$name}\"을(를) 적용했습니다.",
   "presets.error.import": "프리셋 가져오기에 실패했습니다.",
   "presets.error.save": "프리셋 저장에 실패했습니다.",
+  "presets.error.discard": "프리셋 폐기에 실패했습니다.",
   "presets.error.capture": "현재 프리셋 상태를 사용할 수 없습니다.",
   "presets.quick_switch.layout": "작업 공간",
   "presets.quick_switch.calculator": "계산기",

@@ -62,6 +62,7 @@ presets.toast.applied = Applied "{$name}".
 
 presets.error.import = Preset import failed.
 presets.error.save = Preset save failed.
+presets.error.discard = Preset discard failed.
 presets.error.capture = Current preset state is unavailable.
 
 presets.quick_switch.layout = Workspace

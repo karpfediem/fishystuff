@@ -62,6 +62,7 @@ presets.toast.applied = "{$name}" angewendet.
 
 presets.error.import = Vorlagenimport fehlgeschlagen.
 presets.error.save = Vorlage konnte nicht gespeichert werden.
+presets.error.discard = Vorlage konnte nicht verworfen werden.
 presets.error.capture = Aktueller Vorlagenzustand ist nicht verfügbar.
 
 presets.quick_switch.layout = Arbeitsbereich
