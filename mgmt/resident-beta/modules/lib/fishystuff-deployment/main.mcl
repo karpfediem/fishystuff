@@ -1,0 +1,43 @@
+import "fmt"
+
+class base_dirs($st) {
+	$state_dir str = $st->state_dir || "/var/lib/fishystuff/"
+	$run_dir str = $st->run_dir || "/run/fishystuff/"
+	$srv_dir str = $st->srv_dir || "/srv/fishystuff/"
+
+	file "${state_dir}" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "${run_dir}" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+
+	file "${srv_dir}" {
+		state => "exists",
+		mode => "u=rwx,go=rx",
+		owner => "root",
+		group => "root",
+	}
+}
+
+class marker($st) {
+	$path str = $st->path || "/run/fishystuff/deployment-marker"
+	$marker str = $st->marker
+
+	panic($marker == "", "deployment marker requires marker")
+
+	file "${path}" {
+		state => "exists",
+		content => fmt.printf("%s\n", $marker),
+		mode => "u=rw,go=r",
+		owner => "root",
+		group => "root",
+	}
+}

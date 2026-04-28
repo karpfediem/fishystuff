@@ -59,6 +59,7 @@ load_remote_state() {
   local unit_name=""
   local bundle_gcroot=""
   local content_gcroot=""
+  local previous_content_gcroot=""
   local remote_output=""
   local tmp_key=""
   local line_type=""
@@ -83,6 +84,12 @@ load_remote_state() {
     if [[ -n "$content_gcroot" && -z "${seen_roots[$content_gcroot]:-}" ]]; then
       seen_roots["$content_gcroot"]=1
       root_paths+=("$content_gcroot")
+    fi
+
+    previous_content_gcroot="$(status_service_previous_content_gcroot_path "$service")"
+    if [[ -n "$previous_content_gcroot" && -z "${seen_roots[$previous_content_gcroot]:-}" ]]; then
+      seen_roots["$previous_content_gcroot"]=1
+      root_paths+=("$previous_content_gcroot")
     fi
   done
 
@@ -192,6 +199,7 @@ print_service_status() {
   local unit_name=""
   local bundle_gcroot=""
   local content_gcroot=""
+  local previous_content_gcroot=""
   local backing_service=""
   local local_probe_port=""
 
@@ -244,6 +252,9 @@ print_service_status() {
   if [[ -n "$content_gcroot" ]]; then
     printf 'content_gcroot: %s\n' "$content_gcroot"
     printf 'content_store_path: %s\n' "${remote_root_store_path[$content_gcroot]:-}"
+    previous_content_gcroot="$(status_service_previous_content_gcroot_path "$service")"
+    printf 'content_previous_gcroot: %s\n' "$previous_content_gcroot"
+    printf 'content_previous_store_path: %s\n' "${remote_root_store_path[$previous_content_gcroot]:-}"
   fi
 
   case "$service" in

@@ -1,0 +1,82 @@
+import "fmt"
+import "golang/strings" as golang_strings
+import "local"
+
+class symlink_release($st) {
+	$name str = $st->name
+	$store_path str = $st->store_path
+	$drv_path str = $st->drv_path || ""
+	$gcroot_path str = $st->gcroot_path
+	$previous_gcroot_path_override str = $st->previous_gcroot_path || ""
+	$previous_gcroot_path str = if $previous_gcroot_path_override != "" {
+		$previous_gcroot_path_override
+	} else {
+		fmt.printf("%s-previous", golang_strings.trim_suffix($gcroot_path, "-current"))
+	}
+	$link_path str = $st->link_path
+	$candidate_link_path str = $st->candidate_link_path || fmt.printf("%s-candidate", $link_path)
+	$closure_mode str = if $drv_path != "" {
+		"realise"
+	} else {
+		"verify"
+	}
+	$capture_previous_name str = fmt.printf("%s-capture-previous", $name)
+	$capture_previous_vardir = local.vardir(fmt.printf("fishystuff-blue-green-%s/", $name))
+	$capture_previous_stamp_path str = fmt.printf("%sprevious", $capture_previous_vardir)
+
+	panic($name == "", "blue-green symlink release requires name")
+	panic($store_path == "", "blue-green symlink release requires store_path")
+	panic($gcroot_path == "", "blue-green symlink release requires gcroot_path")
+	panic($previous_gcroot_path == "", "blue-green symlink release requires previous_gcroot_path")
+	panic($link_path == "", "blue-green symlink release requires link_path")
+	panic($candidate_link_path == $link_path, "blue-green symlink release candidate_link_path must differ from link_path")
+
+	nix:closure "${name}" {
+		paths => [$store_path,],
+		realise_inputs => if $drv_path != "" { [$drv_path,] } else { [] },
+		mode => $closure_mode,
+	}
+
+	nix:gcroot "${gcroot_path}" {
+		target => $store_path,
+		state => "exists",
+		force => true,
+	}
+
+	file "${link_path}" {
+		state => "exists",
+		source => $store_path,
+		symlink => true,
+		force => true,
+	}
+
+	file "${candidate_link_path}" {
+		state => "exists",
+		source => $store_path,
+		symlink => true,
+		force => true,
+	}
+
+	exec "${capture_previous_name}" {
+		cmd => "/usr/bin/bash",
+		args => [
+			"-e",
+			"-u",
+			"-o",
+			"pipefail",
+			"-c",
+			"link=\"$1\"; previous=\"$2\"; target=\"$3\"; current=\"$(/usr/bin/readlink -f \"$link\" 2>/dev/null || true)\"; if [ -n \"$current\" ] && [ \"$current\" != \"$target\" ] && [ -e \"$current\" ]; then case \"$current\" in /nix/store/*) /usr/bin/install -d -m 0755 \"$(/usr/bin/dirname \"$previous\")\"; /usr/bin/ln -sfnT \"$current\" \"$previous\" ;; esac; fi",
+			"fishystuff-blue-green-capture-previous",
+			$link_path,
+			$previous_gcroot_path,
+			$store_path,
+		],
+		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $store_path, $capture_previous_stamp_path),
+		doneshell => "/usr/bin/bash",
+		ifcmd => fmt.printf("stamp=\"$(/usr/bin/cat '%s' 2>/dev/null || true)\"; current=\"$(/usr/bin/readlink -f '%s' 2>/dev/null || true)\"; /usr/bin/test \"$stamp\" != '%s' || { /usr/bin/test -n \"$current\" && /usr/bin/test \"$current\" != '%s'; }", $capture_previous_stamp_path, $link_path, $store_path, $store_path),
+		ifshell => "/usr/bin/bash",
+	}
+
+	Nix:Closure["${name}"] -> Nix:Gcroot["${gcroot_path}"] -> File["${candidate_link_path}"]
+	File["${candidate_link_path}"] -> Exec["${capture_previous_name}"] -> File["${link_path}"]
+}

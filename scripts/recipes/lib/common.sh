@@ -568,6 +568,19 @@ status_service_content_gcroot_path() {
   esac
 }
 
+status_service_previous_content_gcroot_path() {
+  local current_gcroot=""
+  current_gcroot="$(status_service_content_gcroot_path "$1")"
+  if [[ -z "$current_gcroot" ]]; then
+    printf '%s' ""
+    return
+  fi
+  case "$current_gcroot" in
+    *-current) printf '%s-previous' "${current_gcroot%-current}" ;;
+    *) printf '%s-previous' "$current_gcroot" ;;
+  esac
+}
+
 status_service_remote_unit_name() {
   local service
   service="$(canonical_public_service_name "$1")"
