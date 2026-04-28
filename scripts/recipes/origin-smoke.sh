@@ -114,13 +114,15 @@ probe() {
 }
 
 run_once() {
-  probe "site homepage" "$site_base_url/"
-  probe "api healthz" "$api_base_url/healthz"
-  probe "api readyz" "$api_base_url/readyz"
-  probe "api meta" "$api_base_url/api/v1/meta"
-  probe "calculator catalog" "$api_base_url/api/v1/calculator?lang=en"
-  probe "calculator datastar init" "$api_base_url/api/v1/calculator/datastar/init?lang=en&locale=en-US"
-  probe "cdn runtime manifest" "$cdn_base_url/map/runtime-manifest.json"
+  local failed=0
+  probe "site homepage" "$site_base_url/" || failed=1
+  probe "api healthz" "$api_base_url/healthz" || failed=1
+  probe "api readyz" "$api_base_url/readyz" || failed=1
+  probe "api meta" "$api_base_url/api/v1/meta" || failed=1
+  probe "calculator catalog" "$api_base_url/api/v1/calculator?lang=en" || failed=1
+  probe "calculator datastar init" "$api_base_url/api/v1/calculator/datastar/init?lang=en&locale=en-US" || failed=1
+  probe "cdn runtime manifest" "$cdn_base_url/map/runtime-manifest.json" || failed=1
+  return "$failed"
 }
 
 while true; do
