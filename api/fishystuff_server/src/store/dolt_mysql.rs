@@ -16,7 +16,7 @@ mod zone_profile_v2;
 #[cfg(test)]
 mod layers;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -767,6 +767,28 @@ impl DoltMySqlStore {
         }
     }
 
+    fn query_data_languages(&self) -> AppResult<Vec<String>> {
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let tables: Vec<String> = conn
+            .query(
+                "SELECT table_name \
+                 FROM information_schema.tables \
+                 WHERE table_schema = DATABASE() \
+                   AND table_name LIKE 'languagedata_%'",
+            )
+            .map_err(db_unavailable)?;
+        let mut languages = BTreeSet::new();
+        for table_name in tables {
+            let Some(code) = table_name.strip_prefix("languagedata_") else {
+                continue;
+            };
+            if let Some(lang) = DataLang::from_code(code) {
+                languages.insert(lang.code().to_string());
+            }
+        }
+        Ok(languages.into_iter().collect())
+    }
+
     fn query_fish_names(
         &self,
         lang: &DataLang,
@@ -1115,8 +1137,19 @@ impl DoltMySqlStore {
         Ok(zones)
     }
 
-    fn query_fish_identities(&self, ref_id: Option<&str>) -> AppResult<FishIdentityIndex> {
-        let cache_key = Self::revision_cache_key(ref_id);
+    fn fish_identity_cache_key(lang: &DataLang, ref_id: Option<&str>) -> String {
+        match ref_id {
+            Some(ref_id) => format!("{}:{ref_id}", lang.code()),
+            None => format!("{}:head", lang.code()),
+        }
+    }
+
+    fn query_fish_identities(
+        &self,
+        lang: &DataLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<FishIdentityIndex> {
+        let cache_key = Self::fish_identity_cache_key(lang, ref_id);
         loop {
             if let Ok(cache) = self.fish_identity_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {
@@ -1139,7 +1172,7 @@ impl DoltMySqlStore {
             drop(inflight);
         }
 
-        let result = self.query_fish_identities_uncached(ref_id);
+        let result = self.query_fish_identities_uncached(lang, ref_id);
 
         let (inflight_lock, inflight_cvar) = &*self.fish_identity_inflight;
         let mut inflight = inflight_lock
@@ -1158,25 +1191,31 @@ impl DoltMySqlStore {
         Ok(identities)
     }
 
-    fn query_fish_identities_uncached(&self, ref_id: Option<&str>) -> AppResult<FishIdentityIndex> {
+    fn query_fish_identities_uncached(
+        &self,
+        lang: &DataLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<FishIdentityIndex> {
+        self.validate_data_lang_available(lang, ref_id)?;
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
         } else {
             String::new()
         };
+        let languagedata_table = format!("languagedata_{}", lang.code());
         let query = format!(
             "SELECT \
                 ft.encyclopedia_key, \
                 ft.item_key, \
-                en.`text` AS localized_name, \
+                loc.`text` AS localized_name, \
                 ft.icon, \
                 ft.encyclopedia_icon \
              FROM fish_table{as_of} ft \
-             JOIN languagedata_en{as_of} en ON en.`id` = ft.item_key \
-               AND en.`format` = 'A' \
-               AND en.`unk` IS NULL \
-               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL"
+             JOIN `{languagedata_table}`{as_of} loc ON loc.`id` = ft.item_key \
+               AND loc.`format` = 'A' \
+               AND loc.`unk` IS NULL \
+               AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
@@ -2033,6 +2072,7 @@ impl Store for DoltMySqlStore {
                 patches,
                 default_patch,
                 map_versions,
+                data_languages: this.query_data_languages()?,
                 defaults: this.defaults.clone(),
             })
         })
@@ -2177,7 +2217,7 @@ impl Store for DoltMySqlStore {
 
             let lang = DataLang::from_param(request.lang.as_deref())?;
             let fish_names = this.query_fish_names(&lang, request.ref_id.as_deref())?;
-            let fish_table = this.query_fish_identities(request.ref_id.as_deref())?;
+            let fish_table = this.query_fish_identities(&lang, request.ref_id.as_deref())?;
             let zones_vec = this.query_zones(request.ref_id.as_deref())?;
             let zones: HashMap<u32, ZoneEntry> = zones_vec
                 .into_iter()

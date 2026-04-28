@@ -4,10 +4,13 @@
   const CATALOGS = GENERATED.catalogs || {};
   const PAGE_MANIFEST = GENERATED.pageManifest || {};
   const UI_SETTINGS_KEY = "fishystuff.ui.settings.v1";
+  const DATA_LANGUAGES_CACHE_KEY = "fishystuff.data.languages.v1";
   const LOCALE_PATH = ["app", "language", "locale"];
   const API_LANG_PATH = ["app", "language", "apiLang"];
   const AUTO_VALUE = "__auto__";
   const CHANGE_EVENT = "fishystuff:languagechange";
+  let runtimeApiLanguages = initialApiLanguages();
+  let dataLanguagesPromise = null;
 
   function trimString(value) {
     return String(value ?? "").trim();
@@ -37,6 +40,40 @@
       return parsed === undefined ? fallback : parsed;
     } catch (_error) {
       return fallback;
+    }
+  }
+
+  function isDataLangCode(value) {
+    const code = trimString(value);
+    return /^[a-z0-9_]+$/.test(code);
+  }
+
+  function normalizeApiLanguages(values) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+    const seen = new Set();
+    const languages = [];
+    for (const value of values) {
+      const code = trimString(value);
+      if (!isDataLangCode(code) || seen.has(code)) {
+        continue;
+      }
+      seen.add(code);
+      languages.push(code);
+    }
+    return languages;
+  }
+
+  function initialApiLanguages() {
+    const cached = normalizeApiLanguages(readJsonStorage(DATA_LANGUAGES_CACHE_KEY, []));
+    return cached.length ? cached : normalizeApiLanguages(CONFIG.apiLanguages);
+  }
+
+  function writeDataLanguagesCache(languages) {
+    try {
+      localStorage.setItem(DATA_LANGUAGES_CACHE_KEY, JSON.stringify(languages));
+    } catch (_error) {
     }
   }
 
@@ -98,7 +135,7 @@
   }
 
   function apiLanguages() {
-    return Array.isArray(CONFIG.apiLanguages) ? CONFIG.apiLanguages.map(trimString).filter(Boolean) : [];
+    return runtimeApiLanguages.slice();
   }
 
   function defaultContentLang() {
@@ -110,7 +147,11 @@
   }
 
   function defaultApiLang() {
-    return trimString(CONFIG.defaultApiLang) || "en";
+    const configured = trimString(CONFIG.defaultApiLang);
+    if (configured && runtimeApiLanguages.includes(configured)) {
+      return configured;
+    }
+    return runtimeApiLanguages[0] || configured || "en";
   }
 
   function currentContentLang() {
@@ -123,15 +164,6 @@
     return localeLanguages().includes(contentLang) ? contentLang : defaultLocale();
   }
 
-  function defaultApiLangForLocale(locale) {
-    const normalized = trimString(locale).toLowerCase();
-    const baseLanguage = normalized.split(/[-_]/)[0];
-    if (baseLanguage && apiLanguages().includes(baseLanguage)) {
-      return baseLanguage;
-    }
-    return defaultApiLang();
-  }
-
   function resolveLocale(contentLang, setting) {
     const normalizedSetting = trimString(setting);
     if (normalizedSetting && localeLanguages().includes(normalizedSetting)) {
@@ -140,12 +172,12 @@
     return defaultLocaleForContent(contentLang);
   }
 
-  function resolveApiLang(locale, setting) {
+  function resolveApiLang(_locale, setting) {
     const normalizedSetting = trimString(setting);
     if (normalizedSetting && apiLanguages().includes(normalizedSetting)) {
       return normalizedSetting;
     }
-    return defaultApiLangForLocale(locale);
+    return defaultApiLang();
   }
 
   function replaceVars(message, vars = {}) {
@@ -169,6 +201,82 @@
       localeSource: localeSetting ? "explicit" : "auto",
       apiLangSource: apiLangSetting ? "explicit" : "auto",
     });
+  }
+
+  function sameSnapshot(left, right) {
+    return Boolean(left && right)
+      && left.contentLang === right.contentLang
+      && left.locale === right.locale
+      && left.apiLang === right.apiLang
+      && left.localeSetting === right.localeSetting
+      && left.apiLangSetting === right.apiLangSetting;
+  }
+
+  function apiUrl(pathname) {
+    if (typeof window.__fishystuffResolveApiUrl === "function") {
+      return window.__fishystuffResolveApiUrl(pathname);
+    }
+    const configured = window.__fishystuffRuntimeConfig || {};
+    const baseUrl = trimString(window.__fishystuffApiBaseUrl || configured.apiBaseUrl);
+    if (!baseUrl) {
+      return pathname;
+    }
+    try {
+      return new URL(pathname, baseUrl).toString();
+    } catch (_error) {
+      return pathname;
+    }
+  }
+
+  function updateRuntimeApiLanguages(languages) {
+    const normalized = normalizeApiLanguages(languages);
+    if (!normalized.length) {
+      return false;
+    }
+    if (normalized.join("\n") === runtimeApiLanguages.join("\n")) {
+      writeDataLanguagesCache(normalized);
+      return false;
+    }
+    runtimeApiLanguages = normalized;
+    writeDataLanguagesCache(normalized);
+    return true;
+  }
+
+  async function loadDataLanguages() {
+    if (dataLanguagesPromise) {
+      return dataLanguagesPromise;
+    }
+    dataLanguagesPromise = (async () => {
+      if (typeof fetch !== "function") {
+        return apiLanguages();
+      }
+      let response;
+      try {
+        response = await fetch(apiUrl("/api/v1/meta"));
+      } catch (_error) {
+        return apiLanguages();
+      }
+      if (!response || !response.ok || typeof response.json !== "function") {
+        return apiLanguages();
+      }
+      let meta;
+      try {
+        meta = await response.json();
+      } catch (_error) {
+        return apiLanguages();
+      }
+      const before = snapshot();
+      if (updateRuntimeApiLanguages(meta && meta.data_languages)) {
+        const after = snapshot();
+        apply(document);
+        renderLanguagePanels(document);
+        if (!sameSnapshot(before, after)) {
+          dispatchChange(after);
+        }
+      }
+      return apiLanguages();
+    })();
+    return dataLanguagesPromise;
   }
 
   function catalogForLocale(locale) {
@@ -408,8 +516,11 @@
     event: CHANGE_EVENT,
     apply,
     current: snapshot,
+    dataLanguages: apiLanguages,
     renderPanels: renderLanguagePanels,
     resolveContentUrl,
+    ready: loadDataLanguages(),
+    refreshDataLanguages: loadDataLanguages,
     t,
   });
 

@@ -93,7 +93,7 @@ impl DataLang {
     }
 
     pub fn is_korean(&self) -> bool {
-        self.code() == "ko"
+        self.code() == "kr"
     }
 }
 
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn data_lang_does_not_normalize_locale_tags() {
-        assert_eq!(DataLang::from_code("ko").unwrap().code(), "ko");
+        assert_eq!(DataLang::from_code("kr").unwrap().code(), "kr");
         assert!(DataLang::from_code("KO").is_none());
         assert!(DataLang::from_code("ko-KR").is_none());
         assert!(DataLang::from_param(Some("ko-KR")).is_err());

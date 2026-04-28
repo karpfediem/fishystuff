@@ -291,18 +291,18 @@ fn pet_option_kind(effects: &PetOptionEffects) -> Option<PetOptionKind> {
 fn localized_pet_option_label(
     lang: &DataLang,
     skill_no: &str,
-    english_label: Option<&str>,
+    data_label: Option<&str>,
     korean_label: Option<&str>,
     korean_description: Option<&str>,
 ) -> String {
     if lang.is_korean() {
         korean_label
             .or(korean_description)
-            .or(english_label)
+            .or(data_label)
             .unwrap_or(skill_no)
             .to_string()
     } else {
-        english_label
+        data_label
             .or(korean_label)
             .or(korean_description)
             .unwrap_or(skill_no)
@@ -430,6 +430,7 @@ fn query_acquire_skill_rates(
 
 fn query_languagedata_texts(
     conn: &mut PooledConn,
+    lang: &DataLang,
     as_of: &str,
     ids: &HashSet<String>,
     unk: &str,
@@ -438,9 +439,10 @@ fn query_languagedata_texts(
     values.sort();
     let mut result = HashMap::new();
     for chunk in values.chunks(400) {
+        let table_name = format!("languagedata_{}", lang.code());
         let query = format!(
             "SELECT `id`, `text` \
-             FROM languagedata_en{as_of} \
+             FROM `{table_name}`{as_of} \
              WHERE `unk` = '{}' \
                AND `id` IN ({})",
             unk.replace('\'', "''"),
@@ -834,18 +836,18 @@ fn calculator_pet_option_records(
     skill_ids: &HashSet<String>,
     base_talent_skill_ids: &HashSet<String>,
     learned_skill_ids: &HashSet<String>,
-    english_labels: &HashMap<String, String>,
+    localized_labels: &HashMap<String, String>,
     skilltype_meta: &HashMap<String, (Option<String>, Option<String>, Option<String>)>,
 ) -> HashMap<String, CalculatorPetOptionRecord> {
     let mut records = HashMap::new();
     for skill_id in skill_ids {
-        let english_label = english_labels.get(skill_id).cloned();
+        let localized_label = localized_labels.get(skill_id).cloned();
         let (korean_label, korean_description, _icon) = skilltype_meta
             .get(skill_id)
             .cloned()
             .unwrap_or((None, None, None));
         let effects = parse_pet_option_effects(
-            english_label.as_deref(),
+            localized_label.as_deref(),
             korean_label.as_deref(),
             korean_description.as_deref(),
         );
@@ -871,7 +873,7 @@ fn calculator_pet_option_records(
                     label: localized_pet_option_label(
                         lang,
                         skill_id,
-                        english_label.as_deref(),
+                        localized_label.as_deref(),
                         korean_label.as_deref(),
                         korean_description.as_deref(),
                     ),
@@ -1065,10 +1067,7 @@ impl DoltMySqlStore {
 
         let pet_rows = match query_pet_rows(&mut conn, &as_of) {
             Ok(rows) => rows,
-            Err(err)
-                if is_missing_table(&err, "pet_table")
-                    || is_missing_table(&err, "languagedata_en") =>
-            {
+            Err(err) if is_missing_table(&err, "pet_table") => {
                 return Ok(catalog);
             }
             Err(err) => return Err(db_unavailable(err)),
@@ -1099,9 +1098,8 @@ impl DoltMySqlStore {
             .map(|row| row.character_key.clone())
             .collect::<HashSet<_>>();
         let names_by_character_key =
-            match query_languagedata_texts(&mut conn, &as_of, &pet_character_ids, "6") {
+            match query_languagedata_texts(&mut conn, lang, &as_of, &pet_character_ids, "6") {
                 Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "languagedata_en") => HashMap::new(),
                 Err(err) => return Err(db_unavailable(err)),
             };
 
@@ -1131,10 +1129,9 @@ impl DoltMySqlStore {
             }
         }
 
-        let english_skill_labels =
-            match query_languagedata_texts(&mut conn, &as_of, &skill_ids, "10") {
+        let localized_skill_labels =
+            match query_languagedata_texts(&mut conn, lang, &as_of, &skill_ids, "10") {
                 Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "languagedata_en") => HashMap::new(),
                 Err(err) => return Err(db_unavailable(err)),
             };
         let skilltype_meta = match query_skilltype_meta(&mut conn, &as_of, &skill_ids) {
@@ -1152,7 +1149,7 @@ impl DoltMySqlStore {
             &skill_ids,
             &base_talent_skill_ids,
             &learned_skill_ids,
-            &english_skill_labels,
+            &localized_skill_labels,
             &skilltype_meta,
         );
         options_by_key.extend(calculator_pet_special_option_records(
@@ -1289,8 +1286,8 @@ mod tests {
         BuiltPetEntry, CalculatorPetOptionRecord, PetOptionKind, PetSpecialSkillMeta, RawPetRow,
     };
 
-    fn ko_data_lang() -> DataLang {
-        DataLang::from_code("ko").expect("valid test data language")
+    fn kr_data_lang() -> DataLang {
+        DataLang::from_code("kr").expect("valid test data language")
     }
 
     #[test]
@@ -1344,7 +1341,7 @@ mod tests {
         );
         assert_eq!(
             localized_pet_option_label(
-                &ko_data_lang(),
+                &kr_data_lang(),
                 "49085",
                 Some("Durability Reduction Resistance +5%"),
                 Some("내구도 감소 저항 +5%"),

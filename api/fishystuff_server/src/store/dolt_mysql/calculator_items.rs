@@ -369,14 +369,14 @@ mod tests {
         source_backed_effect_values, CalculatorSourceBackedItemRow, DoltMySqlStore,
     };
 
-    fn ko_data_lang() -> DataLang {
-        DataLang::from_code("ko").expect("valid test data language")
+    fn kr_data_lang() -> DataLang {
+        DataLang::from_code("kr").expect("valid test data language")
     }
 
     #[test]
     fn source_consumable_item_prefers_source_metadata() {
         let sourced = build_source_item(
-            &ko_data_lang(),
+            &kr_data_lang(),
             9359,
             "food",
             Some("Balacs Lunchbox"),
@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn source_lightstone_item_uses_source_owned_identity() {
         let sourced = build_source_lightstone_item(
-            &ko_data_lang(),
+            &kr_data_lang(),
             "lightstone-set:162",
             None,
             Some("예리한 갈매기"),

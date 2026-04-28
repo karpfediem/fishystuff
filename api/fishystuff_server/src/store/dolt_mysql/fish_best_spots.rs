@@ -83,10 +83,11 @@ fn support_status_implies_presence(value: &str) -> bool {
 }
 
 impl DoltMySqlStore {
-    fn fish_best_spots_index_cache_key(ref_id: Option<&str>) -> String {
+    fn fish_best_spots_index_cache_key(lang: &DataLang, ref_id: Option<&str>) -> String {
+        let lang = lang.code();
         match ref_id {
-            Some(ref_id) => ref_id.to_string(),
-            None => "head".to_string(),
+            Some(ref_id) => format!("{lang}:{ref_id}"),
+            None => format!("{lang}:head"),
         }
     }
 
@@ -259,9 +260,10 @@ impl DoltMySqlStore {
 
     pub(super) fn query_fish_best_spots_index_cached(
         &self,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<HashMap<i32, Vec<FishBestSpotEntry>>> {
-        let cache_key = Self::fish_best_spots_index_cache_key(ref_id);
+        let cache_key = Self::fish_best_spots_index_cache_key(lang, ref_id);
         loop {
             if let Ok(cache) = self.fish_best_spots_index_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {
@@ -284,7 +286,7 @@ impl DoltMySqlStore {
             drop(inflight);
         }
 
-        let result = self.query_fish_best_spots_index(ref_id);
+        let result = self.query_fish_best_spots_index(lang, ref_id);
 
         let (inflight_lock, inflight_cvar) = &*self.fish_best_spots_index_inflight;
         let mut inflight = inflight_lock
@@ -305,6 +307,7 @@ impl DoltMySqlStore {
 
     fn query_fish_best_spots_index(
         &self,
+        lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<HashMap<i32, Vec<FishBestSpotEntry>>> {
         let zones = self
@@ -443,7 +446,7 @@ impl DoltMySqlStore {
                 if let Some(support_mode) =
                     self.resolve_event_zone_support_mode(&layer_revision_id)?
                 {
-                    let fish_identities = self.query_fish_identities(ref_id)?;
+                    let fish_identities = self.query_fish_identities(lang, ref_id)?;
                     let event_fish_identities =
                         Self::build_event_fish_identity_map(&fish_identities);
                     let ranking_query = match support_mode {
@@ -589,7 +592,7 @@ impl DoltMySqlStore {
     ) -> AppResult<FishBestSpotsResponse> {
         self.validate_data_lang_available(&lang, ref_id)?;
         let spots = self
-            .query_fish_best_spots_index_cached(ref_id)?
+            .query_fish_best_spots_index_cached(&lang, ref_id)?
             .get(&item_id)
             .cloned()
             .unwrap_or_default();

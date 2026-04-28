@@ -14,6 +14,8 @@ pub struct MetaResponse {
     #[serde(default)]
     pub map_versions: Vec<MapVersionInfo>,
     #[serde(default)]
+    pub data_languages: Vec<String>,
+    #[serde(default)]
     pub defaults: MetaDefaults,
 }
 

@@ -14675,11 +14675,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn init_returns_korean_html_fragment_when_lang_is_ko() {
+    async fn init_returns_korean_html_fragment_when_data_lang_is_kr() {
         let response = get_calculator_datastar_init(
             State(test_state()),
             Ok(Query(CalculatorDatastarQuery {
-                lang: Some("ko".to_string()),
+                lang: Some("kr".to_string()),
                 locale: Some("ko-KR".to_string()),
                 r#ref: None,
                 datastar: Some("{}".to_string()),
@@ -14694,7 +14694,7 @@ mod tests {
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains(
-            "search-url=\"/api/v1/calculator/datastar/zone-search?lang=ko&amp;locale=ko-KR\""
+            "search-url=\"/api/v1/calculator/datastar/zone-search?lang=kr&amp;locale=ko-KR\""
         ));
         assert!(text.contains("placeholder=\"지역 검색\""));
         assert!(text.contains("오버레이 제안"));

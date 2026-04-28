@@ -655,7 +655,7 @@ impl DoltMySqlStore {
                 });
             }
         }
-        let fish_identities = self.query_fish_identities(ref_id)?;
+        let fish_identities = self.query_fish_identities(&lang, ref_id)?;
         let layer_revision_id = match self.resolve_layer_revision_id(
             None,
             self.defaults.map_version_id.as_ref(),
