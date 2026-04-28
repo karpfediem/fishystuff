@@ -204,12 +204,12 @@ fn extract_bracketed_name(text: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_string())
 }
 
-fn parse_lightstone_set_name_ko(
-    skill_name_ko: Option<&str>,
-    description_ko: Option<&str>,
+fn parse_lightstone_set_name(
+    primary_text: Option<&str>,
+    description_text: Option<&str>,
 ) -> Option<String> {
-    skill_name_ko.and_then(extract_bracketed_name).or_else(|| {
-        description_ko
+    primary_text.and_then(extract_bracketed_name).or_else(|| {
+        description_text
             .and_then(|description| normalized_effect_lines(description).into_iter().next())
             .and_then(|line| extract_bracketed_name(&line))
     })
@@ -805,26 +805,21 @@ impl DoltMySqlStore {
                 ls.`SetOptionSkillNo` AS skill_no, \
                 NULLIF(TRIM(stype.`SkillName`), '') AS skill_name_ko, \
                 NULLIF(TRIM(ls.`Description`), '') AS description_ko, \
-                l_en.source_name_en AS source_name_en, \
+                l_en.source_text_en AS source_text_en, \
                 NULLIF(TRIM(stype.`IconImageFile`), '') AS skill_icon_file \
              FROM lightstone_set_option{as_of} ls \
              LEFT JOIN skilltype_table_new{as_of} stype \
                ON stype.`SkillNo` = ls.`SetOptionSkillNo` \
              LEFT JOIN ( \
                 SELECT \
-                    CAST(l.`id` AS SIGNED) AS skill_id, \
-                    MAX( \
-                        TRIM( \
-                            TRAILING ']' FROM SUBSTRING_INDEX(NULLIF(TRIM(l.`text`), ''), '[', -1) \
-                        ) \
-                    ) AS source_name_en \
+                    CAST(l.`id` AS SIGNED) AS lightstone_set_id, \
+                    MIN(NULLIF(TRIM(l.`text`), '')) AS source_text_en \
                 FROM languagedata_en{as_of} l \
                 WHERE l.`format` = 'B' \
-                  AND l.`unk` = '10' \
-                  AND l.`text` LIKE 'Set % - [%' \
+                  AND l.`unk` = '113' \
                 GROUP BY CAST(l.`id` AS SIGNED) \
              ) l_en \
-               ON l_en.skill_id = CAST(ls.`SetOptionSkillNo` AS SIGNED) \
+               ON l_en.lightstone_set_id = CAST(ls.`Index` AS SIGNED) \
              WHERE NULLIF(ls.`SetOptionSkillNo`, '') IS NOT NULL"
         );
         let metadata_rows: Vec<(
@@ -850,18 +845,18 @@ impl DoltMySqlStore {
                     skill_no,
                     skill_name_ko,
                     description_ko,
-                    source_name_en,
+                    source_text_en,
                     skill_icon_file,
                 )| {
                     let skill_no = normalize_optional_string(Some(skill_no))?;
                     Some(CalculatorLightstoneSourceMetadataRow {
                         source_key,
                         skill_no,
-                        set_name_ko: parse_lightstone_set_name_ko(
+                        set_name_ko: parse_lightstone_set_name(
                             skill_name_ko.as_deref(),
                             description_ko.as_deref(),
                         ),
-                        source_name_en: normalize_optional_string(source_name_en),
+                        source_name_en: parse_lightstone_set_name(None, source_text_en.as_deref()),
                         skill_icon_file: normalize_optional_string(skill_icon_file),
                     })
                 },
@@ -1976,9 +1971,9 @@ mod tests {
     use super::{
         collect_calculator_item_metadata_ids, fallback_consumable_family_key,
         manually_maintained_source_effect_values, manually_maintained_source_fish_multiplier,
-        merge_unique_effect_texts, parse_lightstone_set_name_ko,
-        select_consumable_category_metadata, select_consumable_effect_texts,
-        CalculatorBuffSourceMetadata, CalculatorBuffTextRow, CalculatorSourceBackedItemRow,
+        merge_unique_effect_texts, parse_lightstone_set_name, select_consumable_category_metadata,
+        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        CalculatorSourceBackedItemRow,
     };
 
     #[test]
@@ -2198,7 +2193,7 @@ mod tests {
 
     #[test]
     fn parse_lightstone_set_name_prefers_skill_name() {
-        let name = parse_lightstone_set_name_ko(
+        let name = parse_lightstone_set_name(
             Some("160.[신의 입질]"),
             Some("[대장장이의 축복]\n장비 내구도 감소 저항 +30%"),
         );
@@ -2208,12 +2203,24 @@ mod tests {
 
     #[test]
     fn parse_lightstone_set_name_falls_back_to_description() {
-        let name = parse_lightstone_set_name_ko(
+        let name = parse_lightstone_set_name(
             None,
             Some("<PAColor0xffd2ffad>[대장장이의 축복]<PAOldColor>\\n장비 내구도 감소 저항 +30%"),
         );
 
         assert_eq!(name.as_deref(), Some("대장장이의 축복"));
+    }
+
+    #[test]
+    fn parse_lightstone_set_name_reads_loc_category_113_text() {
+        let name = parse_lightstone_set_name(
+            None,
+            Some(
+                "<PAColor0xffd2ffad>[Nibbles]<PAOldColor>\nAuto-fishing Time -15%\nFishing EXP +10%",
+            ),
+        );
+
+        assert_eq!(name.as_deref(), Some("Nibbles"));
     }
 
     #[test]
