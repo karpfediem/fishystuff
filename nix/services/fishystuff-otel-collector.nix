@@ -18,6 +18,12 @@ let
     };
     connectors.spanmetrics = {
       histogram.unit = "ms";
+      dimensions = [
+        {
+          name = "deployment.environment";
+          default = cfg.deploymentEnvironment;
+        }
+      ];
       metrics_flush_interval = "10s";
     };
     exporters = {
@@ -107,6 +113,12 @@ in
       type = types.str;
       default = "127.0.0.1";
       description = "Address for OTLP HTTP ingestion.";
+    };
+
+    deploymentEnvironment = mkOption {
+      type = types.str;
+      default = "beta";
+      description = "Fallback deployment environment used by spanmetrics when traces lack one.";
     };
 
     httpPort = mkOption {

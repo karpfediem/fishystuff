@@ -372,7 +372,11 @@ if service_selected vector && [[ -z "$vector_bundle" ]]; then
   vector_bundle="$(nix build .#vector-service-bundle --no-link --print-out-paths)"
 fi
 if [[ -z "$vector_agent_bundle" ]]; then
-  vector_agent_bundle="$(nix build .#vector-agent-service-bundle --no-link --print-out-paths)"
+  case "$deployment_environment" in
+    production) vector_agent_bundle_package="vector-agent-service-bundle-production" ;;
+    *) vector_agent_bundle_package="vector-agent-service-bundle" ;;
+  esac
+  vector_agent_bundle="$(nix build ".#$vector_agent_bundle_package" --no-link --print-out-paths)"
 fi
 if service_selected prometheus && [[ -z "$prometheus_bundle" ]]; then
   prometheus_bundle="$(nix build .#prometheus-service-bundle --no-link --print-out-paths)"

@@ -191,16 +191,21 @@
             name = "fishystuff-vector";
             serviceModule = serviceModules.vector;
           };
-          vectorAgentServiceBundle = mkServiceBundle {
-            name = "fishystuff-vector-agent";
-            serviceModule = serviceModules.vector;
-            configuration.fishystuff.vector = {
-              role = "agent";
-              vectorSinkAddress = "10.0.0.4:6000";
-              lokiAddress = "10.0.0.4";
-              otelCollectorAddress = "10.0.0.4";
+          vectorAgentServiceBundleFor =
+            deploymentEnvironment:
+            mkServiceBundle {
+              name = "fishystuff-vector-agent";
+              serviceModule = serviceModules.vector;
+              configuration.fishystuff.vector = {
+                role = "agent";
+                deploymentEnvironment = deploymentEnvironment;
+                vectorSinkAddress = "10.0.0.4:6000";
+                lokiAddress = "10.0.0.4";
+                otelCollectorAddress = "10.0.0.4";
+              };
             };
-          };
+          vectorAgentServiceBundle = vectorAgentServiceBundleFor defaultDeploymentEnvironment;
+          vectorAgentServiceBundleProduction = vectorAgentServiceBundleFor "production";
           prometheusServiceBundle = mkServiceBundle {
             name = "fishystuff-prometheus";
             serviceModule = serviceModules.prometheus;
@@ -263,6 +268,7 @@
             site-content = siteContent;
             site-content-beta = siteContentBeta;
             vector-agent-service-bundle = vectorAgentServiceBundle;
+            vector-agent-service-bundle-production = vectorAgentServiceBundleProduction;
             vector-service-bundle = vectorServiceBundle;
             zine = zineCli;
           };

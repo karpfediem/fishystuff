@@ -80,6 +80,32 @@ transforms:
       - telemetry_otlp_ingress
     condition:
       type: is_trace
+  tagged_metrics:
+    type: remap
+    inputs:
+      - telemetry_metrics_only
+      - host_metrics
+      - vector_internal_metrics
+      - otel_spanmetrics
+      - jaeger_metrics
+    source: |
+      if !exists(.tags) || is_null(.tags) {
+        .tags = {}
+      }
+
+      env = get(.tags, ["env"]) ?? null
+      if env == null || string!(env) == "" {
+        env = get(.tags, ["deployment_environment"]) ?? null
+      }
+      if env == null || string!(env) == "" {
+        env = get(.tags, ["deployment.environment"]) ?? null
+      }
+      if env == null || string!(env) == "" {
+        env = "local"
+      }
+
+      .tags.env = string!(env)
+      .tags.deployment_environment = .tags.env
   normalized_process_logs:
     type: remap
     inputs:
@@ -361,11 +387,7 @@ sinks:
   telemetry_ingress_metrics_prometheus:
     type: prometheus_exporter
     inputs:
-      - telemetry_metrics_only
-      - host_metrics
-      - vector_internal_metrics
-      - otel_spanmetrics
-      - jaeger_metrics
+      - tagged_metrics
     address: "127.0.0.1:9598"
     healthcheck:
       enabled: false

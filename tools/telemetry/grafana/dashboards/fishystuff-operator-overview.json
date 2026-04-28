@@ -10,6 +10,36 @@
     {
       "icon": "external link",
       "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Error Logs",
+      "type": "link",
+      "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20level%3D~%5C%22warn%7Cerror%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+    },
+    {
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Lifecycle Logs",
+      "type": "link",
+      "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20service%3D~%5C%22fishystuff-(api%7Cdolt%7Cedge%7Cvector%7Cloki%7Cotel-collector%7Cjaeger%7Cprometheus%7Cgrafana)%5C%22%2C%20service_state!%3D%5C%22log%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+    },
+    {
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Trace Explore",
+      "type": "link",
+      "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+    },
+    {
+      "icon": "external link",
+      "includeVars": false,
       "keepTime": false,
       "tags": [],
       "targetBlank": false,
@@ -49,7 +79,7 @@
       },
       "id": 1,
       "options": {
-        "content": "### Fishystuff Operator Overview\n\nEnvironment: **$env**\n\n- `Service Instances With Errors` and `Service Errors By Instance` come from deployment-host Vector logs.\n- `Recent Service Lifecycle Events` surfaces restarts, stops, and failed units from systemd journal entries.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.\n- Prometheus scrapes Vector for spanmetrics, service metrics and host metrics.",
+        "content": "### Fishystuff Operator Overview\n\nEnvironment: **$env**\n\nUse the health row first. Red tiles point at service errors, warning/error logs, trace errors, or host saturation. Dashboard links open env-scoped logs and Jaeger keeps traces searchable by `deployment.environment`.\n\nMetrics, logs, and spanmetrics are filtered by `env=\"$env\"`; beta data should not appear on production views.",
         "mode": "markdown"
       },
       "title": "Overview: $env",
@@ -98,7 +128,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(fishystuff_site_session_started_total[15m]))",
+          "expr": "sum(increase(fishystuff_site_session_started_total{env=\"$env\"}[15m])) or vector(0)",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -150,7 +180,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(fishystuff_site_frontend_error_total[15m]))",
+          "expr": "sum(increase(fishystuff_site_frontend_error_total{env=\"$env\"}[15m])) or vector(0)",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -202,7 +232,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(traces_span_metrics_calls_total[5m]))",
+          "expr": "sum(rate(traces_span_metrics_calls_total{env=\"$env\"}[5m])) or vector(0)",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -254,7 +284,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m]))",
+          "expr": "sum(rate(traces_span_metrics_calls_total{env=\"$env\", status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -306,7 +336,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{env=\"$env\"}[5m])))",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -358,7 +388,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_site_page_ready_milliseconds_bucket[15m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_site_page_ready_milliseconds_bucket{env=\"$env\"}[15m])))",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -410,7 +440,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_map_runtime_ready_duration_milliseconds_bucket[15m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_map_runtime_ready_duration_milliseconds_bucket{env=\"$env\"}[15m])))",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -478,13 +508,450 @@
             "uid": "fishystuff-loki"
           },
           "editorMode": "code",
-          "expr": "count(sum by (host, service) (count_over_time({app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])))",
+          "expr": "count(sum by (host, service) (count_over_time({app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m]))) or vector(0)",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
       "title": "Service Instances With Errors (30m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 8
+      },
+      "id": 23,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "count(sum by (host) (count_over_time({app=\"fishystuff\", env=\"$env\"}[6h]))) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts Reporting Logs (6h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 8
+              }
+            ]
+          },
+          "unit": "short",
+          "links": [
+            {
+              "title": "Open lifecycle logs",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20service%3D~%5C%22fishystuff-(api%7Cdolt%7Cedge%7Cvector%7Cloki%7Cotel-collector%7Cjaeger%7Cprometheus%7Cgrafana)%5C%22%2C%20service_state!%3D%5C%22log%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 8
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "count(sum by (host, service) (count_over_time({app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\"}[6h]))) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Services Reporting Logs (6h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short",
+          "links": [
+            {
+              "title": "Open warning/error logs",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20level%3D~%5C%22warn%7Cerror%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 8
+      },
+      "id": 25,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({app=\"fishystuff\", env=\"$env\", level=~\"warn|error\"}[30m])) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Warning/Error Logs (30m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short",
+          "links": [
+            {
+              "title": "Open traces",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 8
+      },
+      "id": 26,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "count((sum by (service_name) (rate(traces_span_metrics_calls_total{env=\"$env\", status_code=\"STATUS_CODE_ERROR\"}[5m]))) > 0) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Trace Error Services (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 8
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "count((100 * (1 - avg by (host) (rate(host_cpu_seconds_total{env=\"$env\", mode=\"idle\"}[5m])))) > 80) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts >80% CPU (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 8
+      },
+      "id": 28,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "count((100 * sum by (host) (host_memory_used_bytes{env=\"$env\"}) / sum by (host) (host_memory_total_bytes{env=\"$env\"})) > 85) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts >85% Memory",
       "type": "stat"
     },
     {
@@ -512,7 +979,14 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "links": [
+            {
+              "title": "Open service logs",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20host%3D%5C%22${__field.labels.host}%5C%22%2C%20service%3D%5C%22${__field.labels.service}%5C%22%2C%20level%3D~%5C%22warn%7Cerror%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
@@ -520,7 +994,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 12
       },
       "id": 18,
       "options": {
@@ -563,7 +1037,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 12
       },
       "id": 19,
       "options": {
@@ -602,7 +1076,14 @@
             "mode": "palette-classic"
           },
           "min": 0,
-          "unit": "reqps"
+          "unit": "reqps",
+          "links": [
+            {
+              "title": "Open traces for service",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
@@ -610,7 +1091,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 20
       },
       "id": 10,
       "options": {
@@ -632,7 +1113,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))",
+          "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total{env=\"$env\"}[5m]))",
           "legendFormat": "{{service_name}}",
           "range": true,
           "refId": "A"
@@ -652,7 +1133,14 @@
             "mode": "palette-classic"
           },
           "min": 0,
-          "unit": "reqps"
+          "unit": "reqps",
+          "links": [
+            {
+              "title": "Open traces for service",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
@@ -660,7 +1148,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 20
       },
       "id": 11,
       "options": {
@@ -682,7 +1170,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m]))",
+          "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total{env=\"$env\", status_code=\"STATUS_CODE_ERROR\"}[5m]))",
           "legendFormat": "{{service_name}}",
           "range": true,
           "refId": "A"
@@ -702,7 +1190,14 @@
             "mode": "palette-classic"
           },
           "min": 0,
-          "unit": "ms"
+          "unit": "ms",
+          "links": [
+            {
+              "title": "Open traces for service",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
@@ -710,7 +1205,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 28
       },
       "id": 12,
       "options": {
@@ -732,7 +1227,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{env=\"$env\"}[5m])))",
           "legendFormat": "{{service_name}}",
           "range": true,
           "refId": "A"
@@ -760,7 +1255,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 24
+        "y": 28
       },
       "id": 13,
       "options": {
@@ -782,7 +1277,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "max without(instance, job) (fishystuff_map_bevy_fps)",
+          "expr": "max without(instance, job, env, deployment_environment) (fishystuff_map_bevy_fps{env=\"$env\"})",
           "legendFormat": "FPS",
           "range": true,
           "refId": "A"
@@ -810,7 +1305,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 24
+        "y": 28
       },
       "id": 14,
       "options": {
@@ -832,7 +1327,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_site_page_ready_milliseconds_bucket[15m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_site_page_ready_milliseconds_bucket{env=\"$env\"}[15m])))",
           "legendFormat": "Page ready p95",
           "range": true,
           "refId": "A"
@@ -843,7 +1338,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_map_runtime_ready_duration_milliseconds_bucket[15m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_map_runtime_ready_duration_milliseconds_bucket{env=\"$env\"}[15m])))",
           "legendFormat": "Map ready p95",
           "range": true,
           "refId": "B"
@@ -863,7 +1358,14 @@
             "mode": "palette-classic"
           },
           "min": 0,
-          "unit": "reqps"
+          "unit": "reqps",
+          "links": [
+            {
+              "title": "Open traces for service",
+              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
@@ -871,7 +1373,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 36
       },
       "id": 15,
       "options": {
@@ -893,7 +1395,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "topk(10, sum by (service_name, span_name, status_code) (rate(traces_span_metrics_calls_total[5m])))",
+          "expr": "topk(10, sum by (service_name, span_name, status_code) (rate(traces_span_metrics_calls_total{env=\"$env\"}[5m])))",
           "legendFormat": "{{service_name}} / {{span_name}} / {{status_code}}",
           "range": true,
           "refId": "A"
@@ -921,7 +1423,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 32
+        "y": 36
       },
       "id": 16,
       "options": {
@@ -943,7 +1445,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (source) (increase(fishystuff_site_frontend_error_total[15m]))",
+          "expr": "sum by (source) (increase(fishystuff_site_frontend_error_total{env=\"$env\"}[15m])) or vector(0)",
           "legendFormat": "{{source}}",
           "range": true,
           "refId": "A"
@@ -954,7 +1456,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(fishystuff_site_session_started_total[15m]))",
+          "expr": "sum(increase(fishystuff_site_session_started_total{env=\"$env\"}[15m])) or vector(0)",
           "legendFormat": "sessions started",
           "range": true,
           "refId": "B"
@@ -982,7 +1484,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 40
+        "y": 44
       },
       "id": 20,
       "options": {
@@ -1004,7 +1506,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "100 * (1 - avg by (host) (rate(host_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "expr": "100 * (1 - avg by (host) (rate(host_cpu_seconds_total{env=\"$env\", mode=\"idle\"}[5m])))",
           "legendFormat": "{{host}}",
           "range": true,
           "refId": "A"
@@ -1032,7 +1534,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 40
+        "y": 44
       },
       "id": 21,
       "options": {
@@ -1054,7 +1556,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "100 * sum by (host) (host_memory_used_bytes) / sum by (host) (host_memory_total_bytes)",
+          "expr": "100 * sum by (host) (host_memory_used_bytes{env=\"$env\"}) / sum by (host) (host_memory_total_bytes{env=\"$env\"})",
           "legendFormat": "{{host}}",
           "range": true,
           "refId": "A"
@@ -1082,7 +1584,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 40
+        "y": 44
       },
       "id": 22,
       "options": {
@@ -1104,7 +1606,7 @@
             "uid": "fishystuff-prometheus"
           },
           "editorMode": "code",
-          "expr": "100 * sum by (host, mountpoint) (host_filesystem_used_bytes{filesystem!=\"tmpfs\"}) / sum by (host, mountpoint) (host_filesystem_total_bytes{filesystem!=\"tmpfs\"})",
+          "expr": "100 * sum by (host, mountpoint) (host_filesystem_used_bytes{env=\"$env\", filesystem!=\"tmpfs\"}) / sum by (host, mountpoint) (host_filesystem_total_bytes{env=\"$env\", filesystem!=\"tmpfs\"})",
           "legendFormat": "{{host}} {{mountpoint}}",
           "range": true,
           "refId": "A"
@@ -1122,7 +1624,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 52
       },
       "id": 17,
       "options": {

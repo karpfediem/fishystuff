@@ -11,6 +11,39 @@ let
   cfg = config.fishystuff.vector;
   isAggregator = cfg.role == "aggregator";
   isAgent = cfg.role == "agent";
+  metricEnvironmentRemapLines = [
+    ''if !exists(.tags) || is_null(.tags) {''
+    ''  .tags = {}''
+    ''}''
+    ''''
+    ''env = get(.tags, ["env"]) ?? null''
+    ''if env == null || string!(env) == "" {''
+    ''  env = get(.tags, ["deployment_environment"]) ?? null''
+    ''}''
+    ''if env == null || string!(env) == "" {''
+    ''  env = get(.tags, ["deployment.environment"]) ?? null''
+    ''}''
+    ''if env == null || string!(env) == "" {''
+    ''  env = "${cfg.deploymentEnvironment}"''
+    ''}''
+    ''''
+    ''.tags.env = string!(env)''
+    ''.tags.deployment_environment = .tags.env''
+  ];
+  metricEnvironmentRemapSource =
+    lib.concatMapStringsSep "\n" (line: "          ${line}") metricEnvironmentRemapLines
+    + "\n";
+  metricEnvironmentInputs =
+    [ "telemetry_metrics_only" ]
+    ++ optionals isAggregator [
+      "vector_ingress_metrics_only"
+      "otel_spanmetrics"
+      "jaeger_metrics"
+    ]
+    ++ optionals cfg.enableHostMetrics [ "host_metrics" ]
+    ++ optionals cfg.enableInternalMetrics [ "vector_internal_metrics" ];
+  metricEnvironmentTransform =
+    "\n      tagged_metrics:\n        type: remap\n        inputs:\n${lib.concatMapStringsSep "\n" (input: "          - ${input}") metricEnvironmentInputs}\n        source: |\n${metricEnvironmentRemapSource}";
   journalUnitsYaml =
     lib.concatMapStringsSep "\n" (unit: "        - ${unit}") cfg.journalUnits;
   hostMetricsSource =
@@ -30,10 +63,10 @@ let
       "\n      vector_ingress_logs_only:\n        type: filter\n        inputs:\n          - vector_ingress\n        condition:\n          type: is_log\n      vector_ingress_metrics_only:\n        type: filter\n        inputs:\n          - vector_ingress\n        condition:\n          type: is_metric\n      vector_ingress_traces_only:\n        type: filter\n        inputs:\n          - vector_ingress\n        condition:\n          type: is_trace";
   agentForwardSink =
     optionalString isAgent
-      "\n      agent_forward_to_telemetry_vector:\n        type: vector\n        inputs:\n          - normalized_process_logs\n          - normalized_telemetry_logs\n          - telemetry_metrics_only\n          - telemetry_traces_only\n${optionalString cfg.enableHostMetrics "          - host_metrics\n"}${optionalString cfg.enableInternalMetrics "          - vector_internal_metrics\n"}        address: \"${cfg.vectorSinkAddress}\"\n        compression: true\n        healthcheck:\n          enabled: false";
+      "\n      agent_forward_to_telemetry_vector:\n        type: vector\n        inputs:\n          - normalized_process_logs\n          - normalized_telemetry_logs\n          - tagged_metrics\n          - telemetry_traces_only\n        address: \"${cfg.vectorSinkAddress}\"\n        compression: true\n        healthcheck:\n          enabled: false";
   aggregatorSinks =
     optionalString isAggregator
-      "\n      logs_archive:\n        type: file\n        inputs:\n          - normalized_process_logs\n        path: \"${cfg.dataDir}/archive/logs/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json\n\n      logs_loki:\n        type: loki\n        inputs:\n          - normalized_process_logs\n          - normalized_telemetry_logs\n          - vector_ingress_logs_only\n        endpoint: \"http://${cfg.lokiAddress}:${toString cfg.lokiPort}\"\n        encoding:\n          codec: json\n        labels:\n          app: \"{{ app }}\"\n          env: \"{{ deployment_environment }}\"\n          host: \"{{ host }}\"\n          process: \"{{ process }}\"\n          service: \"{{ service }}\"\n          service_state: \"{{ service_state }}\"\n          level: \"{{ level }}\"\n        structured_metadata:\n          log_schema: \"{{ log_schema }}\"\n          '\"correlation_*\"': \"{{ correlation }}\"\n          '\"http_*\"': \"{{ http }}\"\n          '\"browser_*\"': \"{{ browser }}\"\n        healthcheck:\n          enabled: false\n\n      traces_archive:\n        type: file\n        inputs:\n          - telemetry_traces_only\n          - vector_ingress_traces_only\n        path: \"${cfg.dataDir}/archive/traces/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json\n\n      telemetry_ingress_traces_to_collector:\n        type: opentelemetry\n        inputs:\n          - telemetry_traces_only\n          - vector_ingress_traces_only\n        protocol:\n          type: http\n          uri: \"http://${cfg.otelCollectorAddress}:${toString cfg.otelCollectorPort}/v1/traces\"\n          encoding:\n            codec: otlp\n        healthcheck:\n          enabled: false\n\n      telemetry_ingress_metrics_prometheus:\n        type: prometheus_exporter\n        inputs:\n          - telemetry_metrics_only\n          - vector_ingress_metrics_only\n          - otel_spanmetrics\n          - jaeger_metrics\n${optionalString cfg.enableHostMetrics "          - host_metrics\n"}${optionalString cfg.enableInternalMetrics "          - vector_internal_metrics\n"}        address: \"${cfg.metricsListenAddress}:${toString cfg.metricsPort}\"\n        healthcheck:\n          enabled: false\n\n      telemetry_ingress_logs_archive:\n        type: file\n        inputs:\n          - telemetry_logs_only\n        path: \"${cfg.dataDir}/archive/otel-logs/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json";
+      "\n      logs_archive:\n        type: file\n        inputs:\n          - normalized_process_logs\n        path: \"${cfg.dataDir}/archive/logs/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json\n\n      logs_loki:\n        type: loki\n        inputs:\n          - normalized_process_logs\n          - normalized_telemetry_logs\n          - vector_ingress_logs_only\n        endpoint: \"http://${cfg.lokiAddress}:${toString cfg.lokiPort}\"\n        encoding:\n          codec: json\n        labels:\n          app: \"{{ app }}\"\n          env: \"{{ deployment_environment }}\"\n          host: \"{{ host }}\"\n          process: \"{{ process }}\"\n          service: \"{{ service }}\"\n          service_state: \"{{ service_state }}\"\n          level: \"{{ level }}\"\n        structured_metadata:\n          log_schema: \"{{ log_schema }}\"\n          '\"correlation_*\"': \"{{ correlation }}\"\n          '\"http_*\"': \"{{ http }}\"\n          '\"browser_*\"': \"{{ browser }}\"\n        healthcheck:\n          enabled: false\n\n      traces_archive:\n        type: file\n        inputs:\n          - telemetry_traces_only\n          - vector_ingress_traces_only\n        path: \"${cfg.dataDir}/archive/traces/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json\n\n      telemetry_ingress_traces_to_collector:\n        type: opentelemetry\n        inputs:\n          - telemetry_traces_only\n          - vector_ingress_traces_only\n        protocol:\n          type: http\n          uri: \"http://${cfg.otelCollectorAddress}:${toString cfg.otelCollectorPort}/v1/traces\"\n          encoding:\n            codec: otlp\n        healthcheck:\n          enabled: false\n\n      telemetry_ingress_metrics_prometheus:\n        type: prometheus_exporter\n        inputs:\n          - tagged_metrics\n        address: \"${cfg.metricsListenAddress}:${toString cfg.metricsPort}\"\n        healthcheck:\n          enabled: false\n\n      telemetry_ingress_logs_archive:\n        type: file\n        inputs:\n          - telemetry_logs_only\n        path: \"${cfg.dataDir}/archive/otel-logs/%Y-%m-%d.ndjson\"\n        encoding:\n          codec: json";
   configSource = pkgs.writeText "fishystuff-vector.yaml" ''
     data_dir: "${cfg.dataDir}/state"
 
@@ -96,6 +129,7 @@ ${upstreamMetricsSources}
         condition:
           type: is_trace
 ${vectorIngressTransforms}
+${metricEnvironmentTransform}
       normalized_process_logs:
         type: remap
         inputs:

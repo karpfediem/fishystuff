@@ -13,6 +13,9 @@ connectors:
   spanmetrics:
     histogram:
       unit: ms
+    dimensions:
+      - name: deployment.environment
+        default: local
     metrics_flush_interval: 10s
 
 exporters:
