@@ -30,7 +30,7 @@ for service in "$@"; do
   fi
 done
 
-profile="$(deployment_secretspec_profile "$deployment")"
+profile="$(deployment_open_secretspec_profile "$deployment")"
 if (( needs_tunnel )); then
   exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "${services[@]}"
 fi
@@ -56,7 +56,7 @@ ensure_tunnel() {
   local try_index=0
   local ready_poll=0
 
-  tunnel_target="$(deployment_tunnel_target "$deployment")"
+  tunnel_target="$(deployment_tunnel_target "$deployment" "$service")"
   require_value "$tunnel_target" "deployment $deployment does not define a tunnel target"
   preferred_local_port="$(deployment_open_tunnel_local_port "$service")"
   local_port="$preferred_local_port"
@@ -159,7 +159,7 @@ for service in "${services[@]}"; do
       ;;
     grafana | dashboard | loki | logs | loki-status | prometheus | vector | jaeger)
       tunnel_local_port="$(ensure_tunnel "$service")"
-      open_url "$(deployment_open_tunnel_url "$service" "$tunnel_local_port")"
+      open_url "$(deployment_open_tunnel_url "$deployment" "$service" "$tunnel_local_port")"
       ;;
     *)
       echo "service $service is not openable" >&2

@@ -151,6 +151,9 @@ canonical_deployment_name() {
   local value="${1-}"
   value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
   case "$value" in
+    prod)
+      printf '%s' "production"
+      ;;
     local | beta | production)
       printf '%s' "$value"
       ;;
@@ -223,8 +226,8 @@ deployment_public_base_url() {
       api) printf '%s' "http://127.0.0.1:8080/" ;;
       cdn) printf '%s' "http://127.0.0.1:4040/" ;;
       telemetry) printf '%s' "http://telemetry.localhost:1990/" ;;
-      grafana | loki | logs) printf '%s' "http://127.0.0.1:3000/explore" ;;
-      dashboard) printf '%s' "http://127.0.0.1:3000/d/fishystuff-local-observability/fishystuff-local-observability" ;;
+      grafana | dashboard) printf '%s' "http://127.0.0.1:3000/d/fishystuff-local-observability/fishystuff-local-observability" ;;
+      loki | logs) printf '%s' "http://127.0.0.1:3000/explore" ;;
       loki-status) printf '%s' "http://127.0.0.1:3100/services" ;;
       prometheus) printf '%s' "http://127.0.0.1:9090/" ;;
       vector) printf '%s' "http://127.0.0.1:8686/playground" ;;
@@ -317,6 +320,22 @@ deployment_telemetry_target() {
   esac
 }
 
+deployment_shared_telemetry_target() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta)
+      deployment_telemetry_target "$deployment"
+      ;;
+    production)
+      printf '%s' "$(deployment_env_or_default "$deployment" "telemetry_target" "$(deployment_telemetry_target beta)")"
+      ;;
+    local)
+      printf '%s' ""
+      ;;
+  esac
+}
+
 deployment_control_target() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
@@ -349,8 +368,40 @@ deployment_prod_hostname() {
 
 deployment_tunnel_target() {
   local deployment
+  local service="${2-}"
+  local explicit_target=""
+  local telemetry_tunnel_target=""
+
   deployment="$(canonical_deployment_name "$1")"
-  printf '%s' "$(deployment_env_or_default "$deployment" "tunnel_target" "$(deployment_resident_target "$deployment")")"
+  if [[ -n "$service" ]]; then
+    service="$(canonical_public_service_name "$service")"
+    case "$service" in
+      dashboard | grafana | jaeger | loki | logs | loki-status | prometheus | vector)
+        telemetry_tunnel_target="$(deployment_env_value "$deployment" "telemetry_tunnel_target")"
+        if [[ -n "$telemetry_tunnel_target" ]]; then
+          printf '%s' "$telemetry_tunnel_target"
+        else
+          printf '%s' "$(deployment_shared_telemetry_target "$deployment")"
+        fi
+        return
+        ;;
+    esac
+  fi
+  explicit_target="$(deployment_env_value "$deployment" "tunnel_target")"
+  if [[ -n "$explicit_target" ]]; then
+    printf '%s' "$explicit_target"
+    return
+  fi
+  printf '%s' "$(deployment_resident_target "$deployment")"
+}
+
+deployment_open_secretspec_profile() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta | production) operator_secretspec_profile ;;
+    local) printf '%s' "" ;;
+  esac
 }
 
 deployment_secretspec_profile() {
@@ -625,14 +676,22 @@ deployment_open_tunnel_ttl_seconds() {
 }
 
 deployment_open_tunnel_url() {
+  local deployment
   local service
   local local_port
+  local environment
+  local encoded_environment
 
-  service="$(canonical_public_service_name "$1")"
-  local_port="${2:-$(deployment_open_tunnel_local_port "$service")}"
+  deployment="$(canonical_deployment_name "$1")"
+  service="$(canonical_public_service_name "$2")"
+  local_port="${3:-$(deployment_open_tunnel_local_port "$service")}"
   case "$service" in
-    grafana | loki | logs) printf 'http://127.0.0.1:%s/explore' "$local_port" ;;
-    dashboard) printf 'http://127.0.0.1:%s/d/fishystuff-operator-overview/fishystuff-operator-overview' "$local_port" ;;
+    grafana | dashboard)
+      environment="$(deployment_environment_name "$deployment")"
+      encoded_environment="${environment// /%20}"
+      printf 'http://127.0.0.1:%s/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=%s' "$local_port" "$encoded_environment"
+      ;;
+    loki | logs) printf 'http://127.0.0.1:%s/explore' "$local_port" ;;
     loki-status) printf 'http://127.0.0.1:%s/services' "$local_port" ;;
     prometheus | vector | jaeger) printf 'http://127.0.0.1:%s/' "$local_port" ;;
     *)
