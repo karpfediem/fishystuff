@@ -49,10 +49,10 @@
       },
       "id": 1,
       "options": {
-        "content": "### Fishystuff Operator Overview\nUse this as the first-stop dashboard for beta or production traffic.\n\n- `Service Instances With Errors` and `Service Errors By Instance` come from deployment-host Vector logs.\n- `Recent Service Lifecycle Events` surfaces restarts, stops, and failed units from systemd journal entries.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.\n- Prometheus scrapes Vector for spanmetrics, service metrics and host metrics.",
+        "content": "### Fishystuff Operator Overview\n\nEnvironment: **$env**\n\n- `Service Instances With Errors` and `Service Errors By Instance` come from deployment-host Vector logs.\n- `Recent Service Lifecycle Events` surfaces restarts, stops, and failed units from systemd journal entries.\n- `Frontend Error Signals`, `Page Ready`, and `Map Ready` surface user-facing regressions.\n- Trace rate and latency panels show which service or operation is drifting.\n- Prometheus scrapes Vector for spanmetrics, service metrics and host metrics.",
         "mode": "markdown"
       },
-      "title": "Overview",
+      "title": "Overview: $env",
       "type": "text"
     },
     {
@@ -478,7 +478,7 @@
             "uid": "fishystuff-loki"
           },
           "editorMode": "code",
-          "expr": "count(sum by (host, service) (count_over_time({app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])))",
+          "expr": "count(sum by (host, service) (count_over_time({app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])))",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -545,7 +545,7 @@
             "uid": "fishystuff-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (host, service) (count_over_time({app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])) or sum by (host, service) (count_over_time({app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\"}[30d])) * 0",
+          "expr": "sum by (host, service) (count_over_time({app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", level=\"error\"}[30m])) or sum by (host, service) (count_over_time({app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\"}[30d])) * 0",
           "instant": true,
           "legendFormat": "{{host}} / {{service}}",
           "refId": "A"
@@ -583,7 +583,7 @@
             "uid": "fishystuff-loki"
           },
           "editorMode": "code",
-          "expr": "{app=\"fishystuff\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", service_state!=\"log\"} | json",
+          "expr": "{app=\"fishystuff\", env=\"$env\", service=~\"fishystuff-(api|dolt|edge|vector|loki|otel-collector|jaeger|prometheus|grafana)\", service_state!=\"log\"} | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -1142,7 +1142,7 @@
             "uid": "fishystuff-loki"
           },
           "editorMode": "code",
-          "expr": "{app=\"fishystuff\", level=~\"warn|error\"} | json",
+          "expr": "{app=\"fishystuff\", env=\"$env\", level=~\"warn|error\"} | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -1159,7 +1159,36 @@
     "operator"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "beta",
+          "value": "beta"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Environment",
+        "multi": false,
+        "name": "env",
+        "options": [
+          {
+            "selected": true,
+            "text": "beta",
+            "value": "beta"
+          },
+          {
+            "selected": false,
+            "text": "production",
+            "value": "production"
+          }
+        ],
+        "query": "beta,production",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
