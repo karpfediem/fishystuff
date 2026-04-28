@@ -79,10 +79,10 @@
       },
       "id": 1,
       "options": {
-        "content": "### Fishystuff Operator Overview\n\nEnvironment: **$env**\n\nUse the health row first. Red tiles point at service errors, warning/error logs, trace errors, or host saturation. Dashboard links open env-scoped logs and Jaeger keeps traces searchable by `deployment.environment`.\n\nMetrics, logs, and spanmetrics are filtered by `env=\"$env\"`; beta data should not appear on production views.",
+        "content": "### ${env:text} FishyStuff Dashboard\n\nEnvironment: **${env:text}** (`$env`)\n\nUse the health row first. Red tiles point at service errors, warning/error logs, trace errors, or host saturation. Dashboard links open env-scoped logs and Jaeger keeps traces searchable by `deployment.environment`.\n\nMetrics, logs, and spanmetrics are filtered by `env=\"$env\"`; beta data should not appear on production views. If prod shows zero hosts reporting logs, no prod telemetry has reached this stack in the selected window.",
         "mode": "markdown"
       },
-      "title": "Overview: $env",
+      "title": "${env:text} FishyStuff Dashboard",
       "type": "text"
     },
     {
@@ -1681,11 +1681,11 @@
           },
           {
             "selected": false,
-            "text": "production",
+            "text": "prod",
             "value": "production"
           }
         ],
-        "query": "beta,production",
+        "query": "beta : beta, prod : production",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
@@ -1698,7 +1698,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Fishystuff Operator Overview",
+  "title": "${env:text} FishyStuff Dashboard",
   "uid": "fishystuff-operator-overview",
   "version": 3,
   "weekStart": ""
