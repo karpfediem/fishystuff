@@ -85,6 +85,7 @@ impl DoltMySqlStore {
         if item_ids.is_empty() {
             return Ok(HashMap::new());
         }
+        self.validate_data_lang_available(lang, ref_id)?;
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -160,11 +161,13 @@ impl DoltMySqlStore {
 
         let language_query = format!(
             "SELECT \
-                item_id, \
-                name \
-             FROM calculator_item_names{as_of} \
-             WHERE lang = '{}' \
-               AND item_id IN ({id_list})",
+                CAST(`id` AS SIGNED), \
+                `text` \
+             FROM languagedata{as_of} \
+             WHERE `lang` = '{}' \
+               AND `format` = 'A' \
+               AND `category` = '' \
+               AND `id` IN ({id_list})",
             lang.code().replace('\'', "''")
         );
         let language_rows: Vec<(i64, Option<String>)> = match conn.query(language_query) {

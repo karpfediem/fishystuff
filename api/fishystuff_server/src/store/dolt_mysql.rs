@@ -748,19 +748,27 @@ impl DoltMySqlStore {
         lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<()> {
-        let table_name = format!("languagedata_{}", lang.code());
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
         } else {
             String::new()
         };
-        let query = format!("SELECT 1 FROM `{table_name}`{as_of} LIMIT 1");
+        let query = format!(
+            "SELECT 1 FROM languagedata{as_of} \
+             WHERE `lang` = '{}' \
+             LIMIT 1",
+            lang.code().replace('\'', "''")
+        );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         match conn.query_first::<u8, _>(query) {
-            Ok(_) => Ok(()),
-            Err(err) if is_missing_table(&err, &table_name) => Err(AppError::invalid_argument(
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err(AppError::invalid_argument(format!(
+                "unsupported data language code: {}",
+                lang.code()
+            ))),
+            Err(err) if is_missing_table(&err, "languagedata") => Err(AppError::invalid_argument(
                 format!("unsupported data language code: {}", lang.code()),
             )),
             Err(err) => Err(db_unavailable(err)),
@@ -769,20 +777,12 @@ impl DoltMySqlStore {
 
     fn query_data_languages(&self) -> AppResult<Vec<String>> {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let tables: Vec<String> = conn
-            .query(
-                "SELECT table_name \
-                 FROM information_schema.tables \
-                 WHERE table_schema = DATABASE() \
-                   AND table_name LIKE 'languagedata_%'",
-            )
+        let langs: Vec<String> = conn
+            .query("SELECT DISTINCT `lang` FROM languagedata")
             .map_err(db_unavailable)?;
         let mut languages = BTreeSet::new();
-        for table_name in tables {
-            let Some(code) = table_name.strip_prefix("languagedata_") else {
-                continue;
-            };
-            if let Some(lang) = DataLang::from_code(code) {
+        for code in langs {
+            if let Some(lang) = DataLang::from_code(&code) {
                 languages.insert(lang.code().to_string());
             }
         }
@@ -804,11 +804,14 @@ impl DoltMySqlStore {
         let query = format!(
             "SELECT \
                 k.fish_id, \
-                item_name.`name` AS fish_name \
+                loc.`text` AS fish_name \
              FROM fish_names_ko{as_of} k \
-             JOIN calculator_item_names{as_of} item_name \
-               ON item_name.`item_id` = CAST(k.fish_id AS SIGNED) \
-              AND item_name.`lang` = '{}'",
+             JOIN languagedata{as_of} loc \
+               ON loc.`lang` = '{}' \
+              AND loc.`id` = CAST(k.fish_id AS SIGNED) \
+              AND loc.`format` = 'A' \
+              AND loc.`category` = '' \
+              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL",
             lang.code().replace('\'', "''")
         );
 
@@ -847,7 +850,7 @@ impl DoltMySqlStore {
             "SELECT \
                 f.fish_id, \
                 ft.encyclopedia_key, \
-                item_name.`name` AS fish_name, \
+                loc.`text` AS fish_name, \
                 it.`GradeType` AS grade_type, \
                 NULLIF(ft.icon, '') AS fish_table_icon_file, \
                 NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
@@ -856,16 +859,19 @@ impl DoltMySqlStore {
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
              FROM fish_names_ko{as_of} f \
-             JOIN calculator_item_names{as_of} item_name \
-               ON item_name.`item_id` = CAST(f.fish_id AS SIGNED) \
-              AND item_name.`lang` = '{item_lang}' \
+             JOIN languagedata{as_of} loc \
+               ON loc.`lang` = '{item_lang}' \
+              AND loc.`id` = CAST(f.fish_id AS SIGNED) \
+              AND loc.`format` = 'A' \
+              AND loc.`category` = '' \
+              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL \
              JOIN item_table{as_of} it ON it.`Index` = f.fish_id \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = f.fish_id \
              UNION ALL \
              SELECT \
                 ft.item_key AS fish_id, \
                 ft.encyclopedia_key, \
-                item_name.`name` AS fish_name, \
+                loc.`text` AS fish_name, \
                 it.`GradeType` AS grade_type, \
                 NULLIF(ft.icon, '') AS fish_table_icon_file, \
                 NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
@@ -874,9 +880,12 @@ impl DoltMySqlStore {
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
              FROM fish_table{as_of} ft \
-             JOIN calculator_item_names{as_of} item_name \
-               ON item_name.`item_id` = CAST(ft.item_key AS SIGNED) \
-              AND item_name.`lang` = '{item_lang}' \
+             JOIN languagedata{as_of} loc \
+               ON loc.`lang` = '{item_lang}' \
+              AND loc.`id` = CAST(ft.item_key AS SIGNED) \
+              AND loc.`format` = 'A' \
+              AND loc.`category` = '' \
+              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL \
              LEFT JOIN item_table{as_of} it ON it.`Index` = ft.item_key \
              LEFT JOIN fish_names_ko{as_of} f ON f.fish_id = ft.item_key \
              WHERE f.fish_id IS NULL",
@@ -1203,7 +1212,6 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let languagedata_table = format!("languagedata_{}", lang.code());
         let query = format!(
             "SELECT \
                 ft.encyclopedia_key, \
@@ -1212,10 +1220,13 @@ impl DoltMySqlStore {
                 ft.icon, \
                 ft.encyclopedia_icon \
              FROM fish_table{as_of} ft \
-             JOIN `{languagedata_table}`{as_of} loc ON loc.`id` = ft.item_key \
-               AND loc.`format` = 'A' \
-               AND loc.`unk` IS NULL \
-               AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL"
+             JOIN languagedata{as_of} loc \
+               ON loc.`lang` = '{}' \
+              AND loc.`id` = ft.item_key \
+              AND loc.`format` = 'A' \
+              AND loc.`category` = '' \
+              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL",
+            lang.code().replace('\'', "''")
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;

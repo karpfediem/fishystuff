@@ -870,17 +870,22 @@ impl DoltMySqlStore {
                 .collect::<Vec<_>>();
             let names_query = format!(
                 "SELECT \
-                        CAST(`lightstone_set_id` AS CHAR), \
-                        `name` \
-                     FROM calculator_lightstone_set_names{as_of} \
+                        CAST(`id` AS CHAR), \
+                        MAX(NULLIF(TRIM(TRAILING ']' FROM SUBSTRING_INDEX(SUBSTRING_INDEX(NULLIF(TRIM(`text`), ''), ']', 1), '[', -1)), '')) \
+                     FROM languagedata{as_of} \
                      WHERE `lang` = '{}' \
-                       AND `lightstone_set_id` IN ({})",
+                       AND `format` = 'B' \
+                       AND `category` = '113' \
+                       AND `id` IN ({}) \
+                       AND NULLIF(TRIM(`text`), '') IS NOT NULL \
+                       AND `text` LIKE '%[%' \
+                       AND `text` LIKE '%]%' \
+                     GROUP BY CAST(`id` AS CHAR)",
                 lang.code().replace('\'', "''"),
                 quote_list(&lightstone_set_ids)
             );
             let rows: Vec<(String, Option<String>)> = match conn.query(names_query) {
                 Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "calculator_lightstone_set_names") => Vec::new(),
                 Err(err) => return Err(db_unavailable(err)),
             };
             rows.into_iter()

@@ -439,12 +439,13 @@ fn query_languagedata_texts(
     values.sort();
     let mut result = HashMap::new();
     for chunk in values.chunks(400) {
-        let table_name = format!("languagedata_{}", lang.code());
         let query = format!(
             "SELECT `id`, `text` \
-             FROM `{table_name}`{as_of} \
-             WHERE `unk` = '{}' \
+             FROM languagedata{as_of} \
+             WHERE `lang` = '{}' \
+               AND `category` = '{}' \
                AND `id` IN ({})",
+            lang.code().replace('\'', "''"),
             unk.replace('\'', "''"),
             quoted_sql_values(chunk),
         );
@@ -1056,6 +1057,7 @@ impl DoltMySqlStore {
         lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorPetCatalog> {
+        self.validate_data_lang_available(lang, ref_id)?;
         let mut catalog = build_calculator_pet_catalog(lang);
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;

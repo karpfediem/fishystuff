@@ -876,16 +876,18 @@ impl DoltMySqlStore {
         let item_query = format!(
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
-                NULLIF(TRIM(item_name.`name`), '') AS item_name, \
+                NULLIF(TRIM(item_name.`text`), '') AS item_name, \
                 NULLIF(TRIM(it.`IconImageFile`), '') AS icon_file, \
                 it.`GradeType`, \
                 it.`OriginalPrice`, \
                 CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish \
              FROM item_table{as_of} it \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = it.`Index` \
-             LEFT JOIN calculator_item_names{as_of} item_name \
-               ON item_name.`item_id` = CAST(it.`Index` AS SIGNED) \
-              AND item_name.`lang` = '{}' \
+             LEFT JOIN languagedata{as_of} item_name \
+               ON item_name.`lang` = '{}' \
+              AND item_name.`id` = CAST(it.`Index` AS SIGNED) \
+              AND item_name.`format` = 'A' \
+              AND item_name.`category` = '' \
              WHERE it.`Index` IN ({item_id_csv})",
             lang.code().replace('\'', "''")
         );

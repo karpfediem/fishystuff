@@ -88,7 +88,10 @@ const SUB_GROUP_HEADERS: [&str; 19] = [
     "PriceOption",
 ];
 
-const LANGUAGEDATA_HEADERS: [&str; 4] = ["id", "unk", "text", "format"];
+const LANGUAGEDATA_SOURCE_HEADERS: [&str; 4] = ["id", "unk", "text", "format"];
+const LANGUAGEDATA_HEADERS: [&str; 5] = ["lang", "id", "category", "text", "format"];
+const LANGUAGEDATA_TABLE: &str = "languagedata";
+const LANGUAGEDATA_IMPORT_TABLE: &str = "languagedata_import";
 const FISH_TABLE_HEADERS: [&str; 5] = [
     "encyclopedia_key",
     "item_key",
@@ -747,8 +750,8 @@ fn normalize_languagedata_lang(value: &str) -> std::result::Result<String, Strin
     Ok(lang)
 }
 
-fn languagedata_table_name(lang: &str) -> String {
-    format!("languagedata_{lang}")
+fn languagedata_output_file_name(lang: &str) -> String {
+    format!("languagedata_{lang}.csv")
 }
 
 fn collect_languagedata_inputs(
@@ -985,7 +988,7 @@ fn run_import(command: ImportCommand) -> Result<()> {
         .map(|lang| {
             (
                 lang.clone(),
-                output_dir.join(format!("{}.csv", languagedata_table_name(lang))),
+                output_dir.join(languagedata_output_file_name(lang)),
             )
         })
         .collect::<BTreeMap<_, _>>();
@@ -1056,13 +1059,8 @@ fn run_import(command: ImportCommand) -> Result<()> {
     if patches_stats.is_some() {
         run_dolt_table_import(&dolt_repo, "patches", &outputs.patches_csv)?;
     }
-    for (lang, output_path) in &outputs.languagedata_csvs {
-        let table_name = languagedata_table_name(lang);
-        ensure_languagedata_table(&dolt_repo, &table_name)?;
-        run_dolt_table_replace(&dolt_repo, &table_name, output_path)?;
-    }
+    replace_languagedata_languages(&dolt_repo, &outputs.languagedata_csvs)?;
     ensure_calculator_lookup_indexes(&dolt_repo)?;
-    refresh_calculator_item_name_tables(&dolt_repo)?;
 
     if commit {
         let msg = build_commit_message(commit_msg, &digests);
@@ -1109,21 +1107,16 @@ fn run_languagedata_loc_import(command: ImportLanguageDataLocCommand) -> Result<
     let mut outputs = BTreeMap::<String, PathBuf>::new();
     for (lang, input_path) in &loc_inputs {
         loc_shas.insert(lang.clone(), sha256_file(input_path)?);
-        let output_path = output_dir.join(format!("{}.csv", languagedata_table_name(lang)));
+        let output_path = output_dir.join(languagedata_output_file_name(lang));
         stats.insert(
             lang.clone(),
-            import_languagedata_loc(input_path, &output_path)?,
+            import_languagedata_loc(input_path, &output_path, lang)?,
         );
         outputs.insert(lang.clone(), output_path);
     }
 
-    for (lang, output_path) in &outputs {
-        let table_name = languagedata_table_name(lang);
-        ensure_languagedata_table(&dolt_repo, &table_name)?;
-        run_dolt_table_replace(&dolt_repo, &table_name, output_path)?;
-    }
+    replace_languagedata_languages(&dolt_repo, &outputs)?;
     ensure_calculator_lookup_indexes(&dolt_repo)?;
-    refresh_calculator_item_name_tables(&dolt_repo)?;
 
     if commit {
         let message = build_languagedata_loc_commit_message(commit_msg, &loc_shas);
@@ -1847,42 +1840,73 @@ fn ensure_community_zone_fish_support_table(repo_path: &Path) -> Result<()> {
     )
 }
 
-fn ensure_languagedata_table(repo_path: &Path, table_name: &str) -> Result<()> {
+fn ensure_languagedata_table(repo_path: &Path) -> Result<()> {
     let query = format!(
         "CREATE TABLE IF NOT EXISTS {} (\
-            `id` BIGINT,\
-            `unk` VARCHAR(64),\
+            `lang` VARCHAR(16) NOT NULL,\
+            `id` BIGINT NOT NULL,\
+            `category` VARCHAR(64) NOT NULL,\
             `text` LONGTEXT,\
-            `format` VARCHAR(8)\
+            `format` VARCHAR(8) NOT NULL,\
+            PRIMARY KEY (`lang`, `format`, `category`, `id`),\
+            KEY `idx_languagedata_lang_id_format_category` (`lang`, `id`, `format`, `category`)\
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-        sql_ident(table_name)
+        sql_ident(LANGUAGEDATA_TABLE)
     );
-    run_dolt_sql_query_or_remote(repo_path, &query, &format!("ensure {table_name} table"))
+    run_dolt_sql_query_or_remote(repo_path, &query, "ensure languagedata table")?;
+    ensure_dolt_index(
+        repo_path,
+        LANGUAGEDATA_TABLE,
+        "idx_languagedata_lang_id_format_category",
+        "CREATE INDEX `idx_languagedata_lang_id_format_category` \
+         ON `languagedata` (`lang`, `id`, `format`, `category`);",
+    )
+}
+
+fn ensure_languagedata_import_table(repo_path: &Path) -> Result<()> {
+    let query = format!(
+        "CREATE TABLE IF NOT EXISTS {} (\
+            `lang` VARCHAR(16) NOT NULL,\
+            `id` BIGINT NOT NULL,\
+            `category` VARCHAR(64) NOT NULL,\
+            `text` LONGTEXT,\
+            `format` VARCHAR(8) NOT NULL\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        sql_ident(LANGUAGEDATA_IMPORT_TABLE)
+    );
+    run_dolt_sql_query_or_remote(repo_path, &query, "ensure languagedata import table")
+}
+
+fn replace_languagedata_languages(
+    repo_path: &Path,
+    outputs: &BTreeMap<String, PathBuf>,
+) -> Result<()> {
+    ensure_languagedata_table(repo_path)?;
+    for (lang, output_path) in outputs {
+        ensure_languagedata_import_table(repo_path)?;
+        run_dolt_table_replace(repo_path, LANGUAGEDATA_IMPORT_TABLE, output_path)?;
+        let query = format!(
+            "DELETE FROM {table} WHERE `lang` = {lang};\
+             INSERT INTO {table} (`lang`, `id`, `category`, `text`, `format`) \
+             SELECT `lang`, `id`, COALESCE(`category`, ''), `text`, `format` \
+             FROM {staging} \
+             WHERE `lang` = {lang};\
+             DROP TABLE {staging};",
+            table = sql_ident(LANGUAGEDATA_TABLE),
+            staging = sql_ident(LANGUAGEDATA_IMPORT_TABLE),
+            lang = sql_value(lang),
+        );
+        run_dolt_sql_query_or_remote(
+            repo_path,
+            &query,
+            &format!("replace languagedata rows for {lang}"),
+        )?;
+    }
+    Ok(())
 }
 
 fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
-    for source_table in list_languagedata_tables(repo_path)?.values() {
-        ensure_dolt_index(
-            repo_path,
-            source_table,
-            &format!("idx_{source_table}_id_format_unk"),
-            &format!(
-                "CREATE INDEX {} ON {} (`id`, `format`(1), `unk`(8));",
-                sql_ident(&format!("idx_{source_table}_id_format_unk")),
-                sql_ident(source_table)
-            ),
-        )?;
-        ensure_dolt_index(
-            repo_path,
-            source_table,
-            &format!("idx_{source_table}_format_unk_id"),
-            &format!(
-                "CREATE INDEX {} ON {} (`format`(1), `unk`(8), `id`);",
-                sql_ident(&format!("idx_{source_table}_format_unk_id")),
-                sql_ident(source_table)
-            ),
-        )?;
-    }
+    ensure_languagedata_table(repo_path)?;
     ensure_dolt_index(
         repo_path,
         "item_table",
@@ -1891,108 +1915,6 @@ fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
          ON `item_table` (`ItemName`(191));",
     )?;
     Ok(())
-}
-
-fn refresh_calculator_item_name_tables(repo_path: &Path) -> Result<()> {
-    for (lang, source_table) in list_languagedata_tables(repo_path)? {
-        refresh_calculator_item_names(repo_path, &lang, &source_table)?;
-        refresh_calculator_lightstone_set_names(repo_path, &lang, &source_table)?;
-    }
-    Ok(())
-}
-
-fn refresh_calculator_item_names(repo_path: &Path, lang: &str, source_table: &str) -> Result<()> {
-    if !dolt_table_exists(repo_path, source_table)? {
-        return Ok(());
-    }
-    let query = format!(
-        "CREATE TABLE IF NOT EXISTS `calculator_item_names` (\
-            `lang` VARCHAR(16) NOT NULL,\
-            `item_id` BIGINT NOT NULL,\
-            `name` LONGTEXT,\
-            PRIMARY KEY (`lang`, `item_id`),\
-            KEY `idx_calculator_item_names_item_id` (`item_id`)\
-         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;\
-         DELETE FROM `calculator_item_names` WHERE `lang` = {lang};\
-         INSERT INTO `calculator_item_names` (`lang`, `item_id`, `name`) \
-         SELECT {lang} AS lang, \
-                CAST(`id` AS SIGNED) AS item_id, \
-                MAX(NULLIF(TRIM(`text`), '')) AS name \
-         FROM {source_table} \
-         WHERE `format` = 'A' \
-           AND `unk` IS NULL \
-         GROUP BY CAST(`id` AS SIGNED);",
-        lang = sql_value(lang),
-        source_table = sql_ident(source_table),
-    );
-    run_dolt_sql_query_or_remote(
-        repo_path,
-        &query,
-        &format!("refresh calculator item names for {lang}"),
-    )
-}
-
-fn refresh_calculator_lightstone_set_names(
-    repo_path: &Path,
-    lang: &str,
-    source_table: &str,
-) -> Result<()> {
-    if !dolt_table_exists(repo_path, source_table)? {
-        return Ok(());
-    }
-    let query = format!(
-        "CREATE TABLE IF NOT EXISTS `calculator_lightstone_set_names` (\
-            `lang` VARCHAR(16) NOT NULL,\
-            `lightstone_set_id` BIGINT NOT NULL,\
-            `name` LONGTEXT,\
-            PRIMARY KEY (`lang`, `lightstone_set_id`),\
-            KEY `idx_calculator_lightstone_set_names_set_id` (`lightstone_set_id`)\
-         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;\
-         DELETE FROM `calculator_lightstone_set_names` WHERE `lang` = {lang};\
-         INSERT INTO `calculator_lightstone_set_names` (`lang`, `lightstone_set_id`, `name`) \
-         SELECT {lang} AS lang, \
-                CAST(`id` AS SIGNED) AS lightstone_set_id, \
-                MAX(NULLIF(TRIM(TRAILING ']' FROM SUBSTRING_INDEX(SUBSTRING_INDEX(NULLIF(TRIM(`text`), ''), ']', 1), '[', -1)), '')) AS name \
-         FROM {source_table} \
-         WHERE `format` = 'B' \
-           AND `unk` = '113' \
-           AND NULLIF(TRIM(`text`), '') IS NOT NULL \
-           AND `text` LIKE '%[%' \
-           AND `text` LIKE '%]%' \
-         GROUP BY CAST(`id` AS SIGNED);",
-        lang = sql_value(lang),
-        source_table = sql_ident(source_table),
-    );
-    run_dolt_sql_query_or_remote(
-        repo_path,
-        &query,
-        &format!("refresh calculator lightstone set names for {lang}"),
-    )
-}
-
-fn list_languagedata_tables(repo_path: &Path) -> Result<BTreeMap<String, String>> {
-    let rows = run_dolt_select_named_rows(
-        repo_path,
-        "SELECT table_name \
-         FROM information_schema.tables \
-         WHERE table_schema = DATABASE() \
-           AND table_name LIKE 'languagedata_%'",
-        "list languagedata tables",
-    )?;
-    let mut tables = BTreeMap::<String, String>::new();
-    for row in rows {
-        let Some(table_name) = row.get("table_name").map(String::as_str) else {
-            continue;
-        };
-        let Some(lang) = table_name
-            .strip_prefix("languagedata_")
-            .and_then(|lang| normalize_languagedata_lang(lang).ok())
-        else {
-            continue;
-        };
-        tables.insert(lang, table_name.to_string());
-    }
-    Ok(tables)
 }
 
 fn dolt_table_exists(repo_path: &Path, table_name: &str) -> Result<bool> {
@@ -3187,8 +3109,8 @@ fn import_languagedata_csv(
         .clone();
     validate_headers(
         &headers.iter().map(|h| h.to_string()).collect::<Vec<_>>(),
-        &LANGUAGEDATA_HEADERS,
-        &format!("{}:{}", path.display(), languagedata_table_name(lang)),
+        &LANGUAGEDATA_SOURCE_HEADERS,
+        &format!("{}:languagedata_{lang}", path.display()),
     )?;
 
     let mut writer = build_csv_writer(output_csv)?;
@@ -3197,16 +3119,22 @@ fn import_languagedata_csv(
     let mut row_count = 0;
     for row in reader.records() {
         let record = row.context("read languagedata csv row")?;
-        let mut out = Vec::with_capacity(LANGUAGEDATA_HEADERS.len());
-        for i in 0..LANGUAGEDATA_HEADERS.len() {
+        let mut source = Vec::with_capacity(LANGUAGEDATA_SOURCE_HEADERS.len());
+        for i in 0..LANGUAGEDATA_SOURCE_HEADERS.len() {
             let raw = record.get(i).unwrap_or("").trim();
             if raw.is_empty() || is_null_marker(raw) {
-                out.push(String::new());
+                source.push(String::new());
             } else {
-                out.push(raw.to_string());
+                source.push(raw.to_string());
             }
         }
-        writer.write_record(&out)?;
+        writer.write_record([
+            lang,
+            source.first().map(String::as_str).unwrap_or_default(),
+            source.get(1).map(String::as_str).unwrap_or_default(),
+            source.get(2).map(String::as_str).unwrap_or_default(),
+            source.get(3).map(String::as_str).unwrap_or_default(),
+        ])?;
         row_count += 1;
     }
 
@@ -3214,7 +3142,11 @@ fn import_languagedata_csv(
     Ok(LanguageDataImport { row_count })
 }
 
-fn import_languagedata_loc(path: &Path, output_csv: &Path) -> Result<LanguageDataImport> {
+fn import_languagedata_loc(
+    path: &Path,
+    output_csv: &Path,
+    lang: &str,
+) -> Result<LanguageDataImport> {
     let mut writer = build_csv_writer(output_csv)?;
     writer.write_record(LANGUAGEDATA_HEADERS)?;
 
@@ -3226,6 +3158,7 @@ fn import_languagedata_loc(path: &Path, output_csv: &Path) -> Result<LanguageDat
             .map(|namespace| namespace.to_string())
             .unwrap_or_default();
         writer.write_record([
+            lang,
             id.as_str(),
             unk.as_str(),
             record.text.as_str(),

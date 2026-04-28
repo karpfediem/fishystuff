@@ -304,9 +304,10 @@ function queryPetIconTargets() {
       NULLIF(TRIM(p.IconImageFile1), '') AS pet_icon_file,
       NULLIF(TRIM(ld.text), '') AS display_name
     FROM pet_table p
-    LEFT JOIN languagedata_en ld
-      ON TRIM(ld.id) = TRIM(p.CharacterKey)
-     AND TRIM(ld.unk) = '6'
+    LEFT JOIN languagedata ld
+      ON ld.lang = 'en'
+     AND TRIM(ld.id) = TRIM(p.CharacterKey)
+     AND TRIM(ld.category) = '6'
     WHERE NULLIF(TRIM(p.IconImageFile1), '') IS NOT NULL
     ORDER BY pet_icon_file
   `);
