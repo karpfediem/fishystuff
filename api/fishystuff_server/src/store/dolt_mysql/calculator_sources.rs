@@ -3,7 +3,7 @@ use mysql::Row;
 use std::collections::HashMap;
 
 use crate::error::AppResult;
-use crate::store::validate_dolt_ref;
+use crate::store::{validate_dolt_ref, FishLang};
 
 use super::calculator_effects::{
     normalized_effect_lines, parse_unique_calculator_effect_text, CalculatorItemEffectValues,
@@ -112,9 +112,9 @@ struct CalculatorBuffTextRow {
 #[derive(Debug, Clone)]
 struct CalculatorLightstoneSourceMetadataRow {
     source_key: String,
+    lightstone_set_id: String,
     skill_no: String,
     set_name_ko: Option<String>,
-    source_name_en: Option<String>,
     skill_icon_file: Option<String>,
 }
 
@@ -774,6 +774,7 @@ impl DoltMySqlStore {
 
     fn query_lightstone_source_rows(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<
         Vec<(
@@ -805,28 +806,16 @@ impl DoltMySqlStore {
                 ls.`SetOptionSkillNo` AS skill_no, \
                 NULLIF(TRIM(stype.`SkillName`), '') AS skill_name_ko, \
                 NULLIF(TRIM(ls.`Description`), '') AS description_ko, \
-                l_en.source_text_en AS source_text_en, \
                 NULLIF(TRIM(stype.`IconImageFile`), '') AS skill_icon_file \
              FROM lightstone_set_option{as_of} ls \
              LEFT JOIN skilltype_table_new{as_of} stype \
                ON stype.`SkillNo` = ls.`SetOptionSkillNo` \
-             LEFT JOIN ( \
-                SELECT \
-                    CAST(l.`id` AS SIGNED) AS lightstone_set_id, \
-                    MIN(NULLIF(TRIM(l.`text`), '')) AS source_text_en \
-                FROM languagedata_en{as_of} l \
-                WHERE l.`format` = 'B' \
-                  AND l.`unk` = '113' \
-                GROUP BY CAST(l.`id` AS SIGNED) \
-             ) l_en \
-               ON l_en.lightstone_set_id = CAST(ls.`Index` AS SIGNED) \
              WHERE NULLIF(ls.`SetOptionSkillNo`, '') IS NOT NULL"
         );
         let metadata_rows: Vec<(
             String,
             String,
             String,
-            Option<String>,
             Option<String>,
             Option<String>,
             Option<String>,
@@ -845,18 +834,17 @@ impl DoltMySqlStore {
                     skill_no,
                     skill_name_ko,
                     description_ko,
-                    source_text_en,
                     skill_icon_file,
                 )| {
                     let skill_no = normalize_optional_string(Some(skill_no))?;
                     Some(CalculatorLightstoneSourceMetadataRow {
                         source_key,
+                        lightstone_set_id: _lightstone_set_id,
                         skill_no,
                         set_name_ko: parse_lightstone_set_name(
                             skill_name_ko.as_deref(),
                             description_ko.as_deref(),
                         ),
-                        source_name_en: parse_lightstone_set_name(None, source_text_en.as_deref()),
                         skill_icon_file: normalize_optional_string(skill_icon_file),
                     })
                 },
@@ -873,6 +861,33 @@ impl DoltMySqlStore {
                 .map(|value| format!("'{}'", value.replace('\'', "''")))
                 .collect::<Vec<_>>()
                 .join(",")
+        };
+
+        let localized_lightstone_names = {
+            let lightstone_set_ids = metadata_rows
+                .iter()
+                .map(|row| row.lightstone_set_id.clone())
+                .collect::<Vec<_>>();
+            let names_query = format!(
+                "SELECT \
+                        CAST(`lightstone_set_id` AS CHAR), \
+                        `name` \
+                     FROM calculator_lightstone_set_names{as_of} \
+                     WHERE `lang` = '{}' \
+                       AND `lightstone_set_id` IN ({})",
+                lang.code().replace('\'', "''"),
+                quote_list(&lightstone_set_ids)
+            );
+            let rows: Vec<(String, Option<String>)> = match conn.query(names_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "calculator_lightstone_set_names") => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+            rows.into_iter()
+                .filter_map(|(set_id, name)| {
+                    normalize_optional_string(name).map(|name| (set_id, name))
+                })
+                .collect::<HashMap<_, _>>()
         };
 
         let skill_nos = metadata_rows
@@ -997,7 +1012,9 @@ impl DoltMySqlStore {
             out.push((
                 row.source_key,
                 row.set_name_ko,
-                row.source_name_en,
+                localized_lightstone_names
+                    .get(&row.lightstone_set_id)
+                    .cloned(),
                 row.skill_icon_file,
                 Some(effect_description_ko),
                 values.afr,
@@ -1293,6 +1310,7 @@ impl DoltMySqlStore {
 
     fn query_raw_enchant_skill_only_candidates(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorEnchantEffectEntryRow>> {
         let as_of = if let Some(ref_id) = ref_id {
@@ -1352,7 +1370,7 @@ impl DoltMySqlStore {
             .map(|row| row.normalized_item_name_ko.clone())
             .collect::<Vec<_>>();
         let metadata_candidates =
-            self.query_item_table_metadata_by_names(ref_id, &exact_names, &normalized_names)?;
+            self.query_item_table_metadata_by_names(lang, ref_id, &exact_names, &normalized_names)?;
 
         let mut exact_metadata_by_name = HashMap::<String, Vec<(i32, ItemSourceMetadata)>>::new();
         let mut normalized_metadata_by_name =
@@ -1475,6 +1493,7 @@ impl DoltMySqlStore {
 
     fn query_consumable_source_backed_item_rows(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
@@ -1554,48 +1573,53 @@ impl DoltMySqlStore {
             })
             .collect::<Vec<_>>();
 
-        source_backed_rows.extend(self.query_lightstone_source_rows(ref_id)?.into_iter().map(
-            |(
-                source_key,
-                source_name_ko,
-                source_name_en,
-                item_icon_file,
-                effect_description_ko,
-                afr,
-                bonus_rare,
-                bonus_big,
-                drr,
-                exp_fish,
-                exp_life,
-            )| CalculatorSourceBackedItemRow {
-                source_key,
-                source_kind: "lightstone_set".to_string(),
-                item_id: None,
-                item_type: "lightstone_set".to_string(),
-                buff_category_key: None,
-                buff_category_id: None,
-                buff_category_level: None,
-                source_name_en,
-                source_name_ko,
-                item_icon_file,
-                icon_id: None,
-                durability: None,
-                fish_multiplier: None,
-                effect_description_ko,
-                afr,
-                bonus_rare,
-                bonus_big,
-                item_drr: drr,
-                exp_fish,
-                exp_life,
-            },
-        ));
+        source_backed_rows.extend(
+            self.query_lightstone_source_rows(lang, ref_id)?
+                .into_iter()
+                .map(
+                    |(
+                        source_key,
+                        source_name_ko,
+                        source_name_en,
+                        item_icon_file,
+                        effect_description_ko,
+                        afr,
+                        bonus_rare,
+                        bonus_big,
+                        drr,
+                        exp_fish,
+                        exp_life,
+                    )| CalculatorSourceBackedItemRow {
+                        source_key,
+                        source_kind: "lightstone_set".to_string(),
+                        item_id: None,
+                        item_type: "lightstone_set".to_string(),
+                        buff_category_key: None,
+                        buff_category_id: None,
+                        buff_category_level: None,
+                        source_name_en,
+                        source_name_ko,
+                        item_icon_file,
+                        icon_id: None,
+                        durability: None,
+                        fish_multiplier: None,
+                        effect_description_ko,
+                        afr,
+                        bonus_rare,
+                        bonus_big,
+                        item_drr: drr,
+                        exp_fish,
+                        exp_life,
+                    },
+                ),
+        );
 
         Ok(source_backed_rows)
     }
 
     fn query_source_owned_enchant_source_backed_item_rows(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
         let as_of = if let Some(ref_id) = ref_id {
@@ -1682,7 +1706,7 @@ impl DoltMySqlStore {
             }
         }
 
-        let skill_only_candidates = self.query_raw_enchant_skill_only_candidates(ref_id)?;
+        let skill_only_candidates = self.query_raw_enchant_skill_only_candidates(lang, ref_id)?;
         for candidate in skill_only_candidates {
             let key = (candidate.item_type.clone(), candidate.item_name_ko.clone());
             match chosen_effects.get_mut(&key) {
@@ -1751,7 +1775,7 @@ impl DoltMySqlStore {
             .map(|row| row.normalized_item_name_ko.clone())
             .collect::<Vec<_>>();
         let metadata_candidates =
-            self.query_item_table_metadata_by_names(ref_id, &exact_names, &normalized_names)?;
+            self.query_item_table_metadata_by_names(lang, ref_id, &exact_names, &normalized_names)?;
 
         let mut exact_metadata_by_name = HashMap::<String, Vec<(i32, ItemSourceMetadata)>>::new();
         let mut normalized_metadata_by_name =
@@ -1801,7 +1825,7 @@ impl DoltMySqlStore {
                     buff_category_key: None,
                     buff_category_id: None,
                     buff_category_level: None,
-                    source_name_en: metadata.name_en,
+                    source_name_en: metadata.display_name(),
                     source_name_ko: metadata.name_ko,
                     item_icon_file: None,
                     icon_id: metadata.icon_id,
@@ -1826,7 +1850,7 @@ impl DoltMySqlStore {
         // the calculator but currently have no recoverable source-backed effect
         // row in the intermediate dump.
         let manual_item_ids = [16153];
-        let manual_metadata = self.query_item_table_metadata(ref_id, &manual_item_ids)?;
+        let manual_metadata = self.query_item_table_metadata(lang, ref_id, &manual_item_ids)?;
         for item_id in manual_item_ids {
             if existing_item_ids.contains(&item_id) {
                 continue;
@@ -1850,7 +1874,7 @@ impl DoltMySqlStore {
                 buff_category_key: None,
                 buff_category_id: None,
                 buff_category_level: None,
-                source_name_en: metadata.name_en.clone(),
+                source_name_en: metadata.display_name(),
                 source_name_ko: metadata.name_ko.clone(),
                 item_icon_file: None,
                 icon_id: metadata.icon_id,
@@ -1871,10 +1895,11 @@ impl DoltMySqlStore {
 
     pub(super) fn query_calculator_catalog_source_data(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogSourceData> {
         let (revision, resolved_ref) = self.resolve_calculator_catalog_ref(ref_id)?;
-        let cache_key = revision;
+        let cache_key = format!("{}:{revision}", lang.code());
         loop {
             if let Ok(cache) = self.calculator_source_data_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {
@@ -1901,10 +1926,11 @@ impl DoltMySqlStore {
         let result: AppResult<CalculatorCatalogSourceData> = (|| {
             let all_legacy_rows = self.query_legacy_calculator_item_rows(query_ref, &[], &[])?;
             let mut source_backed_rows =
-                self.query_consumable_source_backed_item_rows(query_ref)?;
+                self.query_consumable_source_backed_item_rows(lang, query_ref)?;
             source_backed_rows
-                .extend(self.query_source_owned_enchant_source_backed_item_rows(query_ref)?);
+                .extend(self.query_source_owned_enchant_source_backed_item_rows(lang, query_ref)?);
             let item_source_metadata = self.query_item_table_metadata(
+                lang,
                 query_ref,
                 &collect_calculator_item_metadata_ids(&all_legacy_rows, &source_backed_rows),
             )?;

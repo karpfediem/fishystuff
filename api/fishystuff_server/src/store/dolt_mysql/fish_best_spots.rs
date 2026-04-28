@@ -200,11 +200,8 @@ impl DoltMySqlStore {
         })
     }
 
-    fn fish_best_spots_cache_key(lang: FishLang, ref_id: Option<&str>, item_id: i32) -> String {
-        let lang = match lang {
-            FishLang::En => "en",
-            FishLang::Ko => "ko",
-        };
+    fn fish_best_spots_cache_key(lang: &FishLang, ref_id: Option<&str>, item_id: i32) -> String {
+        let lang = lang.code();
         match ref_id {
             Some(ref_id) => format!("{lang}:{ref_id}:{item_id}"),
             None => format!("{lang}:head:{item_id}"),
@@ -217,7 +214,7 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
         item_id: i32,
     ) -> AppResult<FishBestSpotsResponse> {
-        let cache_key = Self::fish_best_spots_cache_key(lang, ref_id, item_id);
+        let cache_key = Self::fish_best_spots_cache_key(&lang, ref_id, item_id);
         loop {
             if let Ok(cache) = self.fish_best_spots_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {

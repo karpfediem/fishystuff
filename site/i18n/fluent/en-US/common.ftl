@@ -33,6 +33,7 @@ language.option.locale.en-US = English (US)
 language.option.locale.de-DE = Deutsch
 language.option.locale.ko-KR = Korean
 language.option.api.en = English names
+language.option.api.de = German names
 language.option.api.ko = Korean names
 
 translation_notice.title = Translation help wanted

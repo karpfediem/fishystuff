@@ -208,7 +208,7 @@ function createContext(localStorageInitial = {}, options = {}) {
         return {
           contentLang: options.contentLang || options.lang || "en-US",
           locale,
-          apiLang: options.apiLang || (String(locale).toLowerCase().startsWith("ko") ? "ko" : "en"),
+          apiLang: options.apiLang || String(locale).toLowerCase().split(/[-_]/)[0] || "en",
         };
       },
       apply() {},
@@ -1420,11 +1420,11 @@ test("calculator API URLs keep locale and apiLang separate", () => {
   assert.match(korean.window.__fishystuffCalculator.evalUrl(), /\?lang=ko&locale=ko-KR$/);
 
   const german = createContext({}, { locale: "de-DE", lang: "en-US" });
-  assert.equal(german.window.__fishystuffCalculator.lang, "en");
+  assert.equal(german.window.__fishystuffCalculator.lang, "de");
   assert.equal(german.window.__fishystuffCalculator.locale, "de-DE");
-  assert.equal(german.window.__fishystuffCalculator.apiLang, "en");
-  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=en&locale=de-DE$/);
-  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=en&locale=de-DE$/);
+  assert.equal(german.window.__fishystuffCalculator.apiLang, "de");
+  assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=de&locale=de-DE$/);
+  assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=de&locale=de-DE$/);
 
   const mixed = createContext({}, { locale: "de-DE", apiLang: "ko", lang: "en-US" });
   assert.equal(mixed.window.__fishystuffCalculator.lang, "ko");

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 
 use fishystuff_api::models::calculator::CalculatorCatalogResponse;
@@ -58,20 +60,37 @@ pub struct CalculatorZoneLootEntry {
     pub overlay: CalculatorZoneLootOverlayMeta,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum FishLang {
-    En,
-    Ko,
-}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FishLang(Cow<'static, str>);
 
 impl FishLang {
+    #[allow(non_upper_case_globals)]
+    pub const En: Self = Self(Cow::Borrowed("en"));
+    #[allow(dead_code, non_upper_case_globals)]
+    pub const Ko: Self = Self(Cow::Borrowed("ko"));
+
     pub fn from_param(lang: Option<&str>) -> Self {
-        let value = lang.unwrap_or("en").trim().to_ascii_lowercase();
-        if value.starts_with("ko") || value == "kr" || value == "korean" {
-            Self::Ko
-        } else {
-            Self::En
+        Self::from_code(lang.unwrap_or("en")).unwrap_or(Self::En)
+    }
+
+    pub fn from_code(value: &str) -> Option<Self> {
+        let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
+        if normalized.is_empty()
+            || !normalized
+                .chars()
+                .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+        {
+            return None;
         }
+        Some(Self(Cow::Owned(normalized)))
+    }
+
+    pub fn code(&self) -> &str {
+        self.0.as_ref()
+    }
+
+    pub fn is_korean(&self) -> bool {
+        self.code() == "ko"
     }
 }
 

@@ -2,7 +2,7 @@ use mysql::prelude::Queryable;
 use std::collections::{HashMap, HashSet};
 
 use crate::error::AppResult;
-use crate::store::validate_dolt_ref;
+use crate::store::{validate_dolt_ref, FishLang};
 
 use super::catalog::item_grade_from_db;
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
@@ -11,13 +11,19 @@ use super::DoltMySqlStore;
 #[derive(Debug, Clone, Default)]
 pub(super) struct ItemSourceMetadata {
     pub(super) name_ko: Option<String>,
-    pub(super) name_en: Option<String>,
+    pub(super) name_localized: Option<String>,
     pub(super) normalized_name_ko: Option<String>,
     pub(super) item_type: Option<String>,
     pub(super) durability: Option<i32>,
     pub(super) grade: Option<String>,
     pub(super) icon_path: Option<String>,
     pub(super) icon_id: Option<i32>,
+}
+
+impl ItemSourceMetadata {
+    pub(super) fn display_name(&self) -> Option<String> {
+        self.name_localized.clone()
+    }
 }
 
 pub(super) fn normalize_source_owned_item_name(name: &str) -> String {
@@ -72,6 +78,7 @@ fn quote_sql_string_list(values: &[String]) -> String {
 impl DoltMySqlStore {
     pub(super) fn query_item_table_metadata(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
         item_ids: &[i32],
     ) -> AppResult<HashMap<i32, ItemSourceMetadata>> {
@@ -134,7 +141,7 @@ impl DoltMySqlStore {
                             )
                             .map(|value| normalize_source_owned_item_name(&value)),
                             name_ko: normalize_optional_string(name_ko),
-                            name_en: None,
+                            name_localized: None,
                             item_type: item_type_from_equip_type(equip_type.as_deref())
                                 .map(str::to_string),
                             durability: durability.and_then(|value| i32::try_from(value).ok()),
@@ -154,31 +161,32 @@ impl DoltMySqlStore {
         let language_query = format!(
             "SELECT \
                 item_id, \
-                name AS item_name_en \
+                name \
              FROM calculator_item_names{as_of} \
-             WHERE lang = 'en' \
-               AND item_id IN ({id_list})"
+             WHERE lang = '{}' \
+               AND item_id IN ({id_list})",
+            lang.code().replace('\'', "''")
         );
         let language_rows: Vec<(i64, Option<String>)> = match conn.query(language_query) {
             Ok(rows) => rows,
             Err(err) => return Err(db_unavailable(err)),
         };
-        for (item_id, name_en) in language_rows {
+        for (item_id, name) in language_rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
-            let Some(name_en) = normalize_optional_string(name_en) else {
+            let Some(name) = normalize_optional_string(name) else {
                 continue;
             };
             let Some(entry) = metadata.get_mut(&item_id) else {
                 continue;
             };
             if entry
-                .name_en
+                .name_localized
                 .as_ref()
-                .is_none_or(|existing| existing < &name_en)
+                .is_none_or(|existing| existing < &name)
             {
-                entry.name_en = Some(name_en);
+                entry.name_localized = Some(name);
             }
         }
 
@@ -187,6 +195,7 @@ impl DoltMySqlStore {
 
     pub(super) fn query_item_table_metadata_by_names(
         &self,
+        lang: &FishLang,
         ref_id: Option<&str>,
         exact_names: &[String],
         normalized_names: &[String],
@@ -198,7 +207,7 @@ impl DoltMySqlStore {
         }
         let item_ids =
             self.query_item_table_matching_ids_by_names(ref_id, &exact_names, &normalized_names)?;
-        self.query_item_table_metadata(ref_id, &item_ids)
+        self.query_item_table_metadata(lang, ref_id, &item_ids)
     }
 
     fn query_item_table_matching_ids_by_names(

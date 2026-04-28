@@ -130,7 +130,7 @@
     const locale = String(current.locale || document.documentElement.lang || "en-US").trim();
     const localeKey = locale.toLowerCase();
     const apiLang = String(current.apiLang || "").trim().toLowerCase();
-    const resolvedApiLang = apiLang === "ko" ? "ko" : (localeKey.startsWith("ko") ? "ko" : "en");
+    const resolvedApiLang = apiLang || localeKey.split(/[-_]/)[0] || "en";
     if (localeKey.startsWith("ko")) {
       return {
         locale: "ko-KR",

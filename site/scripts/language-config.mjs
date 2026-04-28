@@ -7,5 +7,5 @@ export const LANGUAGE_CONFIG = Object.freeze({
     Object.freeze({ code: "de-DE", pathPrefix: "/de-DE/" }),
   ]),
   localeLanguages: Object.freeze(["en-US", "de-DE", "ko-KR"]),
-  apiLanguages: Object.freeze(["en", "ko"]),
+  apiLanguages: Object.freeze(["en", "de", "ko"]),
 });

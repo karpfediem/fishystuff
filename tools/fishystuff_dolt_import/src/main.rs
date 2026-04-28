@@ -199,6 +199,8 @@ enum Commands {
         patches_csv: Option<PathBuf>,
         #[arg(long)]
         languagedata_en_csv: Option<PathBuf>,
+        #[arg(long = "languagedata-csv", value_parser = parse_languagedata_csv_arg)]
+        languagedata_csvs: Vec<LanguageDataCsvArg>,
         #[arg(long)]
         output_dir: Option<PathBuf>,
         #[arg(long, value_enum, default_value_t = SubsetMode::FishingOnly)]
@@ -375,6 +377,12 @@ struct LanguageDataImport {
     row_count: usize,
 }
 
+#[derive(Debug, Clone)]
+struct LanguageDataCsvArg {
+    lang: String,
+    path: PathBuf,
+}
+
 struct FishTableImport {
     row_count: usize,
 }
@@ -392,6 +400,7 @@ struct ImportCommand {
     fish_table_csv: Option<PathBuf>,
     patches_csv: Option<PathBuf>,
     languagedata_en_csv: Option<PathBuf>,
+    languagedata_csvs: Vec<LanguageDataCsvArg>,
     output_dir: Option<PathBuf>,
     subset: SubsetMode,
     commit: bool,
@@ -405,7 +414,7 @@ struct ImportDigests {
     item_table_sha: Option<String>,
     fish_table_sha: Option<String>,
     patches_sha: Option<String>,
-    languagedata_sha: Option<String>,
+    languagedata_shas: BTreeMap<String, String>,
 }
 
 struct ImportOutputs {
@@ -415,7 +424,7 @@ struct ImportOutputs {
     item_table_csv: PathBuf,
     fish_table_csv: PathBuf,
     patches_csv: PathBuf,
-    languagedata_csv: PathBuf,
+    languagedata_csvs: BTreeMap<String, PathBuf>,
 }
 
 struct CommunityPrizeGuessImport {
@@ -637,8 +646,70 @@ struct ImportReport<'a> {
     item_table: Option<&'a ItemTableImport>,
     fish_table: Option<&'a FishTableImport>,
     patches: Option<&'a PatchesImport>,
-    languagedata: Option<&'a LanguageDataImport>,
+    languagedata: &'a BTreeMap<String, LanguageDataImport>,
     outputs: &'a ImportOutputs,
+}
+
+fn parse_languagedata_csv_arg(value: &str) -> std::result::Result<LanguageDataCsvArg, String> {
+    let (raw_lang, raw_path) = value
+        .split_once('=')
+        .or_else(|| value.split_once(':'))
+        .map(|(lang, path)| (Some(lang), path))
+        .unwrap_or((None, value));
+    let path = PathBuf::from(raw_path);
+    let lang = match raw_lang {
+        Some(lang) => normalize_languagedata_lang(lang)?,
+        None => infer_languagedata_lang(&path)?,
+    };
+    Ok(LanguageDataCsvArg { lang, path })
+}
+
+fn infer_languagedata_lang(path: &Path) -> std::result::Result<String, String> {
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| format!("cannot infer language from {}", path.display()))?;
+    let lang = stem
+        .strip_prefix("languagedata_")
+        .ok_or_else(|| format!("expected filename like languagedata_<lang>.csv: {stem}"))?;
+    normalize_languagedata_lang(lang)
+}
+
+fn normalize_languagedata_lang(value: &str) -> std::result::Result<String, String> {
+    let lang = value.trim().to_ascii_lowercase().replace('-', "_");
+    if lang.is_empty() {
+        return Err("language code cannot be empty".to_string());
+    }
+    if !lang
+        .chars()
+        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    {
+        return Err(format!("unsupported language code: {value}"));
+    }
+    Ok(lang)
+}
+
+fn languagedata_table_name(lang: &str) -> String {
+    format!("languagedata_{lang}")
+}
+
+fn collect_languagedata_inputs(
+    languagedata_en_csv: Option<PathBuf>,
+    languagedata_csvs: Vec<LanguageDataCsvArg>,
+) -> Result<BTreeMap<String, PathBuf>> {
+    let mut inputs = BTreeMap::<String, PathBuf>::new();
+    if let Some(path) = languagedata_en_csv {
+        inputs.insert("en".to_string(), path);
+    }
+    for input in languagedata_csvs {
+        if inputs
+            .insert(input.lang.clone(), input.path.clone())
+            .is_some()
+        {
+            bail!("duplicate languagedata CSV for language {}", input.lang);
+        }
+    }
+    Ok(inputs)
 }
 
 fn main() -> Result<()> {
@@ -653,6 +724,7 @@ fn main() -> Result<()> {
             fish_table_csv,
             patches_csv,
             languagedata_en_csv,
+            languagedata_csvs,
             output_dir,
             subset,
             commit,
@@ -666,6 +738,7 @@ fn main() -> Result<()> {
             fish_table_csv,
             patches_csv,
             languagedata_en_csv,
+            languagedata_csvs,
             output_dir,
             subset,
             commit,
@@ -784,11 +857,13 @@ fn run_import(command: ImportCommand) -> Result<()> {
         fish_table_csv,
         patches_csv,
         languagedata_en_csv,
+        languagedata_csvs,
         output_dir,
         subset,
         commit,
         commit_msg,
     } = command;
+    let languagedata_inputs = collect_languagedata_inputs(languagedata_en_csv, languagedata_csvs)?;
 
     let output_dir = match output_dir {
         Some(path) => path,
@@ -813,12 +888,21 @@ fn run_import(command: ImportCommand) -> Result<()> {
             Some(path) => Some(sha256_file(path)?),
             None => None,
         },
-        languagedata_sha: match languagedata_en_csv.as_ref() {
-            Some(path) => Some(sha256_file(path)?),
-            None => None,
-        },
+        languagedata_shas: languagedata_inputs
+            .iter()
+            .map(|(lang, path)| Ok((lang.clone(), sha256_file(path)?)))
+            .collect::<Result<BTreeMap<_, _>>>()?,
     };
 
+    let languagedata_csvs = languagedata_inputs
+        .keys()
+        .map(|lang| {
+            (
+                lang.clone(),
+                output_dir.join(format!("{}.csv", languagedata_table_name(lang))),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let outputs = ImportOutputs {
         fishing_csv: output_dir.join("fishing_table.csv"),
         main_group_csv: output_dir.join("item_main_group_table.csv"),
@@ -826,7 +910,7 @@ fn run_import(command: ImportCommand) -> Result<()> {
         item_table_csv: output_dir.join("item_table.csv"),
         fish_table_csv: output_dir.join("fish_table.csv"),
         patches_csv: output_dir.join("patches.csv"),
-        languagedata_csv: output_dir.join("languagedata_en.csv"),
+        languagedata_csvs,
     };
 
     let fishing_stats = import_fishing_table(&fishing_xlsx, &outputs.fishing_csv)?;
@@ -854,10 +938,17 @@ fn run_import(command: ImportCommand) -> Result<()> {
         Some(path) => Some(import_patches_csv(path, &outputs.patches_csv)?),
         None => None,
     };
-    let languagedata_stats = match languagedata_en_csv.as_ref() {
-        Some(path) => Some(import_languagedata_en_csv(path, &outputs.languagedata_csv)?),
-        None => None,
-    };
+    let mut languagedata_stats = BTreeMap::<String, LanguageDataImport>::new();
+    for (lang, input_path) in &languagedata_inputs {
+        let output_path = outputs
+            .languagedata_csvs
+            .get(lang)
+            .expect("languagedata output path should exist for input");
+        languagedata_stats.insert(
+            lang.clone(),
+            import_languagedata_csv(input_path, output_path, lang)?,
+        );
+    }
 
     run_dolt_table_import(&dolt_repo, "fishing_table", &outputs.fishing_csv)?;
     run_dolt_table_import_or_sql_server(
@@ -879,8 +970,8 @@ fn run_import(command: ImportCommand) -> Result<()> {
     if patches_stats.is_some() {
         run_dolt_table_import(&dolt_repo, "patches", &outputs.patches_csv)?;
     }
-    if languagedata_stats.is_some() {
-        run_dolt_table_import(&dolt_repo, "languagedata_en", &outputs.languagedata_csv)?;
+    for (lang, output_path) in &outputs.languagedata_csvs {
+        run_dolt_table_import(&dolt_repo, &languagedata_table_name(lang), output_path)?;
     }
     ensure_calculator_lookup_indexes(&dolt_repo)?;
     refresh_calculator_item_name_tables(&dolt_repo)?;
@@ -898,7 +989,7 @@ fn run_import(command: ImportCommand) -> Result<()> {
         item_table: item_table_stats.as_ref(),
         fish_table: fish_table_stats.as_ref(),
         patches: patches_stats.as_ref(),
-        languagedata: languagedata_stats.as_ref(),
+        languagedata: &languagedata_stats,
         outputs: &outputs,
     });
 
@@ -1613,20 +1704,28 @@ fn ensure_community_zone_fish_support_table(repo_path: &Path) -> Result<()> {
 }
 
 fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
-    ensure_dolt_index(
-        repo_path,
-        "languagedata_en",
-        "idx_languagedata_en_id_format_unk",
-        "CREATE INDEX `idx_languagedata_en_id_format_unk` \
-         ON `languagedata_en` (`id`, `format`(1), `unk`(8));",
-    )?;
-    ensure_dolt_index(
-        repo_path,
-        "languagedata_en",
-        "idx_languagedata_en_format_unk_id",
-        "CREATE INDEX `idx_languagedata_en_format_unk_id` \
-         ON `languagedata_en` (`format`(1), `unk`(8), `id`);",
-    )?;
+    for source_table in list_languagedata_tables(repo_path)?.values() {
+        ensure_dolt_index(
+            repo_path,
+            source_table,
+            &format!("idx_{source_table}_id_format_unk"),
+            &format!(
+                "CREATE INDEX {} ON {} (`id`, `format`(1), `unk`(8));",
+                sql_ident(&format!("idx_{source_table}_id_format_unk")),
+                sql_ident(source_table)
+            ),
+        )?;
+        ensure_dolt_index(
+            repo_path,
+            source_table,
+            &format!("idx_{source_table}_format_unk_id"),
+            &format!(
+                "CREATE INDEX {} ON {} (`format`(1), `unk`(8), `id`);",
+                sql_ident(&format!("idx_{source_table}_format_unk_id")),
+                sql_ident(source_table)
+            ),
+        )?;
+    }
     ensure_dolt_index(
         repo_path,
         "item_table",
@@ -1638,7 +1737,11 @@ fn ensure_calculator_lookup_indexes(repo_path: &Path) -> Result<()> {
 }
 
 fn refresh_calculator_item_name_tables(repo_path: &Path) -> Result<()> {
-    refresh_calculator_item_names(repo_path, "en", "languagedata_en")
+    for (lang, source_table) in list_languagedata_tables(repo_path)? {
+        refresh_calculator_item_names(repo_path, &lang, &source_table)?;
+        refresh_calculator_lightstone_set_names(repo_path, &lang, &source_table)?;
+    }
+    Ok(())
 }
 
 fn refresh_calculator_item_names(repo_path: &Path, lang: &str, source_table: &str) -> Result<()> {
@@ -1670,6 +1773,69 @@ fn refresh_calculator_item_names(repo_path: &Path, lang: &str, source_table: &st
         &query,
         &format!("refresh calculator item names for {lang}"),
     )
+}
+
+fn refresh_calculator_lightstone_set_names(
+    repo_path: &Path,
+    lang: &str,
+    source_table: &str,
+) -> Result<()> {
+    if !dolt_table_exists(repo_path, source_table)? {
+        return Ok(());
+    }
+    let query = format!(
+        "CREATE TABLE IF NOT EXISTS `calculator_lightstone_set_names` (\
+            `lang` VARCHAR(16) NOT NULL,\
+            `lightstone_set_id` BIGINT NOT NULL,\
+            `name` LONGTEXT,\
+            PRIMARY KEY (`lang`, `lightstone_set_id`),\
+            KEY `idx_calculator_lightstone_set_names_set_id` (`lightstone_set_id`)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;\
+         DELETE FROM `calculator_lightstone_set_names` WHERE `lang` = {lang};\
+         INSERT INTO `calculator_lightstone_set_names` (`lang`, `lightstone_set_id`, `name`) \
+         SELECT {lang} AS lang, \
+                CAST(`id` AS SIGNED) AS lightstone_set_id, \
+                MAX(NULLIF(TRIM(TRAILING ']' FROM SUBSTRING_INDEX(SUBSTRING_INDEX(NULLIF(TRIM(`text`), ''), ']', 1), '[', -1)), '')) AS name \
+         FROM {source_table} \
+         WHERE `format` = 'B' \
+           AND `unk` = '113' \
+           AND NULLIF(TRIM(`text`), '') IS NOT NULL \
+           AND `text` LIKE '%[%' \
+           AND `text` LIKE '%]%' \
+         GROUP BY CAST(`id` AS SIGNED);",
+        lang = sql_value(lang),
+        source_table = sql_ident(source_table),
+    );
+    run_dolt_sql_query_or_remote(
+        repo_path,
+        &query,
+        &format!("refresh calculator lightstone set names for {lang}"),
+    )
+}
+
+fn list_languagedata_tables(repo_path: &Path) -> Result<BTreeMap<String, String>> {
+    let rows = run_dolt_select_named_rows(
+        repo_path,
+        "SELECT table_name \
+         FROM information_schema.tables \
+         WHERE table_schema = DATABASE() \
+           AND table_name LIKE 'languagedata_%'",
+        "list languagedata tables",
+    )?;
+    let mut tables = BTreeMap::<String, String>::new();
+    for row in rows {
+        let Some(table_name) = row.get("table_name").map(String::as_str) else {
+            continue;
+        };
+        let Some(lang) = table_name
+            .strip_prefix("languagedata_")
+            .and_then(|lang| normalize_languagedata_lang(lang).ok())
+        else {
+            continue;
+        };
+        tables.insert(lang, table_name.to_string());
+    }
+    Ok(tables)
 }
 
 fn dolt_table_exists(repo_path: &Path, table_name: &str) -> Result<bool> {
@@ -2849,7 +3015,11 @@ fn import_patches_csv(path: &Path, output_csv: &Path) -> Result<PatchesImport> {
     Ok(PatchesImport { row_count })
 }
 
-fn import_languagedata_en_csv(path: &Path, output_csv: &Path) -> Result<LanguageDataImport> {
+fn import_languagedata_csv(
+    path: &Path,
+    output_csv: &Path,
+    lang: &str,
+) -> Result<LanguageDataImport> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(path)
@@ -2861,7 +3031,7 @@ fn import_languagedata_en_csv(path: &Path, output_csv: &Path) -> Result<Language
     validate_headers(
         &headers.iter().map(|h| h.to_string()).collect::<Vec<_>>(),
         &LANGUAGEDATA_HEADERS,
-        &format!("{}:languagedata_en", path.display()),
+        &format!("{}:{}", path.display(), languagedata_table_name(lang)),
     )?;
 
     let mut writer = build_csv_writer(output_csv)?;
@@ -3851,8 +4021,11 @@ fn build_commit_message(base: Option<String>, digests: &ImportDigests) -> String
     if let Some(patches_sha) = digests.patches_sha.as_deref() {
         parts.push(format!("Patches={patches_sha}"));
     }
-    if let Some(languagedata_sha) = digests.languagedata_sha.as_deref() {
-        parts.push(format!("LanguageData_EN={languagedata_sha}"));
+    for (lang, languagedata_sha) in &digests.languagedata_shas {
+        parts.push(format!(
+            "LanguageData_{}={languagedata_sha}",
+            lang.to_uppercase()
+        ));
     }
     let suffix = format!("({})", parts.join(", "));
     match base {
@@ -3960,8 +4133,11 @@ fn report_import(report: ImportReport<'_>) {
     if let Some(patches) = patches {
         println!("patches rows emitted: {}", patches.row_count);
     }
-    if let Some(languagedata) = languagedata {
-        println!("languagedata_en rows emitted: {}", languagedata.row_count);
+    for (lang, languagedata) in languagedata {
+        println!(
+            "languagedata_{lang} rows emitted: {}",
+            languagedata.row_count
+        );
     }
     println!("output fishing csv: {}", outputs.fishing_csv.display());
     println!(
@@ -3984,11 +4160,8 @@ fn report_import(report: ImportReport<'_>) {
     if patches.is_some() {
         println!("output patches csv: {}", outputs.patches_csv.display());
     }
-    if languagedata.is_some() {
-        println!(
-            "output languagedata_en csv: {}",
-            outputs.languagedata_csv.display()
-        );
+    for (lang, output) in &outputs.languagedata_csvs {
+        println!("output languagedata_{lang} csv: {}", output.display());
     }
 }
 
@@ -4036,6 +4209,35 @@ mod tests {
         let actual = vec!["R".to_string(), "G".to_string(), "X".to_string()];
         let err = validate_headers(&actual, &["R", "G", "B"], "test").unwrap_err();
         assert!(err.to_string().contains("unexpected headers"));
+    }
+
+    #[test]
+    fn parse_languagedata_csv_arg_accepts_explicit_language() {
+        let parsed = parse_languagedata_csv_arg("de=/tmp/languagedata_de.csv").unwrap();
+        assert_eq!(parsed.lang, "de");
+        assert_eq!(parsed.path, PathBuf::from("/tmp/languagedata_de.csv"));
+    }
+
+    #[test]
+    fn parse_languagedata_csv_arg_infers_language_from_filename() {
+        let parsed = parse_languagedata_csv_arg("/tmp/languagedata_fr.csv").unwrap();
+        assert_eq!(parsed.lang, "fr");
+        assert_eq!(parsed.path, PathBuf::from("/tmp/languagedata_fr.csv"));
+    }
+
+    #[test]
+    fn collect_languagedata_inputs_rejects_duplicate_languages() {
+        let err = collect_languagedata_inputs(
+            Some(PathBuf::from("/tmp/languagedata_en.csv")),
+            vec![LanguageDataCsvArg {
+                lang: "en".to_string(),
+                path: PathBuf::from("/tmp/other_en.csv"),
+            }],
+        )
+        .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("duplicate languagedata CSV for language en"));
     }
 
     #[test]

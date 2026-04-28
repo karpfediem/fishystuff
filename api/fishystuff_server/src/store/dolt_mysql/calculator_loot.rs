@@ -312,14 +312,11 @@ fn apply_community_guess_weights(
 
 impl DoltMySqlStore {
     fn calculator_zone_loot_cache_key(
-        lang: FishLang,
+        lang: &FishLang,
         ref_id: Option<&str>,
         zone_rgb_key: &str,
     ) -> String {
-        let lang = match lang {
-            FishLang::En => "en",
-            FishLang::Ko => "ko",
-        };
+        let lang = lang.code();
         match ref_id {
             Some(ref_id) => format!("{lang}:{ref_id}:{zone_rgb_key}"),
             None => format!("{lang}:head:{zone_rgb_key}"),
@@ -332,7 +329,7 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
         zone_rgb_key: &str,
     ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
-        let cache_key = Self::calculator_zone_loot_cache_key(lang, ref_id, zone_rgb_key);
+        let cache_key = Self::calculator_zone_loot_cache_key(&lang, ref_id, zone_rgb_key);
         loop {
             if let Ok(cache) = self.calculator_zone_loot_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {
@@ -741,29 +738,21 @@ impl DoltMySqlStore {
             return Ok(Vec::new());
         }
         let item_id_csv = item_ids.join(",");
-        let item_name_expr = match lang {
-            FishLang::En => {
-                "COALESCE(NULLIF(TRIM(en.`text`), ''), NULLIF(TRIM(it.`ItemName`), ''))"
-            }
-            FishLang::Ko => {
-                "COALESCE(NULLIF(TRIM(it.`ItemName`), ''), NULLIF(TRIM(en.`text`), ''))"
-            }
-        };
         let item_query = format!(
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
-                {item_name_expr} AS item_name, \
+                NULLIF(TRIM(item_name.`name`), '') AS item_name, \
                 NULLIF(TRIM(it.`IconImageFile`), '') AS icon_file, \
                 it.`GradeType`, \
                 it.`OriginalPrice`, \
                 CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish \
              FROM item_table{as_of} it \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = it.`Index` \
-             LEFT JOIN languagedata_en{as_of} en ON en.`id` = it.`Index` \
-               AND en.`format` = 'A' \
-               AND en.`unk` IS NULL \
-               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
-             WHERE it.`Index` IN ({item_id_csv})"
+             LEFT JOIN calculator_item_names{as_of} item_name \
+               ON item_name.`item_id` = CAST(it.`Index` AS SIGNED) \
+              AND item_name.`lang` = '{}' \
+             WHERE it.`Index` IN ({item_id_csv})",
+            lang.code().replace('\'', "''")
         );
         let item_rows: Vec<(
             i64,

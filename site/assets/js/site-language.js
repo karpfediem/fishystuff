@@ -125,8 +125,9 @@
 
   function defaultApiLangForLocale(locale) {
     const normalized = trimString(locale).toLowerCase();
-    if (normalized.startsWith("ko")) {
-      return "ko";
+    const baseLanguage = normalized.split(/[-_]/)[0];
+    if (baseLanguage && apiLanguages().includes(baseLanguage)) {
+      return baseLanguage;
     }
     return defaultApiLang();
   }

@@ -51,7 +51,7 @@ impl DoltMySqlStore {
         params.validate()?;
 
         let lang = FishLang::from_param(request.lang.as_deref());
-        let fish_names = self.query_fish_names(lang, request.ref_id.as_deref())?;
+        let fish_names = self.query_fish_names(&lang, request.ref_id.as_deref())?;
         let fish_table = self.query_fish_identities(request.ref_id.as_deref())?;
         let zones_vec = self.query_zones(request.ref_id.as_deref())?;
         let zones: HashMap<u32, fishystuff_api::models::zones::ZoneEntry> = zones_vec

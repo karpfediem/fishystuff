@@ -745,7 +745,7 @@ impl DoltMySqlStore {
 
     fn query_fish_names(
         &self,
-        lang: FishLang,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<HashMap<i32, String>> {
         let as_of = if let Some(ref_id) = ref_id {
@@ -754,19 +754,15 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let fish_name_expr = match lang {
-            FishLang::En => "en.`text`",
-            FishLang::Ko => "k.name_ko",
-        };
         let query = format!(
             "SELECT \
                 k.fish_id, \
-                {fish_name_expr} AS fish_name \
+                item_name.`name` AS fish_name \
              FROM fish_names_ko{as_of} k \
-             JOIN languagedata_en{as_of} en ON en.`id` = k.fish_id \
-               AND en.`format` = 'A' \
-               AND en.`unk` IS NULL \
-               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL"
+             JOIN calculator_item_names{as_of} item_name \
+               ON item_name.`item_id` = CAST(k.fish_id AS SIGNED) \
+              AND item_name.`lang` = '{}'",
+            lang.code().replace('\'', "''")
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
@@ -789,7 +785,7 @@ impl DoltMySqlStore {
 
     fn query_fish_catalog(
         &self,
-        lang: FishLang,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<FishCatalogRow>> {
         let as_of = if let Some(ref_id) = ref_id {
@@ -798,16 +794,12 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let fish_name_expr = match lang {
-            FishLang::En => "en.`text`",
-            FishLang::Ko => "COALESCE(NULLIF(TRIM(f.name_ko), ''), en.`text`)",
-        };
         // fish_names_ko can lag newer releases, so union the fish_table-only rows.
         let query = format!(
             "SELECT \
                 f.fish_id, \
                 ft.encyclopedia_key, \
-                {fish_name_expr} AS fish_name, \
+                item_name.`name` AS fish_name, \
                 it.`GradeType` AS grade_type, \
                 NULLIF(ft.icon, '') AS fish_table_icon_file, \
                 NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
@@ -816,17 +808,16 @@ impl DoltMySqlStore {
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
              FROM fish_names_ko{as_of} f \
-             JOIN languagedata_en{as_of} en ON en.`id` = f.fish_id \
-               AND en.`format` = 'A' \
-               AND en.`unk` IS NULL \
-               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
+             JOIN calculator_item_names{as_of} item_name \
+               ON item_name.`item_id` = CAST(f.fish_id AS SIGNED) \
+              AND item_name.`lang` = '{item_lang}' \
              JOIN item_table{as_of} it ON it.`Index` = f.fish_id \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = f.fish_id \
              UNION ALL \
              SELECT \
                 ft.item_key AS fish_id, \
                 ft.encyclopedia_key, \
-                {fish_name_expr} AS fish_name, \
+                item_name.`name` AS fish_name, \
                 it.`GradeType` AS grade_type, \
                 NULLIF(ft.icon, '') AS fish_table_icon_file, \
                 NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
@@ -835,13 +826,13 @@ impl DoltMySqlStore {
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
              FROM fish_table{as_of} ft \
-             JOIN languagedata_en{as_of} en ON en.`id` = ft.item_key \
-               AND en.`format` = 'A' \
-               AND en.`unk` IS NULL \
-               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
+             JOIN calculator_item_names{as_of} item_name \
+               ON item_name.`item_id` = CAST(ft.item_key AS SIGNED) \
+              AND item_name.`lang` = '{item_lang}' \
              LEFT JOIN item_table{as_of} it ON it.`Index` = ft.item_key \
              LEFT JOIN fish_names_ko{as_of} f ON f.fish_id = ft.item_key \
-             WHERE f.fish_id IS NULL"
+             WHERE f.fish_id IS NULL",
+            item_lang = lang.code().replace('\'', "''")
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
@@ -896,11 +887,8 @@ impl DoltMySqlStore {
         Ok(out.into_values().collect())
     }
 
-    fn fish_list_cache_key(lang: FishLang, ref_id: Option<&str>) -> String {
-        let lang = match lang {
-            FishLang::En => "en",
-            FishLang::Ko => "ko",
-        };
+    fn fish_list_cache_key(lang: &FishLang, ref_id: Option<&str>) -> String {
+        let lang = lang.code();
         match ref_id {
             Some(ref_id) => format!("{lang}:{ref_id}"),
             None => format!("{lang}:head"),
@@ -912,7 +900,7 @@ impl DoltMySqlStore {
         lang: FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<FishListResponse> {
-        let cache_key = Self::fish_list_cache_key(lang, ref_id);
+        let cache_key = Self::fish_list_cache_key(&lang, ref_id);
         loop {
             if let Ok(cache) = self.fish_list_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {
@@ -936,7 +924,7 @@ impl DoltMySqlStore {
         }
 
         let result: AppResult<FishListResponse> = (|| {
-            let mut fish = self.query_fish_catalog(lang, ref_id)?;
+            let mut fish = self.query_fish_catalog(&lang, ref_id)?;
             fish.sort_by(|left, right| {
                 right
                     .is_prize
@@ -2161,7 +2149,7 @@ impl Store for DoltMySqlStore {
             params.validate()?;
 
             let lang = FishLang::from_param(request.lang.as_deref());
-            let fish_names = this.query_fish_names(lang, request.ref_id.as_deref())?;
+            let fish_names = this.query_fish_names(&lang, request.ref_id.as_deref())?;
             let fish_table = this.query_fish_identities(request.ref_id.as_deref())?;
             let zones_vec = this.query_zones(request.ref_id.as_deref())?;
             let zones: HashMap<u32, ZoneEntry> = zones_vec

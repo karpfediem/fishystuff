@@ -11,12 +11,8 @@ use super::calculator_defaults::{
 use super::DoltMySqlStore;
 
 impl DoltMySqlStore {
-    fn calculator_catalog_cache_key(lang: FishLang, revision: &str) -> String {
-        let lang = match lang {
-            FishLang::En => "en",
-            FishLang::Ko => "ko",
-        };
-        format!("{lang}:{revision}")
+    fn calculator_catalog_cache_key(lang: &FishLang, revision: &str) -> String {
+        format!("{}:{revision}", lang.code())
     }
 
     pub(super) fn resolve_calculator_catalog_ref(
@@ -37,7 +33,7 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogResponse> {
         let (revision, resolved_ref) = self.resolve_calculator_catalog_ref(ref_id)?;
-        let cache_key = Self::calculator_catalog_cache_key(lang, &revision);
+        let cache_key = Self::calculator_catalog_cache_key(&lang, &revision);
         loop {
             if let Ok(cache) = self.calculator_catalog_cache.lock() {
                 if let Some(cached) = cache.get(&cache_key) {
@@ -62,19 +58,19 @@ impl DoltMySqlStore {
 
         let query_ref = Some(resolved_ref.as_str());
         let result: AppResult<CalculatorCatalogResponse> = (|| {
-            let items = self.query_calculator_items(lang, query_ref)?;
+            let items = self.query_calculator_items(&lang, query_ref)?;
             let mastery_prize_curve = self.query_calculator_mastery_prize_curve(query_ref)?;
             let zone_group_rates = self.query_calculator_zone_group_rates(query_ref)?;
-            let pets = self.query_calculator_pet_catalog(lang, query_ref)?;
+            let pets = self.query_calculator_pet_catalog(&lang, query_ref)?;
             Ok(CalculatorCatalogResponse {
                 items,
                 lifeskill_levels: build_calculator_lifeskill_levels(),
                 mastery_prize_curve,
                 zone_group_rates,
-                fishing_levels: build_calculator_fishing_levels(lang),
-                trade_levels: build_calculator_trade_levels(lang),
-                session_units: build_calculator_session_units(lang),
-                session_presets: build_calculator_session_presets(lang),
+                fishing_levels: build_calculator_fishing_levels(&lang),
+                trade_levels: build_calculator_trade_levels(&lang),
+                session_units: build_calculator_session_units(&lang),
+                session_presets: build_calculator_session_presets(&lang),
                 defaults: build_calculator_default_signals(&pets),
                 pets,
             })

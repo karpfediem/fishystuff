@@ -716,6 +716,7 @@
   "language.option.locale.de-DE": "Deutsch",
   "language.option.locale.ko-KR": "Korean",
   "language.option.api.en": "English names",
+  "language.option.api.de": "German names",
   "language.option.api.ko": "Korean names",
   "translation_notice.title": "Translation help wanted",
   "translation_notice.body": "This page has not been translated yet. You are currently viewing the English source content.",

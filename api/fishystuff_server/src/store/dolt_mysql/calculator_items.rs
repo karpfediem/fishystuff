@@ -72,7 +72,7 @@ fn slugify_calculator_effect_key(name: &str) -> String {
 }
 
 pub(super) fn build_source_item(
-    lang: FishLang,
+    _lang: &FishLang,
     item_id: i32,
     item_type: &str,
     source_name_en: Option<&str>,
@@ -84,21 +84,12 @@ pub(super) fn build_source_item(
     source_durability: Option<i32>,
     override_values: CalculatorItemEffectValues,
 ) -> CalculatorItemEntry {
-    let name = if matches!(lang, FishLang::Ko) {
-        source_name_ko
-            .map(ToOwned::to_owned)
-            .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
-            .or_else(|| source_name_en.map(ToOwned::to_owned))
-            .or_else(|| metadata.and_then(|metadata| metadata.name_en.clone()))
-            .unwrap_or_else(|| format!("item:{item_id}"))
-    } else {
-        source_name_en
-            .map(ToOwned::to_owned)
-            .or_else(|| metadata.and_then(|metadata| metadata.name_en.clone()))
-            .or_else(|| source_name_ko.map(ToOwned::to_owned))
-            .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
-            .unwrap_or_else(|| format!("item:{item_id}"))
-    };
+    let name = source_name_en
+        .map(ToOwned::to_owned)
+        .or_else(|| metadata.and_then(|metadata| metadata.display_name()))
+        .or_else(|| source_name_ko.map(ToOwned::to_owned))
+        .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
+        .unwrap_or_else(|| format!("item:{item_id}"));
     let (icon_id, icon) =
         resolve_calculator_item_icon(Some(item_id), icon_id, item_icon_file, metadata);
 
@@ -154,7 +145,7 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
 }
 
 pub(super) fn build_source_lightstone_item(
-    lang: FishLang,
+    _lang: &FishLang,
     source_key: &str,
     source_name_en: Option<&str>,
     name_ko: Option<&str>,
@@ -164,18 +155,10 @@ pub(super) fn build_source_lightstone_item(
     fish_multiplier: Option<f32>,
     override_values: CalculatorItemEffectValues,
 ) -> CalculatorItemEntry {
-    let name = if matches!(lang, FishLang::Ko) {
-        name_ko.map(ToOwned::to_owned).unwrap_or_else(|| {
-            source_name_en
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| source_key.to_string())
-        })
-    } else {
-        source_name_en
-            .map(ToOwned::to_owned)
-            .or_else(|| name_ko.map(ToOwned::to_owned))
-            .unwrap_or_else(|| source_key.to_string())
-    };
+    let name = source_name_en
+        .map(ToOwned::to_owned)
+        .or_else(|| name_ko.map(ToOwned::to_owned))
+        .unwrap_or_else(|| source_key.to_string());
     let (icon_id, icon) = resolve_calculator_item_icon(None, None, item_icon_file, None);
 
     CalculatorItemEntry {
@@ -203,7 +186,7 @@ pub(super) fn build_source_lightstone_item(
 impl DoltMySqlStore {
     fn build_legacy_calculator_items(
         &self,
-        lang: FishLang,
+        _lang: &FishLang,
         rows: Vec<CalculatorItemDbRow>,
         item_source_metadata: &HashMap<i32, ItemSourceMetadata>,
     ) -> Vec<CalculatorItemEntry> {
@@ -228,15 +211,8 @@ impl DoltMySqlStore {
             };
             let item_type = normalize_optional_string(item_type).unwrap_or_default();
             let display_name = item_id
-                .and_then(|item_id| {
-                    if matches!(lang, FishLang::Ko) {
-                        item_source_metadata
-                            .get(&item_id)
-                            .and_then(|metadata| metadata.name_ko.clone())
-                    } else {
-                        None
-                    }
-                })
+                .and_then(|item_id| item_source_metadata.get(&item_id))
+                .and_then(|metadata| metadata.display_name())
                 .unwrap_or_else(|| legacy_name.clone());
             let key = if let Some(item_id) = item_id {
                 format!("item:{item_id}")
@@ -281,7 +257,7 @@ impl DoltMySqlStore {
     }
 
     fn build_source_backed_items(
-        lang: FishLang,
+        lang: &FishLang,
         source_backed_rows: &[CalculatorSourceBackedItemRow],
         item_source_metadata: &HashMap<i32, ItemSourceMetadata>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
@@ -364,14 +340,14 @@ impl DoltMySqlStore {
 
     pub(super) fn query_calculator_items(
         &self,
-        lang: FishLang,
+        lang: &FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
         let CalculatorCatalogSourceData {
             legacy_rows,
             item_source_metadata,
             source_backed_rows,
-        } = self.query_calculator_catalog_source_data(ref_id)?;
+        } = self.query_calculator_catalog_source_data(lang, ref_id)?;
         let legacy_items =
             self.build_legacy_calculator_items(lang, legacy_rows, &item_source_metadata);
         let sourced_items =
@@ -396,7 +372,7 @@ mod tests {
     #[test]
     fn source_consumable_item_prefers_source_metadata() {
         let sourced = build_source_item(
-            FishLang::Ko,
+            &FishLang::Ko,
             9359,
             "food",
             Some("Balacs Lunchbox"),
@@ -414,7 +390,7 @@ mod tests {
         );
 
         assert_eq!(sourced.key, "item:9359");
-        assert_eq!(sourced.name, "발락스 도시락");
+        assert_eq!(sourced.name, "Balacs Lunchbox");
         assert_eq!(sourced.r#type, "food");
         assert_eq!(sourced.durability, Some(11));
         assert_eq!(sourced.icon_id, Some(9359));
@@ -427,7 +403,7 @@ mod tests {
     #[test]
     fn source_backed_item_rows_can_use_direct_numeric_effects() {
         let items = DoltMySqlStore::build_source_backed_items(
-            FishLang::En,
+            &FishLang::En,
             &[CalculatorSourceBackedItemRow {
                 source_key: "item:16162".to_string(),
                 source_kind: "item".to_string(),
@@ -470,7 +446,7 @@ mod tests {
     #[test]
     fn source_backed_items_prefer_explicit_source_stems_over_legacy_icon_ids() {
         let items = DoltMySqlStore::build_source_backed_items(
-            FishLang::En,
+            &FishLang::En,
             &[CalculatorSourceBackedItemRow {
                 source_key: "item:24277".to_string(),
                 source_kind: "item".to_string(),
@@ -511,7 +487,7 @@ mod tests {
     #[test]
     fn source_backed_items_key_icons_by_item_id() {
         let items = DoltMySqlStore::build_source_backed_items(
-            FishLang::En,
+            &FishLang::En,
             &[CalculatorSourceBackedItemRow {
                 source_key: "item:14330".to_string(),
                 source_kind: "item".to_string(),
@@ -549,7 +525,7 @@ mod tests {
     #[test]
     fn source_backed_items_preserve_buff_category_metadata() {
         let items = DoltMySqlStore::build_source_backed_items(
-            FishLang::En,
+            &FishLang::En,
             &[CalculatorSourceBackedItemRow {
                 source_key: "item:9359".to_string(),
                 source_kind: "item".to_string(),
@@ -589,7 +565,7 @@ mod tests {
     #[test]
     fn source_backed_items_apply_grade_from_item_metadata() {
         let items = DoltMySqlStore::build_source_backed_items(
-            FishLang::En,
+            &FishLang::En,
             &[CalculatorSourceBackedItemRow {
                 source_key: "item:9307".to_string(),
                 source_kind: "item".to_string(),
@@ -764,7 +740,7 @@ mod tests {
     #[test]
     fn source_backed_items_skip_rows_without_supported_calculator_effects() {
         let items = DoltMySqlStore::build_source_backed_items(
-            FishLang::En,
+            &FishLang::En,
             &[
                 CalculatorSourceBackedItemRow {
                     source_key: "item:14069".to_string(),
@@ -821,7 +797,7 @@ mod tests {
     #[test]
     fn source_lightstone_item_uses_source_owned_identity() {
         let sourced = build_source_lightstone_item(
-            FishLang::Ko,
+            &FishLang::Ko,
             "lightstone-set:162",
             None,
             Some("예리한 갈매기"),
@@ -850,7 +826,7 @@ mod tests {
     #[test]
     fn source_lightstone_item_keeps_non_numeric_source_icon_stems() {
         let sourced = build_source_lightstone_item(
-            FishLang::En,
+            &FishLang::En,
             "lightstone-set:999",
             Some("Event Buff"),
             Some("이벤트 버프"),
@@ -892,7 +868,7 @@ mod tests {
     #[test]
     fn source_lightstone_item_uses_source_owned_english_name() {
         let sourced = build_source_lightstone_item(
-            FishLang::En,
+            &FishLang::En,
             "lightstone-set:160",
             Some("Nibbles"),
             Some("신의 입질"),

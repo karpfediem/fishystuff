@@ -21,6 +21,7 @@
     ],
     "apiLanguages": [
       "en",
+      "de",
       "ko"
     ]
   },
@@ -743,6 +744,7 @@
       "language.option.locale.de-DE": "Deutsch",
       "language.option.locale.ko-KR": "Korean",
       "language.option.api.en": "English names",
+      "language.option.api.de": "German names",
       "language.option.api.ko": "Korean names",
       "translation_notice.title": "Translation help wanted",
       "translation_notice.body": "This page has not been translated yet. You are currently viewing the English source content.",
@@ -1846,6 +1848,7 @@
       "language.option.locale.de-DE": "Deutsch",
       "language.option.locale.ko-KR": "Korean",
       "language.option.api.en": "English names",
+      "language.option.api.de": "German names",
       "language.option.api.ko": "Korean names",
       "translation_notice.title": "Translation help wanted",
       "translation_notice.body": "This page has not been translated yet. You are currently viewing the English source content.",
@@ -2949,6 +2952,7 @@
       "language.option.locale.de-DE": "Deutsch",
       "language.option.locale.ko-KR": "Koreanisch",
       "language.option.api.en": "Englische Namen",
+      "language.option.api.de": "Deutsche Namen",
       "language.option.api.ko": "Koreanische Namen",
       "translation_notice.title": "Übersetzung gesucht",
       "translation_notice.body": "Diese Seite wurde noch nicht übersetzt. Du siehst gerade den englischen Quellinhalt.",

@@ -475,7 +475,7 @@ enum CalculatorLocale {
 }
 
 impl CalculatorLocale {
-    fn from_query(locale: Option<&str>, lang: Option<&str>) -> Self {
+    fn from_query(locale: Option<&str>, _lang: Option<&str>) -> Self {
         let value = locale.unwrap_or_default().trim().to_ascii_lowercase();
         if value.starts_with("ko") || value == "kr" || value == "korean" {
             return Self::KoKr;
@@ -483,17 +483,7 @@ impl CalculatorLocale {
         if value.starts_with("de") || value == "german" || value == "deutsch" {
             return Self::DeDe;
         }
-        Self::from(FishLang::from_param(lang))
-    }
-}
-
-impl From<FishLang> for CalculatorLocale {
-    fn from(value: FishLang) -> Self {
-        match value {
-            FishLang::En => Self::EnUs,
-            FishLang::De => Self::DeDe,
-            FishLang::Ko => Self::KoKr,
-        }
+        Self::EnUs
     }
 }
 
@@ -808,7 +798,8 @@ pub async fn get_calculator_datastar_init(
 
     let lang = FishLang::from_param(query.lang.as_deref());
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
+    let data =
+        load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
     let raw_signals = match query.datastar.as_deref() {
         Some(payload) if !payload.trim().is_empty() => {
             let value = serde_json::from_str::<Value>(payload).map_err(|err| {
@@ -843,7 +834,8 @@ pub async fn post_calculator_datastar_init(
 
     let lang = FishLang::from_param(query.lang.as_deref());
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
+    let data =
+        load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
     let (data, normalized_signals, derived) = load_calculator_runtime_data(
         &state,
@@ -869,7 +861,8 @@ pub async fn post_calculator_datastar_eval(
 
     let lang = FishLang::from_param(query.lang.as_deref());
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
+    let data =
+        load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
     let (data, normalized_signals, derived) = load_calculator_runtime_data(
         &state,
@@ -893,7 +886,7 @@ pub async fn post_calculator_datastar_eval(
         events.push(
             PatchElements::new(render_pet_cards(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 &data.catalog.pets,
                 &normalized_signals,
@@ -966,7 +959,8 @@ pub async fn get_calculator_datastar_zone_search(
 
     let lang = FishLang::from_param(query.lang.as_deref());
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
+    let data =
+        load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
     let selected_zone = query
         .selected
         .as_deref()
@@ -1005,7 +999,7 @@ pub async fn get_calculator_datastar_option_search(
     let lang = FishLang::from_param(query.lang.as_deref());
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let mut data =
-        load_calculator_data(&state, lang, locale, query.r#ref.clone(), &request_id).await?;
+        load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
     if kind == CalculatorSearchableOptionKind::TargetFish {
         let zone = query
             .zone
@@ -1619,7 +1613,7 @@ fn coerce_value_bool(value: &mut Value) {
 
 async fn load_calculator_data(
     state: &SharedState,
-    api_lang: FishLang,
+    api_lang: &FishLang,
     lang: CalculatorLocale,
     ref_id: Option<String>,
     request_id: &RequestId,
@@ -1630,7 +1624,9 @@ async fn load_calculator_data(
         async {
             with_timeout(
                 state.config.request_timeout_secs,
-                state.store.calculator_catalog(api_lang, catalog_ref_id),
+                state
+                    .store
+                    .calculator_catalog(api_lang.clone(), catalog_ref_id),
             )
             .await
             .map_err(|err| map_request_id(err, request_id))
@@ -1654,7 +1650,7 @@ async fn load_calculator_data(
         catalog,
         cdn_base_url: state.config.runtime_cdn_base_url.clone(),
         lang,
-        api_lang,
+        api_lang: api_lang.clone(),
         zones,
         zone_group_rates,
         zone_loot_entries: Vec::new(),
@@ -1669,7 +1665,7 @@ async fn load_calculator_runtime_data(
     request_id: &RequestId,
     raw_signals: CalculatorSignals,
 ) -> AppResult<(CalculatorData, CalculatorSignals, CalculatorDerivedSignals)> {
-    let mut data = load_calculator_data(state, api_lang, lang, ref_id.clone(), request_id).await?;
+    let mut data = load_calculator_data(state, &api_lang, lang, ref_id.clone(), request_id).await?;
     let mut signals = raw_signals;
     normalize_signals(&mut signals, &data);
     data.zone_loot_entries = with_timeout(
@@ -1695,7 +1691,7 @@ async fn load_zone_loot_summary_data(
     request_id: &RequestId,
     request: ZoneLootSummaryRequest,
 ) -> AppResult<ZoneLootSummaryResponse> {
-    let mut data = load_calculator_data(state, api_lang, lang, ref_id.clone(), request_id).await?;
+    let mut data = load_calculator_data(state, &api_lang, lang, ref_id.clone(), request_id).await?;
     let requested_zone_key = request.rgb.0.trim().to_string();
     let zone = data
         .zones
@@ -1729,7 +1725,7 @@ async fn load_zone_loot_summary_data(
     Ok(derive_zone_loot_summary_response(&signals, &data, &zone))
 }
 
-fn lang_param(lang: FishLang) -> &'static str {
+fn lang_param(lang: &FishLang) -> &str {
     lang.code()
 }
 
@@ -9280,7 +9276,7 @@ fn render_calculator_app(
     let buffs = item_options_by_type(&data.catalog.items, "buff");
     let zone_search_url = format!(
         "/api/v1/calculator/datastar/zone-search?lang={}&locale={}",
-        lang_param(data.api_lang),
+        lang_param(&data.api_lang),
         locale_param(data.lang)
     );
     let zone_selected_content = render_searchable_dropdown_text_content(&derived.zone_name);
@@ -10264,7 +10260,7 @@ fn render_calculator_app(
             "__LEVEL_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-level-picker",
                 "calculator-level-value",
@@ -10281,7 +10277,7 @@ fn render_calculator_app(
             "__TIMESPAN_UNIT_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-session-unit-picker",
                 "calculator-session-unit-value",
@@ -10302,7 +10298,7 @@ fn render_calculator_app(
             "__LIFESKILL_LEVEL_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-lifeskill-level-picker",
                 "calculator-lifeskill-level-value",
@@ -10336,7 +10332,7 @@ fn render_calculator_app(
             "__ROD_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-rod-picker",
                 "calculator-rod-value",
@@ -10353,7 +10349,7 @@ fn render_calculator_app(
             "__FLOAT_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-float-picker",
                 "calculator-float-value",
@@ -10370,7 +10366,7 @@ fn render_calculator_app(
             "__CHAIR_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-chair-picker",
                 "calculator-chair-value",
@@ -10387,7 +10383,7 @@ fn render_calculator_app(
             "__LIGHTSTONE_SET_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-lightstone-set-picker",
                 "calculator-lightstone-set-value",
@@ -10404,7 +10400,7 @@ fn render_calculator_app(
             "__BACKPACK_SELECT__",
             render_searchable_select_control(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 "calculator-backpack-picker",
                 "calculator-backpack-value",
@@ -10477,7 +10473,7 @@ fn render_calculator_app(
             "__PETS__",
             render_pet_cards(
                 data.cdn_base_url.as_str(),
-                data.api_lang,
+                &data.api_lang,
                 data.lang,
                 &data.catalog.pets,
                 signals,
@@ -11539,7 +11535,7 @@ fn render_trade_window(
         )),
         render_searchable_select_control(
             data.cdn_base_url.as_str(),
-            data.api_lang,
+            &data.api_lang,
             data.lang,
             "calculator-trade-level-picker",
             "calculator-trade-level-value",
@@ -12533,7 +12529,7 @@ fn render_searchable_select_results(
 }
 
 fn render_calculator_option_search_url(
-    api_lang: FishLang,
+    api_lang: &FishLang,
     lang: CalculatorLocale,
     kind: CalculatorSearchableOptionKind,
     results_id: &str,
@@ -12548,7 +12544,7 @@ fn render_calculator_option_search_url(
 }
 
 fn render_calculator_pet_search_url(
-    api_lang: FishLang,
+    api_lang: &FishLang,
     lang: CalculatorLocale,
     results_id: &str,
     tier_key: &str,
@@ -12566,7 +12562,7 @@ fn render_calculator_pet_search_url(
 
 fn render_searchable_select_control(
     cdn_base_url: &str,
-    api_lang: FishLang,
+    api_lang: &FishLang,
     lang: CalculatorLocale,
     root_id: &str,
     input_id: &str,
@@ -12642,7 +12638,7 @@ fn render_searchable_select_control(
 
 fn render_pet_select_control(
     cdn_base_url: &str,
-    api_lang: FishLang,
+    api_lang: &FishLang,
     lang: CalculatorLocale,
     root_id: &str,
     input_id: &str,
@@ -13017,7 +13013,7 @@ fn render_target_fish_select_control(
     );
     let search_url = format!(
         "/api/v1/calculator/datastar/option-search?lang={}&locale={}&kind=target_fish&results_id={}&zone={}",
-        lang_param(data.api_lang),
+        lang_param(&data.api_lang),
         locale_param(data.lang),
         escape_html(&results_id),
         escape_html(&signals.zone),
@@ -13840,7 +13836,7 @@ fn render_pet_tier_header_control(
 
 fn render_pet_cards(
     cdn_base_url: &str,
-    api_lang: FishLang,
+    api_lang: &FishLang,
     lang: CalculatorLocale,
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
@@ -14857,7 +14853,13 @@ mod tests {
             ..CalculatorSignals::default()
         };
 
-        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+        let html = render_pet_cards(
+            "",
+            &FishLang::En,
+            CalculatorLocale::EnUs,
+            &catalog,
+            &signals,
+        );
 
         assert!(!html.contains("calculator-pet1-pack-leader-value"));
         assert!(html.contains("fishy-calculator-pet-pack-leader--placeholder"));
@@ -14923,7 +14925,13 @@ mod tests {
             ..CalculatorSignals::default()
         };
 
-        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+        let html = render_pet_cards(
+            "",
+            &FishLang::En,
+            CalculatorLocale::EnUs,
+            &catalog,
+            &signals,
+        );
 
         assert!(html.contains("calculator-pet1-skill-slot1-picker"));
         assert!(html.contains("calculator-pet1-skill-slot2-picker"));
@@ -15123,7 +15131,13 @@ mod tests {
             ..CalculatorSignals::default()
         };
 
-        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+        let html = render_pet_cards(
+            "",
+            &FishLang::En,
+            CalculatorLocale::EnUs,
+            &catalog,
+            &signals,
+        );
 
         assert!(html.contains("calculator-pet1-special-picker"));
         assert!(html.contains("calculator-pet1-talent-picker"));
@@ -15190,7 +15204,13 @@ mod tests {
             ..CalculatorSignals::default()
         };
 
-        let html = render_pet_cards("", FishLang::En, CalculatorLocale::EnUs, &catalog, &signals);
+        let html = render_pet_cards(
+            "",
+            &FishLang::En,
+            CalculatorLocale::EnUs,
+            &catalog,
+            &signals,
+        );
 
         assert!(html.contains("calculator-pet1-talent-picker"));
         assert!(html.contains("+5% Item DRR"));
