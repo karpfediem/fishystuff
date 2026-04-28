@@ -491,6 +491,7 @@ impl From<FishLang> for CalculatorLocale {
     fn from(value: FishLang) -> Self {
         match value {
             FishLang::En => Self::EnUs,
+            FishLang::De => Self::DeDe,
             FishLang::Ko => Self::KoKr,
         }
     }
@@ -1729,10 +1730,7 @@ async fn load_zone_loot_summary_data(
 }
 
 fn lang_param(lang: FishLang) -> &'static str {
-    match lang {
-        FishLang::En => "en",
-        FishLang::Ko => "ko",
-    }
+    lang.code()
 }
 
 fn locale_param(lang: CalculatorLocale) -> &'static str {
@@ -13336,23 +13334,17 @@ fn render_zone_search_results(
     zones: &[ZoneEntry],
     current_zone: &str,
     query: &str,
-    offset: usize,
+    _offset: usize,
 ) -> String {
-    let page =
-        paginate_searchable_dropdown_items(fuzzy_zone_matches(zones, query, current_zone), offset);
-    let next_offset_attr = page
-        .next_offset
-        .map(|value| format!(" data-next-offset=\"{}\"", value))
-        .unwrap_or_default();
+    let matches = fuzzy_zone_matches(zones, query, current_zone);
     let mut html = String::new();
     write!(
         html,
-        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\"{}>",
+        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
         escape_html(results_list_id),
-        next_offset_attr,
     )
     .unwrap();
-    if page.items.is_empty() {
+    if matches.is_empty() {
         write!(
             html,
             "<li class=\"menu-disabled\"><span>{}</span></li>",
@@ -13363,7 +13355,7 @@ fn render_zone_search_results(
         )
         .unwrap();
     } else {
-        for zone in page.items.iter().copied() {
+        for zone in matches {
             let label = zone_name(zone);
             let is_selected = zone.rgb_key.0 == current_zone;
             let active_class = if is_selected { " menu-active" } else { "" };
@@ -13389,12 +13381,6 @@ fn render_zone_search_results(
                 selected_badge
             )
             .unwrap();
-        }
-        if let Some(next_offset) = page.next_offset {
-            html.push_str(&render_searchable_dropdown_more_results_row(
-                lang,
-                next_offset,
-            ));
         }
     }
     html.push_str("</ul>");
@@ -15399,6 +15385,8 @@ mod tests {
         assert!(text.contains("data-value=\"240,74,74\""));
         assert!(text.contains("Velia Beach"));
         assert!(text.contains("Selected"));
+        assert!(!text.contains("data-next-offset"));
+        assert!(!text.contains("data-searchable-dropdown-more"));
     }
 
     #[tokio::test]

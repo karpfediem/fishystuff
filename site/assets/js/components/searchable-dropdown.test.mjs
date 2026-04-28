@@ -570,6 +570,7 @@ test("FishySearchableDropdown detaches its panel to the document body in detache
     dropdown.open();
 
     assert.equal(panel.parentNode, document.body);
+    assert.equal(panel.hasAttribute("data-searchable-dropdown-panel"), true);
     assert.equal(panel.style.position, "fixed");
     assert.equal(panel.hidden, false);
     assert.equal(dropdown.searchInputElement(), searchInput);
@@ -619,6 +620,49 @@ test("detached fixed panel uses viewport coordinates when the document is scroll
     assert.equal(panel.style.top, "160px");
 });
 
+test("detached fixed panel ignores scroll events from inside its own results", async (t) => {
+    t.after(restoreGlobals);
+
+    const { FishySearchableDropdown, window } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const trigger = new FakeElement();
+    const panel = new FakeElement();
+    const searchInput = new FakeElement();
+    const results = new FakeElement();
+
+    dropdown.setAttribute("panel-mode", "detached");
+    trigger.setRect({ left: 240, top: 120, width: 156, height: 32 });
+    panel.setRect({ left: 0, top: 0, width: 288, height: 220 });
+    dropdown.setQuery('[data-role="trigger"]', trigger);
+    dropdown.setQuery('[data-role="panel"]', panel);
+    panel.setQuery('[data-role="search-input"]', searchInput);
+    panel.setQuery('[data-role="results"]', results);
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(results);
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+    dropdown.open();
+
+    let scheduledFrames = 0;
+    window.requestAnimationFrame = (callback) => {
+        scheduledFrames += 1;
+        callback();
+        return scheduledFrames;
+    };
+
+    dropdown._handleViewportChange({ type: "scroll", target: results });
+
+    assert.equal(scheduledFrames, 0);
+
+    dropdown._handleViewportChange({ type: "scroll", target: document });
+
+    assert.equal(scheduledFrames, 1);
+});
+
 test("detached fixed panel stays inside the viewport when neither side fully fits", async (t) => {
     t.after(restoreGlobals);
 
@@ -657,14 +701,16 @@ test("detached fixed panel stays inside the viewport when neither side fully fit
     assert.equal(panel.style.left, "12px");
     assert.equal(panel.style.top, "12px");
     assert.equal(panel.style.maxHeight, "439px");
-    assert.equal(panel.style.overflowY, "auto");
     assert.equal(results.style.maxHeight, "342px");
+    assert.equal(results.style.overflowY, "auto");
+    assert.equal(results.style.overscrollBehavior, "contain");
 
     dropdown.close();
 
     assert.equal(panel.style.maxHeight, "");
-    assert.equal(panel.style.overflowY, "");
     assert.equal(results.style.maxHeight, "");
+    assert.equal(results.style.overflowY, "");
+    assert.equal(results.style.overscrollBehavior, "");
 });
 
 test("searchable dropdown accepts valid ISO date custom options", async (t) => {
@@ -808,11 +854,13 @@ test("searchable dropdown paginates local catalog results instead of silently tr
     assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
     assert.equal(results.getAttribute("data-next-offset"), "24");
     assert.ok(results.querySelector("[data-searchable-dropdown-more]"));
+    const firstOption = results.querySelector("[data-searchable-dropdown-option]");
 
     results.scrollTop = 320;
     dropdown._handleResultsScroll();
 
     assert.equal(results.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(results.querySelector("[data-searchable-dropdown-option]"), firstOption);
     assert.equal(results.getAttribute("data-next-offset"), null);
     assert.equal(results.querySelector("[data-searchable-dropdown-more]"), null);
 });
@@ -1234,6 +1282,7 @@ test("searchable dropdown loads the next remote page when scrolling near the end
     assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
     assert.equal(page1.getAttribute("data-next-offset"), "24");
     assert.ok(page1.querySelector("[data-searchable-dropdown-more]"));
+    const firstOption = page1.querySelector("[data-searchable-dropdown-option]");
 
     page1.scrollTop = 320;
     dropdown._handleResultsScroll();
@@ -1243,8 +1292,76 @@ test("searchable dropdown loads the next remote page when scrolling near the end
     assert.match(fetchCalls[1], /q=rod/);
     assert.match(fetchCalls[1], /offset=24/);
     assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(page1.querySelector("[data-searchable-dropdown-option]"), firstOption);
     assert.equal(page1.getAttribute("data-next-offset"), null);
     assert.equal(page1.querySelector("[data-searchable-dropdown-more]"), null);
+});
+
+test("searchable dropdown reuses rendered remote results for the blank query", async (t) => {
+    const fragmentRegistry = new Map();
+    const { FishySearchableDropdown } = await loadModule({ fragmentRegistry });
+
+    const dropdown = new FishySearchableDropdown();
+    dropdown.isConnected = true;
+    const trigger = new FakeElement("button");
+    const panel = new FakeElement("div");
+    const searchInput = new FakeElement("input");
+    const page1 = createResultsPage({
+        count: 24,
+        nextOffset: 24,
+        id: "calculator-zone-picker-results",
+    });
+
+    trigger.setAttribute("data-role", "trigger");
+    panel.setAttribute("data-role", "panel");
+    searchInput.setAttribute("data-role", "search-input");
+
+    dropdown.setAttribute("search-url", "/api/search");
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(page1);
+    t.after(() => {
+        dropdown.disconnectedCallback();
+        restoreGlobals();
+    });
+
+    const page2 = createResultsPage({
+        count: 6,
+        start: 24,
+        id: "calculator-zone-picker-results",
+    });
+    fragmentRegistry.set("PAGE2", page2);
+
+    const fetchCalls = [];
+    globalThis.fetch = async (url) => {
+        fetchCalls.push(String(url));
+        return {
+            ok: true,
+            async text() {
+                return "PAGE2";
+            },
+        };
+    };
+
+    dropdown.connectedCallback();
+    await flushAsyncWork();
+
+    dropdown.search("");
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 0);
+    assert.equal(dropdown.resultsElement(), page1);
+    assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 24);
+
+    page1.scrollTop = 320;
+    dropdown._handleResultsScroll();
+    await flushAsyncWork();
+
+    assert.equal(fetchCalls.length, 1);
+    assert.match(fetchCalls[0], /offset=24/);
+    assert.equal(page1.querySelectorAll("[data-searchable-dropdown-option]").length, 30);
+    assert.equal(page1.getAttribute("data-next-offset"), null);
 });
 
 test("searchable dropdown auto-loads one extra remote page when the first page does not scroll", async (t) => {

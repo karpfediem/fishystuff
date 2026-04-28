@@ -2,6 +2,7 @@ const CLOSE_DELAY_MS = 150;
 const RESULTS_PAGE_SIZE = 24;
 const LOAD_MORE_THRESHOLD_PX = 96;
 const LOAD_MORE_THRESHOLD_RATIO = 0.25;
+const HORIZONTAL_LOAD_MORE_THRESHOLD_RATIO = 0.35;
 const DEFAULT_MORE_RESULTS_LABEL = "Load more results";
 const SEARCH_QUERY_PARAM = "q";
 const OFFSET_QUERY_PARAM = "offset";
@@ -93,6 +94,13 @@ function loadMoreThreshold(maxScrollTop) {
     return Math.min(LOAD_MORE_THRESHOLD_PX, Math.max(0, maxScrollTop) * LOAD_MORE_THRESHOLD_RATIO);
 }
 
+function horizontalLoadMoreThreshold(maxScrollLeft) {
+    return Math.max(
+        LOAD_MORE_THRESHOLD_PX,
+        Math.max(0, maxScrollLeft) * HORIZONTAL_LOAD_MORE_THRESHOLD_RATIO,
+    );
+}
+
 function scrollMetrics(element) {
     const maxScrollTop = Math.max(0, Number(element?.scrollHeight || 0) - Number(element?.clientHeight || 0));
     const maxScrollLeft = Math.max(0, Number(element?.scrollWidth || 0) - Number(element?.clientWidth || 0));
@@ -117,7 +125,7 @@ function isNearScrollEnd(metrics) {
     const remainingX = metrics.maxScrollLeft - metrics.scrollLeft;
     return (
         (metrics.maxScrollTop > 0 && remainingY <= loadMoreThreshold(metrics.maxScrollTop))
-        || (metrics.maxScrollLeft > 0 && remainingX <= loadMoreThreshold(metrics.maxScrollLeft))
+        || (metrics.maxScrollLeft > 0 && remainingX <= horizontalLoadMoreThreshold(metrics.maxScrollLeft))
     );
 }
 
@@ -288,6 +296,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
             this._syncUi();
             this._syncBoundInputValue(this.value, false);
             this._syncFromBoundInputValue(this.boundInputElement()?.value ?? this.value);
+            this._hydrateRenderedRemoteResults();
         });
     }
 
@@ -347,7 +356,6 @@ export class FishySearchableDropdown extends HTMLElementBase {
             }));
         }
         input.value = "";
-        this._lastSearchKey = "";
 
         window.requestAnimationFrame(() => {
             if (!this.isConnected || !this.isOpen()) {
@@ -413,7 +421,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
             this.boundInputElement()?.value ?? this.value,
         );
         const excludedValues = this._excludedSelectedInputValues(selectedValue);
-        const searchKey = `${selectedValue}\n${Array.from(excludedValues).sort().join("\n")}\n${query}`;
+        const searchKey = this._buildSearchKey(query, selectedValue, excludedValues);
         if (this._lastSearchKey === searchKey) {
             return;
         }
@@ -753,7 +761,6 @@ export class FishySearchableDropdown extends HTMLElementBase {
         panel.style.minWidth = "";
         panel.style.maxWidth = "";
         panel.style.maxHeight = "";
-        panel.style.overflowY = "";
         panel.style.overscrollBehavior = "";
         panel.style.zIndex = "";
         panel.style.margin = "";
@@ -766,6 +773,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
             return;
         }
         results.style.maxHeight = "";
+        results.style.overflowY = "";
+        results.style.overscrollBehavior = "";
     }
 
     _configuredPanelWidthStyle() {
@@ -890,6 +899,12 @@ export class FishySearchableDropdown extends HTMLElementBase {
         if (!(this._panelElement instanceof HTMLElement)) {
             this._panelElement = this.querySelector('[data-role="panel"]');
         }
+        if (
+            this._panelElement instanceof HTMLElement
+            && !this._panelElement.hasAttribute("data-searchable-dropdown-panel")
+        ) {
+            this._panelElement.setAttribute("data-searchable-dropdown-panel", "");
+        }
         return this._panelElement;
     }
 
@@ -925,6 +940,31 @@ export class FishySearchableDropdown extends HTMLElementBase {
             return [];
         }
         return Array.from(catalog.querySelectorAll('template[data-role="selected-content"]'));
+    }
+
+    _buildSearchKey(query, selectedValue, excludedValues) {
+        return `${selectedValue}\n${Array.from(excludedValues).sort().join("\n")}\n${query}`;
+    }
+
+    _hydrateRenderedRemoteResults() {
+        const results = this.resultsElement();
+        if (
+            !(results instanceof HTMLElement)
+            || !this._buildSearchUrl("")
+            || !results.childNodes.length
+        ) {
+            return;
+        }
+
+        const selectedValue = String(
+            this.boundInputElement()?.value ?? this.value,
+        );
+        const excludedValues = this._excludedSelectedInputValues(selectedValue);
+        this._lastSearchKey = this._buildSearchKey("", selectedValue, excludedValues);
+        this._activeSearchMode = "remote";
+        this._activeSearchQuery = "";
+        this._activeSearchSelectedValue = selectedValue;
+        this._syncMoreResultsObserver();
     }
 
     _handleBoundInputEvent() {
@@ -1032,7 +1072,13 @@ export class FishySearchableDropdown extends HTMLElementBase {
         this._maybeLoadMore();
     }
 
-    _handleViewportChange() {
+    _handleViewportChange(event = null) {
+        if (event?.type === "scroll" && event.target instanceof Node) {
+            const panel = this.panelElement();
+            if (panel instanceof Node && panel.contains(event.target)) {
+                return;
+            }
+        }
         if (!this.isOpen() || this._panelPositionFrame) {
             return;
         }
@@ -1173,11 +1219,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const pageMatches = state.matches.slice(start, end);
         state.nextOffset = end;
 
-        const existingNodes = Array.from(results.childNodes).filter(
-            (node) => !this._isMoreResultsNode(node),
-        );
-        results.replaceChildren(
-            ...existingNodes,
+        this._removeMoreResultsIndicator(results);
+        results.append(
             ...pageMatches.map((template) => this._buildLocalResultItem(template, state.selectedValue)),
         );
 
@@ -1249,6 +1292,21 @@ export class FishySearchableDropdown extends HTMLElementBase {
         );
     }
 
+    _removeMoreResultsIndicator(results = this.resultsElement()) {
+        if (!(results instanceof HTMLElement)) {
+            return;
+        }
+        for (const node of Array.from(results.childNodes)) {
+            if (this._isMoreResultsNode(node)) {
+                if (typeof node.remove === "function") {
+                    node.remove();
+                } else {
+                    node.parentNode?.removeChild?.(node);
+                }
+            }
+        }
+    }
+
     _loadMore() {
         if (this._searchController || this._loadMoreController) {
             return;
@@ -1312,13 +1370,8 @@ export class FishySearchableDropdown extends HTMLElementBase {
                     return;
                 }
 
-                const mergedChildren = [
-                    ...Array.from(currentResults.childNodes).filter(
-                        (node) => !this._isMoreResultsNode(node),
-                    ),
-                    ...Array.from(nextResults.childNodes),
-                ];
-                currentResults.replaceChildren(...mergedChildren);
+                this._removeMoreResultsIndicator(currentResults);
+                currentResults.append(...Array.from(nextResults.childNodes));
                 this._setResultsNextOffset(currentResults, this._resultsNextOffset(nextResults));
                 this._syncMoreResultsObserver();
                 this._positionOpenDetachedPanel();
@@ -1485,18 +1538,26 @@ export class FishySearchableDropdown extends HTMLElementBase {
         const previousMinWidth = panel.style.minWidth;
         const previousMaxWidth = panel.style.maxWidth;
         const previousMaxHeight = panel.style.maxHeight;
-        const previousOverflowY = panel.style.overflowY;
         const previousOverscrollBehavior = panel.style.overscrollBehavior;
         const results = this.resultsElement();
-        const previousResultsMaxHeight = results instanceof HTMLElement ? results.style.maxHeight : "";
+        const previousResultsMaxHeight = results instanceof HTMLElement
+            ? results.style.maxHeight
+            : "";
+        const previousResultsOverflowY = results instanceof HTMLElement
+            ? results.style.overflowY
+            : "";
+        const previousResultsOverscrollBehavior = results instanceof HTMLElement
+            ? results.style.overscrollBehavior
+            : "";
         const configuredWidth = this._configuredPanelWidthStyle();
         panel.hidden = false;
         panel.style.visibility = "hidden";
         panel.style.maxHeight = "";
-        panel.style.overflowY = "";
         panel.style.overscrollBehavior = "";
         if (results instanceof HTMLElement) {
             results.style.maxHeight = "";
+            results.style.overflowY = "";
+            results.style.overscrollBehavior = "";
         }
         if (configuredWidth) {
             panel.style.width = configuredWidth;
@@ -1512,10 +1573,11 @@ export class FishySearchableDropdown extends HTMLElementBase {
         panel.style.minWidth = previousMinWidth;
         panel.style.maxWidth = previousMaxWidth;
         panel.style.maxHeight = previousMaxHeight;
-        panel.style.overflowY = previousOverflowY;
         panel.style.overscrollBehavior = previousOverscrollBehavior;
         if (results instanceof HTMLElement) {
             results.style.maxHeight = previousResultsMaxHeight;
+            results.style.overflowY = previousResultsOverflowY;
+            results.style.overscrollBehavior = previousResultsOverscrollBehavior;
         }
         return rect;
     }
@@ -1559,10 +1621,11 @@ export class FishySearchableDropdown extends HTMLElementBase {
             );
             const resultsMaxHeight = Math.max(48, constrainedHeight - reservedHeight);
             results.style.maxHeight = `${resultsMaxHeight}px`;
+            results.style.overflowY = "auto";
+            results.style.overscrollBehavior = "contain";
         }
 
         panel.style.maxHeight = `${constrainedHeight}px`;
-        panel.style.overflowY = "auto";
         panel.style.overscrollBehavior = "contain";
     }
 
@@ -1636,7 +1699,6 @@ export class FishySearchableDropdown extends HTMLElementBase {
             160,
         )}px`;
         panel.style.maxHeight = "";
-        panel.style.overflowY = "";
         panel.style.overscrollBehavior = "";
         panel.style.left = `${visualViewportLeft + edgeInset}px`;
         panel.style.top = `${visualViewportTop + edgeInset}px`;
