@@ -34,7 +34,10 @@ let
     lib.concatMapStringsSep "\n" (line: "          ${line}") metricEnvironmentRemapLines
     + "\n";
   metricEnvironmentInputs =
-    [ "telemetry_metrics_only" ]
+    [
+      "telemetry_metrics_only"
+      "edge_access_metrics"
+    ]
     ++ optionals isAggregator [
       "vector_ingress_metrics_only"
       "otel_spanmetrics"
@@ -185,6 +188,104 @@ ${metricEnvironmentTransform}
             .message = string!(.message)
           }
 
+          decoded = parse_json(.message) ?? null
+          if .service == "fishystuff-edge" && is_object(decoded) {
+            .parsed = decoded
+
+            caddy_level = get(.parsed, ["level"]) ?? null
+            if caddy_level != null && string!(caddy_level) != "" {
+              .level = downcase(string!(caddy_level))
+            }
+
+            caddy_message = get(.parsed, ["msg"]) ?? null
+            if caddy_message != null && string!(caddy_message) != "" {
+              .message = string!(caddy_message)
+            }
+
+            caddy_logger = get(.parsed, ["logger"]) ?? null
+            if caddy_logger != null && string!(caddy_logger) != "" {
+              .logger = string!(caddy_logger)
+            }
+
+            if caddy_logger != null && match(string!(caddy_logger), r'^http\.log\.access') {
+              .log_schema = "fishystuff.edge-access.v1"
+              .observability_kind = "access_log"
+              .service_state = "access"
+              .edge_request_count = 1
+              .edge_host = "unknown"
+              .edge_method = "unknown"
+              .edge_path = "unknown"
+              .edge_proto = "unknown"
+              .edge_status = "unknown"
+              .edge_status_class = "unknown"
+
+              caddy_request = get(.parsed, ["request"]) ?? {}
+              request_host = get(caddy_request, ["host"]) ?? null
+              if request_host != null && string!(request_host) != "" {
+                .edge_host = string!(request_host)
+                .http.host = .edge_host
+              }
+
+              request_method = get(caddy_request, ["method"]) ?? null
+              if request_method != null && string!(request_method) != "" {
+                .edge_method = string!(request_method)
+                .http.method = .edge_method
+              }
+
+              request_proto = get(caddy_request, ["proto"]) ?? null
+              if request_proto != null && string!(request_proto) != "" {
+                .edge_proto = string!(request_proto)
+                .http.proto = .edge_proto
+              }
+
+              request_uri = get(caddy_request, ["uri"]) ?? null
+              if request_uri != null && string!(request_uri) != "" {
+                .http.uri = string!(request_uri)
+                path_match = parse_regex(.http.uri, r'^(?P<path>[^?]*)') ?? null
+                if path_match != null && path_match.path != "" {
+                  .edge_path = path_match.path
+                } else {
+                  .edge_path = "/"
+                }
+                .http.path = .edge_path
+              }
+
+              client_ip = get(caddy_request, ["client_ip"]) ?? get(caddy_request, ["remote_ip"]) ?? null
+              if client_ip != null && string!(client_ip) != "" {
+                .http.client_ip = string!(client_ip)
+              }
+
+              status_value = get(.parsed, ["status"]) ?? null
+              if status_value != null {
+                .http.status_code = status_value
+                .edge_status = to_string(status_value) ?? "unknown"
+                if match(.edge_status, r'^1') {
+                  .edge_status_class = "1xx"
+                } else if match(.edge_status, r'^2') {
+                  .edge_status_class = "2xx"
+                } else if match(.edge_status, r'^3') {
+                  .edge_status_class = "3xx"
+                } else if match(.edge_status, r'^4') {
+                  .edge_status_class = "4xx"
+                } else if match(.edge_status, r'^5') {
+                  .edge_status_class = "5xx"
+                }
+              }
+
+              if .edge_status_class == "5xx" {
+                .level = "error"
+              }
+
+              size_value = get(.parsed, ["size"]) ?? 0
+              .edge_response_bytes = to_float(size_value) ?? 0.0
+              .http.response_bytes = .edge_response_bytes
+
+              duration_value = get(.parsed, ["duration"]) ?? 0.0
+              .edge_duration_seconds = to_float(duration_value) ?? 0.0
+              .http.duration_seconds = .edge_duration_seconds
+            }
+          }
+
           if .logger == "systemd" {
             if match(.message, r'^Starting ') {
               .service_state = "starting"
@@ -208,6 +309,50 @@ ${metricEnvironmentTransform}
               .level = "warn"
             }
           }
+      edge_access_logs:
+        type: filter
+        inputs:
+          - normalized_process_logs
+        condition: '.log_schema == "fishystuff.edge-access.v1"'
+      edge_access_metrics:
+        type: log_to_metric
+        inputs:
+          - edge_access_logs
+        metrics:
+          - type: counter
+            field: edge_request_count
+            name: edge_http_requests_total
+            namespace: fishystuff
+            tags:
+              env: "{{ deployment_environment }}"
+              deployment_environment: "{{ deployment_environment }}"
+              host: "{{ host }}"
+              method: "{{ edge_method }}"
+              status: "{{ edge_status }}"
+              status_class: "{{ edge_status_class }}"
+              vhost: "{{ edge_host }}"
+          - type: counter
+            field: edge_response_bytes
+            increment_by_value: true
+            name: edge_http_response_bytes_total
+            namespace: fishystuff
+            tags:
+              env: "{{ deployment_environment }}"
+              deployment_environment: "{{ deployment_environment }}"
+              host: "{{ host }}"
+              status_class: "{{ edge_status_class }}"
+              vhost: "{{ edge_host }}"
+          - type: histogram
+            field: edge_duration_seconds
+            name: edge_http_request_duration_seconds
+            namespace: fishystuff
+            tags:
+              env: "{{ deployment_environment }}"
+              deployment_environment: "{{ deployment_environment }}"
+              host: "{{ host }}"
+              method: "{{ edge_method }}"
+              status_class: "{{ edge_status_class }}"
+              vhost: "{{ edge_host }}"
       normalized_telemetry_logs:
         type: remap
         inputs:

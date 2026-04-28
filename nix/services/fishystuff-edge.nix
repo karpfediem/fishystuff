@@ -36,6 +36,11 @@ let
 
     ${cfg.siteAddress} {
       ${tlsDirective}
+      log {
+        output stdout
+        format json
+      }
+
       root * ${cfg.siteRoot}
       header Cache-Control "no-store"
 
@@ -45,11 +50,21 @@ let
 
     ${cfg.apiAddress} {
       ${tlsDirective}
+      log {
+        output stdout
+        format json
+      }
+
       reverse_proxy ${cfg.apiUpstream}
     }
 
     ${cfg.cdnAddress} {
       ${tlsDirective}
+      log {
+        output stdout
+        format json
+      }
+
       root * ${cfg.cdnRoot}
 
       @runtime_manifest path /map/runtime-manifest.json
@@ -75,6 +90,11 @@ let
 
     ${cfg.telemetryAddress} {
       ${tlsDirective}
+      log {
+        output stdout
+        format json
+      }
+
       @telemetry_preflight method OPTIONS
       @telemetry_logs path /v1/logs
       @telemetry_otlp path /v1/metrics /v1/traces
