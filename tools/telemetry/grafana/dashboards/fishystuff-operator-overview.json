@@ -9,43 +9,43 @@
   "links": [
     {
       "icon": "external link",
-      "includeVars": false,
+      "includeVars": true,
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
       "title": "Error Logs",
       "type": "link",
-      "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20level%3D~%5C%22warn%7Cerror%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+      "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&viewPanel=17"
     },
     {
       "icon": "external link",
-      "includeVars": false,
+      "includeVars": true,
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
       "title": "Lifecycle Logs",
       "type": "link",
-      "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20service%3D~%5C%22fishystuff-(api%7Cdolt%7Cedge%7Cvector%7Cloki%7Cotel-collector%7Cjaeger%7Cprometheus%7Cgrafana)%5C%22%2C%20service_state!%3D%5C%22log%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+      "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&viewPanel=19"
     },
     {
       "icon": "external link",
-      "includeVars": false,
-      "keepTime": false,
+      "includeVars": true,
+      "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Trace Explore",
+      "title": "Edge Access Logs",
       "type": "link",
-      "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+      "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&viewPanel=35"
     },
     {
       "icon": "external link",
-      "includeVars": false,
-      "keepTime": false,
+      "includeVars": true,
+      "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Grafana Explore",
+      "title": "Trace Errors",
       "type": "link",
-      "url": "/explore"
+      "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&viewPanel=26"
     },
     {
       "icon": "external link",
@@ -79,10 +79,10 @@
       },
       "id": 1,
       "options": {
-        "content": "### ${env:text} FishyStuff Dashboard\n\nEnvironment: **${env:text}** (`$env`)\n\nUse the health row first. Red tiles point at service errors, warning/error logs, trace errors, or host saturation. Dashboard links open env-scoped logs and Jaeger keeps traces searchable by `deployment.environment`.\n\nMetrics, logs, and spanmetrics are filtered by `env=\"$env\"`; beta data should not appear on production views. If prod shows zero hosts reporting logs, no prod telemetry has reached this stack in the selected window.",
+        "content": "### FishyStuff Dashboard\n\nEnvironment: **$env**\n\nUse the health row first. Red tiles point at service errors, warning/error logs, trace errors, or host saturation. Dashboard links open env-scoped logs and Jaeger keeps traces searchable by `deployment.environment`.\n\nMetrics, logs, and spanmetrics are filtered by `env=\"$env\"`; beta data should not appear on production views. If prod shows zero hosts reporting logs, no prod telemetry has reached this stack in the selected window.",
         "mode": "markdown"
       },
-      "title": "${env:text} FishyStuff Dashboard",
+      "title": "Overview",
       "type": "text"
     },
     {
@@ -618,7 +618,7 @@
           "links": [
             {
               "title": "Open lifecycle logs",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20service%3D~%5C%22fishystuff-(api%7Cdolt%7Cedge%7Cvector%7Cloki%7Cotel-collector%7Cjaeger%7Cprometheus%7Cgrafana)%5C%22%2C%20service_state!%3D%5C%22log%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-6h&to=now&viewPanel=19",
               "targetBlank": false
             }
           ]
@@ -697,7 +697,7 @@
           "links": [
             {
               "title": "Open warning/error logs",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20level%3D~%5C%22warn%7Cerror%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-6h&to=now&viewPanel=17",
               "targetBlank": false
             }
           ]
@@ -772,7 +772,7 @@
           "links": [
             {
               "title": "Open traces",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-1h&to=now&viewPanel=26",
               "targetBlank": false
             }
           ]
@@ -956,6 +956,334 @@
     },
     {
       "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "min": 0,
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 12
+      },
+      "id": 29,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(fishystuff_edge_http_requests_total{env=\"$env\"}[5m])) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Edge Requests/s (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "min": 0,
+          "unit": "reqps",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 12
+      },
+      "id": 30,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(fishystuff_edge_http_requests_total{env=\"$env\", status_class=\"5xx\"}[5m])) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Edge 5xx/s (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 12
+      },
+      "id": 31,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(fishystuff_edge_http_response_bytes_total{env=\"$env\", vhost=~\"cdn\\\\..*\"}[30d])) or vector(0)",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "CDN Origin Bandwidth (30d)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "min": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 12
+      },
+      "id": 32,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fishystuff_edge_http_request_duration_seconds_bucket{env=\"$env\"}[5m])))",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Edge P95 Duration (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fishystuff-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fishystuff-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (vhost, status_class) (rate(fishystuff_edge_http_requests_total{env=\"$env\"}[5m]))",
+          "legendFormat": "{{vhost}} / {{status_class}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Edge Requests By VHost",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 34,
+      "options": {
+        "displayMode": "basic",
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "topk(10, sum by (edge_host, edge_path) (count_over_time({app=\"fishystuff\", env=\"$env\", service=\"fishystuff-edge\", service_state=\"access\"} | json | edge_path != \"\" [24h])))",
+          "instant": true,
+          "legendFormat": "{{edge_host}}{{edge_path}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Most Visited Pages (24h)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
         "type": "loki",
         "uid": "fishystuff-loki"
       },
@@ -983,7 +1311,7 @@
           "links": [
             {
               "title": "Open service logs",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fishystuff-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bapp%3D%5C%22fishystuff%5C%22%2C%20env%3D%5C%22$env%5C%22%2C%20host%3D%5C%22${__field.labels.host}%5C%22%2C%20service%3D%5C%22${__field.labels.service}%5C%22%2C%20level%3D~%5C%22warn%7Cerror%5C%22%7D%20%7C%20json%22%2C%22queryType%22%3A%22range%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fishystuff-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-6h&to=now&viewPanel=17",
               "targetBlank": false
             }
           ]
@@ -994,7 +1322,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 28
       },
       "id": 18,
       "options": {
@@ -1037,7 +1365,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 28
       },
       "id": 19,
       "options": {
@@ -1080,7 +1408,7 @@
           "links": [
             {
               "title": "Open traces for service",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-1h&to=now&viewPanel=26",
               "targetBlank": false
             }
           ]
@@ -1091,7 +1419,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 36
       },
       "id": 10,
       "options": {
@@ -1137,7 +1465,7 @@
           "links": [
             {
               "title": "Open traces for service",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-1h&to=now&viewPanel=26",
               "targetBlank": false
             }
           ]
@@ -1148,7 +1476,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 36
       },
       "id": 11,
       "options": {
@@ -1194,7 +1522,7 @@
           "links": [
             {
               "title": "Open traces for service",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-1h&to=now&viewPanel=26",
               "targetBlank": false
             }
           ]
@@ -1205,7 +1533,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 44
       },
       "id": 12,
       "options": {
@@ -1255,7 +1583,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 28
+        "y": 44
       },
       "id": 13,
       "options": {
@@ -1305,7 +1633,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 28
+        "y": 44
       },
       "id": 14,
       "options": {
@@ -1362,7 +1690,7 @@
           "links": [
             {
               "title": "Open traces for service",
-              "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22fishystuff-jaeger%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%2C%22service%22%3A%22${__field.labels.service_name}%22%2C%22tags%22%3A%22%7B%5C%22deployment.environment%5C%22%3A%5C%22$env%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22jaeger%22%2C%22uid%22%3A%22fishystuff-jaeger%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+              "url": "/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=$env&from=now-1h&to=now&viewPanel=26",
               "targetBlank": false
             }
           ]
@@ -1373,7 +1701,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 52
       },
       "id": 15,
       "options": {
@@ -1423,7 +1751,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 52
       },
       "id": 16,
       "options": {
@@ -1484,7 +1812,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 44
+        "y": 60
       },
       "id": 20,
       "options": {
@@ -1534,7 +1862,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 44
+        "y": 60
       },
       "id": 21,
       "options": {
@@ -1584,7 +1912,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 44
+        "y": 60
       },
       "id": 22,
       "options": {
@@ -1624,7 +1952,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 68
       },
       "id": 17,
       "options": {
@@ -1650,6 +1978,43 @@
         }
       ],
       "title": "Recent Warnings And Errors",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "fishystuff-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 76
+      },
+      "id": 35,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "fishystuff-loki"
+          },
+          "editorMode": "code",
+          "expr": "{app=\"fishystuff\", env=\"$env\", service=\"fishystuff-edge\", service_state=\"access\"} | json",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Edge Access Logs",
       "type": "logs"
     }
   ],
@@ -1698,8 +2063,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "${env:text} FishyStuff Dashboard",
+  "title": "FishyStuff Dashboard",
   "uid": "fishystuff-operator-overview",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }

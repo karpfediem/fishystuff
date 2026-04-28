@@ -13,9 +13,9 @@
       "keepTime": false,
       "tags": [],
       "targetBlank": false,
-      "title": "Grafana Explore",
+      "title": "Recent Logs",
       "type": "link",
-      "url": "/explore"
+      "url": "/d/fishystuff-local-observability/fishystuff-local-observability?orgId=1&viewPanel=11"
     },
     {
       "icon": "external link",

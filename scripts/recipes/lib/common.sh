@@ -227,7 +227,7 @@ deployment_public_base_url() {
       cdn) printf '%s' "http://127.0.0.1:4040/" ;;
       telemetry) printf '%s' "http://telemetry.localhost:1990/" ;;
       grafana | dashboard) printf '%s' "http://127.0.0.1:3000/d/fishystuff-local-observability/fishystuff-local-observability" ;;
-      loki | logs) printf '%s' "http://127.0.0.1:3000/explore" ;;
+      loki | logs) printf '%s' "http://127.0.0.1:3000/d/fishystuff-local-observability/fishystuff-local-observability?orgId=1&viewPanel=11" ;;
       loki-status) printf '%s' "http://127.0.0.1:3100/services" ;;
       prometheus) printf '%s' "http://127.0.0.1:9090/" ;;
       vector) printf '%s' "http://127.0.0.1:8686/playground" ;;
@@ -691,7 +691,11 @@ deployment_open_tunnel_url() {
       encoded_environment="${environment// /%20}"
       printf 'http://127.0.0.1:%s/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=%s' "$local_port" "$encoded_environment"
       ;;
-    loki | logs) printf 'http://127.0.0.1:%s/explore' "$local_port" ;;
+    loki | logs)
+      environment="$(deployment_environment_name "$deployment")"
+      encoded_environment="${environment// /%20}"
+      printf 'http://127.0.0.1:%s/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=%s&viewPanel=17' "$local_port" "$encoded_environment"
+      ;;
     loki-status) printf 'http://127.0.0.1:%s/services' "$local_port" ;;
     prometheus | vector | jaeger) printf 'http://127.0.0.1:%s/' "$local_port" ;;
     *)

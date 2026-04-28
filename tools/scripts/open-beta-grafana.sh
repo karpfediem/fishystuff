@@ -12,7 +12,7 @@ case "$view" in
     path="/d/fishystuff-operator-overview/fishystuff-operator-overview"
     ;;
   grafana | explore | logs | loki)
-    path="/explore"
+    path="/d/fishystuff-operator-overview/fishystuff-operator-overview?orgId=1&var-env=beta&viewPanel=17"
     ;;
   *)
     echo "unknown beta grafana view: $view" >&2
