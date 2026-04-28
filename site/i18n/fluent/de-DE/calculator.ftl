@@ -225,7 +225,7 @@ calculator.server.field.talent = Talent
 calculator.server.field.skills = Fähigkeiten
 calculator.server.field.pack_leader = Rudelanführer
 calculator.server.field.pet = Haustier
-calculator.server.field.mastery = Meisterschaft
+calculator.server.field.mastery = Meisterung
 calculator.server.field.target_fish = Zielfisch / Beuteobjekt
 calculator.server.field.target_amount = Zielmenge
 calculator.server.field.pmf_max_count = PMF-Maximalanzahl
@@ -262,8 +262,8 @@ calculator.server.stat.sale_multiplier = Verkaufsmultiplikator
 calculator.server.panel.expand_overlay_proposal = Overlay-Vorschlag aufklappen
 calculator.server.panel.collapse_overlay_proposal = Overlay-Vorschlag einklappen
 
-calculator.server.helper.mastery = Gib deine zusammengefasste Angel-Meisterschaft direkt ein.
-calculator.server.helper.mastery_formula_prefix = Meisterschaft
+calculator.server.helper.mastery = Gib deine zusammengefasste Angel-Meisterung direkt ein.
+calculator.server.helper.mastery_formula_prefix = Meisterung
 calculator.server.helper.mastery_formula_suffix = steuert die direkte Preisraten-Formel vor der Normalisierung.
 calculator.server.helper.before_zone_group_normalization = vor der Zonen-Gruppen-Normalisierung
 calculator.server.helper.target_amount = Geschätzte Zeit bis zu dieser Menge.
@@ -361,14 +361,14 @@ calculator.server.group.tooltip.source_backed_share = Quellgestützter Anteil de
 calculator.server.group.bonus.base_plus_bonus = Basis {$base} + Bonus {$bonus}
 calculator.server.group.bonus.base_only = Basis {$base}
 calculator.server.group.bonus.normalized_from_active_weights = Aus aktiven Rohgewichten normalisiert
-calculator.server.group.bonus.mastery_raw_prize = Meisterschaft {$mastery} -> {$rate} roher Preiswert
+calculator.server.group.bonus.mastery_raw_prize = Meisterung {$mastery} -> {$rate} roher Preiswert
 calculator.server.group.bonus.rare = +{$rate}% Selten
 calculator.server.group.bonus.high_quality = +{$rate}% HQ
 calculator.server.group.bonus.none = Kein Bonus
 
 calculator.server.chart.group_distribution_note.unavailable = Fischgruppendaten sind für diese Zone nicht verfügbar.
 calculator.server.chart.group_distribution_note.overlay_active = Persönliche Überschreibungen der Roh-Basisraten für Gruppen sind aktiv. Bearbeitete Basiswerte erhalten zuerst alle aktiven Gruppenboni, danach werden die Gewichte in die aktuellen Gruppenanteile normalisiert.
-calculator.server.chart.group_distribution_note.default = Zonengruppen werden nach Anwendung von Selten- und Hochwertig-Boni plus Preisgewicht aus Meisterschaft wieder auf 100 % normalisiert.
+calculator.server.chart.group_distribution_note.default = Zonengruppen werden nach Anwendung von Selten- und Hochwertig-Boni plus Preisgewicht aus Meisterung wieder auf 100 % normalisiert.
 
 calculator.server.loot.tooltip.overlay.base_db_raw_rate = Basis-DB-Rohrate {$rate}.
 calculator.server.loot.tooltip.overlay.explicit = Persönliche Overlay-Rohrate innerhalb der Gruppe {$base}. Aktuelle normalisierte Rate innerhalb der Gruppe {$rate}, nachdem die Rohwerte dieser Gruppe normalisiert wurden.{$base_detail}
