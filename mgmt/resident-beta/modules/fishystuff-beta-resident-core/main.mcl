@@ -5,6 +5,7 @@ import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "git:///providers/hetzner-firewall/" as hetzner_firewall
 import "golang"
 import "golang/strings" as golang_strings
+import "local"
 import "os"
 import "sys"
 import "../lib/fishystuff-bundle-systemd/" as fishystuff_bundle_systemd
@@ -118,6 +119,8 @@ class api_db_host($st) {
 	$api_service_name str = golang_strings.trim_suffix($api_unit->name, ".service")
 	$dolt_service_name str = golang_strings.trim_suffix($dolt_unit->name, ".service")
 	$api_env_file = $api_runtime_overlay->target_path
+	$dolt_refresh_vardir = local.vardir("fishystuff-dolt-refresh/")
+	$dolt_refresh_stamp_path str = fmt.printf("%sdeployment.marker", $dolt_refresh_vardir)
 	$api_runtime_env = golang.template(deploy.readfile("/files/api-runtime.env.tmpl"), struct {
 		dolt_port => $dolt_port,
 		dolt_database_name => $dolt_database_name,
@@ -290,10 +293,23 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 		startup_mode => $startup_mode,
 	})
 
+	exec "fishystuff-dolt-refresh" {
+		cmd => "/usr/bin/systemctl",
+		args => [
+			"reload",
+			fmt.printf("%s.service", $dolt_service_name),
+		],
+		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $deployment_marker, $dolt_refresh_stamp_path),
+		doneshell => "/usr/bin/bash",
+		ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $dolt_refresh_stamp_path, $deployment_marker),
+		ifshell => "/usr/bin/bash",
+	}
+
 	include fishystuff_deploy_health.gate(struct {
 		name => "fishystuff-api-ready",
 		marker => $deployment_marker,
 		check_cmd => "/usr/bin/curl --fail --silent --show-error --max-time 5 'http://127.0.0.1:8080/readyz' >/dev/null",
+		timeout_secs => 900,
 	})
 
 	include fishystuff_deploy_health.gate(struct {
@@ -306,6 +322,14 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 		name => "fishystuff-edge-api-ready",
 		marker => $deployment_marker,
 		check_cmd => fmt.printf("/usr/bin/curl --fail --silent --show-error --max-time 5 --resolve '%s:443:127.0.0.1' '%s/readyz' >/dev/null", $api_tls_domain, $api_base_url),
+		timeout_secs => 900,
+	})
+
+	include fishystuff_deploy_health.gate(struct {
+		name => "fishystuff-edge-calculator-ready",
+		marker => $deployment_marker,
+		check_cmd => fmt.printf("/usr/bin/curl --fail --silent --show-error --max-time 10 --resolve '%s:443:127.0.0.1' '%s/api/v1/calculator/datastar/init?lang=en&locale=en-US' >/dev/null", $api_tls_domain, $api_base_url),
+		timeout_secs => 900,
 	})
 
 	include fishystuff_deploy_health.gate(struct {
@@ -327,18 +351,26 @@ nix:gcroot "${cdn_content_gcroot_path}" {
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
 	Svc["fishystuff-vector"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
+	Svc["${dolt_service_name}"] -> Exec["fishystuff-dolt-refresh"]
 	File["/run/fishystuff/"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${api_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${dolt_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-vector"] -> File["/run/fishystuff/deployment-marker"]
+	Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-api-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-api-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-api-ready"]
 	Exec["fishystuff-api-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-api-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-edge-api-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-api-ready"]
+	Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-api-ready"]
 	Exec["fishystuff-edge-api-ready"] -> File["/run/fishystuff/deployment-marker"]
+	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-calculator-ready"]
+	Svc["${api_service_name}"] -> Exec["fishystuff-edge-calculator-ready"]
+	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-calculator-ready"]
+	Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-calculator-ready"]
+	Exec["fishystuff-edge-calculator-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-site-ready"]
 	Exec["fishystuff-edge-site-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-cdn-ready"]

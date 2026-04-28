@@ -32,28 +32,32 @@ let
     privilege_file = cfg.privilegeFile;
     branch_control_file = cfg.branchControlFile;
   };
+  remoteBranchFunction = ''
+    resolve_remote_branch() {
+      local deployment_environment="''${FISHYSTUFF_DEPLOYMENT_ENVIRONMENT:-beta}"
+      deployment_environment="$(printf '%s' "$deployment_environment" | tr '[:upper:]' '[:lower:]')"
+      if [ "$deployment_environment" = "production" ]; then
+        printf '%s' "main"
+        return
+      fi
+      if [ -n "$deployment_environment" ]; then
+        printf '%s' "$deployment_environment"
+        return
+      fi
+      printf '%s' "beta"
+    }
+  '';
   startScript = pkgs.writeShellApplication {
     name = "fishystuff-dolt-start";
     runtimeInputs = [
       cfg.package
       pkgs.coreutils
+      pkgs.gnugrep
     ];
     text = ''
       set -euo pipefail
 
-      resolve_remote_branch() {
-        local deployment_environment="''${FISHYSTUFF_DEPLOYMENT_ENVIRONMENT:-beta}"
-        deployment_environment="$(printf '%s' "$deployment_environment" | tr '[:upper:]' '[:lower:]')"
-        if [ "$deployment_environment" = "production" ]; then
-          printf '%s' "main"
-          return
-        fi
-        if [ -n "$deployment_environment" ]; then
-          printf '%s' "$deployment_environment"
-          return
-        fi
-        printf '%s' "beta"
-      }
+      ${remoteBranchFunction}
 
       data_dir=${lib.escapeShellArg cfg.dataDir}
       cfg_dir=${lib.escapeShellArg cfg.cfgDir}
@@ -112,6 +116,55 @@ let
       exec dolt sql-server --config ${lib.escapeShellArg sqlServerConfig} ${lib.escapeShellArgs cfg.extraArgs}
     '';
   };
+  refreshScript = pkgs.writeShellApplication {
+    name = "fishystuff-dolt-refresh";
+    runtimeInputs = [
+      cfg.package
+      pkgs.coreutils
+      pkgs.gnugrep
+    ];
+    text = ''
+      set -euo pipefail
+
+      ${remoteBranchFunction}
+
+      repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
+      repo_name=${lib.escapeShellArg cfg.databaseName}
+      sql_host=${lib.escapeShellArg cfg.listenAddress}
+      sql_port=${lib.escapeShellArg (toString cfg.port)}
+      remote_branch="$(resolve_remote_branch)"
+
+      cd "$repo_dir"
+
+      dolt_sql() {
+        dolt --host "$sql_host" --port "$sql_port" --user root --password "" --no-tls --use-db "$repo_name" sql -q "$1"
+      }
+
+      ${lib.optionalString cfg.readOnly ''
+        restore_read_only() {
+          dolt_sql "SET GLOBAL read_only = 1" || true
+        }
+        trap restore_read_only EXIT
+        dolt_sql "SET GLOBAL read_only = 0"
+        for _ in 1 2 3 4 5; do
+          if dolt_sql "SELECT @@global.read_only" | grep -q '| 0'; then
+            break
+          fi
+          sleep 1
+        done
+        if ! dolt_sql "SELECT @@global.read_only" | grep -q '| 0'; then
+          echo "timed out waiting for Dolt read_only=0 before refresh" >&2
+          exit 1
+        fi
+      ''}
+      dolt_sql "CALL DOLT_FETCH('origin')"
+      dolt_sql "CALL DOLT_RESET('--hard', 'origin/$remote_branch')"
+      ${lib.optionalString cfg.readOnly ''
+        dolt_sql "SET GLOBAL read_only = 1"
+        trap - EXIT
+      ''}
+    '';
+  };
   runtimeEnvFiles =
     optional (cfg.runtimeEnvFile != null) (toString cfg.runtimeEnvFile)
     ++ map toString cfg.environmentFiles;
@@ -130,6 +183,7 @@ let
     dynamicUser = cfg.dynamicUser;
     supplementaryGroups = cfg.supplementaryGroups;
     workingDirectory = cfg.dataDir;
+    execReloadArgv = [ (lib.getExe refreshScript) ];
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     restartPolicy = "on-failure";
@@ -215,7 +269,7 @@ in
 
     cloneDepth = mkOption {
       type = types.nullOr types.int;
-      default = 1;
+      default = null;
       description = "Optional shallow-clone depth for the initial local repo bootstrap.";
     };
 
@@ -316,6 +370,7 @@ in
         cfg.package
         sqlServerConfig
         startScript
+        refreshScript
         systemdUnit.file
       ];
 
@@ -333,6 +388,10 @@ in
         (helpers.mkMaterializationRoot {
           handle = "script/start";
           path = startScript;
+        })
+        (helpers.mkMaterializationRoot {
+          handle = "script/refresh";
+          path = refreshScript;
         })
         (helpers.mkMaterializationRoot {
           handle = "systemd/unit";
@@ -363,6 +422,13 @@ in
           kind = "script";
           storePath = lib.getExe startScript;
           destination = "start";
+          executable = true;
+        };
+
+        "script/refresh" = helpers.mkArtifact {
+          kind = "script";
+          storePath = lib.getExe refreshScript;
+          destination = "refresh";
           executable = true;
         };
 
@@ -401,9 +467,9 @@ in
           delaySeconds = 5;
         };
         reload = {
-          mode = "restart";
+          mode = "command";
           signal = null;
-          argv = [ ];
+          argv = [ (lib.getExe refreshScript) ];
         };
         stop = {
           mode = "signal";
@@ -439,6 +505,7 @@ in
       restartTriggers = [
         sqlServerConfig
         startScript
+        refreshScript
       ];
       serviceConfig =
         {
@@ -466,6 +533,7 @@ in
           UMask = "0077";
           StateDirectory = cfg.stateDirectoryName;
           StateDirectoryMode = "0750";
+          ExecReload = lib.getExe refreshScript;
         }
         // optionalAttrs (!cfg.dynamicUser) {
           User = cfg.user;

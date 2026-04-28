@@ -19,6 +19,7 @@ let
       requiredEnvironment ? { },
       requiredUnitLines ? [ ],
       forbiddenUnitLines ? [ ],
+      expectedReloadMode ? "restart",
       requiredMaterializationAcquisition ? null,
       requiredMaterializationHandle ? null,
     }:
@@ -35,9 +36,13 @@ let
         jq -e '.artifacts["exe/main"].kind == "binary"' "$bundle_json" >/dev/null
         jq -e '.artifacts["config/base"].kind == "config"' "$bundle_json" >/dev/null
         jq -e '.artifacts["config/base"].destination == "${configDestination}"' "$bundle_json" >/dev/null
+        jq -e 'if .id == "fishystuff-dolt" then .artifacts["script/refresh"].kind == "script" else true end' "$bundle_json" >/dev/null
         jq -e '.artifacts["systemd/unit"].kind == "systemd-unit"' "$bundle_json" >/dev/null
         jq -e '.artifacts["systemd/unit"].destination == "${unitName}"' "$bundle_json" >/dev/null
         jq -e '.artifacts["systemd/unit"].bundle_path == "artifacts/systemd/unit"' "$bundle_json" >/dev/null
+        if jq -e '.id == "fishystuff-dolt"' "$bundle_json" >/dev/null; then
+          jq -e '.artifacts["script/refresh"].bundle_path == "artifacts/script/refresh"' "$bundle_json" >/dev/null
+        fi
         jq -e '.bundle_files.bundle_json == "bundle.json"' "$bundle_json" >/dev/null
         jq -e '.bundle_files.materialization_json == "materialization.json"' "$bundle_json" >/dev/null
         jq -e '.bundle_files.mode_substitute == "mode-substitute.txt"' "$bundle_json" >/dev/null
@@ -56,7 +61,7 @@ let
         jq -e '.closure.mode_verify_file == "mode-verify.txt"' "$bundle_json" >/dev/null
         jq -e '.supervision.argv | length >= ${toString minArgvLength}' "$bundle_json" >/dev/null
         jq -e '.supervision.restart.policy == "on-failure"' "$bundle_json" >/dev/null
-        jq -e '.supervision.reload.mode == "restart"' "$bundle_json" >/dev/null
+        jq -e '.supervision.reload.mode == "${expectedReloadMode}"' "$bundle_json" >/dev/null
         jq -e '.backends.systemd.service_manager == "systemd"' "$bundle_json" >/dev/null
         jq -e '.backends.systemd.daemon_reload == true' "$bundle_json" >/dev/null
         jq -e '.backends.systemd.units | length == 1' "$bundle_json" >/dev/null
@@ -75,6 +80,14 @@ let
         grep -Fx "$unit_path" "$store_paths" >/dev/null
         test -L "${bundle}/artifacts/systemd/unit"
         test "$(readlink -f "${bundle}/artifacts/systemd/unit")" = "$unit_path"
+        if jq -e '.id == "fishystuff-dolt"' "$bundle_json" >/dev/null; then
+          refresh_path=$(jq -r '.artifacts["script/refresh"].storePath' "$bundle_json")
+          refresh_root=$(printf '%s\n' "$refresh_path" | cut -d/ -f1-4)
+          grep -Fx "$refresh_root" "$store_paths" >/dev/null
+          test -L "${bundle}/artifacts/script/refresh"
+          test "$(readlink -f "${bundle}/artifacts/script/refresh")" = "$refresh_path"
+          grep -F "ExecReload=" "$unit_path" >/dev/null
+        fi
         test -f "${bundle}/materialization.json"
         test -f "${bundle}/mode-substitute.txt"
         test -f "${bundle}/mode-realise.txt"
@@ -196,5 +209,6 @@ in
     forbiddenUnitLines = [
       "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
     ];
+    expectedReloadMode = "command";
   };
 }

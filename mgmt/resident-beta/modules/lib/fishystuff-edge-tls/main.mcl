@@ -1,10 +1,12 @@
 import "encoding"
+import "datetime"
 import "fmt"
 import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
 import "../../providers/cloudflare-dnsmanager/" as cloudflare_dnsmanager
 import "../../providers/hetzner-firewall/" as hetzner_firewall
 import "os"
 import "strings" as core_strings
+import "golang/strconv" as strconv
 import "golang/strings" as golang_strings
 import "sys"
 import "world"
@@ -20,12 +22,14 @@ class attempt_state($st) {
 	$dns_zone_tail []str = core_strings.split(fmt.printf("%s\"dns_zone\": \"\"", $raw_value), "\"dns_zone\": \"")
 	$dns_name_tail []str = core_strings.split(fmt.printf("%s\"dns_name\": \"\"", $raw_value), "\"dns_name\": \"")
 	$dns_value_tail []str = core_strings.split(fmt.printf("%s\"dns_value\": \"\"", $raw_value), "\"dns_value\": \"")
+	$expires_tail []str = core_strings.split(fmt.printf("%s\"expires_at\": 0", $raw_value), "\"expires_at\": ")
 	$phase str = core_strings.split($phase_tail[1], "\"")[0]
 	$challenge_type str = core_strings.split($challenge_tail[1], "\"")[0]
 	$dns_zone str = core_strings.split($dns_zone_tail[1], "\"")[0]
 	$dns_name str = core_strings.split($dns_name_tail[1], "\"")[0]
 	$dns_value str = core_strings.split($dns_value_tail[1], "\"")[0]
-	$presenting bool = $raw->exists and ($phase == "presenting")
+	$expires_at int = strconv.atoi(core_strings.split($expires_tail[1], ",")[0])
+	$presenting bool = $raw->exists and ($phase == "presenting") and ($expires_at > datetime.now())
 }
 
 class certificate($st) {

@@ -282,7 +282,11 @@ if service_selected dolt && [[ -z "$dolt_bundle" ]]; then
 fi
 if service_selected edge; then
   if [[ -z "$edge_bundle" ]]; then
-    edge_bundle="$(nix build .#edge-service-bundle --no-link --print-out-paths)"
+    case "$deployment_environment" in
+      production) edge_bundle_package="edge-service-bundle-production" ;;
+      *) edge_bundle_package="edge-service-bundle" ;;
+    esac
+    edge_bundle="$(nix build ".#$edge_bundle_package" --no-link --print-out-paths)"
   fi
   if [[ -n "$site_content_override" ]]; then
     case "$site_content_override" in

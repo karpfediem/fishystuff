@@ -164,17 +164,21 @@
               environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
             };
           };
-          edgeServiceBundle = mkServiceBundle {
-            name = "fishystuff-edge";
-            serviceModule = serviceModules.edge;
-            configuration.fishystuff.edge = {
-              tlsEnable = true;
-              siteAddress = deploymentBaseUrl "" defaultDeploymentEnvironment;
-              apiAddress = deploymentBaseUrl "api" defaultDeploymentEnvironment;
-              cdnAddress = deploymentBaseUrl "cdn" defaultDeploymentEnvironment;
-              telemetryAddress = deploymentBaseUrl "telemetry" defaultDeploymentEnvironment;
+          edgeServiceBundleFor =
+            deploymentEnvironment:
+            mkServiceBundle {
+              name = "fishystuff-edge";
+              serviceModule = serviceModules.edge;
+              configuration.fishystuff.edge = {
+                tlsEnable = true;
+                siteAddress = deploymentBaseUrl "" deploymentEnvironment;
+                apiAddress = deploymentBaseUrl "api" deploymentEnvironment;
+                cdnAddress = deploymentBaseUrl "cdn" deploymentEnvironment;
+                telemetryAddress = deploymentBaseUrl "telemetry" deploymentEnvironment;
+              };
             };
-          };
+          edgeServiceBundle = edgeServiceBundleFor defaultDeploymentEnvironment;
+          edgeServiceBundleProduction = edgeServiceBundleFor "production";
           lokiServiceBundle = mkServiceBundle {
             name = "fishystuff-loki";
             serviceModule = serviceModules.loki;
@@ -248,6 +252,7 @@
             cdn-content = cdnContent;
             dolt-service-bundle = doltServiceBundle;
             edge-service-bundle = edgeServiceBundle;
+            edge-service-bundle-production = edgeServiceBundleProduction;
             grafana-service-bundle = grafanaServiceBundle;
             jaeger-service-bundle = jaegerServiceBundle;
             loki-service-bundle = lokiServiceBundle;

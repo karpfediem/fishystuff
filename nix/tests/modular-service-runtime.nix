@@ -21,9 +21,19 @@ pkgs.testers.runNixOSTest {
         text = ''
           set -euo pipefail
 
-          case "''${1:-}" in
+          subcommand=""
+          for arg in "$@"; do
+            case "$arg" in
+              clone|config|fetch|reset|sql|sql-server)
+                subcommand="$arg"
+                break
+                ;;
+            esac
+          done
+
+          case "$subcommand" in
             clone)
-              printf '%s\n' "$@" > /tmp/fishystuff-dolt-clone-args
+              printf '%s\n' "$@" > /var/lib/fishystuff/dolt/fishystuff-dolt-clone-args
               target=""
               for arg in "$@"; do
                 target="$arg"
@@ -31,13 +41,32 @@ pkgs.testers.runNixOSTest {
               mkdir -p "$target/.dolt"
               ;;
             config)
-              printf '%s\n' "$@" >> /tmp/fishystuff-dolt-config-args
+              printf '%s\n' "$@" >> /var/lib/fishystuff/dolt/fishystuff-dolt-config-args
               if [ "''${3:-}" = "--get" ]; then
                 exit 1
               fi
               ;;
+            fetch)
+              printf '%s\n' "$@" > /var/lib/fishystuff/dolt/fishystuff-dolt-fetch-args
+              ;;
+            reset)
+              printf '%s\n' "$@" > /var/lib/fishystuff/dolt/fishystuff-dolt-reset-args
+              ;;
+            sql)
+              printf '%s\n' "$@" >> /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args
+              cat >> /var/lib/fishystuff/dolt/fishystuff-dolt-sql-stdin
+              case "$*" in
+                *"SELECT @@global.read_only"*)
+                  printf '+--------------------+\n'
+                  printf '| @@global.read_only |\n'
+                  printf '+--------------------+\n'
+                  printf '| 0                  |\n'
+                  printf '+--------------------+\n'
+                  ;;
+              esac
+              ;;
             sql-server)
-              printf '%s\n' "$@" > /tmp/fishystuff-dolt-args
+              printf '%s\n' "$@" > /var/lib/fishystuff/dolt/fishystuff-dolt-args
               trap 'exit 0' TERM INT
               while true; do
                 sleep 3600
@@ -78,10 +107,16 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl show fishystuff-api.service -p ExecStart --value | grep -- '--config'")
     machine.succeed("systemctl show fishystuff-api.service -p DynamicUser --value | grep '^yes$'")
     machine.succeed("systemctl show fishystuff-dolt.service -p ExecStart --value | grep -- 'fishystuff-dolt-start'")
+    machine.succeed("systemctl show fishystuff-dolt.service -p ExecReload --value | grep -- 'fishystuff-dolt-refresh'")
     machine.succeed("systemctl show fishystuff-dolt.service -p DynamicUser --value | grep '^yes$'")
     machine.succeed("systemctl show fishystuff-api.service -p EnvironmentFiles --value | grep '/run/fishystuff/api/env'")
     machine.succeed("systemctl cat fishystuff-dolt.service | grep '^StateDirectory=fishystuff/dolt$'")
     machine.succeed("systemctl show fishystuff-dolt.service -p Environment --value | grep 'HOME=/var/lib/fishystuff/dolt'")
     machine.succeed("test -d /var/lib/fishystuff/dolt/fishystuff/.dolt")
+    machine.succeed("systemctl reload fishystuff-dolt.service")
+    machine.succeed("grep 'SET GLOBAL read_only = 0' /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
+    machine.succeed("grep \"CALL DOLT_FETCH('origin')\" /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
+    machine.succeed("grep \"CALL DOLT_RESET('--hard', 'origin/beta')\" /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
+    machine.succeed("grep 'SET GLOBAL read_only = 1' /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
   '';
 }
