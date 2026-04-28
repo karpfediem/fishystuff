@@ -28,7 +28,7 @@ class api_db_host($st) {
 		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; refresh_enabled bool; repo_snapshot_store_path str; repo_snapshot_gcroot_path str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
@@ -94,6 +94,11 @@ class api_db_host($st) {
 	$dolt_data_dir str = $st->dolt_data_dir || "/var/lib/fishystuff/dolt"
 	$dolt_database_name str = $st->dolt_database_name || "fishystuff"
 	$dolt_remote_branch str = $manifest->dolt->remote_branch || ""
+	$dolt_refresh_enabled bool = $manifest->dolt->refresh_enabled
+	$dolt_repo_snapshot_store_path str = $manifest->dolt->repo_snapshot_store_path || ""
+	$dolt_repo_snapshot_gcroot_path str = $manifest->dolt->repo_snapshot_gcroot_path || ""
+	$dolt_repo_snapshot_closure_name str = fmt.printf("fishystuff-dolt-repo-snapshot-%s", $hostname)
+	$dolt_refresh_action str = if $dolt_repo_snapshot_store_path != "" { "restart" } else { "reload" }
 	$dolt_volume_device str = $st->dolt_volume_device || ""
 	$dolt_volume_fs_type str = $st->dolt_volume_fs_type || "ext4"
 	$dolt_port str = $st->dolt_port || "3306"
@@ -123,6 +128,7 @@ class api_db_host($st) {
 		telemetry_traces_endpoint => $telemetry_traces_endpoint,
 		deployment_environment => $deployment_environment,
 		dolt_remote_branch => $dolt_remote_branch,
+		dolt_repo_snapshot => $dolt_repo_snapshot_store_path,
 	})
 
 	include fishystuff_beta_access.catalog(struct {
@@ -217,6 +223,21 @@ class api_db_host($st) {
 		Notify => Svc["${api_service_name}"],
 	}
 
+	if $dolt_repo_snapshot_store_path != "" {
+		nix:closure "${dolt_repo_snapshot_closure_name}" {
+			paths => [$dolt_repo_snapshot_store_path,],
+			mode => "verify",
+		}
+
+		if $dolt_repo_snapshot_gcroot_path != "" {
+			nix:gcroot "${dolt_repo_snapshot_gcroot_path}" {
+				target => $dolt_repo_snapshot_store_path,
+				state => "exists",
+				force => true,
+			}
+		}
+	}
+
 	include fishystuff_bundle_systemd.unit(struct {
 		bundle_path => $api_bundle_path,
 		gcroot_path => $api_service->gcroot_path || "",
@@ -246,16 +267,18 @@ class api_db_host($st) {
 		startup_mode => $startup_mode,
 	})
 
-	exec "fishystuff-dolt-refresh" {
-		cmd => "/usr/bin/systemctl",
-		args => [
-			"reload",
-			fmt.printf("%s.service", $dolt_service_name),
-		],
-		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $deployment_marker, $dolt_refresh_stamp_path),
-		doneshell => "/usr/bin/bash",
-		ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $dolt_refresh_stamp_path, $deployment_marker),
-		ifshell => "/usr/bin/bash",
+	if $dolt_refresh_enabled {
+		exec "fishystuff-dolt-refresh" {
+			cmd => "/usr/bin/systemctl",
+			args => [
+				$dolt_refresh_action,
+				fmt.printf("%s.service", $dolt_service_name),
+			],
+			donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $deployment_marker, $dolt_refresh_stamp_path),
+			doneshell => "/usr/bin/bash",
+			ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $dolt_refresh_stamp_path, $deployment_marker),
+			ifshell => "/usr/bin/bash",
+		}
 	}
 
 	include fishystuff_deploy_health.gate(struct {
@@ -298,27 +321,24 @@ class api_db_host($st) {
 	File["/run/fishystuff/"] -> File["/run/fishystuff/api/"]
 	File["/run/fishystuff/api/"] -> File["${api_env_file}"]
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
+	File["${api_env_file}"] -> Svc["${dolt_service_name}"]
 	Svc["fishystuff-vector"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
-	Svc["${dolt_service_name}"] -> Exec["fishystuff-dolt-refresh"]
 	File["/run/fishystuff/"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${api_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${dolt_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-vector"] -> File["/run/fishystuff/deployment-marker"]
-	Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-api-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-api-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-api-ready"]
 	Exec["fishystuff-api-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-api-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-edge-api-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-api-ready"]
-	Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-api-ready"]
 	Exec["fishystuff-edge-api-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-calculator-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-edge-calculator-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-calculator-ready"]
-	Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-calculator-ready"]
 	Exec["fishystuff-edge-calculator-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-site-ready"]
 	Exec["fishystuff-edge-site-ready"] -> File["/run/fishystuff/deployment-marker"]
@@ -338,6 +358,27 @@ class api_db_host($st) {
 	File["${cdn_root_dir}"] -> File["/run/fishystuff/deployment-marker"]
 	File["${cdn_root_dir}"] -> Exec["fishystuff-edge-cdn-ready"]
 
+	if $dolt_refresh_enabled {
+		Svc["${dolt_service_name}"] -> Exec["fishystuff-dolt-refresh"]
+		File["${api_env_file}"] -> Exec["fishystuff-dolt-refresh"]
+		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-api-ready"]
+		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-api-ready"]
+		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-calculator-ready"]
+
+		if $dolt_repo_snapshot_store_path != "" {
+			Nix:Closure["${dolt_repo_snapshot_closure_name}"] -> Exec["fishystuff-dolt-refresh"]
+		}
+	}
+
+	if $dolt_repo_snapshot_store_path != "" {
+		Nix:Closure["${dolt_repo_snapshot_closure_name}"] -> Svc["${dolt_service_name}"]
+
+		if $dolt_repo_snapshot_gcroot_path != "" {
+			Nix:Closure["${dolt_repo_snapshot_closure_name}"] -> Nix:Gcroot["${dolt_repo_snapshot_gcroot_path}"]
+			Nix:Gcroot["${dolt_repo_snapshot_gcroot_path}"] -> Svc["${dolt_service_name}"]
+		}
+	}
+
 	if $dolt_volume_device != "" {
 		File["/var/lib/fishystuff/"] -> File["${dolt_data_dir}/"] -> Mount["${dolt_data_dir}"] -> Svc["${dolt_service_name}"]
 	}
@@ -355,7 +396,7 @@ class telemetry_host($st) {
 		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; refresh_enabled bool; repo_snapshot_store_path str; repo_snapshot_gcroot_path str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};

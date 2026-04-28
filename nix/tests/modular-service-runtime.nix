@@ -57,11 +57,7 @@ pkgs.testers.runNixOSTest {
               cat >> /var/lib/fishystuff/dolt/fishystuff-dolt-sql-stdin
               case "$*" in
                 *"SELECT @@global.read_only"*)
-                  printf '+--------------------+\n'
-                  printf '| @@global.read_only |\n'
-                  printf '+--------------------+\n'
-                  printf '| 0                  |\n'
-                  printf '+--------------------+\n'
+                  printf '| 0\n'
                   ;;
               esac
               ;;
@@ -91,6 +87,7 @@ pkgs.testers.runNixOSTest {
       system.services.fishystuff-dolt = {
         imports = [ serviceModules.dolt ];
         fishystuff.dolt.package = fakeDoltPackage;
+        fishystuff.dolt.runtimeEnvFile = "/run/fishystuff/api/env";
       };
     };
 
@@ -110,6 +107,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl show fishystuff-dolt.service -p ExecReload --value | grep -- 'fishystuff-dolt-refresh'")
     machine.succeed("systemctl show fishystuff-dolt.service -p DynamicUser --value | grep '^yes$'")
     machine.succeed("systemctl show fishystuff-api.service -p EnvironmentFiles --value | grep '/run/fishystuff/api/env'")
+    machine.succeed("systemctl show fishystuff-dolt.service -p EnvironmentFiles --value | grep '/run/fishystuff/api/env'")
     machine.succeed("systemctl cat fishystuff-dolt.service | grep '^StateDirectory=fishystuff/dolt$'")
     machine.succeed("systemctl show fishystuff-dolt.service -p Environment --value | grep 'HOME=/var/lib/fishystuff/dolt'")
     machine.succeed("test -d /var/lib/fishystuff/dolt/fishystuff/.dolt")
@@ -118,5 +116,15 @@ pkgs.testers.runNixOSTest {
     machine.succeed("grep \"CALL DOLT_FETCH('origin')\" /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
     machine.succeed("grep \"CALL DOLT_RESET('--hard', 'origin/beta')\" /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
     machine.succeed("grep 'SET GLOBAL read_only = 1' /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
+    machine.succeed("mkdir -p /run/fishystuff/api /var/lib/fishystuff/dolt-snapshot/.dolt/noms")
+    machine.succeed("printf 'FISHYSTUFF_DOLT_REPO_SNAPSHOT=/var/lib/fishystuff/dolt-snapshot\\n' > /run/fishystuff/api/env")
+    machine.succeed("systemctl restart fishystuff-dolt.service")
+    machine.wait_for_unit("fishystuff-dolt.service")
+    machine.succeed("pid=$(systemctl show fishystuff-dolt.service -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep '^FISHYSTUFF_DOLT_REPO_SNAPSHOT=/var/lib/fishystuff/dolt-snapshot$'")
+    machine.wait_until_succeeds("test -d /var/lib/fishystuff/dolt/fishystuff/.dolt/noms")
+    machine.wait_until_succeeds("grep '^/var/lib/fishystuff/dolt-snapshot$' /var/lib/fishystuff/dolt/fishystuff/.fishystuff-dolt-snapshot-source")
+    machine.succeed("rm -f /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
+    machine.succeed("systemctl reload fishystuff-dolt.service")
+    machine.succeed("test ! -e /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
   '';
 }

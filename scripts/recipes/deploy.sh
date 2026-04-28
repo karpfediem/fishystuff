@@ -146,6 +146,11 @@ for service in "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"; do
   fi
 done
 
+if [[ -z "${selected_services[dolt]:-}" ]]; then
+  backend_args+=("dolt_refresh_enabled=false")
+  backend_args+=("dolt_repo_snapshot_mode=off")
+fi
+
 FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST="$expected_manifest" \
   bash "${SCRIPT_DIR}/mgmt-resident-push-full-stack.sh" "${backend_args[@]}"
 

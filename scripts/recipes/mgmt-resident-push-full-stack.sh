@@ -34,8 +34,13 @@ services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana
 deployment_environment="beta"
 deployment_marker=""
 dolt_remote_branch=""
+dolt_refresh_enabled="true"
+dolt_repo_snapshot_mode="${FISHYSTUFF_DOLT_REPO_SNAPSHOT_MODE:-auto}"
+dolt_repo_snapshot_src="${FISHYSTUFF_DOLT_REPO_SNAPSHOT_SRC:-$RECIPE_REPO_ROOT/.dolt}"
+dolt_repo_snapshot_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-repo-current"
 api_bundle_override=""
 dolt_bundle_override=""
+dolt_repo_snapshot_override=""
 edge_bundle_override=""
 loki_bundle_override=""
 otel_collector_bundle_override=""
@@ -95,6 +100,11 @@ for arg in "${overrides[@]}"; do
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
     deployment_marker=*) deployment_marker="${arg#deployment_marker=}" ;;
     dolt_remote_branch=*) dolt_remote_branch="${arg#dolt_remote_branch=}" ;;
+    dolt_refresh_enabled=*) dolt_refresh_enabled="${arg#dolt_refresh_enabled=}" ;;
+    dolt_repo_snapshot=*) dolt_repo_snapshot_override="${arg#dolt_repo_snapshot=}" ;;
+    dolt_repo_snapshot_mode=*) dolt_repo_snapshot_mode="${arg#dolt_repo_snapshot_mode=}" ;;
+    dolt_repo_snapshot_src=*) dolt_repo_snapshot_src="${arg#dolt_repo_snapshot_src=}" ;;
+    dolt_repo_snapshot_gcroot=*) dolt_repo_snapshot_gcroot="${arg#dolt_repo_snapshot_gcroot=}" ;;
     api_bundle=*) api_bundle_override="${arg#api_bundle=}" ;;
     dolt_bundle=*) dolt_bundle_override="${arg#dolt_bundle=}" ;;
     edge_bundle=*) edge_bundle_override="${arg#edge_bundle=}" ;;
@@ -150,6 +160,68 @@ build_release_map_runtime() {
   ./tools/scripts/stage_cdn_assets.sh --map-only
 }
 
+build_dolt_repo_snapshot() {
+  local snapshot_src="$1"
+  local environment="$2"
+  local dolt_bundle_path="${3-}"
+  local dolt_cmd=""
+  local stage_parent=""
+  local stage_root=""
+  local snapshot_store_path=""
+  local source_revision=""
+
+  if [[ ! -d "$snapshot_src" || ! -d "$snapshot_src/noms" ]]; then
+    echo "Dolt snapshot source does not look like a .dolt directory: $snapshot_src" >&2
+    exit 2
+  fi
+
+  if [[ "$snapshot_src" == "$RECIPE_REPO_ROOT/.dolt" ]]; then
+    if [[ -n "$dolt_bundle_path" && -f "$dolt_bundle_path/bundle.json" ]]; then
+      dolt_cmd="$(jq -r '.artifacts["exe/dolt"].storePath // empty' "$dolt_bundle_path/bundle.json")"
+    fi
+    if [[ -z "$dolt_cmd" ]]; then
+      dolt_cmd="$(command -v dolt || true)"
+    fi
+    if [[ -z "$dolt_cmd" ]]; then
+      echo "dolt is required to verify the local repo before deploying a .dolt snapshot" >&2
+      exit 2
+    fi
+    if ! (cd "$RECIPE_REPO_ROOT" && "$dolt_cmd" status) | grep -q "nothing to commit"; then
+      echo "local Dolt working tree is not clean; refusing to deploy a repo snapshot" >&2
+      (cd "$RECIPE_REPO_ROOT" && "$dolt_cmd" status) >&2 || true
+      exit 2
+    fi
+    source_revision="$(
+      cd "$RECIPE_REPO_ROOT"
+      "$dolt_cmd" log -n 1 --oneline | awk '{print $1}'
+    )"
+  fi
+
+  stage_parent="$(mktemp -d /tmp/fishystuff-dolt-repo-snapshot.XXXXXX)"
+  stage_root="$stage_parent/fishystuff-dolt-repo-snapshot-$environment"
+  mkdir -p "$stage_root"
+
+  if ! cp -a -l "$snapshot_src" "$stage_root/.dolt" 2>/dev/null; then
+    cp -a "$snapshot_src" "$stage_root/.dolt"
+  fi
+  rm -rf "$stage_root/.dolt/temptf" "$stage_root/.dolt/tmp"
+  find "$stage_root/.dolt" -name LOCK -type f -delete
+  rm -f "$stage_root/.dolt/sql-server.info"
+  jq -n \
+    --arg source "$snapshot_src" \
+    --arg revision "$source_revision" \
+    --arg environment "$environment" \
+    '{
+      source: $source,
+      revision: $revision,
+      deployment_environment: $environment
+    }' > "$stage_root/fishystuff-dolt-snapshot.json"
+
+  snapshot_store_path="$(nix-store --add "$stage_root")"
+  rm -rf "$stage_parent"
+  printf '%s' "$snapshot_store_path"
+}
+
 deployment_environment="$(normalize_deployment_environment "$deployment_environment")"
 deployment_domain_name="$(deployment_domain "$deployment_environment")"
 site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
@@ -182,6 +254,14 @@ fi
 services_csv="${services_csv//[[:space:]]/}"
 require_value "$target" "missing target=... for mgmt-resident-push-full-stack"
 deploy_target="${deploy_target:-$target}"
+
+case "$dolt_refresh_enabled" in
+  true | false) ;;
+  *)
+    echo "dolt_refresh_enabled must be true or false, got: $dolt_refresh_enabled" >&2
+    exit 2
+    ;;
+esac
 
 extract_ipv4_from_ssh_target() {
   local ssh_target="$1"
@@ -246,7 +326,7 @@ bundle_is_remote_only() {
 content_is_remote_only() {
   local content_path="$1"
   local override_path=""
-  for override_path in "$site_content_override" "$cdn_content_override"; do
+  for override_path in "$site_content_override" "$cdn_content_override" "$dolt_repo_snapshot_override"; do
     if [[ -n "$override_path" && "$content_path" == "$override_path" && ! -e "$content_path" ]]; then
       return 0
     fi
@@ -261,6 +341,7 @@ fi
 
 api_bundle="$api_bundle_override"
 dolt_bundle="$dolt_bundle_override"
+dolt_repo_snapshot="$dolt_repo_snapshot_override"
 edge_bundle="$edge_bundle_override"
 loki_bundle="$loki_bundle_override"
 otel_collector_bundle="$otel_collector_bundle_override"
@@ -281,6 +362,27 @@ if service_selected api && [[ -z "$api_bundle" ]]; then
 fi
 if service_selected dolt && [[ -z "$dolt_bundle" ]]; then
   dolt_bundle="$(nix build .#dolt-service-bundle --no-link --print-out-paths)"
+fi
+if [[ "$dolt_refresh_enabled" == "true" && -z "$dolt_repo_snapshot" ]]; then
+  case "$dolt_repo_snapshot_mode" in
+    auto)
+      if [[ -d "$dolt_repo_snapshot_src" ]]; then
+        dolt_repo_snapshot="$(build_dolt_repo_snapshot "$dolt_repo_snapshot_src" "$deployment_environment" "$dolt_bundle")"
+      else
+        echo "[resident-push] no local Dolt snapshot source at $dolt_repo_snapshot_src; using remote refresh"
+      fi
+      ;;
+    local)
+      dolt_repo_snapshot="$(build_dolt_repo_snapshot "$dolt_repo_snapshot_src" "$deployment_environment" "$dolt_bundle")"
+      ;;
+    off | none | false)
+      dolt_repo_snapshot=""
+      ;;
+    *)
+      echo "unknown dolt_repo_snapshot_mode for mgmt-resident-push-full-stack: $dolt_repo_snapshot_mode" >&2
+      exit 2
+      ;;
+  esac
 fi
 if service_selected edge; then
   if [[ -z "$edge_bundle" ]]; then
@@ -449,6 +551,7 @@ add_bundle_push_path site_push_paths site_push_seen "$api_bundle"
 add_bundle_push_path site_push_paths site_push_seen "$dolt_bundle"
 add_bundle_push_path site_push_paths site_push_seen "$edge_bundle"
 add_bundle_push_path site_push_paths site_push_seen "$vector_agent_bundle"
+add_content_push_path site_push_paths site_push_seen "$dolt_repo_snapshot"
 add_content_push_path site_push_paths site_push_seen "$site_content"
 add_content_push_path site_push_paths site_push_seen "$cdn_base_content"
 add_content_push_path site_push_paths site_push_seen "$minimap_display_tiles"
@@ -529,6 +632,9 @@ jq -n \
   --arg dolt_database_name "fishystuff" \
   --arg dolt_remote_url "fishystuff/fishystuff" \
   --arg dolt_remote_branch "$dolt_remote_branch" \
+  --argjson dolt_refresh_enabled "$dolt_refresh_enabled" \
+  --arg dolt_repo_snapshot "$dolt_repo_snapshot" \
+  --arg dolt_repo_snapshot_gcroot "$dolt_repo_snapshot_gcroot" \
   --arg dolt_clone_depth "1" \
   --arg dolt_volume_device "" \
   --arg dolt_volume_fs_type "ext4" \
@@ -592,6 +698,9 @@ jq -n \
       database_name: $dolt_database_name,
       remote_url: $dolt_remote_url,
       remote_branch: $dolt_remote_branch,
+      refresh_enabled: $dolt_refresh_enabled,
+      repo_snapshot_store_path: $dolt_repo_snapshot,
+      repo_snapshot_gcroot_path: $dolt_repo_snapshot_gcroot,
       clone_depth: $dolt_clone_depth,
       volume_device: $dolt_volume_device,
       volume_fs_type: $dolt_volume_fs_type,

@@ -57,6 +57,7 @@ let
     runtimeInputs = [
       cfg.package
       pkgs.coreutils
+      pkgs.findutils
       pkgs.gnugrep
     ];
     text = ''
@@ -74,10 +75,54 @@ let
       branch_control_file=${lib.escapeShellArg cfg.branchControlFile}
       repo_user_name=${lib.escapeShellArg cfg.repoUserName}
       repo_user_email=${lib.escapeShellArg cfg.repoUserEmail}
+      repo_snapshot_path="''${FISHYSTUFF_DOLT_REPO_SNAPSHOT:-}"
 
       export HOME="$data_dir"
 
       mkdir -p "$data_dir" "$cfg_dir"
+
+      normalize_repo_snapshot() {
+        local snapshot_path="$1"
+
+        if [ -d "$snapshot_path/.dolt" ]; then
+          printf '%s/.dolt' "$snapshot_path"
+          return
+        fi
+
+        if [ -d "$snapshot_path/noms" ]; then
+          printf '%s' "$snapshot_path"
+          return
+        fi
+
+        echo "configured Dolt repo snapshot does not look like a .dolt directory: $snapshot_path" >&2
+        exit 1
+      }
+
+      install_repo_snapshot() {
+        local snapshot_path="$1"
+        local snapshot_dolt_path="$2"
+        local marker_path="$repo_dir/.fishystuff-dolt-snapshot-source"
+        local tmp_repo_dir="$data_dir/.''${repo_name}.snapshot-tmp"
+        local old_repo_dir="$data_dir/.''${repo_name}.snapshot-old"
+
+        if [ -d "$repo_dir/.dolt" ] && [ "$(cat "$marker_path" 2>/dev/null || true)" = "$snapshot_path" ]; then
+          return
+        fi
+
+        rm -rf "$tmp_repo_dir" "$old_repo_dir"
+        mkdir -p "$tmp_repo_dir"
+        cp -a "$snapshot_dolt_path" "$tmp_repo_dir/.dolt"
+        rm -rf "$tmp_repo_dir/.dolt/temptf" "$tmp_repo_dir/.dolt/tmp"
+        find "$tmp_repo_dir/.dolt" -name LOCK -type f -delete
+        rm -f "$tmp_repo_dir/.dolt/sql-server.info"
+        printf '%s\n' "$snapshot_path" > "$tmp_repo_dir/.fishystuff-dolt-snapshot-source"
+
+        if [ -e "$repo_dir" ]; then
+          mv "$repo_dir" "$old_repo_dir"
+        fi
+        mv "$tmp_repo_dir" "$repo_dir"
+        rm -rf "$old_repo_dir"
+      }
 
       clone_remote_repo() {
         rm -rf "$repo_dir"
@@ -91,16 +136,21 @@ let
         )
       }
 
-      current_branch=""
-      if [ -d "$repo_dir/.dolt" ]; then
-        current_branch="$(
-          cd "$repo_dir"
-          dolt branch --show-current 2>/dev/null || true
-        )"
-      fi
+      if [ -n "$repo_snapshot_path" ]; then
+        repo_snapshot_dolt_path="$(normalize_repo_snapshot "$repo_snapshot_path")"
+        install_repo_snapshot "$repo_snapshot_path" "$repo_snapshot_dolt_path"
+      else
+        current_branch=""
+        if [ -d "$repo_dir/.dolt" ]; then
+          current_branch="$(
+            cd "$repo_dir"
+            dolt branch --show-current 2>/dev/null || true
+          )"
+        fi
 
-      if [ ! -d "$repo_dir/.dolt" ] || [ "$current_branch" != "$remote_branch" ]; then
-        clone_remote_repo
+        if [ ! -d "$repo_dir/.dolt" ] || [ "$current_branch" != "$remote_branch" ]; then
+          clone_remote_repo
+        fi
       fi
 
       (
@@ -138,6 +188,12 @@ let
       sql_host=${lib.escapeShellArg cfg.listenAddress}
       sql_port=${lib.escapeShellArg (toString cfg.port)}
       remote_branch="$(resolve_remote_branch)"
+      repo_snapshot_path="''${FISHYSTUFF_DOLT_REPO_SNAPSHOT:-}"
+
+      if [ -n "$repo_snapshot_path" ]; then
+        echo "FISHYSTUFF_DOLT_REPO_SNAPSHOT is set; restart fishystuff-dolt.service to activate $repo_snapshot_path" >&2
+        exit 0
+      fi
 
       cd "$repo_dir"
 
