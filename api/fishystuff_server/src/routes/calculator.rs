@@ -1791,6 +1791,7 @@ fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
         "bite_time" => Some("stopwatch-2-fill"),
         "catch_time" => Some("stopwatch-fill"),
         "session" => Some("time-fill"),
+        "gear" => Some("gear-fill"),
         "distribution" => Some("chart-pie-2-fill"),
         "loot" => Some("trending-up-fill"),
         "trade" => Some("wheel-fill"),
@@ -1805,10 +1806,10 @@ fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
 
 fn calculator_workspace_icon_alias(workspace_id: &str) -> Option<&'static str> {
     match workspace_id {
-        "fishing" => Some("fish-fill"),
-        "timing" => Some("stopwatch-2-fill"),
-        "loadout" => Some("adjustments-horizontal"),
-        "loot_trade" => Some("trending-up-fill"),
+        "basics" => Some("time-fill"),
+        "loadout" => Some("gear-fill"),
+        "loot" => Some("trending-up-fill"),
+        "trade" => Some("wheel-fill"),
         "advanced" => Some("settings-1"),
         "custom" => Some("layout-fill"),
         _ => None,
@@ -3481,7 +3482,7 @@ fn default_reset_signals_patch_map(
     patch.insert(
         "_calculator_ui".to_string(),
         json!({
-            "workspace_tab": "fishing",
+            "workspace_tab": "basics",
             "distribution_tab": "groups",
             "custom_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
             "custom_sections": ["overview", "zone", "session", "bite_time", "loot"],
@@ -9999,10 +10000,10 @@ fn render_calculator_app(
                 <div role="tablist"
                      class="fishy-calculator-top-tabs tabs tabs-box w-full max-w-full"
                      aria-label="__WORKSPACE_TABS_ARIA__">
-                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'fishing'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'fishing').toString()" data-on:click="$_calculator_ui.workspace_tab = 'fishing'">__WORKSPACE_FISHING__</button>
-                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'timing'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'timing').toString()" data-on:click="$_calculator_ui.workspace_tab = 'timing'">__WORKSPACE_TIMING__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'basics'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'basics').toString()" data-on:click="$_calculator_ui.workspace_tab = 'basics'">__WORKSPACE_BASICS__</button>
                     <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loadout'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loadout').toString()" data-on:click="$_calculator_ui.workspace_tab = 'loadout'">__WORKSPACE_LOADOUT__</button>
-                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loot_trade'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loot_trade').toString()" data-on:click="$_calculator_ui.workspace_tab = 'loot_trade'">__WORKSPACE_LOOT_TRADE__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loot'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'loot').toString()" data-on:click="$_calculator_ui.workspace_tab = 'loot'">__WORKSPACE_LOOT__</button>
+                    <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'trade'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'trade').toString()" data-on:click="$_calculator_ui.workspace_tab = 'trade'">__WORKSPACE_TRADE__</button>
                     <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'advanced'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'advanced').toString()" data-on:click="$_calculator_ui.workspace_tab = 'advanced'">__WORKSPACE_ADVANCED__</button>
                     <button type="button" class="tab fishy-calculator-workspace-tab whitespace-nowrap" data-class:tab-active="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom'" data-attr:aria-selected="(window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom').toString()" data-on:click="$_calculator_ui.workspace_tab = 'custom'">__WORKSPACE_CUSTOM__</button>
                 </div>
@@ -10401,17 +10402,10 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__WORKSPACE_FISHING__",
+            "__WORKSPACE_BASICS__",
             render_calculator_workspace_tab_label(
-                "fishing",
-                &calculator_route_text(data.lang, "calculator.server.workspace.fishing"),
-            ),
-        ),
-        (
-            "__WORKSPACE_TIMING__",
-            render_calculator_workspace_tab_label(
-                "timing",
-                &calculator_route_text(data.lang, "calculator.server.workspace.timing"),
+                "basics",
+                &calculator_route_text(data.lang, "calculator.server.workspace.basics"),
             ),
         ),
         (
@@ -10422,10 +10416,17 @@ fn render_calculator_app(
             ),
         ),
         (
-            "__WORKSPACE_LOOT_TRADE__",
+            "__WORKSPACE_LOOT__",
             render_calculator_workspace_tab_label(
-                "loot_trade",
-                &calculator_route_text(data.lang, "calculator.server.workspace.loot_trade"),
+                "loot",
+                &calculator_route_text(data.lang, "calculator.server.workspace.loot"),
+            ),
+        ),
+        (
+            "__WORKSPACE_TRADE__",
+            render_calculator_workspace_tab_label(
+                "trade",
+                &calculator_route_text(data.lang, "calculator.server.workspace.trade"),
             ),
         ),
         (
@@ -14723,9 +14724,9 @@ mod tests {
     use super::{
         apply_calculator_condition_context_to_loot_entries, auto_target_fish_pmf_tail_count,
         base_price_for_species, buff_category_label, build_pet_value_aliases,
-        build_zone_loot_summary_condition_options, default_reset_signals_patch_map,
-        derive_fish_group_chart, derive_loot_chart, derive_target_fish_summary,
-        derive_zone_loot_summary_response,
+        build_zone_loot_summary_condition_options, calculator_section_icon_alias,
+        calculator_workspace_icon_alias, default_reset_signals_patch_map, derive_fish_group_chart,
+        derive_loot_chart, derive_target_fish_summary, derive_zone_loot_summary_response,
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
         filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
@@ -15093,6 +15094,16 @@ mod tests {
         AppState::for_tests(config, Arc::new(MockStore))
     }
 
+    #[test]
+    fn calculator_workspace_icons_match_current_workspace_tabs() {
+        assert_eq!(calculator_workspace_icon_alias("basics"), Some("time-fill"));
+        assert_eq!(
+            calculator_workspace_icon_alias("loadout"),
+            Some("gear-fill")
+        );
+        assert_eq!(calculator_section_icon_alias("gear"), Some("gear-fill"));
+    }
+
     #[tokio::test]
     async fn init_returns_html_fragment_with_initial_signals() {
         let response = get_calculator_datastar_init(
@@ -15127,7 +15138,7 @@ mod tests {
         assert!(text.contains("\"active\":false"));
         assert!(text.contains("\"fishingMode\":\"rod\""));
         assert!(text.contains("\"_resources\":0.0"));
-        assert!(text.contains("\"workspace_tab\":\"fishing\""));
+        assert!(text.contains("\"workspace_tab\":\"basics\""));
         assert!(text.contains(
             "\"custom_layout\":[[[\"overview\"]],[[\"zone\"],[\"session\"]],[[\"bite_time\"],[\"loot\"]]]"
         ));
@@ -15231,8 +15242,11 @@ mod tests {
         assert!(text
             .contains("window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom'"));
         assert!(text.contains("Custom"));
-        assert!(text.contains("Gear &amp; Buffs"));
-        assert!(text.contains("Loot &amp; Trade"));
+        assert!(text.contains("Basics"));
+        assert!(!text.contains("calculator.server.workspace.basics"));
+        assert!(text.contains("Loadout"));
+        assert!(text.contains("Loot"));
+        assert!(text.contains("Trade"));
         assert!(text.contains("calculator.server.action.drag_section_generic"));
         assert!(text.contains("Remove Overview from Custom"));
         assert!(text.contains("#fishy-trash"));
@@ -15275,10 +15289,10 @@ mod tests {
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
-        assert!(text.contains("$_calculator_ui.workspace_tab = 'fishing'"));
-        assert!(text.contains("$_calculator_ui.workspace_tab = 'timing'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'basics'"));
         assert!(text.contains("$_calculator_ui.workspace_tab = 'loadout'"));
-        assert!(text.contains("$_calculator_ui.workspace_tab = 'loot_trade'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'loot'"));
+        assert!(text.contains("$_calculator_ui.workspace_tab = 'trade'"));
         assert!(text.contains("$_calculator_ui.workspace_tab = 'advanced'"));
         assert!(text.contains("$_calculator_ui.workspace_tab = 'custom'"));
         assert!(text.contains(
@@ -15306,6 +15320,7 @@ mod tests {
         assert!(text.contains("#fishy-chart-pie-2-fill"));
         assert!(text.contains("#fishy-trending-up-fill"));
         assert!(text.contains("#fishy-wheel-fill"));
+        assert!(text.contains("#fishy-gear-fill"));
         assert!(text.contains("#fishy-dinner-fill"));
         assert!(text.contains("#fishy-arrows-up-fill"));
         assert!(text.contains("#fishy-paw-fill"));
@@ -16518,7 +16533,7 @@ mod tests {
         assert_eq!(
             patch.get("_calculator_ui"),
             Some(&json!({
-                "workspace_tab": "fishing",
+                "workspace_tab": "basics",
                 "distribution_tab": "groups",
                 "custom_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
                 "custom_sections": ["overview", "zone", "session", "bite_time", "loot"],

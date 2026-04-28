@@ -107,6 +107,32 @@ test("normalizeCustomLayout preserves an explicit empty layout", async () => {
     );
 });
 
+test("workspaceLayoutForTab arranges the focused basics workspace", async () => {
+    const { workspaceLayoutForTab } = await loadModule();
+
+    assert.deepEqual(
+        workspaceLayoutForTab("basics", ["overview", "zone", "bite_time", "session", "trade"]),
+        [
+            [["overview"]],
+            [["zone", "session"], ["bite_time"]],
+        ],
+    );
+});
+
+test("workspaceLayoutForTab keeps food and buffs adjacent in loadout", async () => {
+    const { workspaceLayoutForTab } = await loadModule();
+
+    assert.deepEqual(
+        workspaceLayoutForTab("loadout", ["gear", "food", "buffs", "pets"]),
+        [
+            [["gear"]],
+            [["food"], ["buffs"]],
+            [["pets"]],
+        ],
+    );
+    assert.deepEqual(workspaceLayoutForTab("trade", ["trade"]), []);
+});
+
 test("patchTouchesCalculatorSectionLayout ignores non-layout signal patches", async () => {
     const { patchTouchesCalculatorSectionLayout } = await loadModule();
 

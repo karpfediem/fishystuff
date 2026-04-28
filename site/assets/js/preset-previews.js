@@ -32,6 +32,7 @@
     distribution: "chart-pie-2-fill",
     loot: "trending-up-fill",
     trade: "wheel-fill",
+    gear: "gear-fill",
     food: "dinner-fill",
     buffs: "arrows-up-fill",
     pets: "paw-fill",

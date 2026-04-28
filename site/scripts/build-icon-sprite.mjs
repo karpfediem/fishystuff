@@ -45,6 +45,7 @@ const iconSources = {
   "chart-pie-2-fill": { type: "mingcute", name: "chart-pie-2-fill" },
   "dinner-fill": { type: "mingcute", name: "dinner-fill" },
   "filter-2-fill": { type: "mingcute", name: "filter-2-fill" },
+  "gear-fill": { type: "mingcute", name: "sword-fill" },
   "adjustments-horizontal": { type: "mingcute", name: "settings-3-fill" },
   "information-circle": { type: "mingcute", name: "live-location-fill" },
   "inspect-fill": { type: "mingcute", name: "inspect-fill" },

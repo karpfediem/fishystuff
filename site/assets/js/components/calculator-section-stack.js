@@ -17,6 +17,17 @@ const LAYOUT_SIGNAL_KEYS = Object.freeze([
     "custom_layout",
     "custom_sections",
 ]);
+const FIXED_WORKSPACE_LAYOUTS = Object.freeze({
+    basics: Object.freeze([
+        Object.freeze([Object.freeze(["overview"])]),
+        Object.freeze([Object.freeze(["zone", "session"]), Object.freeze(["bite_time"])]),
+    ]),
+    loadout: Object.freeze([
+        Object.freeze([Object.freeze(["gear"])]),
+        Object.freeze([Object.freeze(["food"]), Object.freeze(["buffs"])]),
+        Object.freeze([Object.freeze(["pets"])]),
+    ]),
+});
 const SECTION_LAYOUT_META = Object.freeze({
     overview: { kind: "full", basis: "100%", minWidth: "100%", shareable: false },
     zone: { kind: "wide", basis: "34rem", minWidth: "min(100%, 34rem)", shareable: true },
@@ -161,7 +172,7 @@ function calculatorWorkspaceTab() {
     if (explicitWorkspaceTab) {
         return explicitWorkspaceTab;
     }
-    return "fishing";
+    return "basics";
 }
 
 function isObject(value) {
@@ -180,6 +191,11 @@ export function patchTouchesCalculatorSectionLayout(patch) {
         return true;
     }
     return LAYOUT_SIGNAL_KEYS.some((key) => Object.prototype.hasOwnProperty.call(uiPatch, key));
+}
+
+export function workspaceLayoutForTab(workspaceTab, availableSectionIds = []) {
+    const layout = FIXED_WORKSPACE_LAYOUTS[trimString(workspaceTab)];
+    return layout ? normalizeCustomLayout(layout, availableSectionIds, []) : [];
 }
 
 function patchCustomLayout(customLayout) {
@@ -382,10 +398,10 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
     }
 
     customLayout() {
-        if (calculatorWorkspaceTab() !== CUSTOM_WORKSPACE_TAB) {
-            return [];
-        }
         const availableSectionIds = this.availableSectionIds();
+        if (calculatorWorkspaceTab() !== CUSTOM_WORKSPACE_TAB) {
+            return workspaceLayoutForTab(calculatorWorkspaceTab(), availableSectionIds);
+        }
         return normalizeCustomLayout(
             calculatorUi().custom_layout,
             availableSectionIds,

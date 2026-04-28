@@ -55,12 +55,12 @@ calculator.server.action.drag_section_generic = 섹션 드래그
 calculator.server.toggle.active_fishing = 수동 낚시
 calculator.server.toggle.debug = 디버그
 
-calculator.server.workspace.fishing = 낚시
-calculator.server.workspace.timing = 시간
-calculator.server.workspace.loadout = 장비 & 버프
-calculator.server.workspace.loot_trade = 전리품 & 무역
+calculator.server.workspace.basics = 기본
+calculator.server.workspace.loadout = 장비
+calculator.server.workspace.loot = 전리품
+calculator.server.workspace.trade = 무역
 calculator.server.workspace.advanced = 고급
-calculator.server.workspace.custom = Custom
+calculator.server.workspace.custom = 사용자 지정
 
 calculator.server.search.zones = 지역 검색
 calculator.server.search.fishing_levels = 낚시 레벨 검색

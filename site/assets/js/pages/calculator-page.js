@@ -32,21 +32,21 @@
     "debug",
   ]);
   const CALCULATOR_WORKSPACE_TABS = new Set([
-    "fishing",
-    "timing",
+    "basics",
     "loadout",
-    "loot_trade",
+    "loot",
+    "trade",
     "advanced",
     "custom",
   ]);
-  const CALCULATOR_DEFAULT_WORKSPACE_TAB = "fishing";
+  const CALCULATOR_DEFAULT_WORKSPACE_TAB = "basics";
   const CALCULATOR_CUSTOM_WORKSPACE_TAB = "custom";
   const CALCULATOR_WORKSPACE_SECTIONS = Object.freeze({
-    fishing: Object.freeze(["mode", "zone"]),
-    timing: Object.freeze(["bite_time", "catch_time", "session"]),
+    basics: Object.freeze(["overview", "zone", "session", "bite_time"]),
     loadout: Object.freeze(["gear", "food", "buffs", "pets"]),
-    loot_trade: Object.freeze(["distribution", "loot", "trade"]),
-    advanced: Object.freeze(["overlay", "debug"]),
+    loot: Object.freeze(["distribution", "loot"]),
+    trade: Object.freeze(["trade"]),
+    advanced: Object.freeze(["mode", "catch_time", "overlay", "debug"]),
   });
   const CALCULATOR_PRESET_COLLECTION_KEY = "calculator-presets";
   const CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY = "calculator-layouts";
