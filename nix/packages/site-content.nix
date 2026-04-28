@@ -12,6 +12,10 @@
   woff2,
   zine,
   deploymentEnvironment,
+  frontendSourceDirty ? false,
+  frontendSourceRef ? "",
+  frontendSourceRevision ? "unknown",
+  frontendSourceShortRevision ? frontendSourceRevision,
   mapAssetCacheKey,
   publicApiBaseUrl,
   publicCdnBaseUrl,
@@ -91,8 +95,13 @@ stdenvNoCC.mkDerivation {
   FISHYSTUFF_PUBLIC_API_BASE_URL = publicApiBaseUrl;
   FISHYSTUFF_PUBLIC_CDN_BASE_URL = publicCdnBaseUrl;
   FISHYSTUFF_PUBLIC_TELEMETRY_BASE_URL = publicTelemetryBaseUrl;
+  FISHYSTUFF_FRONTEND_SOURCE_DIRTY = if frontendSourceDirty then "true" else "false";
+  FISHYSTUFF_FRONTEND_SOURCE_REF = frontendSourceRef;
+  FISHYSTUFF_FRONTEND_SOURCE_REVISION = frontendSourceRevision;
+  FISHYSTUFF_FRONTEND_SOURCE_SHORT_REVISION = frontendSourceShortRevision;
   FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY = mapAssetCacheKey;
   FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
+  FISHYSTUFF_RUNTIME_OTEL_SERVICE_VERSION = frontendSourceShortRevision;
   LD_LIBRARY_PATH = lib.makeLibraryPath [ stdenv.cc.cc.lib ];
 
   buildPhase = ''

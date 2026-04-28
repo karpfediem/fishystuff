@@ -2,6 +2,7 @@ import { test } from "bun:test";
 import assert from "node:assert/strict";
 
 import {
+  buildFrontendBuildInfo,
   buildRuntimeConfig,
   deriveSiblingBaseUrl,
   joinUrl,
@@ -15,6 +16,8 @@ test("runtime config defaults to the production sibling-host layout", () => {
   assert.equal(runtimeConfig.siteBaseUrl, "https://fishystuff.fish");
   assert.equal(runtimeConfig.apiBaseUrl, "https://api.fishystuff.fish");
   assert.equal(runtimeConfig.cdnBaseUrl, "https://cdn.fishystuff.fish");
+  assert.equal(runtimeConfig.build.version, "unknown");
+  assert.equal(runtimeConfig.build.deploymentEnvironment, "production");
   assert.equal(runtimeConfig.client.telemetry.defaultMode, "opt-in");
   assert.equal(
     runtimeConfig.tracing.exporterEndpoint,
@@ -29,6 +32,60 @@ test("runtime config defaults to the production sibling-host layout", () => {
     "https://telemetry.fishystuff.fish/v1/logs",
   );
   assert.equal(runtimeConfig.metrics.exportIntervalMs, 5000);
+});
+
+test("runtime config exposes frontend build metadata from explicit env", () => {
+  const runtimeConfig = buildRuntimeConfig({
+    FISHYSTUFF_FRONTEND_SOURCE_REVISION:
+      "0123456789abcdef0123456789abcdef01234567",
+    FISHYSTUFF_FRONTEND_SOURCE_SHORT_REVISION: "0123456789ab",
+    FISHYSTUFF_FRONTEND_SOURCE_DIRTY: "true",
+    FISHYSTUFF_FRONTEND_SOURCE_REF: "feature/version-stamp",
+    FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
+    FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY: "map-cache-key",
+    FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT: "beta",
+  });
+
+  assert.deepEqual(runtimeConfig.build, {
+    schema: "fishystuff.frontend-build.v1",
+    component: "fishystuff-site",
+    version: "0123456789ab-dirty",
+    deploymentEnvironment: "beta",
+    sourceRevision: "0123456789abcdef0123456789abcdef01234567",
+    sourceShortRevision: "0123456789ab",
+    sourceDirty: true,
+    sourceRef: "feature/version-stamp",
+    mapAssetCacheKey: "map-cache-key",
+    siteBaseUrl: "https://beta.fishystuff.fish",
+    apiBaseUrl: "https://api.beta.fishystuff.fish",
+    cdnBaseUrl: "https://cdn.beta.fishystuff.fish",
+  });
+  assert.equal(runtimeConfig.tracing.serviceVersion, "0123456789ab-dirty");
+});
+
+test("frontend build metadata can use an explicit version alias", () => {
+  const buildInfo = buildFrontendBuildInfo({
+    FISHYSTUFF_FRONTEND_VERSION: "site-20260428",
+    FISHYSTUFF_FRONTEND_SOURCE_REVISION:
+      "0123456789abcdef0123456789abcdef01234567",
+    FISHYSTUFF_FRONTEND_SOURCE_DIRTY: "false",
+    FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT: "local",
+  });
+
+  assert.equal(buildInfo.version, "site-20260428");
+  assert.equal(buildInfo.sourceShortRevision, "0123456789ab");
+  assert.equal(buildInfo.deploymentEnvironment, "local");
+});
+
+test("frontend build metadata does not duplicate a dirty revision suffix", () => {
+  const buildInfo = buildFrontendBuildInfo({
+    FISHYSTUFF_FRONTEND_SOURCE_REVISION:
+      "0123456789abcdef0123456789abcdef01234567-dirty",
+    FISHYSTUFF_FRONTEND_SOURCE_SHORT_REVISION: "012345-dirty",
+    FISHYSTUFF_FRONTEND_SOURCE_DIRTY: "true",
+  });
+
+  assert.equal(buildInfo.version, "012345-dirty");
 });
 
 test("runtime config derives telemetry default mode from explicit and legacy env toggles", () => {

@@ -104,6 +104,35 @@
             inherit api;
           };
           defaultDeploymentEnvironment = "beta";
+          shortenFrontendSourceRevision =
+            revision:
+            let
+              cleanRevision = pkgs.lib.removeSuffix "-dirty" revision;
+              dirtySuffix = pkgs.lib.optionalString (pkgs.lib.hasSuffix "-dirty" revision) "-dirty";
+            in
+            if cleanRevision == "unknown" then
+              "unknown"
+            else
+              "${builtins.substring 0 12 cleanRevision}${dirtySuffix}";
+          frontendSourceRevision =
+            if self ? rev then
+              self.rev
+            else if self ? dirtyRev then
+              self.dirtyRev
+            else
+              "unknown";
+          frontendSourceShortRevision =
+            if self ? shortRev then
+              self.shortRev
+            else if self ? dirtyRev then
+              shortenFrontendSourceRevision self.dirtyRev
+            else if self ? dirtyShortRev then
+              self.dirtyShortRev
+            else if frontendSourceRevision == "unknown" then
+              "unknown"
+            else
+              shortenFrontendSourceRevision frontendSourceRevision;
+          frontendSourceDirty = !(self ? rev) && ((self ? dirtyRev) || (self ? dirtyShortRev));
           deploymentBaseHost =
             deploymentEnvironment:
             if deploymentEnvironment == "production" then
@@ -125,7 +154,14 @@
           siteContentFor =
             deploymentEnvironment:
             pkgs.callPackage ./nix/packages/site-content.nix {
-              inherit siteSrc deploymentEnvironment;
+              inherit
+                deploymentEnvironment
+                frontendSourceDirty
+                frontendSourceRevision
+                frontendSourceShortRevision
+                siteSrc
+                ;
+              frontendSourceRef = "";
               zine = zineCli;
               mapAssetCacheKey = siteMapRuntimeCacheKey;
               publicSiteBaseUrl = deploymentBaseUrl "" deploymentEnvironment;
