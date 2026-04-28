@@ -366,6 +366,15 @@ deployment_prod_hostname() {
   esac
 }
 
+deployment_dolt_remote_branch() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta | production) printf '%s' "$(deployment_env_value "$deployment" "dolt_remote_branch")" ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
 deployment_tunnel_target() {
   local deployment
   local service="${2-}"

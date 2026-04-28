@@ -14,7 +14,7 @@ class host($st) {
 		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
@@ -48,6 +48,7 @@ class host($st) {
 			dolt_cfg_dir => $manifest->dolt->cfg_dir || "/var/lib/fishystuff/dolt/.doltcfg",
 			dolt_database_name => $manifest->dolt->database_name || "fishystuff",
 			dolt_remote_url => $manifest->dolt->remote_url || "fishystuff/fishystuff",
+			dolt_remote_branch => $manifest->dolt->remote_branch || "",
 			dolt_clone_depth => $manifest->dolt->clone_depth || "1",
 			dolt_volume_device => if ($manifest->dolt->volume_device || "__auto__") == "__auto__" { $host_layout.dolt_volume_device } else { $manifest->dolt->volume_device || "" },
 			dolt_volume_fs_type => $manifest->dolt->volume_fs_type || "ext4",
@@ -85,7 +86,7 @@ class acme_control($st) {
 		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};

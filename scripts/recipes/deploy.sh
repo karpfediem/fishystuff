@@ -104,6 +104,7 @@ backend_args=(
   "api_base_url=$(deployment_manifest_public_url "$deployment" "api")"
   "cdn_base_url=$(deployment_manifest_public_url "$deployment" "cdn")"
   "telemetry_base_url=$(deployment_manifest_public_url "$deployment" "telemetry")"
+  "dolt_remote_branch=$(deployment_dolt_remote_branch "$deployment")"
   "tls_enabled=$(deployment_tls_enabled "$deployment")"
   "tls_acme_email=$(deployment_tls_acme_email "$deployment")"
   "tls_challenge=$tls_challenge"

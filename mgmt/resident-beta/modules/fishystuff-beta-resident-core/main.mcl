@@ -28,7 +28,7 @@ class api_db_host($st) {
 		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};
@@ -93,6 +93,7 @@ class api_db_host($st) {
 	$cdn_tls_domain str = $tls_domains[2]
 	$dolt_data_dir str = $st->dolt_data_dir || "/var/lib/fishystuff/dolt"
 	$dolt_database_name str = $st->dolt_database_name || "fishystuff"
+	$dolt_remote_branch str = $manifest->dolt->remote_branch || ""
 	$dolt_volume_device str = $st->dolt_volume_device || ""
 	$dolt_volume_fs_type str = $st->dolt_volume_fs_type || "ext4"
 	$dolt_port str = $st->dolt_port || "3306"
@@ -121,6 +122,7 @@ class api_db_host($st) {
 		telemetry_base_url => $telemetry_base_url,
 		telemetry_traces_endpoint => $telemetry_traces_endpoint,
 		deployment_environment => $deployment_environment,
+		dolt_remote_branch => $dolt_remote_branch,
 	})
 
 	include fishystuff_beta_access.catalog(struct {
@@ -353,7 +355,7 @@ class telemetry_host($st) {
 		host_hints struct{site_public_ipv4 str; telemetry_public_ipv4 str};
 		deployment_environment str;
 		startup_mode str;
-		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; clone_depth str; volume_device str; volume_fs_type str; port str};
+		dolt struct{data_dir str; cfg_dir str; database_name str; remote_url str; remote_branch str; clone_depth str; volume_device str; volume_fs_type str; port str};
 		content_roots struct{site_root_dir str; cdn_root_dir str};
 		content map{str: struct{store_path str; drv_path str; gcroot_path str}};
 		tls struct{enabled bool; certificate_name str; acme_email str; challenge str; dns_provider str; dns_env map{str: str}; directory_url str; domains []str};

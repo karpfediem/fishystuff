@@ -34,6 +34,11 @@ let
   };
   remoteBranchFunction = ''
     resolve_remote_branch() {
+      local explicit_remote_branch="''${DOLT_REMOTE_BRANCH:-}"
+      if [ -n "$explicit_remote_branch" ]; then
+        printf '%s' "$explicit_remote_branch"
+        return
+      fi
       local deployment_environment="''${FISHYSTUFF_DEPLOYMENT_ENVIRONMENT:-beta}"
       deployment_environment="$(printf '%s' "$deployment_environment" | tr '[:upper:]' '[:lower:]')"
       if [ "$deployment_environment" = "production" ]; then

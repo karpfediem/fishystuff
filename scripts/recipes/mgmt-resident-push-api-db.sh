@@ -20,6 +20,7 @@ api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
 dolt_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/dolt-current"
 mgmt_modules_dir="${FISHYSTUFF_MGMT_MODULES_DIR:-/home/carp/code/mgmt-fishystuff-beta/modules}"
 deployment_environment="beta"
+dolt_remote_branch=""
 tls_enabled="false"
 tls_certificate_name=""
 tls_acme_email="acme@karpfen.dev"
@@ -46,6 +47,7 @@ for arg in "${overrides[@]}"; do
     dolt_gcroot=*) dolt_gcroot="${arg#dolt_gcroot=}" ;;
     mgmt_modules_dir=*) mgmt_modules_dir="${arg#mgmt_modules_dir=}" ;;
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
+    dolt_remote_branch=*) dolt_remote_branch="${arg#dolt_remote_branch=}" ;;
     tls_enabled=*) tls_enabled="${arg#tls_enabled=}" ;;
     tls_certificate_name=*) tls_certificate_name="${arg#tls_certificate_name=}" ;;
     tls_acme_email=*) tls_acme_email="${arg#tls_acme_email=}" ;;
@@ -106,6 +108,7 @@ jq -n \
   --arg dolt_cfg_dir "/var/lib/fishystuff/dolt/.doltcfg" \
   --arg dolt_database_name "fishystuff" \
   --arg dolt_remote_url "fishystuff/fishystuff" \
+  --arg dolt_remote_branch "$dolt_remote_branch" \
   --arg dolt_clone_depth "1" \
   --arg dolt_volume_device "" \
   --arg dolt_volume_fs_type "ext4" \
@@ -156,6 +159,7 @@ jq -n \
       cfg_dir: $dolt_cfg_dir,
       database_name: $dolt_database_name,
       remote_url: $dolt_remote_url,
+      remote_branch: $dolt_remote_branch,
       clone_depth: $dolt_clone_depth,
       volume_device: $dolt_volume_device,
       volume_fs_type: $dolt_volume_fs_type,

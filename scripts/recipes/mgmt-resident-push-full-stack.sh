@@ -33,6 +33,7 @@ mgmt_modules_dir="${FISHYSTUFF_MGMT_MODULES_DIR:-/home/carp/code/mgmt-fishystuff
 services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana"
 deployment_environment="beta"
 deployment_marker=""
+dolt_remote_branch=""
 api_bundle_override=""
 dolt_bundle_override=""
 edge_bundle_override=""
@@ -93,6 +94,7 @@ for arg in "${overrides[@]}"; do
     services_csv=*) services_csv="${arg#services_csv=}" ;;
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
     deployment_marker=*) deployment_marker="${arg#deployment_marker=}" ;;
+    dolt_remote_branch=*) dolt_remote_branch="${arg#dolt_remote_branch=}" ;;
     api_bundle=*) api_bundle_override="${arg#api_bundle=}" ;;
     dolt_bundle=*) dolt_bundle_override="${arg#dolt_bundle=}" ;;
     edge_bundle=*) edge_bundle_override="${arg#edge_bundle=}" ;;
@@ -526,6 +528,7 @@ jq -n \
   --arg dolt_cfg_dir "/var/lib/fishystuff/dolt/.doltcfg" \
   --arg dolt_database_name "fishystuff" \
   --arg dolt_remote_url "fishystuff/fishystuff" \
+  --arg dolt_remote_branch "$dolt_remote_branch" \
   --arg dolt_clone_depth "1" \
   --arg dolt_volume_device "" \
   --arg dolt_volume_fs_type "ext4" \
@@ -588,6 +591,7 @@ jq -n \
       cfg_dir: $dolt_cfg_dir,
       database_name: $dolt_database_name,
       remote_url: $dolt_remote_url,
+      remote_branch: $dolt_remote_branch,
       clone_depth: $dolt_clone_depth,
       volume_device: $dolt_volume_device,
       volume_fs_type: $dolt_volume_fs_type,
