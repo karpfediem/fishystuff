@@ -19,6 +19,10 @@ status deployment *services:
 smoke deployment:
   bash scripts/recipes/smoke.sh "{{deployment}}"
 
+# Smoke-test a remote deployment against an explicit origin IP without DNS cutover.
+origin-smoke deployment origin_ipv4="":
+  bash scripts/recipes/origin-smoke.sh "{{deployment}}" "{{origin_ipv4}}"
+
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
     dolt clone fishystuff/fishystuff .
