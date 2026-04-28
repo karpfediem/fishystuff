@@ -9919,7 +9919,12 @@ fn render_calculator_app(
         lang_param(&data.api_lang),
         locale_param(data.lang)
     );
-    let zone_selected_content = render_searchable_dropdown_text_content(&derived.zone_name);
+    let zone_selected_content = data
+        .zones
+        .iter()
+        .find(|zone| zone.rgb_key.0 == signals.zone)
+        .map(render_zone_dropdown_content)
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(&derived.zone_name));
     let zone_results = render_zone_search_results(
         data.lang,
         "calculator-zone-search-results",
@@ -11327,6 +11332,21 @@ fn render_searchable_dropdown_text_content(label: &str) -> String {
     format!(
         "<span class=\"truncate font-medium\">{}</span>",
         escape_html(label)
+    )
+}
+
+fn render_zone_rgb_indicator(zone: &ZoneEntry) -> String {
+    format!(
+        "<span class=\"fishy-zone-rgb-indicator\" aria-hidden=\"true\" style=\"--fishy-zone-rgb: {} {} {};\"></span>",
+        zone.rgb.r, zone.rgb.g, zone.rgb.b,
+    )
+}
+
+fn render_zone_dropdown_content(zone: &ZoneEntry) -> String {
+    format!(
+        "<span class=\"fishy-zone-row max-w-full\">{}<span class=\"fishy-zone-label truncate font-medium\">{}</span></span>",
+        render_zone_rgb_indicator(zone),
+        escape_html(zone_name(zone)),
     )
 }
 
@@ -13995,7 +14015,7 @@ fn render_zone_search_results(
             let label = zone_name(zone);
             let is_selected = zone.rgb_key.0 == current_zone;
             let active_class = if is_selected { " menu-active" } else { "" };
-            let option_content = render_searchable_dropdown_text_content(label);
+            let option_content = render_zone_dropdown_content(zone);
             let selected_badge = if is_selected {
                 format!(
                     "<span class=\"badge badge-soft badge-primary badge-xs\">{}</span>",
@@ -15136,6 +15156,8 @@ mod tests {
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #calculator-app"));
         assert!(text.contains("<div id=\"calculator-app\""));
+        assert!(text.contains("fishy-zone-rgb-indicator"));
+        assert!(text.contains("--fishy-zone-rgb: 240 74 74"));
         assert!(text.contains("placeholder=\"Search zones\""));
         assert!(text.contains("<fishy-searchable-dropdown"));
         assert!(text.contains("input-id=\"calculator-zone-value\""));
@@ -16049,6 +16071,8 @@ mod tests {
         assert!(text.contains("data-searchable-dropdown-option"));
         assert!(text.contains("data-role=\"option-content\""));
         assert!(text.contains("data-value=\"240,74,74\""));
+        assert!(text.contains("fishy-zone-rgb-indicator"));
+        assert!(text.contains("--fishy-zone-rgb: 240 74 74"));
         assert!(text.contains("Velia Beach"));
         assert!(text.contains("Selected"));
         assert!(!text.contains("data-next-offset"));
