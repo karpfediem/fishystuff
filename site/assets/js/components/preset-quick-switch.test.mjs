@@ -79,7 +79,7 @@ test("normalizePresetQuickSwitchEntry keeps future preset types data-driven", ()
 test("buildPresetQuickSwitchRow shows modified current state linked to its origin", () => {
   const helper = fakeHelper({
     adapters: {
-      "calculator-layouts": { titleFallback: "Layout presets" },
+      "calculator-layouts": { titleFallback: "Workspace presets" },
     },
     fixedPresets: {
       "calculator-layouts": [{ id: "default", name: "Default", payload: { layout: "default" } }],
@@ -99,7 +99,7 @@ test("buildPresetQuickSwitchRow shows modified current state linked to its origi
 
   const row = buildPresetQuickSwitchRow(
     helper,
-    { collectionKey: "calculator-layouts", labelFallback: "Layout" },
+    { collectionKey: "calculator-layouts", labelFallback: "Workspace" },
     translate,
   );
 

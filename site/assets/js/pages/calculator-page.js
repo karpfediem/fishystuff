@@ -66,8 +66,8 @@
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
     copyShareToken: 0,
-    clearToken: 0,
-    resetLayoutToken: 0,
+    discardCalculatorToken: 0,
+    discardLayoutToken: 0,
   });
   const DEFAULT_CALCULATOR_LOCALE = "en-US";
   const BREAKDOWN_SECTION_KEYS = Object.freeze(["inputs", "composition"]);
@@ -963,6 +963,7 @@
       titleFallback: "Calculator presets",
       openLabelKey: "calculator.presets.open",
       openLabelFallback: "Calculator Presets",
+      managerIconAlias: "settings-6-fill",
       fileBaseName: "fishystuff-calculator-presets",
       defaultPresetName(index) {
         return calculatorText("presets.default_name", {
@@ -1023,8 +1024,9 @@
     }
     helper.registerCollectionAdapter(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
       titleKey: "calculator.layout_presets.title",
-      titleFallback: "Layout presets",
-      openLabelFallback: "Layout Manager",
+      titleFallback: "Workspace presets",
+      openLabelKey: "calculator.layout_presets.open",
+      openLabelFallback: "Workspace Presets",
       fileBaseName: "fishystuff-calculator-layouts",
       defaultPresetName(index) {
         return calculatorText("layout_presets.default_name", {
@@ -1089,6 +1091,45 @@
     const payload = calculatorPresetPayload(signals);
     return helper.trackCurrentPayload(CALCULATOR_PRESET_COLLECTION_KEY, {
       payload,
+    });
+  }
+
+  function presetCollectionHasCurrent(userPresetsSnapshot, collectionKey) {
+    const key = String(collectionKey ?? "").trim();
+    if (!key) {
+      return false;
+    }
+    const collections = userPresetsSnapshot?.collections;
+    const collection = collections && typeof collections === "object" ? collections[key] : null;
+    return Boolean(collection?.hasCurrent && collection?.currentOrigin?.kind !== "none");
+  }
+
+  function presetCollectionHasLiveCurrent(collectionKey) {
+    const helper = sharedUserPresets();
+    const current = helper?.current?.(collectionKey);
+    return Boolean(current?.origin?.kind && current.origin.kind !== "none");
+  }
+
+  function discardPresetCurrent(collectionKey) {
+    const helper = sharedUserPresets();
+    if (!helper || typeof helper.discardCurrent !== "function") {
+      return null;
+    }
+    if (!presetCollectionHasLiveCurrent(collectionKey)) {
+      return null;
+    }
+    const result = helper.discardCurrent(collectionKey);
+    return result?.current ? null : result;
+  }
+
+  function presetText(key, vars = {}) {
+    const helper = languageHelper();
+    const normalizedKey = String(key ?? "").trim();
+    if (!helper || !normalizedKey) {
+      return normalizedKey;
+    }
+    return helper.t(normalizedKey, vars, {
+      locale: calculatorSurfaceLanguage().locale,
     });
   }
 
@@ -1389,10 +1430,6 @@
       + "?preset="
       + LZString.compressToEncodedURIComponent(payload)
     );
-  };
-
-  const clearCalculatorDataStorage = () => {
-    localStorage.removeItem(CALCULATOR_DATA_STORAGE_KEY);
   };
 
   if (presetQueryParam) {
@@ -1735,32 +1772,6 @@
     });
   }
 
-  function clearCalculator(signals) {
-    const current = signals && typeof signals === "object"
-      ? signals
-      : signalStore.signalObject();
-    const persistedUi = current && typeof current === "object"
-      ? persistedCalculatorUiSignals(current)
-      : null;
-    clearCalculatorDataStorage();
-    const defaults = current && typeof current === "object"
-      ? current._defaults
-      : null;
-    if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) {
-      if (persistedUi) {
-        localStorage.setItem(CALCULATOR_UI_STORAGE_KEY, JSON.stringify(persistedUi));
-      }
-      return;
-    }
-    Object.assign(current, cloneCalculatorSignals(defaults));
-    if (persistedUi) {
-      current._calculator_ui = cloneCalculatorSignals(persistedUi);
-      localStorage.setItem(CALCULATOR_UI_STORAGE_KEY, JSON.stringify(persistedUi));
-    }
-    syncSignalsFromSharedUserOverlays(current);
-    trackCalculatorPresetCurrent(current);
-  }
-
   function syncCalculatorActions(signals) {
     const current = signals && typeof signals === "object"
       ? signals
@@ -1781,14 +1792,15 @@
             success: calculatorText("toast.share_copied"),
           });
         },
-        clearToken: () => {
-          clearCalculator(current);
-          window.__fishystuffToast.info(calculatorText("toast.cleared"));
+        discardCalculatorToken: () => {
+          if (discardPresetCurrent(CALCULATOR_PRESET_COLLECTION_KEY)) {
+            window.__fishystuffToast.info(presetText("presets.toast.discarded"));
+          }
         },
-        resetLayoutToken: () => {
-          current._calculator_ui = resetCalculatorLayoutInPlace(current._calculator_ui);
-          trackCalculatorLayoutPresetCurrent(current);
-          window.__fishystuffToast.info(calculatorText("toast.layout_reset"));
+        discardLayoutToken: () => {
+          if (discardPresetCurrent(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY)) {
+            window.__fishystuffToast.info(presetText("presets.toast.discarded"));
+          }
         },
       },
     );
@@ -1808,6 +1820,7 @@
     signalStore.connect(signals);
     bindCalculatorPresetAdapter();
     bindCalculatorLayoutPresetAdapter();
+    sharedUserPresets()?.bindDatastar?.(signals);
     bindPersistListener();
     bindEvalPatchListener();
     bindActionListener();
@@ -2815,6 +2828,7 @@
     layoutPresetTitleIconAlias(payload) {
       return presetPreviewTitleIconAlias(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, payload);
     },
+    presetCollectionHasCurrent,
     applyLayoutPreset: applyCalculatorLayoutPreset,
     applyLayoutPresetInPlace: applyCalculatorLayoutPresetInPlace,
     toggleCustomSection,

@@ -63,3 +63,10 @@ presets.toast.applied = Applied "{$name}".
 presets.error.import = Preset import failed.
 presets.error.save = Preset save failed.
 presets.error.capture = Current preset state is unavailable.
+
+presets.quick_switch.layout = Workspace
+presets.quick_switch.calculator = Calculator
+presets.quick_switch.map = Map
+presets.quick_switch.empty = No presets available.
+presets.quick_switch.search = Search presets...
+presets.quick_switch.not_selected = Not selected

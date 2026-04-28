@@ -95,8 +95,8 @@ function defaultCalculatorActionState(overrides = {}) {
   return {
     copyUrlToken: 0,
     copyShareToken: 0,
-    clearToken: 0,
-    resetLayoutToken: 0,
+    discardCalculatorToken: 0,
+    discardLayoutToken: 0,
     ...cloneTestValue(overrides),
   };
 }
@@ -524,7 +524,11 @@ test("calculator restore leaves initial shell state intact when storage is empty
 
   env.window.__fishystuffCalculator.restore(signals);
 
-  assert.deepEqual(JSON.parse(JSON.stringify(signals)), {
+  assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, false);
+  assert.equal(signals._user_presets.collections["calculator-layouts"].hasCurrent, false);
+  const comparableSignals = JSON.parse(JSON.stringify(signals));
+  delete comparableSignals._user_presets;
+  assert.deepEqual(comparableSignals, {
     _loading: true,
     overlay: {
       zones: {},
@@ -1413,6 +1417,20 @@ test("calculator layout preset title icon follows the first custom section", () 
   );
 });
 
+test("calculator preset adapters expose workspace labels and preset manager icon", () => {
+  const env = createContext();
+  env.window.__fishystuffCalculator.restore(defaultSignals());
+
+  assert.equal(
+    env.window.__fishystuffUserPresets.collectionAdapter("calculator-presets").managerIconAlias,
+    "settings-6-fill",
+  );
+  assert.equal(
+    env.window.__fishystuffUserPresets.collectionAdapter("calculator-layouts").openLabelFallback,
+    "Workspace Presets",
+  );
+});
+
 test("calculator API URLs keep locale and apiLang separate", () => {
   const korean = createContext({}, { locale: "ko-KR", lang: "en-US" });
   assert.equal(korean.window.__fishystuffCalculator.lang, "en");
@@ -1434,7 +1452,7 @@ test("calculator eval filter ignores internal signal branches", () => {
   const exclude = env.window.__fishystuffCalculator.evalSignalPatchFilter().exclude;
 
   assert.equal(exclude.test("_user_presets.version"), true);
-  assert.equal(exclude.test("_calculator_actions.clearToken"), true);
+  assert.equal(exclude.test("_calculator_actions.discardCalculatorToken"), true);
   assert.equal(exclude.test("_calculator_ui.custom_sections.0"), true);
   assert.equal(exclude.test("_food_slots.0"), true);
   assert.equal(exclude.test("food.0"), false);
@@ -1524,80 +1542,31 @@ test("calculator restore prefers shared overlay storage for prices and zone over
   });
 });
 
-test("calculator action listener handles copy and clear tokens once without clearing shared overlays", () => {
-  const env = createContext({
-    "fishystuff.user-overlays.v2": JSON.stringify({
-      overlay: {
-        zones: {
-          "240,74,74": {
-            groups: {
-              4: {
-                rawRatePercent: 82,
-              },
-            },
-            items: {},
-          },
-        },
-      },
-      priceOverrides: {
-        "8473": {
-          basePrice: 8800000,
-        },
-      },
-    }),
-  });
+test("calculator action listener handles copy and discard tokens once", () => {
+  const env = createContext();
   const signals = defaultSignals();
-  Object.assign(signals, {
-    active: true,
-    food: ["item:9359"],
-    _calculator_actions: defaultCalculatorActionState({
-      copyUrlToken: 1,
-      copyShareToken: 1,
-      clearToken: 1,
-    }),
+  env.window.__fishystuffCalculator.restore(signals);
+  signals.active = true;
+  signals.food = ["item:9359"];
+  env.window.__fishystuffUserPresets.trackCurrentPayload("calculator-presets", {
+    payload: env.window.__fishystuffCalculator.calculatorPresetPayload(signals),
+    origin: { kind: "fixed", id: "default" },
+  });
+  assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, true);
+  signals._calculator_actions = defaultCalculatorActionState({
+    copyUrlToken: 1,
+    copyShareToken: 1,
+    discardCalculatorToken: 1,
   });
 
-  env.localStorage.setItem(
-    "fishystuff.calculator.data.v1",
-    JSON.stringify({ food: ["item:9359"] }),
-  );
-  env.localStorage.setItem(
-    "fishystuff.calculator.ui.v1",
-    JSON.stringify(defaultCalculatorUiState({
-    })),
-  );
-  env.window.__fishystuffCalculator.restore(signals);
-  signals._calculator_ui = {
-    workspace_tab: "basics",
-    distribution_tab: "loot_flow",
-    custom_layout: [[["overview"], ["distribution"]]],
-    custom_sections: ["overview", "distribution"],
-  };
-  signals.overlay = {
-    zones: {
-      stale: {
-        groups: {
-          2: {
-            rawRatePercent: 5,
-          },
-        },
-        items: {},
-      },
-    },
-  };
-  signals.priceOverrides = {
-    "9999": {
-      basePrice: 1,
-    },
-  };
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
       _calculator_actions: {
         copyUrlToken: 1,
         copyShareToken: 1,
-        clearToken: 1,
-        resetLayoutToken: 0,
+        discardCalculatorToken: 1,
+        discardLayoutToken: 0,
       },
     },
   });
@@ -1607,8 +1576,8 @@ test("calculator action listener handles copy and clear tokens once without clea
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
-        clearToken: 0,
-        resetLayoutToken: 0,
+        discardCalculatorToken: 0,
+        discardLayoutToken: 0,
       },
     },
   });
@@ -1621,72 +1590,14 @@ test("calculator action listener handles copy and clear tokens once without clea
   assert.match(env.toastCalls[1].text, /FishyStuff Calculator Preset/);
   assert.equal(env.toastCalls[1].options.success, calculatorMessage("toast.share_copied"));
   assert.equal(env.toastCalls[2].type, "info");
-  assert.equal(env.toastCalls[2].message, calculatorMessage("toast.cleared"));
+  assert.equal(env.toastCalls[2].message, translateMessage("presets.toast.discarded"));
   assert.deepEqual(Array.from(signals.food), []);
   assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(env.window.__fishystuffUserPresets.current("calculator-presets")?.payload?.priceOverrides)),
-    {
-      "8473": {
-        basePrice: 8800000,
-      },
-    },
-  );
-  assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
-  assert.deepEqual(
-    JSON.parse(env.localStorage.getItem("fishystuff.calculator.ui.v1")),
-    {
-      workspace_tab: "basics",
-      distribution_tab: "loot_flow",
-      custom_layout: [[["overview"], ["distribution"]]],
-      custom_sections: ["overview", "distribution"],
-    },
-  );
-  assert.deepEqual(signals._calculator_ui, {
-    workspace_tab: "basics",
-    distribution_tab: "loot_flow",
-    custom_layout: [[["overview"], ["distribution"]]],
-    custom_sections: ["overview", "distribution"],
-  });
-  assert.deepEqual(JSON.parse(JSON.stringify(signals.overlay)), {
-    zones: {
-      "240,74,74": {
-        groups: {
-          4: {
-            rawRatePercent: 82,
-          },
-        },
-        items: {},
-      },
-    },
-  });
-  assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
-    "8473": {
-      basePrice: 8800000,
-    },
-  });
-  assert.deepEqual(env.window.__fishystuffUserOverlays.snapshot(), {
-    overlay: {
-      zones: {
-        "240,74,74": {
-          groups: {
-            4: {
-              rawRatePercent: 82,
-            },
-          },
-          items: {},
-        },
-      },
-    },
-    priceOverrides: {
-      "8473": {
-        basePrice: 8800000,
-      },
-    },
-  });
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, false);
 });
 
-test("calculator action listener clears calculator preset current when defaults are fully restored", () => {
+test("calculator action listener discards calculator preset current when defaults are fully restored", () => {
   const env = createContext();
   const signals = defaultSignals();
 
@@ -1699,7 +1610,7 @@ test("calculator action listener clears calculator preset current when defaults 
   });
   assert.notEqual(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
   signals._calculator_actions = defaultCalculatorActionState({
-    clearToken: 1,
+    discardCalculatorToken: 1,
   });
 
   env.document.dispatchEvent({
@@ -1708,8 +1619,8 @@ test("calculator action listener clears calculator preset current when defaults 
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
-        clearToken: 1,
-        resetLayoutToken: 0,
+        discardCalculatorToken: 1,
+        discardLayoutToken: 0,
       },
     },
   });
@@ -1720,7 +1631,7 @@ test("calculator action listener clears calculator preset current when defaults 
   assert.deepEqual(Array.from(signals.food), []);
 });
 
-test("calculator action listener resets only layout state", () => {
+test("calculator action listener discards only layout preset modifications", () => {
   const env = createContext();
   const signals = defaultSignals();
 
@@ -1737,7 +1648,7 @@ test("calculator action listener resets only layout state", () => {
   });
   assert.notEqual(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
   signals._calculator_actions = defaultCalculatorActionState({
-    resetLayoutToken: 1,
+    discardLayoutToken: 1,
   });
 
   env.document.dispatchEvent({
@@ -1746,8 +1657,8 @@ test("calculator action listener resets only layout state", () => {
       _calculator_actions: {
         copyUrlToken: 0,
         copyShareToken: 0,
-        clearToken: 0,
-        resetLayoutToken: 1,
+        discardCalculatorToken: 0,
+        discardLayoutToken: 1,
       },
     },
   });
@@ -1755,7 +1666,7 @@ test("calculator action listener resets only layout state", () => {
 
   assert.equal(env.toastCalls.length, 1);
   assert.equal(env.toastCalls[0].type, "info");
-  assert.equal(env.toastCalls[0].message, calculatorMessage("toast.layout_reset"));
+  assert.equal(env.toastCalls[0].message, translateMessage("presets.toast.discarded"));
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
     workspace_tab: "basics",
     distribution_tab: "target_fish",

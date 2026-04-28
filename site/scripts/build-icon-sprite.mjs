@@ -79,6 +79,7 @@ const iconSources = {
   "eye-slash": { type: "mingcute", name: "eye-close-fill" },
   "drag-handle": { type: "mingcute", name: "move-fill" },
   "settings-1": { type: "mingcute", name: "settings-1-fill" },
+  "settings-6-fill": { type: "mingcute", name: "settings-6-fill" },
   "user-4": { type: "mingcute", name: "user-4-fill" },
   "broom-fill": { type: "mingcute", name: "broom-fill" },
   stopwatch: { type: "mingcute", name: "stopwatch-2-fill" },

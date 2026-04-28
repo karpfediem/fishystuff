@@ -53,6 +53,14 @@ function iconMarkup(alias, sizeClass = "size-5") {
   return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${iconSpriteUrl()}#fishy-${alias}"></use></svg>`;
 }
 
+function setIconElementAlias(element, alias) {
+  const normalizedAlias = trimString(alias) || "layout-fill";
+  const use = element?.querySelector?.("use");
+  if (use) {
+    use.setAttribute("href", `${iconSpriteUrl()}#fishy-${normalizedAlias}`);
+  }
+}
+
 function createIconElement(alias, className = "") {
   const normalizedAlias = trimString(alias);
   if (!normalizedAlias) {
@@ -257,6 +265,11 @@ export class FishyPresetManager extends HTMLElementBase {
     );
   }
 
+  managerIconAlias() {
+    const adapter = this.adapter();
+    return trimString(adapter?.managerIconAlias || adapter?.iconAlias) || "layout-fill";
+  }
+
   defaultName(index) {
     const adapter = this.adapter();
     if (adapter && typeof adapter.defaultPresetName === "function") {
@@ -303,7 +316,7 @@ export class FishyPresetManager extends HTMLElementBase {
           data-role="open"
           data-on:click='window.__fishystuffPresetManager.refresh(el); ${openExpression} = true'
         >
-          ${iconMarkup("layout-fill", "size-5")}
+          <span data-role="open-icon">${iconMarkup("layout-fill", "size-5")}</span>
           <span data-role="open-label"></span>
         </button>
         <input
@@ -322,7 +335,7 @@ export class FishyPresetManager extends HTMLElementBase {
           <div class="modal-box w-11/12 max-w-6xl p-0">
             <div class="flex items-center justify-between gap-4 border-b border-base-300/70 px-6 py-4">
               <div class="inline-flex min-w-0 items-center gap-3">
-                ${iconMarkup("layout-fill", "size-5")}
+                <span data-role="manager-icon">${iconMarkup("layout-fill", "size-5")}</span>
                 <h3 class="text-lg font-semibold text-base-content" data-role="manager-title"></h3>
               </div>
               <form method="dialog" class="shrink-0">
@@ -721,7 +734,10 @@ export class FishyPresetManager extends HTMLElementBase {
     const shouldHighlightCopy = Boolean(currentItem && !linkedSavedPreset);
     const canSaveCurrent = Boolean(currentItem && linkedSavedPreset);
     const canSaveSelectedSnapshot = Boolean(!currentItem && selectedSavedPreset && adapter?.captureOnSave === true);
+    const managerIconAlias = this.managerIconAlias();
 
+    setIconElementAlias(this.element("open-icon"), managerIconAlias);
+    setIconElementAlias(this.element("manager-icon"), managerIconAlias);
     setElementText(this.element("open-label"), this.openLabelText());
     setElementText(this.element("manager-title"), this.titleText());
     setElementText(

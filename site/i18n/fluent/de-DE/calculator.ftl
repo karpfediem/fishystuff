@@ -26,13 +26,17 @@ calculator.share.link = [FishyStuff-Rechner-Preset | {$lead}{$item_drr} Gegensta
 
 calculator.toast.preset_url_copied = Preset-URL kopiert.
 calculator.toast.share_copied = Freigabetext kopiert.
-calculator.toast.cleared = Rechner zurückgesetzt.
-calculator.toast.layout_reset = Layout zurückgesetzt.
 
-calculator.layout_presets.title = Layout-Vorlagen
-calculator.layout_presets.current = Aktuelles Layout
+calculator.layout_presets.title = Arbeitsbereich-Vorlagen
+calculator.layout_presets.open = Arbeitsbereich-Vorlagen
+calculator.layout_presets.current = Aktueller Arbeitsbereich
 calculator.layout_presets.default = Standard
-calculator.layout_presets.default_name = Layout {$index}
+calculator.layout_presets.default_name = Arbeitsbereich {$index}
+
+calculator.presets.title = Rechner-Vorlagen
+calculator.presets.open = Rechner-Vorlagen
+calculator.presets.default = Standard-Rechner
+calculator.presets.default_name = Rechner {$index}
 
 calculator.title.casts_average = Durchschnittliche Würfe ({$timespan})
 calculator.title.durability_loss_average = Durchschnittlicher Haltbarkeitsverlust ({$timespan})
@@ -151,8 +155,7 @@ calculator.server.result.added = Hinzugefügt
 calculator.server.action.remove = {$label} entfernen
 calculator.server.action.copy_url = URL kopieren
 calculator.server.action.copy_share = Freigabe kopieren
-calculator.server.action.reset_layout = Layout zurücksetzen
-calculator.server.action.clear = Leeren
+calculator.server.action.discard = Verwerfen
 calculator.server.action.remove_custom_card = {$label} aus Custom entfernen
 calculator.server.action.drag_section = {$label} ziehen
 calculator.server.action.drag_section_generic = Abschnitt ziehen
@@ -192,7 +195,7 @@ calculator.server.section.bite_time = Bisszeit
 calculator.server.section.catch_time = Fangzeit
 calculator.server.search.pets = Haustiere suchen
 calculator.server.section.session = Sitzung
-calculator.server.section.gear = Ausrüstung
+calculator.server.section.gear = Ausrüstungsset
 calculator.server.section.pets = Haustiere
 calculator.server.section.overlay_proposal = Overlay-Vorschlag
 calculator.server.section.distribution = Verteilung

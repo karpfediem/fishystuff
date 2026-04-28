@@ -1806,7 +1806,7 @@ fn calculator_section_icon_alias(section_id: &str) -> Option<&'static str> {
 
 fn calculator_workspace_icon_alias(workspace_id: &str) -> Option<&'static str> {
     match workspace_id {
-        "basics" => Some("time-fill"),
+        "basics" => Some("information-fill"),
         "loadout" => Some("gear-fill"),
         "loot" => Some("trending-up-fill"),
         "trade" => Some("wheel-fill"),
@@ -9968,8 +9968,21 @@ fn render_calculator_app(
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-4">
-            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-end">
-                <div class="flex flex-wrap gap-2">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div class="flex flex-wrap gap-2" data-calculator-action-group="main">
+                    <fishy-preset-manager class="fishy-calculator-presets"
+                                          data-preset-collection="calculator-presets"></fishy-preset-manager>
+                    <button class="btn"
+                            data-class:btn-warning="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')"
+                            data-class:btn-outline="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')"
+                            data-class:btn-disabled="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')"
+                            data-attr:aria-disabled="(!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets')).toString()"
+                            data-on:click="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-presets') && ($_calculator_actions.discardCalculatorToken = (($_calculator_actions && $_calculator_actions.discardCalculatorToken) || 0) + 1)">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
+                        __TEXT_DISCARD__
+                    </button>
+                </div>
+                <div class="flex flex-wrap gap-2 lg:justify-end" data-calculator-action-group="share">
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-link"></use></svg>
@@ -9980,20 +9993,6 @@ fn render_calculator_app(
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-share-nodes"></use></svg>
                         __TEXT_COPY_SHARE__
                     </button>
-                    <button class="btn btn-dash btn-error"
-                            data-on:click="$_calculator_actions.resetLayoutToken = (($_calculator_actions && $_calculator_actions.resetLayoutToken) || 0) + 1">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
-                        __TEXT_RESET_LAYOUT__
-                    </button>
-                    <button class="btn btn-dash btn-error"
-                            data-on:click="$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
-                        __TEXT_CLEAR__
-                    </button>
-                    <fishy-preset-manager class="fishy-calculator-presets"
-                                          data-preset-collection="calculator-presets"></fishy-preset-manager>
-                    <fishy-preset-manager class="fishy-calculator-layout-presets"
-                                          data-preset-collection="calculator-layouts"></fishy-preset-manager>
                 </div>
             </div>
             <div class="pb-1">
@@ -10009,6 +10008,19 @@ fn render_calculator_app(
                 </div>
             </div>
             <div class="pb-1" data-show="window.__fishystuffCalculator.workspaceTab($_calculator_ui) === 'custom'">
+                <div class="mb-3 flex flex-wrap gap-2" data-calculator-action-group="custom-layout">
+                    <fishy-preset-manager class="fishy-calculator-layout-presets"
+                                          data-preset-collection="calculator-layouts"></fishy-preset-manager>
+                    <button class="btn"
+                            data-class:btn-warning="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"
+                            data-class:btn-outline="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"
+                            data-class:btn-disabled="!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"
+                            data-attr:aria-disabled="(!window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts')).toString()"
+                            data-on:click="window.__fishystuffCalculator.presetCollectionHasCurrent($_user_presets, 'calculator-layouts') && ($_calculator_actions.discardLayoutToken = (($_calculator_actions && $_calculator_actions.discardLayoutToken) || 0) + 1)">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="__CALCULATOR_ICON_SPRITE_URL__#fishy-x-circle"></use></svg>
+                        __TEXT_DISCARD__
+                    </button>
+                </div>
                 <div role="tablist"
                      class="fishy-calculator-custom-tabs tabs tabs-box w-full max-w-full"
                      aria-label="__CUSTOM_TABS_ARIA__">
@@ -10381,17 +10393,10 @@ fn render_calculator_app(
             )),
         ),
         (
-            "__TEXT_RESET_LAYOUT__",
+            "__TEXT_DISCARD__",
             escape_html(&calculator_route_text(
                 data.lang,
-                "calculator.server.action.reset_layout",
-            )),
-        ),
-        (
-            "__TEXT_CLEAR__",
-            escape_html(&calculator_route_text(
-                data.lang,
-                "calculator.server.action.clear",
+                "calculator.server.action.discard",
             )),
         ),
         (
@@ -15096,7 +15101,10 @@ mod tests {
 
     #[test]
     fn calculator_workspace_icons_match_current_workspace_tabs() {
-        assert_eq!(calculator_workspace_icon_alias("basics"), Some("time-fill"));
+        assert_eq!(
+            calculator_workspace_icon_alias("basics"),
+            Some("information-fill")
+        );
         assert_eq!(
             calculator_workspace_icon_alias("loadout"),
             Some("gear-fill")
@@ -15220,10 +15228,26 @@ mod tests {
         assert!(text.contains("bound-select-id=\"outfits-bound-inputs\""));
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
-        assert!(text.contains("$_calculator_actions.resetLayoutToken = (($_calculator_actions && $_calculator_actions.resetLayoutToken) || 0) + 1"));
-        assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
+        assert!(text.contains("$_calculator_actions.discardLayoutToken = (($_calculator_actions && $_calculator_actions.discardLayoutToken) || 0) + 1"));
+        assert!(text.contains("$_calculator_actions.discardCalculatorToken = (($_calculator_actions && $_calculator_actions.discardCalculatorToken) || 0) + 1"));
+        assert!(text.contains("presetCollectionHasCurrent($_user_presets, 'calculator-presets')"));
+        assert!(text.contains("presetCollectionHasCurrent($_user_presets, 'calculator-layouts')"));
         assert!(text.contains("<fishy-preset-manager"));
+        assert!(text.contains("data-calculator-action-group=\"main\""));
+        assert!(text.contains("data-calculator-action-group=\"share\""));
+        assert!(text.contains("data-calculator-action-group=\"custom-layout\""));
         assert!(text.contains("data-preset-collection=\"calculator-layouts\""));
+        let workspace_tabs_index = text.find("fishy-calculator-top-tabs").unwrap();
+        let custom_layout_actions_index = text
+            .find("data-calculator-action-group=\"custom-layout\"")
+            .unwrap();
+        let custom_tabs_index = text.find("fishy-calculator-custom-tabs").unwrap();
+        assert!(text.find("data-calculator-action-group=\"main\"").unwrap() < workspace_tabs_index);
+        assert!(
+            text.find("data-calculator-action-group=\"share\"").unwrap() < workspace_tabs_index
+        );
+        assert!(workspace_tabs_index < custom_layout_actions_index);
+        assert!(custom_layout_actions_index < custom_tabs_index);
         assert!(text.contains(
             "window.__fishystuffCalculator.toggleCustomSectionInPlace($_calculator_ui, 'overview')"
         ));
@@ -15245,6 +15269,8 @@ mod tests {
         assert!(text.contains("Basics"));
         assert!(!text.contains("calculator.server.workspace.basics"));
         assert!(text.contains("Loadout"));
+        assert!(!text.contains("calculator.server.action.discard"));
+        assert!(text.contains("Discard"));
         assert!(text.contains("Loot"));
         assert!(text.contains("Trade"));
         assert!(text.contains("calculator.server.action.drag_section_generic"));
@@ -15316,7 +15342,6 @@ mod tests {
         assert!(text.contains("#fishy-fullscreen-fill"));
         assert!(text.contains("#fishy-stopwatch-2-fill"));
         assert!(text.contains("#fishy-stopwatch-fill"));
-        assert!(text.contains("#fishy-time-fill"));
         assert!(text.contains("#fishy-chart-pie-2-fill"));
         assert!(text.contains("#fishy-trending-up-fill"));
         assert!(text.contains("#fishy-wheel-fill"));
@@ -15365,8 +15390,34 @@ mod tests {
         assert!(text.contains("placeholder=\"지역 검색\""));
         assert!(text.contains("오버레이 제안"));
         assert!(text.contains("시간당 예상 횟수"));
+        assert!(text.contains("폐기"));
         assert!(text.contains("선택됨"));
         assert!(text.contains("<fishy-calculator-overlay-panel>"));
+    }
+
+    #[tokio::test]
+    async fn init_returns_german_html_fragment_when_locale_is_german() {
+        let response = get_calculator_datastar_init(
+            State(test_state()),
+            Ok(Query(CalculatorDatastarQuery {
+                lang: Some("en".to_string()),
+                locale: Some("de-DE".to_string()),
+                r#ref: None,
+                datastar: Some("{}".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("placeholder=\"Zonen suchen\""));
+        assert!(text.contains("Verwerfen"));
+        assert!(text.contains("Ausrüstungsset"));
+        assert!(!text.contains("calculator.server.action.discard"));
     }
 
     #[tokio::test]

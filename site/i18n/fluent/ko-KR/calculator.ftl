@@ -19,12 +19,16 @@ calculator.timeline.auto_fishing_time = 자동 낚시 시간
 calculator.timeline.catch_time = 낚아올리기 시간
 calculator.timeline.time_saved = 절약 시간
 
-calculator.toast.layout_reset = 레이아웃을 재설정했습니다.
-
-calculator.layout_presets.title = 레이아웃 프리셋
-calculator.layout_presets.current = 현재 레이아웃
+calculator.layout_presets.title = 작업 공간 프리셋
+calculator.layout_presets.open = 작업 공간 프리셋
+calculator.layout_presets.current = 현재 작업 공간
 calculator.layout_presets.default = 기본값
-calculator.layout_presets.default_name = 레이아웃 {$index}
+calculator.layout_presets.default_name = 작업 공간 {$index}
+
+calculator.presets.title = 계산기 프리셋
+calculator.presets.open = 계산기 프리셋
+calculator.presets.default = 기본 계산기
+calculator.presets.default_name = 계산기 {$index}
 
 calculator.title.casts_average = 평균 낚시 횟수 ({$timespan})
 calculator.title.durability_loss_average = 평균 내구도 소모 ({$timespan})
@@ -46,8 +50,7 @@ calculator.server.result.added = 추가됨
 calculator.server.action.remove = {$label} 제거
 calculator.server.action.copy_url = URL 복사
 calculator.server.action.copy_share = 공유 텍스트 복사
-calculator.server.action.reset_layout = 레이아웃 재설정
-calculator.server.action.clear = 초기화
+calculator.server.action.discard = 폐기
 calculator.server.action.remove_custom_card = Custom에서 {$label} 제거
 calculator.server.action.drag_section = {$label} 드래그
 calculator.server.action.drag_section_generic = 섹션 드래그
@@ -56,7 +59,7 @@ calculator.server.toggle.active_fishing = 수동 낚시
 calculator.server.toggle.debug = 디버그
 
 calculator.server.workspace.basics = 기본
-calculator.server.workspace.loadout = 장비
+calculator.server.workspace.loadout = 장비 구성
 calculator.server.workspace.loot = 전리품
 calculator.server.workspace.trade = 무역
 calculator.server.workspace.advanced = 고급
@@ -87,7 +90,7 @@ calculator.server.section.bite_time = 입질 시간
 calculator.server.section.catch_time = 낚아올리기 시간
 calculator.server.search.pets = 펫 검색
 calculator.server.section.session = 세션
-calculator.server.section.gear = 장비
+calculator.server.section.gear = 장비 구성
 calculator.server.section.pets = 펫
 calculator.server.section.overlay_proposal = 오버레이 제안
 calculator.server.section.distribution = 분포

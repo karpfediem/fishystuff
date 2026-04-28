@@ -25,13 +25,12 @@ calculator.share.link = [FishyStuff Calculator Preset | {$lead}{$item_drr} Item 
 
 calculator.toast.preset_url_copied = Preset URL copied.
 calculator.toast.share_copied = Share text copied.
-calculator.toast.cleared = Calculator cleared.
-calculator.toast.layout_reset = Layout reset.
 
-calculator.layout_presets.title = Layout presets
-calculator.layout_presets.current = Current layout
+calculator.layout_presets.title = Workspace presets
+calculator.layout_presets.open = Workspace Presets
+calculator.layout_presets.current = Current workspace
 calculator.layout_presets.default = Default
-calculator.layout_presets.default_name = Layout {$index}
+calculator.layout_presets.default_name = Workspace {$index}
 
 calculator.presets.title = Calculator presets
 calculator.presets.open = Calculator Presets
@@ -370,8 +369,7 @@ calculator.server.result.added = Added
 calculator.server.action.remove = Remove {$label}
 calculator.server.action.copy_url = Copy URL
 calculator.server.action.copy_share = Copy Share
-calculator.server.action.reset_layout = Reset Layout
-calculator.server.action.clear = Clear
+calculator.server.action.discard = Discard
 calculator.server.action.remove_custom_card = Remove {$label} from Custom
 calculator.server.action.drag_section = Drag {$label}
 calculator.server.action.drag_section_generic = Drag section
@@ -411,7 +409,7 @@ calculator.server.section.bite_time = Bite Time
 calculator.server.section.catch_time = Catch Time
 calculator.server.search.pets = Search pets
 calculator.server.section.session = Session
-calculator.server.section.gear = Gear
+calculator.server.section.gear = Loadout
 calculator.server.section.pets = Pets
 calculator.server.section.overlay_proposal = Overlay Proposal
 calculator.server.section.distribution = Distribution

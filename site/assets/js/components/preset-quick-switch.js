@@ -14,7 +14,7 @@ const DEFAULT_PRESET_QUICK_SWITCH_ENTRIES = Object.freeze([
   {
     collectionKey: "calculator-layouts",
     labelKey: "presets.quick_switch.layout",
-    labelFallback: "Layout",
+    labelFallback: "Workspace",
     order: 10,
     fixedFallbacks: [{ id: "default", labelFallback: "Default" }],
   },
