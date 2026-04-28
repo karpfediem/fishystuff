@@ -97,6 +97,12 @@ export function currentLocale() {
 }
 
 export async function languageReady() {
+  const snapshot = currentLanguageSnapshot();
+  const apiLang = trimString(snapshot?.apiLang);
+  const apiLangSetting = trimString(snapshot?.apiLangSetting);
+  if (apiLang && (!apiLangSetting || apiLangSetting === apiLang)) {
+    return snapshot;
+  }
   const helper = rawLanguageHelper();
   const ready = helper?.ready;
   if (ready && typeof ready.then === "function") {

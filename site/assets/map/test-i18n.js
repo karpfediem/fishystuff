@@ -32,6 +32,7 @@ export function installMapTestI18n(globalRef = globalThis, options = {}) {
         contentLang: options.contentLang || "en-US",
         locale: options.locale || "en-US",
         apiLang: options.apiLang || "en",
+        apiLangSetting: options.apiLangSetting || "",
       };
     },
     ready: Promise.resolve(),

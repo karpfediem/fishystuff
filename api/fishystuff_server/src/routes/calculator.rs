@@ -6625,6 +6625,13 @@ fn build_zone_loot_summary_condition_options(
         .enumerate()
         .map(|(index, row)| ((index + 1) as u8, row))
         .collect::<HashMap<_, _>>();
+    let mut base_entries_by_slot = HashMap::<u8, Vec<CalculatorZoneLootEntry>>::new();
+    for entry in base_entries {
+        base_entries_by_slot
+            .entry(entry.slot_idx)
+            .or_default()
+            .push(entry.clone());
+    }
     let mut condition_options_by_slot = HashMap::<u8, Vec<ZoneLootSummaryConditionOption>>::new();
 
     for ((slot_idx, item_main_group_key), mut options) in
@@ -6643,13 +6650,17 @@ fn build_zone_loot_summary_condition_options(
         let active_option_idx = calculator_selected_branch_option_idx(&options, signals)
             .or_else(|| options.first().map(|option| option.option_idx));
         let slot_options = condition_options_by_slot.entry(slot_idx).or_default();
+        let slot_entries = base_entries_by_slot
+            .get(&slot_idx)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         for option in options {
             let mut forced_branch_options = HashMap::new();
             forced_branch_options.insert((slot_idx, item_main_group_key), option.option_idx);
             let mut option_entries =
                 apply_calculator_condition_context_to_loot_entries_with_branch_overrides(
                     signals,
-                    base_entries,
+                    slot_entries,
                     &forced_branch_options,
                 );
             option_entries =
