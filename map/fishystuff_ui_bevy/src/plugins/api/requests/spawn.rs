@@ -12,7 +12,7 @@ use fishystuff_client::{ClientError, FishyClient};
 
 use super::super::state::FishCatalogPayload;
 #[cfg(target_arch = "wasm32")]
-use super::util::resolve_api_request_url;
+use super::util::{resolve_api_request_url, resolve_api_request_url_with_data_lang};
 #[cfg(target_arch = "wasm32")]
 use crate::runtime_io;
 
@@ -111,7 +111,7 @@ pub(super) fn spawn_zones_request() -> Receiver<Result<ZonesResponse, String>> {
 pub(super) fn spawn_fish_catalog_request() -> Receiver<Result<FishCatalogPayload, String>> {
     #[cfg(target_arch = "wasm32")]
     {
-        let url = resolve_api_request_url("/api/v1/fish");
+        let url = resolve_api_request_url_with_data_lang("/api/v1/fish");
         let (sender, receiver) = async_channel::bounded(1);
         IoTaskPool::get()
             .spawn_local(async move {

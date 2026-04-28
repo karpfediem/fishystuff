@@ -81,37 +81,107 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
   return mapText("info.window_title");
 }
 
-function buildZoneLootGroups(summary) {
+function zoneLootConditionKey(group, index) {
+  const slotIdx = Number.parseInt(group?.slotIdx, 10) || index + 1;
+  const label = trimString(group?.label) || `slot-${slotIdx}`;
+  return `${slotIdx}:${label}`;
+}
+
+function clampZoneLootConditionIndex(value, count) {
+  const index = Number.parseInt(value, 10);
+  if (!Number.isInteger(index) || index < 0 || index >= count) {
+    return null;
+  }
+  return index;
+}
+
+function normalizeZoneLootSpeciesRow(row) {
+  return {
+    ...cloneJson(row),
+    catchMethods: normalizeCatchMethods(row?.catchMethods),
+  };
+}
+
+function normalizeZoneLootConditionOptions(group) {
+  if (!Array.isArray(group?.conditionOptions)) {
+    return [];
+  }
+  return group.conditionOptions
+    .filter((option) => isPlainObject(option))
+    .map((option) => ({
+      conditionText: trimString(option?.conditionText),
+      conditionTooltip: trimString(option?.conditionTooltip),
+      active: option?.active === true,
+      speciesRows: Array.isArray(option?.speciesRows)
+        ? option.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
+        : [],
+    }))
+    .filter((option) => option.conditionText || option.speciesRows.length > 0);
+}
+
+function selectedZoneLootConditionIndex(options, conditionSelection, key) {
+  if (!options.length) {
+    return -1;
+  }
+  const explicitIndex = isPlainObject(conditionSelection)
+    ? clampZoneLootConditionIndex(conditionSelection[key], options.length)
+    : null;
+  if (explicitIndex != null) {
+    return explicitIndex;
+  }
+  const activeIndex = options.findIndex((option) => option.active === true);
+  return activeIndex >= 0 ? activeIndex : 0;
+}
+
+function buildZoneLootGroups(summary, conditionSelection = {}) {
   const groups = Array.isArray(summary?.groups) ? summary.groups : [];
   const speciesRows = Array.isArray(summary?.speciesRows) ? summary.speciesRows : [];
   if (!groups.length && !speciesRows.length) {
     return [];
   }
   return groups
-    .map((group, index) => ({
-      slotIdx: Number.parseInt(group?.slotIdx, 10) || index + 1,
-      label: trimString(group?.label),
-      fillColor: trimString(group?.fillColor),
-      strokeColor: trimString(group?.strokeColor),
-      textColor: trimString(group?.textColor),
-      dropRateText: trimString(group?.dropRateText),
-      dropRateSourceKind: trimString(group?.dropRateSourceKind),
-      dropRateTooltip: trimString(group?.dropRateTooltip),
-      conditionText: trimString(group?.conditionText),
-      conditionTooltip: trimString(group?.conditionTooltip),
-      catchMethods: normalizeCatchMethods(group?.catchMethods),
-      rows: speciesRows.filter((row) => {
-        const rowGroupLabel = trimString(row?.groupLabel);
-        const groupLabel = trimString(group?.label);
-        if (rowGroupLabel && groupLabel && rowGroupLabel === groupLabel) {
-          return true;
-        }
-        return (Number.parseInt(row?.slotIdx, 10) || 0) === (Number.parseInt(group?.slotIdx, 10) || index + 1);
-      }).map((row) => ({
-        ...cloneJson(row),
-        catchMethods: normalizeCatchMethods(row?.catchMethods),
-      })),
-    }))
+    .map((group, index) => {
+      const slotIdx = Number.parseInt(group?.slotIdx, 10) || index + 1;
+      const groupLabel = trimString(group?.label);
+      const conditionOptions = normalizeZoneLootConditionOptions(group);
+      const conditionOptionKey = zoneLootConditionKey(group, index);
+      const conditionOptionIndex = selectedZoneLootConditionIndex(
+        conditionOptions,
+        conditionSelection,
+        conditionOptionKey,
+      );
+      const selectedCondition =
+        conditionOptionIndex >= 0 ? conditionOptions[conditionOptionIndex] : null;
+      const fallbackRows = speciesRows
+        .filter((row) => {
+          const rowGroupLabel = trimString(row?.groupLabel);
+          if (rowGroupLabel && groupLabel && rowGroupLabel === groupLabel) {
+            return true;
+          }
+          return (Number.parseInt(row?.slotIdx, 10) || 0) === slotIdx;
+        })
+        .map((row) => normalizeZoneLootSpeciesRow(row));
+      return {
+        slotIdx,
+        label: groupLabel,
+        fillColor: trimString(group?.fillColor),
+        strokeColor: trimString(group?.strokeColor),
+        textColor: trimString(group?.textColor),
+        dropRateText: trimString(group?.dropRateText),
+        dropRateSourceKind: trimString(group?.dropRateSourceKind),
+        dropRateTooltip: trimString(group?.dropRateTooltip),
+        conditionText: trimString(selectedCondition?.conditionText) || trimString(group?.conditionText),
+        conditionTooltip:
+          trimString(selectedCondition?.conditionTooltip) || trimString(group?.conditionTooltip),
+        catchMethods: normalizeCatchMethods(group?.catchMethods),
+        conditionOptions,
+        conditionOptionIndex,
+        conditionOptionKey,
+        rows: selectedCondition
+          ? selectedCondition.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
+          : fallbackRows,
+      };
+    })
     .filter((group) => group.label);
 }
 
@@ -188,12 +258,12 @@ function buildZoneLootMethodProfiles(groups) {
   return profiles;
 }
 
-function buildZoneLootSection(summary, status) {
+function buildZoneLootSection(summary, status, conditionSelection = {}) {
   const normalizedStatus = trimString(status || "idle");
   if (normalizedStatus === "idle" && !isPlainObject(summary)) {
     return null;
   }
-  const groups = buildZoneLootGroups(summary);
+  const groups = buildZoneLootGroups(summary, conditionSelection);
   const profiles = buildZoneLootMethodProfiles(groups);
   const available = summary?.available === true && profiles.some((profile) => profile.groups.length > 0);
   const statusText =
@@ -242,7 +312,15 @@ export function patchTouchesInfoSignals(patch) {
   );
 }
 
-export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary = null, zoneLootStatus = "idle" } = {}) {
+export function buildInfoViewModel(
+  signals,
+  {
+    zoneCatalog = [],
+    zoneLootSummary = null,
+    zoneLootStatus = "idle",
+    zoneLootConditionSelection = {},
+  } = {},
+) {
   const selection = isPlainObject(signals?._map_runtime?.selection)
     ? cloneJson(signals._map_runtime.selection)
     : {};
@@ -256,7 +334,11 @@ export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary 
   });
   const territoryFacts = buildTerritoryPaneFacts(layerSamples, { runtimeLayers });
   const tradeFacts = buildTradePaneFacts(layerSamples, { runtimeLayers });
-  const zoneLootSection = buildZoneLootSection(zoneLootSummary, zoneLootStatus);
+  const zoneLootSection = buildZoneLootSection(
+    zoneLootSummary,
+    zoneLootStatus,
+    zoneLootConditionSelection,
+  );
   const panes = [
     paneDescriptor(
       "zone",

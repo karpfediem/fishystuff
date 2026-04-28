@@ -5,6 +5,7 @@ import { createMapPageLive } from "./map-page-live.js";
 import { createMapLifecycleMetrics, createMapOtelMetricsReporter } from "./map-otel-metrics.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
 import { bindMapPresetController } from "./map-presets.js";
+import { languageReady } from "./map-i18n.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
   DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE,
@@ -453,6 +454,7 @@ export async function start() {
   pendingBridgeRestoreView = initialRestorePatch?.commands?.restoreView
     ? cloneJson(initialRestorePatch.commands.restoreView)
     : null;
+  await languageReady();
   await bridge.mount(shell, {
     canvas,
     initialState: {

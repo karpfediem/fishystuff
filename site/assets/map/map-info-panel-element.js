@@ -204,14 +204,49 @@ function zoneLootGroupHeaderMarkup(group) {
   const provenanceRail = provenanceRailMarkup(group);
   const conditionText = trimString(group?.conditionText);
   const conditionTooltip = trimString(group?.conditionTooltip);
+  const conditionOptions = Array.isArray(group?.conditionOptions) ? group.conditionOptions : [];
+  const conditionOptionCount = conditionOptions.length;
+  const conditionOptionIndex = Number.parseInt(group?.conditionOptionIndex, 10);
+  const canSwitchCondition =
+    conditionText &&
+    conditionOptionCount > 1 &&
+    Number.isInteger(conditionOptionIndex) &&
+    conditionOptionIndex >= 0 &&
+    conditionOptionIndex < conditionOptionCount &&
+    trimString(group?.conditionOptionKey);
+  const conditionMarkup = conditionText
+    ? `<div class="fishymap-zone-loot-group-condition" title="${escapeHtml(conditionTooltip || conditionText)}">${escapeHtml(conditionText)}</div>`
+    : "";
   return `
     <div class="fishymap-zone-loot-group-header">
       <div class="fishymap-zone-loot-group-heading">
         <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
         ${
-          conditionText
-            ? `<div class="fishymap-zone-loot-group-condition" title="${escapeHtml(conditionTooltip || conditionText)}">${escapeHtml(conditionText)}</div>`
-            : ""
+          canSwitchCondition
+            ? `<div class="fishymap-zone-loot-condition-control">
+                <button
+                  class="btn btn-ghost btn-xs fishymap-zone-loot-condition-button"
+                  type="button"
+                  data-zone-loot-condition-direction="-1"
+                  data-zone-loot-condition-key="${escapeHtml(group.conditionOptionKey)}"
+                  data-zone-loot-condition-current="${escapeHtml(conditionOptionIndex)}"
+                  data-zone-loot-condition-count="${escapeHtml(conditionOptionCount)}"
+                  aria-label="${escapeHtml(mapText("info.zone_loot.condition.previous"))}"
+                  title="${escapeHtml(mapText("info.zone_loot.condition.previous"))}"
+                >&lt;</button>
+                ${conditionMarkup}
+                <button
+                  class="btn btn-ghost btn-xs fishymap-zone-loot-condition-button"
+                  type="button"
+                  data-zone-loot-condition-direction="1"
+                  data-zone-loot-condition-key="${escapeHtml(group.conditionOptionKey)}"
+                  data-zone-loot-condition-current="${escapeHtml(conditionOptionIndex)}"
+                  data-zone-loot-condition-count="${escapeHtml(conditionOptionCount)}"
+                  aria-label="${escapeHtml(mapText("info.zone_loot.condition.next"))}"
+                  title="${escapeHtml(mapText("info.zone_loot.condition.next"))}"
+                >&gt;</button>
+              </div>`
+            : conditionMarkup
         }
       </div>
       <div class="fishymap-zone-loot-group-rate">
@@ -448,6 +483,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneLootSummary: null,
       zoneLootRgb: null,
       zoneLootRequestToken: 0,
+      zoneLootConditionSelection: {},
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
@@ -466,7 +502,39 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._handleUserOverlaysChanged = () => {
       void this.refreshZoneLootSummary({ force: true });
     };
+    this._handleLanguageChanged = () => {
+      this.scheduleRender();
+      void this.refreshZoneLootSummary({ force: true });
+    };
     this._handleClick = (event) => {
+      const conditionButton = event.target.closest(
+        "button[data-zone-loot-condition-direction]",
+      );
+      if (conditionButton) {
+        event.preventDefault?.();
+        const key = trimString(conditionButton.getAttribute("data-zone-loot-condition-key"));
+        const direction = Number.parseInt(
+          conditionButton.getAttribute("data-zone-loot-condition-direction"),
+          10,
+        );
+        const current = Number.parseInt(
+          conditionButton.getAttribute("data-zone-loot-condition-current"),
+          10,
+        );
+        const count = Number.parseInt(
+          conditionButton.getAttribute("data-zone-loot-condition-count"),
+          10,
+        );
+        if (key && Number.isInteger(direction) && Number.isInteger(current) && count > 1) {
+          this._state.zoneLootConditionSelection = {
+            ...(this._state.zoneLootConditionSelection || {}),
+            [key]: (current + direction + count) % count,
+          };
+          this.scheduleRender();
+        }
+        return;
+      }
+
       const button = event.target.closest("button[data-zone-info-tab]");
       if (!button) {
         return;
@@ -503,6 +571,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       globalThis.window?.__fishystuffUserOverlays?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
       this._handleUserOverlaysChanged,
     );
+    globalThis.window?.addEventListener?.(
+      globalThis.window?.__fishystuffLanguage?.event || "fishystuff:languagechange",
+      this._handleLanguageChanged,
+    );
     attachProvenanceTooltip(this._shell);
     this.render();
   }
@@ -515,6 +587,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     globalThis.window?.removeEventListener?.(
       globalThis.window?.__fishystuffUserOverlays?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
       this._handleUserOverlaysChanged,
+    );
+    globalThis.window?.removeEventListener?.(
+      globalThis.window?.__fishystuffLanguage?.event || "fishystuff:languagechange",
+      this._handleLanguageChanged,
     );
     if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
       globalThis.cancelAnimationFrame(this._rafId);
@@ -534,6 +610,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneCatalog: this._state.zoneCatalog,
       zoneLootSummary: this._state.zoneLootSummary,
       zoneLootStatus: this._state.zoneLootStatus,
+      zoneLootConditionSelection: this._state.zoneLootConditionSelection,
     });
     setTextContent(this._elements?.title, viewModel.descriptor.title);
     setTextContent(this._elements?.statusText, viewModel.descriptor.statusText);
@@ -599,6 +676,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       this._state.zoneLootRgb = null;
       this._state.zoneLootStatus = "idle";
       this._state.zoneLootSummary = null;
+      this._state.zoneLootConditionSelection = {};
       this.scheduleRender();
       return;
     }
@@ -610,6 +688,9 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
         this._state.zoneLootStatus === "error")
     ) {
       return;
+    }
+    if (force || this._state.zoneLootRgb !== zoneRgb) {
+      this._state.zoneLootConditionSelection = {};
     }
     this._state.zoneLootRgb = zoneRgb;
     this._state.zoneLootStatus = "loading";

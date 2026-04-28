@@ -37,6 +37,34 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
         conditionText: "Zone base rate 80%",
         conditionTooltip: "Zone base rate: 80%",
         catchMethods: ["rod"],
+        conditionOptions: [
+          {
+            conditionText: "Default",
+            active: true,
+            speciesRows: [
+              {
+                slotIdx: 4,
+                groupLabel: "General",
+                label: "Sea Eel",
+                dropRateText: "80%",
+                catchMethods: ["rod"],
+              },
+            ],
+          },
+          {
+            conditionText: "Fishing Level Guru 1+",
+            active: false,
+            speciesRows: [
+              {
+                slotIdx: 4,
+                groupLabel: "General",
+                label: "Mystical Fish",
+                dropRateText: "0.005%",
+                catchMethods: ["rod"],
+              },
+            ],
+          },
+        ],
       },
     ],
     speciesRows: [
@@ -60,6 +88,10 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.equal(summary.groups[0].dropRateSourceKind, "database");
   assert.equal(summary.groups[0].conditionText, "Zone base rate 80%");
   assert.deepEqual(summary.groups[0].catchMethods, ["rod"]);
+  assert.equal(summary.groups[0].conditionOptions.length, 2);
+  assert.equal(summary.groups[0].conditionOptions[0].conditionText, "Default");
+  assert.equal(summary.groups[0].conditionOptions[0].active, true);
+  assert.equal(summary.groups[0].conditionOptions[1].speciesRows[0].label, "Mystical Fish");
   assert.equal(summary.speciesRows[0].groupLabel, "General");
   assert.equal(summary.speciesRows[0].dropRateText, "80%");
   assert.equal(
@@ -104,7 +136,7 @@ test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint",
     },
   });
 
-  assert.equal(request.url, "http://127.0.0.1:8080/api/v1/zone_loot_summary");
+  assert.equal(request.url, "http://127.0.0.1:8080/api/v1/zone_loot_summary?lang=en&locale=en-US");
   assert.deepEqual(JSON.parse(request.init.body), {
     rgb: "57,229,141",
     overlay: {

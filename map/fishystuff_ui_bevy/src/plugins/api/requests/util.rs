@@ -90,7 +90,7 @@ pub(super) fn build_zone_stats_request(
         half_life_days: defaults.half_life_days,
         drift_boundary_ts_utc: None,
         ref_id: None,
-        lang: None,
+        lang: selected_data_lang(),
     })
 }
 
@@ -116,6 +116,63 @@ pub(super) fn resolve_api_request_url(path: &str) -> String {
     {
         path.to_string()
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) fn resolve_api_request_url_with_data_lang(path: &str) -> String {
+    let path = if let Some(lang) = selected_data_lang() {
+        append_query_param(path, "lang", &lang)
+    } else {
+        path.to_string()
+    };
+    resolve_api_request_url(&path)
+}
+
+fn selected_data_lang() -> Option<String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        return browser_selected_data_lang();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        None
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn append_query_param(path: &str, key: &str, value: &str) -> String {
+    let separator = if path.contains('?') { '&' } else { '?' };
+    format!("{path}{separator}{key}={value}")
+}
+
+#[cfg(target_arch = "wasm32")]
+fn browser_selected_data_lang() -> Option<String> {
+    use wasm_bindgen::{JsCast, JsValue};
+
+    let window = web_sys::window()?;
+    let helper =
+        js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("__fishystuffLanguage")).ok()?;
+    let current = js_sys::Reflect::get(&helper, &JsValue::from_str("current")).ok()?;
+    let current = current.dyn_ref::<js_sys::Function>()?;
+    let snapshot = current.call0(&helper).ok()?;
+    let value = js_sys::Reflect::get(&snapshot, &JsValue::from_str("apiLang"))
+        .ok()?
+        .as_string()?;
+    normalize_data_lang(value.as_str())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn normalize_data_lang(value: &str) -> Option<String> {
+    let code = value.trim();
+    if code.is_empty()
+        || !code
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    {
+        return None;
+    }
+    Some(code.to_string())
 }
 
 #[cfg(target_arch = "wasm32")]

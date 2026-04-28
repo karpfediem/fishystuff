@@ -56,7 +56,7 @@
        _api_error_hint: '',
      }"
      data-indicator:_loading
-     data-init="window.Fishydex.restore($); @get(window.Fishydex.fishApiUrl())">
+     data-init="window.Fishydex.restore($); window.Fishydex.ready().then(() => @get(window.Fishydex.fishApiUrl()))">
   <section class="fishydex-shell">
     <div class="fishydex-bento">
       <fieldset class="fishydex-stats card card-border bg-base-100">

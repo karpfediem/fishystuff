@@ -8,7 +8,7 @@ function replaceVars(message, vars = {}) {
   );
 }
 
-export function installMapTestI18n(globalRef = globalThis) {
+export function installMapTestI18n(globalRef = globalThis, options = {}) {
   const windowObject = globalRef.window && typeof globalRef.window === "object"
     ? globalRef.window
     : (globalRef.window = {});
@@ -29,11 +29,12 @@ export function installMapTestI18n(globalRef = globalThis) {
     },
     current() {
       return {
-        contentLang: "en-US",
-        locale: "en-US",
-        apiLang: "en",
+        contentLang: options.contentLang || "en-US",
+        locale: options.locale || "en-US",
+        apiLang: options.apiLang || "en",
       };
     },
+    ready: Promise.resolve(),
   };
   globalRef.__fishystuffLanguage = windowObject.__fishystuffLanguage;
 }

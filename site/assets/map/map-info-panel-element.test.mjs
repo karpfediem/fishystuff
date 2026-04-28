@@ -149,4 +149,118 @@ test("render shows the calculator warning and a consolidated calculator notice w
   assert.match(panelSlot.innerHTML, /Groups follow the current calculator ordering/);
   assert.doesNotMatch(panelSlot.innerHTML, /Calculator defaults/);
 });
+
+test("condition arrow buttons switch the visible zone loot branch", () => {
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  element._shell = {
+    __fishymapInitialSignals: {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Velia Event",
+          layerSamples: [
+            {
+              layerId: "zone_mask",
+              rgbU32: 0x39e58d,
+              rgb: [57, 229, 141],
+              detailSections: [detailSectionFact("zone", "Zone", "Velia Event", "hover-zone")],
+            },
+          ],
+        },
+        catalog: {
+          layers: [{ layerId: "zone_mask", displayOrder: 20 }],
+        },
+      },
+    },
+  };
+  element._state = {
+    zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Velia Event", biteTimeMin: 5, biteTimeMax: 7 }],
+    zoneLootStatus: "loaded",
+    zoneLootRgb: 0x39e58d,
+    zoneLootRequestToken: 1,
+    zoneLootConditionSelection: {},
+    zoneLootSummary: {
+      available: true,
+      profileLabel: "Calculator defaults",
+      dataQualityNote: "Expected loot uses average session casts.",
+      note: "Groups follow the current calculator ordering.",
+      groups: [
+        {
+          slotIdx: 2,
+          label: "Rare",
+          dropRateText: "1%",
+          catchMethods: ["rod"],
+          conditionText: "Default",
+          conditionOptions: [
+            {
+              conditionText: "Default",
+              active: true,
+              speciesRows: [
+                {
+                  slotIdx: 2,
+                  groupLabel: "Rare",
+                  label: "Grunt",
+                  dropRateText: "100%",
+                  catchMethods: ["rod"],
+                },
+              ],
+            },
+            {
+              conditionText: "Fishing Level Guru 1+",
+              active: false,
+              speciesRows: [
+                {
+                  slotIdx: 2,
+                  groupLabel: "Rare",
+                  label: "Mystical Fish",
+                  dropRateText: "0.005%",
+                  catchMethods: ["rod"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      speciesRows: [],
+    },
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+
+  element.render();
+
+  assert.match(panelSlot.innerHTML, /data-zone-loot-condition-direction="1"/);
+  assert.match(panelSlot.innerHTML, /Default/);
+  assert.match(panelSlot.innerHTML, /Grunt/);
+
+  const button = {
+    getAttribute(name) {
+      return {
+        "data-zone-loot-condition-key": "2:Rare",
+        "data-zone-loot-condition-direction": "1",
+        "data-zone-loot-condition-current": "0",
+        "data-zone-loot-condition-count": "2",
+      }[name];
+    },
+  };
+  element._handleClick({
+    preventDefault() {},
+    target: {
+      closest(selector) {
+        return selector === "button[data-zone-loot-condition-direction]" ? button : null;
+      },
+    },
+  });
+
+  assert.equal(element._state.zoneLootConditionSelection["2:Rare"], 1);
+  assert.match(panelSlot.innerHTML, /Fishing Level Guru 1\+/);
+  assert.match(panelSlot.innerHTML, /Mystical Fish/);
+});
 installMapTestI18n();

@@ -100,6 +100,8 @@ map.info.zone_loot.status.loaded = zone loot: loaded
 map.info.zone_loot.status.error = zone loot: error
 map.info.zone_loot.status.other = zone loot: {$status}
 map.info.zone_loot.unavailable = Zone loot summary is unavailable.
+map.info.zone_loot.condition.previous = Previous condition
+map.info.zone_loot.condition.next = Next condition
 
 map.bookmarks.window_title = Bookmarks
 map.bookmarks.new = New bookmark

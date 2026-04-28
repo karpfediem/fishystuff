@@ -90,6 +90,11 @@
       : null;
   }
 
+  function languageReady() {
+    const ready = languageHelper()?.ready;
+    return ready && typeof ready.then === "function" ? ready.catch(() => {}) : Promise.resolve();
+  }
+
   const replacePetImageWithFallback = (image) => {
     if (!(image instanceof HTMLImageElement)) {
       return;
@@ -2828,6 +2833,7 @@
     lang: calculatorSurfaceLanguage().lang,
     locale: calculatorSurfaceLanguage().locale,
     apiLang: calculatorSurfaceLanguage().apiLang,
+    ready: languageReady,
     initUrl: calculatorInitUrl,
     evalUrl: calculatorEvalUrl,
     evalSignalPatchFilter: calculatorEvalSignalPatchFilter,

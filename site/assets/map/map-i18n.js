@@ -14,8 +14,17 @@ function isPlainObject(value) {
 }
 
 function languageHelper() {
-  const helper = globalThis.window?.__fishystuffLanguage ?? globalThis.__fishystuffLanguage;
+  const helper = rawLanguageHelper();
   return helper && typeof helper.t === "function" ? helper : null;
+}
+
+function rawLanguageHelper() {
+  return globalThis.window?.__fishystuffLanguage ?? globalThis.__fishystuffLanguage;
+}
+
+function currentLanguageSnapshot() {
+  const helper = rawLanguageHelper();
+  return helper && typeof helper.current === "function" ? helper.current() : {};
 }
 
 function generatedI18nPayload() {
@@ -77,4 +86,24 @@ export function mapCountText(key, count, vars = {}, options = {}) {
     ...normalizedVars,
     count,
   }, options);
+}
+
+export function currentDataLanguage() {
+  return trimString(currentLanguageSnapshot()?.apiLang);
+}
+
+export function currentLocale() {
+  return trimString(currentLanguageSnapshot()?.locale);
+}
+
+export async function languageReady() {
+  const helper = rawLanguageHelper();
+  const ready = helper?.ready;
+  if (ready && typeof ready.then === "function") {
+    try {
+      await ready;
+    } catch (_error) {
+    }
+  }
+  return currentLanguageSnapshot();
 }

@@ -81,6 +81,48 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             conditionText: "Zone base rate 80%",
             conditionTooltip: "Zone base rate: 80%",
             catchMethods: ["rod"],
+            conditionOptions: [
+              {
+                conditionText: "Default",
+                active: true,
+                speciesRows: [
+                  {
+                    slotIdx: 4,
+                    groupLabel: "General",
+                    label: "Sea Eel",
+                    iconUrl: "/i/sea-eel.png",
+                    iconGradeTone: "general",
+                    fillColor: "#eef6ff",
+                    strokeColor: "#89a8d8",
+                    textColor: "#1f2937",
+                    dropRateText: "80%",
+                    dropRateSourceKind: "database",
+                    dropRateTooltip: "DB-backed drop rate",
+                    catchMethods: ["rod"],
+                  },
+                ],
+              },
+              {
+                conditionText: "Fishing Level Guru 1+",
+                active: false,
+                speciesRows: [
+                  {
+                    slotIdx: 4,
+                    groupLabel: "General",
+                    label: "Mystical Fish",
+                    iconUrl: "/i/mystical-fish.png",
+                    iconGradeTone: "rare",
+                    fillColor: "#eef6ff",
+                    strokeColor: "#89a8d8",
+                    textColor: "#1f2937",
+                    dropRateText: "0.005%",
+                    dropRateSourceKind: "database",
+                    dropRateTooltip: "DB-backed drop rate",
+                    catchMethods: ["rod"],
+                  },
+                ],
+              },
+            ],
           },
           {
             slotIdx: 6,
@@ -155,6 +197,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
     "Sea Eel",
   );
   assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.conditionText,
+    "Default",
+  );
+  assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.dropRateText,
     "80%",
   );
@@ -188,6 +234,74 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
       },
     ],
   );
+});
+
+test("buildInfoViewModel lets zone loot condition selection switch branch rows", () => {
+  const viewModel = buildInfoViewModel(
+    {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Velia Event",
+          layerSamples: [],
+        },
+      },
+    },
+    {
+      zoneLootStatus: "loaded",
+      zoneLootConditionSelection: {
+        "2:Rare": 1,
+      },
+      zoneLootSummary: {
+        available: true,
+        profileLabel: "Calculator defaults",
+        groups: [
+          {
+            slotIdx: 2,
+            label: "Rare",
+            dropRateText: "1%",
+            catchMethods: ["rod"],
+            conditionText: "Default",
+            conditionOptions: [
+              {
+                conditionText: "Default",
+                active: true,
+                speciesRows: [
+                  {
+                    slotIdx: 2,
+                    groupLabel: "Rare",
+                    label: "Grunt",
+                    dropRateText: "100%",
+                    catchMethods: ["rod"],
+                  },
+                ],
+              },
+              {
+                conditionText: "Fishing Level Guru 1+",
+                active: false,
+                speciesRows: [
+                  {
+                    slotIdx: 2,
+                    groupLabel: "Rare",
+                    label: "Mystical Fish",
+                    dropRateText: "0.005%",
+                    catchMethods: ["rod"],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        speciesRows: [],
+      },
+    },
+  );
+  const group = viewModel.panes.find((pane) => pane.id === "zone")?.sections[0]?.profiles?.[0]?.groups?.[0];
+
+  assert.equal(group.conditionText, "Fishing Level Guru 1+");
+  assert.equal(group.rows[0].label, "Mystical Fish");
+  assert.equal(group.conditionOptionIndex, 1);
+  assert.equal(group.conditionOptionKey, "2:Rare");
 });
 
 test("patchTouchesInfoSignals stays narrow to selection, pane tab, and runtime layer inputs", () => {

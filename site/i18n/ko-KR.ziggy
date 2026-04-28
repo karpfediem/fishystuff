@@ -945,6 +945,8 @@
   "map.info.zone_loot.status.error": "zone loot: error",
   "map.info.zone_loot.status.other": "zone loot: {$status}",
   "map.info.zone_loot.unavailable": "Zone loot summary is unavailable.",
+  "map.info.zone_loot.condition.previous": "이전 조건",
+  "map.info.zone_loot.condition.next": "다음 조건",
   "map.bookmarks.window_title": "Bookmarks",
   "map.bookmarks.new": "New bookmark",
   "map.bookmarks.click_to_place": "Click map to place",

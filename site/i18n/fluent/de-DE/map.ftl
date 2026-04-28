@@ -95,6 +95,8 @@ map.info.zone_loot.status.loaded = Zonenfang: geladen
 map.info.zone_loot.status.error = Zonenfang: Fehler
 map.info.zone_loot.status.other = Zonenfang: {$status}
 map.info.zone_loot.unavailable = Die Zonenfang-Zusammenfassung ist nicht verfügbar.
+map.info.zone_loot.condition.previous = Vorherige Bedingung
+map.info.zone_loot.condition.next = Nächste Bedingung
 
 map.bookmarks.window_title = Lesezeichen
 map.bookmarks.new = Neues Lesezeichen

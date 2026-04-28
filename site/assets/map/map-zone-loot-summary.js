@@ -1,5 +1,5 @@
 import { resolveApiBaseUrl } from "./map-host.js";
-import { mapText } from "./map-i18n.js";
+import { currentDataLanguage, currentLocale, languageReady, mapText } from "./map-i18n.js";
 import { zoneRgbFromSample } from "./map-overview-facts.js";
 
 const DEFAULT_ZONE_LOOT_SUMMARY_PATH = "/api/v1/zone_loot_summary";
@@ -31,6 +31,26 @@ function normalizeCatchMethods(value) {
   return methods;
 }
 
+function normalizeZoneLootSpeciesRow(row) {
+  return {
+    slotIdx: Number.parseInt(row?.slotIdx, 10) || 0,
+    groupLabel: trimString(row?.groupLabel),
+    label: trimString(row?.label),
+    iconUrl: trimString(row?.iconUrl),
+    iconGradeTone: trimString(row?.iconGradeTone),
+    fillColor: trimString(row?.fillColor),
+    strokeColor: trimString(row?.strokeColor),
+    textColor: trimString(row?.textColor),
+    dropRateText: trimString(row?.dropRateText),
+    dropRateSourceKind: trimString(row?.dropRateSourceKind),
+    dropRateTooltip: trimString(row?.dropRateTooltip),
+    presenceText: trimString(row?.presenceText),
+    presenceSourceKind: trimString(row?.presenceSourceKind),
+    presenceTooltip: trimString(row?.presenceTooltip),
+    catchMethods: normalizeCatchMethods(row?.catchMethods),
+  };
+}
+
 function rgbTripletString(rgbU32) {
   return [(rgbU32 >> 16) & 0xff, (rgbU32 >> 8) & 0xff, rgbU32 & 0xff].join(",");
 }
@@ -44,6 +64,22 @@ function currentUserOverlaySignals(explicitOverlaySignals) {
     return helper.overlaySignals();
   }
   return { zones: {} };
+}
+
+function appendQueryParam(path, key, value) {
+  const normalizedValue = trimString(value);
+  if (!normalizedValue) {
+    return path;
+  }
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}${encodeURIComponent(key)}=${encodeURIComponent(normalizedValue)}`;
+}
+
+function localizedZoneLootSummaryPath() {
+  let path = DEFAULT_ZONE_LOOT_SUMMARY_PATH;
+  path = appendQueryParam(path, "lang", currentDataLanguage());
+  path = appendQueryParam(path, "locale", currentLocale());
+  return path;
 }
 
 export function zoneRgbFromSelection(selection) {
@@ -83,28 +119,26 @@ export function normalizeZoneLootSummary(raw) {
             conditionText: trimString(group.conditionText),
             conditionTooltip: trimString(group.conditionTooltip),
             catchMethods: normalizeCatchMethods(group.catchMethods),
+            conditionOptions: Array.isArray(group.conditionOptions)
+              ? group.conditionOptions
+                  .filter((option) => isPlainObject(option))
+                  .map((option) => ({
+                    conditionText: trimString(option.conditionText),
+                    conditionTooltip: trimString(option.conditionTooltip),
+                    active: option.active === true,
+                    speciesRows: Array.isArray(option.speciesRows)
+                      ? option.speciesRows
+                          .filter((row) => isPlainObject(row))
+                          .map((row) => normalizeZoneLootSpeciesRow(row))
+                      : [],
+                  }))
+              : [],
           }))
       : [],
     speciesRows: Array.isArray(source.speciesRows)
       ? source.speciesRows
           .filter((row) => isPlainObject(row))
-          .map((row) => ({
-            slotIdx: Number.parseInt(row.slotIdx, 10) || 0,
-            groupLabel: trimString(row.groupLabel),
-            label: trimString(row.label),
-            iconUrl: trimString(row.iconUrl),
-            iconGradeTone: trimString(row.iconGradeTone),
-            fillColor: trimString(row.fillColor),
-            strokeColor: trimString(row.strokeColor),
-            textColor: trimString(row.textColor),
-            dropRateText: trimString(row.dropRateText),
-            dropRateSourceKind: trimString(row.dropRateSourceKind),
-            dropRateTooltip: trimString(row.dropRateTooltip),
-            presenceText: trimString(row.presenceText),
-            presenceSourceKind: trimString(row.presenceSourceKind),
-            presenceTooltip: trimString(row.presenceTooltip),
-            catchMethods: normalizeCatchMethods(row.catchMethods),
-          }))
+          .map((row) => normalizeZoneLootSpeciesRow(row))
       : [],
   };
 }
@@ -121,8 +155,9 @@ export async function loadZoneLootSummary(
   if (!Number.isInteger(normalizedZoneRgb) || normalizedZoneRgb < 0) {
     throw new Error(mapText("zone_loot.error.invalid_zone_rgb"));
   }
+  await languageReady();
   const baseUrl = resolveApiBaseUrl(locationLike);
-  const response = await fetchImpl(`${baseUrl}${DEFAULT_ZONE_LOOT_SUMMARY_PATH}`, {
+  const response = await fetchImpl(`${baseUrl}${localizedZoneLootSummaryPath()}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

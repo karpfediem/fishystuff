@@ -38,6 +38,17 @@ pub struct ZoneLootSummaryGroupRow {
     pub condition_tooltip: String,
     #[serde(default)]
     pub catch_methods: Vec<String>,
+    #[serde(default)]
+    pub condition_options: Vec<ZoneLootSummaryConditionOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ZoneLootSummaryConditionOption {
+    pub condition_text: String,
+    pub condition_tooltip: String,
+    pub active: bool,
+    pub species_rows: Vec<ZoneLootSummarySpeciesRow>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

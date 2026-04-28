@@ -82,6 +82,11 @@
       : null;
   }
 
+  function languageReady() {
+    const ready = languageHelper()?.ready;
+    return ready && typeof ready.then === "function" ? ready.catch(() => {}) : Promise.resolve();
+  }
+
   function t(key, vars = {}) {
     const helper = languageHelper();
     return helper ? helper.t(key, vars) : key;
@@ -1967,6 +1972,7 @@
 
   window.Fishydex = {
     restore: restore,
+    ready: languageReady,
     fishApiUrl: fishApiUrl,
     panelToggleLabel: panelToggleLabel,
     progressAriaLabel: progressAriaLabel,

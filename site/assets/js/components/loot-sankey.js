@@ -423,6 +423,9 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             );
             const mid = top + heightValue / 2;
             const valueLabel = `${row.count_share_text} · ${row.expected_count_text}`;
+            const conditionText = optionalString(row, "condition_text");
+            const labelY = conditionText ? mid - 15 : mid - 8;
+            const valueY = conditionText ? mid + 1 : mid + 10;
             const provenanceSegments = buildProvenanceSegments({
                 rateSourceKind: String(row.drop_rate_source_kind ?? ""),
                 rateDetail: String(row.drop_rate_tooltip ?? ""),
@@ -462,7 +465,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             groupNode.append("text")
                 .attr("x", LEFT_X + 10)
-                .attr("y", mid - 8)
+                .attr("y", labelY)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "13px")
@@ -471,12 +474,25 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             groupNode.append("text")
                 .attr("x", LEFT_X + 10)
-                .attr("y", mid + 10)
+                .attr("y", valueY)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "11.5px")
                 .style("font-weight", "600")
                 .text(valueLabel);
+
+            if (conditionText) {
+                const conditionLabel = groupNode.append("text")
+                    .attr("x", LEFT_X + 10)
+                    .attr("y", mid + 15)
+                    .attr("dominant-baseline", "middle")
+                    .style("fill", row.text_color)
+                    .style("font-size", "9.5px")
+                    .style("font-weight", "600")
+                    .style("opacity", 0.82)
+                    .text(truncateText(conditionText, 28));
+                conditionLabel.append("title").text(conditionText);
+            }
 
             if (provenanceSegmentHeight > 0.5) {
                 const provenanceRail = leftNodes.append("g")
@@ -803,6 +819,9 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             );
             const mid = top + heightValue / 2;
             const valueLabel = `${row.silver_share_text} · ${compactSilverText(row.expected_profit_text)}`;
+            const conditionText = optionalString(row, "condition_text");
+            const labelY = conditionText ? mid - 15 : mid - 8;
+            const valueY = conditionText ? mid + 1 : mid + 10;
 
             const groupNode = applyStatBreakdownAttrs(
                 profitGroups.append("g"),
@@ -823,7 +842,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             groupNode.append("text")
                 .attr("x", silverGroupX + 10)
-                .attr("y", mid - 8)
+                .attr("y", labelY)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "13px")
@@ -832,12 +851,25 @@ class FishyLootSankey extends FishyDatastarRenderElement {
 
             groupNode.append("text")
                 .attr("x", silverGroupX + 10)
-                .attr("y", mid + 10)
+                .attr("y", valueY)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "11.5px")
                 .style("font-weight", "600")
                 .text(valueLabel);
+
+            if (conditionText) {
+                const conditionLabel = groupNode.append("text")
+                    .attr("x", silverGroupX + 10)
+                    .attr("y", mid + 15)
+                    .attr("dominant-baseline", "middle")
+                    .style("fill", row.text_color)
+                    .style("font-size", "9.5px")
+                    .style("font-weight", "600")
+                    .style("opacity", 0.82)
+                    .text(truncateText(conditionText, 28));
+                conditionLabel.append("title").text(conditionText);
+            }
         });
 
         this.replaceRenderedChildren(svg.node());
