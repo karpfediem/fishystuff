@@ -193,14 +193,18 @@ let
 
       repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
       repo_name=${lib.escapeShellArg cfg.databaseName}
+      home_dir=${lib.escapeShellArg cfg.homeDir}
       sql_host=${lib.escapeShellArg cfg.listenAddress}
       sql_port=${lib.escapeShellArg (toString cfg.port)}
       remote_branch="$(resolve_remote_branch)"
       repo_snapshot_path="''${FISHYSTUFF_DOLT_REPO_SNAPSHOT:-}"
 
+      mkdir -p "$home_dir"
+      export HOME="$home_dir"
+
       if [ -n "$repo_snapshot_path" ]; then
         echo "FISHYSTUFF_DOLT_REPO_SNAPSHOT is set; restart fishystuff-dolt.service to activate $repo_snapshot_path" >&2
-        exit 0
+        exit 75
       fi
 
       cd "$repo_dir"

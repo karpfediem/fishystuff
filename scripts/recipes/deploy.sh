@@ -115,7 +115,7 @@ refresh_dolt="${2:?missing dolt refresh flag}"
 restart_edge="${3:?missing edge restart flag}"
 
 if [[ "$refresh_dolt" == "true" ]]; then
-  systemctl reload fishystuff-dolt.service || systemctl restart fishystuff-dolt.service
+  systemctl restart fishystuff-dolt.service
   systemctl is-active --quiet fishystuff-dolt.service
 fi
 
@@ -271,8 +271,6 @@ done
 
 if [[ -z "${selected_services[dolt]:-}" ]]; then
   backend_args+=("dolt_refresh_enabled=false")
-  backend_args+=("dolt_repo_snapshot_mode=off")
-elif [[ "$used_default_services" == "true" && -z "${FISHYSTUFF_DOLT_REPO_SNAPSHOT_MODE:-}" ]]; then
   backend_args+=("dolt_repo_snapshot_mode=off")
 fi
 
