@@ -275,7 +275,7 @@ class api_db_host($st) {
 				"-o",
 				"pipefail",
 				"-c",
-				fmt.printf("if /usr/bin/test -d '%s'; then /usr/bin/chown -R '%s:%s' '%s'; fi", $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group, $dolt_data_dir),
+				fmt.printf("data_dir='%s'; private_dir=\"$(/usr/bin/printf '%%s' \"$data_dir\" | /usr/bin/sed 's#^/var/lib/#/var/lib/private/#')\"; for dir in \"$data_dir\" \"$private_dir\"; do if /usr/bin/test -d \"$dir\"; then /usr/bin/chown -R '%s:%s' \"$dir\"; fi; done", $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group),
 			],
 			donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $deployment_marker, $dolt_state_owner_stamp_path),
 			doneshell => "/usr/bin/bash",
