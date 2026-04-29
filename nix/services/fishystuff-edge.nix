@@ -42,10 +42,26 @@ let
       }
 
       root * ${cfg.siteRoot}
-      header Cache-Control "no-store"
+      encode zstd gzip
 
-      try_files {path} {path}.html {path}/index.html =404
-      file_server
+      @runtime_config path /runtime-config.js
+      @site_static path /css/* /js/* /img/*
+
+      handle @runtime_config {
+        header Cache-Control "no-store"
+        file_server
+      }
+
+      handle @site_static {
+        header Cache-Control "public, max-age=3600"
+        file_server
+      }
+
+      handle {
+        header Cache-Control "no-store"
+        try_files {path} {path}.html {path}/index.html =404
+        file_server
+      }
     }
 
     ${cfg.apiAddress} {

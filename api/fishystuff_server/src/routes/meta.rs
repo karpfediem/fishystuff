@@ -1,9 +1,8 @@
 use axum::extract::{Extension, State};
+use axum::http::{header, HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::json;
-
-use fishystuff_api::models::meta::MetaResponse;
 
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::state::{RequestId, SharedState};
@@ -25,11 +24,11 @@ pub async fn readyz(
 pub async fn get_meta(
     State(state): State<SharedState>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<MetaResponse>> {
+) -> AppResult<impl IntoResponse> {
     let meta = with_timeout(state.config.request_timeout_secs, state.store.get_meta())
         .await
         .map_err(|err| err.with_request_id(request_id.0))?;
-    Ok(Json(meta))
+    Ok((meta_headers(), Json(meta)))
 }
 
 pub async fn openapi_json() -> Json<serde_json::Value> {
@@ -60,4 +59,14 @@ pub async fn openapi_json() -> Json<serde_json::Value> {
 
 pub fn map_request_id(err: AppError, request_id: &RequestId) -> AppError {
     err.with_request_id(request_id.0.clone())
+}
+
+fn meta_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=60, stale-while-revalidate=300"),
+    );
+    headers.insert(header::VARY, HeaderValue::from_static("Accept-Encoding"));
+    headers
 }

@@ -89,11 +89,13 @@ const DOLT_TCP_KEEPALIVE_PROBE_INTERVAL_SECS: u32 = 5;
 const DOLT_TCP_KEEPALIVE_PROBE_COUNT: u32 = 3;
 #[cfg(target_os = "linux")]
 const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
+const META_CACHE_TTL_SECS: u64 = 60;
 
 #[derive(Clone)]
 pub struct DoltMySqlStore {
     pool: Pool,
     defaults: MetaDefaults,
+    meta_cache: Arc<Mutex<Option<(Instant, MetaResponse)>>>,
     dolt_revision_cache: Arc<Mutex<HashMap<String, String>>>,
     layer_revision_id_cache: Arc<Mutex<HashMap<String, String>>>,
     event_zone_assignment_exists_cache: Arc<Mutex<HashMap<String, bool>>>,
@@ -395,6 +397,7 @@ impl DoltMySqlStore {
         let store = Self {
             pool,
             defaults,
+            meta_cache: Arc::new(Mutex::new(None)),
             dolt_revision_cache: Arc::new(Mutex::new(HashMap::new())),
             layer_revision_id_cache: Arc::new(Mutex::new(HashMap::new())),
             event_zone_assignment_exists_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -2073,11 +2076,19 @@ impl Store for DoltMySqlStore {
     async fn get_meta(&self) -> AppResult<MetaResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
+            if let Ok(cache) = this.meta_cache.lock() {
+                if let Some((cached_at, cached)) = cache.as_ref() {
+                    if cached_at.elapsed() <= Duration::from_secs(META_CACHE_TTL_SECS) {
+                        return Ok(cached.clone());
+                    }
+                }
+            }
+
             let patches = this.query_patches()?;
             let map_versions = this.query_map_versions()?;
             let default_patch = patches.last().cloned();
             let canonical_map = CanonicalMapInfo::default();
-            Ok(MetaResponse {
+            let meta = MetaResponse {
                 api_version: API_VERSION.to_string(),
                 canonical_map,
                 patches,
@@ -2085,7 +2096,11 @@ impl Store for DoltMySqlStore {
                 map_versions,
                 data_languages: this.query_data_languages()?,
                 defaults: this.defaults.clone(),
-            })
+            };
+            if let Ok(mut cache) = this.meta_cache.lock() {
+                *cache = Some((Instant::now(), meta.clone()));
+            }
+            Ok(meta)
         })
         .await
         .map_err(|err| AppError::internal(err.to_string()))?

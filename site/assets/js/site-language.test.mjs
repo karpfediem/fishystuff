@@ -149,15 +149,59 @@ function uiSettings(apiLang) {
   });
 }
 
-test("site language loads data languages from API metadata", async () => {
+test("site language does not fetch data languages when current setting is resolved", async () => {
+  const fetchUrls = [];
   const env = createContext({
-    metaResponse: { data_languages: ["en", "kr", "jp", "ko-KR", "kr"] },
+    fetch: async (url) => {
+      fetchUrls.push(url);
+      return {
+        ok: true,
+        async json() {
+          return { data_languages: ["en", "kr"] };
+        },
+      };
+    },
   });
 
   await env.window.__fishystuffLanguage.ready;
 
+  assert.deepEqual(fetchUrls, []);
+  assert.deepEqual(env.window.__fishystuffLanguage.dataLanguages(), ["en"]);
+});
+
+test("site language refresh loads data languages from API metadata", async () => {
+  const env = createContext({
+    metaResponse: { data_languages: ["en", "kr", "jp", "ko-KR", "kr"] },
+  });
+
+  await env.window.__fishystuffLanguage.refreshDataLanguages();
+
   assert.deepEqual(env.window.__fishystuffLanguage.dataLanguages(), ["en", "kr", "jp"]);
   assert.deepEqual(JSON.parse(env.localStorage.getItem(DATA_LANGUAGES_CACHE_KEY)), ["en", "kr", "jp"]);
+});
+
+test("site language ready fetches metadata when explicit data language is unresolved", async () => {
+  const fetchUrls = [];
+  const env = createContext({
+    localStorage: {
+      [UI_SETTINGS_KEY]: uiSettings("kr"),
+    },
+    fetch: async (url) => {
+      fetchUrls.push(url);
+      return {
+        ok: true,
+        async json() {
+          return { data_languages: ["en", "kr"] };
+        },
+      };
+    },
+  });
+
+  assert.equal(env.window.__fishystuffLanguage.current().apiLang, "en");
+  await env.window.__fishystuffLanguage.ready;
+
+  assert.deepEqual(fetchUrls, ["https://api.fishystuff.fish/api/v1/meta"]);
+  assert.equal(env.window.__fishystuffLanguage.current().apiLang, "kr");
 });
 
 test("site language uses available data codes without locale aliasing", async () => {

@@ -9,6 +9,7 @@
   const API_LANG_PATH = ["app", "language", "apiLang"];
   const AUTO_VALUE = "__auto__";
   const CHANGE_EVENT = "fishystuff:languagechange";
+  const LANGUAGE_DETAILS_BOUND_ATTR = "data-language-refresh-bound";
   let runtimeApiLanguages = initialApiLanguages();
   let dataLanguagesPromise = null;
 
@@ -180,6 +181,11 @@
     return defaultApiLang();
   }
 
+  function shouldLoadDataLanguages(state = snapshot()) {
+    const setting = trimString(state.apiLangSetting);
+    return Boolean(setting && isDataLangCode(setting) && !apiLanguages().includes(setting));
+  }
+
   function replaceVars(message, vars = {}) {
     return String(message || "").replace(/\{\s*\$([A-Za-z0-9_]+)\s*\}/g, function (_match, name) {
       return Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : "";
@@ -277,6 +283,16 @@
       return apiLanguages();
     })();
     return dataLanguagesPromise;
+  }
+
+  function languageReady() {
+    const current = snapshot();
+    if (!shouldLoadDataLanguages(current)) {
+      return Promise.resolve(current);
+    }
+    return loadDataLanguages()
+      .catch(() => apiLanguages())
+      .then(() => snapshot());
   }
 
   function catalogForLocale(locale) {
@@ -434,12 +450,52 @@
     }
   }
 
-  function renderLanguagePanels(root = document) {
+  function languagePanels(root = document) {
     const panels = Array.from(root.querySelectorAll("[data-language-panel]"))
       .filter((panel) => panel instanceof HTMLElement);
+    return panels;
+  }
+
+  function panelDetails(panel) {
+    return typeof panel.closest === "function" ? panel.closest("details") : null;
+  }
+
+  function isVisibleLanguagePanel(panel) {
+    const details = panelDetails(panel);
+    return !details || Boolean(details.open);
+  }
+
+  function bindLanguagePanelRefresh(panels) {
+    for (const panel of panels) {
+      const details = panelDetails(panel);
+      if (!details || details.hasAttribute(LANGUAGE_DETAILS_BOUND_ATTR)) {
+        continue;
+      }
+      details.setAttribute(LANGUAGE_DETAILS_BOUND_ATTR, "true");
+      details.addEventListener("toggle", () => {
+        if (!details.open) {
+          return;
+        }
+        loadDataLanguages()
+          .then(() => renderLanguagePanels(document))
+          .catch(() => {});
+      });
+    }
+  }
+
+  function maybeLoadDataLanguagesForVisiblePanels(panels) {
+    if (dataLanguagesPromise || !panels.some(isVisibleLanguagePanel)) {
+      return;
+    }
+    loadDataLanguages().catch(() => {});
+  }
+
+  function renderLanguagePanels(root = document) {
+    const panels = languagePanels(root);
     if (!panels.length) {
       return;
     }
+    bindLanguagePanelRefresh(panels);
     const state = snapshot();
     panels.forEach((panel, index) => {
       const instanceId = trimString(panel.getAttribute("data-language-panel-id")) || String(index + 1);
@@ -502,6 +558,7 @@
     });
 
     updateLanguageLabels(root, state);
+    maybeLoadDataLanguagesForVisiblePanels(panels);
   }
 
   function init() {
@@ -519,7 +576,7 @@
     dataLanguages: apiLanguages,
     renderPanels: renderLanguagePanels,
     resolveContentUrl,
-    ready: loadDataLanguages(),
+    ready: languageReady(),
     refreshDataLanguages: loadDataLanguages,
     t,
   });
