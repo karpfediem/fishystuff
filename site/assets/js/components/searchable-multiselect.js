@@ -40,7 +40,13 @@ export class FishySearchableMultiselect extends HTMLElement {
         this._closeTimer = 0;
         this._lastSearchKey = "";
         this._outsideListenerAttached = false;
+        this._panelAnchor = null;
+        this._panelDetached = false;
+        this._panelElement = null;
+        this._panelEventsAttached = false;
+        this._panelPositionFrame = 0;
         this._releaseInputs = [];
+        this._viewportListenersAttached = false;
 
         this._handleBoundInputEvent = this._handleBoundInputEvent.bind(this);
         this._handleClick = this._handleClick.bind(this);
@@ -50,6 +56,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         this._handleInput = this._handleInput.bind(this);
         this._handleKeyDown = this._handleKeyDown.bind(this);
         this._handleMouseDown = this._handleMouseDown.bind(this);
+        this._handleViewportChange = this._handleViewportChange.bind(this);
 
         this.addEventListener("click", this._handleClick);
         this.addEventListener("focusin", this._handleFocusIn);
@@ -78,6 +85,7 @@ export class FishySearchableMultiselect extends HTMLElement {
     connectedCallback() {
         upgradeProperty(this, "boundSelectId");
         upgradeProperty(this, "placeholder");
+        this._ensurePanelReference();
         this._bindInputs();
         queueMicrotask(() => {
             if (!this.isConnected) {
@@ -91,9 +99,12 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     disconnectedCallback() {
+        this.close();
+        this._detachPanelEvents();
         this._unbindInputs();
         this._cancelClose();
         this._detachOutsideListener();
+        this._detachViewportListeners();
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
@@ -121,7 +132,27 @@ export class FishySearchableMultiselect extends HTMLElement {
         panel.hidden = false;
         this.style.zIndex = "60";
         this._attachOutsideListener();
+        let detachedPanelWidth = 0;
+        if (this._usesDetachedPanel()) {
+            detachedPanelWidth = this._measurePanelRect().width;
+            this._detachPanel();
+            this._attachPanelEvents();
+            this._attachViewportListeners();
+            this._positionPanel(detachedPanelWidth);
+        }
         this.search(this.searchInputElement()?.value ?? "");
+        window.requestAnimationFrame(() => {
+            if (!this.isConnected || !this.isOpen()) {
+                return;
+            }
+            if (this._usesDetachedPanel()) {
+                this._positionPanel(detachedPanelWidth);
+            }
+            const searchInput = this.searchInputElement();
+            if (searchInput instanceof HTMLInputElement) {
+                searchInput.focus();
+            }
+        });
     }
 
     close() {
@@ -132,6 +163,11 @@ export class FishySearchableMultiselect extends HTMLElement {
         }
         this.style.zIndex = "";
         this._detachOutsideListener();
+        if (this._usesDetachedPanel()) {
+            this._detachViewportListeners();
+            this._restorePanel();
+            this._detachPanelEvents();
+        }
     }
 
     isOpen() {
@@ -140,15 +176,20 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     panelElement() {
-        return this.querySelector('[data-role="panel"]');
+        this._ensurePanelReference();
+        return this._panelElement;
     }
 
     resultsElement() {
-        return this.querySelector('[data-role="results"]');
+        return this.panelElement()?.querySelector?.('[data-role="results"]') ?? null;
     }
 
     searchInputElement() {
         return this.querySelector('[data-role="search-input"]');
+    }
+
+    shellElement() {
+        return this.querySelector('[data-role="shell"]');
     }
 
     selectionElement() {
@@ -258,6 +299,31 @@ export class FishySearchableMultiselect extends HTMLElement {
         this._outsideListenerAttached = true;
     }
 
+    _attachPanelEvents() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement) || this._panelEventsAttached) {
+            return;
+        }
+        panel.addEventListener("click", this._handleClick);
+        panel.addEventListener("focusin", this._handleFocusIn);
+        panel.addEventListener("focusout", this._handleFocusOut);
+        panel.addEventListener("input", this._handleInput);
+        panel.addEventListener("keydown", this._handleKeyDown);
+        panel.addEventListener("mousedown", this._handleMouseDown);
+        this._panelEventsAttached = true;
+    }
+
+    _attachViewportListeners() {
+        if (this._viewportListenersAttached) {
+            return;
+        }
+        window.addEventListener("resize", this._handleViewportChange);
+        window.addEventListener("scroll", this._handleViewportChange, true);
+        window.visualViewport?.addEventListener?.("resize", this._handleViewportChange);
+        window.visualViewport?.addEventListener?.("scroll", this._handleViewportChange);
+        this._viewportListenersAttached = true;
+    }
+
     _bindInputs() {
         this._unbindInputs();
         const select = this.boundSelectElement();
@@ -280,12 +346,104 @@ export class FishySearchableMultiselect extends HTMLElement {
         this._lastSearchKey = "";
     }
 
+    _clearDetachedPanelStyles() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement)) {
+            return;
+        }
+        panel.style.position = "";
+        panel.style.left = "";
+        panel.style.top = "";
+        panel.style.width = "";
+        panel.style.minWidth = "";
+        panel.style.maxWidth = "";
+        panel.style.maxHeight = "";
+        panel.style.overscrollBehavior = "";
+        panel.style.zIndex = "";
+        panel.style.margin = "";
+        this._clearDetachedResultsStyles();
+    }
+
+    _clearDetachedResultsStyles() {
+        const results = this.resultsElement();
+        if (!(results instanceof HTMLElement)) {
+            return;
+        }
+        results.style.maxHeight = "";
+        results.style.overflowY = "";
+        results.style.overscrollBehavior = "";
+    }
+
+    _configuredPanelWidthStyle() {
+        const width = getStringAttribute(this, "panel-width");
+        if (!width) {
+            return "";
+        }
+        return `min(${width}, calc(100vw - 24px))`;
+    }
+
     _detachOutsideListener() {
         if (!this._outsideListenerAttached) {
             return;
         }
         document.removeEventListener("pointerdown", this._handleDocumentPointerDown, true);
         this._outsideListenerAttached = false;
+    }
+
+    _detachPanel() {
+        const panel = this.panelElement();
+        const body = document.body || document.documentElement;
+        if (!(panel instanceof HTMLElement) || !(body instanceof HTMLElement) || this._panelDetached) {
+            return;
+        }
+        if (!(this._panelAnchor instanceof Node) && panel.parentNode) {
+            this._panelAnchor = document.createComment("fishy-searchable-multiselect-panel");
+            panel.parentNode.insertBefore(this._panelAnchor, panel);
+        }
+        body.appendChild(panel);
+        this._panelDetached = true;
+    }
+
+    _detachPanelEvents() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement) || !this._panelEventsAttached) {
+            return;
+        }
+        panel.removeEventListener("click", this._handleClick);
+        panel.removeEventListener("focusin", this._handleFocusIn);
+        panel.removeEventListener("focusout", this._handleFocusOut);
+        panel.removeEventListener("input", this._handleInput);
+        panel.removeEventListener("keydown", this._handleKeyDown);
+        panel.removeEventListener("mousedown", this._handleMouseDown);
+        this._panelEventsAttached = false;
+    }
+
+    _detachViewportListeners() {
+        if (!this._viewportListenersAttached) {
+            return;
+        }
+        window.removeEventListener("resize", this._handleViewportChange);
+        window.removeEventListener("scroll", this._handleViewportChange, true);
+        window.visualViewport?.removeEventListener?.("resize", this._handleViewportChange);
+        window.visualViewport?.removeEventListener?.("scroll", this._handleViewportChange);
+        this._viewportListenersAttached = false;
+        if (this._panelPositionFrame) {
+            window.cancelAnimationFrame?.(this._panelPositionFrame);
+            this._panelPositionFrame = 0;
+        }
+    }
+
+    _ensurePanelReference() {
+        if (!(this._panelElement instanceof HTMLElement)) {
+            this._panelElement = this.querySelector('[data-role="panel"]');
+        }
+        if (
+            this._panelElement instanceof HTMLElement
+            && !this._panelElement.hasAttribute("data-searchable-multiselect-panel")
+        ) {
+            this._panelElement.setAttribute("data-searchable-multiselect-panel", "");
+        }
+        return this._panelElement;
     }
 
     _findBoundOptionByValue(value) {
@@ -331,7 +489,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         const option = event.target.closest(
             "button[data-searchable-multiselect-option]",
         );
-        if (option && this.contains(option)) {
+        if (option && this._ownsNode(option)) {
             event.preventDefault();
             if (option.getAttribute("data-selected") === "true") {
                 this._clearSearch();
@@ -343,7 +501,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         }
 
         const shell = event.target.closest('[data-role="shell"]');
-        if (!shell || !this.contains(shell)) {
+        if (!shell || !this._ownsNode(shell)) {
             return;
         }
 
@@ -355,14 +513,14 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     _handleDocumentPointerDown(event) {
-        if (!(event.target instanceof Node) || this.contains(event.target)) {
+        if (!(event.target instanceof Node) || this._ownsNode(event.target)) {
             return;
         }
         this.close();
     }
 
     _handleFocusIn(event) {
-        if (!this.contains(event.target)) {
+        if (!this._ownsNode(event.target)) {
             return;
         }
         this._cancelClose();
@@ -377,7 +535,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         }
 
         const nextTarget = event.relatedTarget;
-        if (nextTarget instanceof Node && this.contains(nextTarget)) {
+        if (nextTarget instanceof Node && this._ownsNode(nextTarget)) {
             return;
         }
 
@@ -393,7 +551,7 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     _handleKeyDown(event) {
-        if (!(event.target instanceof Element) || !this.contains(event.target)) {
+        if (!(event.target instanceof Element) || !this._ownsNode(event.target)) {
             return;
         }
 
@@ -417,7 +575,7 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     _handleMouseDown(event) {
-        if (!(event.target instanceof Element) || !this.contains(event.target)) {
+        if (!(event.target instanceof Element) || !this._ownsNode(event.target)) {
             return;
         }
 
@@ -429,6 +587,22 @@ export class FishySearchableMultiselect extends HTMLElement {
         ) {
             event.preventDefault();
         }
+    }
+
+    _handleViewportChange(event = null) {
+        if (event?.type === "scroll" && event.target instanceof Node) {
+            const panel = this.panelElement();
+            if (panel instanceof Node && panel.contains(event.target)) {
+                return;
+            }
+        }
+        if (!this.isOpen() || this._panelPositionFrame) {
+            return;
+        }
+        this._panelPositionFrame = window.requestAnimationFrame(() => {
+            this._panelPositionFrame = 0;
+            this._positionPanel();
+        }) || 0;
     }
 
     _localTemplateMatches(template, normalizedQuery) {
@@ -481,6 +655,7 @@ export class FishySearchableMultiselect extends HTMLElement {
             label.textContent = "No matching options";
             item.append(label);
             results.replaceChildren(item);
+            this._positionOpenDetachedPanel();
             return;
         }
 
@@ -514,6 +689,220 @@ export class FishySearchableMultiselect extends HTMLElement {
                 return item;
             }),
         );
+        this._positionOpenDetachedPanel();
+    }
+
+    _measurePanelRect() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement)) {
+            return { width: 0, height: 0 };
+        }
+        const previousHidden = panel.hidden;
+        const previousVisibility = panel.style.visibility;
+        const previousWidth = panel.style.width;
+        const previousMinWidth = panel.style.minWidth;
+        const previousMaxWidth = panel.style.maxWidth;
+        const previousMaxHeight = panel.style.maxHeight;
+        const previousOverscrollBehavior = panel.style.overscrollBehavior;
+        const results = this.resultsElement();
+        const previousResultsMaxHeight = results instanceof HTMLElement
+            ? results.style.maxHeight
+            : "";
+        const previousResultsOverflowY = results instanceof HTMLElement
+            ? results.style.overflowY
+            : "";
+        const previousResultsOverscrollBehavior = results instanceof HTMLElement
+            ? results.style.overscrollBehavior
+            : "";
+        const configuredWidth = this._configuredPanelWidthStyle();
+        panel.hidden = false;
+        panel.style.visibility = "hidden";
+        panel.style.maxHeight = "";
+        panel.style.overscrollBehavior = "";
+        if (results instanceof HTMLElement) {
+            results.style.maxHeight = "";
+            results.style.overflowY = "";
+            results.style.overscrollBehavior = "";
+        }
+        if (configuredWidth) {
+            panel.style.width = configuredWidth;
+            panel.style.minWidth = "0";
+            panel.style.maxWidth = "calc(100vw - 24px)";
+        }
+        const rect = panel.getBoundingClientRect();
+        panel.hidden = previousHidden;
+        panel.style.visibility = previousVisibility;
+        panel.style.width = previousWidth;
+        panel.style.minWidth = previousMinWidth;
+        panel.style.maxWidth = previousMaxWidth;
+        panel.style.maxHeight = previousMaxHeight;
+        panel.style.overscrollBehavior = previousOverscrollBehavior;
+        if (results instanceof HTMLElement) {
+            results.style.maxHeight = previousResultsMaxHeight;
+            results.style.overflowY = previousResultsOverflowY;
+            results.style.overscrollBehavior = previousResultsOverscrollBehavior;
+        }
+        return rect;
+    }
+
+    _ownsNode(node) {
+        if (!(node instanceof Node)) {
+            return false;
+        }
+        const panel = this.panelElement();
+        return this.contains(node) || (panel instanceof Node && panel.contains(node));
+    }
+
+    _positionOpenDetachedPanel() {
+        if (!this.isOpen() || !this._usesDetachedPanel()) {
+            return;
+        }
+        this._positionPanel();
+    }
+
+    _positionPanel(measuredWidth = 0) {
+        const panel = this.panelElement();
+        const anchor = this.shellElement();
+        if (!(panel instanceof HTMLElement) || !(anchor instanceof HTMLElement)) {
+            return;
+        }
+        const viewportHeight = Math.max(window.innerHeight || 0, 240);
+        const visualViewportLeft = window.visualViewport
+            ? Math.max(0, window.visualViewport.offsetLeft || 0)
+            : 0;
+        const visualViewportTop = window.visualViewport
+            ? Math.max(0, window.visualViewport.offsetTop || 0)
+            : 0;
+        const visibleViewportRight = Math.max(
+            320,
+            Math.min(
+                window.innerWidth || Number.POSITIVE_INFINITY,
+                document.documentElement.clientWidth || Number.POSITIVE_INFINITY,
+                window.visualViewport
+                    ? window.visualViewport.offsetLeft + window.visualViewport.width
+                    : Number.POSITIVE_INFINITY,
+            ),
+        );
+        const visibleViewportBottom = Math.max(
+            240,
+            Math.min(
+                viewportHeight,
+                document.documentElement.clientHeight || Number.POSITIVE_INFINITY,
+                window.visualViewport
+                    ? window.visualViewport.offsetTop + window.visualViewport.height
+                    : Number.POSITIVE_INFINITY,
+            ),
+        );
+        const anchorRect = anchor.getBoundingClientRect();
+        const panelWidth = Math.round(measuredWidth || panel.getBoundingClientRect().width || 0);
+        const anchorWidth = Math.round(anchorRect.width || 0);
+        const edgeInset = 12;
+        const widthSource = getStringAttribute(this, "panel-min-width");
+        const maxWidth = visibleViewportRight - visualViewportLeft - edgeInset * 2;
+        const width = Math.max(
+            0,
+            Math.min(
+                widthSource === "panel" ? Math.max(anchorWidth, panelWidth) : (anchorWidth || panelWidth),
+                Math.max(0, maxWidth),
+            ),
+        );
+        this._clearDetachedResultsStyles();
+
+        panel.style.position = "fixed";
+        panel.style.margin = "0";
+        panel.style.zIndex = "70";
+        panel.style.width = width ? `${width}px` : "";
+        panel.style.minWidth = "0";
+        panel.style.maxWidth = `${Math.max(maxWidth, 160)}px`;
+        panel.style.maxHeight = "";
+        panel.style.overscrollBehavior = "";
+        panel.style.left = `${visualViewportLeft + edgeInset}px`;
+        panel.style.top = `${visualViewportTop + edgeInset}px`;
+
+        const panelRect = panel.getBoundingClientRect();
+        const minLeft = visualViewportLeft + edgeInset;
+        let left = Math.max(minLeft, anchorRect.left);
+        if (left + panelRect.width > visibleViewportRight - edgeInset) {
+            left = Math.max(
+                minLeft,
+                visibleViewportRight - panelRect.width - edgeInset,
+            );
+        }
+
+        const viewportBottom = Math.max(
+            visualViewportTop + edgeInset + 1,
+            visibleViewportBottom - edgeInset,
+        );
+        const minTop = visualViewportTop + edgeInset;
+        const gap = 8;
+        const belowTop = Math.round(anchorRect.bottom + gap);
+        const naturalHeight = Math.round(panelRect.height || 0);
+        const spaceBelow = Math.max(0, viewportBottom - belowTop);
+        const spaceAbove = Math.max(0, anchorRect.top - gap - minTop);
+        const placeBelow =
+            spaceBelow >= naturalHeight
+            || (spaceAbove < naturalHeight && spaceBelow >= spaceAbove);
+        let topInViewport;
+        let availableHeight;
+        if (placeBelow) {
+            topInViewport = Math.max(minTop, belowTop);
+            availableHeight = Math.max(0, viewportBottom - topInViewport);
+        } else {
+            availableHeight = spaceAbove;
+            const panelHeight = naturalHeight
+                ? Math.min(naturalHeight, availableHeight)
+                : availableHeight;
+            topInViewport = Math.max(minTop, Math.round(anchorRect.top - gap - panelHeight));
+        }
+
+        panel.style.left = `${left}px`;
+        panel.style.top = `${topInViewport}px`;
+        this._constrainPanelHeight(
+            panel,
+            Math.min(naturalHeight || availableHeight, availableHeight),
+        );
+    }
+
+    _constrainPanelHeight(panel, maxHeight) {
+        const constrainedHeight = Math.floor(Number(maxHeight) || 0);
+        if (!(panel instanceof HTMLElement) || constrainedHeight <= 0) {
+            return;
+        }
+
+        const results = this.resultsElement();
+        const panelRect = panel.getBoundingClientRect();
+        if (results instanceof HTMLElement) {
+            const resultsRect = results.getBoundingClientRect();
+            const reservedHeight = Math.max(
+                0,
+                Math.round((panelRect.height || 0) - (resultsRect.height || 0)),
+            );
+            const resultsMaxHeight = Math.max(48, constrainedHeight - reservedHeight);
+            results.style.maxHeight = `${resultsMaxHeight}px`;
+            results.style.overflowY = "auto";
+            results.style.overscrollBehavior = "contain";
+        }
+
+        panel.style.maxHeight = `${constrainedHeight}px`;
+        panel.style.overscrollBehavior = "contain";
+    }
+
+    _restorePanel() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement) || !this._panelDetached) {
+            return;
+        }
+        this._clearDetachedPanelStyles();
+        if (this._panelAnchor?.parentNode) {
+            this._panelAnchor.parentNode.insertBefore(panel, this._panelAnchor.nextSibling);
+        } else {
+            this.appendChild(panel);
+        }
+        this._panelDetached = false;
+    }
+
+    _usesDetachedPanel() {
+        return getStringAttribute(this, "panel-mode") === "detached";
     }
 
     _scheduleClose() {
@@ -565,6 +954,7 @@ export class FishySearchableMultiselect extends HTMLElement {
                 return chip;
             }),
         );
+        this._positionOpenDetachedPanel();
     }
 
     _syncBoundInputsFromMarkup() {

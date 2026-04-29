@@ -592,6 +592,7 @@ struct SearchableMultiselectConfig<'a> {
     lang: CalculatorLocale,
     root_id: &'a str,
     bind_key: &'a str,
+    panel_width: Option<&'a str>,
     search_placeholder: &'a str,
     helper_text: Option<&'a str>,
 }
@@ -11507,6 +11508,7 @@ fn render_calculator_app(
                     lang: data.lang,
                     root_id: "calculator-food-picker",
                     bind_key: "_food_slots",
+                    panel_width: Some("34rem"),
                     search_placeholder: &calculator_route_text(
                         data.lang,
                         "calculator.server.search.foods",
@@ -11528,6 +11530,7 @@ fn render_calculator_app(
                     lang: data.lang,
                     root_id: "calculator-buff-picker",
                     bind_key: "_buff_slots",
+                    panel_width: Some("34rem"),
                     search_placeholder: &calculator_route_text(
                         data.lang,
                         "calculator.server.search.buffs",
@@ -14366,11 +14369,20 @@ fn render_searchable_multiselect_control(
             )
         })
         .unwrap_or_default();
+    let panel_attrs = config
+        .panel_width
+        .map(|width| {
+            format!(
+                " panel-mode=\"detached\" panel-min-width=\"panel\" panel-width=\"{}\"",
+                escape_html(width)
+            )
+        })
+        .unwrap_or_default();
 
     format!(
         r#"<div class="grid gap-2">
     <div id="{bound_inputs_id}" data-role="bound-inputs-root" hidden>{bound_select_html}</div>
-    <fishy-searchable-multiselect id="{root_id}" class="relative block w-full" placeholder="{search_placeholder}" bound-select-id="{bound_inputs_id}">
+    <fishy-searchable-multiselect id="{root_id}" class="relative block w-full" placeholder="{search_placeholder}" bound-select-id="{bound_inputs_id}"{panel_attrs}>
     <div data-role="shell" class="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm">
         <div data-role="selection" class="flex flex-wrap gap-2"{selection_hidden_attr}>{selection_html}</div>
         <label class="flex min-w-[12rem] flex-1 items-center gap-2 text-sm">
@@ -14403,6 +14415,7 @@ fn render_searchable_multiselect_control(
         selection_hidden_attr = selection_hidden_attr,
         selection_html = selection_html,
         search_placeholder = escape_html(config.search_placeholder),
+        panel_attrs = panel_attrs,
         results_html = results_html,
         helper_text_html = helper_text_html,
         catalog_html = catalog_html,
@@ -15708,6 +15721,20 @@ mod tests {
         assert!(text.contains("data-bind=\"_buff_slots\""));
         assert!(text.contains("bound-select-id=\"calculator-food-picker-bound-inputs\""));
         assert!(text.contains("bound-select-id=\"calculator-buff-picker-bound-inputs\""));
+        let food_picker_markup = &text[text.find("id=\"calculator-food-picker\"").unwrap()..];
+        let food_picker_markup = &food_picker_markup[..food_picker_markup
+            .find("</fishy-searchable-multiselect>")
+            .unwrap()];
+        assert!(food_picker_markup.contains("panel-mode=\"detached\""));
+        assert!(food_picker_markup.contains("panel-min-width=\"panel\""));
+        assert!(food_picker_markup.contains("panel-width=\"34rem\""));
+        let buff_picker_markup = &text[text.find("id=\"calculator-buff-picker\"").unwrap()..];
+        let buff_picker_markup = &buff_picker_markup[..buff_picker_markup
+            .find("</fishy-searchable-multiselect>")
+            .unwrap()];
+        assert!(buff_picker_markup.contains("panel-mode=\"detached\""));
+        assert!(buff_picker_markup.contains("panel-min-width=\"panel\""));
+        assert!(buff_picker_markup.contains("panel-width=\"34rem\""));
         assert!(text.contains("data-bind=\"_outfit_slots\""));
         assert!(text.contains("bound-select-id=\"outfits-bound-inputs\""));
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
