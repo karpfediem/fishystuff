@@ -318,6 +318,7 @@ fn quoted_sql_values(values: &[String]) -> String {
         .join(",")
 }
 
+#[tracing::instrument(name = "store.calculator_catalog.query.pet_rows", skip_all)]
 fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, mysql::Error> {
     let query = format!(
         "SELECT \
@@ -373,6 +374,11 @@ fn query_pet_rows(conn: &mut PooledConn, as_of: &str) -> Result<Vec<RawPetRow>, 
         .collect())
 }
 
+#[tracing::instrument(
+    name = "store.calculator_catalog.query.pet_skill_map",
+    skip_all,
+    fields(table = %table_name)
+)]
 fn query_skill_map(
     conn: &mut PooledConn,
     as_of: &str,
@@ -400,6 +406,10 @@ fn pet_acquire_skill_rate_select(rate_index: usize, as_of: &str) -> String {
     )
 }
 
+#[tracing::instrument(
+    name = "store.calculator_catalog.query.pet_acquire_skill_rates",
+    skip_all
+)]
 fn query_acquire_skill_rates(
     conn: &mut PooledConn,
     as_of: &str,
@@ -428,6 +438,11 @@ fn query_acquire_skill_rates(
     Ok(result)
 }
 
+#[tracing::instrument(
+    name = "store.calculator_catalog.query.languagedata_texts",
+    skip_all,
+    fields(category = %unk, id_count = ids.len())
+)]
 fn query_languagedata_texts(
     conn: &mut PooledConn,
     lang: &DataLang,
@@ -463,6 +478,11 @@ fn query_languagedata_texts(
     Ok(result)
 }
 
+#[tracing::instrument(
+    name = "store.calculator_catalog.query.skilltype_meta",
+    skip_all,
+    fields(skill_count = skill_ids.len())
+)]
 fn query_skilltype_meta(
     conn: &mut PooledConn,
     as_of: &str,
@@ -496,6 +516,11 @@ fn query_skilltype_meta(
     Ok(result)
 }
 
+#[tracing::instrument(
+    name = "store.calculator_catalog.query.pet_special_skill_meta",
+    skip_all,
+    fields(skill_count = skill_ids.len())
+)]
 fn query_pet_special_skill_meta(
     conn: &mut PooledConn,
     as_of: &str,
@@ -1052,6 +1077,7 @@ fn calculator_pet_special_option_records(
 }
 
 impl DoltMySqlStore {
+    #[tracing::instrument(name = "store.calculator_catalog.query.pet_catalog", skip_all)]
     pub(super) fn query_calculator_pet_catalog(
         &self,
         lang: &DataLang,

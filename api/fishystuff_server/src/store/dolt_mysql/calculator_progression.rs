@@ -13,6 +13,7 @@ use super::util::db_unavailable;
 use super::DoltMySqlStore;
 
 impl DoltMySqlStore {
+    #[tracing::instrument(name = "store.calculator_catalog.query.mastery_prize_curve", skip_all)]
     pub(super) fn query_calculator_mastery_prize_curve(
         &self,
         ref_id: Option<&str>,
@@ -47,6 +48,7 @@ impl DoltMySqlStore {
             .collect())
     }
 
+    #[tracing::instrument(name = "store.calculator_catalog.query.zone_group_rates", skip_all)]
     pub(super) fn query_calculator_zone_group_rates(
         &self,
         ref_id: Option<&str>,

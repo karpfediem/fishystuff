@@ -2,7 +2,7 @@ use mysql::prelude::Queryable;
 use mysql::Row;
 use std::collections::HashMap;
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::store::{validate_dolt_ref, DataLang};
 
 use super::calculator_effects::{
@@ -334,6 +334,10 @@ fn merge_skill_effect_bundle(
 }
 
 impl DoltMySqlStore {
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.consumable_effect_lines",
+        skip_all
+    )]
     fn query_consumable_effect_line_rows(
         &self,
         ref_id: Option<&str>,
@@ -344,7 +348,6 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let keyword_predicate = |column: &str| {
             [
                 "낚시",
@@ -378,18 +381,6 @@ impl DoltMySqlStore {
              WHERE ({})",
             keyword_predicate("`Desc`")
         );
-        let skill_desc_rows: Vec<(String, Option<String>)> = match conn.query(skill_desc_query) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "skilltype_table_new") => Vec::new(),
-            Err(err) => return Err(db_unavailable(err)),
-        };
-        let skill_descriptions = skill_desc_rows
-            .into_iter()
-            .filter_map(|(skill_no, description)| {
-                Some((skill_no, normalize_optional_string(description)?))
-            })
-            .collect::<HashMap<_, _>>();
-
         let buff_desc_query = format!(
             "SELECT \
                 `Index` AS buff_id, \
@@ -400,12 +391,57 @@ impl DoltMySqlStore {
             keyword_predicate("`Description`"),
             keyword_predicate("`BuffName`")
         );
-        let buff_desc_rows: Vec<(String, Option<String>, Option<String>)> =
-            match conn.query(buff_desc_query) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "buff_table") => Vec::new(),
-                Err(err) => return Err(db_unavailable(err)),
-            };
+        let worker_span = tracing::Span::current();
+        let (skill_desc_rows, buff_desc_rows) = std::thread::scope(|scope| -> AppResult<_> {
+            let skill_desc_handle = scope.spawn({
+                let skill_desc_query = skill_desc_query.clone();
+                let worker_span = worker_span.clone();
+                move || -> AppResult<Vec<(String, Option<String>)>> {
+                    let _worker = worker_span.enter();
+                    let _span = tracing::info_span!(
+                        "store.calculator_catalog.query.consumable_effect_skill_descriptions"
+                    )
+                    .entered();
+                    let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+                    match conn.query(skill_desc_query) {
+                        Ok(rows) => Ok(rows),
+                        Err(err) if is_missing_table(&err, "skilltype_table_new") => Ok(Vec::new()),
+                        Err(err) => Err(db_unavailable(err)),
+                    }
+                }
+            });
+            let buff_desc_handle = scope.spawn({
+                let buff_desc_query = buff_desc_query.clone();
+                let worker_span = worker_span.clone();
+                move || {
+                    let _worker = worker_span.enter();
+                    let _span = tracing::info_span!(
+                        "store.calculator_catalog.query.consumable_effect_buff_texts"
+                    )
+                    .entered();
+                    let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+                    match conn.query(buff_desc_query) {
+                        Ok(rows) => Ok(rows),
+                        Err(err) if is_missing_table(&err, "buff_table") => Ok(Vec::new()),
+                        Err(err) => Err(db_unavailable(err)),
+                    }
+                }
+            });
+
+            let skill_desc_rows = skill_desc_handle.join().map_err(|_| {
+                AppError::internal("calculator catalog consumable skill text worker panicked")
+            })??;
+            let buff_desc_rows = buff_desc_handle.join().map_err(|_| {
+                AppError::internal("calculator catalog consumable buff text worker panicked")
+            })??;
+            Ok((skill_desc_rows, buff_desc_rows))
+        })?;
+        let skill_descriptions = skill_desc_rows
+            .into_iter()
+            .filter_map(|(skill_no, description)| {
+                Some((skill_no, normalize_optional_string(description)?))
+            })
+            .collect::<HashMap<_, _>>();
         let buff_text_rows = buff_desc_rows
             .into_iter()
             .filter_map(|(buff_id, buff_name, description)| {
@@ -466,6 +502,7 @@ impl DoltMySqlStore {
              FROM skill_table_new{as_of} \
              WHERE ({skill_filter}) OR ({buff_filter})"
         );
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let skill_rows: Vec<(
             String,
             Option<String>,
@@ -478,10 +515,15 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
-        )> = match conn.query(skill_rows_query) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "skill_table_new") => Vec::new(),
-            Err(err) => return Err(db_unavailable(err)),
+        )> = {
+            let _span =
+                tracing::info_span!("store.calculator_catalog.query.consumable_effect_skill_rows")
+                    .entered();
+            match conn.query(skill_rows_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "skill_table_new") => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            }
         };
 
         let mut relevant_skill_ids = Vec::<String>::new();
@@ -522,10 +564,15 @@ impl DoltMySqlStore {
              WHERE `SkillNo` IN ({quoted_skill_ids}) \
                 OR `SubSkillNo` IN ({quoted_skill_ids})"
         );
-        let item_rows: Vec<(i64, Option<String>, Option<String>)> = match conn.query(item_query) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "item_table") => Vec::new(),
-            Err(err) => return Err(db_unavailable(err)),
+        let item_rows: Vec<(i64, Option<String>, Option<String>)> = {
+            let _span =
+                tracing::info_span!("store.calculator_catalog.query.consumable_effect_item_rows")
+                    .entered();
+            match conn.query(item_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "item_table") => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            }
         };
 
         let mut effect_lines = Vec::new();
@@ -564,6 +611,11 @@ impl DoltMySqlStore {
         Ok(effect_lines)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.consumable_items",
+        skip_all,
+        fields(item_count = item_ids.len())
+    )]
     fn query_consumable_item_rows(
         &self,
         ref_id: Option<&str>,
@@ -617,6 +669,11 @@ impl DoltMySqlStore {
             .collect())
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.consumable_skill_buff_categories",
+        skip_all,
+        fields(skill_count = skill_ids.len())
+    )]
     fn query_consumable_skill_buff_categories(
         &self,
         ref_id: Option<&str>,
@@ -772,6 +829,10 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.lightstone_source_rows",
+        skip_all
+    )]
     fn query_lightstone_source_rows(
         &self,
         lang: &DataLang,
@@ -1034,6 +1095,11 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.skill_buff_effect_bundles",
+        skip_all,
+        fields(skill_count = skill_nos.len())
+    )]
     fn query_skill_buff_effect_bundles(
         &self,
         ref_id: Option<&str>,
@@ -1181,6 +1247,11 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.raw_enchant_skill_map",
+        skip_all,
+        fields(item_name_count = item_names.len())
+    )]
     fn query_raw_enchant_skill_map(
         &self,
         ref_id: Option<&str>,
@@ -1247,6 +1318,11 @@ impl DoltMySqlStore {
             .collect())
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.raw_enchant_effect_text_map",
+        skip_all,
+        fields(item_name_count = item_names.len())
+    )]
     fn query_raw_enchant_effect_text_map(
         &self,
         ref_id: Option<&str>,
@@ -1313,6 +1389,10 @@ impl DoltMySqlStore {
         Ok(effect_text_by_key)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.raw_enchant_skill_only_candidates",
+        skip_all
+    )]
     fn query_raw_enchant_skill_only_candidates(
         &self,
         lang: &DataLang,
@@ -1439,6 +1519,14 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.legacy_item_rows",
+        skip_all,
+        fields(
+            excluded_item_count = excluded_item_ids.len(),
+            excluded_effect_count = excluded_effect_names.len(),
+        )
+    )]
     fn query_legacy_calculator_item_rows(
         &self,
         ref_id: Option<&str>,
@@ -1496,6 +1584,10 @@ impl DoltMySqlStore {
         conn.query(query).map_err(db_unavailable)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.consumable_source_backed_items",
+        skip_all
+    )]
     fn query_consumable_source_backed_item_rows(
         &self,
         lang: &DataLang,
@@ -1622,6 +1714,10 @@ impl DoltMySqlStore {
         Ok(source_backed_rows)
     }
 
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.enchant_source_backed_items",
+        skip_all
+    )]
     fn query_source_owned_enchant_source_backed_item_rows(
         &self,
         lang: &DataLang,
@@ -1633,7 +1729,6 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let query = format!(
             "SELECT \
                 item_type, \
@@ -1647,14 +1742,49 @@ impl DoltMySqlStore {
                 exp_fish \
              FROM calculator_enchant_item_effect_entries{as_of}"
         );
-        let rows: Vec<Row> = match conn.query(query) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "calculator_enchant_item_effect_entries") => {
-                return Ok(Vec::new());
-            }
-            Err(err) => return Err(db_unavailable(err)),
-        };
+        let worker_span = tracing::Span::current();
+        let (rows, skill_only_candidates) = std::thread::scope(|scope| -> AppResult<_> {
+            let rows_handle = scope.spawn({
+                let query = query.clone();
+                let worker_span = worker_span.clone();
+                move || -> AppResult<Option<Vec<Row>>> {
+                    let _worker = worker_span.enter();
+                    let _span = tracing::info_span!(
+                        "store.calculator_catalog.query.enchant_item_effect_entries"
+                    )
+                    .entered();
+                    let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+                    let rows: Option<Vec<Row>> = match conn.query(query) {
+                        Ok(rows) => Ok(Some(rows)),
+                        Err(err)
+                            if is_missing_table(&err, "calculator_enchant_item_effect_entries") =>
+                        {
+                            Ok(None)
+                        }
+                        Err(err) => Err(db_unavailable(err)),
+                    }?;
+                    Ok(rows)
+                }
+            });
+            let skill_only_handle = scope.spawn({
+                let worker_span = worker_span.clone();
+                move || {
+                    let _worker = worker_span.enter();
+                    self.query_raw_enchant_skill_only_candidates(lang, ref_id)
+                }
+            });
 
+            let rows = rows_handle.join().map_err(|_| {
+                AppError::internal("calculator catalog enchant effect worker panicked")
+            })??;
+            let skill_only_candidates = skill_only_handle.join().map_err(|_| {
+                AppError::internal("calculator catalog enchant skill-only worker panicked")
+            })??;
+            let Some(rows) = rows else {
+                return Ok((Vec::new(), Vec::new()));
+            };
+            Ok((rows, skill_only_candidates))
+        })?;
         let mut chosen_effects =
             HashMap::<(String, String), CalculatorEnchantEffectEntryRow>::new();
         for row in rows {
@@ -1711,7 +1841,6 @@ impl DoltMySqlStore {
             }
         }
 
-        let skill_only_candidates = self.query_raw_enchant_skill_only_candidates(lang, ref_id)?;
         for candidate in skill_only_candidates {
             let key = (candidate.item_type.clone(), candidate.item_name_ko.clone());
             match chosen_effects.get_mut(&key) {
@@ -1929,11 +2058,43 @@ impl DoltMySqlStore {
 
         let query_ref = Some(resolved_ref);
         let result: AppResult<CalculatorCatalogSourceData> = (|| {
-            let all_legacy_rows = self.query_legacy_calculator_item_rows(query_ref, &[], &[])?;
-            let mut source_backed_rows =
-                self.query_consumable_source_backed_item_rows(lang, query_ref)?;
-            source_backed_rows
-                .extend(self.query_source_owned_enchant_source_backed_item_rows(lang, query_ref)?);
+            let worker_span = tracing::Span::current();
+            let (all_legacy_rows, source_backed_rows) =
+                std::thread::scope(|scope| -> AppResult<_> {
+                    let legacy_rows_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            self.query_legacy_calculator_item_rows(query_ref, &[], &[])
+                        }
+                    });
+                    let consumable_rows_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            self.query_consumable_source_backed_item_rows(lang, query_ref)
+                        }
+                    });
+                    let enchant_rows_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            self.query_source_owned_enchant_source_backed_item_rows(lang, query_ref)
+                        }
+                    });
+
+                    let all_legacy_rows = legacy_rows_handle.join().map_err(|_| {
+                        AppError::internal("calculator catalog legacy item worker panicked")
+                    })??;
+                    let mut source_backed_rows =
+                        consumable_rows_handle.join().map_err(|_| {
+                            AppError::internal("calculator catalog consumable item worker panicked")
+                        })??;
+                    source_backed_rows.extend(enchant_rows_handle.join().map_err(|_| {
+                        AppError::internal("calculator catalog enchant item worker panicked")
+                    })??);
+                    Ok((all_legacy_rows, source_backed_rows))
+                })?;
             let item_source_metadata = self.query_item_table_metadata(
                 lang,
                 query_ref,

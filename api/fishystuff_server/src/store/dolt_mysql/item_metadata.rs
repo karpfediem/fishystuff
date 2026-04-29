@@ -76,6 +76,11 @@ fn quote_sql_string_list(values: &[String]) -> String {
 }
 
 impl DoltMySqlStore {
+    #[tracing::instrument(
+        name = "store.calculator_catalog.query.item_table_metadata",
+        skip_all,
+        fields(item_count = item_ids.len())
+    )]
     pub(super) fn query_item_table_metadata(
         &self,
         lang: &DataLang,

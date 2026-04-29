@@ -1,6 +1,6 @@
 use fishystuff_api::models::calculator::CalculatorCatalogResponse;
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::store::DataLang;
 
 use super::calculator_defaults::{
@@ -59,15 +59,84 @@ impl DoltMySqlStore {
         let query_ref = Some(resolved_ref.as_str());
         let result: AppResult<CalculatorCatalogResponse> = (|| {
             self.validate_data_lang_available(&lang, query_ref)?;
-            let source_data = self.query_calculator_catalog_source_data_at_revision(
-                &lang,
-                &revision,
-                &resolved_ref,
-            )?;
-            let items = self.build_calculator_items_from_source_data(&lang, source_data)?;
-            let mastery_prize_curve = self.query_calculator_mastery_prize_curve(query_ref)?;
-            let zone_group_rates = self.query_calculator_zone_group_rates(query_ref)?;
-            let pets = self.query_calculator_pet_catalog(&lang, query_ref)?;
+            let worker_span = tracing::Span::current();
+            let (source_data, mastery_prize_curve, zone_group_rates, pets) =
+                std::thread::scope(|scope| -> AppResult<_> {
+                    let source_lang = lang.clone();
+                    let source_revision = revision.clone();
+                    let source_resolved_ref = resolved_ref.clone();
+                    let source_data_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            let _span = tracing::info_span!(
+                                "store.calculator_catalog.source_data",
+                                lang = %source_lang.code(),
+                                revision = %source_revision,
+                            )
+                            .entered();
+                            self.query_calculator_catalog_source_data_at_revision(
+                                &source_lang,
+                                &source_revision,
+                                &source_resolved_ref,
+                            )
+                        }
+                    });
+                    let mastery_prize_curve_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            let _span =
+                                tracing::info_span!("store.calculator_catalog.mastery_prize_curve")
+                                    .entered();
+                            self.query_calculator_mastery_prize_curve(query_ref)
+                        }
+                    });
+                    let zone_group_rates_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            let _span =
+                                tracing::info_span!("store.calculator_catalog.zone_group_rates")
+                                    .entered();
+                            self.query_calculator_zone_group_rates(query_ref)
+                        }
+                    });
+                    let pet_lang = lang.clone();
+                    let pets_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            let _span = tracing::info_span!("store.calculator_catalog.pet_catalog")
+                                .entered();
+                            self.query_calculator_pet_catalog(&pet_lang, query_ref)
+                        }
+                    });
+
+                    let source_data = source_data_handle.join().map_err(|_| {
+                        AppError::internal("calculator catalog source data worker panicked")
+                    })??;
+                    let mastery_prize_curve =
+                        mastery_prize_curve_handle.join().map_err(|_| {
+                            AppError::internal("calculator catalog mastery curve worker panicked")
+                        })??;
+                    let zone_group_rates = zone_group_rates_handle.join().map_err(|_| {
+                        AppError::internal("calculator catalog zone group rates worker panicked")
+                    })??;
+                    let pets = pets_handle.join().map_err(|_| {
+                        AppError::internal("calculator catalog pet catalog worker panicked")
+                    })??;
+                    Ok((source_data, mastery_prize_curve, zone_group_rates, pets))
+                })?;
+            let items = {
+                let _span = tracing::info_span!("store.calculator_catalog.build_items").entered();
+                self.build_calculator_items_from_source_data(&lang, source_data)?
+            };
+            let defaults = {
+                let _span =
+                    tracing::info_span!("store.calculator_catalog.default_signals").entered();
+                build_calculator_default_signals(&pets)
+            };
             Ok(CalculatorCatalogResponse {
                 items,
                 lifeskill_levels: build_calculator_lifeskill_levels(),
@@ -77,7 +146,7 @@ impl DoltMySqlStore {
                 trade_levels: build_calculator_trade_levels(&lang),
                 session_units: build_calculator_session_units(&lang),
                 session_presets: build_calculator_session_presets(&lang),
-                defaults: build_calculator_default_signals(&pets),
+                defaults,
                 pets,
             })
         })();

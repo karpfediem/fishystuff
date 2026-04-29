@@ -338,6 +338,7 @@ impl DoltMySqlStore {
         items
     }
 
+    #[tracing::instrument(name = "store.calculator_catalog.assemble_items", skip_all)]
     pub(super) fn build_calculator_items_from_source_data(
         &self,
         lang: &DataLang,

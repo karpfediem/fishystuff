@@ -2532,9 +2532,13 @@ impl Store for DoltMySqlStore {
         ref_id: Option<String>,
     ) -> AppResult<CalculatorCatalogResponse> {
         let this = self.clone();
-        tokio::task::spawn_blocking(move || this.query_calculator_catalog(lang, ref_id.as_deref()))
-            .await
-            .map_err(|err| AppError::internal(err.to_string()))?
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            let _span = span.enter();
+            this.query_calculator_catalog(lang, ref_id.as_deref())
+        })
+        .await
+        .map_err(|err| AppError::internal(err.to_string()))?
     }
 
     #[instrument(name = "store.calculator_zone_loot", skip_all)]
