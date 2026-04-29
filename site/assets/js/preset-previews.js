@@ -4,6 +4,7 @@
   const CALCULATOR_LAYOUT_COLLECTION_KEY = "calculator-layouts";
   const CALCULATOR_PRESET_COLLECTION_KEY = "calculator-presets";
   const MAP_PRESET_COLLECTION_KEY = "map-presets";
+  const FISHYDEX_PRESET_COLLECTION_KEY = "fishydex-presets";
 
   const CALCULATOR_SECTION_TABS = Object.freeze([
     "mode",
@@ -92,6 +93,10 @@
     }),
     view: Object.freeze({ viewMode: "2d", camera: Object.freeze({}) }),
   });
+  const DEFAULT_FISHYDEX_PRESET_PAYLOAD = Object.freeze({
+    caughtIds: Object.freeze([]),
+    favouriteIds: Object.freeze([]),
+  });
 
   const adapters = new Map();
 
@@ -116,6 +121,27 @@
       return value;
     }
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function formatText(text, vars = {}) {
+    return String(text ?? "").replace(/\{\s*\$([A-Za-z0-9_]+)\s*\}/g, (_match, name) => {
+      return Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : "";
+    });
+  }
+
+  function translatedText(key, vars = {}) {
+    const normalizedKey = trimString(key);
+    if (!normalizedKey) {
+      return "";
+    }
+    const helper = globalThis.window?.__fishystuffLanguage;
+    if (helper && typeof helper.t === "function") {
+      const translated = trimString(helper.t(normalizedKey, vars));
+      if (translated && translated !== normalizedKey) {
+        return translated;
+      }
+    }
+    return formatText(normalizedKey, vars);
   }
 
   function documentFor(container) {
@@ -465,6 +491,60 @@
     };
   }
 
+  function normalizeFishIds(values) {
+    const rawValues = Array.isArray(values)
+      ? values
+      : values === undefined || values === null
+        ? []
+        : [values];
+    const unique = new Set();
+    for (const raw of rawValues) {
+      const fishId = Number.parseInt(raw, 10);
+      if (Number.isInteger(fishId) && fishId > 0) {
+        unique.add(fishId);
+      }
+    }
+    return Array.from(unique).sort((left, right) => left - right);
+  }
+
+  function normalizeFishydexPresetPayload(value) {
+    const source = isPlainObject(value) ? value : {};
+    return {
+      caughtIds: normalizeFishIds(source.caughtIds),
+      favouriteIds: normalizeFishIds(source.favouriteIds),
+    };
+  }
+
+  function fishydexPresetTitleIconAlias(context = {}) {
+    const normalized = normalizeFishydexPresetPayload(context.payload || context);
+    if (normalized.favouriteIds.length) {
+      return "heart-fill";
+    }
+    if (normalized.caughtIds.length) {
+      return "check-badge-solid";
+    }
+    return "nav-dex";
+  }
+
+  function fishydexPresetPreviewModel(payload) {
+    const normalized = normalizeFishydexPresetPayload(payload);
+    const trackedCount = new Set([
+      ...normalized.caughtIds,
+      ...normalized.favouriteIds,
+    ]).size;
+    return {
+      rows: [
+        [
+          translatedText("fishydex.presets.preview.caught", { count: normalized.caughtIds.length }),
+          translatedText("fishydex.presets.preview.favourite", { count: normalized.favouriteIds.length }),
+        ],
+        [
+          translatedText("fishydex.presets.preview.tracked", { count: trackedCount }),
+        ],
+      ],
+    };
+  }
+
   function renderSummaryPreview(container, context = {}) {
     if (!hasRenderableContainer(container)) {
       return;
@@ -662,6 +742,20 @@
     normalizePayload: normalizeMapPresetPayload,
     previewModel: mapPresetPreviewModel,
     titleIconAlias: mapPresetTitleIconAlias,
+    renderPreview: renderSummaryPreview,
+  });
+
+  registerAdapter(FISHYDEX_PRESET_COLLECTION_KEY, {
+    fixedPresets() {
+      return [fixedPreset(
+        "default",
+        translatedText("fishydex.presets.default"),
+        DEFAULT_FISHYDEX_PRESET_PAYLOAD,
+      )];
+    },
+    normalizePayload: normalizeFishydexPresetPayload,
+    previewModel: fishydexPresetPreviewModel,
+    titleIconAlias: fishydexPresetTitleIconAlias,
     renderPreview: renderSummaryPreview,
   });
 

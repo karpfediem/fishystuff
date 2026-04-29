@@ -13,6 +13,9 @@ fishydex.presets.title = Dex-Vorlagen
 fishydex.presets.open = Dex-Vorlagen
 fishydex.presets.default = Standard-Dex
 fishydex.presets.default_name = Dex {$index}
+fishydex.presets.preview.caught = {$count} gefangen
+fishydex.presets.preview.favourite = {$count} Favoriten
+fishydex.presets.preview.tracked = {$count} markiert
 
 fishydex.filter.panel = Filter
 fishydex.filter.expand = Filterbereich erweitern

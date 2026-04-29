@@ -88,6 +88,23 @@ function createContext() {
   return { context, window, document };
 }
 
+function collectTextContent(element) {
+  const values = [];
+  function visit(node) {
+    if (!node) {
+      return;
+    }
+    if (node.textContent) {
+      values.push(node.textContent);
+    }
+    for (const child of node.childNodes || []) {
+      visit(child);
+    }
+  }
+  visit(element);
+  return values;
+}
+
 test("preset preview registry exposes built-in fixed preset payloads", () => {
   const { window } = createContext();
   const helper = window.__fishystuffPresetPreviews;
@@ -99,6 +116,10 @@ test("preset preview registry exposes built-in fixed preset payloads", () => {
   assert.deepEqual(
     helper.fixedPresets("map-presets").map((preset) => [preset.id, preset.payload.bridgedUi.viewMode]),
     [["default", "2d"]],
+  );
+  assert.deepEqual(
+    helper.fixedPresets("fishydex-presets").map((preset) => [preset.id, preset.payload]),
+    [["default", { caughtIds: [], favouriteIds: [] }]],
   );
 });
 
@@ -117,6 +138,14 @@ test("preset preview registry resolves title icons without page adapters", () =>
   assert.equal(
     helper.titleIconAlias("map-presets", { payload: { bridgedUi: { viewMode: "3d" } } }),
     "cube-view",
+  );
+  assert.equal(
+    helper.titleIconAlias("fishydex-presets", { payload: { caughtIds: [10], favouriteIds: [] } }),
+    "check-badge-solid",
+  );
+  assert.equal(
+    helper.titleIconAlias("fishydex-presets", { payload: { caughtIds: [10], favouriteIds: [10] } }),
+    "heart-fill",
   );
 });
 
@@ -138,4 +167,38 @@ test("preset preview registry renders the shared layout preview shell", () => {
   assert.equal(container.childNodes.length, 1);
   assert.equal(container.childNodes[0].tagName, "svg");
   assert.equal(document.createElement("div").childNodes.length, 0);
+});
+
+test("preset preview registry renders Fishydex preset count chips", () => {
+  const { window, document } = createContext();
+  window.__fishystuffLanguage = {
+    t(key, vars = {}) {
+      const messages = {
+        "fishydex.presets.preview.caught": "{$count} caught",
+        "fishydex.presets.preview.favourite": "{$count} favourite",
+        "fishydex.presets.preview.tracked": "{$count} tracked",
+      };
+      return String(messages[key] ?? key).replace(/\{\s*\$([A-Za-z0-9_]+)\s*\}/g, (_match, name) => (
+        Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : ""
+      ));
+    },
+  };
+  const helper = window.__fishystuffPresetPreviews;
+  const container = document.createElement("div");
+
+  const rendered = helper.render(container, {
+    collectionKey: "fishydex-presets",
+    payload: {
+      caughtIds: [400, 100, 400],
+      favouriteIds: [900, 100],
+      search_query: "ignored",
+    },
+  });
+
+  assert.equal(rendered, true);
+  assert.deepEqual(collectTextContent(container), [
+    "2 caught",
+    "2 favourite",
+    "3 tracked",
+  ]);
 });
