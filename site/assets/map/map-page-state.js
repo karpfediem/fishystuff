@@ -630,11 +630,19 @@ export function normalizeMapPresetPayload(value) {
   const sourceBridgedFilters = isPlainObject(source.bridgedFilters)
     ? source.bridgedFilters
     : source._map_bridged?.filters;
+  const mergedSearch = mergeMapPresetBranch(defaults.search, sourceSearch);
+  if (
+    isPlainObject(sourceSearch) &&
+    sourceSearch.expression === undefined &&
+    Array.isArray(sourceSearch.selectedTerms)
+  ) {
+    delete mergedSearch.expression;
+  }
   const uiSnapshot = uiStorageSnapshot({
     _map_ui: {
       windowUi: mergeMapPresetBranch(defaults.windowUi, sourceWindowUi),
       layers: mergeMapPresetBranch(defaults.layers, sourceLayers),
-      search: mergeMapPresetBranch(defaults.search, sourceSearch),
+      search: mergedSearch,
     },
     _map_bridged: {
       ui: mergeMapPresetBranch(defaults.bridgedUi, sourceBridgedUi),

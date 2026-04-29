@@ -68,6 +68,7 @@ presets.error.capture = 현재 프리셋 상태를 사용할 수 없습니다.
 presets.quick_switch.layout = 작업 공간
 presets.quick_switch.calculator = 계산기
 presets.quick_switch.map = 지도
+presets.quick_switch.dex = 도감
 presets.quick_switch.empty = 사용할 수 있는 프리셋이 없습니다.
 presets.quick_switch.search = 프리셋 검색...
 presets.quick_switch.not_selected = 선택되지 않음

@@ -232,6 +232,7 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
   assert.deepEqual(payload.windowUi.search, { open: false, collapsed: true, x: 20, y: 30 });
   assert.equal(payload.windowUi.settings.normalizeRates, false);
   assert.equal(payload.search.query, "eel");
+  assert.deepEqual(payload.search.selectedTerms, [{ kind: "fish", fishId: 77 }]);
   assert.deepEqual(payload.bridgedFilters.layerIdsVisible, ["bookmarks", "zone_mask"]);
   assert.deepEqual(payload.bridgedFilters.layerOpacities, { zone_mask: 0.5 });
   assert.deepEqual(payload.view, { viewMode: "3d", camera: {} });
@@ -298,6 +299,7 @@ test("map-page-state map preset restore patch applies UI and view without bookma
   assert.equal(patch._map_bookmarks, undefined);
   assert.equal(patch._map_ui.windowUi.settings.normalizeRates, false);
   assert.equal(patch._map_ui.search.query, "tuna");
+  assert.deepEqual(patch._map_ui.search.selectedTerms, [{ kind: "fish", fishId: 912 }]);
   assert.equal(patch._map_bridged.ui.showPoints, false);
   assert.deepEqual(patch._map_bridged.filters.layerIdsVisible, ["zone_mask"]);
   assert.deepEqual(patch._map_session.view, { viewMode: "3d", camera: { zoom: 4 } });

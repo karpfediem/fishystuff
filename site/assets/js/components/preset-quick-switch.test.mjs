@@ -7,6 +7,7 @@ import {
   buildPresetQuickSwitchRows,
   filterPresetQuickSwitchOptions,
   normalizePresetQuickSwitchEntry,
+  presetQuickSwitchEntries,
 } from "./preset-quick-switch.js";
 
 function translate(_key, fallback, vars = {}) {
@@ -164,6 +165,24 @@ test("buildPresetQuickSwitchRows accepts a future preset collection as another e
   assert.equal(rows[0].collectionKey, "zone-presets");
   assert.equal(rows[0].selectedLabel, "Default zones");
   assert.equal(rows[0].options[0].key, "fixed:default");
+});
+
+test("preset quick switch default entries include Fishydex presets", () => {
+  const rows = buildPresetQuickSwitchRows(
+    fakeHelper(),
+    presetQuickSwitchEntries(),
+    translate,
+  );
+
+  assert.deepEqual(
+    rows.map((row) => [row.collectionKey, row.label, row.selectedLabel]),
+    [
+      ["calculator-layouts", "Workspace", "Default"],
+      ["calculator-presets", "Calculator", "Default calculator"],
+      ["map-presets", "Map", "Default map"],
+      ["fishydex-presets", "Dex", "Default dex"],
+    ],
+  );
 });
 
 test("buildPresetQuickSwitchRow keeps saved selection switchable without a page adapter", () => {

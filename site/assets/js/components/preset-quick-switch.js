@@ -32,6 +32,17 @@ const DEFAULT_PRESET_QUICK_SWITCH_ENTRIES = Object.freeze([
     order: 30,
     fixedFallbacks: [{ id: "default", labelFallback: "Default map" }],
   },
+  {
+    collectionKey: "fishydex-presets",
+    labelKey: "presets.quick_switch.dex",
+    labelFallback: "Dex",
+    order: 40,
+    fixedFallbacks: [{
+      id: "default",
+      labelKey: "fishydex.presets.default",
+      labelFallback: "Default dex",
+    }],
+  },
 ]);
 
 const registeredEntries = new Map();

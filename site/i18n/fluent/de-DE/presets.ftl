@@ -68,6 +68,7 @@ presets.error.capture = Aktueller Vorlagenzustand ist nicht verfügbar.
 presets.quick_switch.layout = Arbeitsbereich
 presets.quick_switch.calculator = Rechner
 presets.quick_switch.map = Karte
+presets.quick_switch.dex = Dex
 presets.quick_switch.empty = Keine Vorlagen verfügbar.
 presets.quick_switch.search = Vorlagen suchen...
 presets.quick_switch.not_selected = Nicht ausgewählt

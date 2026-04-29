@@ -4,6 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 import { applyMapPageSignalsPatch } from "./map-page-signals.js";
+import { createMapPageDerivedController } from "./map-page-derived.js";
 import {
   applyStoredMapPresetState,
   bindMapPresetController,
@@ -233,6 +234,58 @@ test("map preset adapter applies durable map state without replacing bookmarks",
     ]);
     assert.equal(env.helper.selectedPresetId(MAP_PRESET_COLLECTION_KEY), preset.id);
     assert.equal(env.helper.current(MAP_PRESET_COLLECTION_KEY), null);
+  } finally {
+    env.restore();
+  }
+});
+
+test("map preset quick-switch application projects restored fish filter terms", () => {
+  const env = installUserPresetsGlobal();
+  try {
+    const signals = defaultSignals();
+    const shell = createWindowStub();
+    function applyPatch(patch) {
+      applyMapPageSignalsPatch(signals, patch);
+      shell.dispatchEvent({ type: "fishymap:signal-patched", detail: patch });
+    }
+    bindMapPresetController({
+      shell,
+      readSignals: () => signals,
+      applyPatch,
+      globalRef: createTimerRef(),
+    });
+    createMapPageDerivedController({
+      shell,
+      readSignals: () => signals,
+      dispatchPatch: applyPatch,
+    }).start(shell);
+
+    const preset = env.helper.createPreset(MAP_PRESET_COLLECTION_KEY, {
+      name: "Favourite fish",
+      payload: {
+        search: {
+          query: "",
+          selectedTerms: [{ kind: "fish-filter", term: "favourite" }],
+        },
+      },
+      select: false,
+    });
+
+    env.helper.activatePreset(MAP_PRESET_COLLECTION_KEY, preset.id);
+
+    assert.deepEqual(signals._map_ui.search.selectedTerms, [
+      { kind: "fish-filter", term: "favourite" },
+    ]);
+    assert.deepEqual(signals._map_bridged.filters.fishFilterTerms, ["favourite"]);
+    assert.deepEqual(signals._map_bridged.filters.searchExpression, {
+      type: "group",
+      operator: "or",
+      children: [{
+        type: "term",
+        term: { kind: "fish-filter", term: "favourite" },
+      }],
+    });
+    assert.equal(env.helper.selectedPresetId(MAP_PRESET_COLLECTION_KEY), preset.id);
   } finally {
     env.restore();
   }
