@@ -318,6 +318,7 @@ export class FishyPresetManager extends HTMLElementBase {
         >
           <span data-role="open-icon">${iconMarkup("layout-fill", "size-5")}</span>
           <span data-role="open-label"></span>
+          <span class="badge badge-xs badge-outline max-w-40 truncate" data-role="open-status" hidden></span>
         </button>
         <input
           class="hidden"
@@ -671,6 +672,24 @@ export class FishyPresetManager extends HTMLElementBase {
     };
   }
 
+  openStatusText(items, currentItem, actionState, activePresetId, activeFixedId) {
+    const currentOrigin = normalizeSource(actionState?.currentOrigin);
+    const selectedSource = normalizeSource(actionState?.selectedSource);
+    if (currentItem && currentOrigin.kind !== "none" && sourceKey(currentOrigin) === sourceKey(selectedSource)) {
+      return currentItem.name || "";
+    }
+    const activeCardKey = selectedSource.kind === "preset"
+      ? presetCardKey(selectedSource.id)
+      : selectedSource.kind === "fixed"
+        ? fixedCardKey(selectedSource.id)
+        : activePresetId
+          ? presetCardKey(activePresetId)
+          : activeFixedId
+            ? fixedCardKey(activeFixedId)
+            : "";
+    return this.findItem(items, activeCardKey)?.name || "";
+  }
+
   selectedTitleValue(item) {
     return item?.name || "";
   }
@@ -737,6 +756,13 @@ export class FishyPresetManager extends HTMLElementBase {
     setIconElementAlias(this.element("open-icon"), managerIconAlias);
     setIconElementAlias(this.element("manager-icon"), managerIconAlias);
     setElementText(this.element("open-label"), this.openLabelText());
+    const openStatus = this.element("open-status");
+    if (openStatus) {
+      const openStatusText = this.openStatusText(items, currentItem, actionState, activePresetId, activeFixedId);
+      setElementText(openStatus, openStatusText);
+      openStatus.hidden = !openStatusText;
+      openStatus.title = openStatusText;
+    }
     setElementText(this.element("manager-title"), this.titleText());
     setElementText(
       this.element("grid-title"),

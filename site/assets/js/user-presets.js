@@ -2,6 +2,7 @@
   const STORAGE_KEY = "fishystuff.user-presets.v1";
   const CHANGED_EVENT = "fishystuff:user-presets-changed";
   const ADAPTERS_CHANGED_EVENT = "fishystuff:user-presets-adapters-changed";
+  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const EXPORT_FORMAT = "fishystuff-user-presets.v1";
   const CURRENT_EVENT_LIMIT = 100;
 
@@ -336,6 +337,11 @@
     }
     const collection = currentCollection(key);
     const actionState = collectionCurrentActionState(key, collection);
+    const currentAppliesToSelectedSource = Boolean(
+      actionState.hasCurrent
+      && actionState.currentOrigin.kind !== "none"
+      && sourcesEqual(actionState.currentOrigin, actionState.selectedSource),
+    );
     const adapterFixedPresets = fixedPresets(key);
     const previewFixedPresets = globalThis.window?.__fishystuffPresetPreviews?.fixedPresets?.(key) || [];
     return {
@@ -343,8 +349,8 @@
       selectedFixedId: collection.selectedFixedId,
       hasCurrent: actionState.hasCurrent,
       currentOrigin: actionState.currentOrigin,
-      canSave: actionState.canSave,
-      canDiscard: actionState.canDiscard,
+      canSave: currentAppliesToSelectedSource && actionState.canSave,
+      canDiscard: currentAppliesToSelectedSource && actionState.canDiscard,
       saveAction: actionState.saveAction,
       presetCount: collection.presets.length,
       fixedPresetCount: adapterFixedPresets.length || previewFixedPresets.length,
@@ -382,6 +388,41 @@
       signals._user_presets = cloneJson(snapshot);
     }
     return snapshot;
+  }
+
+  function boundDatastarSignalsNeedPatch(serializedSnapshot) {
+    for (const signals of boundDatastarSignals) {
+      if (!signals || typeof signals !== "object") {
+        continue;
+      }
+      if (JSON.stringify(signals._user_presets ?? null) !== serializedSnapshot) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function dispatchDatastarSignalPatch(snapshot) {
+    globalThis.document?.dispatchEvent?.(
+      new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+        detail: {
+          _user_presets: cloneJson(snapshot),
+        },
+      }),
+    );
+  }
+
+  function refreshDatastar() {
+    const snapshot = datastarSnapshot();
+    const stale = boundDatastarSignalsNeedPatch(JSON.stringify(snapshot));
+    if (stale) {
+      datastarVersion += 1;
+    }
+    const nextSnapshot = patchBoundDatastarSignals();
+    if (stale) {
+      dispatchDatastarSignalPatch(nextSnapshot);
+    }
+    return cloneJson(nextSnapshot);
   }
 
   function bindDatastar(signals) {
@@ -547,9 +588,13 @@
     if (!payload) {
       return currentCollection(key);
     }
+    const collection = currentCollection(key);
+    const origin = Object.prototype.hasOwnProperty.call(options, "origin")
+      ? normalizeSource(options.origin)
+      : normalizeSource(collection.current?.origin);
     trackCurrentPayload(key, {
       payload,
-      ...(Object.prototype.hasOwnProperty.call(options, "origin") ? { origin: options.origin } : {}),
+      ...(origin.kind !== "none" ? { origin } : {}),
     });
     return currentCollection(key);
   }
@@ -562,7 +607,11 @@
     const collection = options.refresh === true
       ? refreshCurrentForAction(key, options)
       : currentCollection(key);
-    return collectionCurrentActionState(key, collection);
+    const state = collectionCurrentActionState(key, collection);
+    if (options.refresh === true) {
+      refreshDatastar();
+    }
+    return state;
   }
 
   function canSaveCurrent(collectionKey, options = {}) {
@@ -654,7 +703,7 @@
       collection.presets.push(preset);
       if (select) {
         selectCollectionSource(collection, presetSource(preset.id), {
-          clearCurrent: payloadsEqual(key, collection.current?.payload, payload),
+          clearCurrent: options.clearCurrent === true || payloadsEqual(key, collection.current?.payload, payload),
         });
       }
       draft.collections[key] = collection;
@@ -1026,6 +1075,9 @@
     updateSnapshot((draft) => {
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       const current = collection.current;
+      if (current && normalizeSource(current.origin).kind !== "preset") {
+        throw new Error("Preset save failed.");
+      }
       const targetPresetId = current?.origin?.kind === "preset"
         ? current.origin.id
         : collection.selectedPresetId;
@@ -1101,6 +1153,7 @@
     const preset = createPreset(key, {
       name: trimString(options.name) || defaultPresetName(key, collection.presets.length + 1),
       payload,
+      clearCurrent: true,
       select: true,
     });
     return {
@@ -1308,6 +1361,7 @@
     bindDatastar,
     unbindDatastar,
     datastarSnapshot,
+    refreshDatastar,
     snapshot() {
       return cloneJson(currentSnapshot);
     },

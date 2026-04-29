@@ -1081,6 +1081,48 @@ test("calculator presets wait for init defaults before tracking default current 
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
 });
 
+test("calculator preset action signals refresh when late defaults make discard possible", () => {
+  const initial = createContext();
+  const initialSignals = defaultSignals();
+  initial.window.__fishystuffCalculator.restore(initialSignals);
+  initial.window.__fishystuffUserPresets.trackCurrentPayload("calculator-presets", {
+    payload: {
+      ...initial.window.__fishystuffCalculator.calculatorPresetPayload(initialSignals),
+      level: 42,
+      resources: 15,
+    },
+    origin: { kind: "fixed", id: "default" },
+  });
+  const presetStorage = initial.localStorage.getItem(initial.window.__fishystuffUserPresets.STORAGE_KEY);
+
+  const env = createContext({
+    [initial.window.__fishystuffUserPresets.STORAGE_KEY]: presetStorage,
+    "fishystuff.calculator.data.v1": JSON.stringify({
+      level: 42,
+      resources: 15,
+    }),
+  });
+  const signals = defaultSignals();
+  const initDefaults = cloneTestValue(signals._defaults);
+  delete signals._defaults;
+  signals.level = 42;
+  signals.resources = 15;
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, true);
+  assert.equal(signals._user_presets.collections["calculator-presets"].canDiscard, false);
+  env.window.__fishystuffCalculator.patchSignals({
+    _loading: false,
+    _defaults: initDefaults,
+    level: 42,
+    resources: 15,
+  });
+
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets")?.payload?.level, 42);
+  assert.equal(env.window.__fishystuffUserPresets.datastarSnapshot().collections["calculator-presets"].canDiscard, true);
+  assert.equal(signals._user_presets.collections["calculator-presets"].canDiscard, true);
+});
+
 test("calculator restore applies the persisted selected layout preset when UI storage is absent", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();

@@ -1081,9 +1081,11 @@
       return null;
     }
     const payload = calculatorLayoutPresetPayload(signals?._calculator_ui);
-    return helper.trackCurrentPayload(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
+    const tracked = helper.trackCurrentPayload(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, {
       payload,
     });
+    helper.refreshDatastar?.();
+    return tracked;
   }
 
   function trackCalculatorPresetCurrent(signals) {
@@ -1092,9 +1094,11 @@
       return null;
     }
     const payload = calculatorPresetPayload(signals);
-    return helper.trackCurrentPayload(CALCULATOR_PRESET_COLLECTION_KEY, {
+    const tracked = helper.trackCurrentPayload(CALCULATOR_PRESET_COLLECTION_KEY, {
       payload,
     });
+    helper.refreshDatastar?.();
+    return tracked;
   }
 
   function presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey) {

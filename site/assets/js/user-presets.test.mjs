@@ -402,6 +402,115 @@ test("user presets can save untracked live modifications through shared current 
   assert.equal(helper.current("calculator-layouts"), null);
 });
 
+test("user presets never overwrite saved presets from a modified fixed default", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+    defaultPresetName(index) {
+      return `Workspace ${index}`;
+    },
+  });
+  const savedPreset = helper.createPreset("calculator-layouts", {
+    name: "Saved",
+    payload: {
+      row: 9,
+    },
+  });
+  helper.activateFixedPreset("calculator-layouts", "default");
+  currentPayload = {
+    row: 5,
+  };
+  helper.trackCurrentPayload("calculator-layouts");
+  helper.setSelectedPresetId("calculator-layouts", savedPreset.id);
+
+  assert.throws(
+    () => helper.saveCurrentToSelectedPreset("calculator-layouts"),
+    /Preset save failed\./,
+  );
+
+  const saved = helper.saveCurrent("calculator-layouts");
+
+  assert.equal(saved.action, "created");
+  assert.notEqual(saved.preset.id, savedPreset.id);
+  assert.deepEqual(saved.preset.payload, { row: 5 });
+  assert.deepEqual(helper.preset("calculator-layouts", savedPreset.id).payload, { row: 9 });
+  assert.equal(helper.selectedPresetId("calculator-layouts"), saved.preset.id);
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "");
+  assert.equal(helper.current("calculator-layouts"), null);
+});
+
+test("user presets Datastar actions only expose modifications on the selected source", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const savedPreset = helper.createPreset("calculator-layouts", {
+    name: "Saved",
+    payload: {
+      row: 9,
+    },
+  });
+  helper.activateFixedPreset("calculator-layouts", "default");
+  currentPayload = {
+    row: 5,
+  };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  let summary = helper.datastarSnapshot().collections["calculator-layouts"];
+  assert.equal(summary.hasCurrent, true);
+  assert.equal(summary.canSave, true);
+  assert.equal(summary.canDiscard, true);
+
+  helper.setSelectedPresetId("calculator-layouts", savedPreset.id);
+
+  summary = helper.datastarSnapshot().collections["calculator-layouts"];
+  assert.equal(summary.hasCurrent, true);
+  assert.equal(summary.canSave, false);
+  assert.equal(summary.canDiscard, false);
+  assert.equal(helper.currentActionState("calculator-layouts").canSave, true);
+  assert.deepEqual(helper.current("calculator-layouts").origin, { kind: "fixed", id: "default" });
+});
+
 test("user presets do not emit Datastar updates when tracking unchanged payloads", () => {
   const env = createEnv();
   const helper = env.helper;
