@@ -338,16 +338,16 @@ impl DoltMySqlStore {
         items
     }
 
-    pub(super) fn query_calculator_items(
+    pub(super) fn build_calculator_items_from_source_data(
         &self,
         lang: &DataLang,
-        ref_id: Option<&str>,
+        source_data: CalculatorCatalogSourceData,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
         let CalculatorCatalogSourceData {
             legacy_rows,
             item_source_metadata,
             source_backed_rows,
-        } = self.query_calculator_catalog_source_data(lang, ref_id)?;
+        } = source_data;
         let legacy_items =
             self.build_legacy_calculator_items(lang, legacy_rows, &item_source_metadata);
         let sourced_items =

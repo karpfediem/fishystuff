@@ -215,7 +215,6 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
         item_id: i32,
     ) -> AppResult<FishBestSpotsResponse> {
-        self.validate_data_lang_available(&lang, ref_id)?;
         let cache_key = Self::fish_best_spots_cache_key(&lang, ref_id, item_id);
         loop {
             if let Ok(cache) = self.fish_best_spots_cache.lock() {

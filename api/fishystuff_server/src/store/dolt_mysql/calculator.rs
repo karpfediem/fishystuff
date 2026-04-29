@@ -33,7 +33,6 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogResponse> {
         let (revision, resolved_ref) = self.resolve_calculator_catalog_ref(ref_id)?;
-        self.validate_data_lang_available(&lang, Some(resolved_ref.as_str()))?;
         let cache_key = Self::calculator_catalog_cache_key(&lang, &revision);
         loop {
             if let Ok(cache) = self.calculator_catalog_cache.lock() {
@@ -59,7 +58,13 @@ impl DoltMySqlStore {
 
         let query_ref = Some(resolved_ref.as_str());
         let result: AppResult<CalculatorCatalogResponse> = (|| {
-            let items = self.query_calculator_items(&lang, query_ref)?;
+            self.validate_data_lang_available(&lang, query_ref)?;
+            let source_data = self.query_calculator_catalog_source_data_at_revision(
+                &lang,
+                &revision,
+                &resolved_ref,
+            )?;
+            let items = self.build_calculator_items_from_source_data(&lang, source_data)?;
             let mastery_prize_curve = self.query_calculator_mastery_prize_curve(query_ref)?;
             let zone_group_rates = self.query_calculator_zone_group_rates(query_ref)?;
             let pets = self.query_calculator_pet_catalog(&lang, query_ref)?;

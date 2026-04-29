@@ -90,12 +90,14 @@ const DOLT_TCP_KEEPALIVE_PROBE_COUNT: u32 = 3;
 #[cfg(target_os = "linux")]
 const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
 const META_CACHE_TTL_SECS: u64 = 60;
+const DATA_LANG_AVAILABLE_CACHE_TTL_SECS: u64 = 60;
 
 #[derive(Clone)]
 pub struct DoltMySqlStore {
     pool: Pool,
     defaults: MetaDefaults,
     meta_cache: Arc<Mutex<Option<(Instant, MetaResponse)>>>,
+    data_lang_available_cache: Arc<Mutex<HashMap<String, (Instant, bool)>>>,
     dolt_revision_cache: Arc<Mutex<HashMap<String, String>>>,
     layer_revision_id_cache: Arc<Mutex<HashMap<String, String>>>,
     event_zone_assignment_exists_cache: Arc<Mutex<HashMap<String, bool>>>,
@@ -398,6 +400,7 @@ impl DoltMySqlStore {
             pool,
             defaults,
             meta_cache: Arc::new(Mutex::new(None)),
+            data_lang_available_cache: Arc::new(Mutex::new(HashMap::new())),
             dolt_revision_cache: Arc::new(Mutex::new(HashMap::new())),
             layer_revision_id_cache: Arc::new(Mutex::new(HashMap::new())),
             event_zone_assignment_exists_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -746,6 +749,18 @@ impl DoltMySqlStore {
         Some(revision)
     }
 
+    fn data_lang_available_cache_key(lang: &DataLang, ref_id: Option<&str>) -> String {
+        let lang = lang.code();
+        match ref_id {
+            Some(ref_id) => format!("{lang}:{ref_id}"),
+            None => format!("{lang}:head"),
+        }
+    }
+
+    fn unsupported_data_lang_error(lang: &DataLang) -> AppError {
+        AppError::invalid_argument(format!("unsupported data language code: {}", lang.code()))
+    }
+
     pub(super) fn validate_data_lang_available(
         &self,
         lang: &DataLang,
@@ -757,6 +772,20 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
+        let cache_key = Self::data_lang_available_cache_key(lang, ref_id);
+        let cache_ttl = Duration::from_secs(DATA_LANG_AVAILABLE_CACHE_TTL_SECS);
+        if let Ok(cache) = self.data_lang_available_cache.lock() {
+            if let Some((cached_at, available)) = cache.get(&cache_key) {
+                if cached_at.elapsed() < cache_ttl {
+                    return if *available {
+                        Ok(())
+                    } else {
+                        Err(Self::unsupported_data_lang_error(lang))
+                    };
+                }
+            }
+        }
+
         let query = format!(
             "SELECT 1 FROM languagedata{as_of} \
              WHERE `lang` = '{}' \
@@ -766,14 +795,24 @@ impl DoltMySqlStore {
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         match conn.query_first::<u8, _>(query) {
-            Ok(Some(_)) => Ok(()),
-            Ok(None) => Err(AppError::invalid_argument(format!(
-                "unsupported data language code: {}",
-                lang.code()
-            ))),
-            Err(err) if is_missing_table(&err, "languagedata") => Err(AppError::invalid_argument(
-                format!("unsupported data language code: {}", lang.code()),
-            )),
+            Ok(Some(_)) => {
+                if let Ok(mut cache) = self.data_lang_available_cache.lock() {
+                    cache.insert(cache_key, (Instant::now(), true));
+                }
+                Ok(())
+            }
+            Ok(None) => {
+                if let Ok(mut cache) = self.data_lang_available_cache.lock() {
+                    cache.insert(cache_key, (Instant::now(), false));
+                }
+                Err(Self::unsupported_data_lang_error(lang))
+            }
+            Err(err) if is_missing_table(&err, "languagedata") => {
+                if let Ok(mut cache) = self.data_lang_available_cache.lock() {
+                    cache.insert(cache_key, (Instant::now(), false));
+                }
+                Err(Self::unsupported_data_lang_error(lang))
+            }
             Err(err) => Err(db_unavailable(err)),
         }
     }
@@ -960,7 +999,6 @@ impl DoltMySqlStore {
         lang: DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<FishListResponse> {
-        self.validate_data_lang_available(&lang, ref_id)?;
         let cache_key = Self::fish_list_cache_key(&lang, ref_id);
         loop {
             if let Ok(cache) = self.fish_list_cache.lock() {

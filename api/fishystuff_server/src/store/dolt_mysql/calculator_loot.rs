@@ -402,7 +402,6 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
         zone_rgb_key: &str,
     ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
-        self.validate_data_lang_available(&lang, ref_id)?;
         let cache_key = Self::calculator_zone_loot_cache_key(&lang, ref_id, zone_rgb_key);
         loop {
             if let Ok(cache) = self.calculator_zone_loot_cache.lock() {

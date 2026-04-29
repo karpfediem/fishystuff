@@ -1898,12 +1898,12 @@ impl DoltMySqlStore {
         Ok(source_backed_rows)
     }
 
-    pub(super) fn query_calculator_catalog_source_data(
+    pub(super) fn query_calculator_catalog_source_data_at_revision(
         &self,
         lang: &DataLang,
-        ref_id: Option<&str>,
+        revision: &str,
+        resolved_ref: &str,
     ) -> AppResult<CalculatorCatalogSourceData> {
-        let (revision, resolved_ref) = self.resolve_calculator_catalog_ref(ref_id)?;
         let cache_key = format!("{}:{revision}", lang.code());
         loop {
             if let Ok(cache) = self.calculator_source_data_cache.lock() {
@@ -1927,7 +1927,7 @@ impl DoltMySqlStore {
             drop(inflight);
         }
 
-        let query_ref = Some(resolved_ref.as_str());
+        let query_ref = Some(resolved_ref);
         let result: AppResult<CalculatorCatalogSourceData> = (|| {
             let all_legacy_rows = self.query_legacy_calculator_item_rows(query_ref, &[], &[])?;
             let mut source_backed_rows =
