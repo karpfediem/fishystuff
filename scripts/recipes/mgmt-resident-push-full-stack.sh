@@ -164,11 +164,13 @@ build_dolt_repo_snapshot() {
   local snapshot_src="$1"
   local environment="$2"
   local dolt_bundle_path="${3-}"
+  local snapshot_branch="${4-}"
   local dolt_cmd=""
   local stage_parent=""
   local stage_root=""
   local snapshot_store_path=""
   local source_revision=""
+  local staged_revision=""
 
   if [[ ! -d "$snapshot_src" || ! -d "$snapshot_src/noms" ]]; then
     echo "Dolt snapshot source does not look like a .dolt directory: $snapshot_src" >&2
@@ -205,16 +207,41 @@ build_dolt_repo_snapshot() {
   rm -rf "$stage_root/.dolt/temptf" "$stage_root/.dolt/tmp"
   find "$stage_root/.dolt" -name LOCK -type f -delete
   rm -f "$stage_root/.dolt/sql-server.info"
+  if [[ -n "$snapshot_branch" ]]; then
+    if [[ -z "$dolt_cmd" ]]; then
+      if [[ -n "$dolt_bundle_path" && -f "$dolt_bundle_path/bundle.json" ]]; then
+        dolt_cmd="$(jq -r '.artifacts["exe/dolt"].storePath // empty' "$dolt_bundle_path/bundle.json")"
+      fi
+      if [[ -z "$dolt_cmd" ]]; then
+        dolt_cmd="$(command -v dolt || true)"
+      fi
+      if [[ -z "$dolt_cmd" ]]; then
+        echo "dolt is required to bind a repo snapshot to branch $snapshot_branch" >&2
+        exit 2
+      fi
+    fi
+    staged_revision="$(
+      cd "$stage_root"
+      "$dolt_cmd" log -n 1 --oneline | awk '{print $1}'
+    )"
+    (
+      cd "$stage_root"
+      "$dolt_cmd" branch --force "$snapshot_branch" "$staged_revision"
+      "$dolt_cmd" checkout "$snapshot_branch" >/dev/null
+    )
+  fi
   find "$stage_root/.dolt" -type d -exec chmod 0555 {} +
   find "$stage_root/.dolt" -type f -exec chmod 0444 {} +
   jq -n \
     --arg source "$snapshot_src" \
     --arg revision "$source_revision" \
     --arg environment "$environment" \
+    --arg branch "$snapshot_branch" \
     '{
       source: $source,
       revision: $revision,
-      deployment_environment: $environment
+      deployment_environment: $environment,
+      branch: $branch
     }' > "$stage_root/fishystuff-dolt-snapshot.json"
 
   snapshot_store_path="$(nix-store --add "$stage_root")"
@@ -355,13 +382,13 @@ if [[ "$dolt_refresh_enabled" == "true" && -z "$dolt_repo_snapshot" ]]; then
   case "$dolt_repo_snapshot_mode" in
     auto)
       if [[ -d "$dolt_repo_snapshot_src" ]]; then
-        dolt_repo_snapshot="$(build_dolt_repo_snapshot "$dolt_repo_snapshot_src" "$deployment_environment" "$dolt_bundle")"
+        dolt_repo_snapshot="$(build_dolt_repo_snapshot "$dolt_repo_snapshot_src" "$deployment_environment" "$dolt_bundle" "$dolt_remote_branch")"
       else
         echo "[resident-push] no local Dolt snapshot source at $dolt_repo_snapshot_src; using remote refresh"
       fi
       ;;
     local)
-      dolt_repo_snapshot="$(build_dolt_repo_snapshot "$dolt_repo_snapshot_src" "$deployment_environment" "$dolt_bundle")"
+      dolt_repo_snapshot="$(build_dolt_repo_snapshot "$dolt_repo_snapshot_src" "$deployment_environment" "$dolt_bundle" "$dolt_remote_branch")"
       ;;
     off | none | false)
       dolt_repo_snapshot=""
