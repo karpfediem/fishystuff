@@ -553,7 +553,14 @@ function defaultMapPresetSnapshot() {
   return {
     windowUi: {
       search: { open: true, collapsed: false, x: null, y: null },
-      settings: { open: false, collapsed: false, x: null, y: null, autoAdjustView: true },
+      settings: {
+        open: false,
+        collapsed: false,
+        x: null,
+        y: null,
+        autoAdjustView: true,
+        normalizeRates: true,
+      },
       zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
       layers: { open: true, collapsed: false, x: null, y: null },
       bookmarks: { open: false, collapsed: false, x: null, y: null },

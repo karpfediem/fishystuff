@@ -195,6 +195,7 @@ map.settings.reset_view = Ansicht zurücksetzen
 map.settings.reset_ui = UI zurücksetzen
 map.settings.display = Anzeige
 map.settings.auto_adjust_view = Ansicht automatisch anpassen
+map.settings.normalize_rates = Raten normalisieren
 map.settings.diagnostics = Diagnose
 map.settings.waiting_bridge_events = Warte auf Bridge-Ereignisse...
 

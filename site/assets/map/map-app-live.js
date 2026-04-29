@@ -20,7 +20,6 @@ import "./map-layer-panel-element.js";
 import "./map-search-panel-element.js";
 import "./map-window-manager-element.js";
 import {
-  dispatchShellPatchedSignalEvent,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
   FISHYMAP_SIGNAL_PATCH_EVENT,
   combineSignalPatches,
@@ -268,7 +267,6 @@ export async function start() {
       return;
     }
     page.patchSignals(patch);
-    dispatchShellPatchedSignalEvent(shell, patch);
   }
   const mapPresetController = bindMapPresetController({
     shell,

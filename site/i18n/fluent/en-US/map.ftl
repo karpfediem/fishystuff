@@ -200,6 +200,7 @@ map.settings.reset_view = Reset view
 map.settings.reset_ui = Reset UI
 map.settings.display = Display
 map.settings.auto_adjust_view = Auto-adjust view
+map.settings.normalize_rates = Normalize rates
 map.settings.diagnostics = Diagnostics
 map.settings.waiting_bridge_events = Waiting for bridge events...
 

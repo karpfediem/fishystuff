@@ -1,11 +1,11 @@
 <div id="map-page-shell"
-         data-on-signal-patch-filter="{include: /^_(?:map_|shared_fish)(?:\.|$)/}"
+         data-on-signal-patch-filter="{include: /^_(?:map_[^.]+|shared_fish)(?:\.|$)/}"
          data-on-signal-patch="el.dispatchEvent(new CustomEvent('fishymap:signal-patched', { bubbles: true, detail: patch }))"
          data-signals="{
            _map_ui: {
              windowUi: {
                search: { open: true, collapsed: false, x: null, y: null },
-               settings: { open: false, collapsed: false, x: null, y: null, autoAdjustView: true },
+               settings: { open: false, collapsed: false, x: null, y: null, autoAdjustView: true, normalizeRates: true },
                zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: '' },
                layers: { open: true, collapsed: false, x: null, y: null },
                bookmarks: { open: false, collapsed: false, x: null, y: null }
@@ -272,7 +272,12 @@
           data-show="!$_map_ui.windowUi.zoneInfo.collapsed"
           style="display: none"
         >
-          <fishymap-info-panel id="fishymap-info-panel" class="space-y-3 not-prose"></fishymap-info-panel>
+          <fishymap-info-panel
+            id="fishymap-info-panel"
+            class="space-y-3 not-prose"
+            data-normalize-rates="true"
+            data-attr:data-normalize-rates="$_map_ui.windowUi.settings.normalizeRates ? 'true' : 'false'"
+          ></fishymap-info-panel>
         </div>
       </aside>
       <aside
@@ -372,6 +377,10 @@
                 <label class="flex items-center justify-between gap-3 text-sm">
                   <span class="font-semibold" data-i18n-text="map.settings.auto_adjust_view"></span>
                   <input id="fishymap-auto-adjust-view" class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked data-bind="_map_ui.windowUi.settings.autoAdjustView">
+                </label>
+                <label class="flex items-center justify-between gap-3 text-sm">
+                  <span class="font-semibold" data-i18n-text="map.settings.normalize_rates"></span>
+                  <input id="fishymap-normalize-rates" class="toggle toggle-sm toggle-primary" type="checkbox" checked data-bind="_map_ui.windowUi.settings.normalizeRates">
                 </label>
               </div>
             </fieldset>

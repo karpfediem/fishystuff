@@ -11,6 +11,7 @@ import {
 
 export const DEFAULT_ZONE_INFO_TAB = "";
 export const DEFAULT_AUTO_ADJUST_VIEW = true;
+export const DEFAULT_NORMALIZE_RATES = true;
 export const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
   "fish_evidence",
@@ -26,6 +27,7 @@ export const DEFAULT_WINDOW_UI_STATE = Object.freeze({
     x: null,
     y: null,
     autoAdjustView: DEFAULT_AUTO_ADJUST_VIEW,
+    normalizeRates: DEFAULT_NORMALIZE_RATES,
   }),
   zoneInfo: Object.freeze({
     open: true,
@@ -326,6 +328,9 @@ function normalizeSettingsWindowUiEntry(rawEntry, fallbackEntry) {
     autoAdjustView: hasOwnKey(baseEntry, "autoAdjustView")
       ? baseEntry.autoAdjustView !== false
       : fallbackEntry?.autoAdjustView !== false,
+    normalizeRates: hasOwnKey(baseEntry, "normalizeRates")
+      ? baseEntry.normalizeRates !== false
+      : fallbackEntry?.normalizeRates !== false,
   };
 }
 

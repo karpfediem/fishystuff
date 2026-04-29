@@ -13,7 +13,7 @@ import {
 test("normalizeWindowUiState applies defaults and normalizes coordinates", () => {
   const state = normalizeWindowUiState({
     search: { open: false, x: "42.8", y: "13.2" },
-    settings: { autoAdjustView: false },
+    settings: { autoAdjustView: false, normalizeRates: false },
     zoneInfo: { tab: " fish " },
   });
 
@@ -23,6 +23,7 @@ test("normalizeWindowUiState applies defaults and normalizes coordinates", () =>
   assert.equal(state.search.y, 13);
   assert.equal(state.settings.open, false);
   assert.equal(state.settings.autoAdjustView, false);
+  assert.equal(state.settings.normalizeRates, false);
   assert.equal(state.zoneInfo.tab, "fish");
   assert.equal(state.layers.open, true);
   assert.equal(state.bookmarks.open, false);

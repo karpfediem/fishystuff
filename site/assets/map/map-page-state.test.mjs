@@ -74,11 +74,30 @@ test("map-page-state loadRestoreState ignores legacy bridged search filters", ()
   assert.equal(restoreState.uiPatch, null);
 });
 
+test("map-page-state loadRestoreState restores persisted normalize rates setting", () => {
+  const localStorage = new MemoryStorage({
+    "fishystuff.map.window_ui.v1": JSON.stringify({
+      windowUi: {
+        settings: { normalizeRates: false },
+      },
+    }),
+  });
+
+  const restoreState = loadRestoreState({
+    localStorage,
+    sessionStorage: new MemoryStorage(),
+    locationHref: "https://fishystuff.fish/map/",
+  });
+
+  assert.equal(restoreState.uiPatch._map_ui.windowUi.settings.normalizeRates, false);
+});
+
 test("map-page-state createPersistedState captures durable map branches", () => {
   const persisted = createPersistedState({
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },
+        settings: { normalizeRates: false },
       },
       layers: {
         expandedLayerIds: ["zone_mask"],
@@ -118,6 +137,7 @@ test("map-page-state createPersistedState captures durable map branches", () => 
   assert.deepEqual(JSON.parse(persisted.uiJson), {
     windowUi: {
       search: { open: false, collapsed: true, x: 20, y: 30 },
+      settings: { normalizeRates: false },
     },
     layers: {
       expandedLayerIds: ["zone_mask"],
@@ -171,6 +191,7 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },
+        settings: { normalizeRates: false },
       },
       layers: {
         expandedLayerIds: ["zone_mask"],
@@ -209,6 +230,7 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
   assert.equal("bookmarks" in payload, false);
   assert.equal("_map_runtime" in payload, false);
   assert.deepEqual(payload.windowUi.search, { open: false, collapsed: true, x: 20, y: 30 });
+  assert.equal(payload.windowUi.settings.normalizeRates, false);
   assert.equal(payload.search.query, "eel");
   assert.deepEqual(payload.bridgedFilters.layerIdsVisible, ["bookmarks", "zone_mask"]);
   assert.deepEqual(payload.bridgedFilters.layerOpacities, { zone_mask: 0.5 });
@@ -250,6 +272,9 @@ test("map-page-state camera-less map preset view mode follows bridge UI state", 
 test("map-page-state map preset restore patch applies UI and view without bookmarks", () => {
   const payload = normalizeMapPresetPayload({
     ...defaultMapPresetPayload(),
+    windowUi: {
+      settings: { normalizeRates: false },
+    },
     search: {
       query: "tuna",
       selectedTerms: [{ kind: "fish", fishId: 912 }],
@@ -271,6 +296,7 @@ test("map-page-state map preset restore patch applies UI and view without bookma
   const patch = mapPresetRestorePatch(payload);
 
   assert.equal(patch._map_bookmarks, undefined);
+  assert.equal(patch._map_ui.windowUi.settings.normalizeRates, false);
   assert.equal(patch._map_ui.search.query, "tuna");
   assert.equal(patch._map_bridged.ui.showPoints, false);
   assert.deepEqual(patch._map_bridged.filters.layerIdsVisible, ["zone_mask"]);

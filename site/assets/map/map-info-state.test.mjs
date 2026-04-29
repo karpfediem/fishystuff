@@ -78,6 +78,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "Source-backed General group share",
+            rawDropRateText: "80%",
+            rawDropRateTooltip: "Source-backed General group share",
+            normalizedDropRateText: "80%",
+            normalizedDropRateTooltip: "Source-backed General group share",
             conditionText: "Zone base rate 80%",
             conditionTooltip: "Zone base rate: 80%",
             catchMethods: ["rod"],
@@ -87,6 +91,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
                 dropRateText: "80%",
                 dropRateSourceKind: "database",
                 dropRateTooltip: "Default General group lineage",
+                rawDropRateText: "80%",
+                rawDropRateTooltip: "Default General group lineage",
+                normalizedDropRateText: "80%",
+                normalizedDropRateTooltip: "Default General group lineage",
                 active: true,
                 speciesRows: [
                   {
@@ -101,6 +109,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
                     dropRateText: "80%",
                     dropRateSourceKind: "database",
                     dropRateTooltip: "DB-backed drop rate",
+                    rawDropRateText: "80%",
+                    rawDropRateTooltip: "DB-backed drop rate",
+                    normalizedDropRateText: "80%",
+                    normalizedDropRateTooltip: "DB-backed drop rate",
                     catchMethods: ["rod"],
                   },
                 ],
@@ -110,6 +122,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
                 dropRateText: "80%",
                 dropRateSourceKind: "database",
                 dropRateTooltip: "Guru General group lineage",
+                rawDropRateText: "80%",
+                rawDropRateTooltip: "Guru General group lineage",
+                normalizedDropRateText: "80%",
+                normalizedDropRateTooltip: "Guru General group lineage",
                 active: false,
                 speciesRows: [
                   {
@@ -124,6 +140,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
                     dropRateText: "0.005%",
                     dropRateSourceKind: "database",
                     dropRateTooltip: "DB-backed drop rate",
+                    rawDropRateText: "0.005%",
+                    rawDropRateTooltip: "DB-backed drop rate",
+                    normalizedDropRateText: "0.005%",
+                    normalizedDropRateTooltip: "DB-backed drop rate",
                     catchMethods: ["rod"],
                   },
                 ],
@@ -139,6 +159,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             dropRateText: "100%",
             dropRateSourceKind: "database",
             dropRateTooltip: "Source-backed Harpoon group share",
+            rawDropRateText: "100%",
+            rawDropRateTooltip: "Source-backed Harpoon group share",
+            normalizedDropRateText: "100%",
+            normalizedDropRateTooltip: "Source-backed Harpoon group share",
             conditionText: "Mastery 200-699 · Mastery 700-1199 · Mastery 1200+ · Fishing Level Guru 1+",
             conditionTooltip:
               "Mastery 200-699 | Mastery 700-1199 | Mastery 1200+ | Fishing Level Guru 1+",
@@ -158,6 +182,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "DB-backed drop rate",
+            rawDropRateText: "80%",
+            rawDropRateTooltip: "DB-backed drop rate",
+            normalizedDropRateText: "80%",
+            normalizedDropRateTooltip: "DB-backed drop rate",
             catchMethods: ["rod"],
           },
           {
@@ -172,6 +200,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             dropRateText: "27.5%",
             dropRateSourceKind: "database",
             dropRateTooltip: "Harpoon in-group rate",
+            rawDropRateText: "27.5%",
+            rawDropRateTooltip: "Harpoon in-group rate",
+            normalizedDropRateText: "27.5%",
+            normalizedDropRateTooltip: "Harpoon in-group rate",
             presenceText: "Community confirmed×1 · General group",
             presenceTooltip: "Community confirmed×1 · General group 9001 · source community_zone_fish_support",
             catchMethods: ["harpoon"],
@@ -242,6 +274,79 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   );
 });
 
+test("buildInfoViewModel switches zone loot rates from the normalize rates signal", () => {
+  const zoneLootSummary = {
+    available: true,
+    groups: [
+      {
+        slotIdx: 2,
+        label: "Rare",
+        dropRateText: "selected group",
+        rawDropRateText: "12%",
+        rawDropRateTooltip: "raw group",
+        normalizedDropRateText: "50%",
+        normalizedDropRateTooltip: "normalized group",
+        catchMethods: ["rod"],
+        conditionOptions: [
+          {
+            conditionText: "Default",
+            dropRateText: "selected condition",
+            rawDropRateText: "12%",
+            rawDropRateTooltip: "raw condition",
+            normalizedDropRateText: "50%",
+            normalizedDropRateTooltip: "normalized condition",
+            active: true,
+            speciesRows: [
+              {
+                slotIdx: 2,
+                groupLabel: "Rare",
+                label: "Grunt",
+                dropRateText: "selected species",
+                rawDropRateText: "40%",
+                rawDropRateTooltip: "raw species",
+                normalizedDropRateText: "100%",
+                normalizedDropRateTooltip: "normalized species",
+                catchMethods: ["rod"],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    speciesRows: [],
+  };
+  const viewModelFor = (normalizeRates) => buildInfoViewModel(
+    {
+      _map_ui: { windowUi: { settings: { normalizeRates } } },
+      _map_runtime: {
+        selection: { pointKind: "clicked", layerSamples: [] },
+        catalog: { layers: [] },
+      },
+    },
+    {
+      zoneLootStatus: "loaded",
+      zoneLootSummary,
+    },
+  );
+  const zoneLootGroup = (viewModel) => viewModel.panes
+    .find((pane) => pane.id === "zone")
+    ?.sections.find((section) => section.kind === "zone-loot")
+    ?.profiles[0]
+    ?.groups[0];
+
+  const normalizedGroup = zoneLootGroup(viewModelFor(true));
+  const rawGroup = zoneLootGroup(viewModelFor(false));
+
+  assert.equal(normalizedGroup.dropRateText, "50%");
+  assert.equal(normalizedGroup.dropRateTooltip, "normalized condition");
+  assert.equal(normalizedGroup.rows[0].dropRateText, "100%");
+  assert.equal(normalizedGroup.rows[0].dropRateTooltip, "normalized species");
+  assert.equal(rawGroup.dropRateText, "12%");
+  assert.equal(rawGroup.dropRateTooltip, "raw condition");
+  assert.equal(rawGroup.rows[0].dropRateText, "40%");
+  assert.equal(rawGroup.rows[0].dropRateTooltip, "raw species");
+});
+
 test("buildInfoViewModel lets zone loot condition selection switch branch rows", () => {
   const viewModel = buildInfoViewModel(
     {
@@ -266,6 +371,10 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
             slotIdx: 2,
             label: "Rare",
             dropRateText: "1%",
+            rawDropRateText: "1%",
+            rawDropRateTooltip: "stale parent lineage",
+            normalizedDropRateText: "1%",
+            normalizedDropRateTooltip: "stale parent lineage",
             catchMethods: ["rod"],
             conditionText: "Default",
             conditionOptions: [
@@ -274,6 +383,10 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
                 dropRateText: "1%",
                 dropRateSourceKind: "database",
                 dropRateTooltip: "stale parent lineage",
+                rawDropRateText: "1%",
+                rawDropRateTooltip: "stale parent lineage",
+                normalizedDropRateText: "1%",
+                normalizedDropRateTooltip: "stale parent lineage",
                 active: true,
                 speciesRows: [
                   {
@@ -282,6 +395,10 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
                     label: "Grunt",
                     dropRateText: "100%",
                     dropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
+                    rawDropRateText: "100%",
+                    rawDropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
+                    normalizedDropRateText: "100%",
+                    normalizedDropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
                     catchMethods: ["rod"],
                   },
                 ],
@@ -291,6 +408,10 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
                 dropRateText: "1%",
                 dropRateSourceKind: "database",
                 dropRateTooltip: "stale parent lineage",
+                rawDropRateText: "1%",
+                rawDropRateTooltip: "stale parent lineage",
+                normalizedDropRateText: "1%",
+                normalizedDropRateTooltip: "stale parent lineage",
                 active: false,
                 speciesRows: [
                   {
@@ -299,6 +420,10 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
                     label: "Mystical Fish",
                     dropRateText: "0.005%",
                     dropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
+                    rawDropRateText: "0.005%",
+                    rawDropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
+                    normalizedDropRateText: "0.005%",
+                    normalizedDropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
                     catchMethods: ["rod"],
                   },
                 ],
@@ -319,7 +444,7 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
   assert.equal(group.conditionOptionKey, "2:Rare");
 });
 
-test("patchTouchesInfoSignals stays narrow to selection, pane tab, and runtime layer inputs", () => {
+test("patchTouchesInfoSignals stays narrow to selection, pane tab, rate display, and runtime layer inputs", () => {
   assert.equal(
     patchTouchesInfoSignals({
       _map_runtime: { selection: {} },
@@ -335,6 +460,12 @@ test("patchTouchesInfoSignals stays narrow to selection, pane tab, and runtime l
   assert.equal(
     patchTouchesInfoSignals({
       _map_ui: { windowUi: { zoneInfo: { tab: "trade" } } },
+    }),
+    true,
+  );
+  assert.equal(
+    patchTouchesInfoSignals({
+      _map_ui: { windowUi: { settings: { normalizeRates: false } } },
     }),
     true,
   );

@@ -472,6 +472,10 @@ function ensureInfoPanelMarkup(host) {
 }
 
 export class FishyMapInfoPanelElement extends HTMLElementBase {
+  static get observedAttributes() {
+    return ["data-normalize-rates"];
+  }
+
   constructor() {
     super();
     this._shell = null;
@@ -552,6 +556,13 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     };
   }
 
+  attributeChangedCallback(name, previousValue, nextValue) {
+    if (name !== "data-normalize-rates" || previousValue === nextValue) {
+      return;
+    }
+    this.scheduleRender();
+  }
+
   connectedCallback() {
     this._shell = this.closest?.("#map-page-shell") || null;
     ensureInfoPanelMarkup(this);
@@ -604,13 +615,24 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     return readMapShellSignals(this._shell);
   }
 
+  normalizeRatesEnabled(signals = this.signals()) {
+    const signalValue = signals?._map_ui?.windowUi?.settings?.normalizeRates;
+    if (typeof signalValue === "boolean") {
+      return signalValue;
+    }
+    const attrValue = trimString(this.getAttribute?.("data-normalize-rates")).toLowerCase();
+    return attrValue !== "false" && attrValue !== "0";
+  }
+
   render() {
     this._rafId = 0;
-    const viewModel = buildInfoViewModel(this.signals(), {
+    const signals = this.signals();
+    const viewModel = buildInfoViewModel(signals, {
       zoneCatalog: this._state.zoneCatalog,
       zoneLootSummary: this._state.zoneLootSummary,
       zoneLootStatus: this._state.zoneLootStatus,
       zoneLootConditionSelection: this._state.zoneLootConditionSelection,
+      normalizeRates: this.normalizeRatesEnabled(signals),
     });
     setTextContent(this._elements?.title, viewModel.descriptor.title);
     setTextContent(this._elements?.statusText, viewModel.descriptor.statusText);
@@ -669,7 +691,9 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   }
 
   async refreshZoneLootSummary({ force = false } = {}) {
-    const selection = this.signals()?._map_runtime?.selection || null;
+    const signals = this.signals();
+    const selection = signals?._map_runtime?.selection || null;
+    const normalizeRates = this.normalizeRatesEnabled(signals);
     const zoneRgb = zoneRgbFromSelection(selection);
     if (!Number.isInteger(zoneRgb) || zoneRgb < 0) {
       this._state.zoneLootRequestToken += 1;
@@ -700,7 +724,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     const requestToken = this._state.zoneLootRequestToken + 1;
     this._state.zoneLootRequestToken = requestToken;
     try {
-      const summary = await loadZoneLootSummary(zoneRgb);
+      const summary = await loadZoneLootSummary(zoneRgb, { normalizeRates });
       if (this._state.zoneLootRequestToken !== requestToken || this._state.zoneLootRgb !== zoneRgb) {
         return;
       }

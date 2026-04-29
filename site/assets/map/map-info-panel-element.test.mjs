@@ -69,6 +69,218 @@ test("info panel element exposes refresh and signal patch handlers", () => {
   assert.equal(typeof element.render, "function");
 });
 
+test("normalize rates Datastar prop re-renders without refetching zone loot", () => {
+  const element = new FishyMapInfoPanelElement();
+  let refreshCount = 0;
+  let renderCount = 0;
+  element.refreshZoneLootSummary = () => {
+    refreshCount += 1;
+    return Promise.resolve();
+  };
+  element.scheduleRender = () => {
+    renderCount += 1;
+  };
+
+  element.attributeChangedCallback("data-normalize-rates", "true", "false");
+
+  assert.equal(refreshCount, 0);
+  assert.equal(renderCount, 1);
+});
+
+test("render switches loaded zone loot rates from the Datastar normalize rates prop", () => {
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  let normalizeRates = "true";
+  element.getAttribute = (name) => (name === "data-normalize-rates" ? normalizeRates : null);
+  element._shell = {
+    __fishymapInitialSignals: {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Velia Coast",
+          layerSamples: [
+            {
+              layerId: "zone_mask",
+              rgbU32: 0x39e58d,
+              rgb: [57, 229, 141],
+              detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+            },
+          ],
+        },
+        catalog: {
+          layers: [{ layerId: "zone_mask", displayOrder: 20 }],
+        },
+      },
+      _map_ui: {
+        windowUi: {
+          zoneInfo: { tab: "" },
+          settings: {},
+        },
+      },
+    },
+  };
+  element._state = {
+    zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Velia Coast", biteTimeMin: 5, biteTimeMax: 7 }],
+    zoneLootStatus: "loaded",
+    zoneLootRgb: 0x39e58d,
+    zoneLootRequestToken: 1,
+    zoneLootConditionSelection: {},
+    zoneLootSummary: {
+      available: true,
+      profileLabel: "Calculator defaults",
+      groups: [
+        {
+          slotIdx: 2,
+          label: "Rare",
+          fillColor: "#eef6ff",
+          strokeColor: "#89a8d8",
+          textColor: "#1f2937",
+          dropRateText: "77.7%",
+          dropRateSourceKind: "database",
+          rawDropRateText: "12.3%",
+          rawDropRateTooltip: "Raw group rate",
+          normalizedDropRateText: "77.7%",
+          normalizedDropRateTooltip: "Normalized group rate",
+          catchMethods: ["rod"],
+        },
+      ],
+      speciesRows: [
+        {
+          slotIdx: 2,
+          groupLabel: "Rare",
+          label: "Grunt",
+          dropRateText: "22.2%",
+          rawDropRateText: "4.5%",
+          rawDropRateTooltip: "Raw species rate",
+          normalizedDropRateText: "22.2%",
+          normalizedDropRateTooltip: "Normalized species rate",
+          catchMethods: ["rod"],
+        },
+      ],
+    },
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+
+  element.render();
+
+  assert.match(panelSlot.innerHTML, /77\.7%/);
+  assert.match(panelSlot.innerHTML, /22\.2%/);
+  assert.doesNotMatch(panelSlot.innerHTML, /12\.3%/);
+  assert.doesNotMatch(panelSlot.innerHTML, /4\.5%/);
+
+  normalizeRates = "false";
+  element.attributeChangedCallback("data-normalize-rates", "true", "false");
+
+  assert.match(panelSlot.innerHTML, /12\.3%/);
+  assert.match(panelSlot.innerHTML, /4\.5%/);
+  assert.doesNotMatch(panelSlot.innerHTML, /77\.7%/);
+  assert.doesNotMatch(panelSlot.innerHTML, /22\.2%/);
+});
+
+test("normalize rates signal patch swaps loaded zone loot rates in place", () => {
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  const signals = {
+    _map_runtime: {
+      selection: {
+        pointKind: "clicked",
+        pointLabel: "Velia Coast",
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rgbU32: 0x39e58d,
+            rgb: [57, 229, 141],
+            detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+          },
+        ],
+      },
+      catalog: {
+        layers: [{ layerId: "zone_mask", displayOrder: 20 }],
+      },
+    },
+    _map_ui: {
+      windowUi: {
+        zoneInfo: { tab: "" },
+        settings: { normalizeRates: true },
+      },
+    },
+  };
+  element._shell = {
+    __fishymapLiveSignals: signals,
+  };
+  element._state = {
+    zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Velia Coast", biteTimeMin: 5, biteTimeMax: 7 }],
+    zoneLootStatus: "loaded",
+    zoneLootRgb: 0x39e58d,
+    zoneLootRequestToken: 1,
+    zoneLootConditionSelection: {},
+    zoneLootSummary: {
+      available: true,
+      profileLabel: "Calculator defaults",
+      groups: [
+        {
+          slotIdx: 2,
+          label: "Rare",
+          dropRateSourceKind: "database",
+          rawDropRateText: "12.3%",
+          rawDropRateTooltip: "Raw group rate",
+          normalizedDropRateText: "77.7%",
+          normalizedDropRateTooltip: "Normalized group rate",
+          catchMethods: ["rod"],
+        },
+      ],
+      speciesRows: [
+        {
+          slotIdx: 2,
+          groupLabel: "Rare",
+          label: "Grunt",
+          rawDropRateText: "4.5%",
+          rawDropRateTooltip: "Raw species rate",
+          normalizedDropRateText: "22.2%",
+          normalizedDropRateTooltip: "Normalized species rate",
+          catchMethods: ["rod"],
+        },
+      ],
+    },
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+  let refreshCount = 0;
+  element.refreshZoneLootSummary = () => {
+    refreshCount += 1;
+    return Promise.resolve();
+  };
+
+  element.render();
+
+  assert.match(panelSlot.innerHTML, /77\.7%/);
+  assert.match(panelSlot.innerHTML, /22\.2%/);
+
+  signals._map_ui.windowUi.settings.normalizeRates = false;
+  element.handleSignalPatch({
+    _map_ui: { windowUi: { settings: { normalizeRates: false } } },
+  });
+
+  assert.equal(refreshCount, 0);
+  assert.match(panelSlot.innerHTML, /12\.3%/);
+  assert.match(panelSlot.innerHTML, /4\.5%/);
+  assert.doesNotMatch(panelSlot.innerHTML, /77\.7%/);
+  assert.doesNotMatch(panelSlot.innerHTML, /22\.2%/);
+});
+
 test("render shows the calculator warning and a consolidated calculator notice without the defaults badge", () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();
@@ -113,6 +325,10 @@ test("render shows the calculator warning and a consolidated calculator notice w
           dropRateText: "80%",
           dropRateSourceKind: "database",
           dropRateTooltip: "Source-backed General group share",
+          rawDropRateText: "80%",
+          rawDropRateTooltip: "Source-backed General group share",
+          normalizedDropRateText: "80%",
+          normalizedDropRateTooltip: "Source-backed General group share",
           conditionText: "Zone base rate 80%",
           conditionTooltip: "Zone base rate: 80%",
           catchMethods: ["rod"],
@@ -124,6 +340,10 @@ test("render shows the calculator warning and a consolidated calculator notice w
           groupLabel: "General",
           label: "Sea Eel",
           dropRateText: "80%",
+          rawDropRateText: "80%",
+          rawDropRateTooltip: "DB-backed drop rate",
+          normalizedDropRateText: "80%",
+          normalizedDropRateTooltip: "DB-backed drop rate",
           catchMethods: ["rod"],
         },
       ],
@@ -190,6 +410,10 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
           slotIdx: 2,
           label: "Rare",
           dropRateText: "1%",
+          rawDropRateText: "1%",
+          rawDropRateTooltip: "stale parent lineage",
+          normalizedDropRateText: "1%",
+          normalizedDropRateTooltip: "stale parent lineage",
           catchMethods: ["rod"],
           conditionText: "Default",
           conditionOptions: [
@@ -198,6 +422,10 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
               dropRateText: "1%",
               dropRateSourceKind: "database",
               dropRateTooltip: "stale parent lineage",
+              rawDropRateText: "1%",
+              rawDropRateTooltip: "stale parent lineage",
+              normalizedDropRateText: "1%",
+              normalizedDropRateTooltip: "stale parent lineage",
               active: true,
               speciesRows: [
                 {
@@ -206,6 +434,10 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
                   label: "Grunt",
                   dropRateText: "100%",
                   dropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
+                  rawDropRateText: "100%",
+                  rawDropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
+                  normalizedDropRateText: "100%",
+                  normalizedDropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
                   catchMethods: ["rod"],
                 },
               ],
@@ -215,6 +447,10 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
               dropRateText: "1%",
               dropRateSourceKind: "database",
               dropRateTooltip: "stale parent lineage",
+              rawDropRateText: "1%",
+              rawDropRateTooltip: "stale parent lineage",
+              normalizedDropRateText: "1%",
+              normalizedDropRateTooltip: "stale parent lineage",
               active: false,
               speciesRows: [
                 {
@@ -223,6 +459,10 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
                   label: "Mystical Fish",
                   dropRateText: "0.005%",
                   dropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
+                  rawDropRateText: "0.005%",
+                  rawDropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
+                  normalizedDropRateText: "0.005%",
+                  normalizedDropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
                   catchMethods: ["rod"],
                 },
               ],

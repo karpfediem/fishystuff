@@ -3,12 +3,28 @@ use serde::{Deserialize, Serialize};
 use crate::ids::RgbKey;
 use crate::models::calculator::CalculatorUserOverlaySignals;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+fn default_show_normalized_select_rates() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ZoneLootSummaryRequest {
     pub rgb: RgbKey,
     #[serde(default)]
     pub overlay: CalculatorUserOverlaySignals,
+    #[serde(default = "default_show_normalized_select_rates")]
+    pub show_normalized_select_rates: bool,
+}
+
+impl Default for ZoneLootSummaryRequest {
+    fn default() -> Self {
+        Self {
+            rgb: RgbKey::default(),
+            overlay: CalculatorUserOverlaySignals::default(),
+            show_normalized_select_rates: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -34,6 +50,14 @@ pub struct ZoneLootSummaryGroupRow {
     pub drop_rate_text: String,
     pub drop_rate_source_kind: String,
     pub drop_rate_tooltip: String,
+    #[serde(default)]
+    pub raw_drop_rate_text: String,
+    #[serde(default)]
+    pub raw_drop_rate_tooltip: String,
+    #[serde(default)]
+    pub normalized_drop_rate_text: String,
+    #[serde(default)]
+    pub normalized_drop_rate_tooltip: String,
     pub condition_text: String,
     pub condition_tooltip: String,
     #[serde(default)]
@@ -50,6 +74,14 @@ pub struct ZoneLootSummaryConditionOption {
     pub drop_rate_text: String,
     pub drop_rate_source_kind: String,
     pub drop_rate_tooltip: String,
+    #[serde(default)]
+    pub raw_drop_rate_text: String,
+    #[serde(default)]
+    pub raw_drop_rate_tooltip: String,
+    #[serde(default)]
+    pub normalized_drop_rate_text: String,
+    #[serde(default)]
+    pub normalized_drop_rate_tooltip: String,
     pub active: bool,
     pub species_rows: Vec<ZoneLootSummarySpeciesRow>,
 }
@@ -68,6 +100,14 @@ pub struct ZoneLootSummarySpeciesRow {
     pub drop_rate_text: String,
     pub drop_rate_source_kind: String,
     pub drop_rate_tooltip: String,
+    #[serde(default)]
+    pub raw_drop_rate_text: String,
+    #[serde(default)]
+    pub raw_drop_rate_tooltip: String,
+    #[serde(default)]
+    pub normalized_drop_rate_text: String,
+    #[serde(default)]
+    pub normalized_drop_rate_tooltip: String,
     pub presence_text: Option<String>,
     pub presence_source_kind: String,
     pub presence_tooltip: String,

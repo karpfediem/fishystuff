@@ -1038,6 +1038,7 @@
   "map.settings.reset_ui": "Reset UI",
   "map.settings.display": "Display",
   "map.settings.auto_adjust_view": "Auto-adjust view",
+  "map.settings.normalize_rates": "비율 정규화",
   "map.settings.diagnostics": "Diagnostics",
   "map.settings.waiting_bridge_events": "Waiting for bridge events...",
   "map.error.renderer_unavailable": "Map renderer unavailable",

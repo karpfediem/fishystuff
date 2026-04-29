@@ -95,14 +95,33 @@ function clampZoneLootConditionIndex(value, count) {
   return index;
 }
 
-function normalizeZoneLootSpeciesRow(row) {
+function normalizeRatesFromSignals(signals) {
+  return signals?._map_ui?.windowUi?.settings?.normalizeRates !== false;
+}
+
+function zoneLootRateDisplayFields(row, normalizeRates = true) {
+  const preferredText = normalizeRates
+    ? trimString(row?.normalizedDropRateText)
+    : trimString(row?.rawDropRateText);
+  const preferredTooltip = normalizeRates
+    ? trimString(row?.normalizedDropRateTooltip)
+    : trimString(row?.rawDropRateTooltip);
+  return {
+    dropRateText: preferredText,
+    dropRateTooltip: preferredTooltip,
+  };
+}
+
+function normalizeZoneLootSpeciesRow(row, normalizeRates = true) {
+  const rateFields = zoneLootRateDisplayFields(row, normalizeRates);
   return {
     ...cloneJson(row),
+    ...rateFields,
     catchMethods: normalizeCatchMethods(row?.catchMethods),
   };
 }
 
-function normalizeZoneLootConditionOptions(group) {
+function normalizeZoneLootConditionOptions(group, normalizeRates = true) {
   if (!Array.isArray(group?.conditionOptions)) {
     return [];
   }
@@ -111,12 +130,11 @@ function normalizeZoneLootConditionOptions(group) {
     .map((option) => ({
       conditionText: trimString(option?.conditionText),
       conditionTooltip: trimString(option?.conditionTooltip),
-      dropRateText: trimString(option?.dropRateText),
+      ...zoneLootRateDisplayFields(option, normalizeRates),
       dropRateSourceKind: trimString(option?.dropRateSourceKind),
-      dropRateTooltip: trimString(option?.dropRateTooltip),
       active: option?.active === true,
       speciesRows: Array.isArray(option?.speciesRows)
-        ? option.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
+        ? option.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row, normalizeRates))
         : [],
     }))
     .filter((option) => option.conditionText || option.speciesRows.length > 0);
@@ -164,7 +182,7 @@ function selectedZoneLootConditionIndex(options, conditionSelection, key) {
   return activeIndex >= 0 ? activeIndex : 0;
 }
 
-function buildZoneLootGroups(summary, conditionSelection = {}) {
+function buildZoneLootGroups(summary, conditionSelection = {}, normalizeRates = true) {
   const groups = Array.isArray(summary?.groups) ? summary.groups : [];
   const speciesRows = Array.isArray(summary?.speciesRows) ? summary.speciesRows : [];
   if (!groups.length && !speciesRows.length) {
@@ -174,7 +192,8 @@ function buildZoneLootGroups(summary, conditionSelection = {}) {
     .map((group, index) => {
       const slotIdx = Number.parseInt(group?.slotIdx, 10) || index + 1;
       const groupLabel = trimString(group?.label);
-      const conditionOptions = normalizeZoneLootConditionOptions(group);
+      const groupRateFields = zoneLootRateDisplayFields(group, normalizeRates);
+      const conditionOptions = normalizeZoneLootConditionOptions(group, normalizeRates);
       const conditionOptionKey = zoneLootConditionKey(group, index);
       const conditionOptionIndex = selectedZoneLootConditionIndex(
         conditionOptions,
@@ -184,7 +203,7 @@ function buildZoneLootGroups(summary, conditionSelection = {}) {
       const selectedCondition =
         conditionOptionIndex >= 0 ? conditionOptions[conditionOptionIndex] : null;
       const selectedConditionRows = selectedCondition
-        ? selectedCondition.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
+        ? selectedCondition.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row, normalizeRates))
         : null;
       const selectedConditionRateLineage =
         zoneLootRowsRateLineageDetail(selectedConditionRows);
@@ -196,20 +215,21 @@ function buildZoneLootGroups(summary, conditionSelection = {}) {
           }
           return (Number.parseInt(row?.slotIdx, 10) || 0) === slotIdx;
         })
-        .map((row) => normalizeZoneLootSpeciesRow(row));
+        .map((row) => normalizeZoneLootSpeciesRow(row, normalizeRates));
+      const selectedConditionRateFields = selectedCondition || null;
       return {
         slotIdx,
         label: groupLabel,
         fillColor: trimString(group?.fillColor),
         strokeColor: trimString(group?.strokeColor),
         textColor: trimString(group?.textColor),
-        dropRateText: trimString(selectedCondition?.dropRateText) || trimString(group?.dropRateText),
+        dropRateText: trimString(selectedConditionRateFields?.dropRateText) || groupRateFields.dropRateText,
         dropRateSourceKind:
           trimString(selectedCondition?.dropRateSourceKind) || trimString(group?.dropRateSourceKind),
         dropRateTooltip:
           selectedConditionRateLineage ||
-          trimString(selectedCondition?.dropRateTooltip) ||
-          trimString(group?.dropRateTooltip),
+          trimString(selectedConditionRateFields?.dropRateTooltip) ||
+          groupRateFields.dropRateTooltip,
         conditionText: trimString(selectedCondition?.conditionText) || trimString(group?.conditionText),
         conditionTooltip:
           trimString(selectedCondition?.conditionTooltip) || trimString(group?.conditionTooltip),
@@ -296,12 +316,17 @@ function buildZoneLootMethodProfiles(groups) {
   return profiles;
 }
 
-function buildZoneLootSection(summary, status, conditionSelection = {}) {
+function buildZoneLootSection(
+  summary,
+  status,
+  conditionSelection = {},
+  normalizeRates = true,
+) {
   const normalizedStatus = trimString(status || "idle");
   if (normalizedStatus === "idle" && !isPlainObject(summary)) {
     return null;
   }
-  const groups = buildZoneLootGroups(summary, conditionSelection);
+  const groups = buildZoneLootGroups(summary, conditionSelection, normalizeRates);
   const profiles = buildZoneLootMethodProfiles(groups);
   const available = summary?.available === true && profiles.some((profile) => profile.groups.length > 0);
   const statusText =
@@ -346,7 +371,8 @@ export function patchTouchesInfoSignals(patch) {
   return Boolean(
     patch._map_runtime?.selection != null ||
       patch._map_runtime?.catalog?.layers != null ||
-      patch._map_ui?.windowUi?.zoneInfo != null,
+      patch._map_ui?.windowUi?.zoneInfo != null ||
+      patch._map_ui?.windowUi?.settings?.normalizeRates != null,
   );
 }
 
@@ -357,6 +383,7 @@ export function buildInfoViewModel(
     zoneLootSummary = null,
     zoneLootStatus = "idle",
     zoneLootConditionSelection = {},
+    normalizeRates = null,
   } = {},
 ) {
   const selection = isPlainObject(signals?._map_runtime?.selection)
@@ -376,6 +403,7 @@ export function buildInfoViewModel(
     zoneLootSummary,
     zoneLootStatus,
     zoneLootConditionSelection,
+    typeof normalizeRates === "boolean" ? normalizeRates : normalizeRatesFromSignals(signals),
   );
   const panes = [
     paneDescriptor(

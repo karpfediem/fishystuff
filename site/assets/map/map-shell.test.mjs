@@ -10,7 +10,7 @@ const shellHtml = readFileSync(new URL("./map-shell.html", import.meta.url), "ut
 test("map shell windows are Datastar-driven for open and collapsed state", () => {
   assert.match(
     shellHtml,
-    /settings: \{ open: false, collapsed: false, x: null, y: null, autoAdjustView: true \}/,
+    /settings: \{ open: false, collapsed: false, x: null, y: null, autoAdjustView: true, normalizeRates: true \}/,
   );
   assert.match(shellHtml, /layers: \{ open: true, collapsed: false, x: null, y: null \}/);
   assert.match(shellHtml, /layers: \{ expandedLayerIds: \[\], hoverFactsVisibleByLayer: \{\} \}/);
@@ -26,7 +26,10 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
   assert.match(shellHtml, /id="fishymap-layers-window"[\s\S]*data-show="\$_map_ui\.windowUi\.layers\.open"/);
   assert.match(shellHtml, /id="fishymap-panel"[\s\S]*data-show="\$_map_ui\.windowUi\.settings\.open"/);
   assert.match(shellHtml, /<fishymap-hover-tooltip id="fishymap-hover-tooltip" class="card card-border bg-base-100 not-prose" hidden><\/fishymap-hover-tooltip>/);
-  assert.match(shellHtml, /<fishymap-info-panel id="fishymap-info-panel" class="space-y-3 not-prose"><\/fishymap-info-panel>/);
+  assert.match(
+    shellHtml,
+    /<fishymap-info-panel[\s\S]*id="fishymap-info-panel"[\s\S]*class="space-y-3 not-prose"[\s\S]*data-normalize-rates="true"[\s\S]*data-attr:data-normalize-rates="\$_map_ui\.windowUi\.settings\.normalizeRates \? 'true' : 'false'"[\s\S]*><\/fishymap-info-panel>/,
+  );
   assert.match(shellHtml, /<fishymap-layer-panel id="fishymap-layer-panel" class="not-prose"><\/fishymap-layer-panel>/);
   assert.doesNotMatch(shellHtml, /<fishymap-patch-picker\b/);
   assert.match(shellHtml, /<fishymap-window-manager id="fishymap-window-manager" hidden><\/fishymap-window-manager>/);
@@ -44,8 +47,14 @@ test("map shell toolbar and status affordances derive from Datastar signals", ()
   );
   assert.match(
     shellHtml,
-    /id="map-page-shell"[\s\S]*data-on-signal-patch-filter="\{include: \/\^_\(\?:map_\|shared_fish\)\(\?:\\\.\|\$\)\/\}"[\s\S]*data-on-signal-patch="el\.dispatchEvent\(new CustomEvent\('fishymap:signal-patched', \{ bubbles: true, detail: patch \}\)\)"/,
+    /id="map-page-shell"[\s\S]*data-on-signal-patch-filter="\{include: \/\^_\(\?:map_\[\^\.\]\+\|shared_fish\)\(\?:\\\.\|\$\)\/\}"[\s\S]*data-on-signal-patch="el\.dispatchEvent\(new CustomEvent\('fishymap:signal-patched', \{ bubbles: true, detail: patch \}\)\)"/,
   );
+  const mapSignalPatchFilter = /^_(?:map_[^.]+|shared_fish)(?:\.|$)/;
+  assert.equal(mapSignalPatchFilter.test("_map_ui.windowUi.settings.normalizeRates"), true);
+  assert.equal(mapSignalPatchFilter.test("_map_actions.resetViewToken"), true);
+  assert.equal(mapSignalPatchFilter.test("_map_bridged.ui.showPoints"), true);
+  assert.equal(mapSignalPatchFilter.test("_shared_fish.caughtIds"), true);
+  assert.equal(mapSignalPatchFilter.test("_not_map_ui.windowUi.settings.open"), false);
   assert.doesNotMatch(shellHtml, /data-on:fishymap-signals-patch=/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.search\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.search\.open"/);
@@ -67,5 +76,7 @@ test("map shell toolbar and status affordances derive from Datastar signals", ()
   assert.match(shellHtml, /id="fishymap-diagnostics"[\s\S]*data-attr:open="\$_map_bridged\.ui\.diagnosticsOpen"/);
   assert.match(shellHtml, /id="fishymap-reset-view"[\s\S]*data-on:click="\$_map_actions\.resetViewToken = \(\$_map_actions\.resetViewToken \|\| 0\) \+ 1"/);
   assert.match(shellHtml, /id="fishymap-reset-ui"[\s\S]*data-on:click="\$_map_actions\.resetUiToken = \(\$_map_actions\.resetUiToken \|\| 0\) \+ 1"/);
+  assert.match(shellHtml, /id="fishymap-normalize-rates"[\s\S]*data-bind="_map_ui\.windowUi\.settings\.normalizeRates"/);
+  assert.match(shellHtml, /data-i18n-text="map\.settings\.normalize_rates"/);
   assert.doesNotMatch(shellHtml, /id="fishymap-view-toggle"/);
 });

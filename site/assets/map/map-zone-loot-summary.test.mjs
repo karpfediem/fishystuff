@@ -34,6 +34,10 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
         dropRateText: "80%",
         dropRateSourceKind: "database",
         dropRateTooltip: "Source-backed General group share",
+        rawDropRateText: "120%",
+        rawDropRateTooltip: "Raw General group share",
+        normalizedDropRateText: "80%",
+        normalizedDropRateTooltip: "Normalized General group share",
         conditionText: "Zone base rate 80%",
         conditionTooltip: "Zone base rate: 80%",
         catchMethods: ["rod"],
@@ -43,6 +47,10 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "Default General source",
+            rawDropRateText: "120%",
+            rawDropRateTooltip: "Default raw General source",
+            normalizedDropRateText: "80%",
+            normalizedDropRateTooltip: "Default normalized General source",
             active: true,
             speciesRows: [
               {
@@ -50,6 +58,10 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
                 groupLabel: "General",
                 label: "Sea Eel",
                 dropRateText: "80%",
+                rawDropRateText: "120%",
+                rawDropRateTooltip: "Raw Sea Eel source",
+                normalizedDropRateText: "80%",
+                normalizedDropRateTooltip: "Normalized Sea Eel source",
                 catchMethods: ["rod"],
               },
             ],
@@ -89,6 +101,8 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.equal(summary.groups[0].slotIdx, 4);
   assert.equal(summary.groups[0].dropRateText, "80%");
   assert.equal(summary.groups[0].dropRateSourceKind, "database");
+  assert.equal(summary.groups[0].rawDropRateText, "120%");
+  assert.equal(summary.groups[0].normalizedDropRateTooltip, "Normalized General group share");
   assert.equal(summary.groups[0].conditionText, "Zone base rate 80%");
   assert.deepEqual(summary.groups[0].catchMethods, ["rod"]);
   assert.equal(summary.groups[0].conditionOptions.length, 2);
@@ -96,10 +110,17 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.equal(summary.groups[0].conditionOptions[0].dropRateText, "80%");
   assert.equal(summary.groups[0].conditionOptions[0].dropRateSourceKind, "database");
   assert.equal(summary.groups[0].conditionOptions[0].dropRateTooltip, "Default General source");
+  assert.equal(summary.groups[0].conditionOptions[0].rawDropRateTooltip, "Default raw General source");
+  assert.equal(summary.groups[0].conditionOptions[0].normalizedDropRateText, "80%");
   assert.equal(summary.groups[0].conditionOptions[0].active, true);
   assert.equal(summary.groups[0].conditionOptions[1].speciesRows[0].label, "Mystical Fish");
   assert.equal(summary.speciesRows[0].groupLabel, "General");
   assert.equal(summary.speciesRows[0].dropRateText, "80%");
+  assert.equal(summary.groups[0].conditionOptions[0].speciesRows[0].rawDropRateText, "120%");
+  assert.equal(
+    summary.groups[0].conditionOptions[0].speciesRows[0].normalizedDropRateTooltip,
+    "Normalized Sea Eel source",
+  );
   assert.equal(
     summary.speciesRows[0].presenceText,
     "Community confirmed×2 · General subgroup",
@@ -121,6 +142,7 @@ test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint",
         },
       },
     },
+    normalizeRates: false,
     locationLike: {
       origin: "http://127.0.0.1:1990",
       protocol: "http:",
@@ -155,8 +177,37 @@ test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint",
         },
       },
     },
+    showNormalizedSelectRates: false,
   });
   assert.equal(result.zoneName, "Valencia Sea - Depth 5");
+});
+
+test("loadZoneLootSummary posts the normalize rate preference when provided", async () => {
+  let body = null;
+  await loadZoneLootSummary(0x39e58d, {
+    normalizeRates: false,
+    locationLike: {
+      origin: "http://127.0.0.1:1990",
+      protocol: "http:",
+      hostname: "127.0.0.1",
+    },
+    fetchImpl: async (_url, init) => {
+      body = JSON.parse(init.body);
+      return {
+        ok: true,
+        async json() {
+          return {
+            available: true,
+            zoneName: "Valencia Sea - Depth 5",
+            groups: [],
+            speciesRows: [],
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(body.showNormalizedSelectRates, false);
 });
 
 test("loadZoneLootSummary reports a clear message when the API build lacks the endpoint", async () => {

@@ -44,6 +44,10 @@ function normalizeZoneLootSpeciesRow(row) {
     dropRateText: trimString(row?.dropRateText),
     dropRateSourceKind: trimString(row?.dropRateSourceKind),
     dropRateTooltip: trimString(row?.dropRateTooltip),
+    rawDropRateText: trimString(row?.rawDropRateText),
+    rawDropRateTooltip: trimString(row?.rawDropRateTooltip),
+    normalizedDropRateText: trimString(row?.normalizedDropRateText),
+    normalizedDropRateTooltip: trimString(row?.normalizedDropRateTooltip),
     presenceText: trimString(row?.presenceText),
     presenceSourceKind: trimString(row?.presenceSourceKind),
     presenceTooltip: trimString(row?.presenceTooltip),
@@ -116,6 +120,10 @@ export function normalizeZoneLootSummary(raw) {
             dropRateText: trimString(group.dropRateText),
             dropRateSourceKind: trimString(group.dropRateSourceKind),
             dropRateTooltip: trimString(group.dropRateTooltip),
+            rawDropRateText: trimString(group.rawDropRateText),
+            rawDropRateTooltip: trimString(group.rawDropRateTooltip),
+            normalizedDropRateText: trimString(group.normalizedDropRateText),
+            normalizedDropRateTooltip: trimString(group.normalizedDropRateTooltip),
             conditionText: trimString(group.conditionText),
             conditionTooltip: trimString(group.conditionTooltip),
             catchMethods: normalizeCatchMethods(group.catchMethods),
@@ -128,6 +136,10 @@ export function normalizeZoneLootSummary(raw) {
                     dropRateText: trimString(option.dropRateText),
                     dropRateSourceKind: trimString(option.dropRateSourceKind),
                     dropRateTooltip: trimString(option.dropRateTooltip),
+                    rawDropRateText: trimString(option.rawDropRateText),
+                    rawDropRateTooltip: trimString(option.rawDropRateTooltip),
+                    normalizedDropRateText: trimString(option.normalizedDropRateText),
+                    normalizedDropRateTooltip: trimString(option.normalizedDropRateTooltip),
                     active: option.active === true,
                     speciesRows: Array.isArray(option.speciesRows)
                       ? option.speciesRows
@@ -152,6 +164,7 @@ export async function loadZoneLootSummary(
     fetchImpl = globalThis.fetch,
     locationLike = globalThis.window?.location,
     overlaySignals = null,
+    normalizeRates = null,
   } = {},
 ) {
   const normalizedZoneRgb = Number.parseInt(zoneRgb, 10);
@@ -160,15 +173,19 @@ export async function loadZoneLootSummary(
   }
   await languageReady();
   const baseUrl = resolveApiBaseUrl(locationLike);
+  const requestBody = {
+    rgb: rgbTripletString(normalizedZoneRgb),
+    overlay: currentUserOverlaySignals(overlaySignals),
+  };
+  if (typeof normalizeRates === "boolean") {
+    requestBody.showNormalizedSelectRates = normalizeRates;
+  }
   const response = await fetchImpl(`${baseUrl}${localizedZoneLootSummaryPath()}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      rgb: rgbTripletString(normalizedZoneRgb),
-      overlay: currentUserOverlaySignals(overlaySignals),
-    }),
+    body: JSON.stringify(requestBody),
   });
   if (!response.ok) {
     if (response.status === 404) {

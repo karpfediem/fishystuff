@@ -1715,6 +1715,7 @@ async fn load_zone_loot_summary_data(
     let mut signals = data.catalog.defaults.clone();
     signals.zone = zone.rgb_key.0.clone();
     signals.show_silver_amounts = false;
+    signals.show_normalized_select_rates = request.show_normalized_select_rates;
     signals.overlay = request.overlay;
     normalize_signals(&mut signals, &data);
     let base_zone_loot_entries = with_timeout(
@@ -5752,11 +5753,11 @@ fn compact_silver_text(value: f64) -> String {
     format!("{}{}", trim_float_to(value / divisor, 1), suffix)
 }
 
-fn evidence_display_rate(
-    signals: &CalculatorSignals,
+fn evidence_display_rate_for_setting(
+    show_normalized_rates: bool,
     evidence: &CalculatorZoneLootEvidence,
 ) -> Option<f64> {
-    if signals.show_normalized_select_rates {
+    if show_normalized_rates {
         evidence.normalized_rate.or(evidence.rate)
     } else {
         evidence.rate
@@ -6334,17 +6335,39 @@ fn group_silver_distribution_breakdown(
 
 fn zone_loot_group_drop_rate_fields(
     chart_row: Option<&FishGroupChartRow>,
+    show_normalized_rates: bool,
 ) -> (String, String, String) {
     let Some(chart_row) = chart_row else {
         return (String::new(), String::new(), String::new());
     };
-    if chart_row.current_share_pct <= 0.0 {
+    let display_rate_pct = if show_normalized_rates {
+        chart_row.current_share_pct
+    } else {
+        chart_row.weight_pct
+    };
+    if display_rate_pct <= 0.0 {
         return (String::new(), String::new(), String::new());
     }
     (
-        percent_value_text(chart_row.current_share_pct),
+        percent_value_text(display_rate_pct),
         fish_group_drop_rate_source_kind(chart_row),
         fish_group_drop_rate_tooltip(chart_row),
+    )
+}
+
+fn zone_loot_group_drop_rate_variants(
+    chart_row: Option<&FishGroupChartRow>,
+    lineage_detail: Option<String>,
+) -> (String, String, String, String) {
+    let (raw_drop_rate_text, _, raw_drop_rate_tooltip) =
+        zone_loot_group_drop_rate_fields(chart_row, false);
+    let (normalized_drop_rate_text, _, normalized_drop_rate_tooltip) =
+        zone_loot_group_drop_rate_fields(chart_row, true);
+    (
+        raw_drop_rate_text,
+        append_provenance_detail(raw_drop_rate_tooltip, lineage_detail.clone()),
+        normalized_drop_rate_text,
+        append_provenance_detail(normalized_drop_rate_tooltip, lineage_detail),
     )
 }
 
@@ -6529,6 +6552,17 @@ fn zone_loot_summary_species_row_from_loot_species(
     row: &LootSpeciesRow,
     data: &CalculatorData,
 ) -> ZoneLootSummarySpeciesRow {
+    let (
+        raw_drop_rate_text,
+        raw_drop_rate_tooltip,
+        normalized_drop_rate_text,
+        normalized_drop_rate_tooltip,
+    ) = data
+        .zone_loot_entries
+        .iter()
+        .find(|entry| entry.slot_idx == row.slot_idx && entry.item_id == row.item_id)
+        .map(|entry| zone_loot_summary_species_rate_variants(entry, data.lang))
+        .unwrap_or_default();
     ZoneLootSummarySpeciesRow {
         slot_idx: row.slot_idx,
         group_label: calculator_group_display_label(data.lang, &row.group_label),
@@ -6541,6 +6575,10 @@ fn zone_loot_summary_species_row_from_loot_species(
         drop_rate_text: row.drop_rate_text.clone(),
         drop_rate_source_kind: row.drop_rate_source_kind.clone(),
         drop_rate_tooltip: row.drop_rate_tooltip.clone(),
+        raw_drop_rate_text,
+        raw_drop_rate_tooltip,
+        normalized_drop_rate_text,
+        normalized_drop_rate_tooltip,
         presence_text: row.presence_text.clone(),
         presence_source_kind: row.presence_source_kind.clone(),
         presence_tooltip: row.presence_tooltip.clone().unwrap_or_default(),
@@ -6556,6 +6594,12 @@ fn zone_loot_summary_species_row_from_entry(
 ) -> ZoneLootSummarySpeciesRow {
     let (group_label, fill_color, stroke_color, text_color) =
         zone_loot_group_values(data.lang, entry.slot_idx, chart_row);
+    let (
+        raw_drop_rate_text,
+        raw_drop_rate_tooltip,
+        normalized_drop_rate_text,
+        normalized_drop_rate_tooltip,
+    ) = zone_loot_summary_species_rate_variants(entry, data.lang);
     ZoneLootSummarySpeciesRow {
         slot_idx: entry.slot_idx,
         group_label,
@@ -6571,11 +6615,27 @@ fn zone_loot_summary_species_row_from_entry(
         drop_rate_text: loot_species_drop_rate_text(signals, entry),
         drop_rate_source_kind: loot_species_drop_rate_source_kind(entry).to_string(),
         drop_rate_tooltip: loot_species_drop_rate_tooltip(signals, entry, data.lang),
+        raw_drop_rate_text,
+        raw_drop_rate_tooltip,
+        normalized_drop_rate_text,
+        normalized_drop_rate_tooltip,
         presence_text: loot_species_presence_text(entry, data.lang),
         presence_source_kind: loot_species_presence_source_kind(entry),
         presence_tooltip: loot_species_presence_tooltip(entry, data.lang).unwrap_or_default(),
         catch_methods: zone_loot_catch_methods(&entry.catch_methods),
     }
+}
+
+fn zone_loot_summary_species_rate_variants(
+    entry: &CalculatorZoneLootEntry,
+    lang: CalculatorLocale,
+) -> (String, String, String, String) {
+    (
+        loot_species_drop_rate_text_for_setting(false, entry),
+        loot_species_drop_rate_tooltip_for_setting(false, entry, lang),
+        loot_species_drop_rate_text_for_setting(true, entry),
+        loot_species_drop_rate_tooltip_for_setting(true, entry, lang),
+    )
 }
 
 fn sort_zone_loot_summary_species_rows(rows: &mut [ZoneLootSummarySpeciesRow]) {
@@ -6613,9 +6673,10 @@ fn zone_loot_summary_condition_option_group_rate_fields(
     slot_idx: u8,
     chart_row: Option<&FishGroupChartRow>,
     option_entries: &[CalculatorZoneLootEntry],
+    show_normalized_rates: bool,
 ) -> (String, String, String) {
     let (mut drop_rate_text, mut drop_rate_source_kind, drop_rate_tooltip) =
-        zone_loot_group_drop_rate_fields(chart_row);
+        zone_loot_group_drop_rate_fields(chart_row, show_normalized_rates);
     if drop_rate_text.is_empty()
         && slot_idx == 6
         && option_entries
@@ -6633,6 +6694,33 @@ fn zone_loot_summary_condition_option_group_rate_fields(
             drop_rate_tooltip,
             zone_loot_group_lineage_detail(slot_idx, option_entries),
         ),
+    )
+}
+
+fn zone_loot_summary_condition_option_group_rate_variants(
+    slot_idx: u8,
+    chart_row: Option<&FishGroupChartRow>,
+    option_entries: &[CalculatorZoneLootEntry],
+) -> (String, String, String, String) {
+    let (raw_drop_rate_text, _, raw_drop_rate_tooltip) =
+        zone_loot_summary_condition_option_group_rate_fields(
+            slot_idx,
+            chart_row,
+            option_entries,
+            false,
+        );
+    let (normalized_drop_rate_text, _, normalized_drop_rate_tooltip) =
+        zone_loot_summary_condition_option_group_rate_fields(
+            slot_idx,
+            chart_row,
+            option_entries,
+            true,
+        );
+    (
+        raw_drop_rate_text,
+        raw_drop_rate_tooltip,
+        normalized_drop_rate_text,
+        normalized_drop_rate_tooltip,
     )
 }
 
@@ -6717,13 +6805,28 @@ fn build_zone_loot_summary_condition_options(
                     slot_idx,
                     chart_row,
                     &option_entries,
+                    signals.show_normalized_select_rates,
                 );
+            let (
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
+            ) = zone_loot_summary_condition_option_group_rate_variants(
+                slot_idx,
+                chart_row,
+                &option_entries,
+            );
             slot_options.push(ZoneLootSummaryConditionOption {
                 condition_text,
                 condition_tooltip,
                 drop_rate_text,
                 drop_rate_source_kind,
                 drop_rate_tooltip,
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
                 active: active_option_idx == Some(option.option_idx),
                 species_rows,
             });
@@ -6975,8 +7078,15 @@ fn loot_species_drop_rate_text(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
 ) -> String {
+    loot_species_drop_rate_text_for_setting(signals.show_normalized_select_rates, entry)
+}
+
+fn loot_species_drop_rate_text_for_setting(
+    show_normalized_rates: bool,
+    entry: &CalculatorZoneLootEntry,
+) -> String {
     let rate = loot_species_rate_evidence(entry)
-        .and_then(|evidence| evidence_display_rate(signals, evidence))
+        .and_then(|evidence| evidence_display_rate_for_setting(show_normalized_rates, evidence))
         .unwrap_or(entry.within_group_rate);
     format!("{}%", format_evidence_percent(rate))
 }
@@ -7147,6 +7257,14 @@ fn loot_species_drop_rate_tooltip(
     entry: &CalculatorZoneLootEntry,
     lang: CalculatorLocale,
 ) -> String {
+    loot_species_drop_rate_tooltip_for_setting(signals.show_normalized_select_rates, entry, lang)
+}
+
+fn loot_species_drop_rate_tooltip_for_setting(
+    show_normalized_rates: bool,
+    entry: &CalculatorZoneLootEntry,
+    lang: CalculatorLocale,
+) -> String {
     let text_with_vars =
         |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
     if entry.overlay.slot_overlay_active {
@@ -7200,7 +7318,7 @@ fn loot_species_drop_rate_tooltip(
         .find(|evidence| {
             evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
         })
-        .and_then(|evidence| evidence_display_rate(signals, evidence))
+        .and_then(|evidence| evidence_display_rate_for_setting(show_normalized_rates, evidence))
         .map(|rate| {
             append_provenance_detail(
                 text_with_vars(
@@ -7217,7 +7335,7 @@ fn loot_species_drop_rate_tooltip(
         .find(|evidence| {
             evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
         })
-        .and_then(|evidence| evidence_display_rate(signals, evidence))
+        .and_then(|evidence| evidence_display_rate_for_setting(show_normalized_rates, evidence))
         .map(|rate| {
             append_provenance_detail(
                 text_with_vars(
@@ -7620,8 +7738,18 @@ fn derive_zone_loot_summary_response_with_condition_options(
         .iter()
         .map(|row| {
             let slot_idx = fish_group_slot_idx(row.label).unwrap_or(0);
+            let chart_row = group_row_by_slot.get(&slot_idx).copied();
+            let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
+                zone_loot_group_drop_rate_fields(chart_row, signals.show_normalized_select_rates);
+            let lineage_detail = zone_loot_group_lineage_detail(slot_idx, &data.zone_loot_entries);
+            let (
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
+            ) = zone_loot_group_drop_rate_variants(chart_row, lineage_detail.clone());
             let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
-                group_row_by_slot.get(&slot_idx).copied(),
+                chart_row,
                 group_conditions_by_slot
                     .get(&slot_idx)
                     .map(Vec::as_slice)
@@ -7634,12 +7762,13 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 fill_color: row.fill_color.to_string(),
                 stroke_color: row.stroke_color.to_string(),
                 text_color: row.text_color.to_string(),
-                drop_rate_text: row.count_share_text.clone(),
-                drop_rate_source_kind: row.drop_rate_source_kind.clone(),
-                drop_rate_tooltip: append_provenance_detail(
-                    row.drop_rate_tooltip.clone(),
-                    zone_loot_group_lineage_detail(slot_idx, &data.zone_loot_entries),
-                ),
+                drop_rate_text,
+                drop_rate_source_kind,
+                drop_rate_tooltip: append_provenance_detail(drop_rate_tooltip, lineage_detail),
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
                 condition_text,
                 condition_tooltip,
                 catch_methods: group_methods_by_slot
@@ -7676,22 +7805,31 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     .unwrap_or(&[]),
                 data,
             );
+            let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
+                zone_loot_group_drop_rate_fields(
+                    Some(chart_row),
+                    signals.show_normalized_select_rates,
+                );
+            let lineage_detail = zone_loot_group_lineage_detail(*slot_idx, &data.zone_loot_entries);
+            let (
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
+            ) = zone_loot_group_drop_rate_variants(Some(chart_row), lineage_detail.clone());
             summary_groups.push(ZoneLootSummaryGroupRow {
                 slot_idx: *slot_idx,
                 label: calculator_group_display_label(data.lang, &chart_row.label),
                 fill_color: chart_row.fill_color.to_string(),
                 stroke_color: chart_row.stroke_color.to_string(),
                 text_color: chart_row.text_color.to_string(),
-                drop_rate_text: if chart_row.current_share_pct > 0.0 {
-                    percent_value_text(chart_row.current_share_pct)
-                } else {
-                    String::new()
-                },
-                drop_rate_source_kind: fish_group_drop_rate_source_kind(chart_row),
-                drop_rate_tooltip: append_provenance_detail(
-                    fish_group_drop_rate_tooltip(chart_row),
-                    zone_loot_group_lineage_detail(*slot_idx, &data.zone_loot_entries),
-                ),
+                drop_rate_text,
+                drop_rate_source_kind,
+                drop_rate_tooltip: append_provenance_detail(drop_rate_tooltip, lineage_detail),
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
                 condition_text,
                 condition_tooltip,
                 catch_methods: group_methods_by_slot
@@ -7742,18 +7880,24 @@ fn derive_zone_loot_summary_response_with_condition_options(
                         .unwrap_or(&[]),
                     data,
                 );
+                let drop_rate_text = percent_value_text(100.0);
+                let drop_rate_tooltip = append_provenance_detail(
+                    String::new(),
+                    zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                );
                 summary_groups.push(ZoneLootSummaryGroupRow {
                     slot_idx: entry.slot_idx,
                     label: group_label.clone(),
                     fill_color: fill_color.clone(),
                     stroke_color: stroke_color.clone(),
                     text_color: text_color.clone(),
-                    drop_rate_text: percent_value_text(100.0),
+                    drop_rate_text: drop_rate_text.clone(),
                     drop_rate_source_kind: "database".to_string(),
-                    drop_rate_tooltip: append_provenance_detail(
-                        String::new(),
-                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
-                    ),
+                    drop_rate_tooltip: drop_rate_tooltip.clone(),
+                    raw_drop_rate_text: drop_rate_text.clone(),
+                    raw_drop_rate_tooltip: drop_rate_tooltip.clone(),
+                    normalized_drop_rate_text: drop_rate_text,
+                    normalized_drop_rate_tooltip: drop_rate_tooltip,
                     condition_text,
                     condition_tooltip,
                     catch_methods: group_methods_by_slot
@@ -7766,6 +7910,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     ),
                 });
             }
+            let (
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
+            ) = zone_loot_summary_species_rate_variants(entry, data.lang);
             ZoneLootSummarySpeciesRow {
                 slot_idx: entry.slot_idx,
                 group_label,
@@ -7781,6 +7931,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 drop_rate_text: loot_species_drop_rate_text(signals, entry),
                 drop_rate_source_kind: loot_species_drop_rate_source_kind(entry).to_string(),
                 drop_rate_tooltip: loot_species_drop_rate_tooltip(signals, entry, data.lang),
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
                 presence_text: loot_species_presence_text(entry, data.lang),
                 presence_source_kind: loot_species_presence_source_kind(entry),
                 presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
@@ -7799,7 +7953,15 @@ fn derive_zone_loot_summary_response_with_condition_options(
             let (group_label, fill_color, stroke_color, text_color) =
                 zone_loot_group_values(data.lang, entry.slot_idx, chart_row);
             let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
-                zone_loot_group_drop_rate_fields(chart_row);
+                zone_loot_group_drop_rate_fields(chart_row, signals.show_normalized_select_rates);
+            let lineage_detail =
+                zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries);
+            let (
+                raw_drop_rate_text,
+                raw_drop_rate_tooltip,
+                normalized_drop_rate_text,
+                normalized_drop_rate_tooltip,
+            ) = zone_loot_group_drop_rate_variants(chart_row, lineage_detail.clone());
             if seen_group_slots.insert(entry.slot_idx) {
                 let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
                     chart_row,
@@ -7819,8 +7981,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     drop_rate_source_kind: drop_rate_source_kind.clone(),
                     drop_rate_tooltip: append_provenance_detail(
                         drop_rate_tooltip.clone(),
-                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                        lineage_detail,
                     ),
+                    raw_drop_rate_text,
+                    raw_drop_rate_tooltip,
+                    normalized_drop_rate_text,
+                    normalized_drop_rate_tooltip,
                     condition_text,
                     condition_tooltip,
                     catch_methods: group_methods_by_slot
@@ -7848,6 +8014,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 drop_rate_text: String::new(),
                 drop_rate_source_kind: String::new(),
                 drop_rate_tooltip: String::new(),
+                raw_drop_rate_text: String::new(),
+                raw_drop_rate_tooltip: String::new(),
+                normalized_drop_rate_text: String::new(),
+                normalized_drop_rate_tooltip: String::new(),
                 presence_text: Some(presence_text),
                 presence_source_kind: loot_species_presence_source_kind(entry),
                 presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
@@ -7886,6 +8056,16 @@ fn derive_zone_loot_summary_response_with_condition_options(
                         String::new(),
                         zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
                     ),
+                    raw_drop_rate_text: String::new(),
+                    raw_drop_rate_tooltip: append_provenance_detail(
+                        String::new(),
+                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                    ),
+                    normalized_drop_rate_text: String::new(),
+                    normalized_drop_rate_tooltip: append_provenance_detail(
+                        String::new(),
+                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                    ),
                     condition_text,
                     condition_tooltip,
                     catch_methods: group_methods_by_slot
@@ -7913,6 +8093,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 drop_rate_text: String::new(),
                 drop_rate_source_kind: String::new(),
                 drop_rate_tooltip: String::new(),
+                raw_drop_rate_text: String::new(),
+                raw_drop_rate_tooltip: String::new(),
+                normalized_drop_rate_text: String::new(),
+                normalized_drop_rate_tooltip: String::new(),
                 presence_text: Some(presence_text),
                 presence_source_kind: loot_species_presence_source_kind(entry),
                 presence_tooltip: loot_species_presence_tooltip(entry, data.lang)
@@ -18805,6 +18989,102 @@ mod tests {
         assert_eq!(
             summary.species_rows[0].catch_methods,
             vec!["harpoon".to_string()]
+        );
+    }
+
+    #[test]
+    fn zone_loot_summary_group_and_species_rates_follow_normalize_setting() {
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: DataLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "test_zone".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "0,0,0".to_string(),
+                    prize_main_group_key: None,
+                    rare_rate_raw: 1_000_000,
+                    high_quality_rate_raw: 0,
+                    general_rate_raw: 1_000_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![
+                CalculatorZoneLootEntry {
+                    slot_idx: 2,
+                    item_id: 820001,
+                    name: "Rare Fish".to_string(),
+                    within_group_rate: 1.0,
+                    evidence: vec![CalculatorZoneLootEvidence {
+                        source_family: "database".to_string(),
+                        claim_kind: "in_group_rate".to_string(),
+                        scope: "group".to_string(),
+                        rate: Some(0.4),
+                        normalized_rate: Some(1.0),
+                        ..CalculatorZoneLootEvidence::default()
+                    }],
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 4,
+                    item_id: 820002,
+                    name: "General Fish".to_string(),
+                    within_group_rate: 1.0,
+                    evidence: vec![CalculatorZoneLootEvidence {
+                        source_family: "database".to_string(),
+                        claim_kind: "in_group_rate".to_string(),
+                        scope: "group".to_string(),
+                        rate: Some(0.6),
+                        normalized_rate: Some(1.0),
+                        ..CalculatorZoneLootEvidence::default()
+                    }],
+                    ..CalculatorZoneLootEntry::default()
+                },
+            ],
+        };
+        let zone = ZoneEntry {
+            name: Some("Test Zone".to_string()),
+            ..ZoneEntry::default()
+        };
+        let normalized_summary = derive_zone_loot_summary_response(
+            &CalculatorSignals {
+                zone: "test_zone".to_string(),
+                show_normalized_select_rates: true,
+                ..CalculatorSignals::default()
+            },
+            &data,
+            &zone,
+        );
+        let raw_summary = derive_zone_loot_summary_response(
+            &CalculatorSignals {
+                zone: "test_zone".to_string(),
+                show_normalized_select_rates: false,
+                ..CalculatorSignals::default()
+            },
+            &data,
+            &zone,
+        );
+
+        assert_eq!(normalized_summary.groups[0].drop_rate_text, "50%");
+        assert_eq!(normalized_summary.species_rows[0].drop_rate_text, "100%");
+        assert_eq!(raw_summary.groups[0].drop_rate_text, "100%");
+        assert_eq!(raw_summary.species_rows[0].drop_rate_text, "40%");
+        assert_eq!(normalized_summary.groups[0].raw_drop_rate_text, "100%");
+        assert_eq!(
+            normalized_summary.groups[0].normalized_drop_rate_text,
+            "50%"
+        );
+        assert_eq!(normalized_summary.species_rows[0].raw_drop_rate_text, "40%");
+        assert_eq!(
+            normalized_summary.species_rows[0].normalized_drop_rate_text,
+            "100%"
+        );
+        assert_eq!(raw_summary.groups[0].normalized_drop_rate_text, "50%");
+        assert_eq!(
+            raw_summary.species_rows[0].normalized_drop_rate_text,
+            "100%"
         );
     }
 
