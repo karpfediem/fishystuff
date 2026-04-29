@@ -351,12 +351,9 @@ impl DoltMySqlStore {
         let keyword_predicate = |column: &str| {
             [
                 "낚시",
-                "자동 낚시",
                 "희귀 어종",
                 "대형 어종",
-                "낚시 경험치",
                 "생활 경험치",
-                "낚시 숙련도",
                 "생활 숙련도",
                 "내구도 소모 감소 저항",
             ]
@@ -1395,9 +1392,8 @@ impl DoltMySqlStore {
     )]
     fn query_raw_enchant_skill_only_candidates(
         &self,
-        lang: &DataLang,
         ref_id: Option<&str>,
-    ) -> AppResult<Vec<CalculatorEnchantEffectEntryRow>> {
+    ) -> AppResult<Vec<RawEnchantSkillCandidateRow>> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -1446,77 +1442,7 @@ impl DoltMySqlStore {
             return Ok(Vec::new());
         }
 
-        let exact_names = raw_rows
-            .iter()
-            .map(|row| row.item_name_ko.clone())
-            .collect::<Vec<_>>();
-        let normalized_names = raw_rows
-            .iter()
-            .map(|row| row.normalized_item_name_ko.clone())
-            .collect::<Vec<_>>();
-        let metadata_candidates =
-            self.query_item_table_metadata_by_names(lang, ref_id, &exact_names, &normalized_names)?;
-
-        let mut exact_metadata_by_name = HashMap::<String, Vec<(i32, ItemSourceMetadata)>>::new();
-        let mut normalized_metadata_by_name =
-            HashMap::<String, Vec<(i32, ItemSourceMetadata)>>::new();
-        for (item_id, metadata) in metadata_candidates {
-            if let Some(name_ko) = metadata.name_ko.clone() {
-                exact_metadata_by_name
-                    .entry(name_ko)
-                    .or_default()
-                    .push((item_id, metadata.clone()));
-            }
-            if let Some(normalized_name_ko) = metadata.normalized_name_ko.clone() {
-                normalized_metadata_by_name
-                    .entry(normalized_name_ko)
-                    .or_default()
-                    .push((item_id, metadata));
-            }
-        }
-
-        let mut out = Vec::new();
-        for row in raw_rows {
-            let exact_match = exact_metadata_by_name
-                .get(&row.item_name_ko)
-                .and_then(|matches| matches.iter().min_by_key(|(item_id, _)| *item_id))
-                .cloned();
-            let resolved = exact_match.or_else(|| {
-                normalized_metadata_by_name
-                    .get(&row.normalized_item_name_ko)
-                    .filter(|matches| matches.len() == 1)
-                    .and_then(|matches| matches.first().cloned())
-            });
-            let Some((_item_id, metadata)) = resolved else {
-                continue;
-            };
-            let Some(item_type) = metadata.item_type.clone() else {
-                continue;
-            };
-            if !matches!(
-                item_type.as_str(),
-                "rod" | "float" | "chair" | "backpack" | "outfit"
-            ) {
-                continue;
-            }
-            out.push(CalculatorEnchantEffectEntryRow {
-                item_type,
-                item_name_ko: row.item_name_ko,
-                normalized_item_name_ko: row.normalized_item_name_ko,
-                enchant_level: row.enchant_level,
-                skill_no: Some(row.skill_no),
-                durability: metadata.durability,
-                effect_description_ko: None,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
-            });
-        }
-
-        Ok(out)
+        Ok(raw_rows)
     }
 
     #[tracing::instrument(
@@ -1770,7 +1696,7 @@ impl DoltMySqlStore {
                 let worker_span = worker_span.clone();
                 move || {
                     let _worker = worker_span.enter();
-                    self.query_raw_enchant_skill_only_candidates(lang, ref_id)
+                    self.query_raw_enchant_skill_only_candidates(ref_id)
                 }
             });
 
@@ -1785,8 +1711,7 @@ impl DoltMySqlStore {
             };
             Ok((rows, skill_only_candidates))
         })?;
-        let mut chosen_effects =
-            HashMap::<(String, String), CalculatorEnchantEffectEntryRow>::new();
+        let mut chosen_effects = HashMap::<String, CalculatorEnchantEffectEntryRow>::new();
         for row in rows {
             let item_type =
                 normalize_optional_string(row.get::<String, _>("item_type")).unwrap_or_default();
@@ -1820,7 +1745,7 @@ impl DoltMySqlStore {
                 exp_life: None,
             };
 
-            let key = (item_type, item_name_ko);
+            let key = effect_row.item_name_ko.clone();
             match chosen_effects.get_mut(&key) {
                 Some(existing) if effect_row.enchant_level > existing.enchant_level => {
                     *existing = effect_row;
@@ -1842,7 +1767,22 @@ impl DoltMySqlStore {
         }
 
         for candidate in skill_only_candidates {
-            let key = (candidate.item_type.clone(), candidate.item_name_ko.clone());
+            let key = candidate.item_name_ko.clone();
+            let candidate = CalculatorEnchantEffectEntryRow {
+                item_type: String::new(),
+                item_name_ko: candidate.item_name_ko,
+                normalized_item_name_ko: candidate.normalized_item_name_ko,
+                enchant_level: candidate.enchant_level,
+                skill_no: Some(candidate.skill_no),
+                durability: None,
+                effect_description_ko: None,
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                item_drr: None,
+                exp_fish: None,
+                exp_life: None,
+            };
             match chosen_effects.get_mut(&key) {
                 Some(existing) if candidate.enchant_level > existing.enchant_level => {
                     *existing = candidate;
@@ -1943,19 +1883,29 @@ impl DoltMySqlStore {
                         .and_then(|matches| matches.first().cloned())
                 })?;
                 let (item_id, metadata) = resolved;
+                let item_type = if row.item_type.is_empty() {
+                    metadata.item_type.clone()?
+                } else {
+                    row.item_type
+                };
+                if !matches!(
+                    item_type.as_str(),
+                    "rod" | "float" | "chair" | "backpack" | "outfit"
+                ) {
+                    return None;
+                }
                 // Manual values only fill gaps that are still unproven in the
                 // current source dump. They do not replace source-backed stats
                 // already recovered from enchant/producttool/skill/buff data.
                 let fish_multiplier =
-                    manually_maintained_source_fish_multiplier(item_id, &row.item_type);
-                let manual_values =
-                    manually_maintained_source_effect_values(item_id, &row.item_type);
+                    manually_maintained_source_fish_multiplier(item_id, &item_type);
+                let manual_values = manually_maintained_source_effect_values(item_id, &item_type);
 
                 Some(CalculatorSourceBackedItemRow {
                     source_key: format!("item:{item_id}"),
                     source_kind: "item".to_string(),
                     item_id: Some(item_id),
-                    item_type: row.item_type,
+                    item_type,
                     buff_category_key: None,
                     buff_category_id: None,
                     buff_category_level: None,
