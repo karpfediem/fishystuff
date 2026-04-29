@@ -56,6 +56,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         this._handleInput = this._handleInput.bind(this);
         this._handleKeyDown = this._handleKeyDown.bind(this);
         this._handleMouseDown = this._handleMouseDown.bind(this);
+        this._handlePointerDown = this._handlePointerDown.bind(this);
         this._handleViewportChange = this._handleViewportChange.bind(this);
 
         this.addEventListener("click", this._handleClick);
@@ -64,6 +65,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         this.addEventListener("input", this._handleInput);
         this.addEventListener("keydown", this._handleKeyDown);
         this.addEventListener("mousedown", this._handleMouseDown);
+        this.addEventListener("pointerdown", this._handlePointerDown);
     }
 
     get placeholder() {
@@ -147,10 +149,6 @@ export class FishySearchableMultiselect extends HTMLElement {
             }
             if (this._usesDetachedPanel()) {
                 this._positionPanel(detachedPanelWidth);
-            }
-            const searchInput = this.searchInputElement();
-            if (searchInput instanceof HTMLInputElement) {
-                searchInput.focus();
             }
         });
     }
@@ -310,6 +308,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         panel.addEventListener("input", this._handleInput);
         panel.addEventListener("keydown", this._handleKeyDown);
         panel.addEventListener("mousedown", this._handleMouseDown);
+        panel.addEventListener("pointerdown", this._handlePointerDown);
         this._panelEventsAttached = true;
     }
 
@@ -415,6 +414,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         panel.removeEventListener("input", this._handleInput);
         panel.removeEventListener("keydown", this._handleKeyDown);
         panel.removeEventListener("mousedown", this._handleMouseDown);
+        panel.removeEventListener("pointerdown", this._handlePointerDown);
         this._panelEventsAttached = false;
     }
 
@@ -575,6 +575,14 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     _handleMouseDown(event) {
+        this._handlePressStart(event);
+    }
+
+    _handlePointerDown(event) {
+        this._handlePressStart(event);
+    }
+
+    _handlePressStart(event) {
         if (!(event.target instanceof Element) || !this._ownsNode(event.target)) {
             return;
         }

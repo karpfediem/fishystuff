@@ -318,7 +318,6 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         this._handlePointerMove = (event) => this.handlePointerMove(event);
         this._handlePointerUp = (event) => this.handlePointerUp(event);
         this._handlePointerCancel = (event) => this.handlePointerCancel(event);
-        this._handleResize = () => this.scheduleSync();
         this._handleSignalPatch = (event) => {
             if (patchTouchesCalculatorSectionLayout(event?.detail)) {
                 this.scheduleSync();
@@ -332,7 +331,7 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         globalThis.addEventListener?.("pointermove", this._handlePointerMove);
         globalThis.addEventListener?.("pointerup", this._handlePointerUp);
         globalThis.addEventListener?.("pointercancel", this._handlePointerCancel);
-        globalThis.addEventListener?.("resize", this._handleResize);
+        // Intentionally no resize listener: mobile keyboards fire resize and row rebuilds blur active inputs.
         globalThis.window?.addEventListener?.(LANGUAGE_CHANGE_EVENT, this._handleLanguageChange);
         globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatch);
         this._observer = new MutationObserver(() => {
@@ -359,7 +358,6 @@ export class FishyCalculatorSectionStack extends HTMLElementBase {
         globalThis.removeEventListener?.("pointermove", this._handlePointerMove);
         globalThis.removeEventListener?.("pointerup", this._handlePointerUp);
         globalThis.removeEventListener?.("pointercancel", this._handlePointerCancel);
-        globalThis.removeEventListener?.("resize", this._handleResize);
         globalThis.window?.removeEventListener?.(LANGUAGE_CHANGE_EVENT, this._handleLanguageChange);
         globalThis.document?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatch);
         this.finishDrag({ commit: false });
