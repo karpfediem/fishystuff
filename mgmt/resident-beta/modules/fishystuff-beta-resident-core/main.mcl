@@ -123,6 +123,8 @@ class api_db_host($st) {
 	$api_env_file = $api_runtime_overlay->target_path
 	$dolt_refresh_vardir = local.vardir("fishystuff-dolt-refresh/")
 	$dolt_refresh_stamp_path str = fmt.printf("%sdeployment.marker", $dolt_refresh_vardir)
+	$dolt_state_owner_vardir = local.vardir("fishystuff-dolt-state-owner/")
+	$dolt_state_owner_stamp_path str = fmt.printf("%sdeployment.marker", $dolt_state_owner_vardir)
 	$api_restart_vardir = local.vardir("fishystuff-api-restart/")
 	$api_restart_stamp_path str = fmt.printf("%sdeployment.marker", $api_restart_vardir)
 	$api_runtime_env = golang.template(deploy.readfile("/files/api-runtime.env.tmpl"), struct {
@@ -265,16 +267,19 @@ class api_db_host($st) {
 			ifshell => "/usr/bin/bash",
 		}
 
-		exec "fishystuff-dolt-state-owner" {
-			cmd => "/usr/bin/chown",
+		exec "fishystuff-dolt-state-owner-v2" {
+			cmd => "/usr/bin/bash",
 			args => [
-				"-R",
-				fmt.printf("%s:%s", $dolt_runtime_user, $dolt_runtime_group),
-				$dolt_data_dir,
+				"-e",
+				"-u",
+				"-o",
+				"pipefail",
+				"-c",
+				fmt.printf("if /usr/bin/test -d '%s'; then /usr/bin/chown -R '%s:%s' '%s'; fi", $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group, $dolt_data_dir),
 			],
-			donecmd => fmt.printf("! /usr/bin/test -d '%s' || ! /usr/bin/find '%s' \\( ! -user '%s' -o ! -group '%s' \\) -print -quit | /usr/bin/grep -q .", $dolt_data_dir, $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group),
+			donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $deployment_marker, $dolt_state_owner_stamp_path),
 			doneshell => "/usr/bin/bash",
-			ifcmd => fmt.printf("/usr/bin/test -d '%s' && /usr/bin/find '%s' \\( ! -user '%s' -o ! -group '%s' \\) -print -quit | /usr/bin/grep -q .", $dolt_data_dir, $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group),
+			ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s' || (/usr/bin/test -d '%s' && /usr/bin/find '%s' \\( ! -user '%s' -o ! -group '%s' \\) -print -quit | /usr/bin/grep -q .)", $dolt_state_owner_stamp_path, $deployment_marker, $dolt_data_dir, $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group),
 			ifshell => "/usr/bin/bash",
 		}
 	}
@@ -402,9 +407,9 @@ class api_db_host($st) {
 	if not $dolt_dynamic_user {
 		Exec["fishystuff-dolt-stop-for-static-user"] -> Exec["fishystuff-dolt-group"]
 		Exec["fishystuff-dolt-group"] -> Exec["fishystuff-dolt-user"]
-		Exec["fishystuff-dolt-user"] -> Exec["fishystuff-dolt-state-owner"]
+		Exec["fishystuff-dolt-user"] -> Exec["fishystuff-dolt-state-owner-v2"]
 		Exec["fishystuff-dolt-user"] -> Exec["systemd-unit-verify-fishystuff-dolt"]
-		Exec["fishystuff-dolt-state-owner"] -> Svc["${dolt_service_name}"]
+		Exec["fishystuff-dolt-state-owner-v2"] -> Svc["${dolt_service_name}"]
 	}
 	Svc["fishystuff-vector"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
