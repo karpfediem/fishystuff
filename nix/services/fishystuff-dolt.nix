@@ -12,6 +12,7 @@ let
   cfg = config.fishystuff.dolt;
   yamlFormat = pkgs.formats.yaml { };
   configName = cfg.configFileName;
+  repoDir = "${cfg.dataDir}/${cfg.databaseName}";
   staticEnvironment = helpers.stringifyEnvironment (
     cfg.environment
     // {
@@ -27,7 +28,7 @@ let
       host = cfg.listenAddress;
       port = cfg.port;
     };
-    data_dir = cfg.dataDir;
+    data_dir = repoDir;
     cfg_dir = cfg.cfgDir;
     privilege_file = cfg.privilegeFile;
     branch_control_file = cfg.branchControlFile;
@@ -69,7 +70,7 @@ let
       cfg_dir=${lib.escapeShellArg cfg.cfgDir}
       home_dir=${lib.escapeShellArg cfg.homeDir}
       repo_name=${lib.escapeShellArg cfg.databaseName}
-      repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
+      repo_dir=${lib.escapeShellArg repoDir}
       remote_url=${lib.escapeShellArg cfg.remoteUrl}
       remote_branch="$(resolve_remote_branch)"
       privilege_file=${lib.escapeShellArg cfg.privilegeFile}
@@ -192,7 +193,7 @@ let
 
       ${remoteBranchFunction}
 
-      repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
+      repo_dir=${lib.escapeShellArg repoDir}
       repo_name=${lib.escapeShellArg cfg.databaseName}
       home_dir=${lib.escapeShellArg cfg.homeDir}
       sql_host=${lib.escapeShellArg cfg.listenAddress}
