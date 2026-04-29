@@ -316,7 +316,7 @@ fn zone_profile_v2_keeps_ranking_and_legacy_claims_separate_for_same_fish() {
 #[test]
 fn ranking_events_query_is_source_filtered() {
     assert!(queries::RANKING_EVENTS_WITH_ZONE_SQL.contains("e.source_kind = ?"));
-    assert!(queries::RANKING_EVENTS_WITH_RING_SUPPORT_SQL.contains("e.source_kind = ?"));
+    assert!(queries::RANKING_RING_SUPPORT_BY_ZONE_SQL.contains("e.source_kind = ?"));
 }
 
 #[test]

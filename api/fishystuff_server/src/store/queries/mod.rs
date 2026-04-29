@@ -120,18 +120,4 @@ WHERE e.water_ok = 1
   AND ring.zone_rgb = ?
 GROUP BY e.fish_id";
 
-pub const RANKING_EVENTS_WITH_RING_SUPPORT_SQL: &str = "
-SELECT
-  e.event_id,
-  CAST(TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', e.ts_utc) AS SIGNED) AS ts_utc,
-  e.fish_id,
-  ring.zone_rgb
-FROM events e
-JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ?
-WHERE e.water_ok = 1
-  AND e.source_kind = ?
-  AND e.ts_utc >= ?
-  AND e.ts_utc < ?
-ORDER BY e.event_id, ring.zone_rgb";
-
 pub const HEALTHCHECK_SQL: &str = "SELECT 1";

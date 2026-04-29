@@ -48,7 +48,7 @@ use fishystuff_core::prob::js_divergence;
 use fishystuff_core::tile::tile_dimensions;
 use mysql::prelude::Queryable;
 use mysql::OptsBuilder;
-use mysql::{Opts, Pool, PoolConstraints, PoolOpts, Row};
+use mysql::{params, Opts, Pool, PoolConstraints, PoolOpts, Row};
 use tracing::instrument;
 
 use crate::config::ZoneStatusConfig;
@@ -120,8 +120,14 @@ pub struct DoltMySqlStore {
     community_fish_zone_support_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     zones_cache: Arc<Mutex<HashMap<String, Vec<ZoneEntry>>>>,
     zones_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    fish_names_cache: Arc<Mutex<HashMap<String, HashMap<i32, String>>>>,
+    fish_names_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     fish_identity_cache: Arc<Mutex<HashMap<String, FishIdentityIndex>>>,
     fish_identity_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    zone_stats_global_weights_cache: Arc<Mutex<HashMap<String, HashMap<i32, f64>>>>,
+    zone_stats_global_weights_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    zone_stats_zone_weights_cache: Arc<Mutex<HashMap<String, ZoneWeightSummary>>>,
+    zone_stats_zone_weights_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
 }
 
 #[derive(Debug, Default)]
@@ -153,12 +159,11 @@ struct QueryParams {
 #[derive(Debug, Clone)]
 struct EventZoneRow {
     ts_utc: i64,
-    fish_id: i32,
     sample_px_x: i32,
     sample_px_y: i32,
-    zone_rgb_u32: u32,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct EventZoneSupportRow {
     event_id: i64,
@@ -167,18 +172,18 @@ struct EventZoneSupportRow {
     zone_rgbs: Vec<u32>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct ZoneWeightSummary {
+    weights_by_fish: HashMap<i32, f64>,
+    weight_sum: f64,
+    weight2_sum: f64,
+    last_seen: Option<i64>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EventZoneSupportMode {
     Assignment,
     RingSupport,
-}
-
-#[derive(Debug, Clone)]
-struct DerivedEvent {
-    ts_utc: i64,
-    fish_id: i32,
-    matches_zone: bool,
-    w_time: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -286,6 +291,7 @@ impl QueryParams {
     }
 }
 
+#[cfg(test)]
 fn group_event_zone_support_rows(
     rows: &[(i64, i64, i64, i64)],
 ) -> AppResult<Vec<EventZoneSupportRow>> {
@@ -326,6 +332,82 @@ fn group_event_zone_membership_rows(
         }
     }
     Ok(out)
+}
+
+fn zone_stats_weight_expr(params: &QueryParams) -> &'static str {
+    if params.half_life_days.is_some() {
+        "POW(2.0, -TIMESTAMPDIFF(SECOND, e.ts_utc, :half_life_to_dt) / (86400.0 * :half_life_days))"
+    } else {
+        "1.0"
+    }
+}
+
+fn zone_stats_weight2_expr(params: &QueryParams) -> &'static str {
+    if params.half_life_days.is_some() {
+        "POW(2.0, -2.0 * TIMESTAMPDIFF(SECOND, e.ts_utc, :half_life_to_dt) / (86400.0 * :half_life_days))"
+    } else {
+        "1.0"
+    }
+}
+
+fn zone_stats_weights_cache_key(
+    params: &QueryParams,
+    support_mode: EventZoneSupportMode,
+    zone_rgb_u32: Option<u32>,
+) -> String {
+    let half_life = params
+        .half_life_days
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "none".to_string());
+    format!(
+        "layer={}|from={}|to={}|half={}|support={support_mode:?}|zone={}",
+        params.map_version,
+        params.from_ts_utc,
+        params.to_ts_utc,
+        half_life,
+        zone_rgb_u32
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "global".to_string())
+    )
+}
+
+fn fish_weight_rows_to_map(rows: Vec<(i64, f64)>) -> AppResult<HashMap<i32, f64>> {
+    let mut out = HashMap::with_capacity(rows.len());
+    for (fish_id, weight) in rows {
+        if !weight.is_finite() || weight <= 0.0 {
+            continue;
+        }
+        let fish_id =
+            i32::try_from(fish_id).map_err(|_| AppError::internal("fish_id out of range"))?;
+        out.insert(fish_id, weight);
+    }
+    Ok(out)
+}
+
+fn zone_weight_rows_to_summary(
+    rows: Vec<(i64, f64, f64, Option<i64>)>,
+) -> AppResult<ZoneWeightSummary> {
+    let mut summary = ZoneWeightSummary::default();
+    for (fish_id, weight, weight2, last_seen) in rows {
+        if !weight.is_finite() || weight <= 0.0 {
+            continue;
+        }
+        let fish_id =
+            i32::try_from(fish_id).map_err(|_| AppError::internal("fish_id out of range"))?;
+        summary.weights_by_fish.insert(fish_id, weight);
+        summary.weight_sum += weight;
+        if weight2.is_finite() && weight2 > 0.0 {
+            summary.weight2_sum += weight2;
+        }
+        if let Some(last_seen) = last_seen {
+            summary.last_seen = Some(
+                summary
+                    .last_seen
+                    .map_or(last_seen, |prev| prev.max(last_seen)),
+            );
+        }
+    }
+    Ok(summary)
 }
 
 fn event_zone_assignment_map(rows: &[EventZoneMembershipDbRow]) -> AppResult<HashMap<i64, u32>> {
@@ -428,8 +510,20 @@ impl DoltMySqlStore {
             )),
             zones_cache: Arc::new(Mutex::new(HashMap::new())),
             zones_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            fish_names_cache: Arc::new(Mutex::new(HashMap::new())),
+            fish_names_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             fish_identity_cache: Arc::new(Mutex::new(HashMap::new())),
             fish_identity_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            zone_stats_global_weights_cache: Arc::new(Mutex::new(HashMap::new())),
+            zone_stats_global_weights_inflight: Arc::new((
+                Mutex::new(HashSet::new()),
+                Condvar::new(),
+            )),
+            zone_stats_zone_weights_cache: Arc::new(Mutex::new(HashMap::new())),
+            zone_stats_zone_weights_inflight: Arc::new((
+                Mutex::new(HashSet::new()),
+                Condvar::new(),
+            )),
         };
         Ok(store)
     }
@@ -836,6 +930,53 @@ impl DoltMySqlStore {
         lang: &DataLang,
         ref_id: Option<&str>,
     ) -> AppResult<HashMap<i32, String>> {
+        let cache_key = Self::fish_names_cache_key(lang, ref_id);
+        loop {
+            if let Ok(cache) = self.fish_names_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.fish_names_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("fish names inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("fish names inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.query_fish_names_uncached(lang, ref_id);
+
+        let (inflight_lock, inflight_cvar) = &*self.fish_names_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("fish names inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let names = result?;
+
+        if let Ok(mut cache) = self.fish_names_cache.lock() {
+            cache.insert(cache_key, names.clone());
+        }
+
+        Ok(names)
+    }
+
+    fn query_fish_names_uncached(
+        &self,
+        lang: &DataLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<HashMap<i32, String>> {
         self.validate_data_lang_available(lang, ref_id)?;
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
@@ -873,6 +1014,13 @@ impl DoltMySqlStore {
         }
 
         Ok(out)
+    }
+
+    fn fish_names_cache_key(lang: &DataLang, ref_id: Option<&str>) -> String {
+        match ref_id {
+            Some(ref_id) => format!("{}:{ref_id}", lang.code()),
+            None => format!("{}:head", lang.code()),
+        }
     }
 
     fn query_fish_catalog(
@@ -1446,39 +1594,16 @@ impl DoltMySqlStore {
             .map_err(events_schema_or_db_unavailable)?;
 
         let mut out = Vec::with_capacity(rows.len());
-        for (ts_utc, fish_id, sample_px_x, sample_px_y, zone_rgb_u32) in rows {
+        for (ts_utc, _fish_id, sample_px_x, sample_px_y, _zone_rgb_u32) in rows {
             out.push(EventZoneRow {
                 ts_utc,
-                fish_id: i32::try_from(fish_id)
-                    .map_err(|_| AppError::internal("fish_id out of range"))?,
                 sample_px_x: i32::try_from(sample_px_x)
                     .map_err(|_| AppError::internal("sample_px_x out of range"))?,
                 sample_px_y: i32::try_from(sample_px_y)
                     .map_err(|_| AppError::internal("sample_px_y out of range"))?,
-                zone_rgb_u32: u32::try_from(zone_rgb_u32)
-                    .map_err(|_| AppError::internal("zone_rgb_u32 out of range"))?,
             });
         }
         Ok(out)
-    }
-
-    fn load_ranking_events_with_ring_support_in_window(
-        &self,
-        layer_revision_id: &str,
-        from_ts_utc: i64,
-        to_ts_utc: i64,
-    ) -> AppResult<Vec<EventZoneSupportRow>> {
-        let from_dt = epoch_to_mysql_datetime(from_ts_utc)?;
-        let to_dt = epoch_to_mysql_datetime(to_ts_utc)?;
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, i64, i64, i64)> = conn
-            .exec(
-                queries::RANKING_EVENTS_WITH_RING_SUPPORT_SQL,
-                (layer_revision_id, SOURCE_KIND_RANKING, from_dt, to_dt),
-            )
-            .map_err(events_schema_or_db_unavailable)?;
-
-        group_event_zone_support_rows(&rows)
     }
 
     fn load_events_snapshot_assignment_map(
@@ -1881,112 +2006,286 @@ impl DoltMySqlStore {
         })
     }
 
-    fn compute_window_summary(
+    fn load_zone_stats_global_weights(
+        &self,
+        params: &QueryParams,
+        support_mode: EventZoneSupportMode,
+    ) -> AppResult<HashMap<i32, f64>> {
+        let cache_key = zone_stats_weights_cache_key(params, support_mode, None);
+        loop {
+            if let Ok(cache) = self.zone_stats_global_weights_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
+
+            let (inflight_lock, inflight_cvar) = &*self.zone_stats_global_weights_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("zone stats global weights inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("zone stats global weights inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result = self.load_zone_stats_global_weights_uncached(params, support_mode);
+
+        let (inflight_lock, inflight_cvar) = &*self.zone_stats_global_weights_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("zone stats global weights inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let weights = result?;
+
+        if let Ok(mut cache) = self.zone_stats_global_weights_cache.lock() {
+            cache.insert(cache_key, weights.clone());
+        }
+
+        Ok(weights)
+    }
+
+    fn load_zone_stats_global_weights_uncached(
+        &self,
+        params: &QueryParams,
+        support_mode: EventZoneSupportMode,
+    ) -> AppResult<HashMap<i32, f64>> {
+        let from_dt = epoch_to_mysql_datetime(params.from_ts_utc)?;
+        let to_dt = epoch_to_mysql_datetime(params.to_ts_utc)?;
+        let support_exists = match support_mode {
+            EventZoneSupportMode::Assignment => {
+                "EXISTS (\
+                    SELECT 1 \
+                    FROM event_zone_assignment z \
+                    WHERE z.layer_revision_id = :layer_revision_id \
+                      AND z.event_id = e.event_id\
+                )"
+            }
+            EventZoneSupportMode::RingSupport => {
+                "EXISTS (\
+                    SELECT 1 \
+                    FROM event_zone_ring_support ring \
+                    WHERE ring.layer_revision_id = :layer_revision_id \
+                      AND ring.event_id = e.event_id\
+                )"
+            }
+        };
+        let weight_expr = zone_stats_weight_expr(params);
+        let query = format!(
+            "SELECT \
+                CAST(e.fish_id AS SIGNED), \
+                CAST(SUM({weight_expr}) AS DOUBLE) \
+             FROM events e \
+             WHERE e.water_ok = 1 \
+               AND e.source_kind = :source_kind \
+               AND e.ts_utc >= :from_dt \
+               AND e.ts_utc < :to_dt \
+               AND {support_exists} \
+             GROUP BY e.fish_id"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(i64, f64)> = if let Some(half_life_days) = params.half_life_days {
+            conn.exec(
+                query,
+                mysql::params! {
+                    "layer_revision_id" => params.map_version.as_str(),
+                    "source_kind" => SOURCE_KIND_RANKING,
+                    "from_dt" => from_dt.as_str(),
+                    "to_dt" => to_dt.as_str(),
+                    "half_life_to_dt" => to_dt.as_str(),
+                    "half_life_days" => half_life_days,
+                },
+            )
+        } else {
+            conn.exec(
+                query,
+                mysql::params! {
+                    "layer_revision_id" => params.map_version.as_str(),
+                    "source_kind" => SOURCE_KIND_RANKING,
+                    "from_dt" => from_dt.as_str(),
+                    "to_dt" => to_dt.as_str(),
+                },
+            )
+        }
+        .map_err(events_schema_or_db_unavailable)?;
+
+        fish_weight_rows_to_map(rows)
+    }
+
+    fn load_zone_stats_zone_weights(
         &self,
         params: &QueryParams,
         zone_rgb_u32: u32,
         support_mode: EventZoneSupportMode,
-    ) -> AppResult<WindowSummary> {
-        let mut derived: Vec<DerivedEvent> = Vec::new();
-        let mut fish_time: HashMap<i32, f64> = HashMap::new();
+    ) -> AppResult<ZoneWeightSummary> {
+        let cache_key = zone_stats_weights_cache_key(params, support_mode, Some(zone_rgb_u32));
+        loop {
+            if let Ok(cache) = self.zone_stats_zone_weights_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
 
-        match support_mode {
-            EventZoneSupportMode::Assignment => {
-                let events = self.load_ranking_events_with_zone_in_window(
-                    &params.map_version,
-                    params.from_ts_utc,
-                    params.to_ts_utc,
-                )?;
-                derived.reserve(events.len());
-                for event in events {
-                    let w_time = time_weight(params, event.ts_utc)?;
-                    *fish_time.entry(event.fish_id).or_insert(0.0) += w_time;
-                    derived.push(DerivedEvent {
-                        ts_utc: event.ts_utc,
-                        fish_id: event.fish_id,
-                        matches_zone: event.zone_rgb_u32 == zone_rgb_u32,
-                        w_time,
-                    });
-                }
+            let (inflight_lock, inflight_cvar) = &*self.zone_stats_zone_weights_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("zone stats zone weights inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
             }
-            EventZoneSupportMode::RingSupport => {
-                let events = self.load_ranking_events_with_ring_support_in_window(
-                    &params.map_version,
-                    params.from_ts_utc,
-                    params.to_ts_utc,
-                )?;
-                derived.reserve(events.len());
-                for event in events {
-                    let w_time = time_weight(params, event.ts_utc)?;
-                    *fish_time.entry(event.fish_id).or_insert(0.0) += w_time;
-                    derived.push(DerivedEvent {
-                        ts_utc: event.ts_utc,
-                        fish_id: event.fish_id,
-                        matches_zone: event.zone_rgbs.contains(&zone_rgb_u32),
-                        w_time,
-                    });
-                }
-            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("zone stats zone weights inflight wait poisoned");
+            drop(inflight);
         }
 
-        if derived.is_empty() {
-            return Ok(WindowSummary {
+        let result = self.load_zone_stats_zone_weights_uncached(params, zone_rgb_u32, support_mode);
+
+        let (inflight_lock, inflight_cvar) = &*self.zone_stats_zone_weights_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("zone stats zone weights inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let weights = result?;
+
+        if let Ok(mut cache) = self.zone_stats_zone_weights_cache.lock() {
+            cache.insert(cache_key, weights.clone());
+        }
+
+        Ok(weights)
+    }
+
+    fn load_zone_stats_zone_weights_uncached(
+        &self,
+        params: &QueryParams,
+        zone_rgb_u32: u32,
+        support_mode: EventZoneSupportMode,
+    ) -> AppResult<ZoneWeightSummary> {
+        let from_dt = epoch_to_mysql_datetime(params.from_ts_utc)?;
+        let to_dt = epoch_to_mysql_datetime(params.to_ts_utc)?;
+        let support_table = match support_mode {
+            EventZoneSupportMode::Assignment => "event_zone_assignment",
+            EventZoneSupportMode::RingSupport => "event_zone_ring_support",
+        };
+        let weight_expr = zone_stats_weight_expr(params);
+        let weight2_expr = zone_stats_weight2_expr(params);
+        let query = format!(
+            "SELECT \
+                CAST(e.fish_id AS SIGNED), \
+                CAST(SUM({weight_expr}) AS DOUBLE), \
+                CAST(SUM({weight2_expr}) AS DOUBLE), \
+                MAX(CAST(TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', e.ts_utc) AS SIGNED)) \
+             FROM {support_table} z \
+             JOIN events e ON e.event_id = z.event_id \
+             WHERE z.layer_revision_id = :layer_revision_id \
+               AND z.zone_rgb = :zone_rgb \
+               AND e.water_ok = 1 \
+               AND e.source_kind = :source_kind \
+               AND e.ts_utc >= :from_dt \
+               AND e.ts_utc < :to_dt \
+             GROUP BY e.fish_id"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(i64, f64, f64, Option<i64>)> =
+            if let Some(half_life_days) = params.half_life_days {
+                conn.exec(
+                    query,
+                    mysql::params! {
+                        "layer_revision_id" => params.map_version.as_str(),
+                        "zone_rgb" => zone_rgb_u32,
+                        "source_kind" => SOURCE_KIND_RANKING,
+                        "from_dt" => from_dt.as_str(),
+                        "to_dt" => to_dt.as_str(),
+                        "half_life_to_dt" => to_dt.as_str(),
+                        "half_life_days" => half_life_days,
+                    },
+                )
+            } else {
+                conn.exec(
+                    query,
+                    mysql::params! {
+                        "layer_revision_id" => params.map_version.as_str(),
+                        "zone_rgb" => zone_rgb_u32,
+                        "source_kind" => SOURCE_KIND_RANKING,
+                        "from_dt" => from_dt.as_str(),
+                        "to_dt" => to_dt.as_str(),
+                    },
+                )
+            }
+            .map_err(events_schema_or_db_unavailable)?;
+
+        zone_weight_rows_to_summary(rows)
+    }
+
+    fn window_summary_from_weights(
+        params: &QueryParams,
+        global_weights: HashMap<i32, f64>,
+        zone_weights: ZoneWeightSummary,
+    ) -> WindowSummary {
+        if global_weights.is_empty() {
+            return WindowSummary {
                 alpha_total: 0.0,
                 alpha_by_fish: HashMap::new(),
                 p_mean_by_fish: HashMap::new(),
                 c_zone: HashMap::new(),
                 ess: 0.0,
-                total_weight: 0.0,
-                last_seen: None,
-            });
-        }
-
-        let mut fish_norm = HashMap::new();
-        if params.fish_norm {
-            for (fish_id, sum) in fish_time {
-                fish_norm.insert(fish_id, 1.0 / sum.max(EPS_FISH));
-            }
-        }
-
-        let mut c_global: HashMap<i32, f64> = HashMap::new();
-        let mut c_zone: HashMap<i32, f64> = HashMap::new();
-        let mut w_sum = 0.0;
-        let mut w2_sum = 0.0;
-        let mut last_seen: Option<i64> = None;
-
-        for event in derived {
-            let u = event.w_time;
-            let w = if params.fish_norm {
-                u * fish_norm.get(&event.fish_id).copied().unwrap_or(0.0)
-            } else {
-                u
+                total_weight: zone_weights.weight_sum,
+                last_seen: zone_weights.last_seen,
             };
+        }
 
-            *c_global.entry(event.fish_id).or_insert(0.0) += w;
-            if event.matches_zone {
-                *c_zone.entry(event.fish_id).or_insert(0.0) += w;
-                w_sum += u;
-                w2_sum += u * u;
-                last_seen = Some(last_seen.map_or(event.ts_utc, |prev| prev.max(event.ts_utc)));
+        let mut c_global: HashMap<i32, f64> = HashMap::with_capacity(global_weights.len());
+        let mut c_zone: HashMap<i32, f64> =
+            HashMap::with_capacity(zone_weights.weights_by_fish.len());
+        if params.fish_norm {
+            for (&fish_id, &fish_weight) in &global_weights {
+                if fish_weight > 0.0 {
+                    c_global.insert(fish_id, 1.0);
+                }
             }
+            for (&fish_id, &zone_weight) in &zone_weights.weights_by_fish {
+                let fish_weight = global_weights.get(&fish_id).copied().unwrap_or(0.0);
+                if fish_weight > 0.0 {
+                    c_zone.insert(fish_id, zone_weight / fish_weight.max(EPS_FISH));
+                }
+            }
+        } else {
+            c_global = global_weights;
+            c_zone = zone_weights.weights_by_fish;
         }
 
         let total_global: f64 = c_global.values().sum();
         if total_global <= 0.0 {
-            let ess = if w2_sum > 0.0 {
-                (w_sum * w_sum) / w2_sum.max(EPS)
+            let ess = if zone_weights.weight2_sum > 0.0 {
+                (zone_weights.weight_sum * zone_weights.weight_sum)
+                    / zone_weights.weight2_sum.max(EPS)
             } else {
                 0.0
             };
-            return Ok(WindowSummary {
+            return WindowSummary {
                 alpha_total: 0.0,
                 alpha_by_fish: HashMap::new(),
                 p_mean_by_fish: HashMap::new(),
                 c_zone,
                 ess,
-                total_weight: w_sum,
-                last_seen,
-            });
+                total_weight: zone_weights.weight_sum,
+                last_seen: zone_weights.last_seen,
+            };
         }
 
         let mut fish_ids: Vec<i32> = c_global.keys().copied().collect();
@@ -2007,21 +2306,36 @@ impl DoltMySqlStore {
             p_mean_by_fish.insert(*fish_id, *alpha / alpha_total);
         }
 
-        let ess = if w2_sum > 0.0 {
-            (w_sum * w_sum) / w2_sum.max(EPS)
+        let ess = if zone_weights.weight2_sum > 0.0 {
+            (zone_weights.weight_sum * zone_weights.weight_sum) / zone_weights.weight2_sum.max(EPS)
         } else {
             0.0
         };
 
-        Ok(WindowSummary {
+        WindowSummary {
             alpha_total,
             alpha_by_fish,
             p_mean_by_fish,
             c_zone,
             ess,
-            total_weight: w_sum,
-            last_seen,
-        })
+            total_weight: zone_weights.weight_sum,
+            last_seen: zone_weights.last_seen,
+        }
+    }
+
+    fn compute_window_summary(
+        &self,
+        params: &QueryParams,
+        zone_rgb_u32: u32,
+        support_mode: EventZoneSupportMode,
+    ) -> AppResult<WindowSummary> {
+        let global_weights = self.load_zone_stats_global_weights(params, support_mode)?;
+        let zone_weights = self.load_zone_stats_zone_weights(params, zone_rgb_u32, support_mode)?;
+        Ok(Self::window_summary_from_weights(
+            params,
+            global_weights,
+            zone_weights,
+        ))
     }
 
     fn compute_drift_info(
@@ -2405,7 +2719,8 @@ mod tests {
         parse_layer_kind, parse_positive_i64, parse_vector_source, pixel_to_tile_index,
         resolve_layer_asset_url, revision_database_name, synthetic_events_snapshot_revision,
         zone_distribution_fish_ids, DoltMySqlStore, EventZoneSupportRow, FishCatalogRow,
-        FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
+        FishIdentityEntry, FishIdentityIndex, QueryParams, VectorSourceFields, WindowSummary,
+        ZoneWeightSummary,
     };
 
     fn vector_source_fields(
@@ -2424,6 +2739,13 @@ mod tests {
             feature_id_property: feature_id_property.map(str::to_string),
             color_property: color_property.map(str::to_string),
         }
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-9,
+            "expected {expected}, got {actual}"
+        );
     }
 
     #[test]
@@ -2763,6 +3085,76 @@ mod tests {
         };
 
         assert_eq!(zone_distribution_fish_ids(&summary), vec![1]);
+    }
+
+    #[test]
+    fn window_summary_from_weights_preserves_zone_evidence_math() {
+        let params = QueryParams {
+            map_version: "layer-1".to_string(),
+            from_ts_utc: 0,
+            to_ts_utc: 200,
+            half_life_days: None,
+            tile_px: 32,
+            sigma_tiles: 3.0,
+            fish_norm: false,
+            alpha0: 1.0,
+            top_k: 10,
+            drift_boundary_ts: None,
+        };
+        let global = HashMap::from([(1, 10.0), (2, 30.0)]);
+        let zone = ZoneWeightSummary {
+            weights_by_fish: HashMap::from([(1, 3.0), (2, 1.0)]),
+            weight_sum: 4.0,
+            weight2_sum: 4.0,
+            last_seen: Some(100),
+        };
+
+        let summary = DoltMySqlStore::window_summary_from_weights(&params, global, zone);
+
+        assert_eq!(summary.c_zone.get(&1).copied(), Some(3.0));
+        assert_eq!(summary.c_zone.get(&2).copied(), Some(1.0));
+        assert_close(summary.alpha_total, 5.0);
+        assert_close(summary.alpha_by_fish.get(&1).copied().unwrap(), 3.25);
+        assert_close(summary.alpha_by_fish.get(&2).copied().unwrap(), 1.75);
+        assert_close(summary.p_mean_by_fish.get(&1).copied().unwrap(), 0.65);
+        assert_close(summary.p_mean_by_fish.get(&2).copied().unwrap(), 0.35);
+        assert_close(summary.ess, 4.0);
+        assert_close(summary.total_weight, 4.0);
+        assert_eq!(summary.last_seen, Some(100));
+    }
+
+    #[test]
+    fn window_summary_from_weights_applies_fish_normalization_to_counts_only() {
+        let params = QueryParams {
+            map_version: "layer-1".to_string(),
+            from_ts_utc: 0,
+            to_ts_utc: 200,
+            half_life_days: None,
+            tile_px: 32,
+            sigma_tiles: 3.0,
+            fish_norm: true,
+            alpha0: 1.0,
+            top_k: 10,
+            drift_boundary_ts: None,
+        };
+        let global = HashMap::from([(1, 10.0), (2, 30.0)]);
+        let zone = ZoneWeightSummary {
+            weights_by_fish: HashMap::from([(1, 5.0), (2, 15.0)]),
+            weight_sum: 20.0,
+            weight2_sum: 250.0,
+            last_seen: Some(150),
+        };
+
+        let summary = DoltMySqlStore::window_summary_from_weights(&params, global, zone);
+
+        assert_eq!(summary.c_zone.get(&1).copied(), Some(0.5));
+        assert_eq!(summary.c_zone.get(&2).copied(), Some(0.5));
+        assert_close(summary.alpha_total, 2.0);
+        assert_close(summary.p_mean_by_fish.get(&1).copied().unwrap(), 0.5);
+        assert_close(summary.p_mean_by_fish.get(&2).copied().unwrap(), 0.5);
+        assert_close(summary.ess, 1.6);
+        assert_close(summary.total_weight, 20.0);
+        assert_eq!(summary.last_seen, Some(150));
     }
 
     #[test]

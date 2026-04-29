@@ -11,6 +11,8 @@ use super::super::state::{ApiBootstrapState, PatchFilterState};
 #[cfg(target_arch = "wasm32")]
 use crate::public_assets::normalize_public_base_url;
 
+const DEFAULT_TO_TS_BUCKET_SECS: i64 = 300;
+
 pub(super) fn pick_map_version(meta: &MetaResponse) -> Option<String> {
     if let Some(default) = meta.defaults.map_version_id.as_ref() {
         if meta
@@ -57,6 +59,22 @@ pub(super) fn now_utc_seconds() -> i64 {
     }
 }
 
+fn ceil_utc_seconds(value: i64, bucket_secs: i64) -> i64 {
+    if bucket_secs <= 0 {
+        return value;
+    }
+    let remainder = value.rem_euclid(bucket_secs);
+    if remainder == 0 {
+        value
+    } else {
+        value + (bucket_secs - remainder)
+    }
+}
+
+pub(super) fn default_to_ts() -> i64 {
+    ceil_utc_seconds(now_utc_seconds(), DEFAULT_TO_TS_BUCKET_SECS)
+}
+
 pub(super) fn build_zone_stats_request(
     bootstrap: &ApiBootstrapState,
     patch_filter: &PatchFilterState,
@@ -68,7 +86,7 @@ pub(super) fn build_zone_stats_request(
     let from_ts = patch_filter
         .from_ts
         .unwrap_or_else(|| default_from_ts(meta));
-    let to_ts = patch_filter.to_ts.unwrap_or_else(now_utc_seconds);
+    let to_ts = patch_filter.to_ts.unwrap_or_else(default_to_ts);
     if from_ts >= to_ts {
         return None;
     }
@@ -194,7 +212,9 @@ fn browser_location_api_base_url() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_zone_stats_request, default_from_patch_id, default_from_ts};
+    use super::{
+        build_zone_stats_request, ceil_utc_seconds, default_from_patch_id, default_from_ts,
+    };
     use crate::plugins::api::{ApiBootstrapState, PatchFilterState};
     use crate::public_assets::resolve_public_asset_url;
     use fishystuff_api::ids::{MapVersionId, PatchId};
@@ -223,6 +243,21 @@ mod tests {
 
         assert_eq!(default_from_ts(&meta), 10);
         assert_eq!(default_from_patch_id(&meta).as_deref(), Some("2025-01-01"));
+    }
+
+    #[test]
+    fn ceil_utc_seconds_keeps_default_to_ts_stable_within_bucket() {
+        let bucket_start = 1_700_000_100;
+        assert_eq!(ceil_utc_seconds(bucket_start, 300), bucket_start);
+        assert_eq!(ceil_utc_seconds(bucket_start + 1, 300), bucket_start + 300);
+        assert_eq!(
+            ceil_utc_seconds(bucket_start + 299, 300),
+            bucket_start + 300
+        );
+        assert_eq!(
+            ceil_utc_seconds(bucket_start + 300, 300),
+            bucket_start + 300
+        );
     }
 
     #[test]
