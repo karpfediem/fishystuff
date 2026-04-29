@@ -87,6 +87,13 @@ let
           test -L "${bundle}/artifacts/script/refresh"
           test "$(readlink -f "${bundle}/artifacts/script/refresh")" = "$refresh_path"
           grep -F "ExecReload=" "$unit_path" >/dev/null
+          grep -Fx "data_dir: /var/lib/fishystuff/dolt" "$config_path" >/dev/null
+          grep -Fx "cfg_dir: /var/lib/fishystuff/dolt/.doltcfg" "$config_path" >/dev/null
+          grep -F "cp -R --no-preserve=ownership,mode" "$exe_path" >/dev/null
+          if grep -F "cp -a" "$exe_path" >/dev/null; then
+            echo "dolt start script must not preserve snapshot ownership or mode" >&2
+            exit 1
+          fi
         fi
         test -f "${bundle}/materialization.json"
         test -f "${bundle}/mode-substitute.txt"
@@ -197,7 +204,7 @@ in
     unitName = "fishystuff-dolt.service";
     workingDirectory = "/var/lib/fishystuff/dolt";
     requiredEnvironment = {
-      HOME = "/var/lib/fishystuff/dolt";
+      HOME = "/var/lib/fishystuff/dolt/home";
     };
     requiredUnitLines = [
       "DynamicUser=true"

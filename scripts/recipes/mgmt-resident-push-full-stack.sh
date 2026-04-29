@@ -201,12 +201,12 @@ build_dolt_repo_snapshot() {
   stage_root="$stage_parent/fishystuff-dolt-repo-snapshot-$environment"
   mkdir -p "$stage_root"
 
-  if ! cp -a -l "$snapshot_src" "$stage_root/.dolt" 2>/dev/null; then
-    cp -a "$snapshot_src" "$stage_root/.dolt"
-  fi
+  cp -R --reflink=auto --no-preserve=ownership,mode "$snapshot_src" "$stage_root/.dolt"
   rm -rf "$stage_root/.dolt/temptf" "$stage_root/.dolt/tmp"
   find "$stage_root/.dolt" -name LOCK -type f -delete
   rm -f "$stage_root/.dolt/sql-server.info"
+  find "$stage_root/.dolt" -type d -exec chmod 0555 {} +
+  find "$stage_root/.dolt" -type f -exec chmod 0444 {} +
   jq -n \
     --arg source "$snapshot_src" \
     --arg revision "$source_revision" \

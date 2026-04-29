@@ -15,7 +15,7 @@ let
   staticEnvironment = helpers.stringifyEnvironment (
     cfg.environment
     // {
-      HOME = cfg.dataDir;
+      HOME = cfg.homeDir;
     }
   );
   sqlServerConfig = yamlFormat.generate "fishystuff-dolt-sql-server.yaml" {
@@ -67,6 +67,7 @@ let
 
       data_dir=${lib.escapeShellArg cfg.dataDir}
       cfg_dir=${lib.escapeShellArg cfg.cfgDir}
+      home_dir=${lib.escapeShellArg cfg.homeDir}
       repo_name=${lib.escapeShellArg cfg.databaseName}
       repo_dir=${lib.escapeShellArg "${cfg.dataDir}/${cfg.databaseName}"}
       remote_url=${lib.escapeShellArg cfg.remoteUrl}
@@ -77,9 +78,13 @@ let
       repo_user_email=${lib.escapeShellArg cfg.repoUserEmail}
       repo_snapshot_path="''${FISHYSTUFF_DOLT_REPO_SNAPSHOT:-}"
 
-      export HOME="$data_dir"
+      mkdir -p "$data_dir" "$cfg_dir" "$home_dir"
+      export HOME="$home_dir"
 
-      mkdir -p "$data_dir" "$cfg_dir"
+      if [ -e "$data_dir/.dolt" ]; then
+        echo "refusing to start: found top-level $data_dir/.dolt; expected repo at $repo_dir/.dolt" >&2
+        exit 64
+      fi
 
       normalize_repo_snapshot() {
         local snapshot_path="$1"
@@ -111,7 +116,9 @@ let
 
         rm -rf "$tmp_repo_dir" "$old_repo_dir"
         mkdir -p "$tmp_repo_dir"
-        cp -a "$snapshot_dolt_path" "$tmp_repo_dir/.dolt"
+        cp -R --no-preserve=ownership,mode "$snapshot_dolt_path" "$tmp_repo_dir/.dolt"
+        find "$tmp_repo_dir/.dolt" -type d -exec chmod u+rwx,go-rwx {} +
+        find "$tmp_repo_dir/.dolt" -type f -exec chmod u+rw,go-rwx {} +
         rm -rf "$tmp_repo_dir/.dolt/temptf" "$tmp_repo_dir/.dolt/tmp"
         find "$tmp_repo_dir/.dolt" -name LOCK -type f -delete
         rm -f "$tmp_repo_dir/.dolt/sql-server.info"
@@ -168,6 +175,7 @@ let
       # Keep SQL auth state deterministic across restarts.
       rm -f "$privilege_file" "$branch_control_file"
 
+      cd "$repo_dir"
       exec dolt sql-server --config ${lib.escapeShellArg sqlServerConfig} ${lib.escapeShellArgs cfg.extraArgs}
     '';
   };
@@ -302,6 +310,12 @@ in
       type = types.str;
       default = "${cfg.dataDir}/.doltcfg";
       description = "Directory for Dolt SQL runtime metadata.";
+    };
+
+    homeDir = mkOption {
+      type = types.str;
+      default = "${cfg.dataDir}/home";
+      description = "HOME directory for Dolt helper commands.";
     };
 
     privilegeFile = mkOption {
@@ -507,6 +521,7 @@ in
         writablePaths = [
           cfg.dataDir
           cfg.cfgDir
+          cfg.homeDir
           cfg.privilegeFile
           cfg.branchControlFile
         ];
