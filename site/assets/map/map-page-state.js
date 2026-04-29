@@ -554,8 +554,6 @@ function defaultMapPresetSnapshot() {
     windowUi: {
       search: { open: true, collapsed: false, x: null, y: null },
       settings: {
-        open: false,
-        collapsed: false,
         x: null,
         y: null,
         autoAdjustView: true,
@@ -612,6 +610,15 @@ function mergeMapPresetBranch(defaultBranch, sourceBranch) {
   return merged;
 }
 
+function stripMapPresetWindowState(windowUi) {
+  const next = isPlainObject(windowUi) ? cloneJson(windowUi) : {};
+  if (isPlainObject(next.settings)) {
+    delete next.settings.open;
+    delete next.settings.collapsed;
+  }
+  return next;
+}
+
 export function normalizeMapPresetPayload(value) {
   const source = isPlainObject(value) ? value : {};
   const defaults = defaultMapPresetSnapshot();
@@ -630,6 +637,9 @@ export function normalizeMapPresetPayload(value) {
   const sourceBridgedFilters = isPlainObject(source.bridgedFilters)
     ? source.bridgedFilters
     : source._map_bridged?.filters;
+  const windowUi = stripMapPresetWindowState(
+    mergeMapPresetBranch(defaults.windowUi, sourceWindowUi),
+  );
   const mergedSearch = mergeMapPresetBranch(defaults.search, sourceSearch);
   if (
     isPlainObject(sourceSearch) &&
@@ -640,7 +650,7 @@ export function normalizeMapPresetPayload(value) {
   }
   const uiSnapshot = uiStorageSnapshot({
     _map_ui: {
-      windowUi: mergeMapPresetBranch(defaults.windowUi, sourceWindowUi),
+      windowUi,
       layers: mergeMapPresetBranch(defaults.layers, sourceLayers),
       search: mergedSearch,
     },

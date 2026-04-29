@@ -12,6 +12,9 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
     shellHtml,
     /settings: \{ open: false, collapsed: false, x: null, y: null, autoAdjustView: true, normalizeRates: true \}/,
   );
+  assert.match(shellHtml, /saveMapPresetToken: 0/);
+  assert.match(shellHtml, /discardMapPresetToken: 0/);
+  assert.match(shellHtml, /_user_presets: \{[\s\S]*'map-presets': \{[\s\S]*canSave: false,[\s\S]*canDiscard: false/);
   assert.match(shellHtml, /layers: \{ open: true, collapsed: false, x: null, y: null \}/);
   assert.match(shellHtml, /layers: \{ expandedLayerIds: \[\], hoverFactsVisibleByLayer: \{\} \}/);
   assert.match(shellHtml, /id="fishymap-search-window"[\s\S]*data-show="\$_map_ui\.windowUi\.search\.open"/);
@@ -76,6 +79,10 @@ test("map shell toolbar and status affordances derive from Datastar signals", ()
   assert.match(shellHtml, /id="fishymap-diagnostics"[\s\S]*data-attr:open="\$_map_bridged\.ui\.diagnosticsOpen"/);
   assert.match(shellHtml, /id="fishymap-reset-view"[\s\S]*data-on:click="\$_map_actions\.resetViewToken = \(\$_map_actions\.resetViewToken \|\| 0\) \+ 1"/);
   assert.match(shellHtml, /id="fishymap-reset-ui"[\s\S]*data-on:click="\$_map_actions\.resetUiToken = \(\$_map_actions\.resetUiToken \|\| 0\) \+ 1"/);
+  assert.match(shellHtml, /<fishy-preset-manager[\s\S]*data-preset-collection="map-presets"[\s\S]*><\/fishy-preset-manager>[\s\S]*id="fishymap-save-preset"/);
+  assert.match(shellHtml, /id="fishymap-save-preset"[\s\S]*data-show="\$_user_presets\.collections\['map-presets'\]\.canSave"[\s\S]*data-on:click="\$_map_actions\.saveMapPresetToken = \(\$_map_actions\.saveMapPresetToken \|\| 0\) \+ 1"[\s\S]*data-i18n-text="presets\.button\.save"/);
+  assert.match(shellHtml, /id="fishymap-discard-preset"[\s\S]*class="btn btn-warning btn-outline btn-sm"/);
+  assert.match(shellHtml, /id="fishymap-discard-preset"[\s\S]*data-show="\$_user_presets\.collections\['map-presets'\]\.canDiscard"[\s\S]*data-on:click="\$_map_actions\.discardMapPresetToken = \(\$_map_actions\.discardMapPresetToken \|\| 0\) \+ 1"[\s\S]*data-i18n-text="presets\.button\.discard"/);
   assert.match(shellHtml, /id="fishymap-normalize-rates"[\s\S]*data-bind="_map_ui\.windowUi\.settings\.normalizeRates"/);
   assert.match(shellHtml, /data-i18n-text="map\.settings\.normalize_rates"/);
   assert.doesNotMatch(shellHtml, /id="fishymap-view-toggle"/);

@@ -4,7 +4,14 @@ import { createMapPageDerivedController } from "./map-page-derived.js";
 import { createMapPageLive } from "./map-page-live.js";
 import { createMapLifecycleMetrics, createMapOtelMetricsReporter } from "./map-otel-metrics.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
-import { bindMapPresetController } from "./map-presets.js";
+import {
+  bindMapPresetController,
+  discardMapPresetCurrent,
+  saveMapPresetCurrent,
+  showMapPresetActionError,
+  showMapPresetDiscardToast,
+  showMapPresetSaveToast,
+} from "./map-presets.js";
 import { languageReady } from "./map-i18n.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
@@ -86,6 +93,10 @@ function patchTouchesLiveBridgeInputs(patch) {
     "_map_bookmarks" in patch ||
     "_shared_fish" in patch
   );
+}
+
+function sharedUserPresets() {
+  return globalThis.window?.__fishystuffUserPresets ?? globalThis.__fishystuffUserPresets ?? null;
 }
 
 function buildResetUiPatch() {
@@ -268,6 +279,7 @@ export async function start() {
     }
     page.patchSignals(patch);
   }
+  sharedUserPresets()?.bindDatastar?.(signals());
   const mapPresetController = bindMapPresetController({
     shell,
     readSignals: signals,
@@ -302,6 +314,7 @@ export async function start() {
   let lastBridgePatchJson = "";
   let pendingBridgeRestoreView = null;
   let actionState = app.readLastActionState();
+  let consumingMapPresetAction = false;
   const bridgeStateRefresher = createDeferredBridgeStateRefresher({
     bridge,
     onSnapshot: patchSignalsFromBridge,
@@ -393,6 +406,45 @@ export async function start() {
     return true;
   }
 
+  function consumeMapPresetActionTokens(nextActionState, previousActionState) {
+    if (consumingMapPresetAction) {
+      return;
+    }
+    const saveToken = Number(nextActionState.saveMapPresetToken || 0);
+    const previousSaveToken = Number(previousActionState.saveMapPresetToken || 0);
+    const discardToken = Number(nextActionState.discardMapPresetToken || 0);
+    const previousDiscardToken = Number(previousActionState.discardMapPresetToken || 0);
+    if (saveToken <= previousSaveToken && discardToken <= previousDiscardToken) {
+      return;
+    }
+
+    actionState = {
+      ...actionState,
+      saveMapPresetToken: Math.max(previousSaveToken, saveToken),
+      discardMapPresetToken: Math.max(previousDiscardToken, discardToken),
+    };
+    consumingMapPresetAction = true;
+    try {
+      if (saveToken > previousSaveToken) {
+        try {
+          showMapPresetSaveToast(saveMapPresetCurrent());
+        } catch (error) {
+          showMapPresetActionError(error, "presets.error.save");
+        }
+      }
+
+      if (discardToken > previousDiscardToken) {
+        try {
+          showMapPresetDiscardToast(discardMapPresetCurrent());
+        } catch (error) {
+          showMapPresetActionError(error, "presets.error.discard");
+        }
+      }
+    } finally {
+      consumingMapPresetAction = false;
+    }
+  }
+
   function handleBridgeStateEvent(event) {
     const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
     if (event?.type === "fishymap:view-changed") {
@@ -435,6 +487,7 @@ export async function start() {
     };
     const resetUiToken = Number(nextActionState.resetUiToken || 0);
     const previousResetUiToken = Number(actionState.resetUiToken || 0);
+    consumeMapPresetActionTokens(nextActionState, actionState);
     if (resetUiToken > previousResetUiToken) {
       applyInternalSignalPatch(buildResetUiPatch());
     }

@@ -104,6 +104,8 @@ export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
     fields: Object.freeze([
       "resetViewToken",
       "resetUiToken",
+      "saveMapPresetToken",
+      "discardMapPresetToken",
       "focusWorldPointToken",
       "focusWorldPoint",
     ]),
@@ -178,6 +180,8 @@ export const DEFAULT_MAP_SESSION_SIGNAL_STATE = Object.freeze({
 export const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
   resetViewToken: 0,
   resetUiToken: 0,
+  saveMapPresetToken: 0,
+  discardMapPresetToken: 0,
   focusWorldPointToken: 0,
   focusWorldPoint: null,
 });

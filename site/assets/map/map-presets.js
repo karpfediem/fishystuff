@@ -1,4 +1,4 @@
-import { mapText } from "./map-i18n.js";
+import { mapText, siteText } from "./map-i18n.js";
 import {
   createMapPresetPayload,
   defaultMapPresetPayload,
@@ -106,6 +106,10 @@ function sharedUserPresets() {
     : null;
 }
 
+function toastHelper() {
+  return globalThis.window?.__fishystuffToast ?? globalThis.__fishystuffToast ?? null;
+}
+
 function presetPreviewHelper() {
   return globalThis.window?.__fishystuffPresetPreviews ?? null;
 }
@@ -168,6 +172,105 @@ export function registerMapPresetAdapter({
         : normalizeMapPresetPayload(payload);
     },
   });
+}
+
+export function mapPresetCollectionActionSnapshot(
+  userPresetsSnapshot,
+  collectionKey = MAP_PRESET_COLLECTION_KEY,
+) {
+  const key = trimString(collectionKey);
+  if (!key) {
+    return null;
+  }
+  const collections = userPresetsSnapshot?.collections;
+  return collections && typeof collections === "object" ? collections[key] || null : null;
+}
+
+export function mapPresetCollectionCanSave(
+  userPresetsSnapshot,
+  collectionKey = MAP_PRESET_COLLECTION_KEY,
+) {
+  return Boolean(mapPresetCollectionActionSnapshot(userPresetsSnapshot, collectionKey)?.canSave);
+}
+
+export function mapPresetCollectionCanDiscard(
+  userPresetsSnapshot,
+  collectionKey = MAP_PRESET_COLLECTION_KEY,
+) {
+  return Boolean(mapPresetCollectionActionSnapshot(userPresetsSnapshot, collectionKey)?.canDiscard);
+}
+
+export function saveMapPresetCurrent() {
+  const helper = sharedUserPresets();
+  if (!helper || typeof helper.saveCurrent !== "function") {
+    return null;
+  }
+  const actionState = helper.currentActionState(MAP_PRESET_COLLECTION_KEY, {
+    refresh: true,
+    patchDatastar: false,
+  });
+  if (!actionState.canSave) {
+    return null;
+  }
+  const result = helper.saveCurrent(MAP_PRESET_COLLECTION_KEY);
+  helper.refreshDatastar?.();
+  return result;
+}
+
+export function discardMapPresetCurrent() {
+  const helper = sharedUserPresets();
+  if (!helper || typeof helper.discardCurrent !== "function") {
+    return null;
+  }
+  const actionState = helper.currentActionState(MAP_PRESET_COLLECTION_KEY, {
+    refresh: true,
+    patchDatastar: false,
+  });
+  if (!actionState.canDiscard) {
+    return null;
+  }
+  const result = helper.discardCurrent(MAP_PRESET_COLLECTION_KEY, {
+    refreshCurrent: false,
+  });
+  helper.refreshDatastar?.();
+  return result?.current ? null : result;
+}
+
+export function showMapPresetSaveToast(result) {
+  const savedPreset = result?.preset;
+  if (!savedPreset) {
+    return null;
+  }
+  const key = result.action === "created" ? "presets.toast.created" : "presets.toast.saved";
+  return toastHelper()?.success?.(siteText(key, { name: savedPreset.name || "" })) || null;
+}
+
+export function showMapPresetDiscardToast(result) {
+  if (!result) {
+    return null;
+  }
+  return toastHelper()?.info?.(siteText("presets.toast.discarded")) || null;
+}
+
+export function showMapPresetActionError(_error, fallbackKey) {
+  return toastHelper()?.error?.(siteText(fallbackKey)) || null;
+}
+
+export function installMapPresetGlobals(globalRef = globalThis) {
+  const target = globalRef?.window ?? globalRef;
+  if (!target || typeof target !== "object") {
+    return null;
+  }
+  target.FishyMapPresets = {
+    ...(target.FishyMapPresets && typeof target.FishyMapPresets === "object"
+      ? target.FishyMapPresets
+      : {}),
+    presetCollectionCanSave: mapPresetCollectionCanSave,
+    presetCollectionCanDiscard: mapPresetCollectionCanDiscard,
+    saveCurrent: saveMapPresetCurrent,
+    discardCurrent: discardMapPresetCurrent,
+  };
+  return target.FishyMapPresets;
 }
 
 export function applyStoredMapPresetState({
@@ -279,3 +382,5 @@ export function bindMapPresetController({
     flushTrackedCurrent: tracker.flush,
   };
 }
+
+installMapPresetGlobals();

@@ -8,9 +8,14 @@ import { createMapPageDerivedController } from "./map-page-derived.js";
 import {
   applyStoredMapPresetState,
   bindMapPresetController,
+  discardMapPresetCurrent,
+  installMapPresetGlobals,
+  mapPresetCollectionCanDiscard,
+  mapPresetCollectionCanSave,
   MAP_PRESET_COLLECTION_KEY,
   patchTouchesMapPreset,
   registerMapPresetAdapter,
+  saveMapPresetCurrent,
 } from "./map-presets.js";
 
 const USER_PRESETS_SOURCE = fs.readFileSync(
@@ -234,6 +239,66 @@ test("map preset adapter applies durable map state without replacing bookmarks",
     ]);
     assert.equal(env.helper.selectedPresetId(MAP_PRESET_COLLECTION_KEY), preset.id);
     assert.equal(env.helper.current(MAP_PRESET_COLLECTION_KEY), null);
+  } finally {
+    env.restore();
+  }
+});
+
+test("map preset current actions ignore settings open state but keep settings position", () => {
+  const env = installUserPresetsGlobal();
+  try {
+    installMapPresetGlobals();
+    const signals = defaultSignals();
+    registerMapPresetAdapter({
+      readSignals: () => signals,
+      applyPatch: (patch) => applyMapPageSignalsPatch(signals, patch),
+    });
+
+    signals._map_ui.windowUi.settings.open = true;
+    signals._map_ui.windowUi.settings.collapsed = true;
+    let actionState = env.helper.currentActionState(MAP_PRESET_COLLECTION_KEY, {
+      refresh: true,
+      patchDatastar: false,
+    });
+
+    assert.equal(actionState.canSave, false);
+    assert.equal(actionState.canDiscard, false);
+    assert.equal(mapPresetCollectionCanSave(env.helper.refreshDatastar(), MAP_PRESET_COLLECTION_KEY), false);
+    assert.equal(mapPresetCollectionCanDiscard(env.helper.refreshDatastar(), MAP_PRESET_COLLECTION_KEY), false);
+
+    signals._map_ui.windowUi.settings.x = 42;
+    signals._map_ui.windowUi.settings.y = 84;
+    actionState = env.helper.currentActionState(MAP_PRESET_COLLECTION_KEY, {
+      refresh: true,
+      patchDatastar: false,
+    });
+
+    assert.equal(actionState.canSave, true);
+    assert.equal(actionState.canDiscard, true);
+    assert.equal(mapPresetCollectionCanSave(env.helper.refreshDatastar(), MAP_PRESET_COLLECTION_KEY), true);
+    assert.equal(mapPresetCollectionCanDiscard(env.helper.refreshDatastar(), MAP_PRESET_COLLECTION_KEY), true);
+
+    const saveResult = saveMapPresetCurrent();
+
+    assert.equal(saveResult.action, "created");
+    assert.equal(env.helper.selectedPresetId(MAP_PRESET_COLLECTION_KEY), saveResult.preset.id);
+    assert.equal(env.helper.current(MAP_PRESET_COLLECTION_KEY), null);
+    assert.equal(env.helper.preset(MAP_PRESET_COLLECTION_KEY, saveResult.preset.id).payload.windowUi.settings.x, 42);
+    assert.equal(
+      "open" in env.helper.preset(MAP_PRESET_COLLECTION_KEY, saveResult.preset.id).payload.windowUi.settings,
+      false,
+    );
+
+    signals._map_ui.windowUi.settings.x = 128;
+    env.helper.currentActionState(MAP_PRESET_COLLECTION_KEY, {
+      refresh: true,
+      patchDatastar: false,
+    });
+    const discardResult = discardMapPresetCurrent();
+
+    assert.equal(discardResult.action, "discarded");
+    assert.equal(signals._map_ui.windowUi.settings.x, 42);
+    assert.equal(signals._map_ui.windowUi.settings.open, true);
   } finally {
     env.restore();
   }

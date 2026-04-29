@@ -191,7 +191,7 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },
-        settings: { normalizeRates: false },
+        settings: { open: true, collapsed: true, x: 40, y: 50, normalizeRates: false },
       },
       layers: {
         expandedLayerIds: ["zone_mask"],
@@ -230,6 +230,10 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
   assert.equal("bookmarks" in payload, false);
   assert.equal("_map_runtime" in payload, false);
   assert.deepEqual(payload.windowUi.search, { open: false, collapsed: true, x: 20, y: 30 });
+  assert.equal("open" in payload.windowUi.settings, false);
+  assert.equal("collapsed" in payload.windowUi.settings, false);
+  assert.equal(payload.windowUi.settings.x, 40);
+  assert.equal(payload.windowUi.settings.y, 50);
   assert.equal(payload.windowUi.settings.normalizeRates, false);
   assert.equal(payload.search.query, "eel");
   assert.deepEqual(payload.search.selectedTerms, [{ kind: "fish", fishId: 77 }]);
@@ -274,7 +278,7 @@ test("map-page-state map preset restore patch applies UI and view without bookma
   const payload = normalizeMapPresetPayload({
     ...defaultMapPresetPayload(),
     windowUi: {
-      settings: { normalizeRates: false },
+      settings: { open: true, collapsed: true, x: 80, y: 90, normalizeRates: false },
     },
     search: {
       query: "tuna",
@@ -298,6 +302,10 @@ test("map-page-state map preset restore patch applies UI and view without bookma
 
   assert.equal(patch._map_bookmarks, undefined);
   assert.equal(patch._map_ui.windowUi.settings.normalizeRates, false);
+  assert.equal("open" in patch._map_ui.windowUi.settings, false);
+  assert.equal("collapsed" in patch._map_ui.windowUi.settings, false);
+  assert.equal(patch._map_ui.windowUi.settings.x, 80);
+  assert.equal(patch._map_ui.windowUi.settings.y, 90);
   assert.equal(patch._map_ui.search.query, "tuna");
   assert.deepEqual(patch._map_ui.search.selectedTerms, [{ kind: "fish", fishId: 912 }]);
   assert.equal(patch._map_bridged.ui.showPoints, false);

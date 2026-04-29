@@ -169,6 +169,12 @@ export function normalizeMapActionState(raw) {
     resetUiToken: Number.isFinite(Number(source.resetUiToken))
       ? Number(source.resetUiToken)
       : 0,
+    saveMapPresetToken: Number.isFinite(Number(source.saveMapPresetToken))
+      ? Number(source.saveMapPresetToken)
+      : 0,
+    discardMapPresetToken: Number.isFinite(Number(source.discardMapPresetToken))
+      ? Number(source.discardMapPresetToken)
+      : 0,
     focusWorldPointToken: Number.isFinite(Number(source.focusWorldPointToken))
       ? Number(source.focusWorldPointToken)
       : 0,

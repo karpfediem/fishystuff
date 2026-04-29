@@ -52,6 +52,8 @@
            _map_actions: {
              resetViewToken: 0,
              resetUiToken: 0,
+             saveMapPresetToken: 0,
+             discardMapPresetToken: 0,
              focusWorldPointToken: 0,
              focusWorldPoint: null
            },
@@ -80,6 +82,15 @@
            _shared_fish: {
              caughtIds: [],
              favouriteIds: []
+           },
+           _user_presets: {
+             version: 0,
+             collections: {
+               'map-presets': {
+                 canSave: false,
+                 canDiscard: false
+               }
+             }
            }
          }">
       <div hidden
@@ -369,6 +380,26 @@
                 class="w-full"
                 data-preset-collection="map-presets"
               ></fishy-preset-manager>
+              <div
+                class="grid grid-cols-2 gap-2"
+                data-show="$_user_presets.collections['map-presets'].canSave || $_user_presets.collections['map-presets'].canDiscard"
+                style="display: none"
+              >
+                <button
+                  id="fishymap-save-preset"
+                  class="btn btn-primary btn-sm"
+                  type="button"
+                  data-show="$_user_presets.collections['map-presets'].canSave"
+                  data-on:click="$_map_actions.saveMapPresetToken = ($_map_actions.saveMapPresetToken || 0) + 1"
+                ><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-check-badge-solid"></use></svg><span data-i18n-text="presets.button.save"></span></button>
+                <button
+                  id="fishymap-discard-preset"
+                  class="btn btn-warning btn-outline btn-sm"
+                  type="button"
+                  data-show="$_user_presets.collections['map-presets'].canDiscard"
+                  data-on:click="$_map_actions.discardMapPresetToken = ($_map_actions.discardMapPresetToken || 0) + 1"
+                ><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-clear"></use></svg><span data-i18n-text="presets.button.discard"></span></button>
+              </div>
             </div>
 
             <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">

@@ -453,6 +453,8 @@ test("normalizeMapActionState defaults missing tokens to zero", () => {
   assert.deepEqual(normalizeMapActionState(null), {
     resetViewToken: 0,
     resetUiToken: 0,
+    saveMapPresetToken: 0,
+    discardMapPresetToken: 0,
     focusWorldPointToken: 0,
     focusWorldPoint: null,
   });
