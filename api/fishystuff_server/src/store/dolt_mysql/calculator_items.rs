@@ -115,32 +115,53 @@ pub(super) fn build_source_item(
     }
 }
 
+fn max_source_effect_value(left: Option<f32>, right: Option<f32>) -> Option<f32> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
 fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> CalculatorItemEffectValues {
-    let values = CalculatorItemEffectValues {
-        afr: row.afr,
-        bonus_rare: row.bonus_rare,
-        bonus_big: row.bonus_big,
-        item_drr: row.item_drr,
-        exp_fish: row.exp_fish,
-        exp_life: row.exp_life,
+    let evidence = &row.effect_evidence;
+    // The public catalog is still flat, but keep the internal merge order
+    // explicit: structured source values first, text-derived values second,
+    // hand-maintained enrichments last.
+    let mut values = CalculatorItemEffectValues {
+        afr: evidence
+            .source_rule_values
+            .afr
+            .or(evidence.source_text_values.afr),
+        bonus_rare: evidence
+            .source_rule_values
+            .bonus_rare
+            .or(evidence.source_text_values.bonus_rare),
+        bonus_big: evidence
+            .source_rule_values
+            .bonus_big
+            .or(evidence.source_text_values.bonus_big),
+        item_drr: evidence
+            .source_rule_values
+            .item_drr
+            .or(evidence.source_text_values.item_drr),
+        exp_fish: evidence
+            .source_rule_values
+            .exp_fish
+            .or(evidence.source_text_values.exp_fish),
+        exp_life: evidence
+            .source_rule_values
+            .exp_life
+            .or(evidence.source_text_values.exp_life),
     };
-    if row.source_kind == "lightstone_set" {
-        return values;
-    }
-    let mut values = values;
-    if let Some(effect_description) = row.effect_description_ko.as_deref() {
-        let mut parsed = CalculatorItemEffectValues::default();
-        super::calculator_effects::parse_unique_calculator_effect_text(
-            &mut parsed,
-            effect_description,
-        );
-        values.afr = values.afr.or(parsed.afr);
-        values.bonus_rare = values.bonus_rare.or(parsed.bonus_rare);
-        values.bonus_big = values.bonus_big.or(parsed.bonus_big);
-        values.item_drr = values.item_drr.or(parsed.item_drr);
-        values.exp_fish = values.exp_fish.or(parsed.exp_fish);
-        values.exp_life = values.exp_life.or(parsed.exp_life);
-    }
+    values.afr = max_source_effect_value(values.afr, evidence.manual_values.afr);
+    values.bonus_rare =
+        max_source_effect_value(values.bonus_rare, evidence.manual_values.bonus_rare);
+    values.bonus_big = max_source_effect_value(values.bonus_big, evidence.manual_values.bonus_big);
+    values.item_drr = max_source_effect_value(values.item_drr, evidence.manual_values.item_drr);
+    values.exp_fish = max_source_effect_value(values.exp_fish, evidence.manual_values.exp_fish);
+    values.exp_life = max_source_effect_value(values.exp_life, evidence.manual_values.exp_life);
     values
 }
 
@@ -363,15 +384,46 @@ mod tests {
 
     use crate::store::DataLang;
 
-    use super::super::calculator_effects::CalculatorItemEffectValues;
+    use super::super::calculator_effects::{
+        parse_unique_calculator_effect_text, CalculatorItemEffectValues,
+    };
     use super::super::item_metadata::ItemSourceMetadata;
     use super::{
         build_source_item, build_source_lightstone_item, resolve_calculator_item_icon,
         source_backed_effect_values, CalculatorSourceBackedItemRow, DoltMySqlStore,
     };
+    use crate::store::dolt_mysql::calculator_sources::CalculatorSourceEffectEvidence;
 
     fn kr_data_lang() -> DataLang {
         DataLang::from_code("kr").expect("valid test data language")
+    }
+
+    fn source_rule_effect_evidence(
+        source_rule_values: CalculatorItemEffectValues,
+    ) -> CalculatorSourceEffectEvidence {
+        CalculatorSourceEffectEvidence {
+            source_rule_values,
+            ..CalculatorSourceEffectEvidence::default()
+        }
+    }
+
+    fn source_text_effect_evidence(source_text_ko: &str) -> CalculatorSourceEffectEvidence {
+        let mut source_text_values = CalculatorItemEffectValues::default();
+        parse_unique_calculator_effect_text(&mut source_text_values, source_text_ko);
+        CalculatorSourceEffectEvidence {
+            source_text_ko: Some(source_text_ko.to_string()),
+            source_text_values,
+            ..CalculatorSourceEffectEvidence::default()
+        }
+    }
+
+    fn source_rule_and_text_effect_evidence(
+        source_rule_values: CalculatorItemEffectValues,
+        source_text_ko: &str,
+    ) -> CalculatorSourceEffectEvidence {
+        let mut evidence = source_text_effect_evidence(source_text_ko);
+        evidence.source_rule_values = source_rule_values;
+        evidence
     }
 
     #[test]
@@ -425,13 +477,10 @@ mod tests {
                 icon_id: Some(1),
                 durability: Some(100),
                 fish_multiplier: None,
-                effect_description_ko: None,
-                afr: Some(0.25),
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: source_rule_effect_evidence(CalculatorItemEffectValues {
+                    afr: Some(0.25),
+                    ..CalculatorItemEffectValues::default()
+                }),
             }],
             &HashMap::new(),
         )
@@ -468,13 +517,7 @@ mod tests {
                 icon_id: Some(1),
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: Some("생활 경험치 획득량 +10%".to_string()),
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: source_text_effect_evidence("생활 경험치 획득량 +10%"),
             }],
             &HashMap::new(),
         )
@@ -509,13 +552,10 @@ mod tests {
                 icon_id: Some(14071),
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: None,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: Some(0.10),
-                exp_life: None,
+                effect_evidence: source_rule_effect_evidence(CalculatorItemEffectValues {
+                    exp_fish: Some(0.10),
+                    ..CalculatorItemEffectValues::default()
+                }),
             }],
             &HashMap::new(),
         )
@@ -545,13 +585,7 @@ mod tests {
                 icon_id: None,
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: Some("자동 낚시 시간 감소 +7%".to_string()),
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: source_text_effect_evidence("자동 낚시 시간 감소 +7%"),
             }],
             &HashMap::new(),
         )
@@ -585,13 +619,7 @@ mod tests {
                 icon_id: Some(9307),
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: Some("자동 낚시 시간 감소 +5%".to_string()),
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: source_text_effect_evidence("자동 낚시 시간 감소 +5%"),
             }],
             &HashMap::from([(
                 9307,
@@ -623,13 +651,13 @@ mod tests {
             icon_id: None,
             durability: None,
             fish_multiplier: None,
-            effect_description_ko: Some("낚시 경험치 획득량 +10%".to_string()),
-            afr: Some(0.05),
-            bonus_rare: None,
-            bonus_big: None,
-            item_drr: None,
-            exp_fish: None,
-            exp_life: None,
+            effect_evidence: source_rule_and_text_effect_evidence(
+                CalculatorItemEffectValues {
+                    afr: Some(0.05),
+                    ..CalculatorItemEffectValues::default()
+                },
+                "낚시 경험치 획득량 +10%",
+            ),
         });
 
         assert_eq!(
@@ -658,15 +686,14 @@ mod tests {
             icon_id: None,
             durability: None,
             fish_multiplier: None,
-            effect_description_ko: Some(
-                "자동 낚시 시간 -15%\n낚시 경험치 획득량 +10%\n낚시 숙련도 +20".to_string(),
+            effect_evidence: source_rule_and_text_effect_evidence(
+                CalculatorItemEffectValues {
+                    afr: Some(0.15),
+                    exp_fish: Some(0.10),
+                    ..CalculatorItemEffectValues::default()
+                },
+                "자동 낚시 시간 -15%\n낚시 경험치 획득량 +10%\n낚시 숙련도 +20",
             ),
-            afr: Some(0.15),
-            bonus_rare: None,
-            bonus_big: None,
-            item_drr: None,
-            exp_fish: Some(0.10),
-            exp_life: None,
         });
 
         assert_eq!(
@@ -695,16 +722,13 @@ mod tests {
             icon_id: None,
             durability: None,
             fish_multiplier: None,
-            effect_description_ko: Some(
-                "[대장장이의 축복]\n몬스터 추가 공격력 +5\n몬스터 피해 감소 +5\n장비 내구도 감소 저항 +30%"
-                    .to_string(),
-            ),
-            afr: None,
-            bonus_rare: None,
-            bonus_big: None,
-            item_drr: None,
-            exp_fish: None,
-            exp_life: None,
+            effect_evidence: CalculatorSourceEffectEvidence {
+                source_text_ko: Some(
+                    "[대장장이의 축복]\n몬스터 추가 공격력 +5\n몬스터 피해 감소 +5\n장비 내구도 감소 저항 +30%"
+                        .to_string(),
+                ),
+                ..CalculatorSourceEffectEvidence::default()
+            },
         });
 
         assert_eq!(values, CalculatorItemEffectValues::default());
@@ -726,16 +750,9 @@ mod tests {
             icon_id: None,
             durability: None,
             fish_multiplier: None,
-            effect_description_ko: Some(
-                "생활 경험치 획득량 +30%\n생활 경험치 획득량 +30%\n낚시 경험치 획득량 +10%"
-                    .to_string(),
+            effect_evidence: source_text_effect_evidence(
+                "생활 경험치 획득량 +30%\n생활 경험치 획득량 +30%\n낚시 경험치 획득량 +10%",
             ),
-            afr: None,
-            bonus_rare: None,
-            bonus_big: None,
-            item_drr: None,
-            exp_fish: None,
-            exp_life: None,
         });
 
         assert_eq!(values.exp_life, Some(0.30));
@@ -761,13 +778,7 @@ mod tests {
                     icon_id: None,
                     durability: Some(0),
                     fish_multiplier: None,
-                    effect_description_ko: None,
-                    afr: None,
-                    bonus_rare: None,
-                    bonus_big: None,
-                    item_drr: None,
-                    exp_fish: None,
-                    exp_life: None,
+                    effect_evidence: CalculatorSourceEffectEvidence::default(),
                 },
                 CalculatorSourceBackedItemRow {
                     source_key: "lightstone-set:151".to_string(),
@@ -783,13 +794,7 @@ mod tests {
                     icon_id: None,
                     durability: None,
                     fish_multiplier: None,
-                    effect_description_ko: Some("낚시 숙련도 +30".to_string()),
-                    afr: None,
-                    bonus_rare: None,
-                    bonus_big: None,
-                    item_drr: None,
-                    exp_fish: None,
-                    exp_life: None,
+                    effect_evidence: source_text_effect_evidence("낚시 숙련도 +30"),
                 },
             ],
             &HashMap::new(),

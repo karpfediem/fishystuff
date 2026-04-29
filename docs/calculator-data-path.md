@@ -89,6 +89,24 @@ Helper views used by those surfaces:
 - `calculator_item_skill_sources`
 - `calculator_pet_skill_sources`
 
+### Source facts versus enriched facts
+
+Calculator catalog assembly must keep these evidence classes distinct:
+
+- source-rule values: values decoded from structured source surfaces, including
+  source macros such as `PatternDescription` and narrow prepared views such as
+  product-tool properties
+- source-text evidence: original text from item, skill, buff, or tooltip
+  descriptions, plus values inferred by parsing that text
+- manual enrichments: narrow hand-maintained values for gaps that are not yet
+  recoverable from the currently imported source set
+
+Do not treat source-text parsed values or manual enrichments as original source
+columns. If this work moves into materialized Dolt tables, preserve these
+buckets as separate columns or evidence rows so downstream API code can tell
+whether a calculator value came from a structured source field, description-text
+inference, or a maintained enrichment.
+
 Localized item display names are projected into the narrow
 `calculator_item_names` table keyed by `(lang, item_id)`. This keeps calculator
 runtime reads away from full `languagedata_*` dumps while still sourcing names

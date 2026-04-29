@@ -35,13 +35,9 @@ struct CalculatorEnchantEffectEntryRow {
     enchant_level: i32,
     skill_no: Option<String>,
     durability: Option<i32>,
-    effect_description_ko: Option<String>,
-    afr: Option<f32>,
-    bonus_rare: Option<f32>,
-    bonus_big: Option<f32>,
-    item_drr: Option<f32>,
-    exp_fish: Option<f32>,
-    exp_life: Option<f32>,
+    source_rule_values: CalculatorItemEffectValues,
+    source_text_ko: Option<String>,
+    source_text_values: CalculatorItemEffectValues,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -65,6 +61,21 @@ pub(super) struct CalculatorCatalogSourceData {
     pub(super) source_backed_rows: Vec<CalculatorSourceBackedItemRow>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(super) struct CalculatorSourceEffectEvidence {
+    // Values decoded from structured source surfaces, including source macros
+    // such as PatternDescription and prepared source views.
+    pub(super) source_rule_values: CalculatorItemEffectValues,
+    // Original Korean text evidence plus values inferred by parsing that text.
+    // Keep these separate from source_rule_values so text-derived enrichment
+    // never masquerades as a structured source fact.
+    pub(super) source_text_ko: Option<String>,
+    pub(super) source_text_values: CalculatorItemEffectValues,
+    // Narrow hand-maintained enrichments for source gaps that are not yet
+    // recoverable from the imported source set.
+    pub(super) manual_values: CalculatorItemEffectValues,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) source_key: String,
@@ -80,13 +91,7 @@ pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) icon_id: Option<i32>,
     pub(super) durability: Option<i32>,
     pub(super) fish_multiplier: Option<f32>,
-    pub(super) effect_description_ko: Option<String>,
-    pub(super) afr: Option<f32>,
-    pub(super) bonus_rare: Option<f32>,
-    pub(super) bonus_big: Option<f32>,
-    pub(super) item_drr: Option<f32>,
-    pub(super) exp_fish: Option<f32>,
-    pub(super) exp_life: Option<f32>,
+    pub(super) effect_evidence: CalculatorSourceEffectEvidence,
 }
 
 #[derive(Debug, Clone)]
@@ -233,6 +238,55 @@ fn max_opt_f32(left: Option<f32>, right: Option<f32>) -> Option<f32> {
     }
 }
 
+fn effect_values_from_source_text(text: Option<&str>) -> CalculatorItemEffectValues {
+    let mut values = CalculatorItemEffectValues::default();
+    if let Some(text) = text {
+        parse_unique_calculator_effect_text(&mut values, text);
+    }
+    values
+}
+
+fn source_text_effect_evidence(text: Option<String>) -> CalculatorSourceEffectEvidence {
+    let source_text_values = effect_values_from_source_text(text.as_deref());
+    CalculatorSourceEffectEvidence {
+        source_text_ko: text,
+        source_text_values,
+        ..CalculatorSourceEffectEvidence::default()
+    }
+}
+
+fn effect_values_from_fields(
+    afr: Option<f32>,
+    bonus_rare: Option<f32>,
+    bonus_big: Option<f32>,
+    item_drr: Option<f32>,
+    exp_fish: Option<f32>,
+    exp_life: Option<f32>,
+) -> CalculatorItemEffectValues {
+    CalculatorItemEffectValues {
+        afr,
+        bonus_rare,
+        bonus_big,
+        item_drr,
+        exp_fish,
+        exp_life,
+    }
+}
+
+fn max_effect_values(
+    left: CalculatorItemEffectValues,
+    right: CalculatorItemEffectValues,
+) -> CalculatorItemEffectValues {
+    CalculatorItemEffectValues {
+        afr: max_opt_f32(left.afr, right.afr),
+        bonus_rare: max_opt_f32(left.bonus_rare, right.bonus_rare),
+        bonus_big: max_opt_f32(left.bonus_big, right.bonus_big),
+        item_drr: max_opt_f32(left.item_drr, right.item_drr),
+        exp_fish: max_opt_f32(left.exp_fish, right.exp_fish),
+        exp_life: max_opt_f32(left.exp_life, right.exp_life),
+    }
+}
+
 fn merge_unique_effect_texts(left: Option<String>, right: Option<String>) -> Option<String> {
     let mut lines = Vec::<String>::new();
     for text in [left, right].into_iter().flatten() {
@@ -321,16 +375,11 @@ fn merge_skill_effect_bundle(
     target: &mut CalculatorEnchantEffectEntryRow,
     bundle: &CalculatorSkillEffectBundle,
 ) {
-    target.effect_description_ko = merge_unique_effect_texts(
-        target.effect_description_ko.clone(),
+    target.source_text_ko = merge_unique_effect_texts(
+        target.source_text_ko.clone(),
         bundle.effect_description_ko.clone(),
     );
-    target.afr = max_opt_f32(target.afr, bundle.values.afr);
-    target.bonus_rare = max_opt_f32(target.bonus_rare, bundle.values.bonus_rare);
-    target.bonus_big = max_opt_f32(target.bonus_big, bundle.values.bonus_big);
-    target.item_drr = max_opt_f32(target.item_drr, bundle.values.item_drr);
-    target.exp_fish = max_opt_f32(target.exp_fish, bundle.values.exp_fish);
-    target.exp_life = max_opt_f32(target.exp_life, bundle.values.exp_life);
+    target.source_text_values = max_effect_values(target.source_text_values, bundle.values);
 }
 
 impl DoltMySqlStore {
@@ -1585,13 +1634,7 @@ impl DoltMySqlStore {
                     icon_id: None,
                     durability: None,
                     fish_multiplier: None,
-                    effect_description_ko: Some(effect_lines.join("\n")),
-                    afr: None,
-                    bonus_rare: None,
-                    bonus_big: None,
-                    item_drr: None,
-                    exp_fish: None,
-                    exp_life: None,
+                    effect_evidence: source_text_effect_evidence(Some(effect_lines.join("\n"))),
                 })
             })
             .collect::<Vec<_>>();
@@ -1626,13 +1669,13 @@ impl DoltMySqlStore {
                         icon_id: None,
                         durability: None,
                         fish_multiplier: None,
-                        effect_description_ko,
-                        afr,
-                        bonus_rare,
-                        bonus_big,
-                        item_drr: drr,
-                        exp_fish,
-                        exp_life,
+                        effect_evidence: CalculatorSourceEffectEvidence {
+                            source_text_ko: effect_description_ko,
+                            source_text_values: effect_values_from_fields(
+                                afr, bonus_rare, bonus_big, drr, exp_fish, exp_life,
+                            ),
+                            ..CalculatorSourceEffectEvidence::default()
+                        },
                     },
                 ),
         );
@@ -1736,13 +1779,16 @@ impl DoltMySqlStore {
                 enchant_level,
                 skill_no: None,
                 durability: row.get::<Option<i32>, _>("durability").flatten(),
-                effect_description_ko: None,
-                afr: row.get::<Option<f32>, _>("afr").flatten(),
-                bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
-                bonus_big: row.get::<Option<f32>, _>("bonus_big").flatten(),
-                item_drr: row.get::<Option<f32>, _>("drr").flatten(),
-                exp_fish: row.get::<Option<f32>, _>("exp_fish").flatten(),
-                exp_life: None,
+                source_rule_values: effect_values_from_fields(
+                    row.get::<Option<f32>, _>("afr").flatten(),
+                    row.get::<Option<f32>, _>("bonus_rare").flatten(),
+                    row.get::<Option<f32>, _>("bonus_big").flatten(),
+                    row.get::<Option<f32>, _>("drr").flatten(),
+                    row.get::<Option<f32>, _>("exp_fish").flatten(),
+                    None,
+                ),
+                source_text_ko: None,
+                source_text_values: CalculatorItemEffectValues::default(),
             };
 
             let key = effect_row.item_name_ko.clone();
@@ -1752,12 +1798,18 @@ impl DoltMySqlStore {
                 }
                 Some(existing) if effect_row.enchant_level == existing.enchant_level => {
                     existing.durability = max_opt_i32(existing.durability, effect_row.durability);
-                    existing.afr = max_opt_f32(existing.afr, effect_row.afr);
-                    existing.bonus_rare = max_opt_f32(existing.bonus_rare, effect_row.bonus_rare);
-                    existing.bonus_big = max_opt_f32(existing.bonus_big, effect_row.bonus_big);
-                    existing.item_drr = max_opt_f32(existing.item_drr, effect_row.item_drr);
-                    existing.exp_fish = max_opt_f32(existing.exp_fish, effect_row.exp_fish);
-                    existing.exp_life = max_opt_f32(existing.exp_life, effect_row.exp_life);
+                    existing.source_rule_values = max_effect_values(
+                        existing.source_rule_values,
+                        effect_row.source_rule_values,
+                    );
+                    existing.source_text_ko = merge_unique_effect_texts(
+                        existing.source_text_ko.clone(),
+                        effect_row.source_text_ko,
+                    );
+                    existing.source_text_values = max_effect_values(
+                        existing.source_text_values,
+                        effect_row.source_text_values,
+                    );
                 }
                 Some(_) => {}
                 None => {
@@ -1775,13 +1827,9 @@ impl DoltMySqlStore {
                 enchant_level: candidate.enchant_level,
                 skill_no: Some(candidate.skill_no),
                 durability: None,
-                effect_description_ko: None,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                source_rule_values: CalculatorItemEffectValues::default(),
+                source_text_ko: None,
+                source_text_values: CalculatorItemEffectValues::default(),
             };
             match chosen_effects.get_mut(&key) {
                 Some(existing) if candidate.enchant_level > existing.enchant_level => {
@@ -1817,12 +1865,13 @@ impl DoltMySqlStore {
             effect_row.skill_no = skill_no_by_item
                 .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
                 .cloned();
-            effect_row.effect_description_ko = merge_unique_effect_texts(
-                effect_row.effect_description_ko.clone(),
-                raw_effect_text_by_item
-                    .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
-                    .cloned(),
-            );
+            let raw_effect_text = raw_effect_text_by_item
+                .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
+                .cloned();
+            effect_row.source_text_ko =
+                merge_unique_effect_texts(effect_row.source_text_ko.clone(), raw_effect_text);
+            effect_row.source_text_values =
+                effect_values_from_source_text(effect_row.source_text_ko.as_deref());
         }
 
         let skill_nos = chosen_effects
@@ -1894,9 +1943,9 @@ impl DoltMySqlStore {
                 ) {
                     return None;
                 }
-                // Manual values only fill gaps that are still unproven in the
-                // current source dump. They do not replace source-backed stats
-                // already recovered from enchant/producttool/skill/buff data.
+                // Manual values stay as enrichment evidence until final catalog
+                // assembly. They cover known source gaps without changing the
+                // structured/text evidence recovered here.
                 let fish_multiplier =
                     manually_maintained_source_fish_multiplier(item_id, &item_type);
                 let manual_values = manually_maintained_source_effect_values(item_id, &item_type);
@@ -1915,13 +1964,12 @@ impl DoltMySqlStore {
                     icon_id: metadata.icon_id,
                     durability: row.durability.or(metadata.durability),
                     fish_multiplier,
-                    effect_description_ko: row.effect_description_ko,
-                    afr: row.afr,
-                    bonus_rare: max_opt_f32(row.bonus_rare, manual_values.bonus_rare),
-                    bonus_big: max_opt_f32(row.bonus_big, manual_values.bonus_big),
-                    item_drr: row.item_drr,
-                    exp_fish: row.exp_fish,
-                    exp_life: row.exp_life,
+                    effect_evidence: CalculatorSourceEffectEvidence {
+                        source_rule_values: row.source_rule_values,
+                        source_text_ko: row.source_text_ko,
+                        source_text_values: row.source_text_values,
+                        manual_values,
+                    },
                 })
             })
             .collect::<Vec<_>>();
@@ -1964,13 +2012,10 @@ impl DoltMySqlStore {
                 icon_id: metadata.icon_id,
                 durability: metadata.durability,
                 fish_multiplier,
-                effect_description_ko: None,
-                afr: manual_values.afr,
-                bonus_rare: manual_values.bonus_rare,
-                bonus_big: manual_values.bonus_big,
-                item_drr: manual_values.item_drr,
-                exp_fish: manual_values.exp_fish,
-                exp_life: manual_values.exp_life,
+                effect_evidence: CalculatorSourceEffectEvidence {
+                    manual_values,
+                    ..CalculatorSourceEffectEvidence::default()
+                },
             });
         }
 
@@ -2115,7 +2160,7 @@ mod tests {
         manually_maintained_source_effect_values, manually_maintained_source_fish_multiplier,
         merge_unique_effect_texts, parse_lightstone_set_name, select_consumable_category_metadata,
         select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
-        CalculatorSourceBackedItemRow,
+        CalculatorSourceBackedItemRow, CalculatorSourceEffectEvidence,
     };
 
     #[test]
@@ -2273,13 +2318,7 @@ mod tests {
                 icon_id: None,
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: None,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: CalculatorSourceEffectEvidence::default(),
             },
             CalculatorSourceBackedItemRow {
                 source_key: "item:9359".to_string(),
@@ -2295,13 +2334,7 @@ mod tests {
                 icon_id: None,
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: None,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: CalculatorSourceEffectEvidence::default(),
             },
             CalculatorSourceBackedItemRow {
                 source_key: "lightstone-set:1".to_string(),
@@ -2317,13 +2350,7 @@ mod tests {
                 icon_id: None,
                 durability: None,
                 fish_multiplier: None,
-                effect_description_ko: None,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                item_drr: None,
-                exp_fish: None,
-                exp_life: None,
+                effect_evidence: CalculatorSourceEffectEvidence::default(),
             },
         ];
 
