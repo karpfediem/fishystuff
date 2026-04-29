@@ -74,6 +74,7 @@ push-closure host *closures:
   bash scripts/recipes/push-closure.sh "{{host}}" {{closures}}
 
 # Deploy the selected services for a named deployment.
+# API without Dolt is refused unless explicitly acknowledged with a reason.
 deploy deployment *services:
   bash scripts/recipes/deploy.sh "{{deployment}}" {{services}}
 

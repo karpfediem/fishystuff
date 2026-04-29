@@ -11,6 +11,8 @@ deployment="${1-}"
 require_value "$deployment" "usage: deploy.sh <deployment> [service ...]"
 deployment="$(canonical_deployment_name "$deployment")"
 shift || true
+allow_api_with_active_dolt=false
+allow_api_with_active_dolt_reason=""
 
 case "$deployment" in
   local)
@@ -74,15 +76,60 @@ gcroot_lookup_target_for_service() {
   esac
 }
 
-if (( $# == 0 )); then
+requested_services=()
+while (( $# > 0 )); do
+  case "$1" in
+    --allow-api-with-active-dolt)
+      allow_api_with_active_dolt=true
+      shift
+      ;;
+    --reason)
+      shift
+      require_value "${1-}" "--reason requires a non-empty value"
+      allow_api_with_active_dolt_reason="$1"
+      shift
+      ;;
+    --reason=*)
+      allow_api_with_active_dolt_reason="${1#*=}"
+      require_value "$allow_api_with_active_dolt_reason" "--reason requires a non-empty value"
+      shift
+      ;;
+    --*)
+      echo "unknown deploy flag: $1" >&2
+      exit 2
+      ;;
+    *)
+      requested_services+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if (( ${#requested_services[@]} == 0 )); then
   while IFS= read -r service; do
     [[ -n "$service" ]] || continue
     expand_requested_service "$service"
   done < <(deployment_default_services)
 else
-  for service in "$@"; do
+  for service in "${requested_services[@]}"; do
     expand_requested_service "$service"
   done
+fi
+
+if [[ -n "${selected_services[api]:-}" && -z "${selected_services[dolt]:-}" ]]; then
+  if [[ "$allow_api_with_active_dolt" != "true" || -z "$allow_api_with_active_dolt_reason" ]]; then
+    cat >&2 <<'EOF'
+refusing deploy:
+  API was selected without Dolt, so this would reuse the active remote Dolt state.
+
+resolution:
+  include service "dolt"
+  or pass --allow-api-with-active-dolt --reason "why the active Dolt state is compatible"
+EOF
+    exit 2
+  fi
+
+  printf 'warning: deploying API against active Dolt state; reason: %s\n' "$allow_api_with_active_dolt_reason" >&2
 fi
 
 readarray -t resident_services < <(deployment_resident_bundle_services)
