@@ -175,27 +175,17 @@ export function applyStoredMapPresetState({
   applyPatch = () => {},
 } = {}) {
   const helper = sharedUserPresets();
-  const currentPreset = helper?.current?.(MAP_PRESET_COLLECTION_KEY);
-  if (currentPreset?.payload) {
-    applyPatch(mapPresetRestorePatch(currentPreset.payload));
-    return currentPreset;
-  }
-  const selectedPreset = helper?.selectedPreset?.(MAP_PRESET_COLLECTION_KEY);
-  if (selectedPreset?.payload) {
-    applyPatch(mapPresetRestorePatch(selectedPreset.payload));
-    const signals = readSignals();
-    return signals && typeof signals === "object" ? selectedPreset : null;
-  }
-  const selectedFixedId = helper?.selectedFixedId?.(MAP_PRESET_COLLECTION_KEY);
-  const selectedFixedPreset = selectedFixedId
-    ? helper?.fixedPreset?.(MAP_PRESET_COLLECTION_KEY, selectedFixedId)
-    : null;
-  if (!selectedFixedPreset?.payload) {
+  const storedCollection = helper?.snapshot?.()?.collections?.[MAP_PRESET_COLLECTION_KEY];
+  if (!storedCollection?.activeWorkingCopyId) {
     return null;
   }
-  applyPatch(mapPresetRestorePatch(selectedFixedPreset.payload));
+  const activeWorkingCopy = helper?.activeWorkingCopy?.(MAP_PRESET_COLLECTION_KEY);
+  if (!activeWorkingCopy?.payload) {
+    return null;
+  }
+  applyPatch(mapPresetRestorePatch(activeWorkingCopy.payload));
   const signals = readSignals();
-  return signals && typeof signals === "object" ? selectedFixedPreset : null;
+  return signals && typeof signals === "object" ? activeWorkingCopy : null;
 }
 
 export function trackMapPresetCurrent(readSignals = () => null) {

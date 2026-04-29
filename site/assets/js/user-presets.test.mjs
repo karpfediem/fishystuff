@@ -132,14 +132,13 @@ test("user presets can create, update, rename, delete, and select collection pre
 
   helper.setSelectedPresetId("calculator-layouts", "");
   assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
 
   helper.deletePreset("calculator-layouts", created.id);
-  assert.deepEqual(helper.collection("calculator-layouts"), {
-    selectedPresetId: "",
-    selectedFixedId: "",
-    current: null,
-    presets: [],
-  });
+  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
+  assert.deepEqual(helper.presets("calculator-layouts"), []);
+  assert.equal(helper.current("calculator-layouts"), null);
 });
 
 test("user presets export and import collection payloads while preserving selection", () => {
@@ -252,7 +251,7 @@ test("user presets can sync selected preset to the current payload", () => {
   const unmatched = helper.syncSelectedPresetToCurrent("calculator-layouts");
 
   assert.equal(unmatched, null);
-  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
 });
 
 test("user presets track modified current state from a fixed preset without creating a saved preset", () => {
@@ -351,6 +350,105 @@ test("user presets save modified fixed presets by creating and selecting a saved
   assert.equal(helper.current("calculator-layouts"), null);
 });
 
+test("user presets can discard current state after deleting its saved source", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+      return currentPayload;
+    },
+  });
+  const saved = helper.createPreset("calculator-layouts", {
+    name: "Saved",
+    payload: { row: 4 },
+    select: true,
+  });
+  currentPayload = { row: 9 };
+  helper.trackCurrentPayload("calculator-layouts", {
+    payload: currentPayload,
+    origin: { kind: "preset", id: saved.id },
+  });
+
+  helper.deletePreset("calculator-layouts", saved.id);
+
+  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
+  assert.deepEqual(helper.current("calculator-layouts")?.origin, { kind: "fixed", id: "default" });
+  assert.equal(helper.currentActionState("calculator-layouts", { refresh: true }).canDiscard, true);
+
+  const discarded = helper.discardCurrent("calculator-layouts");
+
+  assert.equal(discarded.kind, "fixed");
+  assert.deepEqual(currentPayload, { row: 0 });
+  assert.equal(helper.current("calculator-layouts"), null);
+});
+
+test("user presets discard clean working copies when deleting their saved source", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
+    },
+  });
+  const saved = helper.createPreset("calculator-layouts", {
+    name: "Saved",
+    payload: { row: 4 },
+    select: true,
+  });
+
+  helper.deletePreset("calculator-layouts", saved.id);
+
+  assert.equal(helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(helper.selectedFixedId("calculator-layouts"), "default");
+  assert.equal(helper.current("calculator-layouts"), null);
+  assert.deepEqual(helper.workingCopies("calculator-layouts"), []);
+});
+
 test("user presets can save untracked live modifications through shared current actions", () => {
   const env = createEnv();
   const helper = env.helper;
@@ -402,7 +500,7 @@ test("user presets can save untracked live modifications through shared current 
   assert.equal(helper.current("calculator-layouts"), null);
 });
 
-test("user presets never overwrite saved presets from a modified fixed default", () => {
+test("user presets never overwrite the fixed default preset", () => {
   const env = createEnv();
   const helper = env.helper;
   let currentPayload = {
@@ -441,7 +539,6 @@ test("user presets never overwrite saved presets from a modified fixed default",
     row: 5,
   };
   helper.trackCurrentPayload("calculator-layouts");
-  helper.setSelectedPresetId("calculator-layouts", savedPreset.id);
 
   assert.throws(
     () => helper.saveCurrentToSelectedPreset("calculator-layouts"),
@@ -483,6 +580,10 @@ test("user presets Datastar actions only expose modifications on the selected so
     capture() {
       return currentPayload;
     },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
+    },
   });
   const savedPreset = helper.createPreset("calculator-layouts", {
     name: "Saved",
@@ -504,11 +605,15 @@ test("user presets Datastar actions only expose modifications on the selected so
   helper.setSelectedPresetId("calculator-layouts", savedPreset.id);
 
   summary = helper.datastarSnapshot().collections["calculator-layouts"];
-  assert.equal(summary.hasCurrent, true);
+  assert.equal(summary.hasCurrent, false);
   assert.equal(summary.canSave, false);
   assert.equal(summary.canDiscard, false);
-  assert.equal(helper.currentActionState("calculator-layouts").canSave, true);
-  assert.deepEqual(helper.current("calculator-layouts").origin, { kind: "fixed", id: "default" });
+  assert.equal(helper.currentActionState("calculator-layouts").canSave, false);
+  assert.equal(helper.current("calculator-layouts"), null);
+  assert.deepEqual(
+    helper.workingCopies("calculator-layouts").map((workingCopy) => workingCopy.origin),
+    [{ kind: "fixed", id: "default" }],
+  );
 });
 
 test("user presets do not emit Datastar updates when tracking unchanged payloads", () => {
@@ -605,6 +710,47 @@ test("user presets do not reassign unchanged bound Datastar snapshots", () => {
     assignmentProps.filter((property) => property === "_user_presets").length,
     assignmentCount,
   );
+});
+
+test("user presets can refresh action state without patching Datastar", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 0,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+  const signals = {};
+  helper.bindDatastar(signals);
+  helper.trackCurrentPayload("calculator-layouts");
+  signals._user_presets = { stale: true };
+
+  const actionState = helper.currentActionState("calculator-layouts", {
+    refresh: true,
+    patchDatastar: false,
+  });
+
+  assert.equal(actionState.canSave, false);
+  assert.deepEqual(signals._user_presets, { stale: true });
+  helper.currentActionState("calculator-layouts", { refresh: true });
+  assert.notDeepEqual(signals._user_presets, { stale: true });
 });
 
 test("user presets use adapter payload equality when matching fixed presets", () => {
@@ -809,7 +955,7 @@ test("user presets can select fixed presets before their page adapter is loaded"
   assert.equal(helper.current("map-presets"), null);
 });
 
-test("user presets keep current state when selecting a different source without applying it", () => {
+test("user presets keep dirty working copies inactive when selecting a different source", () => {
   const env = createEnv();
   const helper = env.helper;
   let currentPayload = {
@@ -823,6 +969,10 @@ test("user presets keep current state when selecting a different source without 
     },
     capture() {
       return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
     },
   });
   const alpha = helper.createPreset("calculator-layouts", {
@@ -846,8 +996,19 @@ test("user presets keep current state when selecting a different source without 
   helper.setSelectedPresetId("calculator-layouts", beta.id);
 
   assert.equal(helper.selectedPresetId("calculator-layouts"), beta.id);
-  assert.deepEqual(helper.current("calculator-layouts")?.origin, { kind: "preset", id: alpha.id });
-  assert.deepEqual(helper.current("calculator-layouts")?.payload, { row: 4 });
+  assert.equal(helper.current("calculator-layouts"), null);
+  assert.deepEqual(helper.activeWorkingCopy("calculator-layouts")?.origin, { kind: "preset", id: beta.id });
+  assert.deepEqual(helper.activeWorkingCopy("calculator-layouts")?.payload, { row: 9 });
+  assert.deepEqual(
+    helper.workingCopies("calculator-layouts").map((workingCopy) => ({
+      origin: workingCopy.origin,
+      payload: workingCopy.payload,
+    })),
+    [{
+      origin: { kind: "preset", id: alpha.id },
+      payload: { row: 4 },
+    }],
+  );
 });
 
 test("user presets clear current state when copying the current payload into a new selected preset", () => {
@@ -916,13 +1077,71 @@ test("user presets discard current state by applying the original source payload
     row: 4,
   };
   helper.trackCurrentPayload("calculator-layouts");
+  const dirtyWorkingCopy = helper.activeWorkingCopy("calculator-layouts");
+  assert.equal(dirtyWorkingCopy.modified, true);
 
   const discarded = helper.discardCurrent("calculator-layouts");
 
-  assert.equal(discarded.action, "matched-preset");
+  assert.equal(discarded.action, "discarded");
   assert.deepEqual(currentPayload, { row: 1 });
   assert.equal(helper.current("calculator-layouts"), null);
   assert.equal(helper.selectedPresetId("calculator-layouts"), preset.id);
+  assert.notEqual(discarded.workingCopy.id, dirtyWorkingCopy.id);
+  assert.deepEqual(discarded.workingCopy.source, { kind: "preset", id: preset.id });
+  assert.equal(discarded.workingCopy.modified, false);
+  assert.deepEqual(helper.workingCopies("calculator-layouts"), []);
+  assert.deepEqual(
+    helper.workingCopies("calculator-layouts", { includeClean: true }).map((workingCopy) => ({
+      id: workingCopy.id,
+      source: workingCopy.source,
+      modified: workingCopy.modified,
+    })),
+    [{
+      id: discarded.workingCopy.id,
+      source: { kind: "preset", id: preset.id },
+      modified: false,
+    }],
+  );
+});
+
+test("user presets clear working copy history when tracking returns to the linked source", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 1,
+  };
+  helper.registerCollectionAdapter("calculator-layouts", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    fixedPresets() {
+      return [{
+        id: "default",
+        name: "Default",
+        payload: {
+          row: 1,
+        },
+      }];
+    },
+    capture() {
+      return currentPayload;
+    },
+  });
+
+  currentPayload = { row: 4 };
+  helper.trackCurrentPayload("calculator-layouts");
+  assert.equal(helper.activeWorkingCopy("calculator-layouts").events.length, 1);
+
+  currentPayload = { row: 1 };
+  helper.trackCurrentPayload("calculator-layouts");
+
+  const active = helper.activeWorkingCopy("calculator-layouts");
+  assert.equal(active.modified, false);
+  assert.deepEqual(active.events, []);
+  assert.deepEqual(active.undoneEvents, []);
+  assert.equal(helper.current("calculator-layouts"), null);
 });
 
 test("user presets can save a selected preset from an explicit save capture", () => {
@@ -1094,7 +1313,6 @@ test("user presets snapshot reloads from local storage changes", () => {
     "fishystuff.user-presets.v1": JSON.stringify({
       collections: {
         "calculator-layouts": {
-          selectedPresetId: "preset_a",
           presets: [
             {
               id: "preset_a",
@@ -1104,6 +1322,14 @@ test("user presets snapshot reloads from local storage changes", () => {
               },
             },
           ],
+          workingCopies: [{
+            id: "work_a",
+            source: { kind: "preset", id: "preset_a" },
+            payload: {
+              custom_layout: [],
+            },
+          }],
+          activeWorkingCopyId: "work_a",
         },
       },
     }),
@@ -1114,7 +1340,6 @@ test("user presets snapshot reloads from local storage changes", () => {
   env.localStorage.setItem("fishystuff.user-presets.v1", JSON.stringify({
     collections: {
       "calculator-layouts": {
-        selectedPresetId: "",
         presets: [
           {
             id: "preset_b",
@@ -1124,6 +1349,14 @@ test("user presets snapshot reloads from local storage changes", () => {
             },
           },
         ],
+        workingCopies: [{
+          id: "work_b",
+          source: { kind: "fixed", id: "default" },
+          payload: {
+            custom_layout: [[["overview"]]],
+          },
+        }],
+        activeWorkingCopyId: "work_b",
       },
     },
   }));
@@ -1133,6 +1366,7 @@ test("user presets snapshot reloads from local storage changes", () => {
   });
 
   assert.equal(env.helper.selectedPresetId("calculator-layouts"), "");
+  assert.equal(env.helper.selectedFixedId("calculator-layouts"), "default");
   assert.equal(env.helper.presets("calculator-layouts")[0]?.name, "Beta");
 });
 
@@ -1158,14 +1392,16 @@ test("user presets patch bound Datastar signals on collection and adapter change
   assert.equal(signals._user_presets.version, 1);
   assert.deepEqual(signals._user_presets.collections["calculator-layouts"], {
     selectedPresetId: "",
-    selectedFixedId: "",
+    selectedFixedId: "default",
+    activeWorkingCopyId: "virtual_work_calculator-layouts_fixed_default",
     hasCurrent: false,
-    currentOrigin: { kind: "none", id: "" },
+    currentOrigin: { kind: "fixed", id: "default" },
     canSave: false,
     canDiscard: false,
     saveAction: "none",
     presetCount: 0,
     fixedPresetCount: 1,
+    workingCopyCount: 1,
   });
 
   const preset = env.helper.createPreset("calculator-layouts", {

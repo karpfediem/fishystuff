@@ -29,15 +29,17 @@ function fakeHelper({
       return collections[collectionKey] || {
         selectedPresetId: "",
         selectedFixedId: "",
-        current: null,
+        workingCopies: [],
+        activeWorkingCopyId: "",
         presets: [],
       };
     },
     fixedPresets(collectionKey) {
       return fixedPresets[collectionKey] || [];
     },
-    current(collectionKey) {
-      return this.collection(collectionKey).current || null;
+    activateWorkingCopy(collectionKey, workingCopyId) {
+      calls.push(["activateWorkingCopy", collectionKey, workingCopyId]);
+      return { id: workingCopyId };
     },
     activatePreset(collectionKey, presetId) {
       calls.push(["activatePreset", collectionKey, presetId]);
@@ -46,14 +48,6 @@ function fakeHelper({
     activateFixedPreset(collectionKey, fixedId) {
       calls.push(["activateFixedPreset", collectionKey, fixedId]);
       return { id: fixedId };
-    },
-    applyPayload(collectionKey, payload) {
-      calls.push(["applyPayload", collectionKey, payload]);
-      return { ...payload, applied: true };
-    },
-    trackCurrentPayload(collectionKey, options) {
-      calls.push(["trackCurrentPayload", collectionKey, options]);
-      return { action: "updated-current", current: options };
     },
   };
 }
@@ -76,7 +70,7 @@ test("normalizePresetQuickSwitchEntry keeps future preset types data-driven", ()
   );
 });
 
-test("buildPresetQuickSwitchRow shows modified current state linked to its origin", () => {
+test("buildPresetQuickSwitchRow shows modified working copy state linked to its origin", () => {
   const helper = fakeHelper({
     adapters: {
       "calculator-layouts": { titleFallback: "Workspace presets" },
@@ -88,10 +82,13 @@ test("buildPresetQuickSwitchRow shows modified current state linked to its origi
       "calculator-layouts": {
         selectedPresetId: "alpha",
         selectedFixedId: "",
-        current: {
-          origin: { kind: "preset", id: "alpha" },
+        activeWorkingCopyId: "work-alpha",
+        workingCopies: [{
+          id: "work-alpha",
+          source: { kind: "preset", id: "alpha" },
           payload: { layout: "modified" },
-        },
+          modified: true,
+        }],
         presets: [{ id: "alpha", name: "Alpha", payload: { layout: "saved" } }],
       },
     },
@@ -108,11 +105,45 @@ test("buildPresetQuickSwitchRow shows modified current state linked to its origi
   assert.deepEqual(
     row.options.map((option) => [option.kind, option.id, option.label]),
     [
-      ["current", "preset:alpha", "Modified: Alpha"],
       ["fixed", "default", "Default"],
       ["preset", "alpha", "Alpha"],
+      ["working", "work-alpha", "Modified: Alpha"],
     ],
   );
+});
+
+test("buildPresetQuickSwitchRow keeps the selected source active over inactive dirty working copies", () => {
+  const helper = fakeHelper({
+    adapters: {
+      "calculator-presets": { titleFallback: "Calculator presets" },
+    },
+    fixedPresets: {
+      "calculator-presets": [{ id: "default", name: "Default", payload: { level: 0 } }],
+    },
+    collections: {
+      "calculator-presets": {
+        selectedPresetId: "",
+        selectedFixedId: "default",
+        activeWorkingCopyId: "work-default",
+        workingCopies: [{
+          id: "work-alpha",
+          source: { kind: "preset", id: "alpha" },
+          payload: { level: 42 },
+          modified: true,
+        }],
+        presets: [{ id: "alpha", name: "Alpha", payload: { level: 20 } }],
+      },
+    },
+  });
+
+  const row = buildPresetQuickSwitchRow(
+    helper,
+    { collectionKey: "calculator-presets", labelFallback: "Calculator" },
+    translate,
+  );
+
+  assert.equal(row.selectedLabel, "Default");
+  assert.equal(row.selectedOptionKey, "fixed:default");
 });
 
 test("buildPresetQuickSwitchRows accepts a future preset collection as another entry", () => {
@@ -142,7 +173,8 @@ test("buildPresetQuickSwitchRow keeps saved selection switchable without a page 
         "map-presets": {
           selectedPresetId: "night",
           selectedFixedId: "",
-          current: null,
+          workingCopies: [],
+          activeWorkingCopyId: "",
           presets: [{ id: "night", name: "Night fishing", payload: { layers: ["night"] } }],
         },
       },
@@ -180,7 +212,7 @@ test("filterPresetQuickSwitchOptions searches preset names and ids", () => {
   ]);
 });
 
-test("applyPresetQuickSwitchOption delegates saved, fixed, and current application consistently", () => {
+test("applyPresetQuickSwitchOption delegates saved, fixed, and working-copy application consistently", () => {
   const calls = [];
   const helper = fakeHelper({
     calls,
@@ -188,10 +220,13 @@ test("applyPresetQuickSwitchOption delegates saved, fixed, and current applicati
       "calculator-layouts": {
         selectedPresetId: "",
         selectedFixedId: "",
-        current: {
-          origin: { kind: "preset", id: "layout-a" },
+        activeWorkingCopyId: "work-layout-a",
+        workingCopies: [{
+          id: "work-layout-a",
+          source: { kind: "preset", id: "layout-a" },
           payload: { layout: "modified" },
-        },
+          modified: true,
+        }],
         presets: [],
       },
     },
@@ -209,8 +244,8 @@ test("applyPresetQuickSwitchOption delegates saved, fixed, and current applicati
   });
   applyPresetQuickSwitchOption(helper, {
     collectionKey: "calculator-layouts",
-    kind: "current",
-    id: "preset:layout-a",
+    kind: "working",
+    id: "work-layout-a",
     source: { kind: "preset", id: "layout-a" },
     payload: { layout: "modified" },
   });
@@ -218,5 +253,6 @@ test("applyPresetQuickSwitchOption delegates saved, fixed, and current applicati
   assert.deepEqual(calls, [
     ["activateFixedPreset", "map-presets", "default"],
     ["activatePreset", "calculator-presets", "alpha"],
+    ["activateWorkingCopy", "calculator-layouts", "work-layout-a"],
   ]);
 });

@@ -62,11 +62,6 @@ function normalizeSource(value) {
   return { kind: "none", id: "" };
 }
 
-function sourceKey(source) {
-  const normalized = normalizeSource(source);
-  return normalized.kind === "none" ? "none" : `${normalized.kind}:${normalized.id}`;
-}
-
 function optionKey(kind, id) {
   const normalizedKind = trimString(kind).toLowerCase();
   const normalizedId = trimString(id);
@@ -205,7 +200,8 @@ function safeCollection(helper, collectionKey) {
     return {
       selectedPresetId: "",
       selectedFixedId: "",
-      current: null,
+      workingCopies: [],
+      activeWorkingCopyId: "",
       presets: [],
     };
   }
@@ -214,13 +210,15 @@ function safeCollection(helper, collectionKey) {
     ? {
         selectedPresetId: trimString(collection.selectedPresetId),
         selectedFixedId: trimString(collection.selectedFixedId),
-        current: isPlainObject(collection.current) ? collection.current : null,
+        workingCopies: Array.isArray(collection.workingCopies) ? collection.workingCopies : [],
+        activeWorkingCopyId: trimString(collection.activeWorkingCopyId),
         presets: Array.isArray(collection.presets) ? collection.presets : [],
       }
     : {
         selectedPresetId: "",
         selectedFixedId: "",
-        current: null,
+        workingCopies: [],
+        activeWorkingCopyId: "",
         presets: [],
       };
 }
@@ -267,7 +265,8 @@ function collectionHasExplicitState(collection) {
   return Boolean(
     collection.selectedPresetId
       || collection.selectedFixedId
-      || collection.current
+      || collection.activeWorkingCopyId
+      || collection.workingCopies.length
       || collection.presets.length,
   );
 }
@@ -326,36 +325,38 @@ export function buildPresetQuickSwitchRow(helper, entry, translate = defaultTran
       };
     })
     .filter(Boolean);
-  const current = isPlainObject(collection.current) ? collection.current : null;
-  const currentOrigin = normalizeSource(current?.origin);
-  const originName = sourceLabel(currentOrigin, fixedOptions, savedOptions);
-  const currentOption = current?.payload
-    ? {
+  const dirtyWorkingCopies = collection.workingCopies
+    .filter((workingCopy) => workingCopy?.modified === true && workingCopy?.payload)
+    .map((workingCopy) => {
+      const source = normalizeSource(workingCopy.source || workingCopy.origin);
+      const sourceName = sourceLabel(source, fixedOptions, savedOptions);
+      return {
         collectionKey: normalizedEntry.collectionKey,
-        key: optionKey("current", sourceKey(currentOrigin)),
-        kind: "current",
-        id: sourceKey(currentOrigin),
-        source: currentOrigin,
+        key: optionKey("work", workingCopy.id),
+        kind: "working",
+        id: workingCopy.id,
+        source,
         label: translate(
           "presets.current.modified_from",
           "Modified: {$name}",
-          { name: originName || translate("presets.current.modified", "Modified current preset") },
+          { name: sourceName || translate("presets.current.modified", "Modified current preset") },
         ),
         status: translate("presets.status.modified", "Modified"),
         statusTone: "modified",
-        payload: current.payload,
-      }
-    : null;
+        payload: workingCopy.payload,
+        active: workingCopy.id === collection.activeWorkingCopyId,
+      };
+    });
   const options = [
-    ...(currentOption ? [currentOption] : []),
     ...fixedOptions,
     ...savedOptions,
+    ...dirtyWorkingCopies,
   ].map((option) => ({
     ...option,
     searchText: `${option.label} ${option.id}`,
   }));
 
-  let selectedOption = currentOption;
+  let selectedOption = dirtyWorkingCopies.find((option) => option.active) || null;
   if (!selectedOption && collection.selectedPresetId) {
     selectedOption = savedOptions.find((option) => option.id === collection.selectedPresetId) || null;
   }
@@ -404,8 +405,11 @@ export function applyPresetQuickSwitchOption(helper, option) {
   if (option.kind === "fixed" && typeof helper.activateFixedPreset === "function") {
     return helper.activateFixedPreset(collectionKey, option.id);
   }
-  if (option.kind === "current") {
-    return helper.current?.(collectionKey) || option.payload || null;
+  if (option.kind === "working" && typeof helper.activateWorkingCopy === "function") {
+    return helper.activateWorkingCopy(collectionKey, option.id);
+  }
+  if (option.kind === "working") {
+    return option.payload || null;
   }
   return null;
 }

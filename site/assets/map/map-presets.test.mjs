@@ -311,7 +311,8 @@ test("map preset restore applies a fixed preset selected before the adapter load
       applyPatch: (patch) => applyMapPageSignalsPatch(signals, patch),
     });
 
-    assert.equal(applied.id, "default");
+    assert.deepEqual(applied.source, { kind: "fixed", id: "default" });
+    assert.equal(applied.modified, false);
     assert.equal(signals._map_ui.search.query, "");
     assert.equal(signals._map_bridged.ui.showPoints, true);
     assert.equal(signals._map_bridged.ui.viewMode, "2d");

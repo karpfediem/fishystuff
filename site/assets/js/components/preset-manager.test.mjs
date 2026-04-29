@@ -28,17 +28,17 @@ test("preset manager ignores unrelated Datastar signal patches", async () => {
   assert.equal(patchTouchesPresetManager({ _preset_manager_ui: { "map-presets": { open: true } } }), true);
 
   const manager = new FishyPresetManager();
-  let syncCount = 0;
-  manager.sync = () => {
-    syncCount += 1;
+  const syncArgs = [];
+  manager.sync = (options = {}) => {
+    syncArgs.push(options);
   };
 
   manager.handleSignalPatch({ detail: { _map_runtime: { selection: {} } } });
   manager.handleSignalPatch({ detail: { _map_bridged: { filters: {} } } });
-  assert.equal(syncCount, 0);
+  assert.equal(syncArgs.length, 0);
 
   manager.handleSignalPatch({ detail: { _user_presets: { version: 1 } } });
-  assert.equal(syncCount, 1);
+  assert.deepEqual(syncArgs, [{ refreshCurrent: false }]);
 });
 
 test("preset manager uses shared preset action state for save and discard buttons", async () => {
@@ -128,9 +128,9 @@ test("preset manager uses shared preset action state for save and discard button
     manager.linkedSavedPresetForCurrent = () => null;
     manager.renderCards = () => {};
 
-    manager.sync();
+    manager.sync({ refreshCurrent: true });
 
-    assert.deepEqual(actionStateOptions, { refresh: true });
+    assert.deepEqual(actionStateOptions, { refresh: true, patchDatastar: false });
     assert.equal(elements.get("save").hidden, false);
     assert.equal(elements.get("save").disabled, false);
     assert.equal(elements.get("discard").hidden, false);
@@ -233,9 +233,9 @@ test("preset manager trigger shows the active modified preset name", async () =>
         source: { kind: "fixed", id: "default" },
       };
       const currentItem = {
-        key: "current:fixed:default",
-        kind: "current",
-        id: "fixed:default",
+        key: "work:work-default",
+        kind: "working",
+        id: "work-default",
         name: "Modified: Default",
         payload: { level: 42 },
         source: { kind: "fixed", id: "default" },
@@ -262,5 +262,153 @@ test("preset manager trigger shows the active modified preset name", async () =>
   } finally {
     globalThis.window = previousWindow;
     globalThis.HTMLInputElement = previousHTMLInputElement;
+  }
+});
+
+test("preset manager selected card follows the active source after save", async () => {
+  const { FishyPresetManager } = await loadModule();
+  const previousWindow = globalThis.window;
+  globalThis.window = {
+    __fishystuffUserPresets: {
+      capturePayload() {
+        return { row: 4 };
+      },
+    },
+  };
+
+  try {
+    const manager = new FishyPresetManager();
+    manager.dataset = {
+      presetCollection: "calculator-layouts",
+    };
+    manager.adapter = () => ({
+      normalizePayload(payload) {
+        return { row: Number.parseInt(payload?.row ?? 0, 10) || 0 };
+      },
+    });
+    manager.selectedCardKey = "fixed:default";
+    const items = [
+      {
+        key: "fixed:default",
+        kind: "fixed",
+        id: "default",
+        payload: { row: 0 },
+      },
+      {
+        key: "preset:preset_1",
+        kind: "preset",
+        id: "preset_1",
+        payload: { row: 4 },
+      },
+    ];
+
+    const changed = manager.ensureSelectedCard(items, "preset_1", "");
+
+    assert.equal(changed, true);
+    assert.equal(manager.selectedCardKey, "preset:preset_1");
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
+test("preset manager applies default selection even when current modifications exist", async () => {
+  const { FishyPresetManager } = await loadModule();
+  const previousWindow = globalThis.window;
+  let activatedFixed = null;
+  let closed = false;
+  globalThis.window = {
+    __fishystuffUserPresets: {
+      current() {
+        return {
+          origin: { kind: "preset", id: "preset_1" },
+          payload: { row: 4 },
+        };
+      },
+      activateFixedPreset(collectionKey, fixedId) {
+        activatedFixed = { collectionKey, fixedId };
+      },
+    },
+  };
+
+  try {
+    const manager = new FishyPresetManager();
+    manager.dataset = {
+      presetCollection: "calculator-layouts",
+    };
+    manager.cardItems = () => ({
+      items: [{
+        key: "fixed:default",
+        kind: "fixed",
+        id: "default",
+        payload: { row: 0 },
+        source: { kind: "fixed", id: "default" },
+      }],
+    });
+    manager.closeDialogBeforeApply = () => {
+      closed = true;
+    };
+    manager.sync = () => {};
+
+    manager.applyCardSelection("fixed:default");
+
+    assert.equal(closed, true);
+    assert.deepEqual(activatedFixed, {
+      collectionKey: "calculator-layouts",
+      fixedId: "default",
+    });
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
+test("preset manager card events resolve delegated child targets", async () => {
+  const { FishyPresetManager } = await loadModule();
+  const previousWindow = globalThis.window;
+  const previousHTMLElement = globalThis.HTMLElement;
+  let selectedCardKey = "";
+
+  class FakeElement {
+    constructor(dataset = {}) {
+      this.dataset = {};
+      Object.assign(this.dataset, dataset);
+      this.parent = null;
+    }
+
+    closest(selector) {
+      if (selector !== "[data-role='preset-card']") {
+        return null;
+      }
+      let current = this;
+      while (current) {
+        if (current.dataset.role === "preset-card") {
+          return current;
+        }
+        current = current.parent;
+      }
+      return null;
+    }
+  }
+
+  try {
+    globalThis.HTMLElement = FakeElement;
+    globalThis.window = {};
+    const manager = new FishyPresetManager();
+    manager.commitSelectedTitleChange = () => {};
+    manager.applyCardSelection = (cardKey) => {
+      selectedCardKey = cardKey;
+    };
+    const card = new FakeElement({
+      role: "preset-card",
+      cardKey: "fixed:default",
+    });
+    const child = new FakeElement();
+    child.parent = card;
+
+    manager.handleCardClick(child);
+
+    assert.equal(selectedCardKey, "fixed:default");
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.HTMLElement = previousHTMLElement;
   }
 });
