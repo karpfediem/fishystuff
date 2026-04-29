@@ -15,6 +15,18 @@ RECIPE_DEFAULT_DEPLOYMENT_SERVICES=(
   jaeger
   grafana
 )
+RECIPE_DEFAULT_MUTATING_DEPLOY_SERVICES=(
+  api
+  dolt
+  edge
+  site
+  loki
+  otel-collector
+  vector
+  prometheus
+  jaeger
+  grafana
+)
 
 if [[ -n "${FISHYSTUFF_RECIPE_ENV_FILE:-}" ]]; then
   if [[ ! -f "$FISHYSTUFF_RECIPE_ENV_FILE" ]]; then
@@ -295,7 +307,7 @@ deployment_resident_hostname() {
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "$(deployment_env_or_default "$deployment" "resident_hostname" "site-nbg1-beta")" ;;
-    production) printf '%s' "$(deployment_env_value "$deployment" "resident_hostname")" ;;
+    production) printf '%s' "$(deployment_env_or_default "$deployment" "resident_hostname" "site-nbg1-prod")" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -308,6 +320,41 @@ deployment_resident_target() {
     production) printf '%s' "$(deployment_env_value "$deployment" "resident_target")" ;;
     local) printf '%s' "" ;;
   esac
+}
+
+hetzner_server_public_ipv4() {
+  local server_name="$1"
+  local ipv4=""
+
+  require_value "${HETZNER_API_TOKEN:-}" "HETZNER_API_TOKEN is required to discover production host $server_name"
+  ipv4="$(
+    curl -fsS \
+      -H "Authorization: Bearer ${HETZNER_API_TOKEN}" \
+      -H "Content-Type: application/json" \
+      "https://api.hetzner.cloud/v1/servers?name=${server_name}" \
+      | jq -r '.servers[0].public_net.ipv4.ip // empty'
+  )"
+  require_value "$ipv4" "could not discover public IPv4 for Hetzner server $server_name"
+  printf '%s' "$ipv4"
+}
+
+resolve_deployment_resident_target() {
+  local deployment
+  local resident_target
+  local resident_host
+  local resident_ipv4
+
+  deployment="$(canonical_deployment_name "$1")"
+  resident_target="$(deployment_resident_target "$deployment")"
+  if [[ -n "$resident_target" || "$deployment" != "production" ]]; then
+    printf '%s' "$resident_target"
+    return
+  fi
+
+  resident_host="$(deployment_resident_hostname "$deployment")"
+  require_value "$resident_host" "deployment $deployment does not define a resident hostname"
+  resident_ipv4="$(hetzner_server_public_ipv4 "$resident_host")"
+  printf 'root@%s' "$resident_ipv4"
 }
 
 deployment_telemetry_target() {
@@ -341,7 +388,7 @@ deployment_control_target() {
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "mgmt-root")" ;;
-    production) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "$(deployment_resident_target "$deployment")")" ;;
+    production) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "mgmt-root")" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -361,7 +408,7 @@ deployment_prod_hostname() {
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "$(deployment_env_or_default "$deployment" "prod_hostname" "site-nbg1-prod")" ;;
-    production) printf '%s' "$(deployment_env_value "$deployment" "prod_hostname")" ;;
+    production) printf '%s' "$(deployment_env_or_default "$deployment" "prod_hostname" "site-nbg1-prod")" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -418,7 +465,8 @@ deployment_secretspec_profile() {
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "beta-deploy" ;;
-    production | local) printf '%s' "" ;;
+    production) operator_secretspec_profile ;;
+    local) printf '%s' "" ;;
   esac
 }
 
@@ -485,8 +533,25 @@ deployment_default_services() {
   printf '%s\n' "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"
 }
 
+deployment_default_mutating_services() {
+  printf '%s\n' "${RECIPE_DEFAULT_MUTATING_DEPLOY_SERVICES[@]}"
+}
+
 deployment_resident_bundle_services() {
   printf '%s\n' "${RECIPE_RESIDENT_BUNDLE_SERVICES[@]}"
+}
+
+extract_ipv4_from_ssh_target() {
+  local ssh_target="$1"
+  local host_part=""
+
+  host_part="${ssh_target#ssh://}"
+  host_part="${host_part#*@}"
+  host_part="${host_part%%/*}"
+  host_part="${host_part%%:*}"
+  if [[ "$host_part" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    printf '%s' "$host_part"
+  fi
 }
 
 deploy_service_gcroot_path() {

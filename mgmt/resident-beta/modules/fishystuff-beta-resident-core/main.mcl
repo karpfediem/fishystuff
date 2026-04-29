@@ -119,6 +119,8 @@ class api_db_host($st) {
 	$api_env_file = $api_runtime_overlay->target_path
 	$dolt_refresh_vardir = local.vardir("fishystuff-dolt-refresh/")
 	$dolt_refresh_stamp_path str = fmt.printf("%sdeployment.marker", $dolt_refresh_vardir)
+	$api_restart_vardir = local.vardir("fishystuff-api-restart/")
+	$api_restart_stamp_path str = fmt.printf("%sdeployment.marker", $api_restart_vardir)
 	$api_runtime_env = golang.template(deploy.readfile("/files/api-runtime.env.tmpl"), struct {
 		dolt_port => $dolt_port,
 		dolt_database_name => $dolt_database_name,
@@ -238,6 +240,18 @@ class api_db_host($st) {
 		}
 	}
 
+	exec "fishystuff-api-restart" {
+		cmd => "/usr/bin/systemctl",
+		args => [
+			"restart",
+			fmt.printf("%s.service", $api_service_name),
+		],
+		donecmd => fmt.printf("/usr/bin/printf '%%s\\n' '%s' > '%s'", $deployment_marker, $api_restart_stamp_path),
+		doneshell => "/usr/bin/bash",
+		ifcmd => fmt.printf("/usr/bin/test \"$(/usr/bin/cat '%s' 2>/dev/null || true)\" != '%s'", $api_restart_stamp_path, $deployment_marker),
+		ifshell => "/usr/bin/bash",
+	}
+
 	include fishystuff_bundle_systemd.unit(struct {
 		bundle_path => $api_bundle_path,
 		gcroot_path => $api_service->gcroot_path || "",
@@ -324,20 +338,26 @@ class api_db_host($st) {
 	File["${api_env_file}"] -> Svc["${dolt_service_name}"]
 	Svc["fishystuff-vector"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
+	Svc["${api_service_name}"] -> Exec["fishystuff-api-restart"]
+	File["${api_env_file}"] -> Exec["fishystuff-api-restart"]
 	File["/run/fishystuff/"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${api_service_name}"] -> File["/run/fishystuff/deployment-marker"]
+	Exec["fishystuff-api-restart"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${dolt_service_name}"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-vector"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-api-ready"]
+	Exec["fishystuff-api-restart"] -> Exec["fishystuff-api-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-api-ready"]
 	Exec["fishystuff-api-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-api-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-edge-api-ready"]
+	Exec["fishystuff-api-restart"] -> Exec["fishystuff-edge-api-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-api-ready"]
 	Exec["fishystuff-edge-api-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-calculator-ready"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-edge-calculator-ready"]
+	Exec["fishystuff-api-restart"] -> Exec["fishystuff-edge-calculator-ready"]
 	Svc["${dolt_service_name}"] -> Exec["fishystuff-edge-calculator-ready"]
 	Exec["fishystuff-edge-calculator-ready"] -> File["/run/fishystuff/deployment-marker"]
 	Svc["fishystuff-edge"] -> Exec["fishystuff-edge-site-ready"]
@@ -361,6 +381,7 @@ class api_db_host($st) {
 	if $dolt_refresh_enabled {
 		Svc["${dolt_service_name}"] -> Exec["fishystuff-dolt-refresh"]
 		File["${api_env_file}"] -> Exec["fishystuff-dolt-refresh"]
+		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-api-restart"]
 		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-api-ready"]
 		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-api-ready"]
 		Exec["fishystuff-dolt-refresh"] -> Exec["fishystuff-edge-calculator-ready"]

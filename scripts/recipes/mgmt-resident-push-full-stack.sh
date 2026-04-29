@@ -218,6 +218,7 @@ build_dolt_repo_snapshot() {
     }' > "$stage_root/fishystuff-dolt-snapshot.json"
 
   snapshot_store_path="$(nix-store --add "$stage_root")"
+  chmod -R u+w "$stage_parent" 2>/dev/null || true
   rm -rf "$stage_parent"
   printf '%s' "$snapshot_store_path"
 }
@@ -262,19 +263,6 @@ case "$dolt_refresh_enabled" in
     exit 2
     ;;
 esac
-
-extract_ipv4_from_ssh_target() {
-  local ssh_target="$1"
-  local host_part=""
-
-  host_part="${ssh_target#ssh://}"
-  host_part="${host_part#*@}"
-  host_part="${host_part%%/*}"
-  host_part="${host_part%%:*}"
-  if [[ "$host_part" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    printf '%s' "$host_part"
-  fi
-}
 
 site_public_ipv4_hint="$(extract_ipv4_from_ssh_target "$target")"
 telemetry_public_ipv4_hint=""
@@ -407,8 +395,20 @@ if service_selected edge; then
     esac
   else
     case "$deployment_environment" in
-      beta) site_content_package="site-content-beta" ;;
-      production) site_content_package="site-content" ;;
+      beta)
+        if [[ -n "$cdn_content_override" && "$cdn_content_override" == /nix/store/* ]]; then
+          site_content_package="site-content-beta-stable-map-runtime"
+        else
+          site_content_package="site-content-beta"
+        fi
+        ;;
+      production)
+        if [[ -n "$cdn_content_override" && "$cdn_content_override" == /nix/store/* ]]; then
+          site_content_package="site-content-stable-map-runtime"
+        else
+          site_content_package="site-content"
+        fi
+        ;;
       *)
         echo "site_content must be provided explicitly for deployment_environment=$deployment_environment" >&2
         exit 2
@@ -494,6 +494,7 @@ fi
 
 site_push_paths=()
 telemetry_push_paths=()
+site_remote_required_paths=()
 declare -A site_push_seen=()
 declare -A telemetry_push_seen=()
 
@@ -546,6 +547,24 @@ add_content_push_path() {
   fi
   add_push_path "$array_name" "$seen_name" "$path_to_push"
 }
+
+add_site_remote_required_path() {
+  local base_path="$1"
+  local relative_path="$2"
+
+  [[ -n "$base_path" && -n "$relative_path" ]] || return 0
+  site_remote_required_paths+=("$base_path" "$relative_path")
+}
+
+if [[ -n "$cdn_content" && -n "$site_content" && -f "$site_content/runtime-config.js" ]] && content_is_remote_only "$cdn_content"; then
+  required_map_asset_cache_key="$(
+    node ./tools/scripts/print_runtime_map_asset_cache_key.mjs --allow-empty "$site_content/runtime-config.js"
+  )"
+  if [[ -n "$required_map_asset_cache_key" ]]; then
+    add_site_remote_required_path "$cdn_content" "map/runtime-manifest.${required_map_asset_cache_key}.json"
+  fi
+  add_site_remote_required_path "$cdn_content" "map/runtime-manifest.json"
+fi
 
 add_bundle_push_path site_push_paths site_push_seen "$api_bundle"
 add_bundle_push_path site_push_paths site_push_seen "$dolt_bundle"
@@ -773,7 +792,8 @@ bash -lc '
   deploy_target="${7:?}"
   site_push_count="${8:?}"
   telemetry_push_count="${9:?}"
-  shift 9
+  site_remote_required_pair_count="${10:?}"
+  shift 10
   site_push_paths=()
   for (( idx = 0; idx < site_push_count; idx++ )); do
     site_push_paths+=("${1:?missing site push path}")
@@ -784,8 +804,66 @@ bash -lc '
     telemetry_push_paths+=("${1:?missing telemetry push path}")
     shift
   done
+  site_remote_required_paths=()
+  for (( idx = 0; idx < site_remote_required_pair_count; idx++ )); do
+    site_remote_required_paths+=("${1:?missing remote base path}" "${2:?missing remote relative path}")
+    shift 2
+  done
   tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-mgmt-ssh.XXXXXX)"
   trap '\''rm -f "$tmp_key"'\'' EXIT
+
+  check_remote_required_paths() {
+    local ssh_target="${1:?missing ssh target}"
+    shift
+    local base_path=""
+    local relative_path=""
+    local remote_output=""
+
+    if (( $# == 0 )); then
+      return 0
+    fi
+
+    echo "[resident-push] checking reused remote content on $ssh_target"
+    while (( $# > 0 )); do
+      base_path="${1:?missing remote base path}"
+      relative_path="${2:?missing remote relative path}"
+      shift 2
+      remote_output="$(
+        ssh \
+          -i "$tmp_key" \
+          -o IdentitiesOnly=yes \
+          -o StrictHostKeyChecking=accept-new \
+          "$ssh_target" \
+          /bin/bash -s -- "$base_path" "$relative_path" <<'\''EOF'\''
+set -euo pipefail
+base_path="${1:?missing base path}"
+relative_path="${2:?missing relative path}"
+case "$base_path" in
+  /nix/store/*) ;;
+  *)
+    echo "remote content base is not a Nix store path: $base_path" >&2
+    exit 2
+    ;;
+esac
+case "$relative_path" in
+  /* | *..* )
+    echo "remote content relative path is not safe: $relative_path" >&2
+    exit 2
+    ;;
+esac
+required_path="$base_path/$relative_path"
+if [[ ! -e "$required_path" ]]; then
+  echo "$required_path"
+  exit 1
+fi
+EOF
+      )" || {
+        echo "reused remote CDN content is missing required site asset: ${remote_output:-$base_path/$relative_path}" >&2
+        echo "include service \"cdn\" to publish matching CDN content" >&2
+        exit 1
+      }
+    done
+  }
 
   push_paths_to_target() {
     local ssh_target="${1:?missing ssh target}"
@@ -807,6 +885,7 @@ bash -lc '
         "$@"
   }
 
+  check_remote_required_paths "$site_ssh_target" "${site_remote_required_paths[@]}"
   push_paths_to_target "$site_ssh_target" "${site_push_paths[@]}"
   if [[ -n "$telemetry_ssh_target" && "$telemetry_ssh_target" != "$site_ssh_target" ]]; then
     push_paths_to_target "$telemetry_ssh_target" "${telemetry_push_paths[@]}"
@@ -821,4 +900,4 @@ bash -lc '
       "$deploy_timeout" \
       "$remote_mgmt_bin"
 ' \
--- "$RECIPE_REPO_ROOT" "$target" "$telemetry_target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$deploy_target" "${#site_push_paths[@]}" "${#telemetry_push_paths[@]}" "${site_push_paths[@]}" "${telemetry_push_paths[@]}"
+-- "$RECIPE_REPO_ROOT" "$target" "$telemetry_target" "$deploy_dir" "$timeout" "$remote_mgmt_bin" "$deploy_target" "${#site_push_paths[@]}" "${#telemetry_push_paths[@]}" "$((${#site_remote_required_paths[@]} / 2))" "${site_push_paths[@]}" "${telemetry_push_paths[@]}" "${site_remote_required_paths[@]}"

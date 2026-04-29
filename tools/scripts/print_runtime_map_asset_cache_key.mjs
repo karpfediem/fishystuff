@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 function usage() {
-  console.error("usage: print_runtime_map_asset_cache_key.mjs <runtime-config.js>");
+  console.error("usage: print_runtime_map_asset_cache_key.mjs [--allow-empty] <runtime-config.js>");
 }
 
 function extractPayload(text) {
@@ -16,7 +16,13 @@ function extractPayload(text) {
 }
 
 async function main() {
-  const [inputPath] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const allowEmptyIndex = args.indexOf("--allow-empty");
+  const allowEmpty = allowEmptyIndex !== -1;
+  if (allowEmpty) {
+    args.splice(allowEmptyIndex, 1);
+  }
+  const [inputPath] = args;
   if (!inputPath) {
     usage();
     process.exitCode = 2;
@@ -28,6 +34,9 @@ async function main() {
   const payload = extractPayload(text);
   const cacheKey = String(payload.mapAssetCacheKey ?? "").trim();
   if (!cacheKey) {
+    if (allowEmpty) {
+      return;
+    }
     throw new Error("mapAssetCacheKey is empty");
   }
   process.stdout.write(`${cacheKey}\n`);

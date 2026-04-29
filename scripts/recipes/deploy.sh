@@ -13,6 +13,7 @@ deployment="$(canonical_deployment_name "$deployment")"
 shift || true
 allow_api_with_active_dolt=false
 allow_api_with_active_dolt_reason=""
+used_default_services=false
 
 case "$deployment" in
   local)
@@ -33,7 +34,6 @@ prod_host="$(deployment_prod_hostname "$deployment")"
 tls_challenge="$(deployment_tls_challenge "$deployment")"
 tls_dns_provider="$(deployment_tls_dns_provider "$deployment")"
 tls_dns_zone="$(deployment_tls_dns_zone "$deployment")"
-require_value "$resident_target" "deployment $deployment does not define a resident target"
 require_value "$control_target" "deployment $deployment does not define a control target"
 require_value "$resident_host" "deployment $deployment does not define a resident hostname"
 
@@ -76,6 +76,73 @@ gcroot_lookup_target_for_service() {
   esac
 }
 
+remote_exec_with_operator_key() {
+  local ssh_target="$1"
+  shift
+  local tmp_key=""
+
+  tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-deploy-ssh.XXXXXX)"
+  trap 'rm -f "$tmp_key"' RETURN
+  ssh \
+    -i "$tmp_key" \
+    -o IdentitiesOnly=yes \
+    -o StrictHostKeyChecking=accept-new \
+    "$ssh_target" \
+    "$@"
+  rm -f "$tmp_key"
+  trap - RETURN
+}
+
+production_origin_post_apply() {
+  local restart_api="false"
+  local refresh_dolt="false"
+  local restart_edge="false"
+
+  if [[ -n "${selected_services[api]:-}" ]]; then
+    restart_api="true"
+  fi
+  if [[ -n "${selected_services[dolt]:-}" ]]; then
+    refresh_dolt="true"
+  fi
+  if [[ -n "${selected_services[edge]:-}" || -n "${selected_services[site]:-}" || -n "${selected_services[cdn]:-}" ]]; then
+    restart_edge="true"
+  fi
+
+  remote_exec_with_operator_key "$resident_target" /bin/bash -s -- "$restart_api" "$refresh_dolt" "$restart_edge" <<'EOF'
+set -euo pipefail
+restart_api="${1:?missing api restart flag}"
+refresh_dolt="${2:?missing dolt refresh flag}"
+restart_edge="${3:?missing edge restart flag}"
+
+if [[ "$refresh_dolt" == "true" ]]; then
+  systemctl reload fishystuff-dolt.service || systemctl restart fishystuff-dolt.service
+  systemctl is-active --quiet fishystuff-dolt.service
+fi
+
+if [[ "$restart_api" == "true" ]]; then
+  systemctl restart fishystuff-api.service
+  systemctl is-active --quiet fishystuff-api.service
+fi
+
+if [[ "$restart_edge" == "true" ]]; then
+  systemctl restart fishystuff-edge.service
+  systemctl is-active --quiet fishystuff-edge.service
+fi
+EOF
+}
+
+write_remote_deployment_marker() {
+  local marker="$1"
+  require_value "$marker" "cannot write empty deployment marker"
+  remote_exec_with_operator_key "$resident_target" /bin/bash -s -- "$marker" <<'EOF'
+set -euo pipefail
+marker="${1:?missing deployment marker}"
+install -d -m 0755 /run/fishystuff
+printf '%s\n' "$marker" > /run/fishystuff/deployment-marker
+chmod 0644 /run/fishystuff/deployment-marker
+EOF
+}
+
 requested_services=()
 while (( $# > 0 )); do
   case "$1" in
@@ -105,11 +172,20 @@ while (( $# > 0 )); do
   esac
 done
 
+discovered_resident_ipv4=""
+if [[ "$deployment" == "production" && -z "$resident_target" ]]; then
+  discovered_resident_ipv4="$(hetzner_server_public_ipv4 "$resident_host")"
+  resident_target="root@$discovered_resident_ipv4"
+  printf '[deploy] discovered production resident target for %s: %s\n' "$resident_host" "$resident_target" >&2
+fi
+require_value "$resident_target" "deployment $deployment does not define a resident target"
+
 if (( ${#requested_services[@]} == 0 )); then
+  used_default_services=true
   while IFS= read -r service; do
     [[ -n "$service" ]] || continue
-    expand_requested_service "$service"
-  done < <(deployment_default_services)
+    add_selected_service "$service"
+  done < <(deployment_default_mutating_services "$deployment")
 else
   for service in "${requested_services[@]}"; do
     expand_requested_service "$service"
@@ -196,12 +272,30 @@ done
 if [[ -z "${selected_services[dolt]:-}" ]]; then
   backend_args+=("dolt_refresh_enabled=false")
   backend_args+=("dolt_repo_snapshot_mode=off")
+elif [[ "$used_default_services" == "true" && -z "${FISHYSTUFF_DOLT_REPO_SNAPSHOT_MODE:-}" ]]; then
+  backend_args+=("dolt_repo_snapshot_mode=off")
 fi
 
 FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST="$expected_manifest" \
   bash "${SCRIPT_DIR}/mgmt-resident-push-full-stack.sh" "${backend_args[@]}"
 
 if [[ "${FISHYSTUFF_DEPLOY_SMOKE:-true}" == "true" ]]; then
-  bash "${SCRIPT_DIR}/wait-deployment.sh" "$deployment" "$expected_manifest"
-  bash "${SCRIPT_DIR}/smoke.sh" "$deployment"
+  if [[ "$deployment" == "production" && "${FISHYSTUFF_DEPLOY_PUBLIC_SMOKE:-false}" != "true" ]]; then
+    expected_marker="$(jq -r '.deployment_marker // empty' "$expected_manifest")"
+    production_origin_post_apply
+    origin_ipv4="${FISHYSTUFF_ORIGIN_SMOKE_IPV4:-${FISHYSTUFF_SMOKE_ORIGIN_IPV4:-}}"
+    if [[ -z "$origin_ipv4" ]]; then
+      origin_ipv4="$discovered_resident_ipv4"
+    fi
+    if [[ -z "$origin_ipv4" ]]; then
+      origin_ipv4="$(extract_ipv4_from_ssh_target "$resident_target")"
+    fi
+    require_value "$origin_ipv4" "production deploy uses origin smoke by default; set FISHYSTUFF_ORIGIN_SMOKE_IPV4 or FISHYSTUFF_DEPLOY_PUBLIC_SMOKE=true"
+    bash "${SCRIPT_DIR}/origin-smoke.sh" "$deployment" "$origin_ipv4"
+    write_remote_deployment_marker "$expected_marker"
+    bash "${SCRIPT_DIR}/wait-deployment.sh" "$deployment" "$expected_manifest"
+  else
+    bash "${SCRIPT_DIR}/wait-deployment.sh" "$deployment" "$expected_manifest"
+    bash "${SCRIPT_DIR}/smoke.sh" "$deployment"
+  fi
 fi

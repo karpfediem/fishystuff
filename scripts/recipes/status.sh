@@ -39,7 +39,7 @@ else
   done
 fi
 
-resident_target="$(deployment_resident_target "$deployment")"
+resident_target="$(resolve_deployment_resident_target "$deployment")"
 telemetry_target="$(deployment_telemetry_target "$deployment")"
 resident_host="$(deployment_resident_hostname "$deployment")"
 

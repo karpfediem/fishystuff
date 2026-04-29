@@ -24,7 +24,7 @@ fi
 marker="$(jq -r '.deployment_marker // empty' "$manifest_path")"
 require_value "$marker" "deployment manifest does not include deployment_marker"
 
-resident_target="$(deployment_resident_target "$deployment")"
+resident_target="$(resolve_deployment_resident_target "$deployment")"
 telemetry_target="$(deployment_telemetry_target "$deployment")"
 require_value "$resident_target" "deployment $deployment does not define a resident target"
 

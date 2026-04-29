@@ -152,7 +152,7 @@
             inherit cdnBaseContent cdnMinimapVisual;
           };
           siteContentFor =
-            deploymentEnvironment:
+            deploymentEnvironment: mapAssetCacheKey:
             pkgs.callPackage ./nix/packages/site-content.nix {
               inherit
                 deploymentEnvironment
@@ -163,14 +163,16 @@
                 ;
               frontendSourceRef = "";
               zine = zineCli;
-              mapAssetCacheKey = siteMapRuntimeCacheKey;
+              inherit mapAssetCacheKey;
               publicSiteBaseUrl = deploymentBaseUrl "" deploymentEnvironment;
               publicApiBaseUrl = deploymentBaseUrl "api" deploymentEnvironment;
               publicCdnBaseUrl = deploymentBaseUrl "cdn" deploymentEnvironment;
               publicTelemetryBaseUrl = deploymentBaseUrl "telemetry" deploymentEnvironment;
             };
-          siteContent = siteContentFor "production";
-          siteContentBeta = siteContentFor defaultDeploymentEnvironment;
+          siteContent = siteContentFor "production" siteMapRuntimeCacheKey;
+          siteContentBeta = siteContentFor defaultDeploymentEnvironment siteMapRuntimeCacheKey;
+          siteContentStableMapRuntime = siteContentFor "production" "";
+          siteContentBetaStableMapRuntime = siteContentFor defaultDeploymentEnvironment "";
           apiServiceBaseConfig = pkgs.callPackage ./nix/packages/api-service-base-config.nix { };
           serviceModules = import ./nix/services {
             inherit pkgs;
@@ -303,6 +305,8 @@
             prometheus-service-bundle = prometheusServiceBundle;
             site-content = siteContent;
             site-content-beta = siteContentBeta;
+            site-content-beta-stable-map-runtime = siteContentBetaStableMapRuntime;
+            site-content-stable-map-runtime = siteContentStableMapRuntime;
             vector-agent-service-bundle = vectorAgentServiceBundle;
             vector-agent-service-bundle-production = vectorAgentServiceBundleProduction;
             vector-service-bundle = vectorServiceBundle;
