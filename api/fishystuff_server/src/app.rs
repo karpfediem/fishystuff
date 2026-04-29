@@ -303,6 +303,7 @@ mod tests {
             defaults: Default::default(),
             status_cfg: ZoneStatusConfig::default(),
             cache_zone_stats_max: 16,
+            cache_zone_loot_summary_max: 16,
             cache_effort_max: 4,
             cache_log: false,
             request_timeout_secs: 5,

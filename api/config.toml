@@ -32,5 +32,6 @@ drift_min_ess = 10.0
 
 [server.cache]
 zone_stats_max_entries = 256
+zone_loot_summary_max_entries = 256
 effort_grid_max_entries = 16
 log = false

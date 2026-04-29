@@ -29,6 +29,7 @@ impl AppState {
         );
         let cache = CacheStore::new(
             config.cache_zone_stats_max,
+            config.cache_zone_loot_summary_max,
             config.cache_effort_max,
             config.cache_log,
         );
@@ -43,6 +44,7 @@ impl AppState {
     pub fn for_tests(config: AppConfig, store: Arc<dyn Store>) -> SharedState {
         let cache = CacheStore::new(
             config.cache_zone_stats_max,
+            config.cache_zone_loot_summary_max,
             config.cache_effort_max,
             config.cache_log,
         );
@@ -56,13 +58,24 @@ impl AppState {
 
 pub struct CacheStore {
     pub zone_stats: Mutex<BoundedCache>,
+    pub zone_loot_summary: Mutex<BoundedCache>,
     pub effort_grid: Mutex<BoundedCache>,
 }
 
 impl CacheStore {
-    fn new(zone_stats_max: usize, effort_max: usize, log: bool) -> Self {
+    fn new(
+        zone_stats_max: usize,
+        zone_loot_summary_max: usize,
+        effort_max: usize,
+        log: bool,
+    ) -> Self {
         Self {
             zone_stats: Mutex::new(BoundedCache::new("zone_stats", zone_stats_max, log)),
+            zone_loot_summary: Mutex::new(BoundedCache::new(
+                "zone_loot_summary",
+                zone_loot_summary_max,
+                log,
+            )),
             effort_grid: Mutex::new(BoundedCache::new("effort_grid", effort_max, log)),
         }
     }

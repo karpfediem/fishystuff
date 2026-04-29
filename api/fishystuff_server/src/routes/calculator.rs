@@ -21,7 +21,7 @@ use fishystuff_api::models::calculator::{
     CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
     CalculatorPetEntry, CalculatorPetOptionEntry, CalculatorPetSignals, CalculatorPetTierEntry,
     CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry, CalculatorSignals,
-    CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
+    CalculatorUserOverlaySignals, CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
 };
 use fishystuff_api::models::zone_loot_summary::{
     ZoneLootSummaryConditionOption, ZoneLootSummaryGroupRow, ZoneLootSummaryRequest,
@@ -779,6 +779,20 @@ pub async fn post_zone_loot_summary(
 
     let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
+    let cache_key = zone_loot_summary_cache_key(&lang, locale, query.r#ref.as_deref(), &payload);
+    if let Some(cache_key) = cache_key.as_deref() {
+        if let Ok(mut cache) = state.cache.zone_loot_summary.lock() {
+            if let Some(cached) = cache.get(cache_key) {
+                let parsed: ZoneLootSummaryResponse =
+                    serde_json::from_str(&cached).map_err(|err| {
+                        AppError::internal(format!("zone_loot_summary cache decode failed: {err}"))
+                            .with_request_id(request_id.0.clone())
+                    })?;
+                return Ok(Json(parsed));
+            }
+        }
+    }
+
     let summary = load_zone_loot_summary_data(
         &state,
         lang,
@@ -788,7 +802,38 @@ pub async fn post_zone_loot_summary(
         payload,
     )
     .await?;
+    if let Some(cache_key) = cache_key {
+        if let Ok(encoded) = serde_json::to_string(&summary) {
+            if let Ok(mut cache) = state.cache.zone_loot_summary.lock() {
+                cache.insert(cache_key, encoded);
+            }
+        }
+    }
     Ok(Json(summary))
+}
+
+fn zone_loot_summary_cache_key(
+    api_lang: &DataLang,
+    locale: CalculatorLocale,
+    ref_id: Option<&str>,
+    request: &ZoneLootSummaryRequest,
+) -> Option<String> {
+    if request.overlay != CalculatorUserOverlaySignals::default() {
+        return None;
+    }
+    let ref_key = ref_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("head");
+    let rgb_key = request.rgb.0.trim();
+    Some(format!(
+        "v1:{}:{}:{}:{}:normalized={}",
+        api_lang.code(),
+        locale_param(locale),
+        ref_key,
+        rgb_key,
+        request.show_normalized_select_rates
+    ))
 }
 
 pub async fn get_calculator_datastar_init(
@@ -15111,6 +15156,7 @@ mod tests {
     use fishystuff_api::models::fish::FishListResponse;
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::zone_loot_summary::ZoneLootSummaryRequest;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
@@ -15145,10 +15191,11 @@ mod tests {
         render_pet_talent_badges, render_searchable_select_results,
         render_select_option_search_text, render_target_fish_panel,
         select_options_from_pet_entries_for_tier, trade_sale_multiplier_for_species,
-        zone_loot_group_lineage_detail, CalculatorData, CalculatorDatastarQuery, CalculatorLocale,
-        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
-        FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption,
-        SelectOptionPresentation, TargetFishSummary,
+        zone_loot_group_lineage_detail, zone_loot_summary_cache_key, CalculatorData,
+        CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
+        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
+        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
+        TargetFishSummary,
     };
 
     struct MockStore;
@@ -15490,12 +15537,50 @@ mod tests {
             defaults: MetaDefaults::default(),
             status_cfg: ZoneStatusConfig::default(),
             cache_zone_stats_max: 4,
+            cache_zone_loot_summary_max: 4,
             cache_effort_max: 4,
             cache_log: false,
             request_timeout_secs: 5,
             telemetry: TelemetryConfig::default(),
         };
         AppState::for_tests(config, Arc::new(MockStore))
+    }
+
+    #[test]
+    fn zone_loot_summary_cache_key_includes_request_context() {
+        let request = ZoneLootSummaryRequest {
+            rgb: RgbKey("57,229,141".to_string()),
+            show_normalized_select_rates: false,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            zone_loot_summary_cache_key(
+                &DataLang::En,
+                CalculatorLocale::DeDe,
+                Some("feature/test"),
+                &request,
+            )
+            .as_deref(),
+            Some("v1:en:de-DE:feature/test:57,229,141:normalized=false"),
+        );
+    }
+
+    #[test]
+    fn zone_loot_summary_cache_key_skips_user_overlays() {
+        let mut request = ZoneLootSummaryRequest {
+            rgb: RgbKey("57,229,141".to_string()),
+            ..Default::default()
+        };
+        request
+            .overlay
+            .zones
+            .insert("57,229,141".to_string(), Default::default());
+
+        assert!(
+            zone_loot_summary_cache_key(&DataLang::En, CalculatorLocale::EnUs, None, &request,)
+                .is_none()
+        );
     }
 
     #[test]

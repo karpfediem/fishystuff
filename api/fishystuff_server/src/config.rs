@@ -63,6 +63,7 @@ pub struct AppConfig {
     pub defaults: MetaDefaults,
     pub status_cfg: ZoneStatusConfig,
     pub cache_zone_stats_max: usize,
+    pub cache_zone_loot_summary_max: usize,
     pub cache_effort_max: usize,
     pub cache_log: bool,
     pub request_timeout_secs: u64,
@@ -142,6 +143,10 @@ impl AppConfig {
         }
 
         let mut cache_zone_stats_max = fs_config.server_cache.zone_stats_max_entries.unwrap_or(256);
+        let mut cache_zone_loot_summary_max = fs_config
+            .server_cache
+            .zone_loot_summary_max_entries
+            .unwrap_or(256);
         let mut cache_effort_max = fs_config.server_cache.effort_grid_max_entries.unwrap_or(16);
         let mut cache_log = fs_config.server_cache.log.unwrap_or(false);
         let mut request_timeout_secs = 15u64;
@@ -250,6 +255,14 @@ impl AppConfig {
                         .context("parse --cache-zone-stats-max")?;
                     i += 2;
                 }
+                "--cache-zone-loot-summary-max" => {
+                    cache_zone_loot_summary_max = args
+                        .get(i + 1)
+                        .ok_or_else(|| anyhow!("--cache-zone-loot-summary-max requires value"))?
+                        .parse()
+                        .context("parse --cache-zone-loot-summary-max")?;
+                    i += 2;
+                }
                 "--cache-effort-max" => {
                     cache_effort_max = args
                         .get(i + 1)
@@ -290,6 +303,7 @@ impl AppConfig {
             defaults,
             status_cfg,
             cache_zone_stats_max,
+            cache_zone_loot_summary_max,
             cache_effort_max,
             cache_log,
             request_timeout_secs,

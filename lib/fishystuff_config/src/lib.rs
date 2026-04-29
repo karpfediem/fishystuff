@@ -78,6 +78,7 @@ pub struct Thresholds {
 #[derive(Debug, Clone, Default)]
 pub struct ServerCache {
     pub zone_stats_max_entries: Option<usize>,
+    pub zone_loot_summary_max_entries: Option<usize>,
     pub effort_grid_max_entries: Option<usize>,
     pub log: Option<bool>,
 }
@@ -355,6 +356,9 @@ fn assign_threshold(thresholds: &mut Thresholds, key: &str, value: &str) -> Resu
 fn assign_cache(cache: &mut ServerCache, key: &str, value: &str) -> Result<()> {
     match key {
         "zone_stats_max_entries" => cache.zone_stats_max_entries = Some(parse_usize(value, key)?),
+        "zone_loot_summary_max_entries" => {
+            cache.zone_loot_summary_max_entries = Some(parse_usize(value, key)?)
+        }
         "effort_grid_max_entries" => cache.effort_grid_max_entries = Some(parse_usize(value, key)?),
         "log" => cache.log = Some(parse_bool(value, key)?),
         _ => {}
