@@ -81,10 +81,11 @@ let
       mkdir -p "$data_dir" "$cfg_dir" "$home_dir"
       export HOME="$home_dir"
 
-      if [ -e "$data_dir/.dolt" ]; then
+      if [ -e "$data_dir/.dolt/noms" ] || [ -e "$data_dir/.dolt/repo_state.json" ] || [ -e "$data_dir/.dolt/config.json" ]; then
         echo "refusing to start: found top-level $data_dir/.dolt; expected repo at $repo_dir/.dolt" >&2
         exit 64
       fi
+      rm -rf "$data_dir/.dolt"
 
       normalize_repo_snapshot() {
         local snapshot_path="$1"

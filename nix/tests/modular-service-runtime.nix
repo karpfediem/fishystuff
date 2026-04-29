@@ -139,7 +139,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl is-active fishystuff-dolt.service")
     machine.succeed("test ! -e /var/lib/fishystuff/dolt/fishystuff-dolt-sql-args")
     machine.succeed("systemctl stop fishystuff-dolt.service")
-    machine.succeed("mkdir -p /var/lib/fishystuff/dolt/.dolt")
+    machine.succeed("mkdir -p /var/lib/fishystuff/dolt/.dolt/noms")
     machine.succeed("start_cmd=$(systemctl cat fishystuff-dolt.service | sed -n 's/^ExecStart=//p' | tr -d '\"'); test -n \"$start_cmd\"; set +e; $start_cmd 2>/tmp/fishystuff-dolt-start.err; status=$?; set -e; test \"$status\" = 64")
     machine.succeed("grep 'refusing to start: found top-level /var/lib/fishystuff/dolt/.dolt' /tmp/fishystuff-dolt-start.err")
   '';
