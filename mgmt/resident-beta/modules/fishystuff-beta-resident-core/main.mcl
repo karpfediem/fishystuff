@@ -221,6 +221,18 @@ class api_db_host($st) {
 	}
 
 	if not $dolt_dynamic_user {
+		exec "fishystuff-dolt-stop-for-static-user" {
+			cmd => "/usr/bin/systemctl",
+			args => [
+				"stop",
+				fmt.printf("%s.service", $dolt_service_name),
+			],
+			donecmd => fmt.printf("! /usr/bin/systemctl is-active --quiet '%s.service'", $dolt_service_name),
+			doneshell => "/usr/bin/bash",
+			ifcmd => fmt.printf("! /usr/bin/grep -q '^%s:' /etc/passwd && /usr/bin/systemctl is-active --quiet '%s.service'", $dolt_runtime_user, $dolt_service_name),
+			ifshell => "/usr/bin/bash",
+		}
+
 		exec "fishystuff-dolt-group" {
 			cmd => "/usr/bin/bash",
 			args => [
@@ -229,11 +241,11 @@ class api_db_host($st) {
 				"-o",
 				"pipefail",
 				"-c",
-				fmt.printf("if ! /usr/bin/getent group '%s' >/dev/null; then /usr/sbin/groupadd --system '%s'; fi", $dolt_runtime_group, $dolt_runtime_group),
+				fmt.printf("if ! /usr/bin/grep -q '^%s:' /etc/group; then /usr/sbin/groupadd --system '%s'; fi", $dolt_runtime_group, $dolt_runtime_group),
 			],
-			donecmd => fmt.printf("/usr/bin/getent group '%s' >/dev/null", $dolt_runtime_group),
+			donecmd => fmt.printf("/usr/bin/grep -q '^%s:' /etc/group", $dolt_runtime_group),
 			doneshell => "/usr/bin/bash",
-			ifcmd => fmt.printf("! /usr/bin/getent group '%s' >/dev/null", $dolt_runtime_group),
+			ifcmd => fmt.printf("! /usr/bin/grep -q '^%s:' /etc/group", $dolt_runtime_group),
 			ifshell => "/usr/bin/bash",
 		}
 
@@ -245,11 +257,11 @@ class api_db_host($st) {
 				"-o",
 				"pipefail",
 				"-c",
-				fmt.printf("if ! /usr/bin/id -u '%s' >/dev/null 2>&1; then /usr/sbin/useradd --system --no-create-home --shell /usr/sbin/nologin --gid '%s' '%s'; fi", $dolt_runtime_user, $dolt_runtime_group, $dolt_runtime_user),
+				fmt.printf("if ! /usr/bin/grep -q '^%s:' /etc/passwd; then /usr/sbin/useradd --system --no-create-home --shell /usr/sbin/nologin --gid '%s' '%s'; fi", $dolt_runtime_user, $dolt_runtime_group, $dolt_runtime_user),
 			],
-			donecmd => fmt.printf("/usr/bin/id -u '%s' >/dev/null 2>&1", $dolt_runtime_user),
+			donecmd => fmt.printf("/usr/bin/grep -q '^%s:' /etc/passwd", $dolt_runtime_user),
 			doneshell => "/usr/bin/bash",
-			ifcmd => fmt.printf("! /usr/bin/id -u '%s' >/dev/null 2>&1", $dolt_runtime_user),
+			ifcmd => fmt.printf("! /usr/bin/grep -q '^%s:' /etc/passwd", $dolt_runtime_user),
 			ifshell => "/usr/bin/bash",
 		}
 
@@ -388,6 +400,7 @@ class api_db_host($st) {
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
 	File["${api_env_file}"] -> Svc["${dolt_service_name}"]
 	if not $dolt_dynamic_user {
+		Exec["fishystuff-dolt-stop-for-static-user"] -> Exec["fishystuff-dolt-group"]
 		Exec["fishystuff-dolt-group"] -> Exec["fishystuff-dolt-user"]
 		Exec["fishystuff-dolt-user"] -> Exec["fishystuff-dolt-state-owner"]
 		Exec["fishystuff-dolt-user"] -> Exec["systemd-unit-verify-fishystuff-dolt"]
