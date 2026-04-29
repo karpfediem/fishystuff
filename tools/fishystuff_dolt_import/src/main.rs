@@ -12,6 +12,9 @@ use anyhow::{bail, Context, Result};
 use calamine::{open_workbook_auto, Data, Range, Reader};
 use clap::{Parser, Subcommand, ValueEnum};
 use csv::{QuoteStyle, Writer, WriterBuilder};
+use fishystuff_core::calculator_effects::{
+    normalized_effect_lines, parse_unique_calculator_effect_text, CalculatorEffectValues,
+};
 use fishystuff_core::loc::scan_loc_records;
 use sha2::{Digest, Sha256};
 
@@ -92,6 +95,23 @@ const LANGUAGEDATA_SOURCE_HEADERS: [&str; 4] = ["id", "unk", "text", "format"];
 const LANGUAGEDATA_HEADERS: [&str; 5] = ["lang", "id", "category", "text", "format"];
 const LANGUAGEDATA_TABLE: &str = "languagedata";
 const LANGUAGEDATA_IMPORT_TABLE: &str = "languagedata_import";
+const CALCULATOR_CONSUMABLE_SOURCE_ITEM_EFFECT_EVIDENCE_TABLE: &str =
+    "calculator_consumable_source_item_effect_evidence";
+const CALCULATOR_CONSUMABLE_SOURCE_ITEM_EFFECT_EVIDENCE_HEADERS: [&str; 13] = [
+    "source_key",
+    "item_id",
+    "item_type",
+    "buff_category_key",
+    "buff_category_id",
+    "buff_category_level",
+    "source_text_ko",
+    "source_text_afr",
+    "source_text_bonus_rare",
+    "source_text_bonus_big",
+    "source_text_item_drr",
+    "source_text_exp_fish",
+    "source_text_exp_life",
+];
 const FISH_TABLE_HEADERS: [&str; 5] = [
     "encyclopedia_key",
     "item_key",
@@ -243,6 +263,16 @@ enum Commands {
         dolt_repo: PathBuf,
         #[arg(long)]
         excel_dir: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
+    RefreshCalculatorConsumableSourceItems {
+        #[arg(long)]
+        dolt_repo: PathBuf,
         #[arg(long)]
         output_dir: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
@@ -532,6 +562,36 @@ struct RawTableImport {
     row_count: usize,
 }
 
+struct CalculatorConsumableSourceItemEffectEvidenceImport {
+    row_count: usize,
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorConsumableSkillRow {
+    skill_no: String,
+    buff_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorConsumableItemSourceRow {
+    item_id: i64,
+    item_classify: Option<String>,
+    skill_no: Option<String>,
+    sub_skill_no: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CalculatorConsumableBuffCategory {
+    category_id: Option<i32>,
+    category_level: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorConsumableBuffText {
+    text: String,
+    has_description: bool,
+}
+
 struct FlockfishSubgroupImportCommand {
     dolt_repo: PathBuf,
     workbook_xlsx: PathBuf,
@@ -565,6 +625,13 @@ struct FlockfishZoneGroupSlotsImport {
 struct CalculatorEffectsImportCommand {
     dolt_repo: PathBuf,
     excel_dir: PathBuf,
+    output_dir: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct RefreshCalculatorConsumableSourceItemsCommand {
+    dolt_repo: PathBuf,
     output_dir: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
@@ -616,6 +683,7 @@ struct CalculatorEffectsOutputs {
     pet_grade_table_csv: PathBuf,
     pet_exp_table_csv: PathBuf,
     upgradepet_looting_percent_csv: PathBuf,
+    consumable_source_item_effect_evidence_csv: PathBuf,
 }
 
 struct CalculatorEffectsDigests {
@@ -859,6 +927,19 @@ fn main() -> Result<()> {
             commit,
             commit_msg,
         }),
+        Commands::RefreshCalculatorConsumableSourceItems {
+            dolt_repo,
+            output_dir,
+            commit,
+            commit_msg,
+        } => run_refresh_calculator_consumable_source_items(
+            RefreshCalculatorConsumableSourceItemsCommand {
+                dolt_repo,
+                output_dir,
+                commit,
+                commit_msg,
+            },
+        ),
         Commands::ImportCalculatorProgressionXlsx {
             dolt_repo,
             excel_dir,
@@ -2048,6 +2129,8 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         pet_grade_table_csv: output_dir.join("pet_grade_table.csv"),
         pet_exp_table_csv: output_dir.join("pet_exp_table.csv"),
         upgradepet_looting_percent_csv: output_dir.join("upgradepet_looting_percent.csv"),
+        consumable_source_item_effect_evidence_csv: output_dir
+            .join("calculator_consumable_source_item_effect_evidence.csv"),
     };
 
     let buff_table_stats = import_workbook_sheet(
@@ -2246,6 +2329,10 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "upgradepet_looting_percent",
         &outputs.upgradepet_looting_percent_csv,
     )?;
+    let consumable_source_items_stats = refresh_calculator_consumable_source_item_effect_evidence(
+        &dolt_repo,
+        &outputs.consumable_source_item_effect_evidence_csv,
+    )?;
 
     if commit {
         let msg = build_calculator_effects_commit_message(commit_msg, &digests);
@@ -2330,8 +2417,597 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "upgradepet_looting_percent rows imported: {}",
         upgradepet_looting_percent_stats.row_count
     );
+    println!(
+        "calculator consumable source item evidence rows emitted: {}",
+        consumable_source_items_stats.row_count
+    );
 
     Ok(())
+}
+
+fn run_refresh_calculator_consumable_source_items(
+    command: RefreshCalculatorConsumableSourceItemsCommand,
+) -> Result<()> {
+    let RefreshCalculatorConsumableSourceItemsCommand {
+        dolt_repo,
+        output_dir,
+        commit,
+        commit_msg,
+    } = command;
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+    let output_csv = output_dir.join("calculator_consumable_source_item_effect_evidence.csv");
+    let stats = refresh_calculator_consumable_source_item_effect_evidence(&dolt_repo, &output_csv)?;
+
+    if commit {
+        let msg = commit_msg.unwrap_or_else(|| {
+            "Refresh calculator consumable source item effect evidence".to_string()
+        });
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!(
+        "calculator consumable source item evidence rows emitted: {}",
+        stats.row_count
+    );
+    Ok(())
+}
+
+fn refresh_calculator_consumable_source_item_effect_evidence(
+    repo_path: &Path,
+    output_csv: &Path,
+) -> Result<CalculatorConsumableSourceItemEffectEvidenceImport> {
+    let rows = build_calculator_consumable_source_item_effect_evidence_rows(repo_path)?;
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(CALCULATOR_CONSUMABLE_SOURCE_ITEM_EFFECT_EVIDENCE_HEADERS)?;
+    for row in &rows {
+        writer.write_record(row)?;
+    }
+    writer.flush()?;
+
+    run_dolt_sql_table_import_or_remote(
+        repo_path,
+        CALCULATOR_CONSUMABLE_SOURCE_ITEM_EFFECT_EVIDENCE_TABLE,
+        output_csv,
+    )?;
+
+    Ok(CalculatorConsumableSourceItemEffectEvidenceImport {
+        row_count: rows.len(),
+    })
+}
+
+fn build_calculator_consumable_source_item_effect_evidence_rows(
+    repo_path: &Path,
+) -> Result<Vec<Vec<String>>> {
+    let skill_descriptions = load_calculator_consumable_skill_descriptions(repo_path)?;
+    let buff_texts = load_calculator_consumable_buff_texts(repo_path)?;
+    if skill_descriptions.is_empty() && buff_texts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let relevant_skill_rows = load_calculator_consumable_relevant_skill_rows(
+        repo_path,
+        &skill_descriptions,
+        &buff_texts,
+    )?;
+    if relevant_skill_rows.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut relevant_skill_ids = relevant_skill_rows
+        .iter()
+        .map(|row| row.skill_no.clone())
+        .collect::<Vec<_>>();
+    relevant_skill_ids.sort_unstable();
+    relevant_skill_ids.dedup();
+
+    let item_rows = load_calculator_consumable_item_source_rows(repo_path, &relevant_skill_ids)?;
+    if item_rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let primary_skill_counts = item_rows
+        .iter()
+        .filter_map(|row| row.skill_no.clone())
+        .fold(HashMap::<String, usize>::new(), |mut counts, skill_id| {
+            *counts.entry(skill_id).or_default() += 1;
+            counts
+        });
+    let skill_ids = item_rows
+        .iter()
+        .flat_map(|row| [row.skill_no.clone(), row.sub_skill_no.clone()])
+        .flatten()
+        .collect::<Vec<_>>();
+    let buff_categories_by_skill =
+        load_calculator_consumable_skill_buff_categories(repo_path, &skill_ids)?;
+    let skill_buffs = relevant_skill_rows
+        .into_iter()
+        .map(|row| (row.skill_no, row.buff_ids))
+        .collect::<HashMap<_, _>>();
+
+    let mut out = Vec::<Vec<String>>::new();
+    let mut item_rows = item_rows;
+    item_rows.sort_by_key(|row| row.item_id);
+    for row in item_rows {
+        let Ok(item_id) = i32::try_from(row.item_id) else {
+            continue;
+        };
+        let mut effect_lines = Vec::<String>::new();
+        for candidate_skill in [row.skill_no.as_deref(), row.sub_skill_no.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            let selected_texts = skill_buffs
+                .get(candidate_skill)
+                .map(|buff_ids| {
+                    select_consumable_effect_texts(
+                        candidate_skill,
+                        buff_ids,
+                        &buff_texts,
+                        &skill_descriptions,
+                    )
+                })
+                .filter(|texts| !texts.is_empty())
+                .unwrap_or_else(|| {
+                    skill_descriptions
+                        .get(candidate_skill)
+                        .cloned()
+                        .into_iter()
+                        .collect()
+                });
+            for text in selected_texts {
+                for line in normalized_effect_lines(&text) {
+                    if !effect_lines.iter().any(|existing| existing == &line) {
+                        effect_lines.push(line);
+                    }
+                }
+            }
+        }
+        if effect_lines.is_empty() {
+            continue;
+        }
+
+        let category_metadata = select_consumable_category_metadata(
+            row.skill_no.as_deref(),
+            row.sub_skill_no.as_deref(),
+            &buff_categories_by_skill,
+        );
+        let buff_category_key = buff_category_key(category_metadata.category_id).or_else(|| {
+            fallback_consumable_family_key(row.skill_no.as_deref(), &primary_skill_counts)
+        });
+        let item_type = match (category_metadata.category_id, row.item_classify.as_deref()) {
+            (Some(1), _) | (None, Some("8")) => "food",
+            _ => "buff",
+        };
+        let source_text_ko = effect_lines.join("\n");
+        let mut source_text_values = CalculatorEffectValues::default();
+        parse_unique_calculator_effect_text(&mut source_text_values, &source_text_ko);
+        out.push(vec![
+            format!("item:{item_id}"),
+            item_id.to_string(),
+            item_type.to_string(),
+            buff_category_key.unwrap_or_default(),
+            optional_i32_to_string(category_metadata.category_id),
+            optional_i32_to_string(category_metadata.category_level),
+            source_text_ko,
+            optional_f32_to_string(source_text_values.afr),
+            optional_f32_to_string(source_text_values.bonus_rare),
+            optional_f32_to_string(source_text_values.bonus_big),
+            optional_f32_to_string(source_text_values.item_drr),
+            optional_f32_to_string(source_text_values.exp_fish),
+            optional_f32_to_string(source_text_values.exp_life),
+        ]);
+    }
+
+    Ok(out)
+}
+
+fn load_calculator_consumable_skill_descriptions(
+    repo_path: &Path,
+) -> Result<HashMap<String, String>> {
+    let query = format!(
+        "SELECT `SkillNo` AS skill_no, `Desc` AS description \
+         FROM skilltype_table_new \
+         WHERE ({})",
+        calculator_effect_keyword_predicate("`Desc`")
+    );
+    let rows = run_dolt_select_named_rows(repo_path, &query, "calculator skill descriptions")?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            Some((
+                normalized_db_field(&row, "skill_no")?,
+                normalized_db_field(&row, "description")?,
+            ))
+        })
+        .collect())
+}
+
+fn load_calculator_consumable_buff_texts(
+    repo_path: &Path,
+) -> Result<HashMap<String, CalculatorConsumableBuffText>> {
+    let query = format!(
+        "SELECT `Index` AS buff_id, `BuffName` AS buff_name, `Description` AS description \
+         FROM buff_table \
+         WHERE ({}) OR ({})",
+        calculator_effect_keyword_predicate("`Description`"),
+        calculator_effect_keyword_predicate("`BuffName`")
+    );
+    let rows = run_dolt_select_named_rows(repo_path, &query, "calculator buff texts")?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let buff_id = normalized_db_field(&row, "buff_id")?;
+            let description = normalized_db_field(&row, "description");
+            let buff_name = normalized_db_field(&row, "buff_name");
+            Some((
+                buff_id,
+                CalculatorConsumableBuffText {
+                    text: description.clone().or(buff_name)?,
+                    has_description: description.is_some(),
+                },
+            ))
+        })
+        .collect())
+}
+
+fn load_calculator_consumable_relevant_skill_rows(
+    repo_path: &Path,
+    skill_descriptions: &HashMap<String, String>,
+    buff_texts: &HashMap<String, CalculatorConsumableBuffText>,
+) -> Result<Vec<CalculatorConsumableSkillRow>> {
+    let skill_ids = skill_descriptions.keys().cloned().collect::<Vec<_>>();
+    let buff_ids = buff_texts.keys().cloned().collect::<Vec<_>>();
+    let skill_filter = if skill_ids.is_empty() {
+        String::from("FALSE")
+    } else {
+        format!("`SkillNo` IN ({})", quote_sql_string_list(&skill_ids))
+    };
+    let buff_filter = if buff_ids.is_empty() {
+        String::from("FALSE")
+    } else {
+        format!(
+            "`Buff0` IN ({ids}) \
+             OR `Buff1` IN ({ids}) \
+             OR `Buff2` IN ({ids}) \
+             OR `Buff3` IN ({ids}) \
+             OR `Buff4` IN ({ids}) \
+             OR `Buff5` IN ({ids}) \
+             OR `Buff6` IN ({ids}) \
+             OR `Buff7` IN ({ids}) \
+             OR `Buff8` IN ({ids}) \
+             OR `Buff9` IN ({ids})",
+            ids = quote_sql_string_list(&buff_ids)
+        )
+    };
+    let query = format!(
+        "SELECT `SkillNo` AS skill_no, \
+                `Buff0` AS buff0, \
+                `Buff1` AS buff1, \
+                `Buff2` AS buff2, \
+                `Buff3` AS buff3, \
+                `Buff4` AS buff4, \
+                `Buff5` AS buff5, \
+                `Buff6` AS buff6, \
+                `Buff7` AS buff7, \
+                `Buff8` AS buff8, \
+                `Buff9` AS buff9 \
+         FROM skill_table_new \
+         WHERE ({skill_filter}) OR ({buff_filter})"
+    );
+    load_calculator_consumable_skill_rows_from_query(
+        repo_path,
+        &query,
+        "calculator relevant skills",
+    )
+}
+
+fn load_calculator_consumable_item_source_rows(
+    repo_path: &Path,
+    skill_ids: &[String],
+) -> Result<Vec<CalculatorConsumableItemSourceRow>> {
+    if skill_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let query = format!(
+        "SELECT CAST(`Index` AS SIGNED) AS item_id, \
+                `ItemClassify` AS item_classify, \
+                `SkillNo` AS skill_no, \
+                `SubSkillNo` AS sub_skill_no \
+         FROM item_table \
+         WHERE `SkillNo` IN ({skill_ids}) \
+            OR `SubSkillNo` IN ({skill_ids})",
+        skill_ids = quote_sql_string_list(skill_ids)
+    );
+    let rows = run_dolt_select_named_rows(repo_path, &query, "calculator consumable item sources")?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let item_id = normalized_db_field(&row, "item_id")?.parse::<i64>().ok()?;
+            Some(CalculatorConsumableItemSourceRow {
+                item_id,
+                item_classify: normalized_db_field(&row, "item_classify"),
+                skill_no: normalized_db_field(&row, "skill_no"),
+                sub_skill_no: normalized_db_field(&row, "sub_skill_no"),
+            })
+        })
+        .collect())
+}
+
+fn load_calculator_consumable_skill_buff_categories(
+    repo_path: &Path,
+    skill_ids: &[String],
+) -> Result<HashMap<String, CalculatorConsumableBuffCategory>> {
+    let mut skill_ids = skill_ids
+        .iter()
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    skill_ids.sort_unstable();
+    skill_ids.dedup();
+    if skill_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let query = format!(
+        "SELECT `SkillNo` AS skill_no, \
+                `Buff0` AS buff0, \
+                `Buff1` AS buff1, \
+                `Buff2` AS buff2, \
+                `Buff3` AS buff3, \
+                `Buff4` AS buff4, \
+                `Buff5` AS buff5, \
+                `Buff6` AS buff6, \
+                `Buff7` AS buff7, \
+                `Buff8` AS buff8, \
+                `Buff9` AS buff9 \
+         FROM skill_table_new \
+         WHERE `SkillNo` IN ({})",
+        quote_sql_string_list(&skill_ids)
+    );
+    let skill_rows = load_calculator_consumable_skill_rows_from_query(
+        repo_path,
+        &query,
+        "calculator category skills",
+    )?;
+
+    let mut buff_ids = skill_rows
+        .iter()
+        .flat_map(|row| row.buff_ids.iter().cloned())
+        .collect::<Vec<_>>();
+    buff_ids.sort_unstable();
+    buff_ids.dedup();
+    if buff_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let buff_query = format!(
+        "SELECT `Index` AS buff_id, `Category` AS category, `CategoryLevel` AS category_level \
+         FROM buff_table \
+         WHERE `Index` IN ({})",
+        quote_sql_string_list(&buff_ids)
+    );
+    let buff_rows =
+        run_dolt_select_named_rows(repo_path, &buff_query, "calculator category buffs")?;
+    let buff_metadata = buff_rows
+        .into_iter()
+        .filter_map(|row| {
+            Some((
+                normalized_db_field(&row, "buff_id")?,
+                CalculatorConsumableBuffCategory {
+                    category_id: parse_optional_i32(normalized_db_field(&row, "category")),
+                    category_level: parse_optional_i32(normalized_db_field(&row, "category_level")),
+                },
+            ))
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut out = HashMap::new();
+    for skill_row in skill_rows {
+        let categories = skill_row
+            .buff_ids
+            .iter()
+            .filter_map(|buff_id| buff_metadata.get(buff_id))
+            .filter_map(|metadata| {
+                metadata
+                    .category_id
+                    .filter(|category_id| *category_id > 0)
+                    .map(|category_id| (category_id, metadata.category_level))
+            })
+            .collect::<Vec<_>>();
+        let Some((category_id, occurrences)) = categories
+            .iter()
+            .fold(
+                HashMap::<i32, usize>::new(),
+                |mut counts, (category_id, _)| {
+                    *counts.entry(*category_id).or_default() += 1;
+                    counts
+                },
+            )
+            .into_iter()
+            .max_by_key(|(category_id, count)| (*count, -(*category_id)))
+        else {
+            continue;
+        };
+        let _ = occurrences;
+        let category_level = categories
+            .iter()
+            .filter(|(candidate_id, _)| *candidate_id == category_id)
+            .filter_map(|(_, category_level)| *category_level)
+            .max();
+        out.insert(
+            skill_row.skill_no,
+            CalculatorConsumableBuffCategory {
+                category_id: Some(category_id),
+                category_level,
+            },
+        );
+    }
+    Ok(out)
+}
+
+fn load_calculator_consumable_skill_rows_from_query(
+    repo_path: &Path,
+    query: &str,
+    label: &str,
+) -> Result<Vec<CalculatorConsumableSkillRow>> {
+    let rows = run_dolt_select_named_rows(repo_path, query, label)?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let skill_no = normalized_db_field(&row, "skill_no")?;
+            let mut buff_ids = Vec::new();
+            for key in [
+                "buff0", "buff1", "buff2", "buff3", "buff4", "buff5", "buff6", "buff7", "buff8",
+                "buff9",
+            ] {
+                let Some(buff_id) = normalized_db_field(&row, key) else {
+                    continue;
+                };
+                if !buff_ids.iter().any(|existing| existing == &buff_id) {
+                    buff_ids.push(buff_id);
+                }
+            }
+            Some(CalculatorConsumableSkillRow { skill_no, buff_ids })
+        })
+        .collect())
+}
+
+fn select_consumable_effect_texts(
+    skill_id: &str,
+    buff_ids: &[String],
+    buff_text_rows: &HashMap<String, CalculatorConsumableBuffText>,
+    skill_descriptions: &HashMap<String, String>,
+) -> Vec<String> {
+    let buff_rows = buff_ids
+        .iter()
+        .filter_map(|buff_id| buff_text_rows.get(buff_id))
+        .collect::<Vec<_>>();
+    let composite_rows = buff_rows
+        .iter()
+        .filter(|row| row.has_description && normalized_effect_lines(&row.text).len() > 1)
+        .map(|row| row.text.clone())
+        .collect::<Vec<_>>();
+    if !composite_rows.is_empty() {
+        return composite_rows;
+    }
+    let leaf_rows = buff_rows
+        .iter()
+        .map(|row| row.text.clone())
+        .collect::<Vec<_>>();
+    if !leaf_rows.is_empty() {
+        return leaf_rows;
+    }
+    skill_descriptions
+        .get(skill_id)
+        .cloned()
+        .into_iter()
+        .collect()
+}
+
+fn select_consumable_category_metadata(
+    primary_skill_id: Option<&str>,
+    fallback_skill_id: Option<&str>,
+    buff_categories_by_skill: &HashMap<String, CalculatorConsumableBuffCategory>,
+) -> CalculatorConsumableBuffCategory {
+    if let Some(primary) = primary_skill_id
+        .and_then(|skill_id| buff_categories_by_skill.get(skill_id))
+        .filter(|metadata| metadata.category_id.is_some())
+    {
+        return primary.clone();
+    }
+    if let Some(fallback) = fallback_skill_id
+        .and_then(|skill_id| buff_categories_by_skill.get(skill_id))
+        .filter(|metadata| metadata.category_id.is_some())
+    {
+        return fallback.clone();
+    }
+    let categories = [primary_skill_id, fallback_skill_id]
+        .into_iter()
+        .flatten()
+        .filter_map(|skill_id| buff_categories_by_skill.get(skill_id))
+        .filter_map(|metadata| {
+            metadata
+                .category_id
+                .map(|category_id| (category_id, metadata.category_level))
+        })
+        .collect::<Vec<_>>();
+    let Some((category_id, category_level)) = categories
+        .iter()
+        .max_by_key(|(category_id, category_level)| (*category_level, -*category_id))
+        .copied()
+    else {
+        return CalculatorConsumableBuffCategory::default();
+    };
+    CalculatorConsumableBuffCategory {
+        category_id: Some(category_id),
+        category_level,
+    }
+}
+
+fn fallback_consumable_family_key(
+    primary_skill_id: Option<&str>,
+    primary_skill_counts: &HashMap<String, usize>,
+) -> Option<String> {
+    let skill_id = primary_skill_id?;
+    (primary_skill_counts.get(skill_id).copied().unwrap_or(0) > 1)
+        .then(|| format!("skill-family:{skill_id}"))
+}
+
+fn buff_category_key(category_id: Option<i32>) -> Option<String> {
+    category_id.map(|category_id| format!("buff-category:{category_id}"))
+}
+
+fn calculator_effect_keyword_predicate(column: &str) -> String {
+    [
+        "낚시",
+        "희귀 어종",
+        "대형 어종",
+        "생활 경험치",
+        "생활 숙련도",
+        "내구도 소모 감소 저항",
+    ]
+    .into_iter()
+    .map(|keyword| format!("COALESCE({column}, '') LIKE '%{keyword}%'"))
+    .collect::<Vec<_>>()
+    .join(" OR ")
+}
+
+fn normalized_db_field(row: &BTreeMap<String, String>, key: &str) -> Option<String> {
+    row.get(key)
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| !is_null_marker(value))
+        .map(str::to_string)
+}
+
+fn parse_optional_i32(value: Option<String>) -> Option<i32> {
+    value.and_then(|value| value.parse::<i32>().ok())
+}
+
+fn optional_i32_to_string(value: Option<i32>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
+}
+
+fn optional_f32_to_string(value: Option<f32>) -> String {
+    value
+        .map(|value| format_float(f64::from(value)))
+        .unwrap_or_default()
+}
+
+fn quote_sql_string_list(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| sql_value(value))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn run_calculator_progression_import(command: CalculatorProgressionImportCommand) -> Result<()> {
@@ -4544,6 +5220,114 @@ mod tests {
             "".to_string(),
         ];
         assert!(!is_removed_flockfish_subgroup_outlier(&keep));
+    }
+
+    #[test]
+    fn consumable_effect_texts_prefer_composite_buff_rows_over_leaf_rows() {
+        let mut buff_text_rows = HashMap::new();
+        buff_text_rows.insert(
+            "55426".to_string(),
+            CalculatorConsumableBuffText {
+                text: "엔트의 눈물\n생활 경험치 획득량 +30%\n낚시 속도 잠재력 +2단계".to_string(),
+                has_description: true,
+            },
+        );
+        buff_text_rows.insert(
+            "55427".to_string(),
+            CalculatorConsumableBuffText {
+                text: "생활 경험치 획득량 +30%".to_string(),
+                has_description: false,
+            },
+        );
+
+        let selected = select_consumable_effect_texts(
+            "59335",
+            &["55426".to_string(), "55427".to_string()],
+            &buff_text_rows,
+            &HashMap::new(),
+        );
+
+        assert_eq!(
+            selected,
+            vec!["엔트의 눈물\n생활 경험치 획득량 +30%\n낚시 속도 잠재력 +2단계".to_string()]
+        );
+    }
+
+    #[test]
+    fn consumable_effect_texts_fall_back_to_leaf_rows_without_composite_text() {
+        let mut buff_text_rows = HashMap::new();
+        buff_text_rows.insert(
+            "55948".to_string(),
+            CalculatorConsumableBuffText {
+                text: "낚시 경험치 획득량 +10%".to_string(),
+                has_description: true,
+            },
+        );
+        buff_text_rows.insert(
+            "55942".to_string(),
+            CalculatorConsumableBuffText {
+                text: "자동 낚시 시간 감소 7%".to_string(),
+                has_description: true,
+            },
+        );
+
+        let selected = select_consumable_effect_texts(
+            "55570",
+            &["55948".to_string(), "55942".to_string()],
+            &buff_text_rows,
+            &HashMap::new(),
+        );
+
+        assert_eq!(
+            selected,
+            vec![
+                "낚시 경험치 획득량 +10%".to_string(),
+                "자동 낚시 시간 감소 7%".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn consumable_category_prefers_primary_skill_over_buff_removal_subskill() {
+        let by_skill = HashMap::from([
+            (
+                "55595".to_string(),
+                CalculatorConsumableBuffCategory {
+                    category_id: Some(1),
+                    category_level: Some(1),
+                },
+            ),
+            (
+                "51349".to_string(),
+                CalculatorConsumableBuffCategory {
+                    category_id: Some(10),
+                    category_level: Some(1),
+                },
+            ),
+        ]);
+
+        let selected = select_consumable_category_metadata(Some("55595"), Some("51349"), &by_skill);
+
+        assert_eq!(selected.category_id, Some(1));
+        assert_eq!(selected.category_level, Some(1));
+    }
+
+    #[test]
+    fn fallback_consumable_family_uses_skill_family_for_duplicate_skills() {
+        let counts = HashMap::from([("12345".to_string(), 3usize)]);
+
+        let key = fallback_consumable_family_key(Some("12345"), &counts);
+
+        assert_eq!(key.as_deref(), Some("skill-family:12345"));
+    }
+
+    #[test]
+    fn fallback_consumable_family_is_none_for_unique_skills_without_category() {
+        let counts = HashMap::from([("59778".to_string(), 1usize)]);
+
+        let key = fallback_consumable_family_key(Some("59778"), &counts);
+
+        assert_eq!(key, None);
     }
 
     #[test]

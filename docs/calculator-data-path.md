@@ -89,6 +89,14 @@ Helper views used by those surfaces:
 - `calculator_item_skill_sources`
 - `calculator_pet_skill_sources`
 
+Materialized source-text evidence used by runtime API reads:
+
+- `calculator_consumable_source_item_effect_evidence`
+  - generated from the consumable `item -> skill -> buff` source chain
+  - stores original Korean source text separately from parsed calculator values
+  - lets the API read narrow evidence rows instead of scanning and parsing the
+    wide raw source chain on every cold calculator catalog load
+
 ### Source facts versus enriched facts
 
 Calculator catalog assembly must keep these evidence classes distinct:
@@ -172,6 +180,17 @@ What this importer currently reads:
 When `languagedata_en` is imported, the importer also refreshes
 `calculator_item_names` for `lang = 'en'`.
 
+The importer refreshes
+`calculator_consumable_source_item_effect_evidence` after loading the workbook
+tables. To rebuild only that materialized evidence table from the current Dolt
+source tables:
+
+```bash
+devenv shell -- cargo run -q -p fishystuff_dolt_import -- \
+  refresh-calculator-consumable-source-items \
+  --dolt-repo .
+```
+
 Notes:
 
 - this is intentionally a temporary path
@@ -194,6 +213,7 @@ Recommended spot checks:
 devenv shell -- bash -lc 'dolt sql -q "select count(*) from calculator_lightstone_set_effects"'
 devenv shell -- bash -lc 'dolt sql -q "select count(*) from calculator_pet_skill_options"'
 devenv shell -- bash -lc 'dolt sql -q "select count(*) from calculator_consumable_effects"'
+devenv shell -- bash -lc 'dolt sql -q "select count(*) from calculator_consumable_source_item_effect_evidence"'
 ```
 
 The wide consumable view is still a temporary analysis surface. Direct
