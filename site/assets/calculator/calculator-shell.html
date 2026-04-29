@@ -2,6 +2,8 @@
      class="not-prose grid gap-6"
      data-signals="{ _loading: true, _calculator_ui: { workspace_tab: 'basics', distribution_tab: 'groups', custom_layout: [[['overview']], [['zone'], ['session']], [['bite_time'], ['loot']]], custom_sections: ['overview', 'zone', 'session', 'bite_time', 'loot'] }, _calculator_actions: { copyUrlToken: 0, copyShareToken: 0, saveCalculatorToken: 0, discardCalculatorToken: 0, saveLayoutToken: 0, discardLayoutToken: 0 } }"
      data-init__delay.50ms="window.__fishystuffCalculator.restore($); window.__fishystuffCalculator.ready().then(() => @get(window.__fishystuffCalculator.initUrl()))">
+    <div hidden
+         data-on:fishystuff-calculator-patch-signals__window="window.__fishystuffCalculator.applyReactiveSignalPatch($, evt.detail); evt.detail && evt.detail.eval ? @post(window.__fishystuffCalculator.evalUrl(evt.detail.patch || {})) : null"></div>
     <section data-show="$_loading" class="card card-border bg-base-100">
         <div class="card-body">
             <span class="loading loading-spinner loading-md"></span>

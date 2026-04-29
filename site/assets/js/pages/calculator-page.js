@@ -3,6 +3,7 @@
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
+  const CALCULATOR_REACTIVE_SIGNAL_PATCH_EVENT = "fishystuff-calculator-patch-signals";
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN =
     /^_(?:loading|calc|live|defaults|user_presets|preset_manager_ui)(?:\.|$)/;
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN = /^_/;
@@ -89,6 +90,7 @@
     pendingCalculatorUiState: null,
     pendingEvalNeedsPetCards: null,
     pendingEvalNeedsTargetFishSelect: null,
+    reactivePatchApplied: false,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -288,6 +290,97 @@
 
   const isPlainObject = (value) => value && typeof value === "object" && !Array.isArray(value);
 
+  function mergeCalculatorSignalPatch(target, patch) {
+    if (!isPlainObject(target) || !isPlainObject(patch)) {
+      return target;
+    }
+    for (const [key, value] of Object.entries(patch)) {
+      if (isPlainObject(value) && isPlainObject(target[key])) {
+        mergeCalculatorSignalPatch(target[key], value);
+      } else {
+        target[key] = cloneCalculatorSignals(value);
+      }
+    }
+    return target;
+  }
+
+  function assignCalculatorSignalPatch(target, patch, options = {}) {
+    if (!isPlainObject(target) || !isPlainObject(patch)) {
+      return target;
+    }
+    if (options.replaceCalculatorData === true) {
+      for (const key of Object.keys(target)) {
+        if (!key.startsWith("_") && key !== "overlay" && !(key in patch)) {
+          delete target[key];
+        }
+      }
+    }
+    if (options.replaceTopLevel === true || options.replaceCalculatorData === true) {
+      for (const [key, value] of Object.entries(patch)) {
+        target[key] = cloneCalculatorSignals(value);
+      }
+      return target;
+    }
+    return mergeCalculatorSignalPatch(target, patch);
+  }
+
+  function readSignalPath(source, path) {
+    return String(path ?? "")
+      .split(".")
+      .filter(Boolean)
+      .reduce((current, key) => (
+        current && typeof current === "object" && key in current ? current[key] : undefined
+      ), source);
+  }
+
+  function writeControlValue(control, value) {
+    if (!(control instanceof HTMLElement)) {
+      return;
+    }
+    if (control instanceof HTMLInputElement) {
+      if (control.type === "checkbox") {
+        control.checked = typeof value === "string" ? value === control.value : Boolean(value);
+        return;
+      }
+      if (control.type === "radio") {
+        control.checked = value === (typeof value === "number" ? Number(control.value) : control.value);
+        return;
+      }
+      control.value = value == null ? "" : String(value);
+      return;
+    }
+    if (control instanceof HTMLSelectElement) {
+      if (control.multiple) {
+        const selected = new Set((Array.isArray(value) ? value : []).map(String));
+        for (const option of Array.from(control.options)) {
+          option.selected = selected.has(option.value);
+        }
+        return;
+      }
+      control.value = value == null ? "" : String(value);
+      return;
+    }
+    if (control instanceof HTMLTextAreaElement) {
+      control.value = value == null ? "" : String(value);
+    }
+  }
+
+  function syncBoundCalculatorControls(patch) {
+    if (!isPlainObject(patch) || typeof document.querySelectorAll !== "function") {
+      return;
+    }
+    for (const control of Array.from(document.querySelectorAll("[data-bind]"))) {
+      const path = String(control.getAttribute("data-bind") || "").trim();
+      if (!path) {
+        continue;
+      }
+      const value = readSignalPath(patch, path);
+      if (value !== undefined) {
+        writeControlValue(control, value);
+      }
+    }
+  }
+
   function signalPatchLeafPaths(patch, prefix = "") {
     if (!isPlainObject(patch)) {
       return [];
@@ -471,6 +564,9 @@
         if ((applied || pendingUiState) && typeof window.__fishystuffCalculator?.patchSignals === "function") {
           window.__fishystuffCalculator.patchSignals({
             _calculator_ui: cloneCalculatorSignals(signals._calculator_ui),
+          }, {
+            eval: false,
+            replaceTopLevel: true,
           });
           return;
         }
@@ -522,7 +618,10 @@
         if (pendingCalculatorData) {
           const restoredPatch = calculatorPresetPatch(signals, pendingCalculatorData);
           if (typeof window.__fishystuffCalculator?.patchSignals === "function") {
-            window.__fishystuffCalculator.patchSignals(restoredPatch);
+            window.__fishystuffCalculator.patchSignals(restoredPatch, {
+              eval: true,
+              replaceCalculatorData: true,
+            });
           } else {
             Object.assign(signals, cloneCalculatorSignals(restoredPatch));
           }
@@ -532,6 +631,10 @@
         if (applied && typeof window.__fishystuffCalculator?.patchSignals === "function") {
           window.__fishystuffCalculator.patchSignals(
             calculatorPresetPatch(signals, applied.payload),
+            {
+              eval: true,
+              replaceCalculatorData: true,
+            },
           );
           return;
         }
@@ -953,6 +1056,84 @@
     });
   }
 
+  function dispatchCalculatorSignalPatch(patch) {
+    document.dispatchEvent(new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+      detail: cloneCalculatorSignals(patch),
+    }));
+  }
+
+  function applyReactiveSignalPatch(signals, detail) {
+    const current = signals && typeof signals === "object"
+      ? signals
+      : signalStore.signalObject();
+    const patch = detail && Object.prototype.hasOwnProperty.call(detail, "patch")
+      ? detail.patch
+      : detail;
+    if (!current || !isPlainObject(patch)) {
+      return null;
+    }
+    const normalizedPatch = cloneCalculatorSignals(patch);
+    calculatorState.reactivePatchApplied = true;
+    signalStore.connect(current);
+    assignCalculatorSignalPatch(current, normalizedPatch, {
+      replaceCalculatorData: detail?.replaceCalculatorData === true,
+      replaceTopLevel: detail?.replaceTopLevel === true,
+    });
+    syncBoundCalculatorControls(normalizedPatch);
+    dispatchCalculatorSignalPatch(normalizedPatch);
+    return current;
+  }
+
+  function patchCalculatorSignals(patch, options = {}) {
+    if (!isPlainObject(patch)) {
+      return null;
+    }
+    const normalizedPatch = cloneCalculatorSignals(patch);
+    const detail = {
+      patch: normalizedPatch,
+      eval: options.eval === true || (options.eval !== false && patchMatchesCalculatorEvalFilter(normalizedPatch)),
+      replaceCalculatorData: options.replaceCalculatorData === true,
+      replaceTopLevel: options.replaceTopLevel === true,
+    };
+    calculatorState.reactivePatchApplied = false;
+    if (typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent(CALCULATOR_REACTIVE_SIGNAL_PATCH_EVENT, { detail }));
+    }
+    if (!calculatorState.reactivePatchApplied) {
+      applyReactiveSignalPatch(signalStore.signalObject(), detail);
+    }
+    return signalStore.signalObject();
+  }
+
+  function replaceCalculatorPresetSignals(signals, payload) {
+    if (!signals || typeof signals !== "object") {
+      return null;
+    }
+    const patch = calculatorPresetPatch(signals, payload);
+    patchCalculatorSignals(patch, {
+      eval: true,
+      replaceCalculatorData: true,
+    });
+    return calculatorPresetPayload({
+      ...signals,
+      ...patch,
+    });
+  }
+
+  function replaceCalculatorUiSignals(signals, nextUiState) {
+    if (!signals || typeof signals !== "object") {
+      return null;
+    }
+    const patch = {
+      _calculator_ui: cloneCalculatorSignals(nextUiState),
+    };
+    patchCalculatorSignals(patch, {
+      eval: false,
+      replaceTopLevel: true,
+    });
+    return signals._calculator_ui;
+  }
+
   function bindCalculatorPresetAdapter() {
     if (calculatorState.calculatorPresetAdapterBound) {
       return;
@@ -999,19 +1180,7 @@
       },
       apply(payload) {
         const signals = signalStore.signalObject();
-        if (!signals || typeof signals !== "object") {
-          return null;
-        }
-        const patch = calculatorPresetPatch(signals, payload);
-        if (typeof window.__fishystuffCalculator?.patchSignals === "function") {
-          window.__fishystuffCalculator.patchSignals(patch);
-        } else {
-          Object.assign(signals, cloneCalculatorSignals(patch));
-        }
-        return calculatorPresetPayload({
-          ...signals,
-          ...patch,
-        });
+        return replaceCalculatorPresetSignals(signals, payload);
       },
     });
     calculatorState.calculatorPresetAdapterBound = true;
@@ -1062,14 +1231,7 @@
           return null;
         }
         const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, payload);
-        if (typeof window.__fishystuffCalculator?.patchSignals === "function") {
-          window.__fishystuffCalculator.patchSignals({
-            _calculator_ui: cloneCalculatorSignals(nextUiState),
-          });
-          return nextUiState;
-        }
-        signals._calculator_ui = cloneCalculatorSignals(nextUiState);
-        return nextUiState;
+        return replaceCalculatorUiSignals(signals, nextUiState);
       },
     });
     calculatorState.layoutPresetAdapterBound = true;
@@ -1123,11 +1285,14 @@
     if (!helper || typeof helper.discardCurrent !== "function") {
       return null;
     }
-    const actionState = helper.currentActionState(collectionKey, { refresh: true });
+    const actionState = helper.currentActionState(collectionKey, {
+      refresh: true,
+      patchDatastar: false,
+    });
     if (!actionState.canDiscard) {
       return null;
     }
-    const result = helper.discardCurrent(collectionKey);
+    const result = helper.discardCurrent(collectionKey, { refreshCurrent: false });
     return result?.current ? null : result;
   }
 
@@ -1136,7 +1301,10 @@
     if (!helper || typeof helper.saveCurrent !== "function") {
       return null;
     }
-    const actionState = helper.currentActionState(collectionKey, { refresh: true });
+    const actionState = helper.currentActionState(collectionKey, {
+      refresh: true,
+      patchDatastar: false,
+    });
     if (!actionState.canSave) {
       return null;
     }
@@ -1203,22 +1371,17 @@
     if (!signals || typeof signals !== "object") {
       return null;
     }
-    const selectedPreset = helper?.selectedPreset?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
-    if (selectedPreset?.payload) {
-      const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedPreset.payload);
-      signals._calculator_ui = cloneCalculatorSignals(nextUiState);
-      return selectedPreset;
-    }
-    const selectedFixedId = helper?.selectedFixedId?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
-    const selectedFixedPreset = selectedFixedId
-      ? helper?.fixedPreset?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY, selectedFixedId)
-      : null;
-    if (!selectedFixedPreset?.payload) {
+    const storedCollection = helper?.snapshot?.()?.collections?.[CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY];
+    if (!storedCollection?.activeWorkingCopyId) {
       return null;
     }
-    const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, selectedFixedPreset.payload);
-    signals._calculator_ui = cloneCalculatorSignals(nextUiState);
-    return selectedFixedPreset;
+    const activeWorkingCopy = helper?.activeWorkingCopy?.(CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY);
+    if (activeWorkingCopy?.payload) {
+      const nextUiState = applyCalculatorLayoutPreset(signals._calculator_ui, activeWorkingCopy.payload);
+      signals._calculator_ui = cloneCalculatorSignals(nextUiState);
+      return activeWorkingCopy;
+    }
+    return null;
   }
 
   function applyStoredCalculatorPresetState(signals, options = {}) {
@@ -1226,23 +1389,24 @@
     if (!signals || typeof signals !== "object") {
       return null;
     }
-    if (options.hasStoredData && helper?.current?.(CALCULATOR_PRESET_COLLECTION_KEY)?.payload) {
+    const storedCollection = helper?.snapshot?.()?.collections?.[CALCULATOR_PRESET_COLLECTION_KEY];
+    if (!storedCollection?.activeWorkingCopyId) {
       return null;
     }
-    const selectedPreset = helper?.selectedPreset?.(CALCULATOR_PRESET_COLLECTION_KEY);
-    if (selectedPreset?.payload) {
-      Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, selectedPreset.payload)));
-      return selectedPreset;
+    const activeWorkingCopy = helper?.activeWorkingCopy?.(CALCULATOR_PRESET_COLLECTION_KEY);
+    const activeSource = activeWorkingCopy?.source || activeWorkingCopy?.origin || {};
+    const hasActiveModifications = Boolean(helper?.current?.(CALCULATOR_PRESET_COLLECTION_KEY)?.payload);
+    const shouldPreferStoredData = Boolean(
+      options.hasStoredData
+        && !hasActiveModifications
+        && activeSource.kind === "fixed"
+        && activeSource.id === "default",
+    );
+    if (!shouldPreferStoredData && activeWorkingCopy?.payload) {
+      Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, activeWorkingCopy.payload)));
+      return activeWorkingCopy;
     }
-    const selectedFixedId = helper?.selectedFixedId?.(CALCULATOR_PRESET_COLLECTION_KEY);
-    const selectedFixedPreset = selectedFixedId
-      ? helper?.fixedPreset?.(CALCULATOR_PRESET_COLLECTION_KEY, selectedFixedId)
-      : null;
-    if (!selectedFixedPreset?.payload) {
-      return null;
-    }
-    Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, selectedFixedPreset.payload)));
-    return selectedFixedPreset;
+    return null;
   }
 
   function addCustomSection(customSections, sectionId) {
@@ -1449,11 +1613,38 @@
       : calculatorPresetBasePayload(signals);
   }
 
+  function calculatorControlSignalPatch(payload) {
+    const patch = cloneCalculatorSignals(payload && typeof payload === "object" ? payload : {});
+    if ("resources" in patch) {
+      patch._resources = patch.resources;
+    }
+    if ("outfit" in patch) {
+      patch._outfit_slots = compactStringArray(patch.outfit);
+    }
+    if ("food" in patch) {
+      patch._food_slots = compactStringArray(patch.food);
+    }
+    if ("buff" in patch) {
+      patch._buff_slots = compactStringArray(patch.buff);
+    }
+    for (const petKey of ["pet1", "pet2", "pet3", "pet4", "pet5"]) {
+      const pet = patch[petKey];
+      if (!pet || typeof pet !== "object" || Array.isArray(pet)) {
+        continue;
+      }
+      const skills = compactStringArray(pet.skills);
+      for (let index = 0; index < 3; index += 1) {
+        patch[`_${petKey}_skill_slot${index + 1}`] = String(skills[index] ?? "");
+      }
+    }
+    return patch;
+  }
+
   function calculatorPresetPatch(signals, payload) {
-    return {
+    return calculatorControlSignalPatch({
       ...defaultCalculatorPresetPayload(signals),
       ...normalizeCalculatorPresetPayload(payload),
-    };
+    });
   }
 
   const persistedCalculatorUiSignals = (signals) => {
@@ -1909,9 +2100,7 @@
     const pendingCalculatorDataState = storedState.hasStoredData && !restoredCalculatorPresetState
       ? persistedCalculatorSignals(signals)
       : null;
-    const restoredLayoutPresetState = restoredUiState
-      ? null
-      : applyStoredCalculatorLayoutPresetState(signals);
+    const restoredLayoutPresetState = applyStoredCalculatorLayoutPresetState(signals);
     const trackedCalculatorPresetState = trackCalculatorPresetCurrent(signals);
     const trackedLayoutPresetState = trackCalculatorLayoutPresetCurrent(signals);
     calculatorState.pendingCalculatorPresetRestore = Boolean(restoredCalculatorPresetState)
@@ -1922,7 +2111,7 @@
     calculatorState.pendingCalculatorDataState = pendingCalculatorDataState
       ? cloneCalculatorSignals(pendingCalculatorDataState)
       : null;
-    calculatorState.pendingCalculatorUiState = restoredUiState
+    calculatorState.pendingCalculatorUiState = restoredUiState && !restoredLayoutPresetState
       ? cloneCalculatorSignals(signals._calculator_ui)
       : null;
     const appRoot = document.getElementById?.("calculator");
@@ -2865,12 +3054,10 @@
     },
     normalizeFishingMode,
     effectiveActivity,
-    patchSignals(patch) {
-      signalStore.patchSignals(patch);
-      document.dispatchEvent(new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
-        detail: cloneCalculatorSignals(patch),
-      }));
+    patchSignals(patch, options = {}) {
+      patchCalculatorSignals(patch, options);
     },
+    applyReactiveSignalPatch,
     applyPackLeaderChange,
     petSkillSlots,
     restore: restoreCalculator,
@@ -2887,8 +3074,14 @@
         return null;
       }
       const patch = calculatorPresetPatch(current, payload);
-      Object.assign(current, cloneCalculatorSignals(patch));
-      return calculatorPresetPayload(current);
+      patchCalculatorSignals(patch, {
+        eval: true,
+        replaceCalculatorData: true,
+      });
+      return calculatorPresetPayload({
+        ...current,
+        ...patch,
+      });
     },
     layoutPresetCollectionKey: CALCULATOR_LAYOUT_PRESET_COLLECTION_KEY,
     layoutPresetPayload: calculatorLayoutPresetPayload,

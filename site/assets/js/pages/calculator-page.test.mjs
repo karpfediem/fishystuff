@@ -917,8 +917,13 @@ test("calculator presets apply durable inputs without changing the layout preset
       level: 5,
       resources: 44,
       zone: "240,74,74",
+      outfit: ["item:14330"],
       food: ["item:9359", "", "item:9359"],
       buff: ["item:1"],
+      pet1: {
+        tier: "5",
+        skills: ["49023", "49014", "49017"],
+      },
       priceOverrides: {
         "item:8473": {
           basePrice: "8800000",
@@ -936,8 +941,17 @@ test("calculator presets apply durable inputs without changing the layout preset
   assert.equal(signals.fishingMode, "harpoon");
   assert.equal(signals.level, 5);
   assert.equal(signals.resources, 44);
+  assert.equal(signals._resources, 44);
+  assert.deepEqual(Array.from(signals.outfit), ["item:14330"]);
+  assert.deepEqual(Array.from(signals._outfit_slots), ["item:14330"]);
   assert.deepEqual(Array.from(signals.food), ["item:9359"]);
+  assert.deepEqual(Array.from(signals._food_slots), ["item:9359"]);
   assert.deepEqual(Array.from(signals.buff), ["item:1"]);
+  assert.deepEqual(Array.from(signals._buff_slots), ["item:1"]);
+  assert.deepEqual(Array.from(signals.pet1.skills), ["49023", "49014", "49017"]);
+  assert.equal(signals._pet1_skill_slot1, "49023");
+  assert.equal(signals._pet1_skill_slot2, "49014");
+  assert.equal(signals._pet1_skill_slot3, "49017");
   assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {
     "8473": {
       basePrice: 8800000,
@@ -1155,7 +1169,7 @@ test("calculator restore applies the persisted selected layout preset when UI st
   });
 });
 
-test("calculator restore prefers persisted layout UI over stale selected layout metadata", () => {
+test("calculator restore loads the persisted layout working copy over older UI storage", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();
   initial.window.__fishystuffCalculator.restore(initialSignals);
@@ -1180,11 +1194,11 @@ test("calculator restore prefers persisted layout UI over stale selected layout 
     _calculator_ui: defaultCalculatorUiState(),
   });
 
-  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), "");
-  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "default");
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), preset.id);
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "");
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
   assert.deepEqual(JSON.parse(JSON.stringify(env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui))), {
-    custom_layout: cloneTestValue(DEFAULT_CUSTOM_LAYOUT),
+    custom_layout: [[["overview"]], [["trade"]]],
   });
   assert.equal(preset.id.length > 0, true);
 });
@@ -1272,7 +1286,7 @@ test("calculator restore preserves a persisted modified current layout preset wh
   });
 });
 
-test("calculator restore ignores a stale current layout when persisted UI is default", () => {
+test("calculator restore loads a persisted modified layout working copy over older UI storage", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();
   initial.window.__fishystuffCalculator.restore(initialSignals);
@@ -1303,13 +1317,17 @@ test("calculator restore ignores a stale current layout when persisted UI is def
     _calculator_ui: defaultCalculatorUiState(),
   });
 
-  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), "");
-  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "default");
-  assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
-  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), defaultCalculatorUiState());
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), preset.id);
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "");
+  assert.deepEqual(JSON.parse(JSON.stringify(env.window.__fishystuffUserPresets.current("calculator-layouts")?.payload)), {
+    custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui))), {
+    custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
+  });
 });
 
-test("calculator restore ignores stale current layout when UI storage is absent", () => {
+test("calculator restore loads a persisted modified default layout working copy when UI storage is absent", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();
   initial.window.__fishystuffCalculator.restore(initialSignals);
@@ -1334,11 +1352,15 @@ test("calculator restore ignores stale current layout when UI storage is absent"
 
   assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-layouts"), "");
   assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-layouts"), "default");
-  assert.equal(env.window.__fishystuffUserPresets.current("calculator-layouts"), null);
-  assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), defaultCalculatorUiState());
+  assert.deepEqual(JSON.parse(JSON.stringify(env.window.__fishystuffUserPresets.current("calculator-layouts")?.payload)), {
+    custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(env.window.__fishystuffCalculator.layoutPresetPayload(signals._calculator_ui))), {
+    custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
+  });
 });
 
-test("calculator restore ignores stale current calculator preset when data storage is absent", () => {
+test("calculator restore loads a persisted modified default calculator working copy when data storage is absent", () => {
   const initial = createContext();
   const initialSignals = defaultSignals();
   initial.window.__fishystuffCalculator.restore(initialSignals);
@@ -1364,9 +1386,9 @@ test("calculator restore ignores stale current calculator preset when data stora
 
   assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), "");
   assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
-  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
-  assert.equal(signals.level, 0);
-  assert.equal(signals.resources, 100);
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets")?.payload?.level, 42);
+  assert.equal(signals.level, 42);
+  assert.equal(signals.resources, 15);
 });
 
 test("calculator restore keeps stored calculator data ahead of stale fixed preset selection", () => {
@@ -1596,6 +1618,7 @@ test("calculator action listener handles copy and discard tokens once", () => {
     payload: env.window.__fishystuffCalculator.calculatorPresetPayload(signals),
     origin: { kind: "fixed", id: "default" },
   });
+  const dirtyWorkingCopy = env.window.__fishystuffUserPresets.activeWorkingCopy("calculator-presets");
   assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, true);
   signals._calculator_actions = defaultCalculatorActionState({
     copyUrlToken: 1,
@@ -1642,6 +1665,11 @@ test("calculator action listener handles copy and discard tokens once", () => {
   assert.deepEqual(Array.from(signals.food), []);
   assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  assert.deepEqual(env.window.__fishystuffUserPresets.workingCopies("calculator-presets"), []);
+  assert.notEqual(
+    env.window.__fishystuffUserPresets.activeWorkingCopy("calculator-presets")?.id,
+    dirtyWorkingCopy.id,
+  );
   assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, false);
 });
 
@@ -1717,6 +1745,101 @@ test("calculator action listener saves modified default calculator preset as a n
   assert.equal(env.toastCalls.length, 1);
   assert.equal(env.toastCalls[0].type, "info");
   assert.equal(env.toastCalls[0].message, "presets.toast.created");
+});
+
+test("calculator can return from a saved preset to the fixed default preset", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  signals.level = 42;
+  signals.food = ["item:9359"];
+  env.window.__fishystuffUserPresets.trackCurrentPayload("calculator-presets", {
+    payload: env.window.__fishystuffCalculator.calculatorPresetPayload(signals),
+    origin: { kind: "fixed", id: "default" },
+  });
+  const saved = env.window.__fishystuffUserPresets.saveCurrent("calculator-presets");
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), saved.preset.id);
+  assert.equal(signals.level, 42);
+
+  env.window.__fishystuffUserPresets.activateFixedPreset("calculator-presets", "default");
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), "");
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  assert.equal(signals.level, 0);
+  assert.deepEqual(Array.from(signals.food), []);
+});
+
+test("calculator fixed preset apply replaces object-map fields", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  signals.level = 42;
+  signals.food = ["item:9359"];
+  signals.priceOverrides = {
+    9359: {
+      basePrice: 12345,
+    },
+  };
+  env.window.__fishystuffUserPresets.trackCurrentPayload("calculator-presets", {
+    payload: env.window.__fishystuffCalculator.calculatorPresetPayload(signals),
+    origin: { kind: "fixed", id: "default" },
+  });
+  const saved = env.window.__fishystuffUserPresets.saveCurrent("calculator-presets");
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), saved.preset.id);
+
+  env.window.__fishystuffUserPresets.activateFixedPreset("calculator-presets", "default");
+
+  assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), "");
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  assert.equal(signals.level, 0);
+  assert.deepEqual(Array.from(signals.food), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {});
+});
+
+test("calculator action listener can discard default modifications with object-map fields", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  signals.priceOverrides = {
+    9359: {
+      basePrice: 12345,
+    },
+  };
+  env.window.__fishystuffUserPresets.trackCurrentPayload("calculator-presets", {
+    payload: env.window.__fishystuffCalculator.calculatorPresetPayload(signals),
+    origin: { kind: "fixed", id: "default" },
+  });
+  assert.notEqual(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+  signals._calculator_actions = defaultCalculatorActionState({
+    discardCalculatorToken: 1,
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_actions: {
+        copyUrlToken: 0,
+        copyShareToken: 0,
+        saveCalculatorToken: 0,
+        discardCalculatorToken: 1,
+        saveLayoutToken: 0,
+        discardLayoutToken: 0,
+      },
+    },
+  });
+
+  assert.equal(env.toastCalls.length, 1);
+  assert.equal(env.toastCalls[0].type, "info");
+  assert.equal(env.toastCalls[0].message, translateMessage("presets.toast.discarded"));
+  assert.deepEqual(JSON.parse(JSON.stringify(signals.priceOverrides)), {});
+  assert.equal(env.window.__fishystuffUserPresets.selectedFixedId("calculator-presets"), "default");
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
 });
 
 test("calculator action listener saves modified layout preset back to its saved preset", () => {
