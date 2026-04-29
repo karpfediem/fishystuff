@@ -250,7 +250,29 @@ build_dolt_repo_snapshot() {
   printf '%s' "$snapshot_store_path"
 }
 
+resolve_dolt_remote_branch() {
+  local explicit_remote_branch="${1-}"
+  local environment="${2:-beta}"
+
+  if [[ -n "$explicit_remote_branch" ]]; then
+    printf '%s' "$explicit_remote_branch"
+    return
+  fi
+
+  environment="$(normalize_deployment_environment "$environment")"
+  if [[ "$environment" == "production" ]]; then
+    printf '%s' "main"
+    return
+  fi
+  if [[ -n "$environment" ]]; then
+    printf '%s' "$environment"
+    return
+  fi
+  printf '%s' "beta"
+}
+
 deployment_environment="$(normalize_deployment_environment "$deployment_environment")"
+dolt_remote_branch="$(resolve_dolt_remote_branch "$dolt_remote_branch" "$deployment_environment")"
 deployment_domain_name="$(deployment_domain "$deployment_environment")"
 site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
 api_base_url="${api_base_url_override:-https://api.$deployment_domain_name}"

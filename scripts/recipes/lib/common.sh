@@ -417,7 +417,8 @@ deployment_dolt_remote_branch() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
-    beta | production) printf '%s' "$(deployment_env_value "$deployment" "dolt_remote_branch")" ;;
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "dolt_remote_branch" "beta")" ;;
+    production) printf '%s' "$(deployment_env_or_default "$deployment" "dolt_remote_branch" "main")" ;;
     local) printf '%s' "" ;;
   esac
 }
