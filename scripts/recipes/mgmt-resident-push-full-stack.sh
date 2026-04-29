@@ -349,6 +349,46 @@ content_is_remote_only() {
   return 1
 }
 
+reuse_remote_dolt_snapshot_if_matching() {
+  local remote_snapshot=""
+  local local_metadata=""
+  local remote_metadata_raw=""
+  local remote_metadata=""
+  local tmp_key=""
+
+  [[ -n "$target" && -n "$dolt_repo_snapshot" && -f "$dolt_repo_snapshot/fishystuff-dolt-snapshot.json" ]] || return 0
+
+  remote_snapshot="$(bash "$SCRIPT_DIR/remote-gcroot-target.sh" "$target" "$dolt_repo_snapshot_gcroot")"
+  [[ "$remote_snapshot" == /nix/store/* ]] || return 0
+
+  local_metadata="$(
+    jq -c '{revision, deployment_environment, branch}' "$dolt_repo_snapshot/fishystuff-dolt-snapshot.json"
+  )"
+  tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-dolt-snapshot-reuse.XXXXXX)"
+  remote_metadata_raw="$(
+    ssh \
+      -i "$tmp_key" \
+      -o IdentitiesOnly=yes \
+      -o StrictHostKeyChecking=accept-new \
+      "$target" \
+      /bin/bash -s -- "$remote_snapshot" <<'EOF' || true
+set -euo pipefail
+remote_snapshot="${1:?missing remote snapshot}"
+cat "$remote_snapshot/fishystuff-dolt-snapshot.json"
+EOF
+  )"
+  rm -f "$tmp_key"
+  if [[ -n "$remote_metadata_raw" ]]; then
+    remote_metadata="$(jq -c '{revision, deployment_environment, branch}' <<< "$remote_metadata_raw" || true)"
+  fi
+
+  if [[ -n "$remote_metadata" && "$remote_metadata" == "$local_metadata" ]]; then
+    echo "[resident-push] reusing existing remote Dolt snapshot without local push: $remote_snapshot"
+    dolt_repo_snapshot="$remote_snapshot"
+    dolt_repo_snapshot_override="$remote_snapshot"
+  fi
+}
+
 if ! service_selected api || ! service_selected dolt; then
   echo "services_csv must include both api and dolt for mgmt-resident-push-full-stack" >&2
   exit 2
@@ -399,6 +439,7 @@ if [[ "$dolt_refresh_enabled" == "true" && -z "$dolt_repo_snapshot" ]]; then
       ;;
   esac
 fi
+reuse_remote_dolt_snapshot_if_matching
 if service_selected edge; then
   if [[ -z "$edge_bundle" ]]; then
     case "$deployment_environment" in
