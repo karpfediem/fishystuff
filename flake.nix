@@ -198,6 +198,7 @@
             name = "fishystuff-dolt";
             serviceModule = serviceModules.dolt;
             configuration.fishystuff.dolt = {
+              dynamicUser = false;
               runtimeEnvFile = "/run/fishystuff/api/env";
               environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
             };

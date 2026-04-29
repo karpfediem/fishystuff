@@ -105,7 +105,7 @@ class api_db_host($st) {
 	$site_root_dir str = $st->site_root_dir || "/srv/fishystuff/site"
 	$cdn_root_dir str = $st->cdn_root_dir || "/srv/fishystuff/cdn"
 	$api_bundle struct{id str; runtime_overlays []struct{target_path str}; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $api_bundle_path)))
-	$dolt_bundle struct{id str; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $dolt_bundle_path)))
+	$dolt_bundle struct{id str; supervision struct{identity struct{user str; group str; dynamic_user bool}}; backends struct{systemd struct{units []struct{name str; install_path str}}}} = encoding.decode_json_flexible(os.readfile(fmt.printf("%s/bundle.json", $dolt_bundle_path)))
 	$api_runtime_overlays []struct{target_path str} = $api_bundle->runtime_overlays
 	$api_backends struct{systemd struct{units []struct{name str; install_path str}}} = $api_bundle->backends
 	$dolt_backends struct{systemd struct{units []struct{name str; install_path str}}} = $dolt_bundle->backends
@@ -113,6 +113,10 @@ class api_db_host($st) {
 	$dolt_systemd struct{units []struct{name str; install_path str}} = $dolt_backends->systemd
 	$api_unit struct{name str; install_path str} = $api_systemd->units[0]
 	$dolt_unit struct{name str; install_path str} = $dolt_systemd->units[0]
+	$dolt_identity struct{user str; group str; dynamic_user bool} = $dolt_bundle->supervision->identity
+	$dolt_runtime_user str = $dolt_identity->user || "fishystuff-dolt"
+	$dolt_runtime_group str = $dolt_identity->group || "fishystuff-dolt"
+	$dolt_dynamic_user bool = $dolt_identity->dynamic_user
 	$api_runtime_overlay struct{target_path str} = $api_runtime_overlays[0]
 	$api_service_name str = golang_strings.trim_suffix($api_unit->name, ".service")
 	$dolt_service_name str = golang_strings.trim_suffix($dolt_unit->name, ".service")
@@ -213,6 +217,53 @@ class api_db_host($st) {
 			state => "exists",
 			device => $dolt_volume_device,
 			type => $dolt_volume_fs_type,
+		}
+	}
+
+	if not $dolt_dynamic_user {
+		exec "fishystuff-dolt-group" {
+			cmd => "/usr/bin/bash",
+			args => [
+				"-e",
+				"-u",
+				"-o",
+				"pipefail",
+				"-c",
+				fmt.printf("if ! /usr/bin/getent group '%s' >/dev/null; then /usr/sbin/groupadd --system '%s'; fi", $dolt_runtime_group, $dolt_runtime_group),
+			],
+			donecmd => fmt.printf("/usr/bin/getent group '%s' >/dev/null", $dolt_runtime_group),
+			doneshell => "/usr/bin/bash",
+			ifcmd => fmt.printf("! /usr/bin/getent group '%s' >/dev/null", $dolt_runtime_group),
+			ifshell => "/usr/bin/bash",
+		}
+
+		exec "fishystuff-dolt-user" {
+			cmd => "/usr/bin/bash",
+			args => [
+				"-e",
+				"-u",
+				"-o",
+				"pipefail",
+				"-c",
+				fmt.printf("if ! /usr/bin/id -u '%s' >/dev/null 2>&1; then /usr/sbin/useradd --system --no-create-home --shell /usr/sbin/nologin --gid '%s' '%s'; fi", $dolt_runtime_user, $dolt_runtime_group, $dolt_runtime_user),
+			],
+			donecmd => fmt.printf("/usr/bin/id -u '%s' >/dev/null 2>&1", $dolt_runtime_user),
+			doneshell => "/usr/bin/bash",
+			ifcmd => fmt.printf("! /usr/bin/id -u '%s' >/dev/null 2>&1", $dolt_runtime_user),
+			ifshell => "/usr/bin/bash",
+		}
+
+		exec "fishystuff-dolt-state-owner" {
+			cmd => "/usr/bin/chown",
+			args => [
+				"-R",
+				fmt.printf("%s:%s", $dolt_runtime_user, $dolt_runtime_group),
+				$dolt_data_dir,
+			],
+			donecmd => fmt.printf("! /usr/bin/test -d '%s' || ! /usr/bin/find '%s' \\( ! -user '%s' -o ! -group '%s' \\) -print -quit | /usr/bin/grep -q .", $dolt_data_dir, $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group),
+			doneshell => "/usr/bin/bash",
+			ifcmd => fmt.printf("/usr/bin/test -d '%s' && /usr/bin/find '%s' \\( ! -user '%s' -o ! -group '%s' \\) -print -quit | /usr/bin/grep -q .", $dolt_data_dir, $dolt_data_dir, $dolt_runtime_user, $dolt_runtime_group),
+			ifshell => "/usr/bin/bash",
 		}
 	}
 
@@ -336,6 +387,12 @@ class api_db_host($st) {
 	File["/run/fishystuff/api/"] -> File["${api_env_file}"]
 	File["${api_env_file}"] -> Svc["${api_service_name}"]
 	File["${api_env_file}"] -> Svc["${dolt_service_name}"]
+	if not $dolt_dynamic_user {
+		Exec["fishystuff-dolt-group"] -> Exec["fishystuff-dolt-user"]
+		Exec["fishystuff-dolt-user"] -> Exec["fishystuff-dolt-state-owner"]
+		Exec["fishystuff-dolt-user"] -> Exec["systemd-unit-verify-fishystuff-dolt"]
+		Exec["fishystuff-dolt-state-owner"] -> Svc["${dolt_service_name}"]
+	}
 	Svc["fishystuff-vector"] -> Svc["${api_service_name}"]
 	Svc["${dolt_service_name}"] -> Svc["${api_service_name}"]
 	Svc["${api_service_name}"] -> Exec["fishystuff-api-restart"]

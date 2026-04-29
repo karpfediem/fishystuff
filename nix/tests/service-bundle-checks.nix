@@ -87,7 +87,7 @@ let
           test -L "${bundle}/artifacts/script/refresh"
           test "$(readlink -f "${bundle}/artifacts/script/refresh")" = "$refresh_path"
           grep -F "ExecReload=" "$unit_path" >/dev/null
-          grep -Fx "data_dir: /var/lib/fishystuff/dolt" "$config_path" >/dev/null
+          grep -Fx "data_dir: /var/lib/fishystuff/dolt/fishystuff" "$config_path" >/dev/null
           grep -Fx "cfg_dir: /var/lib/fishystuff/dolt/.doltcfg" "$config_path" >/dev/null
           grep -F "cp -R --no-preserve=ownership,mode" "$exe_path" >/dev/null
           if grep -F "cp -a" "$exe_path" >/dev/null; then
@@ -207,13 +207,15 @@ in
       HOME = "/var/lib/fishystuff/dolt/home";
     };
     requiredUnitLines = [
-      "DynamicUser=true"
+      "User=fishystuff-dolt"
+      "Group=fishystuff-dolt"
       "StateDirectory=fishystuff/dolt"
       "StateDirectoryMode=0750"
     ];
     requiredMaterializationHandle = "pkg/main";
     requiredMaterializationAcquisition = "substitute";
     forbiddenUnitLines = [
+      "DynamicUser=true"
       "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
     ];
     expectedReloadMode = "command";
