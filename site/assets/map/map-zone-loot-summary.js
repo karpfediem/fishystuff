@@ -125,6 +125,9 @@ export function normalizeZoneLootSummary(raw) {
                   .map((option) => ({
                     conditionText: trimString(option.conditionText),
                     conditionTooltip: trimString(option.conditionTooltip),
+                    dropRateText: trimString(option.dropRateText),
+                    dropRateSourceKind: trimString(option.dropRateSourceKind),
+                    dropRateTooltip: trimString(option.dropRateTooltip),
                     active: option.active === true,
                     speciesRows: Array.isArray(option.speciesRows)
                       ? option.speciesRows

@@ -47,6 +47,9 @@ pub struct ZoneLootSummaryGroupRow {
 pub struct ZoneLootSummaryConditionOption {
     pub condition_text: String,
     pub condition_tooltip: String,
+    pub drop_rate_text: String,
+    pub drop_rate_source_kind: String,
+    pub drop_rate_tooltip: String,
     pub active: bool,
     pub species_rows: Vec<ZoneLootSummarySpeciesRow>,
 }

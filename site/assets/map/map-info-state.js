@@ -111,12 +111,43 @@ function normalizeZoneLootConditionOptions(group) {
     .map((option) => ({
       conditionText: trimString(option?.conditionText),
       conditionTooltip: trimString(option?.conditionTooltip),
+      dropRateText: trimString(option?.dropRateText),
+      dropRateSourceKind: trimString(option?.dropRateSourceKind),
+      dropRateTooltip: trimString(option?.dropRateTooltip),
       active: option?.active === true,
       speciesRows: Array.isArray(option?.speciesRows)
         ? option.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
         : [],
     }))
     .filter((option) => option.conditionText || option.speciesRows.length > 0);
+}
+
+function rateLineageDetailFromTooltip(value) {
+  const detail = trimString(value);
+  if (!detail) {
+    return "";
+  }
+  const lineageStarts = ["main group ", "subgroup "]
+    .map((needle) => detail.indexOf(needle))
+    .filter((index) => index >= 0);
+  if (!lineageStarts.length) {
+    return "";
+  }
+  return detail.slice(Math.min(...lineageStarts)).trim();
+}
+
+function zoneLootRowsRateLineageDetail(rows) {
+  if (!Array.isArray(rows)) {
+    return "";
+  }
+  const details = [];
+  for (const row of rows) {
+    const detail = rateLineageDetailFromTooltip(row?.dropRateTooltip);
+    if (detail && !details.includes(detail)) {
+      details.push(detail);
+    }
+  }
+  return details.join(" | ");
 }
 
 function selectedZoneLootConditionIndex(options, conditionSelection, key) {
@@ -152,6 +183,11 @@ function buildZoneLootGroups(summary, conditionSelection = {}) {
       );
       const selectedCondition =
         conditionOptionIndex >= 0 ? conditionOptions[conditionOptionIndex] : null;
+      const selectedConditionRows = selectedCondition
+        ? selectedCondition.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
+        : null;
+      const selectedConditionRateLineage =
+        zoneLootRowsRateLineageDetail(selectedConditionRows);
       const fallbackRows = speciesRows
         .filter((row) => {
           const rowGroupLabel = trimString(row?.groupLabel);
@@ -167,9 +203,13 @@ function buildZoneLootGroups(summary, conditionSelection = {}) {
         fillColor: trimString(group?.fillColor),
         strokeColor: trimString(group?.strokeColor),
         textColor: trimString(group?.textColor),
-        dropRateText: trimString(group?.dropRateText),
-        dropRateSourceKind: trimString(group?.dropRateSourceKind),
-        dropRateTooltip: trimString(group?.dropRateTooltip),
+        dropRateText: trimString(selectedCondition?.dropRateText) || trimString(group?.dropRateText),
+        dropRateSourceKind:
+          trimString(selectedCondition?.dropRateSourceKind) || trimString(group?.dropRateSourceKind),
+        dropRateTooltip:
+          selectedConditionRateLineage ||
+          trimString(selectedCondition?.dropRateTooltip) ||
+          trimString(group?.dropRateTooltip),
         conditionText: trimString(selectedCondition?.conditionText) || trimString(group?.conditionText),
         conditionTooltip:
           trimString(selectedCondition?.conditionTooltip) || trimString(group?.conditionTooltip),
@@ -177,9 +217,7 @@ function buildZoneLootGroups(summary, conditionSelection = {}) {
         conditionOptions,
         conditionOptionIndex,
         conditionOptionKey,
-        rows: selectedCondition
-          ? selectedCondition.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row))
-          : fallbackRows,
+        rows: selectedConditionRows || fallbackRows,
       };
     })
     .filter((group) => group.label);

@@ -40,6 +40,9 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
         conditionOptions: [
           {
             conditionText: "Default",
+            dropRateText: "80%",
+            dropRateSourceKind: "database",
+            dropRateTooltip: "Default General source",
             active: true,
             speciesRows: [
               {
@@ -90,6 +93,9 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.deepEqual(summary.groups[0].catchMethods, ["rod"]);
   assert.equal(summary.groups[0].conditionOptions.length, 2);
   assert.equal(summary.groups[0].conditionOptions[0].conditionText, "Default");
+  assert.equal(summary.groups[0].conditionOptions[0].dropRateText, "80%");
+  assert.equal(summary.groups[0].conditionOptions[0].dropRateSourceKind, "database");
+  assert.equal(summary.groups[0].conditionOptions[0].dropRateTooltip, "Default General source");
   assert.equal(summary.groups[0].conditionOptions[0].active, true);
   assert.equal(summary.groups[0].conditionOptions[1].speciesRows[0].label, "Mystical Fish");
   assert.equal(summary.speciesRows[0].groupLabel, "General");

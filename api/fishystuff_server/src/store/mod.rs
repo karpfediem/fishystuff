@@ -32,6 +32,8 @@ pub struct CalculatorZoneLootEvidence {
     pub status: Option<String>,
     pub claim_count: Option<u32>,
     pub source_id: Option<String>,
+    pub source_label: Option<String>,
+    pub source_drop_label: Option<String>,
     pub slot_idx: Option<u8>,
     pub item_main_group_key: Option<i64>,
     pub subgroup_key: Option<i64>,
@@ -40,6 +42,9 @@ pub struct CalculatorZoneLootEvidence {
 #[derive(Debug, Clone, Default)]
 pub struct CalculatorZoneLootRateContribution {
     pub source_family: String,
+    pub source_id: Option<String>,
+    pub source_label: Option<String>,
+    pub source_drop_label: Option<String>,
     pub item_main_group_key: Option<i64>,
     pub option_idx: Option<u32>,
     pub subgroup_key: Option<i64>,

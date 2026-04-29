@@ -81,6 +81,21 @@ struct MainGroupOption {
 }
 
 #[derive(Debug, Clone)]
+struct SlotGroupSourceMeta {
+    source_id: String,
+    source_label: String,
+    source_drop_label: String,
+}
+
+#[derive(Debug, Clone)]
+struct ZoneGroupSlotRow {
+    slot_idx: u8,
+    item_main_group_key: i64,
+    catch_method: &'static str,
+    source: SlotGroupSourceMeta,
+}
+
+#[derive(Debug, Clone)]
 struct SlotSubgroupOptionMeta {
     item_main_group_key: i64,
     option_idx: u32,
@@ -233,6 +248,7 @@ fn build_community_presence_evidence(meta: &CommunityPresenceMeta) -> Calculator
         slot_idx: meta.slot_idx,
         item_main_group_key: meta.item_main_group_key,
         subgroup_key: meta.subgroup_key,
+        ..CalculatorZoneLootEvidence::default()
     }
 }
 
@@ -494,6 +510,9 @@ impl DoltMySqlStore {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let zone_query = format!(
             "SELECT \
+                source_id, \
+                source_label, \
+                source_drop_label, \
                 CAST(slot_idx AS SIGNED), \
                 CAST(item_main_group_key AS SIGNED) \
              FROM flockfish_zone_group_slots{as_of} \
@@ -501,15 +520,26 @@ impl DoltMySqlStore {
                AND resolution_status = 'numeric' \
              ORDER BY slot_idx"
         );
-        let zone_rows: Vec<(i64, i64)> = conn
+        let zone_rows: Vec<(String, String, String, i64, i64)> = conn
             .exec(zone_query, (zone_rgb.to_u32(),))
             .map_err(db_unavailable)?;
         let mut slot_rows = zone_rows
             .into_iter()
-            .filter_map(|(slot_idx, item_main_group_key)| {
-                let slot_idx = u8::try_from(slot_idx).ok()?;
-                (item_main_group_key > 0).then_some((slot_idx, item_main_group_key, "rod"))
-            })
+            .filter_map(
+                |(source_id, source_label, source_drop_label, slot_idx, item_main_group_key)| {
+                    let slot_idx = u8::try_from(slot_idx).ok()?;
+                    (item_main_group_key > 0).then_some(ZoneGroupSlotRow {
+                        slot_idx,
+                        item_main_group_key,
+                        catch_method: "rod",
+                        source: SlotGroupSourceMeta {
+                            source_id,
+                            source_label,
+                            source_drop_label,
+                        },
+                    })
+                },
+            )
             .collect::<Vec<_>>();
         let harpoon_query = format!(
             "SELECT CAST(DropIDHarpoon AS SIGNED) \
@@ -522,24 +552,37 @@ impl DoltMySqlStore {
             .exec_first(harpoon_query, (zone_rgb.r, zone_rgb.g, zone_rgb.b))
             .map_err(db_unavailable)?;
         if let Some(item_main_group_key) = harpoon_main_group_key.filter(|value| *value > 0) {
-            slot_rows.push((HARPOON_SLOT_IDX, item_main_group_key, "harpoon"));
+            slot_rows.push(ZoneGroupSlotRow {
+                slot_idx: HARPOON_SLOT_IDX,
+                item_main_group_key,
+                catch_method: "harpoon",
+                source: SlotGroupSourceMeta {
+                    source_id: "legacy_fishing_table".to_string(),
+                    source_label: "fishing_table".to_string(),
+                    source_drop_label: "DropIDHarpoon".to_string(),
+                },
+            });
         }
-        slot_rows.sort_by_key(|(slot_idx, _, _)| *slot_idx);
+        slot_rows.sort_by_key(|row| row.slot_idx);
         let slot_main_group_by_idx = slot_rows
             .iter()
-            .map(|(slot_idx, item_main_group_key, _)| (*slot_idx, *item_main_group_key))
+            .map(|row| (row.slot_idx, row.item_main_group_key))
             .collect::<HashMap<u8, i64>>();
         let slot_method_by_idx = slot_rows
             .iter()
-            .map(|(slot_idx, _, method)| (*slot_idx, (*method).to_string()))
+            .map(|row| (row.slot_idx, row.catch_method.to_string()))
             .collect::<HashMap<u8, String>>();
+        let slot_source_by_idx = slot_rows
+            .iter()
+            .map(|row| (row.slot_idx, row.source.clone()))
+            .collect::<HashMap<u8, SlotGroupSourceMeta>>();
 
         let mut subgroup_options = HashMap::<i64, Vec<MainGroupOption>>::new();
         let mut group_conditions_raw = HashMap::<i64, Vec<String>>::new();
         if !slot_rows.is_empty() {
             let main_group_ids = slot_rows
                 .iter()
-                .map(|(_, item_main_group_key, _)| *item_main_group_key)
+                .map(|row| row.item_main_group_key)
                 .collect::<HashSet<_>>()
                 .into_iter()
                 .collect::<Vec<_>>();
@@ -644,8 +687,8 @@ impl DoltMySqlStore {
         let mut rate_contributions_by_key =
             HashMap::<(u8, i32), Vec<CalculatorZoneLootRateContribution>>::new();
         let mut slot_item_subgroups = HashMap::<(u8, i32), Vec<i64>>::new();
-        for (slot_idx, item_main_group_key, _) in &slot_rows {
-            let Some(options) = subgroup_options.get(item_main_group_key) else {
+        for slot_row in &slot_rows {
+            let Some(options) = subgroup_options.get(&slot_row.item_main_group_key) else {
                 continue;
             };
             for option in options {
@@ -654,12 +697,15 @@ impl DoltMySqlStore {
                 };
                 for (item_id, variant_rate) in variants {
                     let weight = (option.select_rate as f64) * (*variant_rate as f64);
-                    let key = (*slot_idx, *item_id);
+                    let key = (slot_row.slot_idx, *item_id);
                     *aggregate_weights.entry(key).or_default() += weight;
                     rate_contributions_by_key.entry(key).or_default().push(
                         CalculatorZoneLootRateContribution {
                             source_family: "database".to_string(),
-                            item_main_group_key: Some(*item_main_group_key),
+                            source_id: Some(slot_row.source.source_id.clone()),
+                            source_label: Some(slot_row.source.source_label.clone()),
+                            source_drop_label: Some(slot_row.source.source_drop_label.clone()),
+                            item_main_group_key: Some(slot_row.item_main_group_key),
                             option_idx: Some(option.option_idx),
                             subgroup_key: Some(option.subgroup_key),
                             group_conditions_raw: option
@@ -680,19 +726,19 @@ impl DoltMySqlStore {
         let mut slot_subgroup_select_rate = HashMap::<(u8, i64), i64>::new();
         let mut slot_subgroup_option_meta = HashMap::<(u8, i64), SlotSubgroupOptionMeta>::new();
         let mut slot_option_count = HashMap::<u8, usize>::new();
-        for (slot_idx, item_main_group_key, _) in &slot_rows {
-            let Some(options) = subgroup_options.get(item_main_group_key) else {
+        for slot_row in &slot_rows {
+            let Some(options) = subgroup_options.get(&slot_row.item_main_group_key) else {
                 continue;
             };
-            slot_option_count.insert(*slot_idx, options.len());
+            slot_option_count.insert(slot_row.slot_idx, options.len());
             for option in options {
-                let key = (*slot_idx, option.subgroup_key);
+                let key = (slot_row.slot_idx, option.subgroup_key);
                 slot_subgroup_select_rate.insert(key, option.select_rate);
                 let conditions = option.condition_raw.iter().cloned().collect::<Vec<_>>();
                 slot_subgroup_option_meta.insert(
                     key,
                     SlotSubgroupOptionMeta {
-                        item_main_group_key: *item_main_group_key,
+                        item_main_group_key: slot_row.item_main_group_key,
                         option_idx: option.option_idx,
                         conditions: conditions.clone(),
                     },
@@ -813,7 +859,7 @@ impl DoltMySqlStore {
             &slot_subgroup_select_rate,
             &slot_option_count,
         );
-        for (key @ (slot_idx, item_id), (_, guess)) in &community_guess_by_key {
+        for (key @ (slot_idx, item_id), (guess_source_id, guess)) in &community_guess_by_key {
             if aggregate_weights.contains_key(key) {
                 continue;
             }
@@ -839,6 +885,9 @@ impl DoltMySqlStore {
                 .or_default()
                 .push(CalculatorZoneLootRateContribution {
                     source_family: "community".to_string(),
+                    source_id: Some(guess_source_id.clone()),
+                    source_label: Some("community_zone_fish_support".to_string()),
+                    source_drop_label: None,
                     item_main_group_key: option_meta.as_ref().map(|meta| meta.item_main_group_key),
                     option_idx: option_meta.as_ref().map(|meta| meta.option_idx),
                     subgroup_key: weight.subgroup_key,
@@ -943,6 +992,7 @@ impl DoltMySqlStore {
                     .unwrap_or_else(|| vec!["rod".to_string()]);
                 let mut evidence = Vec::new();
                 if let Some(db_weight) = aggregate_weights.get(&(slot_idx, item_id)).copied() {
+                    let slot_source = slot_source_by_idx.get(&slot_idx);
                     evidence.push(CalculatorZoneLootEvidence {
                         source_family: "database".to_string(),
                         claim_kind: "in_group_rate".to_string(),
@@ -951,6 +1001,10 @@ impl DoltMySqlStore {
                         normalized_rate: Some(db_weight / total_weight),
                         status: Some("best_effort".to_string()),
                         claim_count: None,
+                        source_id: slot_source.map(|source| source.source_id.clone()),
+                        source_label: slot_source.map(|source| source.source_label.clone()),
+                        source_drop_label: slot_source
+                            .map(|source| source.source_drop_label.clone()),
                         slot_idx: Some(slot_idx),
                         item_main_group_key: slot_main_group_by_idx.get(&slot_idx).copied(),
                         ..CalculatorZoneLootEvidence::default()
@@ -994,6 +1048,7 @@ impl DoltMySqlStore {
                         status: Some("guessed".to_string()),
                         claim_count: None,
                         source_id: Some(guess_source_id.clone()),
+                        source_label: Some("community_zone_fish_support".to_string()),
                         slot_idx: Some(guess.slot_idx),
                         item_main_group_key: slot_main_group_by_idx.get(&slot_idx).copied(),
                         subgroup_key: guess.subgroup_key,

@@ -84,6 +84,9 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             conditionOptions: [
               {
                 conditionText: "Default",
+                dropRateText: "80%",
+                dropRateSourceKind: "database",
+                dropRateTooltip: "Default General group lineage",
                 active: true,
                 speciesRows: [
                   {
@@ -104,6 +107,9 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
               },
               {
                 conditionText: "Fishing Level Guru 1+",
+                dropRateText: "80%",
+                dropRateSourceKind: "database",
+                dropRateTooltip: "Guru General group lineage",
                 active: false,
                 speciesRows: [
                   {
@@ -265,6 +271,9 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
             conditionOptions: [
               {
                 conditionText: "Default",
+                dropRateText: "1%",
+                dropRateSourceKind: "database",
+                dropRateTooltip: "stale parent lineage",
                 active: true,
                 speciesRows: [
                   {
@@ -272,12 +281,16 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
                     groupLabel: "Rare",
                     label: "Grunt",
                     dropRateText: "100%",
+                    dropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
                     catchMethods: ["rod"],
                   },
                 ],
               },
               {
                 conditionText: "Fishing Level Guru 1+",
+                dropRateText: "1%",
+                dropRateSourceKind: "database",
+                dropRateTooltip: "stale parent lineage",
                 active: false,
                 speciesRows: [
                   {
@@ -285,6 +298,7 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
                     groupLabel: "Rare",
                     label: "Mystical Fish",
                     dropRateText: "0.005%",
+                    dropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
                     catchMethods: ["rod"],
                   },
                 ],
@@ -299,6 +313,7 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
   const group = viewModel.panes.find((pane) => pane.id === "zone")?.sections[0]?.profiles?.[0]?.groups?.[0];
 
   assert.equal(group.conditionText, "Fishing Level Guru 1+");
+  assert.equal(group.dropRateTooltip, "main group 10990 -> subgroup 11152 · option 0");
   assert.equal(group.rows[0].label, "Mystical Fish");
   assert.equal(group.conditionOptionIndex, 1);
   assert.equal(group.conditionOptionKey, "2:Rare");

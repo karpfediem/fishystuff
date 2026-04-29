@@ -15,6 +15,17 @@ pub(super) struct LegacyZoneFishSupport {
     pub(super) encyclopedia_id: Option<i32>,
     pub(super) fish_name: Option<String>,
     pub(super) aggregate_weight: f64,
+    pub(super) lineages: Vec<LegacyZoneFishLineage>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct LegacyZoneFishLineage {
+    pub(super) slot_idx: u8,
+    pub(super) drop_rate: i64,
+    pub(super) item_main_group_key: i64,
+    pub(super) option_idx: u8,
+    pub(super) select_rate: i64,
+    pub(super) subgroup_key: i64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -271,13 +282,21 @@ impl DoltMySqlStore {
         }
 
         let mut fish_support: HashMap<i32, LegacyZoneFishSupport> = HashMap::new();
-        for (_slot_idx, drop_rate, item_main_group_key) in slot_rows {
+        for (slot_idx, drop_rate, item_main_group_key) in slot_rows {
             let Some(options) = subgroup_options.get(&item_main_group_key) else {
                 continue;
             };
-            for (_option_idx, select_rate, item_sub_group_key) in options {
+            for (option_idx, select_rate, item_sub_group_key) in options {
                 let Some(variants) = subgroup_variants.get(item_sub_group_key) else {
                     continue;
+                };
+                let lineage = LegacyZoneFishLineage {
+                    slot_idx,
+                    drop_rate,
+                    item_main_group_key,
+                    option_idx: *option_idx,
+                    select_rate: *select_rate,
+                    subgroup_key: *item_sub_group_key,
                 };
                 for (item_key, variant_rate) in variants {
                     let Ok(raw_fish_id) = i32::try_from(*item_key) else {
@@ -298,6 +317,9 @@ impl DoltMySqlStore {
                         .entry(item_id)
                         .and_modify(|entry| {
                             entry.aggregate_weight += aggregate_weight;
+                            if !entry.lineages.contains(&lineage) {
+                                entry.lineages.push(lineage.clone());
+                            }
                             if entry.fish_name.is_none() {
                                 entry.fish_name = fish_name.clone();
                             }
@@ -314,6 +336,7 @@ impl DoltMySqlStore {
                             encyclopedia_id,
                             fish_name,
                             aggregate_weight,
+                            lineages: vec![lineage.clone()],
                         });
                 }
             }

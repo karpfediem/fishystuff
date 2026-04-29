@@ -12,7 +12,9 @@ use crate::store::queries;
 use super::community_support::{
     CommunitySupportStatus, CommunityZoneFishSupport, CommunityZoneSupportSummary,
 };
-use super::legacy_support::{LegacyZoneFishSupport, LegacyZoneSupportSummary};
+use super::legacy_support::{
+    LegacyZoneFishLineage, LegacyZoneFishSupport, LegacyZoneSupportSummary,
+};
 use super::response::build_zone_profile_v2_response;
 
 fn zone_profile_request() -> ZoneProfileV2Request {
@@ -186,6 +188,14 @@ fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
                 encyclopedia_id: Some(8501),
                 fish_name: Some("Mudskipper".to_string()),
                 aggregate_weight: 0.62,
+                lineages: vec![LegacyZoneFishLineage {
+                    slot_idx: 4,
+                    drop_rate: 870_000,
+                    item_main_group_key: 9001,
+                    option_idx: 0,
+                    select_rate: 1_000_000,
+                    subgroup_key: 11054,
+                }],
             }],
             notes: vec!["legacy support evaluated".to_string()],
         },
@@ -209,6 +219,14 @@ fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
     assert_eq!(
         profile.presence_support.fish[0].claims[0].claim_type,
         ZoneClaimType::PresenceReferenced
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].claims[0].item_main_group_key,
+        Some(9001)
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].claims[0].subgroup_key,
+        Some(11054)
     );
     assert!(profile.ranking_evidence.fish.is_empty());
     assert_eq!(profile.diagnostics.public_state, ZonePublicState::Supported);
@@ -259,6 +277,7 @@ fn zone_profile_v2_keeps_ranking_and_legacy_claims_separate_for_same_fish() {
                 encyclopedia_id: Some(8501),
                 fish_name: Some("Mudskipper".to_string()),
                 aggregate_weight: 0.62,
+                lineages: Vec::new(),
             }],
             notes: Vec::new(),
         },
@@ -330,6 +349,10 @@ fn zone_profile_v2_merges_confirmed_community_support_without_blurring_ranking()
                 fish_name: Some("Mudskipper".to_string()),
                 status: CommunitySupportStatus::Confirmed,
                 claim_count: 2,
+                source_id: "community_zone_fish_support".to_string(),
+                slot_idx: Some(4),
+                item_main_group_key: Some(9001),
+                subgroup_key: Some(11054),
             }],
             notes: vec!["community support evaluated".to_string()],
         },
@@ -351,6 +374,16 @@ fn zone_profile_v2_merges_confirmed_community_support_without_blurring_ranking()
     assert_eq!(
         profile.presence_support.fish[0].claims[0].claim_type,
         ZoneClaimType::PresenceReferenced
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].claims[0]
+            .source_id
+            .as_deref(),
+        Some("community_zone_fish_support")
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].claims[0].subgroup_key,
+        Some(11054)
     );
     assert!(profile.ranking_evidence.fish.is_empty());
     assert_eq!(profile.diagnostics.public_state, ZonePublicState::Supported);
@@ -386,6 +419,10 @@ fn zone_profile_v2_maps_unconfirmed_community_rows_to_weak_hint() {
                 fish_name: Some("Sea Eel".to_string()),
                 status: CommunitySupportStatus::Unconfirmed,
                 claim_count: 1,
+                source_id: "community_zone_fish_support".to_string(),
+                slot_idx: None,
+                item_main_group_key: None,
+                subgroup_key: None,
             }],
             notes: Vec::new(),
         },
@@ -436,6 +473,10 @@ fn zone_profile_v2_maps_guessed_community_rows_to_reference_supported_presence()
                 fish_name: Some("Sea Eel".to_string()),
                 status: CommunitySupportStatus::Guessed,
                 claim_count: 1,
+                source_id: "manual_community_zone_fish_guess".to_string(),
+                slot_idx: Some(1),
+                item_main_group_key: Some(9002),
+                subgroup_key: Some(11055),
             }],
             notes: Vec::new(),
         },

@@ -1725,12 +1725,12 @@ async fn load_zone_loot_summary_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
-    let condition_options_by_slot =
-        build_zone_loot_summary_condition_options(&signals, &data, &base_zone_loot_entries);
     data.zone_loot_entries =
         apply_calculator_condition_context_to_loot_entries(&signals, &base_zone_loot_entries);
     data.zone_loot_entries =
         apply_zone_overlay_to_loot_entries(&signals, &signals.zone, &data.zone_loot_entries);
+    let condition_options_by_slot =
+        build_zone_loot_summary_condition_options(&signals, &data, &base_zone_loot_entries);
 
     Ok(derive_zone_loot_summary_response_with_condition_options(
         &signals,
@@ -6609,6 +6609,33 @@ fn zone_loot_summary_condition_option_fields(
     )
 }
 
+fn zone_loot_summary_condition_option_group_rate_fields(
+    slot_idx: u8,
+    chart_row: Option<&FishGroupChartRow>,
+    option_entries: &[CalculatorZoneLootEntry],
+) -> (String, String, String) {
+    let (mut drop_rate_text, mut drop_rate_source_kind, drop_rate_tooltip) =
+        zone_loot_group_drop_rate_fields(chart_row);
+    if drop_rate_text.is_empty()
+        && slot_idx == 6
+        && option_entries
+            .iter()
+            .any(|entry| entry.slot_idx == slot_idx && entry.within_group_rate > 0.0)
+    {
+        drop_rate_text = percent_value_text(100.0);
+        drop_rate_source_kind = "database".to_string();
+    }
+
+    (
+        drop_rate_text,
+        drop_rate_source_kind,
+        append_provenance_detail(
+            drop_rate_tooltip,
+            zone_loot_group_lineage_detail(slot_idx, option_entries),
+        ),
+    )
+}
+
 fn build_zone_loot_summary_condition_options(
     signals: &CalculatorSignals,
     data: &CalculatorData,
@@ -6685,9 +6712,18 @@ fn build_zone_loot_summary_condition_options(
             {
                 continue;
             }
+            let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
+                zone_loot_summary_condition_option_group_rate_fields(
+                    slot_idx,
+                    chart_row,
+                    &option_entries,
+                );
             slot_options.push(ZoneLootSummaryConditionOption {
                 condition_text,
                 condition_tooltip,
+                drop_rate_text,
+                drop_rate_source_kind,
+                drop_rate_tooltip,
                 active: active_option_idx == Some(option.option_idx),
                 species_rows,
             });
@@ -6958,6 +6994,154 @@ fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'stat
         .unwrap_or("derived")
 }
 
+fn non_empty_owned(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
+fn source_detail(
+    source_id: Option<&str>,
+    source_drop_label: Option<&str>,
+    source_label: Option<&str>,
+) -> Option<String> {
+    let mut source_parts = Vec::new();
+    if let Some(source_id) = non_empty_owned(source_id) {
+        source_parts.push(source_id);
+    }
+    if let Some(source_drop_label) = non_empty_owned(source_drop_label) {
+        source_parts.push(source_drop_label);
+    }
+
+    let mut details = Vec::new();
+    if !source_parts.is_empty() {
+        details.push(format!("source {}", source_parts.join(" ")));
+    }
+    if let Some(source_label) = non_empty_owned(source_label) {
+        if !source_parts.iter().any(|part| part == &source_label) {
+            details.push(source_label);
+        }
+    }
+
+    (!details.is_empty()).then(|| details.join(" · "))
+}
+
+fn append_provenance_detail(base: String, detail: Option<String>) -> String {
+    match detail.filter(|detail| !detail.trim().is_empty()) {
+        Some(detail) if base.trim().is_empty() => detail,
+        Some(detail) => format!("{base} · {detail}"),
+        None => base,
+    }
+}
+
+fn contribution_lineage_detail(
+    contribution: &CalculatorZoneLootRateContribution,
+) -> Option<String> {
+    let mut parts = match (contribution.item_main_group_key, contribution.subgroup_key) {
+        (Some(item_main_group_key), Some(subgroup_key)) => {
+            vec![format!(
+                "main group {item_main_group_key} -> subgroup {subgroup_key}"
+            )]
+        }
+        (Some(item_main_group_key), None) => vec![format!("main group {item_main_group_key}")],
+        (None, Some(subgroup_key)) => vec![format!("subgroup {subgroup_key}")],
+        (None, None) => Vec::new(),
+    };
+    if let Some(option_idx) = contribution.option_idx {
+        parts.push(format!("option {option_idx}"));
+    }
+    if let Some(source) = source_detail(
+        contribution.source_id.as_deref(),
+        contribution.source_drop_label.as_deref(),
+        contribution.source_label.as_deref(),
+    ) {
+        parts.push(source);
+    }
+
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+fn evidence_lineage_detail(evidence: &CalculatorZoneLootEvidence) -> Option<String> {
+    let mut parts = match (evidence.item_main_group_key, evidence.subgroup_key) {
+        (Some(item_main_group_key), Some(subgroup_key)) => {
+            vec![format!(
+                "main group {item_main_group_key} -> subgroup {subgroup_key}"
+            )]
+        }
+        (Some(item_main_group_key), None) => vec![format!("main group {item_main_group_key}")],
+        (None, Some(subgroup_key)) => vec![format!("subgroup {subgroup_key}")],
+        (None, None) => Vec::new(),
+    };
+    if let Some(source) = source_detail(
+        evidence.source_id.as_deref(),
+        evidence.source_drop_label.as_deref(),
+        evidence.source_label.as_deref(),
+    ) {
+        parts.push(source);
+    }
+
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+fn loot_species_rate_lineage_detail(
+    entry: &CalculatorZoneLootEntry,
+    source_family: &str,
+) -> Option<String> {
+    let mut seen = HashSet::new();
+    let mut details = Vec::new();
+    for contribution in entry
+        .rate_contributions
+        .iter()
+        .filter(|contribution| contribution.source_family == source_family)
+    {
+        let Some(detail) = contribution_lineage_detail(contribution) else {
+            continue;
+        };
+        if seen.insert(detail.clone()) {
+            details.push(detail);
+        }
+    }
+
+    if details.is_empty() {
+        for evidence in entry
+            .evidence
+            .iter()
+            .filter(|evidence| evidence.source_family == source_family)
+        {
+            let Some(detail) = evidence_lineage_detail(evidence) else {
+                continue;
+            };
+            if seen.insert(detail.clone()) {
+                details.push(detail);
+            }
+        }
+    }
+
+    (!details.is_empty()).then(|| details.join(" | "))
+}
+
+fn zone_loot_group_lineage_detail(
+    slot_idx: u8,
+    entries: &[CalculatorZoneLootEntry],
+) -> Option<String> {
+    let mut seen = HashSet::new();
+    let mut details = Vec::new();
+    for contribution in entries
+        .iter()
+        .filter(|entry| entry.slot_idx == slot_idx)
+        .flat_map(|entry| entry.rate_contributions.iter())
+        .filter(|contribution| contribution.source_family == "database")
+    {
+        let Some(detail) = contribution_lineage_detail(contribution) else {
+            continue;
+        };
+        if seen.insert(detail.clone()) {
+            details.push(detail);
+        }
+    }
+
+    (!details.is_empty()).then(|| details.join(" | "))
+}
+
 fn loot_species_drop_rate_tooltip(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
@@ -7018,9 +7202,12 @@ fn loot_species_drop_rate_tooltip(
         })
         .and_then(|evidence| evidence_display_rate(signals, evidence))
         .map(|rate| {
-            text_with_vars(
-                "calculator.server.loot.tooltip.db_rate",
-                &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+            append_provenance_detail(
+                text_with_vars(
+                    "calculator.server.loot.tooltip.db_rate",
+                    &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+                ),
+                loot_species_rate_lineage_detail(entry, "database"),
             )
         });
 
@@ -7032,9 +7219,12 @@ fn loot_species_drop_rate_tooltip(
         })
         .and_then(|evidence| evidence_display_rate(signals, evidence))
         .map(|rate| {
-            text_with_vars(
-                "calculator.server.loot.tooltip.community_guess",
-                &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+            append_provenance_detail(
+                text_with_vars(
+                    "calculator.server.loot.tooltip.community_guess",
+                    &[("rate", &format!("{}%", format_evidence_percent(rate)))],
+                ),
+                loot_species_rate_lineage_detail(entry, "community"),
             )
         });
 
@@ -7446,7 +7636,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 text_color: row.text_color.to_string(),
                 drop_rate_text: row.count_share_text.clone(),
                 drop_rate_source_kind: row.drop_rate_source_kind.clone(),
-                drop_rate_tooltip: row.drop_rate_tooltip.clone(),
+                drop_rate_tooltip: append_provenance_detail(
+                    row.drop_rate_tooltip.clone(),
+                    zone_loot_group_lineage_detail(slot_idx, &data.zone_loot_entries),
+                ),
                 condition_text,
                 condition_tooltip,
                 catch_methods: group_methods_by_slot
@@ -7495,7 +7688,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     String::new()
                 },
                 drop_rate_source_kind: fish_group_drop_rate_source_kind(chart_row),
-                drop_rate_tooltip: fish_group_drop_rate_tooltip(chart_row),
+                drop_rate_tooltip: append_provenance_detail(
+                    fish_group_drop_rate_tooltip(chart_row),
+                    zone_loot_group_lineage_detail(*slot_idx, &data.zone_loot_entries),
+                ),
                 condition_text,
                 condition_tooltip,
                 catch_methods: group_methods_by_slot
@@ -7554,7 +7750,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     text_color: text_color.clone(),
                     drop_rate_text: percent_value_text(100.0),
                     drop_rate_source_kind: "database".to_string(),
-                    drop_rate_tooltip: String::new(),
+                    drop_rate_tooltip: append_provenance_detail(
+                        String::new(),
+                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                    ),
                     condition_text,
                     condition_tooltip,
                     catch_methods: group_methods_by_slot
@@ -7618,7 +7817,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     text_color: text_color.clone(),
                     drop_rate_text: drop_rate_text.clone(),
                     drop_rate_source_kind: drop_rate_source_kind.clone(),
-                    drop_rate_tooltip: drop_rate_tooltip.clone(),
+                    drop_rate_tooltip: append_provenance_detail(
+                        drop_rate_tooltip.clone(),
+                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                    ),
                     condition_text,
                     condition_tooltip,
                     catch_methods: group_methods_by_slot
@@ -7680,7 +7882,10 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     text_color: text_color.clone(),
                     drop_rate_text: String::new(),
                     drop_rate_source_kind: String::new(),
-                    drop_rate_tooltip: String::new(),
+                    drop_rate_tooltip: append_provenance_detail(
+                        String::new(),
+                        zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
+                    ),
                     condition_text,
                     condition_tooltip,
                     catch_methods: group_methods_by_slot
@@ -14745,8 +14950,8 @@ mod tests {
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
         filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        init_signals_patch_map, load_calculator_runtime_data, loot_species_evidence_text,
-        loot_species_presence_source_kind, loot_species_presence_text,
+        init_signals_patch_map, load_calculator_runtime_data, loot_species_drop_rate_tooltip,
+        loot_species_evidence_text, loot_species_presence_source_kind, loot_species_presence_text,
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pet_skill_limit_for_tier_key,
@@ -14756,10 +14961,10 @@ mod tests {
         render_pet_talent_badges, render_searchable_select_results,
         render_select_option_search_text, render_target_fish_panel,
         select_options_from_pet_entries_for_tier, trade_sale_multiplier_for_species,
-        CalculatorData, CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
-        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
-        FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
-        TargetFishSummary,
+        zone_loot_group_lineage_detail, CalculatorData, CalculatorDatastarQuery, CalculatorLocale,
+        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption,
+        SelectOptionPresentation, TargetFishSummary,
     };
 
     struct MockStore;
@@ -17898,6 +18103,92 @@ mod tests {
     }
 
     #[test]
+    fn loot_species_rate_tooltip_includes_group_subgroup_and_source_lineage() {
+        let signals = CalculatorSignals {
+            show_normalized_select_rates: false,
+            ..CalculatorSignals::default()
+        };
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.95,
+            evidence: vec![CalculatorZoneLootEvidence {
+                source_family: "database".to_string(),
+                claim_kind: "in_group_rate".to_string(),
+                scope: "group".to_string(),
+                rate: Some(0.95),
+                normalized_rate: Some(0.95),
+                source_id: Some("flockfish_workbook".to_string()),
+                source_label: Some("Flockfish final combined zone group table".to_string()),
+                source_drop_label: Some("DropID PRIZE CATCH".to_string()),
+                item_main_group_key: Some(11081),
+                ..CalculatorZoneLootEvidence::default()
+            }],
+            rate_contributions: vec![CalculatorZoneLootRateContribution {
+                source_family: "database".to_string(),
+                source_id: Some("flockfish_workbook".to_string()),
+                source_label: Some("Flockfish final combined zone group table".to_string()),
+                source_drop_label: Some("DropID PRIZE CATCH".to_string()),
+                item_main_group_key: Some(11081),
+                option_idx: Some(0),
+                subgroup_key: Some(11161),
+                weight: 950_000_000_000.0,
+                ..CalculatorZoneLootRateContribution::default()
+            }],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(
+            loot_species_drop_rate_tooltip(&signals, &entry, CalculatorLocale::EnUs),
+            "DB 95% · main group 11081 -> subgroup 11161 · option 0 · source flockfish_workbook DropID PRIZE CATCH · Flockfish final combined zone group table"
+        );
+    }
+
+    #[test]
+    fn zone_loot_group_lineage_deduplicates_species_contributions() {
+        let entries = vec![
+            CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 8377,
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    source_id: Some("flockfish_workbook".to_string()),
+                    source_label: Some("Flockfish final combined zone group table".to_string()),
+                    source_drop_label: Some("DropID PRIZE CATCH".to_string()),
+                    item_main_group_key: Some(11081),
+                    option_idx: Some(0),
+                    subgroup_key: Some(11161),
+                    weight: 10_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 8382,
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    source_id: Some("flockfish_workbook".to_string()),
+                    source_label: Some("Flockfish final combined zone group table".to_string()),
+                    source_drop_label: Some("DropID PRIZE CATCH".to_string()),
+                    item_main_group_key: Some(11081),
+                    option_idx: Some(0),
+                    subgroup_key: Some(11161),
+                    weight: 40_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+        ];
+
+        assert_eq!(
+            zone_loot_group_lineage_detail(1, &entries),
+            Some(
+                "main group 11081 -> subgroup 11161 · option 0 · source flockfish_workbook DropID PRIZE CATCH · Flockfish final combined zone group table"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
     fn loot_species_evidence_text_shows_explicit_subgroup_scope_when_present() {
         let raw_signals = CalculatorSignals {
             show_normalized_select_rates: false,
@@ -18686,6 +18977,7 @@ mod tests {
                         subgroup_key: Some(11152),
                         group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
                         weight: 473_500_000_000.0,
+                        ..CalculatorZoneLootRateContribution::default()
                     },
                     CalculatorZoneLootRateContribution {
                         source_family: "database".to_string(),
@@ -18715,6 +19007,7 @@ mod tests {
                     subgroup_key: Some(11152),
                     group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
                     weight: 50_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
                 }],
                 ..CalculatorZoneLootEntry::default()
             },
@@ -18778,6 +19071,7 @@ mod tests {
                         subgroup_key: Some(11152),
                         group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
                         weight: 473_500_000_000.0,
+                        ..CalculatorZoneLootRateContribution::default()
                     },
                     CalculatorZoneLootRateContribution {
                         source_family: "database".to_string(),
@@ -18807,6 +19101,7 @@ mod tests {
                     subgroup_key: Some(11152),
                     group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
                     weight: 50_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
                 }],
                 ..CalculatorZoneLootEntry::default()
             },
@@ -18871,6 +19166,11 @@ mod tests {
             .find(|option| option.active)
             .expect("default branch should be active below Guru 1");
         assert_eq!(active_option.condition_text, "Default");
+        assert_eq!(active_option.drop_rate_text, "100%");
+        assert!(active_option
+            .drop_rate_tooltip
+            .contains("main group 10990 -> subgroup 10990"));
+        assert!(active_option.drop_rate_tooltip.contains("option 1"));
         assert_eq!(active_option.species_rows.len(), 1);
         assert_eq!(active_option.species_rows[0].label, "Grunt");
         let guru_option = rare_group
@@ -18886,6 +19186,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["Grunt", "Mystical fish"]
         );
+        assert_eq!(guru_option.drop_rate_text, "100%");
+        assert!(guru_option
+            .drop_rate_tooltip
+            .contains("main group 10990 -> subgroup 11152"));
+        assert!(guru_option.drop_rate_tooltip.contains("option 0"));
     }
 
     #[test]
@@ -18897,11 +19202,15 @@ mod tests {
                 name: "Lower bracket harpoon fish".to_string(),
                 rate_contributions: vec![CalculatorZoneLootRateContribution {
                     source_family: "database".to_string(),
+                    source_id: Some("legacy_fishing_table".to_string()),
+                    source_label: Some("fishing_table".to_string()),
+                    source_drop_label: Some("DropIDHarpoon".to_string()),
                     item_main_group_key: Some(10901),
                     option_idx: Some(0),
                     subgroup_key: Some(10916),
                     group_conditions_raw: vec!["lifestat(1,1)>199;lifestat(1,1)<700;".to_string()],
                     weight: 1_000_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
                 }],
                 ..CalculatorZoneLootEntry::default()
             },
@@ -18911,11 +19220,15 @@ mod tests {
                 name: "Middle bracket harpoon fish".to_string(),
                 rate_contributions: vec![CalculatorZoneLootRateContribution {
                     source_family: "database".to_string(),
+                    source_id: Some("legacy_fishing_table".to_string()),
+                    source_label: Some("fishing_table".to_string()),
+                    source_drop_label: Some("DropIDHarpoon".to_string()),
                     item_main_group_key: Some(10901),
                     option_idx: Some(1),
                     subgroup_key: Some(10917),
                     group_conditions_raw: vec!["lifestat(1,1)>699;lifestat(1,1)<1200;".to_string()],
                     weight: 1_000_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
                 }],
                 ..CalculatorZoneLootEntry::default()
             },
@@ -18925,11 +19238,15 @@ mod tests {
                 name: "Lifeskill fallback harpoon fish".to_string(),
                 rate_contributions: vec![CalculatorZoneLootRateContribution {
                     source_family: "database".to_string(),
+                    source_id: Some("legacy_fishing_table".to_string()),
+                    source_label: Some("fishing_table".to_string()),
+                    source_drop_label: Some("DropIDHarpoon".to_string()),
                     item_main_group_key: Some(10901),
                     option_idx: Some(3),
                     subgroup_key: Some(10901),
                     group_conditions_raw: vec!["getLifeLevel(1)>34;".to_string()],
                     weight: 1_000_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
                 }],
                 ..CalculatorZoneLootEntry::default()
             },
@@ -18979,6 +19296,43 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![820117]
         );
+
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                lifeskill_levels: vec![CalculatorLifeskillLevelEntry {
+                    key: "35".to_string(),
+                    name: "Professional 5".to_string(),
+                    index: 35,
+                    order: 35,
+                    lifeskill_level_drr: 0.0,
+                }],
+                ..CalculatorCatalogResponse::default()
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: DataLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: mastery_700_entries,
+        };
+        let condition_options_by_slot =
+            build_zone_loot_summary_condition_options(&mastery_700, &data, &base_entries);
+        let active_harpoon_option = condition_options_by_slot
+            .get(&6)
+            .and_then(|options| options.iter().find(|option| option.active))
+            .expect("harpoon mastery branch should have active group provenance");
+
+        assert_eq!(active_harpoon_option.condition_text, "Mastery 700-1199");
+        assert_eq!(active_harpoon_option.drop_rate_text, "100%");
+        assert!(active_harpoon_option
+            .drop_rate_tooltip
+            .contains("main group 10901 -> subgroup 10917"));
+        assert!(active_harpoon_option
+            .drop_rate_tooltip
+            .contains("source legacy_fishing_table DropIDHarpoon"));
+        assert!(active_harpoon_option
+            .drop_rate_tooltip
+            .contains("fishing_table"));
     }
 
     #[test]

@@ -10,7 +10,7 @@ use fishystuff_api::models::zone_profile_v2::{
 use fishystuff_api::models::zone_stats::{DriftInfo, ZoneStatsResponse, ZoneStatus};
 
 use super::community_support::{CommunitySupportStatus, CommunityZoneSupportSummary};
-use super::legacy_support::LegacyZoneSupportSummary;
+use super::legacy_support::{LegacyZoneFishLineage, LegacyZoneSupportSummary};
 
 fn ranking_status_from_zone_status(status: ZoneStatus) -> ZoneRankingStatus {
     match status {
@@ -117,6 +117,64 @@ fn support_note_from_community_status(status: CommunitySupportStatus) -> &'stati
     }
 }
 
+fn legacy_source_revision(request: &ZoneProfileV2Request) -> Option<String> {
+    request
+        .ref_id
+        .as_ref()
+        .map(|ref_id| format!("legacy_ref:{ref_id}"))
+        .or_else(|| Some("legacy_runtime_tables".to_string()))
+}
+
+fn legacy_claim_for_lineage(
+    request: &ZoneProfileV2Request,
+    lineage: Option<&LegacyZoneFishLineage>,
+) -> ZoneSupportClaim {
+    let confidence_note = lineage
+        .map(|lineage| {
+            format!(
+                "supported by legacy fishing tables via slot {} drop rate {}, main group {}, option {} select rate {}, subgroup {}",
+                lineage.slot_idx,
+                lineage.drop_rate,
+                lineage.item_main_group_key,
+                lineage.option_idx,
+                lineage.select_rate,
+                lineage.subgroup_key
+            )
+        })
+        .unwrap_or_else(|| {
+            "supported by legacy fishing tables for this zone via group-table resolution"
+                .to_string()
+        });
+
+    ZoneSupportClaim {
+        source_family: ZoneSourceFamily::Legacy,
+        claim_type: ZoneClaimType::PresenceReferenced,
+        confidence_note: Some(confidence_note),
+        observed_at_ts_utc: None,
+        source_revision: legacy_source_revision(request),
+        source_id: Some("legacy_fishing_tables".to_string()),
+        source_table: Some(
+            "fishing_table -> item_main_group_table -> item_sub_group_table".to_string(),
+        ),
+        slot_idx: lineage.map(|lineage| lineage.slot_idx),
+        item_main_group_key: lineage.map(|lineage| lineage.item_main_group_key),
+        subgroup_key: lineage.map(|lineage| lineage.subgroup_key),
+    }
+}
+
+fn legacy_claims_for_lineages(
+    request: &ZoneProfileV2Request,
+    lineages: &[LegacyZoneFishLineage],
+) -> Vec<ZoneSupportClaim> {
+    if lineages.is_empty() {
+        return vec![legacy_claim_for_lineage(request, None)];
+    }
+    lineages
+        .iter()
+        .map(|lineage| legacy_claim_for_lineage(request, Some(lineage)))
+        .collect()
+}
+
 pub(super) fn build_zone_profile_v2_response(
     request: &ZoneProfileV2Request,
     layer_revision_id: &str,
@@ -217,6 +275,11 @@ pub(super) fn build_zone_profile_v2_response(
                         ),
                         observed_at_ts_utc: zone_stats.confidence.last_seen_ts_utc,
                         source_revision: Some(format!("layer_revision:{layer_revision_id}")),
+                        source_id: Some(format!("layer_revision:{layer_revision_id}")),
+                        source_table: Some("event_zone_ring_support".to_string()),
+                        slot_idx: None,
+                        item_main_group_key: None,
+                        subgroup_key: None,
                     }],
                 },
                 ranking_rank: Some(ranking_rank),
@@ -226,20 +289,7 @@ pub(super) fn build_zone_profile_v2_response(
     }
 
     for legacy_fish in legacy_fish_rows {
-        let legacy_claim = ZoneSupportClaim {
-            source_family: ZoneSourceFamily::Legacy,
-            claim_type: ZoneClaimType::PresenceReferenced,
-            confidence_note: Some(
-                "supported by legacy fishing tables for this zone via group-table resolution"
-                    .to_string(),
-            ),
-            observed_at_ts_utc: None,
-            source_revision: request
-                .ref_id
-                .as_ref()
-                .map(|ref_id| format!("legacy_ref:{ref_id}"))
-                .or_else(|| Some("legacy_runtime_tables".to_string())),
-        };
+        let legacy_claims = legacy_claims_for_lineages(request, &legacy_fish.lineages);
 
         if let Some(accumulator) = presence_by_item.get_mut(&legacy_fish.item_id) {
             accumulator.legacy_weight += legacy_fish.aggregate_weight;
@@ -251,7 +301,7 @@ pub(super) fn build_zone_profile_v2_response(
                 &mut accumulator.fish.source_badges,
                 ZoneSourceFamily::Legacy,
             );
-            accumulator.fish.claims.push(legacy_claim);
+            accumulator.fish.claims.extend(legacy_claims);
             if accumulator.fish.fish_name.is_none() {
                 accumulator.fish.fish_name = legacy_fish.fish_name.clone();
             }
@@ -273,7 +323,7 @@ pub(super) fn build_zone_profile_v2_response(
                         fish_name: legacy_fish.fish_name,
                         support_grade: ZoneSupportGrade::ReferenceSupported,
                         source_badges: vec![ZoneSourceFamily::Legacy],
-                        claims: vec![legacy_claim],
+                        claims: legacy_claims,
                     },
                     ranking_rank: None,
                     legacy_weight: legacy_fish.aggregate_weight,
@@ -295,6 +345,11 @@ pub(super) fn build_zone_profile_v2_response(
                 .as_ref()
                 .map(|ref_id| format!("community_ref:{ref_id}"))
                 .or_else(|| Some("community_zone_fish_support".to_string())),
+            source_id: Some(community_fish.source_id.clone()),
+            source_table: Some("community_zone_fish_support".to_string()),
+            slot_idx: community_fish.slot_idx,
+            item_main_group_key: community_fish.item_main_group_key,
+            subgroup_key: community_fish.subgroup_key,
         };
 
         if let Some(accumulator) = presence_by_item.get_mut(&community_fish.item_id) {

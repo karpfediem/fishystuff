@@ -148,6 +148,16 @@ pub struct ZoneSupportClaim {
     pub observed_at_ts_utc: Option<Timestamp>,
     #[serde(default)]
     pub source_revision: Option<String>,
+    #[serde(default)]
+    pub source_id: Option<String>,
+    #[serde(default)]
+    pub source_table: Option<String>,
+    #[serde(default)]
+    pub slot_idx: Option<u8>,
+    #[serde(default)]
+    pub item_main_group_key: Option<i64>,
+    #[serde(default)]
+    pub subgroup_key: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -450,6 +460,11 @@ mod tests {
                 confidence_note: Some("curated subgroup hint".to_string()),
                 observed_at_ts_utc: None,
                 source_revision: Some("sheet:v1".to_string()),
+                source_id: Some("community_presence_sheet".to_string()),
+                source_table: Some("community_zone_fish_support".to_string()),
+                slot_idx: Some(1),
+                item_main_group_key: Some(9001),
+                subgroup_key: Some(11054),
             }],
         };
 

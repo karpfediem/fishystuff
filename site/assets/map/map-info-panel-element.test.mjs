@@ -195,6 +195,9 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
           conditionOptions: [
             {
               conditionText: "Default",
+              dropRateText: "1%",
+              dropRateSourceKind: "database",
+              dropRateTooltip: "stale parent lineage",
               active: true,
               speciesRows: [
                 {
@@ -202,12 +205,16 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
                   groupLabel: "Rare",
                   label: "Grunt",
                   dropRateText: "100%",
+                  dropRateTooltip: "DB 100% · main group 10990 -> subgroup 10990 · option 1",
                   catchMethods: ["rod"],
                 },
               ],
             },
             {
               conditionText: "Fishing Level Guru 1+",
+              dropRateText: "1%",
+              dropRateSourceKind: "database",
+              dropRateTooltip: "stale parent lineage",
               active: false,
               speciesRows: [
                 {
@@ -215,6 +222,7 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
                   groupLabel: "Rare",
                   label: "Mystical Fish",
                   dropRateText: "0.005%",
+                  dropRateTooltip: "DB 0.005% · main group 10990 -> subgroup 11152 · option 0",
                   catchMethods: ["rod"],
                 },
               ],
@@ -261,6 +269,7 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
 
   assert.equal(element._state.zoneLootConditionSelection["2:Rare"], 1);
   assert.match(panelSlot.innerHTML, /Fishing Level Guru 1\+/);
+  assert.match(panelSlot.innerHTML, /main group 10990 -&gt; subgroup 11152 · option 0/);
   assert.match(panelSlot.innerHTML, /Mystical Fish/);
 });
 installMapTestI18n();
