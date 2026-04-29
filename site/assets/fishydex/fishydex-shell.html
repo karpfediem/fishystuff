@@ -47,9 +47,10 @@
        _loading: true,
        _caught_stamp_fish_id: null,
        _favourite_stamp_fish_id: null,
+       _user_presets: { version: 0, collections: {} },
        _fishydex_actions: {
-         exportCaughtToken: 0,
-         importCaughtToken: 0,
+         saveDexPresetToken: 0,
+         discardDexPresetToken: 0,
          closeDetailsToken: 0,
        },
        _api_error_message: '',
@@ -181,14 +182,20 @@
             </div>
           </div>
         <div class="fishydex-actions">
+          <fishy-preset-manager
+            class="fishydex-preset-manager"
+            data-preset-collection="fishydex-presets"
+          ></fishy-preset-manager>
           <button type="button"
-                  class="btn btn-sm btn-soft btn-primary fishydex-button"
-                  data-on:click="$_fishydex_actions.exportCaughtToken = ($_fishydex_actions.exportCaughtToken || 0) + 1"
-                  data-i18n-text="fishydex.progress.export"></button>
+                  class="btn btn-sm btn-primary fishydex-button"
+                  style="display: none"
+                  data-show="window.Fishydex.presetCollectionCanSave($_user_presets, 'fishydex-presets')"
+                  data-on:click="$_fishydex_actions.saveDexPresetToken = ($_fishydex_actions.saveDexPresetToken || 0) + 1"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-check-badge-solid"></use></svg><span data-i18n-text="presets.button.save"></span></button>
           <button type="button"
-                  class="btn btn-sm btn-outline fishydex-button"
-                  data-on:click="$_fishydex_actions.importCaughtToken = ($_fishydex_actions.importCaughtToken || 0) + 1"
-                  data-i18n-text="fishydex.progress.import"></button>
+                  class="btn btn-sm btn-warning btn-outline fishydex-button"
+                  style="display: none"
+                  data-show="window.Fishydex.presetCollectionCanDiscard($_user_presets, 'fishydex-presets')"
+                  data-on:click="$_fishydex_actions.discardDexPresetToken = ($_fishydex_actions.discardDexPresetToken || 0) + 1"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-clear"></use></svg><span data-i18n-text="presets.button.discard"></span></button>
         </div>
         </div>
       </fieldset>

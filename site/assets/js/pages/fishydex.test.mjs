@@ -31,6 +31,12 @@ const ENGLISH_MESSAGES = Object.freeze({
       "utf8",
     ),
   ),
+  ...parseFluentMessages(
+    fs.readFileSync(
+      new URL("../../../i18n/fluent/en-US/presets.ftl", import.meta.url),
+      "utf8",
+    ),
+  ),
 });
 
 function translateMessage(key, vars = {}) {
@@ -296,6 +302,9 @@ function createContext(localStorageInitial = {}, options = {}) {
       return recordToast("error", message, options);
     },
   };
+  if (options.userPresets) {
+    window.__fishystuffUserPresets = options.userPresets;
+  }
   const localStorage = new MemoryStorage(localStorageInitial);
   const timers = new Map();
   let nextTimerId = 1;
@@ -400,9 +409,10 @@ function defaultSignals() {
     _filter_panel_collapsed: false,
     supports_guide_view: false,
     _loading: true,
+    _user_presets: { version: 0, collections: {} },
     _fishydex_actions: {
-      exportCaughtToken: 0,
-      importCaughtToken: 0,
+      saveDexPresetToken: 0,
+      discardDexPresetToken: 0,
       closeDetailsToken: 0,
     },
     _api_error_message: "",
@@ -487,90 +497,248 @@ test("fishydex persists panel collapse state in fishydex ui storage", () => {
   );
 });
 
-test("fishydex export action token copies caught ids and shows a toast", async () => {
-  const env = createContext();
-  const signals = defaultSignals();
-  let copiedText = "";
-  env.navigator.clipboard = {
-    writeText(value) {
-      copiedText = String(value);
-      return Promise.resolve();
+test("fishydex registers a dex preset adapter for caught and favourite data only", () => {
+  let registered = null;
+  const tracked = [];
+  const userPresets = {
+    bindDatastar(signals) {
+      signals._user_presets = { version: 1, collections: {} };
     },
+    registerCollectionAdapter(collectionKey, adapter) {
+      registered = { collectionKey, adapter };
+      return adapter;
+    },
+    trackCurrentPayload(collectionKey, options = {}) {
+      tracked.push({ collectionKey, payload: options.payload });
+      return { kind: "current" };
+    },
+    refreshDatastar() {},
   };
+  const env = createContext({}, { userPresets });
+  const signals = defaultSignals();
 
   env.window.Fishydex.restore(signals);
+
+  assert.equal(registered.collectionKey, "fishydex-presets");
   Object.assign(signals, {
+    search_query: "eel",
+    caught_filter: "missing",
     _shared_fish: {
-      caughtIds: [8473, 8476],
-      favouriteIds: [],
-    },
-    _fishydex_actions: {
-      exportCaughtToken: 1,
-      importCaughtToken: 0,
-      closeDetailsToken: 0,
+      caughtIds: [8476, 8473],
+      favouriteIds: [8476],
     },
   });
 
+  assert.deepEqual(registered.adapter.capture(), {
+    caughtIds: [8473, 8476],
+    favouriteIds: [8476],
+  });
+  assert.equal(Object.hasOwn(registered.adapter.capture(), "search_query"), false);
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
-      _fishydex_actions: {
-        exportCaughtToken: 1,
-        importCaughtToken: 0,
-        closeDetailsToken: 0,
-      },
+      _shared_fish: signals._shared_fish,
     },
   });
-  await Promise.resolve();
-  await Promise.resolve();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-
-  assert.equal(copiedText, JSON.stringify([8473, 8476], null, 2));
-  assert.deepEqual(env.toastCalls, [
-    {
-      tone: "success",
-      message: "Copied 2 caught fish IDs.",
-      options: {},
+  assert.deepEqual(tracked.at(-1), {
+    collectionKey: "fishydex-presets",
+    payload: {
+      caughtIds: [8473, 8476],
+      favouriteIds: [8476],
     },
-  ]);
+  });
+
+  const applied = registered.adapter.apply({
+    caughtIds: [100, 99],
+    favouriteIds: [99],
+    search_query: "ignored",
+  });
+
+  assert.deepEqual(applied, {
+    caughtIds: [99, 100],
+    favouriteIds: [99],
+  });
+  assert.equal(signals.search_query, "eel");
+  assert.equal(signals.caught_filter, "missing");
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._shared_fish)), {
+    caughtIds: [99, 100],
+    favouriteIds: [99],
+  });
+  assert.equal(env.localStorage.getItem("fishystuff.fishydex.caught.v1"), "[99,100]");
+  assert.equal(env.localStorage.getItem("fishystuff.fishydex.favourites.v1"), "[99]");
 });
 
-test("fishydex import action token updates caught ids from prompt input", () => {
-  const env = createContext();
+test("fishydex restores the active dex preset working copy before legacy progress storage", () => {
+  let adapter = null;
+  const userPresets = {
+    bindDatastar(signals) {
+      signals._user_presets = { version: 1, collections: {} };
+    },
+    registerCollectionAdapter(_collectionKey, nextAdapter) {
+      adapter = nextAdapter;
+      return nextAdapter;
+    },
+    snapshot() {
+      return {
+        collections: {
+          "fishydex-presets": {
+            activeWorkingCopyId: "current_1",
+          },
+        },
+      };
+    },
+    activeWorkingCopy() {
+      return {
+        id: "current_1",
+        payload: {
+          caughtIds: [8476],
+          favouriteIds: [8473],
+        },
+      };
+    },
+    trackCurrentPayload() {
+      return { kind: "current" };
+    },
+    refreshDatastar() {},
+  };
+  const env = createContext({
+    "fishystuff.fishydex.caught.v1": "[100]",
+    "fishystuff.fishydex.favourites.v1": "[101]",
+  }, { userPresets });
   const signals = defaultSignals();
-  env.window.prompt = () => JSON.stringify({ 8473: true, 8476: true });
+
+  env.window.Fishydex.restore(signals);
+
+  assert.ok(adapter);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._shared_fish)), {
+    caughtIds: [8476],
+    favouriteIds: [8473],
+  });
+  assert.equal(env.localStorage.getItem("fishystuff.fishydex.caught.v1"), "[8476]");
+  assert.equal(env.localStorage.getItem("fishystuff.fishydex.favourites.v1"), "[8473]");
+});
+
+test("fishydex save action delegates to the shared dex preset collection", () => {
+  const calls = [];
+  const userPresets = {
+    bindDatastar(signals) {
+      signals._user_presets = {
+        version: 1,
+        collections: {
+          "fishydex-presets": { canSave: true, canDiscard: true },
+        },
+      };
+    },
+    registerCollectionAdapter(_collectionKey, adapter) {
+      this.adapter = adapter;
+      return adapter;
+    },
+    trackCurrentPayload(collectionKey, options = {}) {
+      calls.push(["track", collectionKey, options.payload]);
+      return { kind: "current" };
+    },
+    currentActionState(collectionKey) {
+      calls.push(["action-state", collectionKey]);
+      return { canSave: true, canDiscard: true };
+    },
+    saveCurrent(collectionKey) {
+      calls.push(["save", collectionKey]);
+      return {
+        action: "created",
+        preset: { name: "Dex 1" },
+      };
+    },
+    refreshDatastar() {
+      calls.push(["refresh"]);
+    },
+  };
+  const env = createContext({}, { userPresets });
+  const signals = defaultSignals();
 
   env.window.Fishydex.restore(signals);
   Object.assign(signals, {
     _fishydex_actions: {
-      exportCaughtToken: 0,
-      importCaughtToken: 1,
+      saveDexPresetToken: 1,
+      discardDexPresetToken: 0,
       closeDetailsToken: 0,
     },
   });
-
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
-      _fishydex_actions: {
-        exportCaughtToken: 0,
-        importCaughtToken: 1,
-        closeDetailsToken: 0,
-      },
+      _fishydex_actions: signals._fishydex_actions,
     },
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(signals._shared_fish)), {
-    caughtIds: [8473, 8476],
-    favouriteIds: [],
+  assert.deepEqual(
+    calls.filter((call) => call[0] === "save"),
+    [["save", "fishydex-presets"]],
+  );
+  assert.deepEqual(env.toastCalls.at(-1), {
+    tone: "success",
+    message: 'Saved new preset "Dex 1".',
+    options: {},
   });
-  assert.deepEqual(env.toastCalls, [
-    {
-      tone: "success",
-      message: "Imported 2 caught fish IDs.",
-      options: {},
+});
+
+test("fishydex discard action delegates to the shared dex preset collection", () => {
+  const calls = [];
+  const userPresets = {
+    bindDatastar(signals) {
+      signals._user_presets = {
+        version: 1,
+        collections: {
+          "fishydex-presets": { canSave: true, canDiscard: true },
+        },
+      };
     },
-  ]);
+    registerCollectionAdapter(_collectionKey, adapter) {
+      this.adapter = adapter;
+      return adapter;
+    },
+    trackCurrentPayload(collectionKey, options = {}) {
+      calls.push(["track", collectionKey, options.payload]);
+      return { kind: "current" };
+    },
+    currentActionState(collectionKey) {
+      calls.push(["action-state", collectionKey]);
+      return { canSave: true, canDiscard: true };
+    },
+    discardCurrent(collectionKey, options = {}) {
+      calls.push(["discard", collectionKey, options.refreshCurrent]);
+      return { action: "discarded", current: null };
+    },
+    refreshDatastar() {
+      calls.push(["refresh"]);
+    },
+  };
+  const env = createContext({}, { userPresets });
+  const signals = defaultSignals();
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    _fishydex_actions: {
+      saveDexPresetToken: 0,
+      discardDexPresetToken: 1,
+      closeDetailsToken: 0,
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _fishydex_actions: signals._fishydex_actions,
+    },
+  });
+
+  assert.deepEqual(
+    calls.filter((call) => call[0] === "discard"),
+    [["discard", "fishydex-presets", false]],
+  );
+  assert.deepEqual(env.toastCalls.at(-1), {
+    tone: "info",
+    message: "Discarded current changes.",
+    options: {},
+  });
 });
 
 test("fishydex clears API feedback on filter signal patches", () => {
@@ -818,8 +986,6 @@ test("fishydex closes the details modal after a close action token is consumed",
 
   Object.assign(signals, {
     _fishydex_actions: {
-      exportCaughtToken: 0,
-      importCaughtToken: 0,
       closeDetailsToken: 1,
     },
   });
@@ -828,8 +994,6 @@ test("fishydex closes the details modal after a close action token is consumed",
     type: "datastar-signal-patch",
     detail: {
       _fishydex_actions: {
-        exportCaughtToken: 0,
-        importCaughtToken: 0,
         closeDetailsToken: 1,
       },
     },

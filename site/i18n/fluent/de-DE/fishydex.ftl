@@ -8,8 +8,11 @@ fishydex.progress.title = Katalogfortschritt
 fishydex.progress.remaining = {$count} verbleibend
 fishydex.progress.empty = Noch keine Katalogeinträge
 fishydex.progress.empty_grade = Keine Katalogfische
-fishydex.progress.export = Exportieren
-fishydex.progress.import = Importieren
+
+fishydex.presets.title = Dex-Vorlagen
+fishydex.presets.open = Dex-Vorlagen
+fishydex.presets.default = Standard-Dex
+fishydex.presets.default_name = Dex {$index}
 
 fishydex.filter.panel = Filter
 fishydex.filter.expand = Filterbereich erweitern
@@ -103,12 +106,6 @@ fishydex.action.favourite.add = {$name} zu den Favoriten hinzufügen
 fishydex.action.favourite.remove = {$name} aus den Favoriten entfernen
 fishydex.action.caught.mark = {$name} als gefangen markieren
 fishydex.action.caught.unmark = {$name} als nicht gefangen markieren
-
-fishydex.io.copied = {$count} gefangene Fisch-IDs kopiert.
-fishydex.io.downloaded = {$count} gefangene Fisch-IDs heruntergeladen.
-fishydex.io.import_prompt = JSON mit gefangenen Fischen einfügen (Array von IDs oder eine id:true-Map).
-fishydex.io.imported = {$count} gefangene Fisch-IDs importiert.
-fishydex.io.import_failed = Import fehlgeschlagen. Füge ein JSON-Array von Fisch-IDs oder eine Map wie {"8474": true} ein.
 
 fishydex.api.best_spots_error = Daten zu den besten Spots konnten nicht geladen werden ({$message}).
 fishydex.api.fish_error = Fish-API-Anfrage fehlgeschlagen.

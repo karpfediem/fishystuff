@@ -2,6 +2,7 @@
   const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
   const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
   const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
+  const FISHYDEX_PRESET_COLLECTION_KEY = "fishydex-presets";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const GRADE_COLOR_ORDER = ["red", "yellow", "blue", "green", "white", "unknown"];
   const GRADE_FILTER_COLOR_ORDER = ["red", "yellow", "blue", "green", "white"];
@@ -22,8 +23,8 @@
     "ssssfssssshschcffsffffssssssssshhsssfsfffffcfcfffffffffssssssssssssssssssssssssssssssffffffffffssfsssssssssssssssssssssssssssssssssssssssssssssssssssssssfffffffffffffffffffffffhhhhhhhhhhhhhfffsscsshhhshffffffffffffffffffffchsssshsssssfsf?ssssssfssfsssssfssssfsss?ssssssf?sfssssffff";
   const SILVER_FORMATTER = new Intl.NumberFormat();
   const FISHYDEX_ACTION_DEFAULTS = Object.freeze({
-    exportCaughtToken: 0,
-    importCaughtToken: 0,
+    saveDexPresetToken: 0,
+    discardDexPresetToken: 0,
     closeDetailsToken: 0,
   });
   const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter|guide_view)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
@@ -31,14 +32,18 @@
     /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction|catalog_view)(?:\.|$)/;
   const DEX_SYNC_SIGNAL_PATTERN =
     /^(fish(?:\.|$)|revision(?:\.|$)|search_query(?:\.|$)|caught_filter(?:\.|$)|favourite_filter(?:\.|$)|grade_filters(?:\.|$)|method_filters(?:\.|$)|show_dried(?:\.|$)|sort_field(?:\.|$)|sort_direction(?:\.|$)|catalog_view(?:\.|$)|_shared_fish(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_fishydex_actions(?:\.|$))/;
+  const FISHYDEX_PRESET_SIGNAL_PATTERN = /^_shared_fish(?:\.|$)/;
   const state = {
     persistBinding: null,
     feedbackBinding: null,
     syncBinding: null,
+    presetBinding: null,
     persistedUiJson: "",
     persistedCaughtJson: "",
     persistedFavouriteJson: "",
     uiStateRestored: false,
+    presetAdapterBound: false,
+    applyingPreset: false,
     stampTimers: new Map(),
     fishById: new Map(),
     bestSpotsByFish: new Map(),
@@ -194,6 +199,15 @@
     signalStore.patchSignals(patch);
   }
 
+  function sharedUserPresets() {
+    const helper = window.__fishystuffUserPresets;
+    return helper
+      && typeof helper.registerCollectionAdapter === "function"
+      && typeof helper.trackCurrentPayload === "function"
+      ? helper
+      : null;
+  }
+
   function datastarPersistHelper() {
     const helper = window.__fishystuffDatastarPersist;
     return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
@@ -313,14 +327,23 @@
     return [];
   }
 
-  function parseCaughtJson(raw) {
-    const helper = sharedFishStateHelper();
-    return helper ? helper.parse(raw) : normalizeStoredFishIds(JSON.parse(raw));
+  function normalizeDexPresetPayload(payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    return {
+      caughtIds: normalizeStoredFishIds(source.caughtIds),
+      favouriteIds: normalizeStoredFishIds(source.favouriteIds),
+    };
   }
 
-  function parseFavouriteJson(raw) {
-    const helper = sharedFishStateHelper();
-    return helper ? helper.parse(raw) : normalizeStoredFishIds(JSON.parse(raw));
+  function dexPresetPayload(signals) {
+    return normalizeDexPresetPayload(sharedFishSnapshot(signals));
+  }
+
+  function defaultDexPresetPayload() {
+    return {
+      caughtIds: [],
+      favouriteIds: [],
+    };
   }
 
   function normalizeMethod(value) {
@@ -526,12 +549,192 @@
     persistFavouriteIds(sharedFish.favouriteIds);
   }
 
+  function replaceDexPresetSignals(payload, options = {}) {
+    const normalized = normalizeDexPresetPayload(payload);
+    state.suppressCardAnimation = true;
+    patchSignals({
+      _shared_fish: {
+        caughtIds: normalized.caughtIds,
+        favouriteIds: normalized.favouriteIds,
+      },
+      _api_error_message: "",
+      _api_error_hint: "",
+    });
+    persistCaughtIds(normalized.caughtIds);
+    persistFavouriteIds(normalized.favouriteIds);
+    const signals = signalObject();
+    if (signals && options.sync !== false) {
+      sync(signals);
+    }
+    return signals ? dexPresetPayload(signals) : normalized;
+  }
+
+  function trackDexPresetCurrent(signals) {
+    const helper = sharedUserPresets();
+    if (!helper || state.applyingPreset || !signals || typeof signals !== "object") {
+      return null;
+    }
+    const tracked = helper.trackCurrentPayload(FISHYDEX_PRESET_COLLECTION_KEY, {
+      payload: dexPresetPayload(signals),
+    });
+    helper.refreshDatastar?.();
+    return tracked;
+  }
+
+  function applyStoredDexPresetState() {
+    const helper = sharedUserPresets();
+    const collection = helper?.snapshot?.()?.collections?.[FISHYDEX_PRESET_COLLECTION_KEY];
+    if (!collection?.activeWorkingCopyId || typeof helper?.activeWorkingCopy !== "function") {
+      return null;
+    }
+    const active = helper.activeWorkingCopy(FISHYDEX_PRESET_COLLECTION_KEY);
+    if (!active?.payload) {
+      return null;
+    }
+    state.applyingPreset = true;
+    try {
+      replaceDexPresetSignals(active.payload, { sync: false });
+    } finally {
+      state.applyingPreset = false;
+    }
+    return active;
+  }
+
+  function bindDexPresetAdapter() {
+    if (state.presetAdapterBound) {
+      return;
+    }
+    const helper = sharedUserPresets();
+    if (!helper) {
+      return;
+    }
+    helper.registerCollectionAdapter(FISHYDEX_PRESET_COLLECTION_KEY, {
+      titleKey: "fishydex.presets.title",
+      titleFallback: "Dex presets",
+      openLabelKey: "fishydex.presets.open",
+      openLabelFallback: "Dex Presets",
+      managerIconAlias: "nav-dex",
+      fileBaseName: "fishystuff-dex-presets",
+      defaultPresetName(index) {
+        return languageText("fishydex.presets.default_name", {
+          index: String(index),
+        });
+      },
+      fixedPresets() {
+        return [{
+          id: "default",
+          name: languageText("fishydex.presets.default"),
+          payload: defaultDexPresetPayload(),
+        }];
+      },
+      normalizePayload: normalizeDexPresetPayload,
+      capture() {
+        const signals = signalObject();
+        return signals && typeof signals === "object" ? dexPresetPayload(signals) : null;
+      },
+      apply(payload) {
+        state.applyingPreset = true;
+        try {
+          return replaceDexPresetSignals(payload);
+        } finally {
+          state.applyingPreset = false;
+        }
+      },
+    });
+    state.presetAdapterBound = true;
+  }
+
+  function bindDexPresetListener() {
+    if (state.presetBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    if (!patchMatches) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      if (!state.uiStateRestored || state.applyingPreset) {
+        return;
+      }
+      const patch = event && event.detail ? event.detail : null;
+      if (!patchMatches(patch, { include: FISHYDEX_PRESET_SIGNAL_PATTERN })) {
+        return;
+      }
+      trackDexPresetCurrent(signalObject());
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    state.presetBinding = {
+      dispose() {
+        document.removeEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
+  }
+
+  function presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey) {
+    const key = String(collectionKey ?? "").trim();
+    if (!key) {
+      return null;
+    }
+    const collections = userPresetsSnapshot?.collections;
+    return collections && typeof collections === "object" ? collections[key] || null : null;
+  }
+
+  function presetCollectionCanSave(userPresetsSnapshot, collectionKey) {
+    return Boolean(presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey)?.canSave);
+  }
+
+  function presetCollectionCanDiscard(userPresetsSnapshot, collectionKey) {
+    return Boolean(presetCollectionActionSnapshot(userPresetsSnapshot, collectionKey)?.canDiscard);
+  }
+
+  function saveDexPresetCurrent() {
+    const helper = sharedUserPresets();
+    if (!helper || typeof helper.saveCurrent !== "function") {
+      return null;
+    }
+    const actionState = helper.currentActionState(FISHYDEX_PRESET_COLLECTION_KEY, {
+      refresh: true,
+      patchDatastar: false,
+    });
+    if (!actionState.canSave) {
+      return null;
+    }
+    const result = helper.saveCurrent(FISHYDEX_PRESET_COLLECTION_KEY);
+    helper.refreshDatastar?.();
+    return result;
+  }
+
+  function discardDexPresetCurrent() {
+    const helper = sharedUserPresets();
+    if (!helper || typeof helper.discardCurrent !== "function") {
+      return null;
+    }
+    const actionState = helper.currentActionState(FISHYDEX_PRESET_COLLECTION_KEY, {
+      refresh: true,
+      patchDatastar: false,
+    });
+    if (!actionState.canDiscard) {
+      return null;
+    }
+    const result = helper.discardCurrent(FISHYDEX_PRESET_COLLECTION_KEY, {
+      refreshCurrent: false,
+    });
+    helper.refreshDatastar?.();
+    return result?.current ? null : result;
+  }
+
   function restore(signals) {
     connect(signals);
     const language = currentLanguage();
+    sharedUserPresets()?.bindDatastar?.(signals);
     bindPersistListener();
     bindFeedbackResetListener();
     bindSyncListener();
+    bindDexPresetAdapter();
+    bindDexPresetListener();
     const uiState = loadUiStateFromStorage();
     const caughtState = loadCaughtIdsFromStorage();
     const favouriteState = loadFavouriteIdsFromStorage();
@@ -546,11 +749,12 @@
       },
       _selected_fish_id: 0,
       _fishydex_actions: {
-        exportCaughtToken: 0,
-        importCaughtToken: 0,
+        saveDexPresetToken: 0,
+        discardDexPresetToken: 0,
         closeDetailsToken: 0,
       },
     });
+    applyStoredDexPresetState();
     const initialStatusMessage =
       uiState.statusMessage || caughtState.statusMessage || favouriteState.statusMessage;
     const appRoot = document.getElementById("fishydex-app");
@@ -562,6 +766,7 @@
       showToastOnce("fishydex.restore.status", "warning", initialStatusMessage);
     }
     sync(signals);
+    trackDexPresetCurrent(signals);
   }
 
   function toggleFishIds(values, fishId) {
@@ -1268,11 +1473,22 @@
     const consumption = fishydexActionTokens.consume(
       snapshot && typeof snapshot === "object" ? snapshot._fishydex_actions : null,
       {
-        exportCaughtToken: () => {
-          void exportCaught(sharedFishSnapshot(snapshot).caughtIds);
+        saveDexPresetToken: () => {
+          try {
+            showPresetSaveToast(saveDexPresetCurrent());
+          } catch (error) {
+            showPresetActionError(error, "presets.error.save");
+          }
+          return true;
         },
-        importCaughtToken: () => {
-          importCaught();
+        discardDexPresetToken: () => {
+          try {
+            if (discardDexPresetCurrent()) {
+              showToast("info", languageText("presets.toast.discarded"));
+            }
+          } catch (error) {
+            showPresetActionError(error, "presets.error.discard");
+          }
           return true;
         },
         closeDetailsToken: () => {
@@ -1822,18 +2038,6 @@
     }
   }
 
-  function downloadJson(filename, text) {
-    const blob = new Blob([text], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function showToast(tone, message, options = {}) {
     const toast = window.__fishystuffToast;
     if (!toast || !message) {
@@ -1873,41 +2077,18 @@
     return result;
   }
 
-  async function exportCaught(caughtIds) {
-    const normalized = normalizeStoredFishIds(caughtIds);
-    const text = JSON.stringify(normalized, null, 2);
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        showToast("success", languageText("fishydex.io.copied", { count: normalized.length }));
-        return;
-      }
-    } catch (_error) {
-    }
-    downloadJson("fishystuff-fishydex-caught.json", text);
-    showToast("info", languageText("fishydex.io.downloaded", { count: normalized.length }));
-  }
-
-  function importCaught() {
-    const raw = window.prompt(languageText("fishydex.io.import_prompt"));
-    if (raw === null) {
+  function showPresetSaveToast(result) {
+    const savedPreset = result?.preset;
+    if (!savedPreset) {
       return;
     }
-    try {
-      const caughtIds = parseCaughtJson(raw);
-      const currentSharedFish = sharedFishSnapshot(signalObject());
-      patchSignals({
-        _shared_fish: {
-          caughtIds: caughtIds,
-          favouriteIds: currentSharedFish.favouriteIds,
-        },
-        _api_error_message: "",
-        _api_error_hint: "",
-      });
-      showToast("success", languageText("fishydex.io.imported", { count: caughtIds.length }));
-    } catch (_error) {
-      showToast("error", languageText("fishydex.io.import_failed"));
-    }
+    const key = result.action === "created" ? "presets.toast.created" : "presets.toast.saved";
+    const message = languageText(key, { name: savedPreset.name || "" });
+    showToast("success", message);
+  }
+
+  function showPresetActionError(_error, fallbackKey) {
+    showToast("error", languageText(fallbackKey));
   }
 
   function apiUrl(pathname) {
@@ -1979,5 +2160,8 @@
     remainingLabel: remainingLabel,
     matchesLabel: matchesLabel,
     sortLabel: sortLabel,
+    dexPresetCollectionKey: FISHYDEX_PRESET_COLLECTION_KEY,
+    presetCollectionCanSave,
+    presetCollectionCanDiscard,
   };
 })();
