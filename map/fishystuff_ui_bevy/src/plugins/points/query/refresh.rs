@@ -4,6 +4,7 @@ use fishystuff_api::models::events::EventPointCompact;
 use fishystuff_api::models::events::{EventsQueryMode, MapBboxPx};
 
 use crate::bridge::contract::FishyMapSearchExpressionNode;
+use crate::config::DRAG_THRESHOLD;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::events::{
     cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, ViewSelection,
@@ -20,6 +21,7 @@ use crate::plugins::api::{
     SemanticFieldFilterState, ZoneMembershipFilter,
 };
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::input::PanState;
 use crate::plugins::points::query::evidence::zone_membership_binding_support;
 
 use super::super::render::view_bbox_map_px;
@@ -64,6 +66,16 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     if !refresh.snapshot.loaded {
         refresh.points.status = "points: snapshot pending".to_string();
         clear_render_points(&mut refresh.points, &mut refresh.render_state);
+        return;
+    }
+    if refresh.pan.dragging
+        && refresh.pan.drag_distance > DRAG_THRESHOLD
+        && !refresh.points.points.is_empty()
+    {
+        refresh.points.status = format!(
+            "{}; pan-refresh deferred",
+            points_status_line(&refresh.points, &refresh.snapshot)
+        );
         return;
     }
 
@@ -182,6 +194,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
             zone_rgb_u32: None,
             sample_count: point.sample_count,
             aggregated: point.aggregated,
+            event_indices: point.event_indices,
             point_samples: point.point_samples,
         })
         .collect();
@@ -221,6 +234,7 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     fish_catalog: Res<'w, FishCatalog>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     display_state: Res<'w, MapDisplayState>,
+    pan: Res<'w, PanState>,
     view_mode: Res<'w, ViewModeState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,

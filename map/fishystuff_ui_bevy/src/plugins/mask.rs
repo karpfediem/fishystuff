@@ -4,6 +4,7 @@ use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
 use crate::map::camera::map2d::map2d_cursor_to_world;
+use crate::map::events::EventsSnapshotState;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
@@ -116,6 +117,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     let point_samples = point_hover_samples_at_world_point(
         world_point,
         &context.points,
+        &context.snapshot,
         &context.display_state,
         &context.point_camera_q,
     );
@@ -166,6 +168,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     let point_samples = point_samples_at_world_point(
         world_point,
         &context.points,
+        &context.snapshot,
         &context.display_state,
         &context.point_camera_q,
     );
@@ -304,6 +307,7 @@ struct HoverUpdateContext<'w, 's> {
     hover: ResMut<'w, HoverState>,
     pan: Res<'w, PanState>,
     points: Res<'w, PointsState>,
+    snapshot: Res<'w, EventsSnapshotState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
@@ -327,6 +331,7 @@ struct MaskClickContext<'w, 's> {
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,
     points: Res<'w, PointsState>,
+    snapshot: Res<'w, EventsSnapshotState>,
     display_state: Res<'w, MapDisplayState>,
     pan: Res<'w, PanState>,
     bootstrap: Res<'w, ApiBootstrapState>,

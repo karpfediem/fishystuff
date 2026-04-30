@@ -672,6 +672,7 @@ mod tests {
             zone_rgb_u32: None,
             sample_count: 4,
             aggregated: true,
+            event_indices: Vec::new(),
             point_samples: Vec::new(),
         };
         let mut cache = PointIconCache::default();

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use fishystuff_api::models::events::{EventPointCompact, EventsQueryMode, MapBboxPx};
 
@@ -16,6 +16,7 @@ pub struct DerivedRenderPoint {
     pub fish_id: Option<i32>,
     pub sample_count: u32,
     pub aggregated: bool,
+    pub event_indices: Vec<usize>,
     pub point_samples: Vec<PointSampleSummary>,
 }
 
@@ -66,6 +67,7 @@ pub fn cluster_view_events(
                 fish_id: Some(event.fish_id),
                 sample_count: 1,
                 aggregated: false,
+                event_indices: vec![*idx],
                 point_samples: vec![point_sample_summary_for_event(event)],
             });
         }
@@ -80,7 +82,7 @@ pub fn cluster_view_events(
     }
 
     let cluster_bucket_px = cluster_bucket_px.max(1);
-    let mut bins: BTreeMap<(i32, i32), ClusterAcc> = BTreeMap::new();
+    let mut bins: HashMap<(i32, i32), ClusterAcc> = HashMap::new();
     for idx in filtered_indices {
         let Some(event) = events.get(*idx) else {
             continue;
@@ -89,12 +91,14 @@ pub fn cluster_view_events(
             event.map_px_x.div_euclid(cluster_bucket_px),
             event.map_px_y.div_euclid(cluster_bucket_px),
         );
-        bins.entry(key).or_default().push(event);
+        bins.entry(key).or_default().push(*idx, event);
     }
 
+    let mut bins = bins.into_iter().collect::<Vec<_>>();
+    bins.sort_by_key(|(key, _)| *key);
     let mut points = Vec::with_capacity(bins.len());
-    for acc in bins.into_values() {
-        points.push(acc.to_render_point());
+    for (_, acc) in bins {
+        points.push(acc.into_render_point());
     }
 
     ClusterOutput {
@@ -127,11 +131,11 @@ struct ClusterAcc {
     sum_world_z: i64,
     world_count: u32,
     fish_counts: HashMap<i32, u32>,
-    point_samples: Vec<PointSampleSummary>,
+    event_indices: Vec<usize>,
 }
 
 impl ClusterAcc {
-    fn push(&mut self, event: &EventPointCompact) {
+    fn push(&mut self, idx: usize, event: &EventPointCompact) {
         self.count = self.count.saturating_add(1);
         self.sum_map_x += i64::from(event.map_px_x);
         self.sum_map_y += i64::from(event.map_px_y);
@@ -141,11 +145,10 @@ impl ClusterAcc {
             self.world_count = self.world_count.saturating_add(1);
         }
         *self.fish_counts.entry(event.fish_id).or_insert(0) += 1;
-        self.point_samples
-            .push(point_sample_summary_for_event(event));
+        self.event_indices.push(idx);
     }
 
-    fn to_render_point(&self) -> DerivedRenderPoint {
+    fn into_render_point(self) -> DerivedRenderPoint {
         let count_i64 = i64::from(self.count.max(1));
         let top_fish_id = self.top_fish_id();
         DerivedRenderPoint {
@@ -172,7 +175,8 @@ impl ClusterAcc {
             fish_id: top_fish_id,
             sample_count: self.count.max(1),
             aggregated: true,
-            point_samples: sorted_point_samples(&self.point_samples, &self.fish_counts),
+            event_indices: self.event_indices,
+            point_samples: Vec::new(),
         }
     }
 
@@ -192,7 +196,7 @@ impl ClusterAcc {
     }
 }
 
-fn point_sample_summary_for_event(event: &EventPointCompact) -> PointSampleSummary {
+pub(crate) fn point_sample_summary_for_event(event: &EventPointCompact) -> PointSampleSummary {
     PointSampleSummary {
         fish_id: event.fish_id,
         sample_count: 1,
@@ -203,11 +207,10 @@ fn point_sample_summary_for_event(event: &EventPointCompact) -> PointSampleSumma
     }
 }
 
-fn sorted_point_samples(
-    samples: &[PointSampleSummary],
+pub(crate) fn sort_point_samples_by_cluster_order(
+    summaries: &mut [PointSampleSummary],
     fish_counts: &HashMap<i32, u32>,
-) -> Vec<PointSampleSummary> {
-    let mut summaries = samples.to_vec();
+) {
     summaries.sort_by(|left, right| {
         fish_counts
             .get(&right.fish_id)
@@ -221,7 +224,6 @@ fn sorted_point_samples(
             .then_with(|| left.zone_rgbs.cmp(&right.zone_rgbs))
             .then_with(|| left.full_zone_rgbs.cmp(&right.full_zone_rgbs))
     });
-    summaries
 }
 
 fn normalized_zone_rgbs(event: &EventPointCompact) -> Vec<u32> {
@@ -363,10 +365,12 @@ mod tests {
         assert_eq!(clustered.points[0].fish_id, Some(10));
         assert!(clustered.points[0].aggregated);
         assert_eq!(clustered.points[0].sample_count, 2501);
+        assert_eq!(clustered.points[0].event_indices.len(), 2501);
+        assert!(clustered.points[0].point_samples.is_empty());
     }
 
     #[test]
-    fn aggregated_clusters_keep_sorted_point_sample_summaries() {
+    fn aggregated_clusters_defer_point_sample_summaries() {
         let mut events = Vec::new();
         for idx in 0..2501 {
             let (fish_id, zone_rgbs, full_zone_rgbs) = if idx < 1200 {
@@ -401,28 +405,18 @@ mod tests {
             max_y: 2_000,
         };
         let clustered = cluster_view_events(&events, &indices, &viewport_bbox, 64);
-        let summaries = &clustered.points[0].point_samples;
+        let point = &clustered.points[0];
 
         assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
         assert_eq!(clustered.points.len(), 1);
-        assert_eq!(summaries.len(), 2501);
-        assert_eq!(summaries[0].fish_id, 10);
-        assert_eq!(summaries[0].sample_count, 1);
-        assert_eq!(summaries[0].sample_id, Some(1199));
-        assert_eq!(summaries[0].full_zone_rgbs, vec![0x39e58d]);
-        assert_eq!(summaries[1].fish_id, 10);
-        assert_eq!(summaries[1].sample_count, 1);
-        assert_eq!(summaries[1].sample_id, Some(1198));
-        assert_eq!(summaries[1200].fish_id, 20);
-        assert_eq!(summaries[1200].sample_id, Some(1999));
-        assert_eq!(summaries[1200].zone_rgbs, vec![0x123456, 0x654321]);
-        assert!(summaries[1200].full_zone_rgbs.is_empty());
-        assert_eq!(summaries[2000].fish_id, 30);
-        assert_eq!(summaries[2000].sample_id, Some(2500));
+        assert_eq!(point.event_indices.len(), 2501);
+        assert_eq!(point.event_indices[0], 0);
+        assert_eq!(point.event_indices[2500], 2500);
+        assert!(point.point_samples.is_empty());
     }
 
     #[test]
-    fn aggregated_clusters_keep_individual_samples_across_zone_footprints() {
+    fn aggregated_clusters_keep_individual_sample_indices_across_zone_footprints() {
         let mut events = Vec::new();
         for idx in 0..2501 {
             let (fish_id, zone_rgbs, full_zone_rgbs) = if idx < 1000 {
@@ -447,30 +441,14 @@ mod tests {
 
         let indices: Vec<usize> = (0..events.len()).collect();
         let clustered = cluster_view_events(&events, &indices, &aggregate_viewport_bbox(), 64);
-        let summaries = &clustered.points[0].point_samples;
+        let point = &clustered.points[0];
 
         assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
-        assert_eq!(summaries.len(), 2501);
-        assert_eq!(
-            summaries
-                .iter()
-                .filter(|sample| sample.fish_id == 10)
-                .count(),
-            1500,
-        );
-        assert_eq!(summaries[0].fish_id, 10);
-        assert_eq!(summaries[0].sample_count, 1);
-        assert_eq!(summaries[0].sample_id, Some(1499));
-        assert_eq!(summaries[0].zone_rgbs, vec![0x39e58d, 0x654321]);
-        assert!(summaries[0].full_zone_rgbs.is_empty());
-        assert!(summaries.iter().any(|sample| {
-            sample.fish_id == 10
-                && sample.sample_id == Some(999)
-                && sample.zone_rgbs == vec![0x39e58d]
-                && sample.full_zone_rgbs == vec![0x39e58d]
-        }));
-        assert_eq!(summaries[1500].fish_id, 20);
-        assert_eq!(summaries[1500].sample_count, 1);
+        assert_eq!(point.event_indices.len(), 2501);
+        assert!(point.event_indices.contains(&999));
+        assert!(point.event_indices.contains(&1499));
+        assert!(point.event_indices.contains(&1500));
+        assert!(point.point_samples.is_empty());
     }
 
     #[test]

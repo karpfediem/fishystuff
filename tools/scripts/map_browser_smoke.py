@@ -176,6 +176,19 @@ class DevToolsClient:
         self._send_frame(json.dumps(payload))
         return message_id
 
+    def command(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        message_id = self.send(method, params)
+        payload = self.wait_for_result(message_id, timeout_seconds=timeout_seconds)
+        if "error" in payload:
+            raise RuntimeError(str(payload["error"]))
+        result = payload.get("result")
+        return result if isinstance(result, dict) else {}
+
     def wait_for_result(
         self, message_id: int, timeout_seconds: float | None = None
     ) -> dict[str, Any]:

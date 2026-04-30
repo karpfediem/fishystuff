@@ -1,5 +1,10 @@
 use bevy::prelude::*;
+use std::collections::HashMap;
 
+use crate::map::events::cluster::{
+    point_sample_summary_for_event, sort_point_samples_by_cluster_order,
+};
+use crate::map::events::EventsSnapshotState;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{MapDisplayState, PointSampleSummary};
 use crate::plugins::camera::Map2dCamera;
@@ -13,6 +18,7 @@ const POINT_HOVER_SAMPLE_LIMIT: usize = 5;
 pub fn point_samples_at_world_point(
     world_point: WorldPoint,
     points: &PointsState,
+    snapshot: &EventsSnapshotState,
     display_state: &MapDisplayState,
     camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
 ) -> Vec<PointSampleSummary> {
@@ -21,14 +27,15 @@ pub fn point_samples_at_world_point(
         return Vec::new();
     };
     if best.point.aggregated {
-        return best.point.point_samples.clone();
+        return aggregated_point_samples(best.point, snapshot);
     }
-    exact_raw_point_samples(best.point, &hits)
+    exact_raw_point_samples(best.point, &hits, snapshot)
 }
 
 pub fn point_hover_samples_at_world_point(
     world_point: WorldPoint,
     points: &PointsState,
+    snapshot: &EventsSnapshotState,
     display_state: &MapDisplayState,
     camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
 ) -> Vec<PointSampleSummary> {
@@ -36,12 +43,90 @@ pub fn point_hover_samples_at_world_point(
     let Some(best) = hits.first() else {
         return Vec::new();
     };
-    let samples = if best.point.aggregated {
-        best.point.point_samples.clone()
-    } else {
-        exact_raw_point_samples(best.point, &hits)
-    };
+    if best.point.aggregated {
+        if !best.point.point_samples.is_empty() {
+            return summarize_hover_samples(&best.point.point_samples);
+        }
+        return summarize_hover_event_indices(&best.point.event_indices, snapshot);
+    }
+    let samples = exact_raw_point_samples(best.point, &hits, snapshot);
     summarize_hover_samples(&samples)
+}
+
+fn aggregated_point_samples(
+    point: &RenderPoint,
+    snapshot: &EventsSnapshotState,
+) -> Vec<PointSampleSummary> {
+    if !point.point_samples.is_empty() {
+        return point.point_samples.clone();
+    }
+    let mut fish_counts: HashMap<i32, u32> = HashMap::new();
+    let mut samples = Vec::with_capacity(point.event_indices.len());
+    for idx in &point.event_indices {
+        let Some(event) = snapshot.events.get(*idx) else {
+            continue;
+        };
+        *fish_counts.entry(event.fish_id).or_insert(0) += 1;
+        samples.push(point_sample_summary_for_event(event));
+    }
+    sort_point_samples_by_cluster_order(&mut samples, &fish_counts);
+    samples
+}
+
+fn samples_for_point(
+    point: &RenderPoint,
+    snapshot: &EventsSnapshotState,
+) -> Vec<PointSampleSummary> {
+    if !point.point_samples.is_empty() {
+        return point.point_samples.clone();
+    }
+    let mut samples = Vec::with_capacity(point.event_indices.len());
+    for idx in &point.event_indices {
+        let Some(event) = snapshot.events.get(*idx) else {
+            continue;
+        };
+        samples.push(point_sample_summary_for_event(event));
+    }
+    samples
+}
+
+fn summarize_hover_event_indices(
+    event_indices: &[usize],
+    snapshot: &EventsSnapshotState,
+) -> Vec<PointSampleSummary> {
+    let mut summaries: HashMap<i32, PointSampleSummary> = HashMap::new();
+    for idx in event_indices {
+        let Some(event) = snapshot.events.get(*idx) else {
+            continue;
+        };
+        let sample = point_sample_summary_for_event(event);
+        if let Some(current) = summaries.get_mut(&sample.fish_id) {
+            current.sample_count = current.sample_count.saturating_add(1);
+            current.last_ts_utc = current.last_ts_utc.max(sample.last_ts_utc);
+            merge_zone_rgbs(&mut current.zone_rgbs, &sample.zone_rgbs);
+            merge_zone_rgbs(&mut current.full_zone_rgbs, &sample.full_zone_rgbs);
+        } else {
+            summaries.insert(
+                sample.fish_id,
+                PointSampleSummary {
+                    sample_id: None,
+                    ..sample
+                },
+            );
+        }
+    }
+    let mut summaries = summaries.into_values().collect::<Vec<_>>();
+    summaries.sort_by(|left, right| {
+        right
+            .sample_count
+            .cmp(&left.sample_count)
+            .then_with(|| right.last_ts_utc.cmp(&left.last_ts_utc))
+            .then_with(|| left.fish_id.cmp(&right.fish_id))
+            .then_with(|| left.zone_rgbs.cmp(&right.zone_rgbs))
+            .then_with(|| left.full_zone_rgbs.cmp(&right.full_zone_rgbs))
+    });
+    summaries.truncate(POINT_HOVER_SAMPLE_LIMIT);
+    summaries
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -63,7 +148,7 @@ fn point_hits_at_world_point<'a>(
     let icon_size_world_units = point_icon_world_size(display_state, camera_q);
     let mut hits = Vec::new();
     for point in &points.points {
-        if point.point_samples.is_empty() {
+        if point.point_samples.is_empty() && point.event_indices.is_empty() {
             continue;
         }
         let point_world = map_point_to_world(point);
@@ -93,6 +178,7 @@ fn point_hits_at_world_point<'a>(
 fn exact_raw_point_samples(
     best_point: &RenderPoint,
     hits: &[PointHit<'_>],
+    snapshot: &EventsSnapshotState,
 ) -> Vec<PointSampleSummary> {
     let mut samples = Vec::new();
     for hit in hits {
@@ -103,7 +189,7 @@ fn exact_raw_point_samples(
         if point.map_px_x != best_point.map_px_x || point.map_px_y != best_point.map_px_y {
             continue;
         }
-        samples.extend(point.point_samples.iter().cloned());
+        samples.extend(samples_for_point(point, snapshot));
     }
     samples.sort_by(|left, right| {
         right
@@ -160,7 +246,13 @@ fn merge_zone_rgbs(target: &mut Vec<u32>, source: &[u32]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{exact_raw_point_samples, summarize_hover_samples, PointHit};
+    use fishystuff_api::models::events::EventPointCompact;
+
+    use super::{
+        aggregated_point_samples, exact_raw_point_samples, summarize_hover_event_indices,
+        summarize_hover_samples, PointHit,
+    };
+    use crate::map::events::EventsSnapshotState;
     use crate::plugins::api::PointSampleSummary;
     use crate::plugins::points::query::RenderPoint;
 
@@ -185,7 +277,32 @@ mod tests {
             zone_rgb_u32: None,
             sample_count: 1,
             aggregated: false,
+            event_indices: Vec::new(),
             point_samples: vec![sample],
+        }
+    }
+
+    fn event(
+        event_id: i64,
+        fish_id: i32,
+        ts_utc: i64,
+        zone_rgbs: Vec<u32>,
+        full_zone_rgbs: Vec<u32>,
+    ) -> EventPointCompact {
+        EventPointCompact {
+            event_id,
+            fish_id,
+            ts_utc,
+            map_px_x: 10,
+            map_px_y: 20,
+            length_milli: 1000,
+            world_x: None,
+            world_z: None,
+            zone_rgb_u32: None,
+            zone_rgbs,
+            full_zone_rgbs,
+            source_kind: None,
+            source_id: None,
         }
     }
 
@@ -209,11 +326,53 @@ mod tests {
             },
         ];
 
-        let samples = exact_raw_point_samples(&first, &hits);
+        let snapshot = EventsSnapshotState::default();
+        let samples = exact_raw_point_samples(&first, &hits, &snapshot);
 
         assert_eq!(samples.len(), 2);
         assert_eq!(samples[0].sample_id, Some(41755));
         assert_eq!(samples[1].sample_id, Some(1674));
+    }
+
+    #[test]
+    fn aggregated_point_samples_expand_lazily_from_snapshot() {
+        let snapshot = EventsSnapshotState {
+            events: vec![
+                event(1, 10, 100, vec![0x39e58d], vec![0x39e58d]),
+                event(2, 20, 130, vec![0x123456], vec![0x123456]),
+                event(3, 10, 140, vec![0x39e58d, 0x654321], Vec::new()),
+                event(4, 30, 160, vec![0x0abcde], vec![0x0abcde]),
+            ],
+            ..Default::default()
+        };
+        let point = RenderPoint {
+            map_px_x: 10,
+            map_px_y: 20,
+            world_x: None,
+            world_z: None,
+            fish_id: Some(10),
+            zone_rgb_u32: None,
+            sample_count: 4,
+            aggregated: true,
+            event_indices: vec![0, 1, 2, 3],
+            point_samples: Vec::new(),
+        };
+
+        let samples = aggregated_point_samples(&point, &snapshot);
+        let hover = summarize_hover_event_indices(&point.event_indices, &snapshot);
+
+        assert_eq!(samples.len(), 4);
+        assert_eq!(samples[0].fish_id, 10);
+        assert_eq!(samples[0].sample_id, Some(3));
+        assert_eq!(samples[0].zone_rgbs, vec![0x39e58d, 0x654321]);
+        assert!(samples[0].full_zone_rgbs.is_empty());
+        assert_eq!(samples[1].fish_id, 10);
+        assert_eq!(samples[1].sample_id, Some(1));
+        assert_eq!(hover[0].fish_id, 10);
+        assert_eq!(hover[0].sample_count, 2);
+        assert_eq!(hover[0].sample_id, None);
+        assert_eq!(hover[0].zone_rgbs, vec![0x39e58d, 0x654321]);
+        assert_eq!(hover[0].full_zone_rgbs, vec![0x39e58d]);
     }
 
     #[test]

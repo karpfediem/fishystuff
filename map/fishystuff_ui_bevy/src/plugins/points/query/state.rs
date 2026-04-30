@@ -88,5 +88,6 @@ pub struct RenderPoint {
     pub zone_rgb_u32: Option<u32>,
     pub sample_count: u32,
     pub aggregated: bool,
+    pub event_indices: Vec<usize>,
     pub point_samples: Vec<PointSampleSummary>,
 }

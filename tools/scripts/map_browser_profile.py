@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import os
 import subprocess
 import sys
@@ -31,6 +33,7 @@ def parse_args() -> argparse.Namespace:
             "load_map",
             "minimap_enable",
             "minimap_pan_zoom",
+            "minimap_pointer_drag",
             "vector_regions_enable",
             "vector_region_groups_enable",
             "vector_region_groups_dom_toggle",
@@ -83,6 +86,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
         return 120
     if scenario == "minimap_pan_zoom":
         return 240
+    if scenario == "minimap_pointer_drag":
+        return 90
     if scenario == "vector_regions_enable":
         return 180
     if scenario == "vector_region_groups_enable":
@@ -657,6 +662,244 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     raise RuntimeError(f"unsupported profiling scenario: {scenario}")
 
 
+def run_pointer_drag_profile(
+    client: DevToolsClient,
+    timeout_seconds: float,
+    capture_frames: int,
+) -> dict[str, Any]:
+    wait_frames = wait_frames_js(capture_frames)
+    wait_for_raster_idle = wait_for_raster_idle_js()
+    setup_expr = f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.resetPerformanceSnapshot || !bridge?.setState || !bridge?.getCurrentState) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  {wait_for_raster_idle}
+  const waitFrames = async (count) => {{
+    if (count <= 0) {{
+      return;
+    }}
+    await new Promise((resolve) => {{
+      let remaining = count;
+      const tick = () => {{
+        remaining -= 1;
+        if (remaining <= 0) {{
+          resolve();
+          return;
+        }}
+        requestAnimationFrame(tick);
+      }};
+      requestAnimationFrame(tick);
+    }});
+  }};
+  const waitForPointsReady = async () => {{
+    const deadline = performance.now() + 20000;
+    let lastStatus = "";
+    while (performance.now() < deadline) {{
+      const state = typeof bridge.refreshCurrentStateNow === "function"
+        ? bridge.refreshCurrentStateNow()
+        : bridge.getCurrentState();
+      const status = String(state?.statuses?.pointsStatus || "");
+      lastStatus = status;
+      if (
+        status &&
+        !status.includes("snapshot loading") &&
+        !status.includes("pending") &&
+        !status.includes("missing viewport")
+      ) {{
+        return {{ timedOut: false, status }};
+      }}
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+    }}
+    return {{ timedOut: true, status: lastStatus }};
+  }};
+  const state = bridge.getCurrentState();
+  const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+  const minimapLayer = layers.find((layer) => layer?.layerId === "minimap") || null;
+  if (!minimapLayer?.layerId) {{
+    throw new Error("minimap layer is unavailable for profiling");
+  }}
+  const visibleLayerIds = Array.isArray(state?.filters?.layerIdsVisible)
+    ? state.filters.layerIdsVisible.slice()
+    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId);
+  if (!visibleLayerIds.includes(minimapLayer.layerId)) {{
+    visibleLayerIds.push(minimapLayer.layerId);
+  }}
+  bridge.setState({{
+    filters: {{
+      layerIdsVisible: visibleLayerIds,
+    }},
+    commands: {{
+      setViewMode: "2d",
+      restoreView: {{
+        viewMode: "2d",
+        camera: {{
+          centerWorldX: 0,
+          centerWorldZ: 0,
+          zoom: 2500,
+        }},
+      }},
+    }},
+  }});
+  await waitFrames(30);
+  const settle = await waitForRasterIdle();
+  const points = await waitForPointsReady();
+  const canvas = document.getElementById("bevy") || document.querySelector("canvas");
+  if (!canvas) {{
+    throw new Error("map canvas not found");
+  }}
+  canvas.focus?.();
+  const rect = canvas.getBoundingClientRect();
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) {{
+    throw new Error("map canvas has no measurable size");
+  }}
+  bridge.resetPerformanceSnapshot({{
+    scenario: "minimap_pointer_drag",
+    warmupFrames: 0,
+  }});
+  return {{
+    before_camera: bridge.getCurrentState()?.view?.camera || null,
+    points,
+    raster: {{
+      timedOut: settle.timedOut,
+      busyLayers: settle.busyLayers,
+      busyLayerIds: settle.busyLayerIds,
+      busyTiles: settle.busyTiles,
+    }},
+    rect: {{
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    }},
+  }};
+}})()
+""".strip()
+    setup = client.evaluate_json(
+        setup_expr,
+        await_promise=True,
+        timeout_seconds=timeout_seconds,
+    )
+    if not isinstance(setup, dict):
+        raise RuntimeError("pointer drag setup returned no JSON object")
+    if (setup.get("points") or {}).get("timedOut"):
+        raise RuntimeError(
+            "timeout waiting for points before pointer drag "
+            f"({(setup.get('points') or {}).get('status')})"
+        )
+
+    rect = setup.get("rect") or {}
+    left = float(rect.get("left") or 0.0)
+    top = float(rect.get("top") or 0.0)
+    width = float(rect.get("width") or 0.0)
+    height = float(rect.get("height") or 0.0)
+    if width <= 0.0 or height <= 0.0:
+        raise RuntimeError("pointer drag setup returned an empty canvas rect")
+
+    start_x = left + width * 0.55
+    start_y = top + height * 0.55
+    drag_dx = -420.0
+    drag_dy = -160.0
+    steps = 120
+    interval_seconds = 1.0 / 120.0
+
+    client.command("Page.bringToFront", timeout_seconds=timeout_seconds)
+    client.command(
+        "Input.dispatchMouseEvent",
+        {
+            "type": "mouseMoved",
+            "x": start_x,
+            "y": start_y,
+            "button": "none",
+            "buttons": 0,
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    client.command(
+        "Input.dispatchMouseEvent",
+        {
+            "type": "mousePressed",
+            "x": start_x,
+            "y": start_y,
+            "button": "left",
+            "buttons": 1,
+            "clickCount": 1,
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    for idx in range(steps):
+        t = idx / max(1, steps - 1)
+        x = start_x + drag_dx * t
+        y = start_y + drag_dy * math.sin(t * math.pi)
+        client.command(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseMoved",
+                "x": x,
+                "y": y,
+                "button": "none",
+                "buttons": 1,
+            },
+            timeout_seconds=timeout_seconds,
+        )
+        time.sleep(interval_seconds)
+    client.command(
+        "Input.dispatchMouseEvent",
+        {
+            "type": "mouseReleased",
+            "x": start_x + drag_dx,
+            "y": start_y,
+            "button": "left",
+            "buttons": 0,
+            "clickCount": 1,
+        },
+        timeout_seconds=timeout_seconds,
+    )
+
+    raster_setup = setup.get("raster") or {}
+    final_expr = f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.getPerformanceSnapshot || !bridge?.getCurrentState) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  const frameWait = {wait_frames};
+  const report = bridge.getPerformanceSnapshot();
+  const finalState = typeof bridge.refreshCurrentStateNow === "function"
+    ? bridge.refreshCurrentStateNow()
+    : bridge.getCurrentState();
+  report.browser_action = {{
+    target_layer_id: "minimap",
+    trigger: "cdp_pointer_drag",
+    drag_steps: {steps},
+    drag_interval_ms: {interval_seconds * 1000.0},
+    drag_dx_px: {drag_dx},
+    drag_dy_px: {drag_dy},
+    pre_capture_raster_idle_timed_out: {json.dumps(bool(raster_setup.get("timedOut", False)))},
+    pre_capture_busy_raster_layers: {json.dumps(int(raster_setup.get("busyLayers") or 0))},
+    pre_capture_busy_raster_tiles: {json.dumps(int(raster_setup.get("busyTiles") or 0))},
+    pre_capture_busy_raster_layer_ids: {json.dumps(raster_setup.get("busyLayerIds") or [])},
+    pre_capture_points_status: {json.dumps(setup.get("points") or {})},
+    before_camera: {json.dumps(setup.get("before_camera"))},
+    after_camera: finalState?.view?.camera || null,
+    capture_frames_target: {capture_frames},
+    completed_frames: frameWait.completedFrames,
+    frame_wait_timed_out: frameWait.timedOut,
+  }};
+  return report;
+}})()
+""".strip()
+    report = client.evaluate_json(
+        final_expr,
+        await_promise=True,
+        timeout_seconds=timeout_seconds,
+    )
+    if not isinstance(report, dict):
+        raise RuntimeError("pointer drag profiling expression returned no JSON object")
+    return report
+
+
 def top_spans(report: dict[str, Any], limit: int = 8) -> list[tuple[str, float]]:
     spans = report.get("named_spans") or {}
     ranked: list[tuple[str, float]] = []
@@ -747,12 +990,19 @@ def main() -> int:
                     ready_state = wait_for_ready(
                         client, proc, args.timeout_seconds, args.poll_interval_seconds
                     )
-                    profile_expr = build_profile_expression(args.scenario, capture_frames)
-                    profile_report = client.evaluate_json(
-                        profile_expr,
-                        await_promise=True,
-                        timeout_seconds=args.timeout_seconds,
-                    )
+                    if args.scenario == "minimap_pointer_drag":
+                        profile_report = run_pointer_drag_profile(
+                            client,
+                            args.timeout_seconds,
+                            capture_frames,
+                        )
+                    else:
+                        profile_expr = build_profile_expression(args.scenario, capture_frames)
+                        profile_report = client.evaluate_json(
+                            profile_expr,
+                            await_promise=True,
+                            timeout_seconds=args.timeout_seconds,
+                        )
                     if not isinstance(profile_report, dict):
                         raise RuntimeError("browser profiling expression returned no JSON object")
                     report = {
