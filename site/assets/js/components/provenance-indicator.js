@@ -278,11 +278,8 @@ export function provenanceIndicatorColor(
     }
     if (channel === "presence") {
         const communitySupport = communityPresenceSupport(detail, valueText);
-        if (communitySupport === "confirmed") {
+        if (communitySupport === "confirmed" || communitySupport === "guessed") {
             return PROVENANCE_PRESENCE_FULL_COLOR;
-        }
-        if (communitySupport === "guessed") {
-            return PROVENANCE_PRESENCE_PARTIAL_COLOR;
         }
         const ringSupport = presenceRingSupport(detail, valueText);
         if (ringSupport === "full") {

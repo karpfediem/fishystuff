@@ -77,11 +77,11 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             textColor: "#1f2937",
             dropRateText: "80%",
             dropRateSourceKind: "database",
-            dropRateTooltip: "Source-backed General group share",
+            dropRateTooltip: "DB General group share",
             rawDropRateText: "80%",
-            rawDropRateTooltip: "Source-backed General group share",
+            rawDropRateTooltip: "DB General group share",
             normalizedDropRateText: "80%",
-            normalizedDropRateTooltip: "Source-backed General group share",
+            normalizedDropRateTooltip: "DB General group share",
             conditionText: "Zone base rate 80%",
             conditionTooltip: "Zone base rate: 80%",
             catchMethods: ["rod"],
@@ -161,11 +161,14 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             textColor: "#083344",
             dropRateText: "100%",
             dropRateSourceKind: "database",
-            dropRateTooltip: "Source-backed Harpoon group share",
+            dropRateTooltip: "DB Harpoon group share",
+            presenceText: "DB presence · Harpoon subgroup",
+            presenceSourceKind: "database",
+            presenceTooltip: "DB presence · Harpoon subgroup 10901 · Source: item_sub_group_table",
             rawDropRateText: "100%",
-            rawDropRateTooltip: "Source-backed Harpoon group share",
+            rawDropRateTooltip: "DB Harpoon group share",
             normalizedDropRateText: "100%",
-            normalizedDropRateTooltip: "Source-backed Harpoon group share",
+            normalizedDropRateTooltip: "DB Harpoon group share",
             conditionText: "Mastery 200-699 · Mastery 700-1199 · Mastery 1200+ · Fishing Level Guru 1+",
             conditionTooltip:
               "Mastery 200-699 | Mastery 700-1199 | Mastery 1200+ | Fishing Level Guru 1+",
@@ -256,6 +259,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[1]?.groups?.[0]?.rows?.[0]?.dropRateText,
     "27.5%",
+  );
+  assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[1]?.groups?.[0]?.presenceSourceKind,
+    "database",
   );
   assert.deepEqual(
     viewModel.panes.find((pane) => pane.id === "territory")?.sections[0].facts,

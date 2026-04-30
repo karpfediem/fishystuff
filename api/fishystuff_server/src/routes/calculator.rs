@@ -6728,6 +6728,23 @@ fn zone_loot_summary_condition_options_for_slot(
         .unwrap_or_default()
 }
 
+fn zone_loot_summary_group_presence_fields(
+    slot_idx: u8,
+    entries: &[CalculatorZoneLootEntry],
+    lang: CalculatorLocale,
+) -> (Option<String>, String, String) {
+    let slot_entries = entries
+        .iter()
+        .filter(|entry| entry.slot_idx == slot_idx)
+        .cloned()
+        .collect::<Vec<_>>();
+    (
+        loot_entries_presence_text(&slot_entries, lang),
+        loot_entries_presence_source_kind(&slot_entries),
+        loot_entries_presence_tooltip(&slot_entries, lang).unwrap_or_default(),
+    )
+}
+
 fn zone_loot_summary_condition_option_fields(
     option: &CalculatorLootBranchOption,
     data: &CalculatorData,
@@ -6996,10 +7013,12 @@ fn loot_species_presence_priority(evidence: &CalculatorZoneLootEvidence) -> u8 {
         evidence.scope.as_str(),
         evidence.status.as_deref(),
     ) {
-        ("community", _, Some("confirmed")) => 7,
-        ("community", _, Some("guessed")) => 6,
-        ("ranking", "ring_full", _) => 5,
-        ("ranking", "ring_partial", _) => 4,
+        ("community", _, Some("confirmed")) => 8,
+        ("community", _, Some("guessed")) => 7,
+        ("database", "subgroup", _) => 6,
+        ("database", _, _) => 5,
+        ("ranking", "ring_full", _) => 4,
+        ("ranking", "ring_partial", _) => 3,
         ("community", _, Some("unconfirmed")) => 2,
         ("community", _, Some("data_incomplete")) => 1,
         _ => 0,
@@ -7028,10 +7047,13 @@ fn loot_species_presence_evidence(
 
 fn loot_entries_presence_evidence(
     entries: &[CalculatorZoneLootEntry],
-) -> Vec<&CalculatorZoneLootEvidence> {
+) -> Vec<CalculatorZoneLootEvidence> {
     let mut evidence = entries
         .iter()
         .flat_map(|entry| loot_species_presence_evidence(entry))
+        .filter(|evidence| evidence.source_family != "ranking")
+        .cloned()
+        .chain(loot_entries_rate_presence_evidence(entries))
         .collect::<Vec<_>>();
     evidence.sort_by(|left, right| {
         loot_species_presence_priority(right)
@@ -7045,6 +7067,220 @@ fn loot_entries_presence_evidence(
             .then_with(|| left.source_family.cmp(&right.source_family))
             .then_with(|| left.scope.cmp(&right.scope))
     });
+    let mut seen = HashSet::new();
+    evidence.retain(|evidence| {
+        seen.insert((
+            evidence.source_family.clone(),
+            evidence.scope.clone(),
+            evidence.status.clone(),
+            evidence.source_id.clone(),
+            evidence.source_label.clone(),
+            evidence.source_drop_label.clone(),
+            evidence.observed_at_utc.clone(),
+            evidence.imported_at_utc.clone(),
+            evidence.slot_idx,
+            evidence.item_main_group_key,
+            evidence.subgroup_key,
+        ))
+    });
+    evidence
+}
+
+fn loot_entries_rate_presence_scope(
+    entries: &[CalculatorZoneLootEntry],
+) -> Option<(u8, Option<i64>, Option<i64>)> {
+    let mut slots = Vec::new();
+    let mut main_groups = Vec::new();
+    let mut subgroups = Vec::new();
+    let mut has_rate_source = false;
+
+    for entry in entries.iter().filter(|entry| entry.within_group_rate > 0.0) {
+        for contribution in entry
+            .rate_contributions
+            .iter()
+            .filter(|contribution| contribution.weight > 0.0)
+            .filter(|contribution| {
+                contribution.source_family == "database"
+                    || contribution.source_family == "community"
+                    || contribution.item_source_family.as_deref() == Some("community")
+            })
+        {
+            has_rate_source = true;
+            slots.push(entry.slot_idx);
+            if let Some(item_main_group_key) = contribution.item_main_group_key {
+                main_groups.push(item_main_group_key);
+            }
+            if let Some(subgroup_key) = contribution.subgroup_key {
+                subgroups.push(subgroup_key);
+            }
+        }
+    }
+
+    if !has_rate_source {
+        for evidence in entries
+            .iter()
+            .filter(|entry| entry.within_group_rate > 0.0)
+            .flat_map(|entry| entry.evidence.iter())
+            .filter(|evidence| {
+                matches!(
+                    evidence.claim_kind.as_str(),
+                    "in_group_rate" | "guessed_in_group_rate"
+                )
+            })
+        {
+            has_rate_source = true;
+            if let Some(slot_idx) = evidence.slot_idx {
+                slots.push(slot_idx);
+            }
+            if let Some(item_main_group_key) = evidence.item_main_group_key {
+                main_groups.push(item_main_group_key);
+            }
+            if let Some(subgroup_key) = evidence.subgroup_key {
+                subgroups.push(subgroup_key);
+            }
+        }
+    }
+
+    if !has_rate_source {
+        return None;
+    }
+
+    slots.sort_unstable();
+    slots.dedup();
+    main_groups.sort_unstable();
+    main_groups.dedup();
+    subgroups.sort_unstable();
+    subgroups.dedup();
+
+    let slot_idx = match slots.as_slice() {
+        [slot_idx] => *slot_idx,
+        _ => return None,
+    };
+    let item_main_group_key = match main_groups.as_slice() {
+        [] => None,
+        [item_main_group_key] => Some(*item_main_group_key),
+        _ => return None,
+    };
+    let subgroup_key = match subgroups.as_slice() {
+        [] => None,
+        [subgroup_key] => Some(*subgroup_key),
+        _ => return None,
+    };
+
+    Some((slot_idx, item_main_group_key, subgroup_key))
+}
+
+fn rate_presence_scope_label(subgroup_key: Option<i64>) -> &'static str {
+    if subgroup_key.is_some() {
+        "subgroup"
+    } else {
+        "group"
+    }
+}
+
+fn contribution_matches_rate_presence_scope(
+    contribution: &CalculatorZoneLootRateContribution,
+    item_main_group_key: Option<i64>,
+    subgroup_key: Option<i64>,
+) -> bool {
+    if let Some(expected_subgroup_key) = subgroup_key {
+        return contribution.subgroup_key == Some(expected_subgroup_key);
+    }
+    if let Some(expected_item_main_group_key) = item_main_group_key {
+        return contribution.item_main_group_key == Some(expected_item_main_group_key);
+    }
+    true
+}
+
+fn evidence_matches_rate_presence_scope(
+    evidence: &CalculatorZoneLootEvidence,
+    item_main_group_key: Option<i64>,
+    subgroup_key: Option<i64>,
+) -> bool {
+    if let Some(expected_subgroup_key) = subgroup_key {
+        return evidence.subgroup_key == Some(expected_subgroup_key);
+    }
+    if let Some(expected_item_main_group_key) = item_main_group_key {
+        return evidence.item_main_group_key == Some(expected_item_main_group_key);
+    }
+    true
+}
+
+fn loot_entries_rate_presence_evidence(
+    entries: &[CalculatorZoneLootEntry],
+) -> Vec<CalculatorZoneLootEvidence> {
+    let Some((slot_idx, item_main_group_key, subgroup_key)) =
+        loot_entries_rate_presence_scope(entries)
+    else {
+        return Vec::new();
+    };
+    let scope = rate_presence_scope_label(subgroup_key).to_string();
+    let mut evidence = Vec::new();
+
+    for entry in entries
+        .iter()
+        .filter(|entry| entry.slot_idx == slot_idx && entry.within_group_rate > 0.0)
+    {
+        for contribution in entry
+            .rate_contributions
+            .iter()
+            .filter(|contribution| contribution.weight > 0.0)
+            .filter(|contribution| {
+                contribution_matches_rate_presence_scope(
+                    contribution,
+                    item_main_group_key,
+                    subgroup_key,
+                )
+            })
+        {
+            if contribution.source_family == "database" {
+                evidence.push(CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: scope.clone(),
+                    status: Some("best_effort".to_string()),
+                    source_id: contribution.source_id.clone(),
+                    source_label: contribution.source_label.clone(),
+                    source_drop_label: contribution.source_drop_label.clone(),
+                    slot_idx: Some(slot_idx),
+                    item_main_group_key,
+                    subgroup_key,
+                    ..CalculatorZoneLootEvidence::default()
+                });
+            }
+            if contribution.source_family == "community" {
+                evidence.push(CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: scope.clone(),
+                    status: Some("guessed".to_string()),
+                    source_id: contribution.source_id.clone(),
+                    source_label: contribution.source_label.clone(),
+                    source_drop_label: contribution.source_drop_label.clone(),
+                    slot_idx: Some(slot_idx),
+                    item_main_group_key,
+                    subgroup_key,
+                    ..CalculatorZoneLootEvidence::default()
+                });
+            }
+        }
+
+        for source_evidence in entry.evidence.iter().filter(|evidence| {
+            matches!(
+                evidence.claim_kind.as_str(),
+                "in_group_rate" | "guessed_in_group_rate"
+            ) && evidence_matches_rate_presence_scope(evidence, item_main_group_key, subgroup_key)
+        }) {
+            let mut inferred = source_evidence.clone();
+            inferred.claim_kind = "presence".to_string();
+            inferred.scope = scope.clone();
+            inferred.slot_idx = inferred.slot_idx.or(Some(slot_idx));
+            inferred.item_main_group_key = inferred.item_main_group_key.or(item_main_group_key);
+            inferred.subgroup_key = inferred.subgroup_key.or(subgroup_key);
+            evidence.push(inferred);
+        }
+    }
+
     evidence
 }
 
@@ -7140,12 +7376,50 @@ fn loot_species_presence_line(
             }
             value
         }
+        "database" => {
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids, lang);
+            let mut value = format!("DB presence · {scope}");
+            if include_source_id {
+                let mut details = Vec::new();
+                if let Some(source) = source_detail(
+                    evidence.source_id.as_deref(),
+                    evidence.source_drop_label.as_deref(),
+                    evidence.source_label.as_deref(),
+                ) {
+                    details.push(format!("Source: {source}"));
+                }
+                if !details.is_empty() {
+                    value = format!("{value} · {}", details.join(" · "));
+                }
+            }
+            value
+        }
         _ => {
             let scope = loot_species_presence_scope_text(evidence, include_structural_ids, lang);
-            text_with_vars(
+            let mut value = text_with_vars(
                 "calculator.server.presence.line.generic",
                 &[("claims", &compact_claims), ("scope", &scope)],
-            )
+            );
+            if include_source_id {
+                let mut details = Vec::new();
+                if let Some(observed_at_utc) =
+                    provenance_datetime_text(evidence.observed_at_utc.as_deref())
+                {
+                    details.push(format!("Last seen: {observed_at_utc}"));
+                }
+                if let Some(imported_at_utc) =
+                    provenance_datetime_text(evidence.imported_at_utc.as_deref())
+                {
+                    details.push(format!("Row import: {imported_at_utc}"));
+                }
+                if let Some(source) = evidence_source_display(evidence) {
+                    details.push(format!("Source: {source}"));
+                }
+                if !details.is_empty() {
+                    value = format!("{value} · {}", details.join(" · "));
+                }
+            }
+            value
         }
     }
 }
@@ -7195,7 +7469,7 @@ fn loot_entries_presence_text(
     loot_entries_presence_evidence(entries)
         .into_iter()
         .next()
-        .map(|evidence| loot_species_presence_line(evidence, false, false, lang))
+        .map(|evidence| loot_species_presence_line(&evidence, false, false, lang))
 }
 
 fn loot_entries_presence_tooltip(
@@ -7206,7 +7480,7 @@ fn loot_entries_presence_tooltip(
     let parts = loot_entries_presence_evidence(entries)
         .into_iter()
         .filter_map(|evidence| {
-            let line = loot_species_presence_line(evidence, true, true, lang);
+            let line = loot_species_presence_line(&evidence, true, true, lang);
             seen.insert(line.clone()).then_some(line)
         })
         .collect::<Vec<_>>();
@@ -7216,16 +7490,13 @@ fn loot_entries_presence_tooltip(
 fn loot_entries_presence_source_kind(entries: &[CalculatorZoneLootEntry]) -> String {
     let mut families = loot_entries_presence_evidence(entries)
         .into_iter()
-        .map(|evidence| evidence.source_family.as_str())
+        .map(|evidence| evidence.source_family)
         .collect::<Vec<_>>();
     families.sort_unstable();
     families.dedup();
-    match families.as_slice() {
-        [] => String::new(),
-        ["community"] => "community".to_string(),
-        ["ranking"] => "ranking".to_string(),
-        ["database"] => "database".to_string(),
-        [_] => families[0].to_string(),
+    match families.len() {
+        0 => String::new(),
+        1 => families[0].clone(),
         _ => "mixed".to_string(),
     }
 }
@@ -7963,6 +8234,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 normalized_drop_rate_text,
                 normalized_drop_rate_tooltip,
             ) = zone_loot_group_drop_rate_variants(chart_row, lineage_detail.clone());
+            let (presence_text, presence_source_kind, presence_tooltip) =
+                zone_loot_summary_group_presence_fields(
+                    slot_idx,
+                    &data.zone_loot_entries,
+                    data.lang,
+                );
             let (condition_text, condition_tooltip) = zone_loot_group_condition_fields(
                 chart_row,
                 group_conditions_by_slot
@@ -7980,6 +8257,9 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 drop_rate_text,
                 drop_rate_source_kind,
                 drop_rate_tooltip: append_provenance_detail(drop_rate_tooltip, lineage_detail),
+                presence_text,
+                presence_source_kind,
+                presence_tooltip,
                 raw_drop_rate_text,
                 raw_drop_rate_tooltip,
                 normalized_drop_rate_text,
@@ -8032,6 +8312,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 normalized_drop_rate_text,
                 normalized_drop_rate_tooltip,
             ) = zone_loot_group_drop_rate_variants(Some(chart_row), lineage_detail.clone());
+            let (presence_text, presence_source_kind, presence_tooltip) =
+                zone_loot_summary_group_presence_fields(
+                    *slot_idx,
+                    &data.zone_loot_entries,
+                    data.lang,
+                );
             summary_groups.push(ZoneLootSummaryGroupRow {
                 slot_idx: *slot_idx,
                 label: calculator_group_display_label(data.lang, &chart_row.label),
@@ -8041,6 +8327,9 @@ fn derive_zone_loot_summary_response_with_condition_options(
                 drop_rate_text,
                 drop_rate_source_kind,
                 drop_rate_tooltip: append_provenance_detail(drop_rate_tooltip, lineage_detail),
+                presence_text,
+                presence_source_kind,
+                presence_tooltip,
                 raw_drop_rate_text,
                 raw_drop_rate_tooltip,
                 normalized_drop_rate_text,
@@ -8100,6 +8389,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     String::new(),
                     zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
                 );
+                let (presence_text, presence_source_kind, presence_tooltip) =
+                    zone_loot_summary_group_presence_fields(
+                        entry.slot_idx,
+                        &data.zone_loot_entries,
+                        data.lang,
+                    );
                 summary_groups.push(ZoneLootSummaryGroupRow {
                     slot_idx: entry.slot_idx,
                     label: group_label.clone(),
@@ -8109,6 +8404,9 @@ fn derive_zone_loot_summary_response_with_condition_options(
                     drop_rate_text: drop_rate_text.clone(),
                     drop_rate_source_kind: "database".to_string(),
                     drop_rate_tooltip: drop_rate_tooltip.clone(),
+                    presence_text,
+                    presence_source_kind,
+                    presence_tooltip,
                     raw_drop_rate_text: drop_rate_text.clone(),
                     raw_drop_rate_tooltip: drop_rate_tooltip.clone(),
                     normalized_drop_rate_text: drop_rate_text,
@@ -8186,6 +8484,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                         .unwrap_or(&[]),
                     data,
                 );
+                let (presence_text, presence_source_kind, presence_tooltip) =
+                    zone_loot_summary_group_presence_fields(
+                        entry.slot_idx,
+                        &data.zone_loot_entries,
+                        data.lang,
+                    );
                 summary_groups.push(ZoneLootSummaryGroupRow {
                     slot_idx: entry.slot_idx,
                     label: group_label.clone(),
@@ -8198,6 +8502,9 @@ fn derive_zone_loot_summary_response_with_condition_options(
                         drop_rate_tooltip.clone(),
                         lineage_detail,
                     ),
+                    presence_text,
+                    presence_source_kind,
+                    presence_tooltip,
                     raw_drop_rate_text,
                     raw_drop_rate_tooltip,
                     normalized_drop_rate_text,
@@ -8259,6 +8566,12 @@ fn derive_zone_loot_summary_response_with_condition_options(
                         .unwrap_or(&[]),
                     data,
                 );
+                let (presence_text, presence_source_kind, presence_tooltip) =
+                    zone_loot_summary_group_presence_fields(
+                        entry.slot_idx,
+                        &data.zone_loot_entries,
+                        data.lang,
+                    );
                 summary_groups.push(ZoneLootSummaryGroupRow {
                     slot_idx: entry.slot_idx,
                     label: group_label.clone(),
@@ -8271,6 +8584,9 @@ fn derive_zone_loot_summary_response_with_condition_options(
                         String::new(),
                         zone_loot_group_lineage_detail(entry.slot_idx, &data.zone_loot_entries),
                     ),
+                    presence_text,
+                    presence_source_kind,
+                    presence_tooltip,
                     raw_drop_rate_text: String::new(),
                     raw_drop_rate_tooltip: append_provenance_detail(
                         String::new(),
@@ -15362,9 +15678,10 @@ mod tests {
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
         filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        init_signals_patch_map, load_calculator_runtime_data, loot_species_drop_rate_source_kind,
-        loot_species_drop_rate_tooltip, loot_species_evidence_text,
-        loot_species_presence_source_kind, loot_species_presence_text,
+        init_signals_patch_map, load_calculator_runtime_data, loot_entries_presence_source_kind,
+        loot_entries_presence_text, loot_entries_presence_tooltip,
+        loot_species_drop_rate_source_kind, loot_species_drop_rate_tooltip,
+        loot_species_evidence_text, loot_species_presence_source_kind, loot_species_presence_text,
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pet_skill_limit_for_tier_key,
@@ -18831,6 +19148,164 @@ mod tests {
     }
 
     #[test]
+    fn loot_entries_presence_uses_exact_database_rate_scope() {
+        let entries = vec![
+            CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 8377,
+                within_group_rate: 0.6,
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    source_id: Some("flockfish_workbook".to_string()),
+                    source_label: Some("Flockfish final combined zone group table".to_string()),
+                    source_drop_label: Some("DropID PRIZE CATCH".to_string()),
+                    item_main_group_key: Some(11081),
+                    subgroup_key: Some(11161),
+                    weight: 600_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                }],
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "ranking".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "ring_full".to_string(),
+                    status: Some("observed".to_string()),
+                    claim_count: Some(8),
+                    source_id: Some("layer_revision:v1".to_string()),
+                    observed_at_utc: Some("2026-04-18 13:46:45".to_string()),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+            CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 8382,
+                within_group_rate: 0.4,
+                rate_contributions: vec![CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    source_id: Some("flockfish_workbook".to_string()),
+                    source_label: Some("Flockfish final combined zone group table".to_string()),
+                    source_drop_label: Some("DropID PRIZE CATCH".to_string()),
+                    item_main_group_key: Some(11081),
+                    subgroup_key: Some(11161),
+                    weight: 400_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            },
+        ];
+
+        assert_eq!(
+            loot_entries_presence_text(&entries, CalculatorLocale::EnUs),
+            Some("DB presence · Prize subgroup".to_string())
+        );
+        assert_eq!(loot_entries_presence_source_kind(&entries), "database");
+        assert_eq!(
+            loot_entries_presence_tooltip(&entries, CalculatorLocale::EnUs),
+            Some(
+                "DB presence · Prize subgroup 11161 · Source: Flockfish final combined zone group table (DropID PRIZE CATCH)"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn loot_entries_presence_ignores_ranking_rings_for_group_scope() {
+        let entries = vec![CalculatorZoneLootEntry {
+            slot_idx: 1,
+            item_id: 8377,
+            evidence: vec![CalculatorZoneLootEvidence {
+                source_family: "ranking".to_string(),
+                claim_kind: "presence".to_string(),
+                scope: "ring_full".to_string(),
+                status: Some("observed".to_string()),
+                claim_count: Some(8),
+                source_id: Some("layer_revision:v1".to_string()),
+                observed_at_utc: Some("2026-04-18 13:46:45".to_string()),
+                ..CalculatorZoneLootEvidence::default()
+            }],
+            ..CalculatorZoneLootEntry::default()
+        }];
+
+        assert_eq!(
+            loot_entries_presence_text(&entries, CalculatorLocale::EnUs),
+            None
+        );
+        assert_eq!(loot_entries_presence_source_kind(&entries), "");
+        assert_eq!(
+            loot_entries_presence_tooltip(&entries, CalculatorLocale::EnUs),
+            None
+        );
+    }
+
+    #[test]
+    fn loot_entries_presence_uses_exact_community_guess_scope() {
+        let entries = vec![CalculatorZoneLootEntry {
+            slot_idx: 1,
+            item_id: 8377,
+            within_group_rate: 0.02,
+            rate_contributions: vec![CalculatorZoneLootRateContribution {
+                source_family: "community".to_string(),
+                source_id: Some("community_zone_fish_support".to_string()),
+                source_label: Some("Community zone fish support".to_string()),
+                item_main_group_key: Some(11081),
+                subgroup_key: Some(11161),
+                weight: 20_000_000_000.0,
+                ..CalculatorZoneLootRateContribution::default()
+            }],
+            ..CalculatorZoneLootEntry::default()
+        }];
+
+        assert_eq!(
+            loot_entries_presence_text(&entries, CalculatorLocale::EnUs),
+            Some("Community guessed presence · Prize subgroup".to_string())
+        );
+        assert_eq!(loot_entries_presence_source_kind(&entries), "community");
+        assert_eq!(
+            loot_entries_presence_tooltip(&entries, CalculatorLocale::EnUs),
+            Some(
+                "Community guessed presence · Prize subgroup 11161 · Source: Community zone fish support"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn loot_entries_presence_does_not_infer_mixed_subgroup_rate_scope() {
+        let entries = vec![CalculatorZoneLootEntry {
+            slot_idx: 1,
+            item_id: 8377,
+            within_group_rate: 1.0,
+            rate_contributions: vec![
+                CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    item_main_group_key: Some(11081),
+                    subgroup_key: Some(11161),
+                    weight: 500_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                },
+                CalculatorZoneLootRateContribution {
+                    source_family: "database".to_string(),
+                    item_main_group_key: Some(11081),
+                    subgroup_key: Some(11162),
+                    weight: 500_000_000_000.0,
+                    ..CalculatorZoneLootRateContribution::default()
+                },
+            ],
+            ..CalculatorZoneLootEntry::default()
+        }];
+
+        assert_eq!(
+            loot_entries_presence_text(&entries, CalculatorLocale::EnUs),
+            None
+        );
+        assert_eq!(loot_entries_presence_source_kind(&entries), "");
+        assert_eq!(
+            loot_entries_presence_tooltip(&entries, CalculatorLocale::EnUs),
+            None
+        );
+    }
+
+    #[test]
     fn loot_species_evidence_text_preserves_tiny_non_zero_rates() {
         let raw_signals = CalculatorSignals {
             show_normalized_select_rates: false,
@@ -19813,6 +20288,11 @@ mod tests {
             .expect("rare group should be visible");
 
         assert_eq!(rare_group.condition_options.len(), 2);
+        assert_eq!(
+            rare_group.presence_text.as_deref(),
+            Some("DB presence · Rare subgroup")
+        );
+        assert_eq!(rare_group.presence_source_kind, "database");
         let active_option = rare_group
             .condition_options
             .iter()
@@ -19824,6 +20304,11 @@ mod tests {
             .drop_rate_tooltip
             .contains("main group 10990 -> subgroup 10990"));
         assert!(active_option.drop_rate_tooltip.contains("option 1"));
+        assert_eq!(
+            active_option.presence_text.as_deref(),
+            Some("DB presence · Rare subgroup")
+        );
+        assert_eq!(active_option.presence_source_kind, "database");
         assert_eq!(active_option.species_rows.len(), 1);
         assert_eq!(active_option.species_rows[0].label, "Grunt");
         let guru_option = rare_group

@@ -557,7 +557,7 @@
   "calculator.server.group.tooltip.overlay_explicit_with_bonus": "Die rohe Overlay-Basisrate {$base} plus aktiver Gruppenbonus {$bonus} ergibt aktuell {$weight} Gesamt-Rohgewicht und {$share} normalisierten Anteil.",
   "calculator.server.group.tooltip.overlay_explicit": "Rohe Overlay-Basisrate {$base}. Aktueller normalisierter Anteil {$share}, nachdem die aktiven Gruppengewichte normalisiert wurden.",
   "calculator.server.group.tooltip.overlay_adjusted": "Das persönliche Overlay hat die aktiven Roh-Gruppengewichte verändert. {$group} ergibt aktuell {$share} normalisierten Anteil.",
-  "calculator.server.group.tooltip.source_backed_share": "Quellgestützter Anteil der Gruppe {$group}",
+  "calculator.server.group.tooltip.source_backed_share": "DB-Anteil der Gruppe {$group}",
   "calculator.server.group.bonus.base_plus_bonus": "Basis {$base} + Bonus {$bonus}",
   "calculator.server.group.bonus.base_only": "Basis {$base}",
   "calculator.server.group.bonus.normalized_from_active_weights": "Aus aktiven Rohgewichten normalisiert",

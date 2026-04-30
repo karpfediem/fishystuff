@@ -33,7 +33,10 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
         label: "General",
         dropRateText: "80%",
         dropRateSourceKind: "database",
-        dropRateTooltip: "Source-backed General group share",
+        dropRateTooltip: "DB General group share",
+        presenceText: "DB presence · General subgroup",
+        presenceSourceKind: "database",
+        presenceTooltip: "DB presence · General subgroup 11054 · Source: item_sub_group_table",
         rawDropRateText: "120%",
         rawDropRateTooltip: "Raw General group share",
         normalizedDropRateText: "80%",
@@ -104,6 +107,9 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.equal(summary.groups[0].slotIdx, 4);
   assert.equal(summary.groups[0].dropRateText, "80%");
   assert.equal(summary.groups[0].dropRateSourceKind, "database");
+  assert.equal(summary.groups[0].presenceText, "DB presence · General subgroup");
+  assert.equal(summary.groups[0].presenceSourceKind, "database");
+  assert.match(summary.groups[0].presenceTooltip, /General subgroup 11054/);
   assert.equal(summary.groups[0].rawDropRateText, "120%");
   assert.equal(summary.groups[0].normalizedDropRateTooltip, "Normalized General group share");
   assert.equal(summary.groups[0].conditionText, "Zone base rate 80%");

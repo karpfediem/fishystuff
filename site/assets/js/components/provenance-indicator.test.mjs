@@ -42,6 +42,17 @@ test("buildProvenanceSegments marks community confirmed presence green and commu
     assert.match(provenanceAriaLabel(rateSegment), /Rate: Community guess/);
 });
 
+test("buildProvenanceSegments marks community guessed presence green", () => {
+    const [presenceSegment] = buildProvenanceSegments({
+        presenceSourceKind: "community",
+        presenceDetail: "Community guessed presence · Prize subgroup 11054",
+        presenceValueText: "Community guessed presence",
+    });
+
+    assert.equal(presenceSegment.sourceTone, "community-presence");
+    assert.equal(presenceSegment.color, ACTIVE_GREEN_COLOR);
+});
+
 test("buildProvenanceSegments falls back to neutral inactive facts when provenance is missing", () => {
     const [presenceSegment, rateSegment] = buildProvenanceSegments({});
 

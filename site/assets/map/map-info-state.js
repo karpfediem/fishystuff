@@ -233,9 +233,10 @@ function buildZoneLootGroups(summary, conditionSelection = {}, normalizeRates = 
           selectedConditionRateLineage ||
           trimString(selectedConditionRateFields?.dropRateTooltip) ||
           groupRateFields.dropRateTooltip,
-        presenceText: trimString(selectedCondition?.presenceText),
-        presenceSourceKind: trimString(selectedCondition?.presenceSourceKind),
-        presenceTooltip: trimString(selectedCondition?.presenceTooltip),
+        presenceText: trimString(selectedCondition?.presenceText) || trimString(group?.presenceText),
+        presenceSourceKind:
+          trimString(selectedCondition?.presenceSourceKind) || trimString(group?.presenceSourceKind),
+        presenceTooltip: trimString(selectedCondition?.presenceTooltip) || trimString(group?.presenceTooltip),
         conditionText: trimString(selectedCondition?.conditionText) || trimString(group?.conditionText),
         conditionTooltip:
           trimString(selectedCondition?.conditionTooltip) || trimString(group?.conditionTooltip),
