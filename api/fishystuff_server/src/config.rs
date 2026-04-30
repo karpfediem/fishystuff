@@ -60,6 +60,7 @@ pub struct AppConfig {
     pub database_url: String,
     pub cors_allowed_origins: Vec<String>,
     pub runtime_cdn_base_url: String,
+    pub runtime_cdn_root: Option<PathBuf>,
     pub defaults: MetaDefaults,
     pub status_cfg: ZoneStatusConfig,
     pub cache_zone_stats_max: usize,
@@ -105,6 +106,12 @@ impl AppConfig {
             .and_then(|value| normalize_public_base_url(Some(value)))
             .or_else(default_public_cdn_base_url)
             .unwrap_or_else(|| DEFAULT_PUBLIC_CDN_BASE_URL.to_string());
+        let runtime_cdn_root = std::env::var("FISHYSTUFF_RUNTIME_CDN_ROOT")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .or_else(|| fs_config.zone_masks.get("root").cloned())
+            .map(PathBuf::from);
 
         let mut defaults = MetaDefaults {
             tile_px: fs_config.defaults.tile_px.unwrap_or(32),
@@ -300,6 +307,7 @@ impl AppConfig {
             database_url,
             cors_allowed_origins,
             runtime_cdn_base_url,
+            runtime_cdn_root,
             defaults,
             status_cfg,
             cache_zone_stats_max,

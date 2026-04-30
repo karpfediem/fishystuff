@@ -271,6 +271,10 @@ enum Commands {
         #[arg(long = "waypoint-xml", required = true)]
         waypoint_xml: Vec<PathBuf>,
         #[arg(long)]
+        zone_mask_field: Option<PathBuf>,
+        #[arg(long)]
+        regions_field: Option<PathBuf>,
+        #[arg(long)]
         catalog_out: PathBuf,
     },
     BuildRegionsFieldMetadata {
@@ -583,6 +587,8 @@ fn main() -> Result<()> {
             regiongroupinfo_bss,
             loc,
             waypoint_xml,
+            zone_mask_field,
+            regions_field,
             catalog_out,
         } => run_build_trade_npc_destinations(
             character_function_xlsx,
@@ -593,6 +599,8 @@ fn main() -> Result<()> {
             regiongroupinfo_bss,
             loc,
             waypoint_xml,
+            zone_mask_field,
+            regions_field,
             catalog_out,
         ),
         Commands::BuildRegionsFieldMetadata {
@@ -1568,6 +1576,8 @@ fn run_build_trade_npc_destinations(
     regiongroupinfo_bss: PathBuf,
     loc: PathBuf,
     waypoint_xml: Vec<PathBuf>,
+    zone_mask_field: Option<PathBuf>,
+    regions_field: Option<PathBuf>,
     catalog_out: PathBuf,
 ) -> Result<()> {
     let summary = trade_npcs::build_trade_npc_destinations(
@@ -1580,13 +1590,16 @@ fn run_build_trade_npc_destinations(
             regiongroupinfo_bss: &regiongroupinfo_bss,
             loc: &loc,
             waypoint_xml: &waypoint_xml,
+            zone_mask_field: zone_mask_field.as_deref(),
+            regions_field: regions_field.as_deref(),
         },
         &catalog_out,
     )?;
     println!(
-        "build-trade-npc-destinations: catalog={} origin_regions={} destinations={} candidates={} regular_trade_rows={} barter_rows={} missing_spawn={} missing_trade_origin={}",
+        "build-trade-npc-destinations: catalog={} origin_regions={} zone_origin_regions={} destinations={} candidates={} regular_trade_rows={} barter_rows={} missing_spawn={} missing_trade_origin={}",
         catalog_out.display(),
         summary.origin_regions,
+        summary.zone_origin_regions,
         summary.destinations,
         summary.candidate_npcs,
         summary.character_function_trade_rows,

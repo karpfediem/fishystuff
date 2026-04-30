@@ -298,6 +298,7 @@ mod tests {
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
             runtime_cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            runtime_cdn_root: None,
             defaults: MetaDefaults {
                 tile_px: 32,
                 sigma_tiles: 3.0,

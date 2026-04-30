@@ -2,6 +2,7 @@ use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Write as _;
+use std::path::Path;
 use std::sync::LazyLock;
 
 use async_stream::stream;
@@ -23,6 +24,9 @@ use fishystuff_api::models::calculator::{
     CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry, CalculatorSignals,
     CalculatorUserOverlaySignals, CalculatorZoneGroupRateEntry, CalculatorZoneOverlaySignals,
 };
+use fishystuff_api::models::trade::{
+    TradeNpcCatalogResponse, TradeNpcDestination, TradeOriginRegion,
+};
 use fishystuff_api::models::zone_loot_summary::{
     ZoneLootSummaryConditionOption, ZoneLootSummaryGroupRow, ZoneLootSummaryRequest,
     ZoneLootSummaryResponse, ZoneLootSummarySpeciesRow,
@@ -37,6 +41,9 @@ use crate::store::{
     CalculatorZoneLootRateContribution, DataLang,
 };
 
+const TRADE_NPC_CATALOG_PATH: &str = "trade/trade_npc_destinations.v1.json";
+const TRADE_DISTANCE_BONUS_SCALE: f64 = 68.0 / 1_000_000.0;
+
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
     pub lang: Option<String>,
@@ -44,6 +51,8 @@ pub struct CalculatorQuery {
     pub r#ref: Option<String>,
     pub pet_cards: Option<bool>,
     pub target_fish_select: Option<bool>,
+    pub trade_origin_select: Option<bool>,
+    pub trade_destination_select: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -588,6 +597,24 @@ struct SearchableDropdownConfig<'a> {
     search_placeholder: &'a str,
 }
 
+#[derive(Debug, Clone)]
+struct TradeOriginSelectOption {
+    value: String,
+    label: String,
+    search_text: String,
+    preferred_for_zone: bool,
+    zone_pixel_count: u32,
+}
+
+#[derive(Debug, Clone)]
+struct TradeDestinationSelectOption {
+    value: String,
+    npc_name: String,
+    assigned_origin: String,
+    distance_bonus: f64,
+    search_text: String,
+}
+
 struct SearchableMultiselectConfig<'a> {
     lang: CalculatorLocale,
     root_id: &'a str,
@@ -753,12 +780,17 @@ pub async fn get_calculator_catalog(
     })?;
 
     let lang = data_lang_from_query(query.lang.as_deref(), &request_id)?;
-    let catalog = with_timeout(
+    let mut catalog = with_timeout(
         state.config.request_timeout_secs,
         state.store.calculator_catalog(lang, query.r#ref),
     )
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
+    attach_runtime_trade_catalog(
+        &mut catalog,
+        state.config.runtime_cdn_root.as_deref(),
+        &request_id,
+    )?;
 
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -925,6 +957,8 @@ pub async fn post_calculator_datastar_eval(
     .await?;
     let include_pet_cards = query.pet_cards.unwrap_or(true);
     let include_target_fish_select = query.target_fish_select.unwrap_or(false);
+    let include_trade_origin_select = query.trade_origin_select.unwrap_or(false);
+    let include_trade_destination_select = query.trade_destination_select.unwrap_or(false);
     let mut events = vec![calculator_signals_event(
         &normalized_signals,
         &derived,
@@ -955,6 +989,28 @@ pub async fn post_calculator_datastar_eval(
                 &target_fishes,
             ))
             .selector("#calculator-target-fish-control")
+            .mode(ElementPatchMode::Inner)
+            .into_datastar_event(),
+        );
+    }
+    if include_trade_origin_select {
+        events.push(
+            PatchElements::new(render_trade_origin_select_control(
+                &data,
+                &normalized_signals,
+            ))
+            .selector("#calculator-trade-origin-control")
+            .mode(ElementPatchMode::Inner)
+            .into_datastar_event(),
+        );
+    }
+    if include_trade_destination_select {
+        events.push(
+            PatchElements::new(render_trade_destination_select_control(
+                &data,
+                &normalized_signals,
+            ))
+            .selector("#calculator-trade-destination-control")
             .mode(ElementPatchMode::Inner)
             .into_datastar_event(),
         );
@@ -1670,7 +1726,7 @@ async fn load_calculator_data(
 ) -> AppResult<CalculatorData> {
     let catalog_ref_id = ref_id.clone();
     let zones_ref_id = ref_id;
-    let (catalog, zones) = tokio::try_join!(
+    let (mut catalog, zones) = tokio::try_join!(
         async {
             with_timeout(
                 state.config.request_timeout_secs,
@@ -1690,6 +1746,11 @@ async fn load_calculator_data(
             .map_err(|err| map_request_id(err, request_id))
         }
     )?;
+    attach_runtime_trade_catalog(
+        &mut catalog,
+        state.config.runtime_cdn_root.as_deref(),
+        request_id,
+    )?;
     let zone_group_rates = catalog
         .zone_group_rates
         .iter()
@@ -1705,6 +1766,355 @@ async fn load_calculator_data(
         zone_group_rates,
         zone_loot_entries: Vec::new(),
     })
+}
+
+fn attach_runtime_trade_catalog(
+    catalog: &mut CalculatorCatalogResponse,
+    runtime_cdn_root: Option<&Path>,
+    request_id: &RequestId,
+) -> AppResult<()> {
+    catalog.trade_npcs = load_runtime_trade_npc_catalog(runtime_cdn_root, request_id)?;
+    normalize_trade_defaults(&mut catalog.defaults, &catalog.trade_npcs);
+    Ok(())
+}
+
+fn load_runtime_trade_npc_catalog(
+    runtime_cdn_root: Option<&Path>,
+    request_id: &RequestId,
+) -> AppResult<TradeNpcCatalogResponse> {
+    let Some(root) = runtime_cdn_root else {
+        return Ok(TradeNpcCatalogResponse::default());
+    };
+    let path = root.join(TRADE_NPC_CATALOG_PATH);
+    if !path.exists() {
+        tracing::warn!(
+            path = %path.display(),
+            "trade NPC catalog is not staged; calculator trade selectors will be empty"
+        );
+        return Ok(TradeNpcCatalogResponse::default());
+    }
+    let contents = std::fs::read_to_string(&path)
+        .map_err(|err| {
+            AppError::internal(format!("read trade NPC catalog {}: {err}", path.display()))
+        })
+        .map_err(|err| map_request_id(err, request_id))?;
+    serde_json::from_str(&contents)
+        .map_err(|err| {
+            AppError::internal(format!("parse trade NPC catalog {}: {err}", path.display()))
+        })
+        .map_err(|err| map_request_id(err, request_id))
+}
+
+fn normalize_trade_defaults(signals: &mut CalculatorSignals, catalog: &TradeNpcCatalogResponse) {
+    let zone_key = signals.zone.trim().to_string();
+    normalize_trade_selection(signals, catalog, Some(zone_key.as_str()));
+}
+
+fn normalize_trade_selection(
+    signals: &mut CalculatorSignals,
+    catalog: &TradeNpcCatalogResponse,
+    zone_key: Option<&str>,
+) {
+    if catalog.origin_regions.is_empty() || catalog.destinations.is_empty() {
+        signals.trade_origin_region = signals.trade_origin_region.trim().to_string();
+        signals.trade_destination_npc = signals.trade_destination_npc.trim().to_string();
+        signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
+        return;
+    }
+
+    let zone_origin_counts = trade_zone_origin_region_counts(catalog, zone_key);
+    let mut origin = find_trade_origin(catalog, &signals.trade_origin_region);
+    let mut destination = find_trade_destination(catalog, &signals.trade_destination_npc);
+
+    if origin.is_none() {
+        if let Some(selected_destination) = destination {
+            origin = closest_trade_origin_for_destination_in_counts(
+                catalog,
+                selected_destination,
+                signals.trade_distance_bonus,
+                &zone_origin_counts,
+            )
+            .or_else(|| {
+                closest_trade_origin_for_destination(
+                    catalog,
+                    selected_destination,
+                    signals.trade_distance_bonus,
+                )
+            });
+        }
+        if origin.is_none() {
+            origin = preferred_trade_origin_for_zone(catalog, &zone_origin_counts);
+        }
+        if origin.is_none() {
+            if let Some((best_origin, best_destination, _)) =
+                closest_trade_pair(catalog, signals.trade_distance_bonus)
+            {
+                origin = Some(best_origin);
+                if destination.is_none() {
+                    destination = Some(best_destination);
+                }
+            }
+        }
+    }
+
+    if destination.is_none() {
+        if let Some(selected_origin) = origin {
+            destination = farthest_trade_destination(catalog, selected_origin);
+        }
+    }
+
+    if let Some(selected_origin) = origin {
+        signals.trade_origin_region = selected_origin.region_id.to_string();
+    }
+    if let Some(selected_destination) = destination {
+        signals.trade_destination_npc = selected_destination.npc_key.to_string();
+    }
+    if let (Some(selected_origin), Some(selected_destination)) = (origin, destination) {
+        if let Some(distance_bonus) =
+            trade_distance_bonus_percent(selected_origin, selected_destination)
+        {
+            signals.trade_distance_bonus = distance_bonus.max(0.0);
+        }
+    }
+    signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
+}
+
+fn trade_zone_origin_region_counts(
+    catalog: &TradeNpcCatalogResponse,
+    zone_key: Option<&str>,
+) -> HashMap<u32, u32> {
+    let normalized = zone_key.map(str::trim).filter(|value| !value.is_empty());
+    let Some(zone_key) = normalized else {
+        return HashMap::new();
+    };
+    catalog
+        .zone_origin_regions
+        .iter()
+        .find(|entry| entry.zone_rgb_key == zone_key || entry.zone_rgb_u32.to_string() == zone_key)
+        .map(|entry| {
+            entry
+                .origins
+                .iter()
+                .map(|origin| (origin.region_id, origin.pixel_count))
+                .collect::<HashMap<_, _>>()
+        })
+        .unwrap_or_default()
+}
+
+fn preferred_trade_origin_for_zone<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    zone_origin_counts: &HashMap<u32, u32>,
+) -> Option<&'a TradeOriginRegion> {
+    catalog
+        .origin_regions
+        .iter()
+        .filter_map(|origin| {
+            zone_origin_counts
+                .get(&origin.region_id)
+                .map(|pixel_count| (origin, *pixel_count))
+        })
+        .max_by(|left, right| {
+            left.1
+                .cmp(&right.1)
+                .then_with(|| trade_origin_label(right.0).cmp(&trade_origin_label(left.0)))
+        })
+        .map(|(origin, _)| origin)
+}
+
+fn find_trade_origin<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    value: &str,
+) -> Option<&'a TradeOriginRegion> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+    if let Ok(region_id) = normalized.parse::<u32>() {
+        if let Some(origin) = catalog
+            .origin_regions
+            .iter()
+            .find(|origin| origin.region_id == region_id)
+        {
+            return Some(origin);
+        }
+    }
+    let lookup = normalize_lookup_value(normalized);
+    catalog.origin_regions.iter().find(|origin| {
+        [
+            origin.region_name.as_deref().unwrap_or_default(),
+            origin.waypoint_name.as_deref().unwrap_or_default(),
+        ]
+        .iter()
+        .any(|label| normalize_lookup_value(label) == lookup)
+    })
+}
+
+fn find_trade_destination<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    value: &str,
+) -> Option<&'a TradeNpcDestination> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+    if let Ok(npc_key) = normalized.parse::<u32>() {
+        if let Some(destination) = catalog
+            .destinations
+            .iter()
+            .find(|destination| destination.npc_key == npc_key)
+        {
+            return Some(destination);
+        }
+    }
+    let lookup = normalize_lookup_value(normalized);
+    catalog
+        .destinations
+        .iter()
+        .find(|destination| normalize_lookup_value(&destination.npc_name) == lookup)
+}
+
+fn closest_trade_pair<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    target_bonus: f64,
+) -> Option<(&'a TradeOriginRegion, &'a TradeNpcDestination, f64)> {
+    let target_bonus = target_bonus.max(0.0);
+    catalog
+        .origin_regions
+        .iter()
+        .flat_map(|origin| {
+            catalog.destinations.iter().filter_map(move |destination| {
+                trade_distance_bonus_percent(origin, destination)
+                    .map(|distance_bonus| (origin, destination, distance_bonus))
+            })
+        })
+        .min_by(|left, right| {
+            let left_delta = (left.2 - target_bonus).abs();
+            let right_delta = (right.2 - target_bonus).abs();
+            left_delta
+                .partial_cmp(&right_delta)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| trade_origin_label(left.0).cmp(&trade_origin_label(right.0)))
+                .then_with(|| left.1.npc_name.cmp(&right.1.npc_name))
+        })
+}
+
+fn closest_trade_origin_for_destination<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    destination: &TradeNpcDestination,
+    target_bonus: f64,
+) -> Option<&'a TradeOriginRegion> {
+    let target_bonus = target_bonus.max(0.0);
+    catalog
+        .origin_regions
+        .iter()
+        .filter_map(|origin| {
+            trade_distance_bonus_percent(origin, destination)
+                .map(|distance_bonus| (origin, distance_bonus))
+        })
+        .min_by(|left, right| {
+            let left_delta = (left.1 - target_bonus).abs();
+            let right_delta = (right.1 - target_bonus).abs();
+            left_delta
+                .partial_cmp(&right_delta)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| trade_origin_label(left.0).cmp(&trade_origin_label(right.0)))
+        })
+        .map(|(origin, _)| origin)
+}
+
+fn closest_trade_origin_for_destination_in_counts<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    destination: &TradeNpcDestination,
+    target_bonus: f64,
+    zone_origin_counts: &HashMap<u32, u32>,
+) -> Option<&'a TradeOriginRegion> {
+    if zone_origin_counts.is_empty() {
+        return None;
+    }
+    let target_bonus = target_bonus.max(0.0);
+    catalog
+        .origin_regions
+        .iter()
+        .filter(|origin| zone_origin_counts.contains_key(&origin.region_id))
+        .filter_map(|origin| {
+            trade_distance_bonus_percent(origin, destination)
+                .map(|distance_bonus| (origin, distance_bonus))
+        })
+        .min_by(|left, right| {
+            let left_delta = (left.1 - target_bonus).abs();
+            let right_delta = (right.1 - target_bonus).abs();
+            left_delta
+                .partial_cmp(&right_delta)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| trade_origin_label(left.0).cmp(&trade_origin_label(right.0)))
+        })
+        .map(|(origin, _)| origin)
+}
+
+fn farthest_trade_destination<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    origin: &TradeOriginRegion,
+) -> Option<&'a TradeNpcDestination> {
+    catalog.destinations.iter().max_by(|left, right| {
+        let left_distance = trade_distance_bonus_percent(origin, left).unwrap_or(0.0);
+        let right_distance = trade_distance_bonus_percent(origin, right).unwrap_or(0.0);
+        left_distance
+            .partial_cmp(&right_distance)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| right.npc_name.cmp(&left.npc_name))
+    })
+}
+
+fn trade_distance_bonus_percent(
+    origin: &TradeOriginRegion,
+    destination: &TradeNpcDestination,
+) -> Option<f64> {
+    let destination_x = destination.sell_destination_trade_origin.world_x?;
+    let destination_z = destination.sell_destination_trade_origin.world_z?;
+    Some(
+        ((origin.world_x - destination_x).powi(2) + (origin.world_z - destination_z).powi(2))
+            .sqrt()
+            * TRADE_DISTANCE_BONUS_SCALE,
+    )
+}
+
+fn trade_origin_label(origin: &TradeOriginRegion) -> String {
+    region_label_with_id(
+        origin
+            .region_name
+            .as_deref()
+            .or(origin.waypoint_name.as_deref()),
+        Some(origin.region_id),
+    )
+}
+
+fn trade_destination_assigned_origin_label(destination: &TradeNpcDestination) -> String {
+    region_label_with_id(
+        destination
+            .sell_destination_trade_origin
+            .region_name
+            .as_deref()
+            .or(destination
+                .sell_destination_trade_origin
+                .waypoint_name
+                .as_deref())
+            .or(destination.assigned_region.region_name.as_deref())
+            .or(destination.assigned_region.waypoint_name.as_deref()),
+        destination
+            .sell_destination_trade_origin
+            .region_id
+            .or(destination.assigned_region.region_id),
+    )
+}
+
+fn region_label_with_id(label: Option<&str>, region_id: Option<u32>) -> String {
+    let label = label.map(str::trim).filter(|value| !value.is_empty());
+    match (label, region_id) {
+        (Some(label), Some(region_id)) => format!("{label} (R{region_id})"),
+        (Some(label), None) => label.to_string(),
+        (None, Some(region_id)) => format!("Region {region_id}"),
+        (None, None) => "Unknown region".to_string(),
+    }
 }
 
 async fn load_calculator_runtime_data(
@@ -2247,6 +2657,12 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         defaults.zone.clone(),
         false,
         true,
+    );
+    let trade_zone_key = signals.zone.trim().to_string();
+    normalize_trade_selection(
+        signals,
+        &data.catalog.trade_npcs,
+        Some(trade_zone_key.as_str()),
     );
     signals.fishing_mode =
         normalize_calculator_fishing_mode(&signals.fishing_mode, &defaults.fishing_mode);
@@ -10763,6 +11179,10 @@ fn trim_float(value: f64) -> String {
     trim_float_to(value, 2)
 }
 
+fn format_trade_distance_bonus(value: f64) -> String {
+    format!("{}%", trim_float(value.max(0.0)))
+}
+
 fn format_evidence_percent(rate: f64) -> String {
     let percent = rate * 100.0;
     let max_decimals = if percent.abs() < 1.0 { 4 } else { 2 };
@@ -12250,6 +12670,302 @@ fn render_searchable_dropdown_text_content(label: &str) -> String {
     )
 }
 
+fn trade_origin_select_options(
+    catalog: &TradeNpcCatalogResponse,
+    zone_key: Option<&str>,
+) -> Vec<TradeOriginSelectOption> {
+    let zone_origin_counts = trade_zone_origin_region_counts(catalog, zone_key);
+    let mut options = catalog
+        .origin_regions
+        .iter()
+        .map(|origin| {
+            let label = trade_origin_label(origin);
+            let mut search_parts = vec![label.clone(), origin.region_id.to_string()];
+            if let Some(waypoint_id) = origin.waypoint_id {
+                search_parts.push(waypoint_id.to_string());
+            }
+            if let Some(waypoint_name) = origin.waypoint_name.as_deref() {
+                search_parts.push(waypoint_name.to_string());
+            }
+            TradeOriginSelectOption {
+                value: origin.region_id.to_string(),
+                label,
+                search_text: search_parts.join(" "),
+                preferred_for_zone: zone_origin_counts.contains_key(&origin.region_id),
+                zone_pixel_count: zone_origin_counts
+                    .get(&origin.region_id)
+                    .copied()
+                    .unwrap_or_default(),
+            }
+        })
+        .collect::<Vec<_>>();
+    options.sort_by(|left, right| {
+        right
+            .preferred_for_zone
+            .cmp(&left.preferred_for_zone)
+            .then_with(|| right.zone_pixel_count.cmp(&left.zone_pixel_count))
+            .then_with(|| left.label.cmp(&right.label))
+            .then_with(|| left.value.cmp(&right.value))
+    });
+    options
+}
+
+fn trade_destination_select_options(
+    catalog: &TradeNpcCatalogResponse,
+    origin: Option<&TradeOriginRegion>,
+) -> Vec<TradeDestinationSelectOption> {
+    let mut options = catalog
+        .destinations
+        .iter()
+        .map(|destination| {
+            let assigned_origin = trade_destination_assigned_origin_label(destination);
+            let distance_bonus = origin
+                .and_then(|origin| trade_distance_bonus_percent(origin, destination))
+                .unwrap_or(0.0);
+            let search_text = [
+                destination.npc_name.as_str(),
+                assigned_origin.as_str(),
+                destination
+                    .assigned_region
+                    .region_name
+                    .as_deref()
+                    .unwrap_or_default(),
+                destination
+                    .assigned_region
+                    .waypoint_name
+                    .as_deref()
+                    .unwrap_or_default(),
+                destination
+                    .sell_destination_trade_origin
+                    .region_name
+                    .as_deref()
+                    .unwrap_or_default(),
+                destination
+                    .sell_destination_trade_origin
+                    .waypoint_name
+                    .as_deref()
+                    .unwrap_or_default(),
+            ]
+            .join(" ");
+            TradeDestinationSelectOption {
+                value: destination.npc_key.to_string(),
+                npc_name: destination.npc_name.clone(),
+                assigned_origin,
+                distance_bonus,
+                search_text,
+            }
+        })
+        .collect::<Vec<_>>();
+    options.sort_by(|left, right| {
+        right
+            .distance_bonus
+            .partial_cmp(&left.distance_bonus)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| left.npc_name.cmp(&right.npc_name))
+            .then_with(|| left.assigned_origin.cmp(&right.assigned_origin))
+    });
+    options
+}
+
+fn render_trade_origin_option_content(
+    option: &TradeOriginSelectOption,
+    lang: CalculatorLocale,
+) -> String {
+    let badge = if option.preferred_for_zone {
+        format!(
+            "<span class=\"badge badge-sm badge-primary\">{}</span>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.badge.zone_origin",
+            )),
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "<span class=\"min-w-0 flex-1\">\
+            <span class=\"flex min-w-0 flex-wrap items-center gap-2\">\
+                <span class=\"truncate font-medium text-base-content\">{}</span>{}\
+            </span>\
+        </span>",
+        escape_html(&option.label),
+        badge,
+    )
+}
+
+fn render_trade_destination_option_content(option: &TradeDestinationSelectOption) -> String {
+    format!(
+        "<span class=\"min-w-0 flex-1\">\
+            <span class=\"block truncate font-medium text-base-content\">{}</span>\
+            <span class=\"mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/65\">\
+                <span class=\"truncate\">{}</span>\
+                <span class=\"badge badge-sm {}\">{}</span>\
+            </span>\
+        </span>",
+        escape_html(&option.npc_name),
+        escape_html(&option.assigned_origin),
+        if option.distance_bonus >= 150.0 {
+            "badge-primary"
+        } else {
+            "badge-ghost"
+        },
+        escape_html(&format_trade_distance_bonus(option.distance_bonus)),
+    )
+}
+
+fn render_trade_origin_catalog_html(
+    options: &[TradeOriginSelectOption],
+    lang: CalculatorLocale,
+) -> String {
+    let mut html = String::from("<div data-role=\"selected-content-catalog\" hidden>");
+    for option in options {
+        let content = render_trade_origin_option_content(option, lang);
+        write!(
+            html,
+            "<template data-role=\"selected-content\" data-value=\"{}\" data-label=\"{}\" data-search-text=\"{}\" data-zone-origin=\"{}\" data-zone-pixels=\"{}\">{}</template>",
+            escape_html(&option.value),
+            escape_html(&option.label),
+            escape_html(&option.search_text),
+            if option.preferred_for_zone { "true" } else { "false" },
+            option.zone_pixel_count,
+            content,
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_trade_destination_catalog_html(options: &[TradeDestinationSelectOption]) -> String {
+    let mut html = String::from("<div data-role=\"selected-content-catalog\" hidden>");
+    for option in options {
+        let content = render_trade_destination_option_content(option);
+        write!(
+            html,
+            "<template data-role=\"selected-content\" data-value=\"{}\" data-label=\"{}\" data-search-text=\"{}\">{}</template>",
+            escape_html(&option.value),
+            escape_html(&option.npc_name),
+            escape_html(&option.search_text),
+            content,
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_empty_searchable_results(results_id: &str) -> String {
+    format!(
+        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\"></ul>",
+        escape_html(results_id),
+    )
+}
+
+fn render_trade_origin_select_control(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+) -> String {
+    let root_id = "calculator-trade-origin-picker";
+    let input_id = "calculator-trade-origin-value";
+    let results_id = format!("{root_id}-results");
+    let options = trade_origin_select_options(&data.catalog.trade_npcs, Some(&signals.zone));
+    let selected = options
+        .iter()
+        .find(|option| option.value == signals.trade_origin_region);
+    let selected_label = selected
+        .map(|option| option.label.as_str())
+        .unwrap_or_else(|| signals.trade_origin_region.as_str());
+    let selected_content_html = selected
+        .map(|option| render_trade_origin_option_content(option, data.lang))
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let catalog_html = render_trade_origin_catalog_html(&options, data.lang);
+    let results_html = render_empty_searchable_results(&results_id);
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact: false,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: Some("32rem"),
+            panel_placement: SearchableDropdownPanelPlacement::Adjacent,
+            results_layout: SearchableDropdownResultsLayout::List,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: &signals.trade_origin_region,
+            search_url: "",
+            search_url_root: None,
+            exclude_selected_inputs: None,
+            search_placeholder: &calculator_route_text(
+                data.lang,
+                "calculator.server.search.trade_origins",
+            ),
+        },
+        &results_html,
+    );
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"tradeOriginRegion\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(&signals.trade_origin_region),
+        dropdown,
+    )
+}
+
+fn render_trade_destination_select_control(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+) -> String {
+    let root_id = "calculator-trade-destination-picker";
+    let input_id = "calculator-trade-destination-value";
+    let results_id = format!("{root_id}-results");
+    let origin = find_trade_origin(&data.catalog.trade_npcs, &signals.trade_origin_region);
+    let options = trade_destination_select_options(&data.catalog.trade_npcs, origin);
+    let selected = options
+        .iter()
+        .find(|option| option.value == signals.trade_destination_npc);
+    let selected_label = selected
+        .map(|option| option.npc_name.as_str())
+        .unwrap_or_else(|| signals.trade_destination_npc.as_str());
+    let selected_content_html = selected
+        .map(render_trade_destination_option_content)
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let catalog_html = render_trade_destination_catalog_html(&options);
+    let results_html = render_empty_searchable_results(&results_id);
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact: false,
+            trigger_size: SearchableDropdownTriggerSize::Fill,
+            trigger_width: None,
+            trigger_min_height: None,
+            panel_width: Some("34rem"),
+            panel_placement: SearchableDropdownPanelPlacement::Adjacent,
+            results_layout: SearchableDropdownResultsLayout::List,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: &signals.trade_destination_npc,
+            search_url: "",
+            search_url_root: None,
+            exclude_selected_inputs: None,
+            search_placeholder: &calculator_route_text(
+                data.lang,
+                "calculator.server.search.trade_destinations",
+            ),
+        },
+        &results_html,
+    );
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"tradeDestinationNpc\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(&signals.trade_destination_npc),
+        dropdown,
+    )
+}
+
 fn render_zone_rgb_indicator(zone: &ZoneEntry) -> String {
     format!(
         "<span class=\"fishy-zone-rgb-indicator\" aria-hidden=\"true\" style=\"--fishy-zone-rgb: {} {} {};\"></span>",
@@ -13074,10 +13790,20 @@ fn render_trade_window(
                         <legend class=\"fieldset-legend\">{}</legend>\
                         {}\
                     </fieldset>\
+                    <div class=\"grid gap-3 lg:grid-cols-2\">\
+                        <fieldset class=\"fieldset\">\
+                            <legend class=\"fieldset-legend\">{}</legend>\
+                            <div id=\"calculator-trade-origin-control\">{}</div>\
+                        </fieldset>\
+                        <fieldset class=\"fieldset\">\
+                            <legend class=\"fieldset-legend\">{}</legend>\
+                            <div id=\"calculator-trade-destination-control\">{}</div>\
+                        </fieldset>\
+                    </div>\
                     <div class=\"grid gap-3 sm:grid-cols-2\">\
                         <fieldset class=\"fieldset\">\
                             <legend class=\"fieldset-legend\">{}</legend>\
-                            <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\">\
+                            <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\" readonly>\
                             <span class=\"label text-xs\">{}</span>\
                         </fieldset>\
                         <fieldset class=\"fieldset\">\
@@ -13122,6 +13848,16 @@ fn render_trade_window(
             &calculator_route_text(data.lang, "calculator.server.search.trade_levels"),
             false,
         ),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.trade_origin",
+        )),
+        render_trade_origin_select_control(data, signals),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.field.trade_destination",
+        )),
+        render_trade_destination_select_control(data, signals),
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.distance_bonus",
@@ -15654,6 +16390,10 @@ mod tests {
     use fishystuff_api::models::fish::FishListResponse;
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::trade::{
+        TradeNpcCatalogResponse, TradeNpcDestination, TradeNpcSpawn, TradeNpcTradeInfo,
+        TradeOriginRegion, TradeRegionWaypointRef, TradeZoneOriginRegion, TradeZoneOriginRegions,
+    };
     use fishystuff_api::models::zone_loot_summary::ZoneLootSummaryRequest;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
@@ -15676,7 +16416,7 @@ mod tests {
         calculator_workspace_icon_alias, default_reset_signals_patch_map, derive_fish_group_chart,
         derive_loot_chart, derive_target_fish_summary, derive_zone_loot_summary_response,
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
-        filtered_loot_flow_rows, get_calculator_datastar_init,
+        filtered_loot_flow_rows, find_trade_origin, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         init_signals_patch_map, load_calculator_runtime_data, loot_entries_presence_source_kind,
         loot_entries_presence_text, loot_entries_presence_tooltip,
@@ -15684,13 +16424,14 @@ mod tests {
         loot_species_evidence_text, loot_species_presence_source_kind, loot_species_presence_text,
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
-        parse_calculator_signals_value, pet_drr, pet_skill_limit_for_tier_key,
-        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
-        render_pet_cards, render_pet_dropdown_option_content_html,
+        normalize_trade_selection, parse_calculator_signals_value, pet_drr,
+        pet_skill_limit_for_tier_key, pmf_bucket_contains_target, poisson_probability_at_least,
+        post_calculator_datastar_eval, render_pet_cards, render_pet_dropdown_option_content_html,
         render_pet_dropdown_selected_content_html, render_pet_effective_talent_badges,
         render_pet_talent_badges, render_searchable_select_results,
         render_select_option_search_text, render_target_fish_panel,
-        select_options_from_pet_entries_for_tier, trade_sale_multiplier_for_species,
+        select_options_from_pet_entries_for_tier, trade_destination_select_options,
+        trade_origin_select_options, trade_sale_multiplier_for_species,
         zone_loot_group_lineage_detail, zone_loot_summary_cache_key, CalculatorData,
         CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
         CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
@@ -15958,6 +16699,8 @@ mod tests {
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
                     },
+                    trade_origin_region: String::new(),
+                    trade_destination_npc: String::new(),
                     trade_distance_bonus: 134.15,
                     trade_price_curve: 120.0,
                     price_overrides: Default::default(),
@@ -16034,6 +16777,7 @@ mod tests {
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
             runtime_cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            runtime_cdn_root: None,
             defaults: MetaDefaults::default(),
             status_cfg: ZoneStatusConfig::default(),
             cache_zone_stats_max: 4,
@@ -16435,6 +17179,8 @@ mod tests {
                 r#ref: None,
                 pet_cards: None,
                 target_fish_select: None,
+                trade_origin_select: None,
+                trade_destination_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -16479,6 +17225,8 @@ mod tests {
                 r#ref: None,
                 pet_cards: Some(false),
                 target_fish_select: None,
+                trade_origin_select: None,
+                trade_destination_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -16511,6 +17259,8 @@ mod tests {
                 r#ref: None,
                 pet_cards: Some(false),
                 target_fish_select: Some(true),
+                trade_origin_select: None,
+                trade_destination_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
@@ -16528,6 +17278,66 @@ mod tests {
         assert!(!text.contains("data:selector #calculator-fish-group-chart"));
         assert!(!text.contains("data:selector #calculator-fish-group-silver-chart"));
         assert!(!text.contains("data:selector #calculator-loot-chart"));
+    }
+
+    #[tokio::test]
+    async fn eval_can_patch_trade_destination_control_without_replacing_trade_window() {
+        let response = post_calculator_datastar_eval(
+            State(test_state()),
+            Ok(Query(CalculatorQuery {
+                lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
+                r#ref: None,
+                pet_cards: Some(false),
+                target_fish_select: None,
+                trade_origin_select: None,
+                trade_destination_select: Some(true),
+            })),
+            Extension(RequestId("req-test".to_string())),
+            Bytes::from_static(br#"{"tradeOriginRegion":"1"}"#),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("event:datastar-patch-signals"));
+        assert!(text.contains("data:selector #calculator-trade-destination-control"));
+        assert!(!text.contains("data:selector #calculator-trade-window"));
+        assert!(!text.contains("data:selector #calculator-target-fish-control"));
+        assert!(!text.contains("data:selector #pets"));
+    }
+
+    #[tokio::test]
+    async fn eval_can_patch_trade_origin_and_destination_controls_without_replacing_trade_window() {
+        let response = post_calculator_datastar_eval(
+            State(test_state()),
+            Ok(Query(CalculatorQuery {
+                lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
+                r#ref: None,
+                pet_cards: Some(false),
+                target_fish_select: None,
+                trade_origin_select: Some(true),
+                trade_destination_select: Some(true),
+            })),
+            Extension(RequestId("req-test".to_string())),
+            Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("data:selector #calculator-trade-origin-control"));
+        assert!(text.contains("data:selector #calculator-trade-destination-control"));
+        assert!(!text.contains("data:selector #calculator-trade-window"));
+        assert!(!text.contains("data:selector #calculator-target-fish-control"));
+        assert!(!text.contains("data:selector #pets"));
     }
 
     #[test]
@@ -17056,6 +17866,8 @@ mod tests {
                 r#ref: None,
                 pet_cards: None,
                 target_fish_select: None,
+                trade_origin_select: None,
+                trade_destination_select: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"active":true,"rod":"item:16162"}"#),
@@ -17511,6 +18323,7 @@ mod tests {
                 mastery_prize_curve: Vec::new(),
                 zone_group_rates: Vec::new(),
                 trade_levels: Vec::new(),
+                trade_npcs: TradeNpcCatalogResponse::default(),
                 defaults: CalculatorSignals::default(),
                 fishing_levels: Vec::new(),
                 pets: CalculatorPetCatalog::default(),
@@ -18731,6 +19544,132 @@ mod tests {
         normalize_signals(&mut parsed, &data);
 
         assert_eq!(parsed.mastery, 3000.0);
+    }
+
+    fn test_trade_catalog() -> TradeNpcCatalogResponse {
+        TradeNpcCatalogResponse {
+            origin_regions: vec![
+                TradeOriginRegion {
+                    region_id: 1,
+                    region_name: Some("Near Origin".to_string()),
+                    world_x: 0.0,
+                    world_z: 0.0,
+                    ..TradeOriginRegion::default()
+                },
+                TradeOriginRegion {
+                    region_id: 2,
+                    region_name: Some("Far Origin".to_string()),
+                    world_x: 1_000_000.0,
+                    world_z: 0.0,
+                    ..TradeOriginRegion::default()
+                },
+            ],
+            zone_origin_regions: vec![TradeZoneOriginRegions {
+                zone_rgb_key: "240,74,74".to_string(),
+                zone_rgb_u32: 15_747_658,
+                origins: vec![TradeZoneOriginRegion {
+                    region_id: 2,
+                    pixel_count: 42,
+                }],
+            }],
+            destinations: vec![
+                TradeNpcDestination {
+                    id: "100".to_string(),
+                    npc_key: 100,
+                    npc_name: "Closer Trader".to_string(),
+                    trade: TradeNpcTradeInfo::default(),
+                    npc_spawn: TradeNpcSpawn::default(),
+                    assigned_region: TradeRegionWaypointRef {
+                        region_name: Some("Closer Assigned".to_string()),
+                        ..TradeRegionWaypointRef::default()
+                    },
+                    sell_destination_trade_origin: TradeRegionWaypointRef {
+                        region_id: Some(10),
+                        region_name: Some("Closer Assigned".to_string()),
+                        world_x: Some(100_000.0),
+                        world_z: Some(0.0),
+                        ..TradeRegionWaypointRef::default()
+                    },
+                    ..TradeNpcDestination::default()
+                },
+                TradeNpcDestination {
+                    id: "200".to_string(),
+                    npc_key: 200,
+                    npc_name: "Farther Trader".to_string(),
+                    trade: TradeNpcTradeInfo::default(),
+                    npc_spawn: TradeNpcSpawn::default(),
+                    assigned_region: TradeRegionWaypointRef {
+                        region_name: Some("Farther Assigned".to_string()),
+                        ..TradeRegionWaypointRef::default()
+                    },
+                    sell_destination_trade_origin: TradeRegionWaypointRef {
+                        region_id: Some(20),
+                        region_name: Some("Farther Assigned".to_string()),
+                        world_x: Some(500_000.0),
+                        world_z: Some(0.0),
+                        ..TradeRegionWaypointRef::default()
+                    },
+                    ..TradeNpcDestination::default()
+                },
+            ],
+            ..TradeNpcCatalogResponse::default()
+        }
+    }
+
+    #[test]
+    fn normalize_trade_selection_calculates_distance_bonus_from_selected_regions() {
+        let catalog = test_trade_catalog();
+        let mut signals = CalculatorSignals {
+            trade_origin_region: "1".to_string(),
+            trade_destination_npc: "200".to_string(),
+            ..CalculatorSignals::default()
+        };
+
+        normalize_trade_selection(&mut signals, &catalog, None);
+
+        assert_eq!(signals.trade_origin_region, "1");
+        assert_eq!(signals.trade_destination_npc, "200");
+        assert!((signals.trade_distance_bonus - 34.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn normalize_trade_selection_prefers_zone_origin_when_origin_is_empty() {
+        let catalog = test_trade_catalog();
+        let mut signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            trade_distance_bonus: 0.0,
+            ..CalculatorSignals::default()
+        };
+
+        normalize_trade_selection(&mut signals, &catalog, Some("240,74,74"));
+
+        assert_eq!(signals.trade_origin_region, "2");
+        assert_eq!(signals.trade_destination_npc, "100");
+        assert!((signals.trade_distance_bonus - 61.2).abs() < 0.0001);
+    }
+
+    #[test]
+    fn trade_destination_options_sort_by_distance_from_origin_descending() {
+        let catalog = test_trade_catalog();
+        let origin = find_trade_origin(&catalog, "1");
+        let options = trade_destination_select_options(&catalog, origin);
+
+        assert_eq!(options[0].npc_name, "Farther Trader");
+        assert_eq!(options[1].npc_name, "Closer Trader");
+        assert!((options[0].distance_bonus - 34.0).abs() < 0.0001);
+        assert!((options[1].distance_bonus - 6.8).abs() < 0.0001);
+    }
+
+    #[test]
+    fn trade_origin_options_prioritize_and_label_selected_zone_origins() {
+        let catalog = test_trade_catalog();
+        let options = trade_origin_select_options(&catalog, Some("240,74,74"));
+
+        assert_eq!(options[0].label, "Far Origin (R2)");
+        assert!(options[0].preferred_for_zone);
+        assert_eq!(options[0].zone_pixel_count, 42);
+        assert_eq!(options[1].label, "Near Origin (R1)");
+        assert!(!options[1].preferred_for_zone);
     }
 
     #[test]

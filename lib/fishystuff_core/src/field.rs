@@ -343,6 +343,19 @@ impl DiscreteFieldRows {
         }
     }
 
+    pub fn for_each_span(&self, mut visit: impl FnMut(u16, u16, u16, u32)) {
+        for y in 0..self.height as usize {
+            let start = self.row_offsets[y] as usize;
+            let end = self.row_offsets[y + 1] as usize;
+            let mut span_start = 0_u16;
+            for idx in start..end {
+                let span_end = self.row_end_xs[idx];
+                visit(y as u16, span_start, span_end, self.row_ids[idx]);
+                span_start = span_end;
+            }
+        }
+    }
+
     pub fn for_each_merged_rect_matching(
         &self,
         target_id: u32,
@@ -618,6 +631,21 @@ mod tests {
         assert_eq!(field.cell_id_u32(4, 0), Some(7));
         assert_eq!(field.cell_id_u32(0, 1), Some(9));
         assert_eq!(field.cell_id_u32(4, 1), Some(0));
+    }
+
+    #[test]
+    fn for_each_span_visits_all_segments() {
+        let field =
+            DiscreteFieldRows::from_u32_grid(4, 2, &[1, 1, 2, 2, 3, 3, 2, 2]).expect("field");
+        let mut spans = Vec::new();
+        field.for_each_span(|y, start_x, end_x, id| {
+            spans.push((y, start_x, end_x, id));
+        });
+
+        assert_eq!(
+            spans,
+            vec![(0, 0, 2, 1), (0, 2, 4, 2), (1, 0, 2, 3), (1, 2, 4, 2)]
+        );
     }
 
     #[test]

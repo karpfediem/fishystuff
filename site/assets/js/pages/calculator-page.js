@@ -10,6 +10,8 @@
   const CALCULATOR_PACK_LEADER_SIGNAL_PATTERN = /^pet[1-5]\.packLeader$/;
   const CALCULATOR_PET_CARD_SIGNAL_PATTERN = /^pet[1-5](?:\.|$)/;
   const CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN = /^zone$/;
+  const CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN = /^zone$/;
+  const CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN = /^tradeOriginRegion$/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
   const CALCULATOR_PRESET_SIGNAL_FILTER = {
@@ -90,6 +92,8 @@
     pendingCalculatorUiState: null,
     pendingEvalNeedsPetCards: null,
     pendingEvalNeedsTargetFishSelect: null,
+    pendingEvalNeedsTradeOriginSelect: null,
+    pendingEvalNeedsTradeDestinationSelect: null,
     reactivePatchApplied: false,
   };
   const calculatorPetUiState = {
@@ -415,6 +419,8 @@
   function clearPendingEvalElementPatches() {
     calculatorState.pendingEvalNeedsPetCards = null;
     calculatorState.pendingEvalNeedsTargetFishSelect = null;
+    calculatorState.pendingEvalNeedsTradeOriginSelect = null;
+    calculatorState.pendingEvalNeedsTradeDestinationSelect = null;
   }
 
   function calculatorEvalOptionsForPatch(patch) {
@@ -424,6 +430,11 @@
     return {
       includePetCards: touchesPetCards,
       includeTargetFishSelect: paths.some((path) => CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN.test(path)),
+      includeTradeOriginSelect: paths.some((path) => CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)),
+      includeTradeDestinationSelect: paths.some((path) => (
+        CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN.test(path)
+        || CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)
+      )),
     };
   }
 
@@ -441,6 +452,12 @@
     const options = calculatorEvalOptionsForPatch(patch);
     if (options.includeTargetFishSelect) {
       calculatorState.pendingEvalNeedsTargetFishSelect = true;
+    }
+    if (options.includeTradeOriginSelect) {
+      calculatorState.pendingEvalNeedsTradeOriginSelect = true;
+    }
+    if (options.includeTradeDestinationSelect) {
+      calculatorState.pendingEvalNeedsTradeDestinationSelect = true;
     }
     if (!options.includePetCards) {
       if (calculatorState.pendingEvalNeedsPetCards !== true) {
@@ -1975,11 +1992,19 @@
     const includeTargetFishSelect = patchOptions
       ? patchOptions.includeTargetFishSelect
       : calculatorState.pendingEvalNeedsTargetFishSelect === true;
+    const includeTradeOriginSelect = patchOptions
+      ? patchOptions.includeTradeOriginSelect
+      : calculatorState.pendingEvalNeedsTradeOriginSelect === true;
+    const includeTradeDestinationSelect = patchOptions
+      ? patchOptions.includeTradeDestinationSelect
+      : calculatorState.pendingEvalNeedsTradeDestinationSelect === true;
     clearPendingEvalElementPatches();
     const petCardsParam = includePetCards ? "" : "&pet_cards=false";
     const targetFishSelectParam = includeTargetFishSelect ? "&target_fish_select=true" : "";
+    const tradeOriginSelectParam = includeTradeOriginSelect ? "&trade_origin_select=true" : "";
+    const tradeDestinationSelectParam = includeTradeDestinationSelect ? "&trade_destination_select=true" : "";
     return window.__fishystuffResolveApiUrl(
-      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}${petCardsParam}${targetFishSelectParam}`,
+      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}${petCardsParam}${targetFishSelectParam}${tradeOriginSelectParam}${tradeDestinationSelectParam}`,
     );
   }
 

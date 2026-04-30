@@ -440,9 +440,11 @@ test("session duration changes request signal-only eval updates", () => {
   const url = env.window.__fishystuffCalculator.evalUrl();
   assert.match(url, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
+  assert.doesNotMatch(url, /[?&]trade_origin_select=true\b/);
+  assert.doesNotMatch(url, /[?&]trade_destination_select=true\b/);
 });
 
-test("zone changes request only the zone-dependent target fish control", () => {
+test("zone changes request zone-dependent fish and trade controls", () => {
   const env = createContext();
   const signals = defaultSignals();
 
@@ -452,6 +454,22 @@ test("zone changes request only the zone-dependent target fish control", () => {
   const url = env.window.__fishystuffCalculator.evalUrl();
   assert.match(url, /[?&]pet_cards=false\b/);
   assert.match(url, /[?&]target_fish_select=true\b/);
+  assert.match(url, /[?&]trade_origin_select=true\b/);
+  assert.match(url, /[?&]trade_destination_select=true\b/);
+});
+
+test("trade origin changes request only the trade destination control", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.window.__fishystuffCalculator.patchSignals({ tradeOriginRegion: "740" });
+
+  const url = env.window.__fishystuffCalculator.evalUrl();
+  assert.match(url, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
+  assert.doesNotMatch(url, /[?&]trade_origin_select=true\b/);
+  assert.match(url, /[?&]trade_destination_select=true\b/);
 });
 
 test("calculator eval URL classifies direct Datastar patch payloads", () => {
@@ -460,14 +478,25 @@ test("calculator eval URL classifies direct Datastar patch payloads", () => {
   const durationUrl = env.window.__fishystuffCalculator.evalUrl({ timespanAmount: 10 });
   assert.match(durationUrl, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(durationUrl, /[?&]target_fish_select=true\b/);
+  assert.doesNotMatch(durationUrl, /[?&]trade_origin_select=true\b/);
+  assert.doesNotMatch(durationUrl, /[?&]trade_destination_select=true\b/);
 
   const zoneUrl = env.window.__fishystuffCalculator.evalUrl({ zone: "240,74,74" });
   assert.match(zoneUrl, /[?&]pet_cards=false\b/);
   assert.match(zoneUrl, /[?&]target_fish_select=true\b/);
+  assert.match(zoneUrl, /[?&]trade_origin_select=true\b/);
+  assert.match(zoneUrl, /[?&]trade_destination_select=true\b/);
+
+  const tradeOriginUrl = env.window.__fishystuffCalculator.evalUrl({ tradeOriginRegion: "740" });
+  assert.match(tradeOriginUrl, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(tradeOriginUrl, /[?&]trade_origin_select=true\b/);
+  assert.match(tradeOriginUrl, /[?&]trade_destination_select=true\b/);
 
   const petUrl = env.window.__fishystuffCalculator.evalUrl({ pet1: { tier: "4" } });
   assert.doesNotMatch(petUrl, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(petUrl, /[?&]target_fish_select=true\b/);
+  assert.doesNotMatch(petUrl, /[?&]trade_origin_select=true\b/);
+  assert.doesNotMatch(petUrl, /[?&]trade_destination_select=true\b/);
 
   const packLeaderUrl = env.window.__fishystuffCalculator.evalUrl({ pet1: { packLeader: true } });
   assert.match(packLeaderUrl, /[?&]pet_cards=false\b/);

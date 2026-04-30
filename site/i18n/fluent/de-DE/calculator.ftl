@@ -182,6 +182,8 @@ calculator.server.search.backpacks = Rucksäcke suchen
 calculator.server.search.foods = Nahrung nach Name oder Effekt suchen
 calculator.server.search.buffs = Buffs nach Name oder Effekt suchen
 calculator.server.search.trade_levels = Handelsstufen suchen
+calculator.server.search.trade_origins = Handelsursprünge suchen
+calculator.server.search.trade_destinations = Handels-NPCs suchen
 calculator.server.search.loot_rows = Beutezeilen an diesem Spot suchen
 calculator.server.search.pet_tiers = Haustierstufen suchen
 calculator.server.search.pet_specials = Haustier-Spezialisierungen suchen
@@ -232,6 +234,8 @@ calculator.server.field.target_fish = Zielfisch / Beuteobjekt
 calculator.server.field.target_amount = Zielmenge
 calculator.server.field.pmf_max_count = PMF-Maximalanzahl
 calculator.server.field.trade_level = Handelsstufe
+calculator.server.field.trade_origin = Handelsursprung
+calculator.server.field.trade_destination = Zielhändler
 calculator.server.field.distance_bonus = Distanzbonus
 calculator.server.field.trade_price_curve = Handelspreiskurve
 calculator.server.field.discard_grade = Fische bis Qualität verwerfen
@@ -280,7 +284,7 @@ calculator.server.helper.target_missing_at_spot = Dieses Ziel erscheint aktuell 
 calculator.server.helper.target_pmf_auto = 0 = automatisch. Der letzte PMF-Bucket ist aktuell ≥{$count} (0,5-%-Schwanzgrenze).
 calculator.server.helper.target_pmf_fixed = Der letzte PMF-Bucket ist ≥{$count}.
 calculator.server.helper.normalize_rates = Raten normalisieren
-calculator.server.helper.distance_bonus = manueller %-Bonus, im Verkaufsmodell auf +150 % gedeckelt
+calculator.server.helper.distance_bonus = aus Handelsursprung und Ziel berechnet, im Verkaufsmodell auf +150 % gedeckelt
 calculator.server.helper.trade_price_curve = manuelle %-Kurve, häufig etwa 105–130 %
 calculator.server.helper.apply_trade_settings = Handelseinstellungen anwenden
 calculator.server.helper.food_family = Pro Nahrungskategorie wirkt immer nur eine Familie gleichzeitig. Höherstufige Nahrung ersetzt niedrigerstufige Nahrung derselben Familie.
@@ -341,6 +345,7 @@ calculator.server.badge.fish_exp = +{$percent}% Angel-EP
 calculator.server.badge.life_exp = +{$percent}% Lebens-EP
 calculator.server.badge.set_effect = Set-Effekt
 calculator.server.badge.level_drr = +{$percent}% Stufen-DRR
+calculator.server.badge.zone_origin = Zonenursprung
 
 # Group and loot labels visible in charts and tooltips
 calculator.server.group.prize = Preisfisch

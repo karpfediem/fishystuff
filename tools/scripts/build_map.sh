@@ -526,7 +526,7 @@ if [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f
     --out "$region_nodes_output"
 fi
 
-if [ -f "$character_function_xlsx_input" ] && [ -f "$character_table_xlsx_input" ] && [ -f "$selling_to_npc_xlsx_input" ] && [ -f "$regionclientdata_input" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+if [ -f "$character_function_xlsx_input" ] && [ -f "$character_table_xlsx_input" ] && [ -f "$selling_to_npc_xlsx_input" ] && [ -f "$regionclientdata_input" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ -f "$zone_lookup_output" ] && [ -f "$regions_field_output" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
   [ "${REBUILD_TRADE_NPC_DESTINATIONS:-0}" = "1" ] ||
   [ ! -f "$trade_npc_catalog_output" ] ||
   [ "$character_function_xlsx_input" -nt "$trade_npc_catalog_output" ] ||
@@ -535,7 +535,9 @@ if [ -f "$character_function_xlsx_input" ] && [ -f "$character_table_xlsx_input"
   [ "$regionclientdata_input" -nt "$trade_npc_catalog_output" ] ||
   [ "$regioninfo_bss_input" -nt "$trade_npc_catalog_output" ] ||
   [ "$regiongroupinfo_bss_input" -nt "$trade_npc_catalog_output" ] ||
-  [ "$region_loc_input" -nt "$trade_npc_catalog_output" ];
+  [ "$region_loc_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$zone_lookup_output" -nt "$trade_npc_catalog_output" ] ||
+  [ "$regions_field_output" -nt "$trade_npc_catalog_output" ];
 }; then
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
     build-trade-npc-destinations \
@@ -547,5 +549,7 @@ if [ -f "$character_function_xlsx_input" ] && [ -f "$character_table_xlsx_input"
     --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
     --loc "$region_loc_input" \
     "${waypoint_xml_args[@]}" \
+    --zone-mask-field "$zone_lookup_output" \
+    --regions-field "$regions_field_output" \
     --catalog-out "$trade_npc_catalog_output"
 fi

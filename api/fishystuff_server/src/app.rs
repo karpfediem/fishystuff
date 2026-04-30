@@ -300,6 +300,7 @@ mod tests {
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: origins.into_iter().map(str::to_string).collect(),
             runtime_cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            runtime_cdn_root: None,
             defaults: Default::default(),
             status_cfg: ZoneStatusConfig::default(),
             cache_zone_stats_max: 16,

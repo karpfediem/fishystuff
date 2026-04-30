@@ -153,6 +153,8 @@ pub(super) fn build_calculator_default_signals(pets: &CalculatorPetCatalog) -> C
         pet3: build_calculator_default_lahtron_pet(pets, "4", false),
         pet4: build_calculator_default_lahtron_pet(pets, "4", false),
         pet5: build_calculator_default_lahtron_pet(pets, "4", false),
+        trade_origin_region: String::new(),
+        trade_destination_npc: String::new(),
         trade_distance_bonus: 134.15,
         trade_price_curve: 120.0,
         price_overrides: Default::default(),

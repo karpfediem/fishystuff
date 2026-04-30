@@ -9,6 +9,8 @@ pub struct TradeNpcCatalogSummary {
     pub title_trade_manager_rows: usize,
     pub candidate_npcs: usize,
     pub origin_regions: usize,
+    #[serde(default)]
+    pub zone_origin_regions: usize,
     pub destinations: usize,
     pub excluded_missing_spawn: usize,
     pub excluded_missing_trade_origin: usize,
@@ -25,6 +27,8 @@ pub struct TradeNpcCatalogResponse {
     pub summary: TradeNpcCatalogSummary,
     #[serde(default)]
     pub origin_regions: Vec<TradeOriginRegion>,
+    #[serde(default)]
+    pub zone_origin_regions: Vec<TradeZoneOriginRegions>,
     #[serde(default)]
     pub destinations: Vec<TradeNpcDestination>,
     #[serde(default)]
@@ -46,6 +50,20 @@ pub struct TradeOriginRegion {
     pub waypoint_name: Option<String>,
     pub world_x: f64,
     pub world_z: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TradeZoneOriginRegions {
+    pub zone_rgb_key: String,
+    pub zone_rgb_u32: u32,
+    #[serde(default)]
+    pub origins: Vec<TradeZoneOriginRegion>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TradeZoneOriginRegion {
+    pub region_id: u32,
+    pub pixel_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

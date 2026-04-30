@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::trade::TradeNpcCatalogResponse;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CalculatorItemEntry {
     pub key: String,
@@ -208,6 +210,10 @@ pub struct CalculatorSignals {
     pub pet3: CalculatorPetSignals,
     pub pet4: CalculatorPetSignals,
     pub pet5: CalculatorPetSignals,
+    #[serde(rename = "tradeOriginRegion")]
+    pub trade_origin_region: String,
+    #[serde(rename = "tradeDestinationNpc")]
+    pub trade_destination_npc: String,
     #[serde(rename = "tradeDistanceBonus")]
     pub trade_distance_bonus: f64,
     #[serde(rename = "tradePriceCurve")]
@@ -257,6 +263,8 @@ pub struct CalculatorCatalogResponse {
     pub session_presets: Vec<CalculatorSessionPresetEntry>,
     #[serde(default)]
     pub pets: CalculatorPetCatalog,
+    #[serde(default)]
+    pub trade_npcs: TradeNpcCatalogResponse,
     #[serde(default)]
     pub defaults: CalculatorSignals,
 }

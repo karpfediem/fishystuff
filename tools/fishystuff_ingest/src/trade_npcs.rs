@@ -7,8 +7,9 @@ use calamine::{open_workbook_auto, Data, Range, Reader};
 use fishystuff_api::models::trade::{
     ExcludedTradeNpc, TradeNpcCatalogResponse, TradeNpcCatalogSummary, TradeNpcDestination,
     TradeNpcSourceDescriptor, TradeNpcSpawn, TradeNpcTradeInfo, TradeOriginRegion,
-    TradeRegionWaypointRef,
+    TradeRegionWaypointRef, TradeZoneOriginRegion, TradeZoneOriginRegions,
 };
+use fishystuff_core::field::DiscreteFieldRows;
 use fishystuff_core::gamecommondata::{
     load_original_region_layer_context, OriginalRegionLayerContext, RegionOriginInfo,
 };
@@ -29,6 +30,8 @@ pub struct TradeNpcBuildInputs<'a> {
     pub regiongroupinfo_bss: &'a Path,
     pub loc: &'a Path,
     pub waypoint_xml: &'a [PathBuf],
+    pub zone_mask_field: Option<&'a Path>,
+    pub regions_field: Option<&'a Path>,
 }
 
 #[derive(Debug, Default)]
@@ -131,12 +134,16 @@ pub fn build_trade_npc_destinations(
         title_trade_manager_rows: title_trade_manager_keys.len(),
         candidate_npcs: 0,
         origin_regions: 0,
+        zone_origin_regions: 0,
         destinations: 0,
         excluded_missing_spawn: 0,
         excluded_missing_trade_origin: 0,
     };
     let origin_regions = build_origin_regions(&context);
     summary.origin_regions = origin_regions.len();
+    let zone_origin_regions =
+        build_zone_origin_regions(&context, inputs.zone_mask_field, inputs.regions_field)?;
+    summary.zone_origin_regions = zone_origin_regions.len();
 
     let mut candidates = BTreeMap::<u32, CandidateTradeNpc>::new();
     for record in function_records {
@@ -251,53 +258,70 @@ pub fn build_trade_npc_destinations(
 
     summary.destinations = destinations.len();
 
+    let mut sources = vec![
+        source_descriptor(
+            "character_function_table",
+            inputs.character_function_xlsx,
+            "regular Trade NPC classification and trade item group metadata",
+        ),
+        source_descriptor(
+            "selling_to_npc_table",
+            inputs.selling_to_npc_xlsx,
+            "cross-check for NPCs that accept regular trade item sales",
+        ),
+        source_descriptor(
+            "character_table",
+            inputs.character_table_xlsx,
+            "exact Trade Manager title classification",
+        ),
+        source_descriptor(
+            "regionclientdata",
+            inputs.regionclientdata,
+            "NPC spawn region and world coordinates",
+        ),
+        source_descriptor(
+            "regioninfo_bss",
+            inputs.regioninfo_bss,
+            "assigned region tradeoriginregion linkage",
+        ),
+        source_descriptor(
+            "waypoint_xml",
+            inputs
+                .waypoint_xml
+                .first()
+                .map(|path| path.as_path())
+                .unwrap_or(Path::new("")),
+            "region and trade-origin waypoint coordinates",
+        ),
+        source_descriptor(
+            "languagedata_loc",
+            inputs.loc,
+            "localized NPC and region names",
+        ),
+    ];
+    if let Some(path) = inputs.zone_mask_field {
+        sources.push(source_descriptor(
+            "zone_mask_field",
+            path,
+            "zone mask field used to precompute trade origins per fishing zone",
+        ));
+    }
+    if let Some(path) = inputs.regions_field {
+        sources.push(source_descriptor(
+            "regions_field",
+            path,
+            "region field used to precompute trade origins per fishing zone",
+        ));
+    }
+
     let catalog = TradeNpcCatalogResponse {
         schema: "fishystuff.trade_npc_destinations".to_string(),
         version: 1,
         coordinate_space: "bdo_world_xz".to_string(),
-        sources: vec![
-            source_descriptor(
-                "character_function_table",
-                inputs.character_function_xlsx,
-                "regular Trade NPC classification and trade item group metadata",
-            ),
-            source_descriptor(
-                "selling_to_npc_table",
-                inputs.selling_to_npc_xlsx,
-                "cross-check for NPCs that accept regular trade item sales",
-            ),
-            source_descriptor(
-                "character_table",
-                inputs.character_table_xlsx,
-                "exact Trade Manager title classification",
-            ),
-            source_descriptor(
-                "regionclientdata",
-                inputs.regionclientdata,
-                "NPC spawn region and world coordinates",
-            ),
-            source_descriptor(
-                "regioninfo_bss",
-                inputs.regioninfo_bss,
-                "assigned region tradeoriginregion linkage",
-            ),
-            source_descriptor(
-                "waypoint_xml",
-                inputs
-                    .waypoint_xml
-                    .first()
-                    .map(|path| path.as_path())
-                    .unwrap_or(Path::new("")),
-                "region and trade-origin waypoint coordinates",
-            ),
-            source_descriptor(
-                "languagedata_loc",
-                inputs.loc,
-                "localized NPC and region names",
-            ),
-        ],
+        sources,
         summary,
         origin_regions,
+        zone_origin_regions,
         destinations: destinations.clone(),
         excluded,
     };
@@ -307,29 +331,130 @@ pub fn build_trade_npc_destinations(
 }
 
 fn build_origin_regions(context: &OriginalRegionLayerContext) -> Vec<TradeOriginRegion> {
-    let mut origin_regions = Vec::new();
+    let mut origin_regions = BTreeMap::<u32, TradeOriginRegion>::new();
     for region_id in context.region_ids() {
-        let Some(info) = context.resolve_region_waypoint_info(region_id) else {
+        let Some(info) = context.resolve_region_origin_info(region_id) else {
+            continue;
+        };
+        let Some(origin_region_id) = info.region_id else {
             continue;
         };
         let (Some(world_x), Some(world_z)) = (info.world_x, info.world_z) else {
             continue;
         };
-        origin_regions.push(TradeOriginRegion {
-            region_id,
-            region_name: info.region_name,
-            waypoint_id: info.waypoint_id,
-            waypoint_name: info.waypoint_name,
-            world_x,
-            world_z,
-        });
+        origin_regions
+            .entry(origin_region_id)
+            .or_insert_with(|| TradeOriginRegion {
+                region_id: origin_region_id,
+                region_name: info.region_name,
+                waypoint_id: info.waypoint_id,
+                waypoint_name: info.waypoint_name,
+                world_x,
+                world_z,
+            });
     }
+    let mut origin_regions = origin_regions.into_values().collect::<Vec<_>>();
     origin_regions.sort_by(|left, right| {
         left.region_name
             .cmp(&right.region_name)
             .then_with(|| left.region_id.cmp(&right.region_id))
     });
     origin_regions
+}
+
+fn build_zone_origin_regions(
+    context: &OriginalRegionLayerContext,
+    zone_mask_field: Option<&Path>,
+    regions_field: Option<&Path>,
+) -> Result<Vec<TradeZoneOriginRegions>> {
+    let (Some(zone_mask_field), Some(regions_field)) = (zone_mask_field, regions_field) else {
+        return Ok(Vec::new());
+    };
+    let zone_mask = load_discrete_field(zone_mask_field, "zone mask field")?;
+    let regions = load_discrete_field(regions_field, "regions field")?;
+    if zone_mask.width() != regions.width() || zone_mask.height() != regions.height() {
+        bail!(
+            "zone mask field dimensions {}x{} do not match regions field dimensions {}x{}",
+            zone_mask.width(),
+            zone_mask.height(),
+            regions.width(),
+            regions.height()
+        );
+    }
+
+    let mut origin_cache = HashMap::<u32, Option<u32>>::new();
+    let mut origins_by_zone = BTreeMap::<u32, BTreeMap<u32, u32>>::new();
+    zone_mask.for_each_span(|y, start_x, end_x, zone_rgb_u32| {
+        if zone_rgb_u32 == 0 {
+            return;
+        }
+        for x in start_x..end_x {
+            let region_id = regions
+                .cell_id_u32(i32::from(x), i32::from(y))
+                .unwrap_or_default();
+            if region_id == 0 {
+                continue;
+            }
+            let origin_region_id = if let Some(cached) = origin_cache.get(&region_id) {
+                *cached
+            } else {
+                let resolved = context
+                    .resolve_region_origin_info(region_id)
+                    .filter(|info| info.world_x.is_some() && info.world_z.is_some())
+                    .and_then(|info| info.region_id);
+                origin_cache.insert(region_id, resolved);
+                resolved
+            };
+            let Some(origin_region_id) = origin_region_id else {
+                continue;
+            };
+            let count = origins_by_zone
+                .entry(zone_rgb_u32)
+                .or_default()
+                .entry(origin_region_id)
+                .or_default();
+            *count = count.saturating_add(1);
+        }
+    });
+
+    Ok(origins_by_zone
+        .into_iter()
+        .map(|(zone_rgb_u32, counts)| {
+            let mut origins = counts
+                .into_iter()
+                .map(|(region_id, pixel_count)| TradeZoneOriginRegion {
+                    region_id,
+                    pixel_count,
+                })
+                .collect::<Vec<_>>();
+            origins.sort_by(|left, right| {
+                right
+                    .pixel_count
+                    .cmp(&left.pixel_count)
+                    .then_with(|| left.region_id.cmp(&right.region_id))
+            });
+            TradeZoneOriginRegions {
+                zone_rgb_key: rgb_key(zone_rgb_u32),
+                zone_rgb_u32,
+                origins,
+            }
+        })
+        .collect())
+}
+
+fn load_discrete_field(path: &Path, label: &str) -> Result<DiscreteFieldRows> {
+    let bytes = std::fs::read(path).with_context(|| format!("read {label}: {}", path.display()))?;
+    DiscreteFieldRows::from_bytes(&bytes)
+        .with_context(|| format!("decode {label}: {}", path.display()))
+}
+
+fn rgb_key(rgb: u32) -> String {
+    format!(
+        "{},{},{}",
+        (rgb >> 16) & 0xff,
+        (rgb >> 8) & 0xff,
+        rgb & 0xff
+    )
 }
 
 fn load_character_function_records(path: &Path) -> Result<Vec<TradeFunctionRecord>> {
