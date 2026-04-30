@@ -39,6 +39,20 @@ type CalculatorPetSpecialSkillDbRow = (
     Option<String>,
     Option<String>,
 );
+type CalculatorPetSkillBuffDbRow = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+type CalculatorPetBuffModuleDbRow = (Option<String>, Option<String>);
 
 #[derive(Debug, Clone)]
 struct RawPetRow {
@@ -269,6 +283,57 @@ fn parse_pet_option_effects(
                     }
                 }
             }
+        }
+    }
+
+    effects
+}
+
+fn merge_pet_option_effects(
+    mut primary: PetOptionEffects,
+    secondary: PetOptionEffects,
+) -> PetOptionEffects {
+    if primary.auto_fishing_time_reduction.is_none() {
+        primary.auto_fishing_time_reduction = secondary.auto_fishing_time_reduction;
+    }
+    if primary.durability_reduction_resistance.is_none() {
+        primary.durability_reduction_resistance = secondary.durability_reduction_resistance;
+    }
+    if primary.fishing_exp.is_none() {
+        primary.fishing_exp = secondary.fishing_exp;
+    }
+    if primary.life_exp.is_none() {
+        primary.life_exp = secondary.life_exp;
+    }
+    primary
+}
+
+fn has_pet_skill_module(module_types: Option<&HashSet<String>>, module_type: &str) -> bool {
+    module_types.is_some_and(|types| types.contains(module_type))
+}
+
+fn source_pet_option_effects(
+    skill_id: &str,
+    module_types: Option<&HashSet<String>>,
+) -> PetOptionEffects {
+    let Some(skill_no) = skill_id.trim().parse::<i32>().ok() else {
+        return PetOptionEffects::default();
+    };
+    let mut effects = PetOptionEffects::default();
+
+    if has_pet_skill_module(module_types, "91") && (49081..=49085).contains(&skill_no) {
+        effects.durability_reduction_resistance = Some((skill_no - 49080) as f32 / 100.0);
+    }
+
+    if has_pet_skill_module(module_types, "25") {
+        if (49066..=49070).contains(&skill_no) {
+            effects.life_exp = Some((skill_no - 49065) as f32 / 100.0);
+        } else {
+            effects.fishing_exp = match skill_no {
+                49022 | 49023 => Some(0.05),
+                49024 => Some(0.07),
+                _ => None,
+            };
         }
     }
 
@@ -511,6 +576,104 @@ fn query_skilltype_meta(
                     trim_optional_string(icon),
                 ),
             );
+        }
+    }
+    Ok(result)
+}
+
+#[tracing::instrument(
+    name = "store.calculator_catalog.query.pet_skill_buff_modules",
+    skip_all,
+    fields(skill_count = skill_ids.len())
+)]
+fn query_skill_buff_module_types(
+    conn: &mut PooledConn,
+    as_of: &str,
+    skill_ids: &HashSet<String>,
+) -> Result<HashMap<String, HashSet<String>>, mysql::Error> {
+    let mut values = skill_ids.iter().cloned().collect::<Vec<_>>();
+    values.sort();
+    if values.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let mut buff_ids_by_skill = HashMap::<String, Vec<String>>::new();
+    let mut buff_ids = Vec::<String>::new();
+    for chunk in values.chunks(400) {
+        let query = format!(
+            "SELECT \
+                `SkillNo`, \
+                `Buff0`, \
+                `Buff1`, \
+                `Buff2`, \
+                `Buff3`, \
+                `Buff4`, \
+                `Buff5`, \
+                `Buff6`, \
+                `Buff7`, \
+                `Buff8`, \
+                `Buff9` \
+             FROM skill_table_new{as_of} \
+             WHERE `SkillNo` IN ({})",
+            quoted_sql_values(chunk),
+        );
+        let rows: Vec<CalculatorPetSkillBuffDbRow> = conn.query(query)?;
+        for (skill_no, buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9) in rows
+        {
+            let Some(skill_no) = trim_optional_string(skill_no) else {
+                continue;
+            };
+            let entry = buff_ids_by_skill.entry(skill_no).or_default();
+            for buff_id in [
+                buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9,
+            ]
+            .into_iter()
+            .filter_map(trim_optional_string)
+            {
+                if !entry.iter().any(|existing| existing == &buff_id) {
+                    entry.push(buff_id.clone());
+                }
+                if !buff_ids.iter().any(|existing| existing == &buff_id) {
+                    buff_ids.push(buff_id);
+                }
+            }
+        }
+    }
+
+    if buff_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    buff_ids.sort();
+    let mut module_type_by_buff_id = HashMap::<String, String>::new();
+    for chunk in buff_ids.chunks(400) {
+        let query = format!(
+            "SELECT `Index`, `ModuleType` \
+             FROM buff_table{as_of} \
+             WHERE `Index` IN ({})",
+            quoted_sql_values(chunk),
+        );
+        let rows: Vec<CalculatorPetBuffModuleDbRow> = conn.query(query)?;
+        for (buff_id, module_type) in rows {
+            let Some(buff_id) = trim_optional_string(buff_id) else {
+                continue;
+            };
+            let Some(module_type) = trim_optional_string(module_type) else {
+                continue;
+            };
+            module_type_by_buff_id.entry(buff_id).or_insert(module_type);
+        }
+    }
+
+    let mut result = HashMap::<String, HashSet<String>>::new();
+    for (skill_no, buff_ids) in buff_ids_by_skill {
+        for buff_id in buff_ids {
+            if let Some(module_type) = module_type_by_buff_id.get(&buff_id) {
+                result
+                    .entry(skill_no.clone())
+                    .or_default()
+                    .insert(module_type.clone());
+            }
         }
     }
     Ok(result)
@@ -863,19 +1026,29 @@ fn calculator_pet_option_records(
     base_talent_skill_ids: &HashSet<String>,
     learned_skill_ids: &HashSet<String>,
     localized_labels: &HashMap<String, String>,
+    english_labels: &HashMap<String, String>,
     skilltype_meta: &HashMap<String, (Option<String>, Option<String>, Option<String>)>,
+    source_module_types: &HashMap<String, HashSet<String>>,
 ) -> HashMap<String, CalculatorPetOptionRecord> {
     let mut records = HashMap::new();
     for skill_id in skill_ids {
         let localized_label = localized_labels.get(skill_id).cloned();
+        let english_label = english_labels.get(skill_id).cloned().or_else(|| {
+            (lang.code() == "en")
+                .then(|| localized_label.clone())
+                .flatten()
+        });
         let (korean_label, korean_description, _icon) = skilltype_meta
             .get(skill_id)
             .cloned()
             .unwrap_or((None, None, None));
-        let effects = parse_pet_option_effects(
-            localized_label.as_deref(),
-            korean_label.as_deref(),
-            korean_description.as_deref(),
+        let effects = merge_pet_option_effects(
+            source_pet_option_effects(skill_id, source_module_types.get(skill_id)),
+            parse_pet_option_effects(
+                english_label.as_deref(),
+                korean_label.as_deref(),
+                korean_description.as_deref(),
+            ),
         );
         let Some(_kind) = pet_option_kind(&effects)
             .or_else(|| {
@@ -1162,11 +1335,26 @@ impl DoltMySqlStore {
                 Ok(rows) => rows,
                 Err(err) => return Err(db_unavailable(err)),
             };
+        let english_skill_labels = if lang.code() == "en" {
+            localized_skill_labels.clone()
+        } else {
+            match query_languagedata_texts(&mut conn, &DataLang::En, &as_of, &skill_ids, "10") {
+                Ok(rows) => rows,
+                Err(err) => return Err(db_unavailable(err)),
+            }
+        };
         let skilltype_meta = match query_skilltype_meta(&mut conn, &as_of, &skill_ids) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "skilltype_table_new") => HashMap::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
+        let skill_buff_module_types =
+            match query_skill_buff_module_types(&mut conn, &as_of, &skill_ids) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "skill_table_new") => HashMap::new(),
+                Err(err) if is_missing_table(&err, "buff_table") => HashMap::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            };
         let pet_special_skill_meta =
             match query_pet_special_skill_meta(&mut conn, &as_of, &pet_special_skill_ids) {
                 Ok(rows) => rows,
@@ -1178,7 +1366,9 @@ impl DoltMySqlStore {
             &base_talent_skill_ids,
             &learned_skill_ids,
             &localized_skill_labels,
+            &english_skill_labels,
             &skilltype_meta,
+            &skill_buff_module_types,
         );
         options_by_key.extend(calculator_pet_special_option_records(
             lang,
@@ -1402,6 +1592,8 @@ mod tests {
             &base_talent_skill_ids,
             &HashSet::new(),
             &english_labels,
+            &english_labels,
+            &HashMap::new(),
             &HashMap::new(),
         );
 
@@ -1427,6 +1619,8 @@ mod tests {
             &HashSet::new(),
             &learned_skill_ids,
             &english_labels,
+            &english_labels,
+            &HashMap::new(),
             &HashMap::new(),
         );
 
@@ -1434,6 +1628,60 @@ mod tests {
             .get("skill:combat_exp")
             .expect("source learned skill");
         assert_eq!(record.entry.label, "Combat EXP +5%");
+    }
+
+    #[test]
+    fn calculator_pet_option_records_uses_source_modules_for_localized_drr() {
+        let skill_ids = HashSet::from(["49084".to_string()]);
+        let base_talent_skill_ids = HashSet::from(["49084".to_string()]);
+        let localized_labels = HashMap::from([(
+            "49084".to_string(),
+            "Haltbarkeitsbeständigkeit +4 %".to_string(),
+        )]);
+        let source_module_types =
+            HashMap::from([("49084".to_string(), HashSet::from(["91".to_string()]))]);
+
+        let records = calculator_pet_option_records(
+            &DataLang::from_code("de").expect("valid data language"),
+            &skill_ids,
+            &base_talent_skill_ids,
+            &HashSet::new(),
+            &localized_labels,
+            &HashMap::new(),
+            &HashMap::new(),
+            &source_module_types,
+        );
+
+        let record = records.get("49084").expect("drr talent");
+        assert_eq!(record.entry.label, "Haltbarkeitsbeständigkeit +4 %");
+        assert_eq!(record.entry.durability_reduction_resistance, Some(0.04));
+    }
+
+    #[test]
+    fn calculator_pet_option_records_uses_english_text_before_localized_text() {
+        let skill_ids = HashSet::from(["future:drr".to_string()]);
+        let base_talent_skill_ids = HashSet::from(["future:drr".to_string()]);
+        let localized_labels =
+            HashMap::from([("future:drr".to_string(), "Haltbarkeit +3 %".to_string())]);
+        let english_labels = HashMap::from([(
+            "future:drr".to_string(),
+            "Durability Reduction Resistance +3%".to_string(),
+        )]);
+
+        let records = calculator_pet_option_records(
+            &DataLang::from_code("de").expect("valid data language"),
+            &skill_ids,
+            &base_talent_skill_ids,
+            &HashSet::new(),
+            &localized_labels,
+            &english_labels,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        let record = records.get("future:drr").expect("drr talent");
+        assert_eq!(record.entry.label, "Haltbarkeit +3 %");
+        assert_eq!(record.entry.durability_reduction_resistance, Some(0.03));
     }
 
     #[test]
