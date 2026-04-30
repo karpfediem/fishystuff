@@ -1234,10 +1234,7 @@ fn calculator_signals_event(
     mode: CalculatorPatchMode,
     defaults: Option<&CalculatorSignals>,
 ) -> AppResult<PatchSignals> {
-    let mut patch = match mode {
-        CalculatorPatchMode::Init => init_signals_patch_map(signals)?,
-        CalculatorPatchMode::Eval => serde_json::Map::new(),
-    };
+    let mut patch = init_signals_patch_map(signals)?;
     if matches!(mode, CalculatorPatchMode::Init) {
         patch.insert("_loading".to_string(), Value::Bool(false));
         if let Some(defaults) = defaults {
@@ -11303,7 +11300,7 @@ fn render_calculator_app(
 <div id="calculator-app" class="grid gap-6">
     __CANONICAL_SIGNAL_COMPUTEDS__
     <div class="hidden"
-         data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl(patch))"
+         data-on-signal-patch__debounce.150ms="window.__fishystuffCalculator.shouldEvalSignalPatch(patch) ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"
          data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
 
     <section class="card card-border bg-base-100">
@@ -17210,9 +17207,9 @@ mod tests {
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
         assert!(text.contains("\"raw_prize_rate_text\":\""));
         assert!(text.contains("\"raw_prize_mastery_text\":\""));
-        assert!(!text.contains("\"zone\":\"240,74,74\""));
-        assert!(!text.contains("\"rod\":\"item:16162\""));
-        assert!(!text.contains("\"_resources\":0.0"));
+        assert!(text.contains("\"zone\":\"240,74,74\""));
+        assert!(text.contains("\"rod\":\"item:16162\""));
+        assert!(text.contains("\"_resources\":0.0"));
     }
 
     #[tokio::test]
@@ -17304,6 +17301,8 @@ mod tests {
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("event:datastar-patch-signals"));
+        assert!(text.contains("\"tradeOriginRegion\":\"1\""));
+        assert!(text.contains("\"tradeDistanceBonus\":"));
         assert!(text.contains("data:selector #calculator-trade-destination-control"));
         assert!(!text.contains("data:selector #calculator-trade-window"));
         assert!(!text.contains("data:selector #calculator-target-fish-control"));
@@ -17880,7 +17879,7 @@ mod tests {
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("\"auto_fish_time\":\""));
-        assert!(!text.contains("\"active\":true"));
+        assert!(text.contains("\"active\":true"));
     }
 
     #[tokio::test]

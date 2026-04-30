@@ -401,7 +401,14 @@
     return paths;
   }
 
+  function isCalculatorServerSignalPatch(patch) {
+    return isPlainObject(patch) && Object.prototype.hasOwnProperty.call(patch, "_calc");
+  }
+
   function patchMatchesCalculatorEvalFilter(patch) {
+    if (isCalculatorServerSignalPatch(patch)) {
+      return false;
+    }
     const helper = datastarPersistHelper();
     const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
       ? helper.patchMatchesSignalFilter
@@ -409,6 +416,10 @@
     return patchMatches
       ? patchMatches(patch, calculatorEvalSignalPatchFilter())
       : signalPatchLeafPaths(patch).some((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
+  }
+
+  function shouldEvalSignalPatch(patch) {
+    return patchMatchesCalculatorEvalFilter(patch);
   }
 
   function calculatorEvalPatchPaths(patch) {
@@ -3074,6 +3085,7 @@
     initUrl: calculatorInitUrl,
     evalUrl: calculatorEvalUrl,
     evalSignalPatchFilter: calculatorEvalSignalPatchFilter,
+    shouldEvalSignalPatch,
     signalObject() {
       return signalStore.signalObject();
     },

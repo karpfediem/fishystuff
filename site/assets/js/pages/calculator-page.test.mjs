@@ -1554,6 +1554,37 @@ test("calculator eval filter ignores internal signal branches", () => {
   assert.equal(exclude.test("timespanAmount"), false);
 });
 
+test("calculator eval trigger ignores server signal patches", () => {
+  const env = createContext();
+
+  assert.equal(env.window.__fishystuffCalculator.shouldEvalSignalPatch({ timespanAmount: 10 }), true);
+  assert.equal(env.window.__fishystuffCalculator.shouldEvalSignalPatch({
+    _calc: { zone_name: "Velia Beach" },
+    tradeDistanceBonus: 134.15,
+  }), false);
+});
+
+test("calculator server signal patches do not schedule dependent control refreshes", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calc: { zone_name: "Velia Beach" },
+      zone: "240,74,74",
+      tradeOriginRegion: "740",
+      tradeDistanceBonus: 134.15,
+    },
+  });
+
+  const url = env.window.__fishystuffCalculator.evalUrl();
+  assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
+  assert.doesNotMatch(url, /[?&]trade_origin_select=true\b/);
+  assert.doesNotMatch(url, /[?&]trade_destination_select=true\b/);
+});
+
 test("calculator persist stores canonical page state and excludes transient branches", () => {
   const env = createContext();
   const signals = defaultSignals();
