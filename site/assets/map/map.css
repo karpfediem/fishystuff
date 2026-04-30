@@ -1036,13 +1036,13 @@ fishymap-search-panel {
   left: 0;
   z-index: 42;
   display: flex;
-  min-width: 12rem;
-  max-width: min(20rem, calc(100vw - 1.5rem));
+  min-width: 15rem;
+  max-width: min(24rem, calc(100vw - 1.5rem));
   flex-direction: column;
-  gap: 0.22rem;
-  padding: 0.6rem 0.72rem;
+  gap: 0.55rem;
+  padding: 0.7rem 0.78rem;
   border: 1px solid color-mix(in srgb, var(--color-base-content, #1f2937) 14%, transparent);
-  border-radius: calc(var(--radius-box, 1rem) * 0.9);
+  border-radius: min(8px, var(--radius-box, 1rem));
   background: color-mix(in oklab, var(--color-base-100, #ffffff) 94%, var(--color-base-200, #f3f4f6) 6%);
   box-shadow:
     0 16px 42px color-mix(in srgb, black 16%, transparent),
@@ -1055,36 +1055,82 @@ fishymap-search-panel {
   display: none !important;
 }
 
-.fishy-provenance-tooltip__eyebrow {
-  display: inline-flex;
+.fishy-provenance-tooltip__header {
+  display: flex;
   align-items: center;
-  gap: 0.42rem;
-  font-size: 0.66rem;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.fishy-provenance-tooltip__badge.badge {
+  display: inline-flex;
+  min-height: 1.28rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  border-color: color-mix(in srgb, var(--fishy-provenance-tooltip-color, var(--color-info, #6b8afd)) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fishy-provenance-tooltip-color, var(--color-info, #6b8afd)) 10%, transparent);
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 84%, transparent);
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-base-content, #1f2937) 52%, transparent);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .fishy-provenance-tooltip__swatch {
-  width: 0.42rem;
-  height: 0.42rem;
+  width: 0.46rem;
+  height: 0.46rem;
   border-radius: 999px;
   background: var(--fishy-provenance-tooltip-color, var(--color-info, #6b8afd));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100, #ffffff) 70%, transparent);
 }
 
 .fishy-provenance-tooltip__source {
-  font-size: 0.83rem;
+  min-width: 0;
+  font-size: 0.8rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.25;
+  text-align: right;
   color: color-mix(in srgb, var(--color-base-content, #1f2937) 88%, transparent);
 }
 
-.fishy-provenance-tooltip__detail {
+.fishy-provenance-tooltip__details {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.fishy-provenance-tooltip__detail-row {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  padding-top: 0.32rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-base-content, #1f2937) 9%, transparent);
+}
+
+.fishy-provenance-tooltip__detail-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.fishy-provenance-tooltip__detail-row--keyed {
+  grid-template-columns: minmax(4.8rem, auto) minmax(0, 1fr);
+  column-gap: 0.55rem;
+}
+
+.fishy-provenance-tooltip__detail-key {
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 56%, transparent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.fishy-provenance-tooltip__detail-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 78%, transparent);
   font-size: 0.76rem;
   line-height: 1.35;
-  color: color-mix(in srgb, var(--color-base-content, #1f2937) 74%, transparent);
 }
 
 .fishymap-overview-row {

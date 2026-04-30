@@ -58,7 +58,7 @@ function sourceLabel(channel, sourceKind) {
         return "Personal overlay";
     }
     if (sourceKind === "mixed") {
-        return channel === "presence" ? "Mixed support" : "Mixed provenance";
+        return channel === "presence" ? "Mixed support" : "Mixed sources";
     }
     return "Unspecified";
 }
@@ -249,19 +249,68 @@ function ensureTooltipElement() {
         return null;
     }
     tooltipElement = documentRef.createElement("div");
-    tooltipElement.className = "fishy-provenance-tooltip";
+    tooltipElement.className =
+        "fishy-provenance-tooltip card card-compact border border-base-300 bg-base-100 shadow-xl";
     tooltipElement.hidden = true;
     tooltipElement.setAttribute("role", "tooltip");
     tooltipElement.innerHTML = `
-        <div class="fishy-provenance-tooltip__eyebrow">
-            <span class="fishy-provenance-tooltip__swatch" aria-hidden="true"></span>
-            <span class="fishy-provenance-tooltip__label"></span>
+        <div class="fishy-provenance-tooltip__header">
+            <span class="fishy-provenance-tooltip__badge badge badge-sm badge-outline">
+                <span class="fishy-provenance-tooltip__swatch" aria-hidden="true"></span>
+                <span class="fishy-provenance-tooltip__label"></span>
+            </span>
+            <span class="fishy-provenance-tooltip__source"></span>
         </div>
-        <div class="fishy-provenance-tooltip__source"></div>
-        <div class="fishy-provenance-tooltip__detail"></div>
+        <div class="fishy-provenance-tooltip__details"></div>
     `;
     documentRef.body.appendChild(tooltipElement);
     return tooltipElement;
+}
+
+function detailRows(detail) {
+    return trimString(detail)
+        .split(/\s*(?:\n+|\s+\|\s+|\s+·\s+)\s*/u)
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => {
+            const separatorIndex = part.indexOf(":");
+            if (separatorIndex > 0 && separatorIndex <= 28) {
+                return {
+                    label: part.slice(0, separatorIndex).trim(),
+                    value: part.slice(separatorIndex + 1).trim(),
+                };
+            }
+            return { label: "", value: part };
+        })
+        .filter((row) => row.label || row.value);
+}
+
+function renderTooltipDetails(tooltip, detail) {
+    const documentRef = globalThis.document;
+    const container = tooltip.querySelector(".fishy-provenance-tooltip__details");
+    if (!container || !documentRef) {
+        return;
+    }
+    container.replaceChildren();
+    const rows = detailRows(detail);
+    container.hidden = rows.length === 0;
+    for (const row of rows) {
+        const rowElement = documentRef.createElement("div");
+        rowElement.className = row.label
+            ? "fishy-provenance-tooltip__detail-row fishy-provenance-tooltip__detail-row--keyed"
+            : "fishy-provenance-tooltip__detail-row";
+        if (row.label) {
+            const keyElement = documentRef.createElement("span");
+            keyElement.className = "fishy-provenance-tooltip__detail-key";
+            keyElement.textContent = row.label;
+            rowElement.appendChild(keyElement);
+        }
+        const valueElement = documentRef.createElement("span");
+        valueElement.className = "fishy-provenance-tooltip__detail-value";
+        valueElement.textContent = row.value;
+        rowElement.appendChild(valueElement);
+        container.appendChild(rowElement);
+    }
 }
 
 function provenanceTargetFromEvent(eventTarget) {
@@ -320,7 +369,7 @@ function showTooltip(anchor, event) {
     const color = trimString(anchor.dataset.fishyProvenanceColor);
     tooltip.querySelector(".fishy-provenance-tooltip__label").textContent = label;
     tooltip.querySelector(".fishy-provenance-tooltip__source").textContent = source;
-    tooltip.querySelector(".fishy-provenance-tooltip__detail").textContent = detail;
+    renderTooltipDetails(tooltip, detail);
     tooltip.style.setProperty("--fishy-provenance-tooltip-color", color);
     tooltip.hidden = false;
     updateTooltipPosition(tooltip, anchor, event);

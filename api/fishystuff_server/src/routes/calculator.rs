@@ -7141,6 +7141,17 @@ fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'stat
     if entry.overlay.slot_overlay_active {
         return "overlay";
     }
+    if loot_species_has_community_subgroup_source(entry) {
+        return if entry
+            .rate_contributions
+            .iter()
+            .any(|contribution| contribution.source_family == "database")
+        {
+            "mixed"
+        } else {
+            "community"
+        };
+    }
     loot_species_rate_evidence(entry)
         .map(|evidence| match evidence.source_family.as_str() {
             "database" => "database",
@@ -7148,6 +7159,13 @@ fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'stat
             _ => "derived",
         })
         .unwrap_or("derived")
+}
+
+fn loot_species_has_community_subgroup_source(entry: &CalculatorZoneLootEntry) -> bool {
+    entry
+        .rate_contributions
+        .iter()
+        .any(|contribution| contribution.item_source_family.as_deref() == Some("community"))
 }
 
 fn non_empty_owned(value: Option<&str>) -> Option<String> {
@@ -7160,25 +7178,15 @@ fn source_detail(
     source_drop_label: Option<&str>,
     source_label: Option<&str>,
 ) -> Option<String> {
-    let mut source_parts = Vec::new();
-    if let Some(source_id) = non_empty_owned(source_id) {
-        source_parts.push(source_id);
+    let source = non_empty_owned(source_label).or_else(|| non_empty_owned(source_id))?;
+    let Some(source_drop_label) = non_empty_owned(source_drop_label) else {
+        return Some(source);
+    };
+    if source.contains(&source_drop_label) {
+        Some(source)
+    } else {
+        Some(format!("{source} ({source_drop_label})"))
     }
-    if let Some(source_drop_label) = non_empty_owned(source_drop_label) {
-        source_parts.push(source_drop_label);
-    }
-
-    let mut details = Vec::new();
-    if !source_parts.is_empty() {
-        details.push(format!("source {}", source_parts.join(" ")));
-    }
-    if let Some(source_label) = non_empty_owned(source_label) {
-        if !source_parts.iter().any(|part| part == &source_label) {
-            details.push(source_label);
-        }
-    }
-
-    (!details.is_empty()).then(|| details.join(" · "))
 }
 
 fn append_provenance_detail(base: String, detail: Option<String>) -> String {
@@ -7191,40 +7199,90 @@ fn append_provenance_detail(base: String, detail: Option<String>) -> String {
 
 fn contribution_lineage_detail(
     contribution: &CalculatorZoneLootRateContribution,
+    include_item_source: bool,
 ) -> Option<String> {
     let mut parts = match (contribution.item_main_group_key, contribution.subgroup_key) {
         (Some(item_main_group_key), Some(subgroup_key)) => {
             vec![format!(
-                "main group {item_main_group_key} -> subgroup {subgroup_key}"
+                "Group path: main group {item_main_group_key} -> subgroup {subgroup_key}"
             )]
         }
-        (Some(item_main_group_key), None) => vec![format!("main group {item_main_group_key}")],
-        (None, Some(subgroup_key)) => vec![format!("subgroup {subgroup_key}")],
+        (Some(item_main_group_key), None) => {
+            vec![format!("Group path: main group {item_main_group_key}")]
+        }
+        (None, Some(subgroup_key)) => vec![format!("Group path: subgroup {subgroup_key}")],
         (None, None) => Vec::new(),
     };
     if let Some(option_idx) = contribution.option_idx {
-        parts.push(format!("option {option_idx}"));
+        if let Some(group_path) = parts.first_mut() {
+            group_path.push_str(&format!(", option {option_idx}"));
+        } else {
+            parts.push(format!("Group path: option {option_idx}"));
+        }
     }
     if let Some(source) = source_detail(
         contribution.source_id.as_deref(),
         contribution.source_drop_label.as_deref(),
         contribution.source_label.as_deref(),
     ) {
-        parts.push(source);
+        let label = match contribution.source_family.as_str() {
+            "database" => "Zone mapping",
+            "community" => "Community support",
+            _ => "Source",
+        };
+        parts.push(format!("{label}: {source}"));
+    }
+    if include_item_source {
+        if let Some(drop_row) = contribution_drop_row_detail(contribution) {
+            parts.push(drop_row);
+        }
     }
 
     (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+fn contribution_drop_row_detail(
+    contribution: &CalculatorZoneLootRateContribution,
+) -> Option<String> {
+    match contribution.item_source_family.as_deref() {
+        Some("community") => {
+            let mut parts = Vec::new();
+            parts.push(
+                non_empty_owned(contribution.item_source_label.as_deref())
+                    .or_else(|| non_empty_owned(contribution.item_source_id.as_deref()))
+                    .unwrap_or_else(|| "community_item_sub_group_overlay".to_string()),
+            );
+            if let Some(row) = contribution.item_source_row {
+                if let Some(sheet) = non_empty_owned(contribution.item_source_sheet.as_deref()) {
+                    parts.push(format!("{sheet} row {row}"));
+                } else {
+                    parts.push(format!("row {row}"));
+                }
+            }
+            if contribution.item_source_added.unwrap_or(false) {
+                parts.push("added row".to_string());
+            }
+            Some(format!("Drop row: {}", parts.join(", ")))
+        }
+        Some("database") => Some("Drop row: item_sub_group_table".to_string()),
+        _ if contribution.source_family == "database" => {
+            Some("Drop row: item_sub_group_table".to_string())
+        }
+        _ => None,
+    }
 }
 
 fn evidence_lineage_detail(evidence: &CalculatorZoneLootEvidence) -> Option<String> {
     let mut parts = match (evidence.item_main_group_key, evidence.subgroup_key) {
         (Some(item_main_group_key), Some(subgroup_key)) => {
             vec![format!(
-                "main group {item_main_group_key} -> subgroup {subgroup_key}"
+                "Group path: main group {item_main_group_key} -> subgroup {subgroup_key}"
             )]
         }
-        (Some(item_main_group_key), None) => vec![format!("main group {item_main_group_key}")],
-        (None, Some(subgroup_key)) => vec![format!("subgroup {subgroup_key}")],
+        (Some(item_main_group_key), None) => {
+            vec![format!("Group path: main group {item_main_group_key}")]
+        }
+        (None, Some(subgroup_key)) => vec![format!("Group path: subgroup {subgroup_key}")],
         (None, None) => Vec::new(),
     };
     if let Some(source) = source_detail(
@@ -7232,7 +7290,7 @@ fn evidence_lineage_detail(evidence: &CalculatorZoneLootEvidence) -> Option<Stri
         evidence.source_drop_label.as_deref(),
         evidence.source_label.as_deref(),
     ) {
-        parts.push(source);
+        parts.push(format!("Source: {source}"));
     }
 
     (!parts.is_empty()).then(|| parts.join(" · "))
@@ -7249,7 +7307,7 @@ fn loot_species_rate_lineage_detail(
         .iter()
         .filter(|contribution| contribution.source_family == source_family)
     {
-        let Some(detail) = contribution_lineage_detail(contribution) else {
+        let Some(detail) = contribution_lineage_detail(contribution, true) else {
             continue;
         };
         if seen.insert(detail.clone()) {
@@ -7287,7 +7345,7 @@ fn zone_loot_group_lineage_detail(
         .flat_map(|entry| entry.rate_contributions.iter())
         .filter(|contribution| contribution.source_family == "database")
     {
-        let Some(detail) = contribution_lineage_detail(contribution) else {
+        let Some(detail) = contribution_lineage_detail(contribution, false) else {
             continue;
         };
         if seen.insert(detail.clone()) {
@@ -15193,8 +15251,9 @@ mod tests {
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
         filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        init_signals_patch_map, load_calculator_runtime_data, loot_species_drop_rate_tooltip,
-        loot_species_evidence_text, loot_species_presence_source_kind, loot_species_presence_text,
+        init_signals_patch_map, load_calculator_runtime_data, loot_species_drop_rate_source_kind,
+        loot_species_drop_rate_tooltip, loot_species_evidence_text,
+        loot_species_presence_source_kind, loot_species_presence_text,
         loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_pack_leader_selection, normalize_pet, normalize_signals,
         parse_calculator_signals_value, pet_drr, pet_skill_limit_for_tier_key,
@@ -18434,7 +18493,54 @@ mod tests {
 
         assert_eq!(
             loot_species_drop_rate_tooltip(&signals, &entry, CalculatorLocale::EnUs),
-            "DB 95% · main group 11081 -> subgroup 11161 · option 0 · source flockfish_workbook DropID PRIZE CATCH · Flockfish final combined zone group table"
+            "DB 95% · Group path: main group 11081 -> subgroup 11161, option 0 · Zone mapping: Flockfish final combined zone group table (DropID PRIZE CATCH) · Drop row: item_sub_group_table"
+        );
+    }
+
+    #[test]
+    fn loot_species_rate_tooltip_distinguishes_zone_mapping_from_community_drop_row() {
+        let signals = CalculatorSignals {
+            show_normalized_select_rates: false,
+            ..CalculatorSignals::default()
+        };
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.35,
+            evidence: vec![CalculatorZoneLootEvidence {
+                source_family: "database".to_string(),
+                claim_kind: "in_group_rate".to_string(),
+                scope: "group".to_string(),
+                rate: Some(0.35),
+                normalized_rate: Some(0.35),
+                source_id: Some("flockfish_workbook".to_string()),
+                source_label: Some("Flockfish final combined zone group table".to_string()),
+                source_drop_label: Some("DropID GENERAL".to_string()),
+                item_main_group_key: Some(10952),
+                ..CalculatorZoneLootEvidence::default()
+            }],
+            rate_contributions: vec![CalculatorZoneLootRateContribution {
+                source_family: "database".to_string(),
+                source_id: Some("flockfish_workbook".to_string()),
+                source_label: Some("Flockfish final combined zone group table".to_string()),
+                source_drop_label: Some("DropID GENERAL".to_string()),
+                item_source_family: Some("community".to_string()),
+                item_source_id: Some("community_subgroups_no_formulas_workbook".to_string()),
+                item_source_label: Some("Community Subgroups(no formulas) workbook".to_string()),
+                item_source_sheet: Some("no formulas".to_string()),
+                item_source_row: Some(327),
+                item_source_added: Some(true),
+                item_main_group_key: Some(10952),
+                option_idx: Some(0),
+                subgroup_key: Some(10952),
+                weight: 350_000_000_000.0,
+                ..CalculatorZoneLootRateContribution::default()
+            }],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(loot_species_drop_rate_source_kind(&entry), "mixed");
+        assert_eq!(
+            loot_species_drop_rate_tooltip(&signals, &entry, CalculatorLocale::EnUs),
+            "DB 35% · Group path: main group 10952 -> subgroup 10952, option 0 · Zone mapping: Flockfish final combined zone group table (DropID GENERAL) · Drop row: Community Subgroups(no formulas) workbook, no formulas row 327, added row"
         );
     }
 
@@ -18478,7 +18584,7 @@ mod tests {
         assert_eq!(
             zone_loot_group_lineage_detail(1, &entries),
             Some(
-                "main group 11081 -> subgroup 11161 · option 0 · source flockfish_workbook DropID PRIZE CATCH · Flockfish final combined zone group table"
+                "Group path: main group 11081 -> subgroup 11161, option 0 · Zone mapping: Flockfish final combined zone group table (DropID PRIZE CATCH)"
                     .to_string()
             )
         );
@@ -19721,7 +19827,7 @@ mod tests {
             .contains("main group 10901 -> subgroup 10917"));
         assert!(active_harpoon_option
             .drop_rate_tooltip
-            .contains("source legacy_fishing_table DropIDHarpoon"));
+            .contains("Zone mapping: fishing_table (DropIDHarpoon)"));
         assert!(active_harpoon_option
             .drop_rate_tooltip
             .contains("fishing_table"));
