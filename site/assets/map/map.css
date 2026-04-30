@@ -85,6 +85,7 @@ body:has(#map-page-shell) #content > .site-content-clip {
   left: 1rem;
   width: min(27rem, calc(100vw - 2rem));
   max-height: calc(100% - 2rem);
+  contain: layout paint style;
 }
 
 .fishymap-window[hidden],
@@ -817,6 +818,7 @@ fishymap-search-panel {
   border-radius: var(--radius-box, 1rem);
   background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
   box-shadow: 0 16px 34px -26px color-mix(in oklab, var(--color-base-content, #1f2937) 46%, transparent);
+  contain: layout paint style;
   pointer-events: none;
   transform: translate3d(0, 0, 0);
   will-change: transform;
@@ -835,6 +837,22 @@ fishymap-search-panel {
   min-width: 0;
   flex-direction: column;
   gap: 0.45rem;
+  contain: layout paint style;
+}
+
+.fishymap-point-sample-summary,
+.fishymap-point-sample-pager {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.fishymap-point-sample-summary {
+  color: color-mix(in srgb, var(--color-base-content) 62%, transparent);
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .fishymap-point-sample-group {
@@ -855,6 +873,9 @@ fishymap-search-panel {
   border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
   border-radius: calc(var(--radius-box, 1rem) * 0.65);
   background: color-mix(in srgb, var(--color-base-200) 72%, transparent);
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 94px;
 }
 
 .fishymap-point-sample-main {

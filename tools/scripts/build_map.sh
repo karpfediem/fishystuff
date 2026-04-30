@@ -69,6 +69,80 @@ wasm-bindgen --target web --no-typescript --out-dir "$WASM_BINDGEN_TMP_DIR" "$WA
 
 WASM_BUNDLE_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy_bg.wasm"
 JS_BUNDLE_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy.js"
+
+patch_wasm_bindgen_mouse_offsets() {
+  local js_path="$1"
+
+  # winit's web event path reads MouseEvent.offsetX/offsetY through generated
+  # wasm-bindgen imports. In Chromium those accessors can force layout when
+  # unrelated DOM has pending style work, so compute canvas-relative pointer
+  # coordinates from clientX/clientY and a cached target rect instead.
+  if ! grep -q 'function __wbg_get_imports() {' "$js_path"; then
+    echo "wasm-bindgen JS changed: missing __wbg_get_imports hook point" >&2
+    exit 1
+  fi
+  if ! grep -q 'const ret = arg0\.offsetX;' "$js_path" || ! grep -q 'const ret = arg0\.offsetY;' "$js_path"; then
+    echo "wasm-bindgen JS changed: missing mouse offset imports" >&2
+    exit 1
+  fi
+
+  local pointer_helper
+  pointer_helper="$(cat <<'JS'
+let __fishymapPointerRectCache = new WeakMap();
+let __fishymapPointerRectListenersAttached = false;
+
+function __fishymapInvalidatePointerRectCache() {
+    __fishymapPointerRectCache = new WeakMap();
+}
+
+function __fishymapEnsurePointerRectListeners() {
+    if (__fishymapPointerRectListenersAttached || typeof globalThis.addEventListener !== "function") {
+        return;
+    }
+    __fishymapPointerRectListenersAttached = true;
+    globalThis.addEventListener("resize", __fishymapInvalidatePointerRectCache, { passive: true });
+    globalThis.addEventListener("scroll", __fishymapInvalidatePointerRectCache, { passive: true, capture: true });
+}
+
+function __fishymapCachedPointerTargetRect(event) {
+    __fishymapEnsurePointerRectListeners();
+    const target = event?.target ?? event?.currentTarget;
+    if (!target || typeof target.getBoundingClientRect !== "function") {
+        return null;
+    }
+    const cached = __fishymapPointerRectCache.get(target);
+    if (cached) {
+        return cached;
+    }
+    const rect = target.getBoundingClientRect();
+    const next = { left: rect.left, top: rect.top };
+    __fishymapPointerRectCache.set(target, next);
+    return next;
+}
+
+function __fishymapPointerOffset(event, axis) {
+    const rect = __fishymapCachedPointerTargetRect(event);
+    const client = axis === "x" ? Number(event?.clientX) : Number(event?.clientY);
+    if (rect && Number.isFinite(client)) {
+        return client - (axis === "x" ? rect.left : rect.top);
+    }
+    return 0;
+}
+
+function __wbg_get_imports() {
+JS
+)"
+  FISHYMAP_POINTER_HELPER="$pointer_helper" perl -0pi -e 's/function __wbg_get_imports\(\) \{/$ENV{FISHYMAP_POINTER_HELPER}/s' "$js_path"
+  perl -0pi -e 's/const ret = arg0\.offsetX;\n\s*return ret;/return __fishymapPointerOffset(arg0, "x");/g' "$js_path"
+  perl -0pi -e 's/const ret = arg0\.offsetY;\n\s*return ret;/return __fishymapPointerOffset(arg0, "y");/g' "$js_path"
+  if grep -q 'const ret = arg0\.offsetX;' "$js_path" || grep -q 'const ret = arg0\.offsetY;' "$js_path"; then
+    echo "wasm-bindgen JS changed: failed to patch mouse offset imports" >&2
+    exit 1
+  fi
+}
+
+patch_wasm_bindgen_mouse_offsets "$JS_BUNDLE_INPUT"
+
 WASM_BUNDLE_HASH="$(sha256sum "$WASM_BUNDLE_INPUT" | cut -c1-16)"
 WASM_BUNDLE_FILE="fishystuff_ui_bevy_bg.${WASM_BUNDLE_HASH}.wasm"
 WASM_BUNDLE_PATH="$CDN_MAP_ASSET_DIR/$WASM_BUNDLE_FILE"

@@ -263,6 +263,58 @@ test("render shows clicked ranking sample rows in the selected samples pane", ()
   assert.match(panelSlot.innerHTML, /href="#fishy-ring-partial"/);
 });
 
+test("render caps large clicked ranking sample panes to one page", () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  element._shell = {
+    __fishymapInitialSignals: {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Ranking cluster",
+          layerSamples: [],
+          pointSamples: Array.from({ length: 125 }, (_entry, index) => ({
+            fishId: 10,
+            sampleCount: 1,
+            sampleId: index + 1,
+            lastTsUtc: 1_700_000_000 + index,
+            zoneRgbs: [0x39e58d],
+            fullZoneRgbs: [0x39e58d],
+          })),
+        },
+        catalog: {
+          fish: [{ fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" }],
+          layers: [],
+        },
+      },
+    },
+  };
+  element._state = {
+    zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Velia Coast", biteTimeMin: 5, biteTimeMax: 7 }],
+    zoneLootStatus: "idle",
+    zoneLootSummary: null,
+    zoneLootRgb: null,
+    zoneLootRequestToken: 0,
+    zoneLootConditionSelection: {},
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+
+  element.render();
+
+  assert.match(panelSlot.innerHTML, /Showing 1-50 of 125 samples/);
+  assert.match(panelSlot.innerHTML, /Page 1\/3/);
+  assert.equal((panelSlot.innerHTML.match(/fishymap-point-sample-card/g) || []).length, 50);
+});
+
 test("normalize rates signal patch swaps loaded zone loot rates in place", () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();

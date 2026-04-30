@@ -12,6 +12,7 @@ import {
 
 const INFO_PANEL_TAG_NAME = "fishymap-info-panel";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
+const POINT_SAMPLE_PAGE_SIZE = 50;
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -510,11 +511,51 @@ function zoneLootSectionMarkup(section) {
   `;
 }
 
-function pointSampleSectionMarkup(section) {
+function pointSamplePageCount(rows, pageSize = POINT_SAMPLE_PAGE_SIZE) {
+  return Math.max(1, Math.ceil(rows.length / pageSize));
+}
+
+function normalizePointSamplePage(value, rows, pageSize = POINT_SAMPLE_PAGE_SIZE) {
+  const page = Number.parseInt(value, 10);
+  if (!Number.isInteger(page) || page < 0) {
+    return 0;
+  }
+  return Math.min(page, pointSamplePageCount(rows, pageSize) - 1);
+}
+
+function pointSampleSectionMarkup(section, { pointSamplePage = 0 } = {}) {
   const rows = Array.isArray(section?.rows) ? section.rows : [];
   if (!rows.length) {
     return "";
   }
+  const page = normalizePointSamplePage(pointSamplePage, rows);
+  const pageCount = pointSamplePageCount(rows);
+  const start = page * POINT_SAMPLE_PAGE_SIZE;
+  const end = Math.min(start + POINT_SAMPLE_PAGE_SIZE, rows.length);
+  const visibleRows = rows.slice(start, end);
+  const hasPages = rows.length > POINT_SAMPLE_PAGE_SIZE;
+  const sampleRangeText = hasPages
+    ? `Showing ${start + 1}-${end} of ${rows.length} samples`
+    : `${rows.length} sample${rows.length === 1 ? "" : "s"}`;
+  const pagingMarkup = hasPages
+    ? `
+      <div class="fishymap-point-sample-pager">
+        <button
+          class="btn btn-ghost btn-xs"
+          type="button"
+          data-point-sample-page="${Math.max(0, page - 1)}"
+          ${page <= 0 ? "disabled" : ""}
+        >Prev</button>
+        <span class="text-[11px] text-base-content/55">Page ${page + 1}/${pageCount}</span>
+        <button
+          class="btn btn-ghost btn-xs"
+          type="button"
+          data-point-sample-page="${Math.min(pageCount - 1, page + 1)}"
+          ${page >= pageCount - 1 ? "disabled" : ""}
+        >Next</button>
+      </div>
+    `
+    : "";
   return `
     <section class="space-y-2">
       ${
@@ -522,15 +563,21 @@ function pointSampleSectionMarkup(section) {
           ? `<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title)}</p>`
           : ""
       }
-      <div class="fishymap-point-sample-list">${rows.map((row) => pointSampleMarkup(row)).join("")}</div>
+      <div class="fishymap-point-sample-summary">
+        <span>${escapeHtml(sampleRangeText)}</span>
+        ${hasPages ? `<span>Sorted by occurrence</span>` : ""}
+      </div>
+      ${pagingMarkup}
+      <div class="fishymap-point-sample-list">${visibleRows.map((row) => pointSampleMarkup(row)).join("")}</div>
+      ${pagingMarkup}
     </section>
   `;
 }
 
-function sectionMarkup(section) {
+function sectionMarkup(section, options = {}) {
   switch (trimString(section?.kind)) {
     case "point-samples":
-      return pointSampleSectionMarkup(section);
+      return pointSampleSectionMarkup(section, options);
     case "facts":
       return `
         <section class="space-y-2">
@@ -553,6 +600,45 @@ function sectionMarkup(section) {
 
 function emptyPanelMarkup() {
   return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">${escapeHtml(mapText("info.empty_selection"))}</div>`;
+}
+
+function pointSampleSectionKey(section) {
+  const rows = Array.isArray(section?.rows) ? section.rows : [];
+  if (!rows.length) {
+    return "";
+  }
+  return [
+    trimString(section?.id),
+    rows.length,
+    trimString(rows[0]?.key),
+    trimString(rows[rows.length - 1]?.key),
+  ].join(":");
+}
+
+function panelRenderKey(viewModel, pointSamplePage) {
+  const sections = viewModel.activePane?.sections || [];
+  return JSON.stringify({
+    empty: viewModel.empty,
+    activePaneId: viewModel.activePaneId,
+    pointSamplePage,
+    sections: sections.map((section) => {
+      if (trimString(section?.kind) !== "point-samples") {
+        return section;
+      }
+      const rows = Array.isArray(section?.rows) ? section.rows : [];
+      const page = normalizePointSamplePage(pointSamplePage, rows);
+      const start = page * POINT_SAMPLE_PAGE_SIZE;
+      const end = Math.min(start + POINT_SAMPLE_PAGE_SIZE, rows.length);
+      return {
+        id: section.id,
+        kind: section.kind,
+        title: section.title,
+        rowCount: rows.length,
+        page,
+        visibleRowKeys: rows.slice(start, end).map((row) => row?.key || ""),
+      };
+    }),
+  });
 }
 
 function ensureInfoPanelMarkup(host) {
@@ -590,6 +676,8 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneLootRgb: null,
       zoneLootRequestToken: 0,
       zoneLootConditionSelection: {},
+      pointSamplePage: 0,
+      pointSampleSectionKey: "",
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
@@ -638,6 +726,17 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
           };
           this.scheduleRender();
         }
+        return;
+      }
+
+      const pointSamplePageButton = event.target.closest("button[data-point-sample-page]");
+      if (pointSamplePageButton) {
+        event.preventDefault?.();
+        this._state.pointSamplePage = Math.max(
+          0,
+          Number.parseInt(pointSamplePageButton.getAttribute("data-point-sample-page"), 10) || 0,
+        );
+        this.scheduleRender();
         return;
       }
 
@@ -736,6 +835,20 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneLootConditionSelection: this._state.zoneLootConditionSelection,
       normalizeRates: this.normalizeRatesEnabled(signals),
     });
+    const activePointSampleSection = (viewModel.activePane?.sections || []).find(
+      (section) => trimString(section?.kind) === "point-samples",
+    );
+    const activePointSampleSectionKey = activePointSampleSection
+      ? pointSampleSectionKey(activePointSampleSection)
+      : "";
+    if (this._state.pointSampleSectionKey !== activePointSampleSectionKey) {
+      this._state.pointSampleSectionKey = activePointSampleSectionKey;
+      this._state.pointSamplePage = 0;
+    }
+    this._state.pointSamplePage = normalizePointSamplePage(
+      this._state.pointSamplePage,
+      Array.isArray(activePointSampleSection?.rows) ? activePointSampleSection.rows : [],
+    );
     setTextContent(this._elements?.title, viewModel.descriptor.title);
     setTextContent(this._elements?.statusText, viewModel.descriptor.statusText);
     setMarkup(
@@ -756,14 +869,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     );
     setMarkup(
       this._elements?.panel,
-      JSON.stringify({
-        empty: viewModel.empty,
-        activePaneId: viewModel.activePaneId,
-        sections: viewModel.activePane?.sections || [],
-      }),
+      panelRenderKey(viewModel, this._state.pointSamplePage),
       viewModel.empty
         ? emptyPanelMarkup()
-        : `<section class="space-y-3">${(viewModel.activePane?.sections || []).map((section) => sectionMarkup(section)).join("")}</section>`,
+        : `<section class="space-y-3">${(viewModel.activePane?.sections || []).map((section) => sectionMarkup(section, { pointSamplePage: this._state.pointSamplePage })).join("")}</section>`,
     );
   }
 
