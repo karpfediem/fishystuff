@@ -40,12 +40,18 @@ fn hovered_zone_rgb(info: Option<&crate::plugins::api::HoverInfo>) -> Option<u32
 }
 
 fn set_hover_state(
-    hover: &mut HoverState,
+    hover: &mut ResMut<'_, HoverState>,
     display_state: &mut MapDisplayState,
     next_info: Option<crate::plugins::api::HoverInfo>,
 ) {
-    if hover.info != next_info {
-        hover.info = next_info.clone();
+    match hover_storage_update(hover.info.as_ref(), next_info.as_ref()) {
+        HoverStorageUpdate::None => {}
+        HoverStorageUpdate::CoordinatesOnly => {
+            hover.bypass_change_detection().info = next_info.clone();
+        }
+        HoverStorageUpdate::Content => {
+            hover.info = next_info.clone();
+        }
     }
     let next_hovered_zone_rgb = hovered_zone_rgb(next_info.as_ref());
     if display_state.hovered_zone_rgb != next_hovered_zone_rgb {
@@ -53,7 +59,41 @@ fn set_hover_state(
     }
 }
 
-fn clear_hover_state(hover: &mut HoverState, display_state: &mut MapDisplayState) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HoverStorageUpdate {
+    None,
+    CoordinatesOnly,
+    Content,
+}
+
+fn hover_storage_update(
+    current: Option<&crate::plugins::api::HoverInfo>,
+    next: Option<&crate::plugins::api::HoverInfo>,
+) -> HoverStorageUpdate {
+    if current == next {
+        HoverStorageUpdate::None
+    } else if hover_content_matches(current, next) {
+        HoverStorageUpdate::CoordinatesOnly
+    } else {
+        HoverStorageUpdate::Content
+    }
+}
+
+fn hover_content_matches(
+    current: Option<&crate::plugins::api::HoverInfo>,
+    next: Option<&crate::plugins::api::HoverInfo>,
+) -> bool {
+    match (current, next) {
+        (None, None) => true,
+        (Some(current), Some(next)) => {
+            current.layer_samples == next.layer_samples
+                && current.point_samples == next.point_samples
+        }
+        _ => false,
+    }
+}
+
+fn clear_hover_state(hover: &mut ResMut<'_, HoverState>, display_state: &mut MapDisplayState) {
     set_hover_state(hover, display_state, None);
 }
 
@@ -307,30 +347,115 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
 
 #[cfg(test)]
 mod tests {
-    use super::hovered_zone_rgb;
-    use crate::plugins::api::HoverInfo;
+    use super::{
+        hover_content_matches, hover_storage_update, hovered_zone_rgb, HoverStorageUpdate,
+    };
+    use crate::plugins::api::{HoverInfo, PointSampleSummary};
+
+    fn hover_info(map_px: i32, world_x: f64, zone_rgb: u32) -> HoverInfo {
+        HoverInfo {
+            map_px,
+            map_py: 34,
+            world_x,
+            world_z: 2.0,
+            layer_samples: vec![zone_sample(zone_rgb)],
+            point_samples: Vec::new(),
+        }
+    }
+
+    fn zone_sample(zone_rgb: u32) -> crate::map::layer_query::LayerQuerySample {
+        crate::map::layer_query::LayerQuerySample {
+            layer_id: "zone_mask".to_string(),
+            layer_name: "Zone Mask".to_string(),
+            kind: "field".to_string(),
+            rgb: fishystuff_api::Rgb::from_u32(zone_rgb),
+            rgb_u32: zone_rgb,
+            field_id: Some(zone_rgb),
+            targets: Vec::new(),
+            detail_pane: None,
+            detail_sections: Vec::new(),
+        }
+    }
 
     #[test]
     fn hovered_zone_rgb_reads_zone_from_hover_info() {
-        let info = HoverInfo {
-            map_px: 12,
-            map_py: 34,
-            world_x: 1.0,
-            world_z: 2.0,
-            layer_samples: vec![crate::map::layer_query::LayerQuerySample {
-                layer_id: "zone_mask".to_string(),
-                layer_name: "Zone Mask".to_string(),
-                kind: "field".to_string(),
-                rgb: fishystuff_api::Rgb::from_u32(0x123456),
-                rgb_u32: 0x123456,
-                field_id: Some(0x123456),
-                targets: Vec::new(),
-                detail_pane: None,
-                detail_sections: Vec::new(),
-            }],
-            point_samples: Vec::new(),
-        };
+        let info = hover_info(12, 1.0, 0x123456);
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
         assert_eq!(hovered_zone_rgb(None), None);
+    }
+
+    #[test]
+    fn hover_content_match_ignores_coordinate_only_motion() {
+        let current = hover_info(12, 1.0, 0x123456);
+        let next = hover_info(99, 88.0, 0x123456);
+
+        assert!(hover_content_matches(Some(&current), Some(&next)));
+    }
+
+    #[test]
+    fn hover_content_match_tracks_sample_changes() {
+        let current = hover_info(12, 1.0, 0x123456);
+        let mut next = hover_info(99, 88.0, 0x123456);
+        next.point_samples.push(PointSampleSummary {
+            fish_id: 116,
+            sample_count: 1,
+            last_ts_utc: 1_700_000_000,
+            sample_id: None,
+            zone_rgbs: vec![0x123456],
+            full_zone_rgbs: vec![0x123456],
+        });
+
+        assert!(!hover_content_matches(Some(&current), Some(&next)));
+    }
+
+    #[test]
+    fn hover_content_match_tracks_zone_changes() {
+        let current = hover_info(12, 1.0, 0x123456);
+        let next = hover_info(99, 88.0, 0x654321);
+
+        assert!(!hover_content_matches(Some(&current), Some(&next)));
+    }
+
+    #[test]
+    fn hover_storage_update_detects_coordinate_only_motion() {
+        let current = hover_info(12, 1.0, 0x123456);
+        let next = hover_info(99, 88.0, 0x123456);
+
+        assert_eq!(
+            hover_storage_update(Some(&current), Some(&next)),
+            HoverStorageUpdate::CoordinatesOnly,
+        );
+    }
+
+    #[test]
+    fn hover_storage_update_detects_content_motion() {
+        let current = hover_info(12, 1.0, 0x123456);
+        let next = hover_info(99, 88.0, 0x654321);
+
+        assert_eq!(
+            hover_storage_update(Some(&current), Some(&next)),
+            HoverStorageUpdate::Content,
+        );
+    }
+
+    #[test]
+    fn hover_storage_update_detects_clears() {
+        let current = hover_info(12, 1.0, 0x123456);
+
+        assert_eq!(
+            hover_storage_update(Some(&current), None),
+            HoverStorageUpdate::Content,
+        );
+    }
+
+    #[test]
+    fn hover_storage_update_detects_noop() {
+        let current = hover_info(12, 1.0, 0x123456);
+
+        assert_eq!(
+            hover_storage_update(Some(&current), Some(&current)),
+            HoverStorageUpdate::None,
+        );
+        assert_eq!(hover_storage_update(None, None), HoverStorageUpdate::None);
     }
 }
