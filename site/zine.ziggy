@@ -25,7 +25,6 @@ Multilingual {
   .static_assets = [
     "config.ziggy",
     "css/fonts.css",
-    "css/fira_code.css",
     "css/highlight.css",
     "css/style.css",
     "css/site.css", // Tailwind generated
@@ -153,41 +152,12 @@ Multilingual {
     "jsonld/article.json",
 
     // Fonts referenced in CSS
-    "css/fonts/FiraCode/FiraCode-Bold.woff",
-    "css/fonts/FiraCode/FiraCode-Bold.woff2",
-    "css/fonts/FiraCode/FiraCode-Light.woff",
-    "css/fonts/FiraCode/FiraCode-Light.woff2",
-    "css/fonts/FiraCode/FiraCode-Medium.woff",
-    "css/fonts/FiraCode/FiraCode-Medium.woff2",
-    "css/fonts/FiraCode/FiraCode-Regular.woff",
-    "css/fonts/FiraCode/FiraCode-Regular.woff2",
-    "css/fonts/FiraCode/FiraCode-SemiBold.woff",
-    "css/fonts/FiraCode/FiraCode-SemiBold.woff2",
-    "css/fonts/FiraCode/FiraCode-VF.woff",
-    "css/fonts/FiraCode/FiraCode-VF.woff2",
-
     "css/fonts/Comfortaa/Comfortaa-VariableFont_wght.site.woff2",
-    "css/fonts/Flavors/Flavors-Regular.ttf",
-    "css/fonts/Modak/Modak-Regular.ttf",
     "css/fonts/Itim/Itim-Regular.site.woff2",
     "css/fonts/Pacifico/Pacifico-Regular.site.woff2",
 
     "css/fonts/jbm/JetBrainsMono-Bold.woff2",
-    "css/fonts/jbm/JetBrainsMono-BoldItalic.woff2",
-    "css/fonts/jbm/JetBrainsMono-ExtraBold.woff2",
-    "css/fonts/jbm/JetBrainsMono-ExtraBoldItalic.woff2",
-    "css/fonts/jbm/JetBrainsMono-ExtraLight.woff2",
-    "css/fonts/jbm/JetBrainsMono-ExtraLightItalic.woff2",
-    "css/fonts/jbm/JetBrainsMono-Italic.woff2",
-    "css/fonts/jbm/JetBrainsMono-Light.woff2",
-    "css/fonts/jbm/JetBrainsMono-LightItalic.woff2",
-    "css/fonts/jbm/JetBrainsMono-Medium.woff2",
-    "css/fonts/jbm/JetBrainsMono-MediumItalic.woff2",
     "css/fonts/jbm/JetBrainsMono-Regular.woff2",
-    "css/fonts/jbm/JetBrainsMono-SemiBold.woff2",
-    "css/fonts/jbm/JetBrainsMono-SemiBoldItalic.woff2",
-    "css/fonts/jbm/JetBrainsMono-Thin.woff2",
-    "css/fonts/jbm/JetBrainsMono-ThinItalic.woff2",
 
   ],
 }
