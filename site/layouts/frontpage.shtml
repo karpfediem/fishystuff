@@ -82,7 +82,7 @@
           <a href="$site.page('guides').link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
-                <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg>
+                <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-guides"></use></svg>
                 <h2 class="card-title justify-center text-2xl"
                     data-i18n-text="frontpage.guides.title"
                     :text="$i18n.getOr('frontpage.guides.title','')"></h2>
@@ -100,7 +100,7 @@
           <a href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
-              <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg>
+              <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-map-pin"></use></svg>
               <h2 class="card-title justify-center text-2xl"
                   data-i18n-text="frontpage.map.title"
                   :text="$i18n.getOr('frontpage.map.title','')"></h2>
@@ -121,7 +121,7 @@
           <a href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
-                <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg>
+                <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-dex"></use></svg>
                 <h2 class="card-title justify-center text-2xl"
                     data-i18n-text="frontpage.dex.title"
                     :text="$i18n.getOr('frontpage.dex.title','')"></h2>

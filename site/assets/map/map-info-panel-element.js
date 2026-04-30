@@ -11,7 +11,6 @@ import {
 } from "../js/components/provenance-indicator.js";
 
 const INFO_PANEL_TAG_NAME = "fishymap-info-panel";
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function cloneJson(value) {
@@ -63,7 +62,7 @@ function setMarkup(element, renderKey, markup) {
 }
 
 function spriteIcon(name, sizeClass = "size-5") {
-  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${name}"></use></svg>`;
+  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-${name}"></use></svg>`;
 }
 
 function trimString(value) {

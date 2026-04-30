@@ -32,7 +32,6 @@ import {
 const LAYER_PANEL_TAG_NAME = "fishymap-layer-panel";
 const FISHYMAP_POINT_ICON_SCALE_MAX = 3;
 const FISHYMAP_POINT_ICON_SCALE_MIN = 0.25;
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const DRAG_ATTACH_EDGE_PX_MIN = 14;
 const DRAG_ATTACH_EDGE_PX_MAX = 22;
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
@@ -62,7 +61,7 @@ function escapeHtml(value) {
 }
 
 function spriteIcon(name, sizeClass = "size-5") {
-  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${name}"></use></svg>`;
+  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-${name}"></use></svg>`;
 }
 
 function dragHandleIcon() {

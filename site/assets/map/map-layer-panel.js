@@ -41,7 +41,7 @@ function hoverFactIconMarkup(row, escapeHtml) {
   if (String(row?.swatchRgb || "").trim()) {
     return `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeAttribute(row.swatchRgb)};" aria-hidden="true"></span>`;
   }
-  return `<svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-${escapeAttribute(row?.icon || "information-circle")}"></use></svg>`;
+  return `<svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-${escapeAttribute(row?.icon || "information-circle")}"></use></svg>`;
 }
 
 function hoverFactValueMarkup(row, escapeHtml) {

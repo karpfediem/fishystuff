@@ -214,19 +214,45 @@ in {
   services.caddy = {
     enable = true;
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
-      route {
-        root * ${config.devenv.root}/site/.out
-        header Cache-Control "no-store"
+      root * ${config.devenv.root}/site/.out
 
+      @site_svg path /img/*.svg
+      @site_image path /img/*
+
+      handle @site_svg {
+        header Cache-Control "public, max-age=31536000, immutable"
+        file_server
+      }
+
+      handle @site_image {
+        header Cache-Control "public, max-age=3600"
+        file_server
+      }
+
+      handle {
+        header Cache-Control "no-store"
         try_files {path} {path}.html {path}/index.html =404
         file_server
       }
     '';
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
-      route {
-        root * ${config.devenv.root}/site/.out
-        header Cache-Control "no-store"
+      root * ${config.devenv.root}/site/.out
 
+      @site_svg path /img/*.svg
+      @site_image path /img/*
+
+      handle @site_svg {
+        header Cache-Control "public, max-age=31536000, immutable"
+        file_server
+      }
+
+      handle @site_image {
+        header Cache-Control "public, max-age=3600"
+        file_server
+      }
+
+      handle {
+        header Cache-Control "no-store"
         try_files {path} {path}.html {path}/index.html =404
         file_server
       }

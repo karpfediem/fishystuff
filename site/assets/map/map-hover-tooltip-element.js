@@ -6,7 +6,6 @@ import { readMapShellSignals } from "./map-shell-signals.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260419-2";
 const HOVER_TOOLTIP_TAG_NAME = "fishymap-hover-tooltip";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
@@ -59,7 +58,7 @@ function setMarkup(element, renderKey, markup) {
 }
 
 function spriteIcon(name, sizeClass = "size-4") {
-  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${escapeHtml(name)}"></use></svg>`;
+  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-${escapeHtml(name)}"></use></svg>`;
 }
 
 function overviewRowMarkup(row) {

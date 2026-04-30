@@ -213,6 +213,8 @@ test("FishyMapHoverTooltipElement renders ordered visible hover facts only", asy
   assert.match(layers.innerHTML, /Valencia Sea - Depth 5/);
   assert.match(layers.innerHTML, /57,229,141/);
   assert.match(layers.innerHTML, /\(RG212\|Arehaza\)/);
+  assert.match(layers.innerHTML, /href="#fishy-hover-zone"/);
+  assert.doesNotMatch(layers.innerHTML, /\/img\/icons\.svg/);
   assert.doesNotMatch(layers.innerHTML, /\(R430\|Hakoven Islands\)/);
   assert.ok(
     layers.innerHTML.indexOf("Valencia Sea - Depth 5") < layers.innerHTML.indexOf("(RG212|Arehaza)"),

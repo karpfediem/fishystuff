@@ -45,10 +45,16 @@ let
       encode zstd gzip
 
       @runtime_config path /runtime-config.js
+      @site_svg path /img/*.svg
       @site_static path /css/* /js/* /img/*
 
       handle @runtime_config {
         header Cache-Control "no-store"
+        file_server
+      }
+
+      handle @site_svg {
+        header Cache-Control "public, max-age=31536000, immutable"
         file_server
       }
 

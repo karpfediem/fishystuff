@@ -88,17 +88,17 @@
                     <div class="flex min-w-0 flex-1 items-center gap-2 lg:justify-self-start">
                         <div class="dropdown lg:hidden">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Open navigation menu">
-                                <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-menu"></use></svg>
+                                <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-menu"></use></svg>
                             </button>
 
                             <ul tabindex="0"
                                 role="menu"
                                 class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-56">
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a></li>
                             </ul>
                         </div>
 
@@ -140,11 +140,11 @@
                     </div>
 
                     <div class="hidden min-w-0 flex-wrap justify-center gap-1 lg:flex lg:justify-self-center">
-                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
-                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a>
-                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a>
-                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a>
-                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-guides"></use></svg><span data-i18n-text="nav.guides" :text="$i18n.getOr('nav.guides','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('map').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-map-pin"></use></svg><span data-i18n-text="nav.map" :text="$i18n.getOr('nav.map','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('dex').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-dex"></use></svg><span data-i18n-text="nav.dex" :text="$i18n.getOr('nav.dex','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.locale('en-US').page('calculator').locale($site.localeCode()).link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-calculator"></use></svg><span data-i18n-text="nav.calculator" :text="$i18n.getOr('nav.calculator','')"></span></a>
+                        <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-log"></use></svg><span data-i18n-text="nav.log" :text="$i18n.getOr('nav.log','')"></span></a>
                     </div>
 
                     <div class="navbar-end w-auto flex-none gap-1 lg:justify-self-end">
@@ -197,7 +197,7 @@
                                     aria-label="Open profile menu">
                                 <span class="avatar avatar-placeholder">
                                     <span class="bg-primary/12 text-primary inline-flex size-9 items-center justify-center rounded-full border border-primary/15">
-                                        <svg class="fishy-icon size-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-user-4"></use></svg>
+                                        <svg class="fishy-icon size-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-user-4"></use></svg>
                                     </span>
                                 </span>
                             </button>
@@ -210,7 +210,7 @@
                                         <div class="flex items-start gap-4">
                                             <span class="avatar avatar-placeholder shrink-0">
                                                 <span class="bg-primary text-primary-content inline-flex size-16 items-center justify-center rounded-3xl ring-4 ring-base-100 shadow-sm">
-                                                    <svg class="fishy-icon size-8 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-user-4"></use></svg>
+                                                    <svg class="fishy-icon size-8 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-user-4"></use></svg>
                                                 </span>
                                             </span>
                                             <div class="min-w-0 flex-1">
@@ -229,7 +229,7 @@
                                                 <details class="w-full">
                                                     <summary class="flex w-full items-center justify-between gap-3">
                                                         <span class="inline-flex items-center gap-2">
-                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-adjustments-horizontal"></use></svg>
+                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-adjustments-horizontal"></use></svg>
                                                             <span data-i18n-text="language.menu.label" :text="$i18n.getOr('language.menu.label','')"></span>
                                                         </span>
                                                         <span class="badge badge-outline badge-sm" data-language-current-label></span>
@@ -243,7 +243,7 @@
                                                 <details class="w-full">
                                                     <summary class="flex w-full items-center justify-between gap-3">
                                                         <span class="inline-flex items-center gap-2">
-                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-theme-palette"></use></svg>
+                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-theme-palette"></use></svg>
                                                             <span>Theme</span>
                                                         </span>
                                                         <span class="badge badge-outline badge-sm" data-theme-current-label>fishy</span>
@@ -276,7 +276,7 @@
                                                 <details class="w-full">
                                                     <summary class="flex w-full items-center justify-between gap-3">
                                                         <span class="inline-flex items-center gap-2">
-                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-settings-1"></use></svg>
+                                                            <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-settings-1"></use></svg>
                                                             <span>Presets</span>
                                                         </span>
                                                     </summary>
@@ -412,17 +412,17 @@
                 <span class="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-base-content/45" data-i18n-text="footer.about" :text="$i18n.getOr('footer.about','')"></span>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="$site.page('community').link()">
-                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-community"></use></svg>
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-community"></use></svg>
                     <span data-i18n-text="nav.community" :text="$i18n.getOr('nav.community','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="$site.page('devlog').link()">
-                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-devlog"></use></svg>
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-devlog"></use></svg>
                     <span data-i18n-text="nav.devlog" :text="$i18n.getOr('nav.devlog','')"></span>
                 </a>
                 <a class="inline-flex items-center gap-2 text-sm font-medium text-base-content/80 no-underline transition-colors hover:text-base-content hover:underline"
                    href="$site.page('feedback').link()">
-                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-nav-feedback"></use></svg>
+                    <svg class="fishy-icon size-4 shrink-0 opacity-80" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-nav-feedback"></use></svg>
                     <span data-i18n-text="footer.feedback" :text="$i18n.getOr('footer.feedback','')"></span>
                 </a>
             </div>

@@ -71,7 +71,7 @@
     if (className) {
       classes.push(className);
     }
-    return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260419-2#fishy-${name}"></use></svg>`;
+    return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-${name}"></use></svg>`;
   }
 
   const ICON_HEART_FILL = spriteIconMarkup("heart-fill", "size-6", true);

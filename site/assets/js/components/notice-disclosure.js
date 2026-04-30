@@ -137,7 +137,7 @@ function createSvgUse(icon) {
     const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
     use.setAttribute("width", "100%");
     use.setAttribute("height", "100%");
-    use.setAttribute("href", `/img/icons.svg?v=20260419-2#fishy-${icon}`);
+    use.setAttribute("href", `#fishy-${icon}`);
     svg.append(use);
 
     return svg;
@@ -360,7 +360,7 @@ export class FishyNoticeDisclosure extends HTMLElementBase {
         const resolvedOpen = this._resolvedOpenState();
         this._detailsElement.open = resolvedOpen;
         this._reflectOpenAttribute(resolvedOpen);
-        this._iconUseElement.setAttribute("href", `/img/icons.svg?v=20260419-2#fishy-${this.icon}`);
+        this._iconUseElement.setAttribute("href", `#fishy-${this.icon}`);
         this._titleElement.textContent = this.title;
     }
 }

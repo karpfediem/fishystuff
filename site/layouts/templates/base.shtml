@@ -323,6 +323,7 @@
   <super>
 </head>
 <body id="body" class="prose prose-lg lg:prose-xl max-w-none min-h-dvh bg-base-100 text-base-content">
+<div id="fishystuff-icon-sprite" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden;" :html="$site.asset('img/icons.svg').bytes()"></div>
 <super>
 <div id="fishystuff-toast-root" class="toast toast-bottom toast-center pointer-events-none" aria-live="polite" aria-atomic="false"></div>
 </body>

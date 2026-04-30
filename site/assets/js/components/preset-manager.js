@@ -3,7 +3,7 @@ import { DATASTAR_SIGNAL_PATCH_EVENT } from "../datastar-signals.js";
 const TAG_NAME = "fishy-preset-manager";
 const LANGUAGE_CHANGE_EVENT = "fishystuff:languagechange";
 const DEFAULT_TITLE = "Saved presets";
-const ICON_SPRITE_FALLBACK_URL = "/img/icons.svg";
+const ICON_SPRITE_FALLBACK_URL = "";
 const FIXED_CARD_PREFIX = "fixed:";
 const PRESET_CARD_PREFIX = "preset:";
 const WORKING_COPY_CARD_PREFIX = "work:";

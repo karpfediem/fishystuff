@@ -1,6 +1,6 @@
 (function () {
   const CHANGE_EVENT = "fishystuff:preset-previews-changed";
-  const ICON_SPRITE_FALLBACK_URL = "/img/icons.svg";
+  const ICON_SPRITE_FALLBACK_URL = "";
   const CALCULATOR_LAYOUT_COLLECTION_KEY = "calculator-layouts";
   const CALCULATOR_PRESET_COLLECTION_KEY = "calculator-presets";
   const MAP_PRESET_COLLECTION_KEY = "map-presets";

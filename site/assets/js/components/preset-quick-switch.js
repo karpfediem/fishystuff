@@ -6,7 +6,7 @@ const LANGUAGE_CHANGE_EVENT = "fishystuff:languagechange";
 const ENTRIES_CHANGE_EVENT = "fishystuff:preset-quick-switch-entries-changed";
 const SEARCHABLE_DROPDOWN_OPEN_EVENT = "fishystuff:searchable-dropdown-open";
 const SEARCHABLE_DROPDOWN_CLOSE_EVENT = "fishystuff:searchable-dropdown-close";
-const ICON_SPRITE_FALLBACK_URL = "/img/icons.svg";
+const ICON_SPRITE_FALLBACK_URL = "";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 let nextQuickSwitchInstanceId = 1;
 

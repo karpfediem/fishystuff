@@ -1,5 +1,5 @@
 (function () {
-  const ICON_SPRITE_URL = "/img/icons.svg?v=20260423-3";
+  const ICON_SPRITE_URL = "";
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";

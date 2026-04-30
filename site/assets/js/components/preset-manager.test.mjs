@@ -83,7 +83,7 @@ test("preset manager uses shared preset action state for save and discard button
 
   globalThis.window = {
     __fishystuffCalculator: {
-      iconSpriteUrl: "/img/icons.svg",
+      iconSpriteUrl: "",
     },
     __fishystuffLanguage: {
       t(key) {
@@ -184,7 +184,7 @@ test("preset manager trigger shows the active modified preset name", async () =>
 
   globalThis.window = {
     __fishystuffCalculator: {
-      iconSpriteUrl: "/img/icons.svg",
+      iconSpriteUrl: "",
     },
     __fishystuffLanguage: {
       t(_key, vars = {}) {

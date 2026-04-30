@@ -17,7 +17,7 @@ const PROVENANCE_PRESENCE_FULL_COLOR =
     "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
 const PROVENANCE_PRESENCE_PARTIAL_COLOR =
     "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260430-3";
+const ICON_SPRITE_URL = "";
 
 function normalizeSourceKind(value) {
     const normalized = trimString(value).toLowerCase();

@@ -467,7 +467,7 @@ struct CalculatorData {
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
-const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260423-3";
+const CALCULATOR_ICON_SPRITE_URL: &str = "";
 const CALCULATOR_MODE_ROD_TEXTURE_URL: &str = "/img/calculator/fishing-mode-rod.png";
 const CALCULATOR_MODE_HARPOON_TEXTURE_URL: &str = "/img/calculator/fishing-mode-harpoon.png";
 const CALCULATOR_COMBINED_GROUP_RATE_SCALE: f64 = 1_000_000.0 * 1_000_000.0;
