@@ -30,14 +30,74 @@ fetch_json() {
     "$url" > "$out_file"
 }
 
-check_url_exists() {
+fetch_headers() {
   local url="$1"
+  local out_file="$2"
   curl -fsSI \
     --connect-timeout "$CURL_CONNECT_TIMEOUT" \
     --max-time "$CURL_MAX_TIME" \
     -H "Referer: ${CDN_CHECK_REFERRER_URL}" \
     -H "Origin: ${CDN_CHECK_ORIGIN_URL}" \
-    "$url" >/dev/null
+    "$url" >"$out_file"
+}
+
+read_header_value() {
+  local headers_file="$1"
+  local header_name="$2"
+
+  awk -v header_name="$header_name" '
+    BEGIN {
+      prefix = tolower(header_name ":")
+    }
+    index(tolower($0), prefix) == 1 {
+      sub(/^[^:]+:[[:space:]]*/, "", $0)
+      sub(/\r$/, "", $0)
+      print
+      exit
+    }
+  ' "$headers_file"
+}
+
+check_url_exists() {
+  local url="$1"
+  local headers_file
+
+  headers_file="$(mktemp)"
+  fetch_headers "$url" "$headers_file"
+  rm -f "$headers_file"
+}
+
+check_url_cache_control() {
+  local url="$1"
+  shift
+  local headers_file
+  local cache_control
+  local normalized_cache_control
+  local expected
+  local normalized_expected
+
+  headers_file="$(mktemp)"
+  fetch_headers "$url" "$headers_file"
+  cache_control="$(read_header_value "$headers_file" "Cache-Control")"
+  rm -f "$headers_file"
+
+  if [ -z "$cache_control" ]; then
+    echo "missing Cache-Control header: $url" >&2
+    exit 1
+  fi
+
+  normalized_cache_control="$(printf '%s' "$cache_control" | tr '[:upper:]' '[:lower:]')"
+  for expected in "$@"; do
+    normalized_expected="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
+    case "$normalized_cache_control" in
+      *"$normalized_expected"*) ;;
+      *)
+        echo "unexpected Cache-Control header for $url: $cache_control" >&2
+        echo "  missing expected value: $expected" >&2
+        exit 1
+        ;;
+    esac
+  done
 }
 
 check_url_cors() {
@@ -46,24 +106,8 @@ check_url_cors() {
   local allow_origin
 
   headers_file="$(mktemp)"
-  curl -fsSI \
-    --connect-timeout "$CURL_CONNECT_TIMEOUT" \
-    --max-time "$CURL_MAX_TIME" \
-    -H "Referer: ${CDN_CHECK_REFERRER_URL}" \
-    -H "Origin: ${CDN_CHECK_ORIGIN_URL}" \
-    "$url" >"$headers_file"
-
-  allow_origin="$(
-    awk '
-      BEGIN { IGNORECASE = 1 }
-      /^Access-Control-Allow-Origin:/ {
-        sub(/^[^:]+:[[:space:]]*/, "", $0)
-        sub(/\r$/, "", $0)
-        print
-        exit
-      }
-    ' "$headers_file"
-  )"
+  fetch_headers "$url" "$headers_file"
+  allow_origin="$(read_header_value "$headers_file" "Access-Control-Allow-Origin")"
   rm -f "$headers_file"
 
   if [ -z "$allow_origin" ]; then
@@ -144,6 +188,24 @@ required_urls=(
   "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
 )
 
+immutable_cache_urls=(
+  "$current_manifest_url"
+  "$(join_url "$CDN_BASE_URL" "/map/${current_module}")"
+  "$(join_url "$CDN_BASE_URL" "/map/${current_wasm}")"
+  "$(join_url "$CDN_BASE_URL" "/fields/regions.v1.bin")"
+  "$(join_url "$CDN_BASE_URL" "/fields/regions.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.bin")"
+  "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.bin")"
+  "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
+)
+
+short_cache_urls=(
+  "$(join_url "$CDN_BASE_URL" "/map/map-host.js")"
+  "$(join_url "$CDN_BASE_URL" "/map/ui/fishystuff.css")"
+)
+
 cors_required_urls=(
   "$current_manifest_url"
   "$stable_manifest_url"
@@ -162,8 +224,18 @@ for url in "${required_urls[@]}"; do
   check_url_exists "$url"
 done
 
+check_url_cache_control "$stable_manifest_url" "no-store"
+
+for url in "${immutable_cache_urls[@]}"; do
+  check_url_cache_control "$url" "max-age=31536000" "immutable"
+done
+
+for url in "${short_cache_urls[@]}"; do
+  check_url_cache_control "$url" "max-age=3600"
+done
+
 for url in "${cors_required_urls[@]}"; do
   check_url_cors "$url"
 done
 
-echo "CDN map runtime assets are reachable and CORS-readable." >&2
+echo "CDN map runtime assets are reachable, CORS-readable, and cache headers match expectations." >&2

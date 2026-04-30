@@ -10,6 +10,9 @@ let
   inherit (lib) mkOption optional optionalString types;
   cfg = config.fishystuff.edge;
   caddyExe = lib.getExe' cfg.package "caddy";
+  siteStaticFilePattern = "\\.(css|js|mjs|png|webp|jpe?g|gif|ico|woff2?|ttf|json|xml|txt|ziggy)$";
+  # Paths in this matcher must be content-addressed or otherwise versioned by
+  # their path. Browsers may keep them for a year without revalidation.
   cdnImmutablePaths = lib.concatStringsSep " " [
     "/map/runtime-manifest.*.json"
     "/map/fishystuff_ui_bevy.*.js"
@@ -45,8 +48,8 @@ let
       encode zstd gzip
 
       @runtime_config path /runtime-config.js
-      @site_svg path /img/*.svg
-      @site_static path /css/* /js/* /img/*
+      @site_svg path_regexp \.svg$
+      @site_static path_regexp ${siteStaticFilePattern}
 
       handle @runtime_config {
         header Cache-Control "no-store"

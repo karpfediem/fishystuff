@@ -28,7 +28,10 @@ let
   siteHost = "127.0.0.1";
   sitePort = 1990;
   telemetryHost = "telemetry.localhost";
+  siteStaticFilePattern = "\\.(css|js|mjs|png|webp|jpe?g|gif|ico|woff2?|ttf|json|xml|txt|ziggy)$";
   toString = builtins.toString;
+  # Paths in this matcher must be content-addressed or otherwise versioned by
+  # their path. Browsers may keep them for a year without revalidation.
   cdnImmutablePaths = lib.concatStringsSep " " [
     "/map/runtime-manifest.*.json"
     "/map/fishystuff_ui_bevy.*.js"
@@ -216,15 +219,21 @@ in {
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
 
-      @site_svg path /img/*.svg
-      @site_image path /img/*
+      @runtime_config path /runtime-config.js
+      @site_svg path_regexp \.svg$
+      @site_static path_regexp ${siteStaticFilePattern}
+
+      handle @runtime_config {
+        header Cache-Control "no-store"
+        file_server
+      }
 
       handle @site_svg {
         header Cache-Control "public, max-age=31536000, immutable"
         file_server
       }
 
-      handle @site_image {
+      handle @site_static {
         header Cache-Control "public, max-age=3600"
         file_server
       }
@@ -238,15 +247,21 @@ in {
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
 
-      @site_svg path /img/*.svg
-      @site_image path /img/*
+      @runtime_config path /runtime-config.js
+      @site_svg path_regexp \.svg$
+      @site_static path_regexp ${siteStaticFilePattern}
+
+      handle @runtime_config {
+        header Cache-Control "no-store"
+        file_server
+      }
 
       handle @site_svg {
         header Cache-Control "public, max-age=31536000, immutable"
         file_server
       }
 
-      handle @site_image {
+      handle @site_static {
         header Cache-Control "public, max-age=3600"
         file_server
       }
