@@ -3,6 +3,7 @@ mod mysql_store;
 mod ranking;
 mod region_groups;
 mod region_layers;
+mod trade_npcs;
 
 use std::fs::File;
 use std::io::Read;
@@ -251,6 +252,26 @@ enum Commands {
         waypoint_xml: Vec<PathBuf>,
         #[arg(long)]
         out: PathBuf,
+    },
+    BuildTradeNpcDestinations {
+        #[arg(long)]
+        character_function_xlsx: PathBuf,
+        #[arg(long)]
+        character_table_xlsx: PathBuf,
+        #[arg(long)]
+        selling_to_npc_xlsx: PathBuf,
+        #[arg(long)]
+        regionclientdata: PathBuf,
+        #[arg(long)]
+        regioninfo_bss: PathBuf,
+        #[arg(long)]
+        regiongroupinfo_bss: PathBuf,
+        #[arg(long, help = "Original localization .loc file")]
+        loc: PathBuf,
+        #[arg(long = "waypoint-xml", required = true)]
+        waypoint_xml: Vec<PathBuf>,
+        #[arg(long)]
+        catalog_out: PathBuf,
     },
     BuildRegionsFieldMetadata {
         #[arg(long)]
@@ -552,6 +573,27 @@ fn main() -> Result<()> {
             loc,
             waypoint_xml,
             out,
+        ),
+        Commands::BuildTradeNpcDestinations {
+            character_function_xlsx,
+            character_table_xlsx,
+            selling_to_npc_xlsx,
+            regionclientdata,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            catalog_out,
+        } => run_build_trade_npc_destinations(
+            character_function_xlsx,
+            character_table_xlsx,
+            selling_to_npc_xlsx,
+            regionclientdata,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            catalog_out,
         ),
         Commands::BuildRegionsFieldMetadata {
             field,
@@ -1513,6 +1555,44 @@ fn run_build_region_nodes_geojson(
         summary.feature_count,
         summary.named_feature_count,
         summary.connection_feature_count,
+    );
+    Ok(())
+}
+
+fn run_build_trade_npc_destinations(
+    character_function_xlsx: PathBuf,
+    character_table_xlsx: PathBuf,
+    selling_to_npc_xlsx: PathBuf,
+    regionclientdata: PathBuf,
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
+    loc: PathBuf,
+    waypoint_xml: Vec<PathBuf>,
+    catalog_out: PathBuf,
+) -> Result<()> {
+    let summary = trade_npcs::build_trade_npc_destinations(
+        trade_npcs::TradeNpcBuildInputs {
+            character_function_xlsx: &character_function_xlsx,
+            character_table_xlsx: &character_table_xlsx,
+            selling_to_npc_xlsx: &selling_to_npc_xlsx,
+            regionclientdata: &regionclientdata,
+            regioninfo_bss: &regioninfo_bss,
+            regiongroupinfo_bss: &regiongroupinfo_bss,
+            loc: &loc,
+            waypoint_xml: &waypoint_xml,
+        },
+        &catalog_out,
+    )?;
+    println!(
+        "build-trade-npc-destinations: catalog={} origin_regions={} destinations={} candidates={} regular_trade_rows={} barter_rows={} missing_spawn={} missing_trade_origin={}",
+        catalog_out.display(),
+        summary.origin_regions,
+        summary.destinations,
+        summary.candidate_npcs,
+        summary.character_function_trade_rows,
+        summary.character_function_barter_rows,
+        summary.excluded_missing_spawn,
+        summary.excluded_missing_trade_origin,
     );
     Ok(())
 }

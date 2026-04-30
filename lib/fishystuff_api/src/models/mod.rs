@@ -6,6 +6,7 @@ pub mod layers;
 pub mod meta;
 pub mod region_groups;
 pub mod tiles;
+pub mod trade;
 pub mod zone_loot_summary;
 pub mod zone_profile_v2;
 pub mod zone_stats;

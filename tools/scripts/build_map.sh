@@ -46,12 +46,14 @@ CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 CDN_MAP_ASSET_DIR="$CDN_ROOT/map"
 CDN_IMAGE_ASSET_DIR="$CDN_ROOT/images"
 CDN_FIELD_ASSET_DIR="$CDN_ROOT/fields"
+CDN_TRADE_ASSET_DIR="$CDN_ROOT/trade"
 CDN_WAYPOINT_ASSET_DIR="$CDN_ROOT/waypoints"
 MINIMAP_SOURCE_TILE_DIR="${MINIMAP_SOURCE_TILE_DIR:-$ROOT_DIR/data/scratch/minimap/source_tiles}"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
 mkdir -p "$CDN_MAP_ASSET_DIR"
 mkdir -p "$CDN_IMAGE_ASSET_DIR"
 mkdir -p "$CDN_FIELD_ASSET_DIR"
+mkdir -p "$CDN_TRADE_ASSET_DIR"
 mkdir -p "$CDN_WAYPOINT_ASSET_DIR"
 
 cp -f map/fishystuff_ui_bevy/assets/ui/fishystuff.css "$SITE_MAP_ASSET_DIR/ui/fishystuff.css"
@@ -424,6 +426,14 @@ regiongroupinfo_bss_input="${REGIONGROUPINFO_BSS_INPUT:-$(first_existing_path \
   data/scratch/gamecommondata/binary/regiongroupinfo.bss)}"
 region_loc_input="${REGION_LOC_INPUT:-$(first_existing_path \
   data/data/languagedata_en.loc)}"
+character_function_xlsx_input="${CHARACTER_FUNCTION_XLSX_INPUT:-$(first_existing_path \
+  data/data/excel/CharacterFunction_Table.xlsx)}"
+character_table_xlsx_input="${CHARACTER_TABLE_XLSX_INPUT:-$(first_existing_path \
+  data/data/excel/Character_Table.xlsx)}"
+selling_to_npc_xlsx_input="${SELLING_TO_NPC_XLSX_INPUT:-$(first_existing_path \
+  data/data/excel/SellingToNpc_Table.xlsx)}"
+regionclientdata_input="${REGIONCLIENTDATA_INPUT:-$(first_existing_path \
+  data/scratch/gamecommondata/regionclientdata_en_.xml)}"
 waypoint_xml_primary="${WAYPOINT_XML_PRIMARY:-$(first_existing_path \
   data/scratch/gamecommondata/waypoint/mapdata_realexplore.xml)}"
 waypoint_xml_secondary="${WAYPOINT_XML_SECONDARY:-$(first_existing_path \
@@ -433,6 +443,7 @@ region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
 regions_field_metadata_output="$CDN_FIELD_ASSET_DIR/regions.v1.meta.json"
 region_groups_field_metadata_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.meta.json"
 region_nodes_output="$CDN_WAYPOINT_ASSET_DIR/region_nodes.v1.geojson"
+trade_npc_catalog_output="$CDN_TRADE_ASSET_DIR/trade_npc_destinations.v1.json"
 waypoint_xml_args=()
 if [ -f "$waypoint_xml_primary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_primary")
@@ -513,4 +524,28 @@ if [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f
     --loc "$region_loc_input" \
     "${waypoint_xml_args[@]}" \
     --out "$region_nodes_output"
+fi
+
+if [ -f "$character_function_xlsx_input" ] && [ -f "$character_table_xlsx_input" ] && [ -f "$selling_to_npc_xlsx_input" ] && [ -f "$regionclientdata_input" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+  [ "${REBUILD_TRADE_NPC_DESTINATIONS:-0}" = "1" ] ||
+  [ ! -f "$trade_npc_catalog_output" ] ||
+  [ "$character_function_xlsx_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$character_table_xlsx_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$selling_to_npc_xlsx_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$regionclientdata_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$regiongroupinfo_bss_input" -nt "$trade_npc_catalog_output" ] ||
+  [ "$region_loc_input" -nt "$trade_npc_catalog_output" ];
+}; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-trade-npc-destinations \
+    --character-function-xlsx "$character_function_xlsx_input" \
+    --character-table-xlsx "$character_table_xlsx_input" \
+    --selling-to-npc-xlsx "$selling_to_npc_xlsx_input" \
+    --regionclientdata "$regionclientdata_input" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
+    --loc "$region_loc_input" \
+    "${waypoint_xml_args[@]}" \
+    --catalog-out "$trade_npc_catalog_output"
 fi

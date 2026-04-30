@@ -3134,10 +3134,12 @@ name = "fishystuff_ingest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "calamine",
  "chrono",
  "clap",
  "csv",
  "fishystuff_analytics",
+ "fishystuff_api",
  "fishystuff_config",
  "fishystuff_core",
  "fishystuff_store",
