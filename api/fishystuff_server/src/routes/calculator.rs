@@ -43,6 +43,7 @@ use crate::store::{
 
 const TRADE_NPC_CATALOG_PATH: &str = "trade/trade_npc_destinations.v1.json";
 const TRADE_DISTANCE_BONUS_SCALE: f64 = 68.0 / 1_000_000.0;
+const TRADE_CUSTOM_DESTINATION_PREFIX: &str = "custom:";
 
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
@@ -53,6 +54,10 @@ pub struct CalculatorQuery {
     pub target_fish_select: Option<bool>,
     pub trade_origin_select: Option<bool>,
     pub trade_destination_select: Option<bool>,
+    pub trade_origin_region: Option<String>,
+    pub trade_destination_npc: Option<String>,
+    pub trade_distance_bonus: Option<f64>,
+    pub trade_distance_custom: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -613,6 +618,7 @@ struct TradeDestinationSelectOption {
     assigned_origin: String,
     distance_bonus: f64,
     search_text: String,
+    custom: bool,
 }
 
 struct SearchableMultiselectConfig<'a> {
@@ -918,7 +924,9 @@ pub async fn post_calculator_datastar_init(
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
-    let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
+    let mut raw_signals =
+        parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
+    apply_trade_eval_query_overrides(&mut raw_signals, &query);
     let (data, normalized_signals, derived) = load_calculator_runtime_data(
         &state,
         lang,
@@ -945,7 +953,9 @@ pub async fn post_calculator_datastar_eval(
     let locale = CalculatorLocale::from_query(query.locale.as_deref(), query.lang.as_deref());
     let data =
         load_calculator_data(&state, &lang, locale, query.r#ref.clone(), &request_id).await?;
-    let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
+    let mut raw_signals =
+        parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
+    apply_trade_eval_query_overrides(&mut raw_signals, &query);
     let (data, normalized_signals, derived) = load_calculator_runtime_data(
         &state,
         lang,
@@ -1023,6 +1033,22 @@ pub async fn post_calculator_datastar_eval(
         ));
     }
     Ok(calculator_datastar_response(events))
+}
+
+fn apply_trade_eval_query_overrides(signals: &mut CalculatorSignals, query: &CalculatorQuery) {
+    if let Some(origin) = query.trade_origin_region.as_deref() {
+        signals.trade_origin_region = origin.trim().to_string();
+    }
+    if let Some(destination) = query.trade_destination_npc.as_deref() {
+        signals.trade_destination_npc = destination.trim().to_string();
+    }
+    if let Some(distance_bonus) = query.trade_distance_bonus {
+        signals.trade_distance_bonus = distance_bonus.max(0.0);
+    }
+    if query.trade_distance_custom.unwrap_or(false) {
+        signals.trade_destination_npc =
+            custom_trade_destination_value(signals.trade_distance_bonus);
+    }
 }
 
 fn render_pet_talent_fixed_option_patch_events(
@@ -1812,19 +1838,27 @@ fn normalize_trade_selection(
     catalog: &TradeNpcCatalogResponse,
     zone_key: Option<&str>,
 ) {
+    signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
     if catalog.origin_regions.is_empty() || catalog.destinations.is_empty() {
         signals.trade_origin_region = signals.trade_origin_region.trim().to_string();
         signals.trade_destination_npc = signals.trade_destination_npc.trim().to_string();
-        signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
+        if custom_trade_destination_bonus(&signals.trade_destination_npc).is_some() {
+            signals.trade_destination_npc =
+                custom_trade_destination_value(signals.trade_distance_bonus);
+        }
         return;
     }
 
     let zone_origin_counts = trade_zone_origin_region_counts(catalog, zone_key);
+    let custom_destination_bonus = custom_trade_destination_bonus(&signals.trade_destination_npc);
     let mut origin = find_trade_origin(catalog, &signals.trade_origin_region);
-    let mut destination = find_trade_destination(catalog, &signals.trade_destination_npc);
+    let mut destination = custom_destination_bonus
+        .is_none()
+        .then(|| find_trade_destination(catalog, &signals.trade_destination_npc))
+        .flatten();
 
     if origin.is_none() {
-        if let Some(selected_destination) = destination {
+        if let (None, Some(selected_destination)) = (custom_destination_bonus, destination) {
             origin = closest_trade_origin_for_destination_in_counts(
                 catalog,
                 selected_destination,
@@ -1854,6 +1888,16 @@ fn normalize_trade_selection(
         }
     }
 
+    if let Some(distance_bonus) = custom_destination_bonus {
+        if let Some(selected_origin) = origin {
+            signals.trade_origin_region = selected_origin.region_id.to_string();
+        }
+        signals.trade_distance_bonus = distance_bonus.max(0.0);
+        signals.trade_destination_npc =
+            custom_trade_destination_value(signals.trade_distance_bonus);
+        return;
+    }
+
     if destination.is_none() {
         if let Some(selected_origin) = origin {
             destination = farthest_trade_destination(catalog, selected_origin);
@@ -1874,6 +1918,19 @@ fn normalize_trade_selection(
         }
     }
     signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
+}
+
+fn custom_trade_destination_value(distance_bonus: f64) -> String {
+    format!(
+        "{}{}",
+        TRADE_CUSTOM_DESTINATION_PREFIX,
+        trim_float(distance_bonus.max(0.0))
+    )
+}
+
+fn custom_trade_destination_bonus(value: &str) -> Option<f64> {
+    let raw = value.trim().strip_prefix(TRADE_CUSTOM_DESTINATION_PREFIX)?;
+    Some(raw.trim().parse::<f64>().unwrap_or(0.0).max(0.0))
 }
 
 fn trade_zone_origin_region_counts(
@@ -12750,6 +12807,7 @@ fn trade_destination_select_options(
                 assigned_origin,
                 distance_bonus,
                 search_text,
+                custom: false,
             }
         })
         .collect::<Vec<_>>();
@@ -12762,6 +12820,24 @@ fn trade_destination_select_options(
             .then_with(|| left.assigned_origin.cmp(&right.assigned_origin))
     });
     options
+}
+
+fn custom_trade_destination_select_option(
+    lang: CalculatorLocale,
+    distance_bonus: f64,
+) -> TradeDestinationSelectOption {
+    let label = calculator_route_text(lang, "calculator.server.option.custom_trade_distance");
+    let assigned_origin =
+        calculator_route_text(lang, "calculator.server.helper.custom_trade_distance");
+    let distance_text = format_trade_distance_bonus(distance_bonus);
+    TradeDestinationSelectOption {
+        value: custom_trade_destination_value(distance_bonus),
+        npc_name: label.clone(),
+        assigned_origin: assigned_origin.clone(),
+        distance_bonus: distance_bonus.max(0.0),
+        search_text: [label, assigned_origin, distance_text].join(" "),
+        custom: true,
+    }
 }
 
 fn render_trade_origin_option_content(
@@ -12801,7 +12877,9 @@ fn render_trade_destination_option_content(option: &TradeDestinationSelectOption
         </span>",
         escape_html(&option.npc_name),
         escape_html(&option.assigned_origin),
-        if option.distance_bonus >= 150.0 {
+        if option.custom {
+            "badge-warning"
+        } else if option.distance_bonus >= 150.0 {
             "badge-primary"
         } else {
             "badge-ghost"
@@ -12918,7 +12996,13 @@ fn render_trade_destination_select_control(
     let input_id = "calculator-trade-destination-value";
     let results_id = format!("{root_id}-results");
     let origin = find_trade_origin(&data.catalog.trade_npcs, &signals.trade_origin_region);
-    let options = trade_destination_select_options(&data.catalog.trade_npcs, origin);
+    let mut options = trade_destination_select_options(&data.catalog.trade_npcs, origin);
+    if let Some(distance_bonus) = custom_trade_destination_bonus(&signals.trade_destination_npc) {
+        options.insert(
+            0,
+            custom_trade_destination_select_option(data.lang, distance_bonus),
+        );
+    }
     let selected = options
         .iter()
         .find(|option| option.value == signals.trade_destination_npc);
@@ -13778,108 +13862,115 @@ fn render_trade_window(
     trade_levels: &[SelectOption<'_>],
 ) -> String {
     let title = calculator_route_text(data.lang, "calculator.server.section.trade");
+    let trade_level_control = render_searchable_select_control(
+        data.cdn_base_url.as_str(),
+        &data.api_lang,
+        data.lang,
+        "calculator-trade-level-picker",
+        "calculator-trade-level-value",
+        "trade_level",
+        CalculatorSearchableOptionKind::TradeLevel,
+        &signals.trade_level,
+        trade_levels,
+        false,
+        &calculator_route_text(data.lang, "calculator.server.search.trade_levels"),
+        false,
+    );
+    let origin_control = render_trade_origin_select_control(data, signals);
+    let destination_control = render_trade_destination_select_control(data, signals);
     format!(
-        "<fieldset id=\"calculator-trade-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
-            {}\
-            <div class=\"card-body gap-4 pt-0\">\
-                <div class=\"grid gap-3\">\
-                    <fieldset class=\"fieldset\">\
-                        <legend class=\"fieldset-legend\">{}</legend>\
-                        {}\
-                    </fieldset>\
-                    <div class=\"grid gap-3 lg:grid-cols-2\">\
-                        <fieldset class=\"fieldset\">\
-                            <legend class=\"fieldset-legend\">{}</legend>\
-                            <div id=\"calculator-trade-origin-control\">{}</div>\
-                        </fieldset>\
-                        <fieldset class=\"fieldset\">\
-                            <legend class=\"fieldset-legend\">{}</legend>\
-                            <div id=\"calculator-trade-destination-control\">{}</div>\
-                        </fieldset>\
-                    </div>\
-                    <div class=\"grid gap-3 sm:grid-cols-2\">\
-                        <fieldset class=\"fieldset\">\
-                            <legend class=\"fieldset-legend\">{}</legend>\
-                            <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\" readonly>\
-                            <span class=\"label text-xs\">{}</span>\
-                        </fieldset>\
-                        <fieldset class=\"fieldset\">\
-                            <legend class=\"fieldset-legend\">{}</legend>\
-                            <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradePriceCurve\">\
-                            <span class=\"label text-xs\">{}</span>\
-                        </fieldset>\
-                    </div>\
-                    <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
-                        <input data-bind=\"applyTradeModifiers\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
-                        <span class=\"text-sm font-medium\">{}</span>\
-                    </label>\
-                    <div class=\"grid gap-3 sm:grid-cols-2\">\
-                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\">\
-                            <span class=\"block text-xs text-base-content/70\">{}</span>\
-                            <span class=\"font-medium\" data-text=\"$_calc.trade_bargain_bonus_text\"></span>\
-                        </div>\
-                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\">\
-                            <span class=\"block text-xs text-base-content/70\">{}</span>\
-                            <span class=\"font-medium\" data-text=\"$_calc.trade_sale_multiplier_text\"></span>\
-                        </div>\
-                    </div>\
-                </div>\
-            </div>\
-        </fieldset>",
-        render_calculator_panel_legend(data.lang, "trade", &title, None),
-        escape_html(&calculator_route_text(
-            data.lang,
-            "calculator.server.field.trade_level"
-        )),
-        render_searchable_select_control(
-            data.cdn_base_url.as_str(),
-            &data.api_lang,
-            data.lang,
-            "calculator-trade-level-picker",
-            "calculator-trade-level-value",
-            "trade_level",
-            CalculatorSearchableOptionKind::TradeLevel,
-            &signals.trade_level,
-            trade_levels,
-            false,
-            &calculator_route_text(data.lang, "calculator.server.search.trade_levels"),
-            false,
-        ),
-        escape_html(&calculator_route_text(
+        r#"<fieldset id="calculator-trade-window" class="card card-border bg-base-100 xl:col-span-2">
+            {legend}
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">{origin_label}</legend>
+                            <div id="calculator-trade-origin-control">{origin_control}</div>
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">{destination_label}</legend>
+                            <div id="calculator-trade-destination-control">{destination_control}</div>
+                        </fieldset>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                        <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">{distance_label}</legend>
+                            <input type="number" min="0" step="any" inputmode="decimal" class="input input-lg input-primary w-full text-2xl font-semibold" data-bind="tradeDistanceBonus">
+                            <p class="label text-xs leading-snug">{distance_helper}</p>
+                        </fieldset>
+                        <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">{price_curve_label}</legend>
+                            <input type="number" min="0" step="any" inputmode="decimal" class="input input-md w-full font-semibold" data-bind="tradePriceCurve">
+                            <p class="label text-xs leading-snug">{price_curve_helper}</p>
+                        </fieldset>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.75fr)]">
+                        <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">{trade_level_label}</legend>
+                            {trade_level_control}
+                            <div class="mt-3 flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2 text-sm">
+                                <span class="text-base-content/70">{bargain_label}</span>
+                                <span class="badge badge-primary badge-lg font-semibold" data-text="$_calc.trade_bargain_bonus_text"></span>
+                            </div>
+                        </fieldset>
+                        <div class="grid gap-3">
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3">
+                                <input data-bind="applyTradeModifiers" type="checkbox" class="checkbox checkbox-primary checkbox-sm">
+                                <span class="text-sm font-medium">{apply_trade_label}</span>
+                            </label>
+                            <div class="rounded-box border border-primary/40 bg-primary/10 px-4 py-4">
+                                <span class="block text-xs font-semibold uppercase text-primary/80">{sale_multiplier_label}</span>
+                                <span class="mt-1 block text-3xl font-bold leading-none text-base-content" data-text="$_calc.trade_sale_multiplier_text"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>"#,
+        legend = render_calculator_panel_legend(data.lang, "trade", &title, None),
+        origin_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.trade_origin",
         )),
-        render_trade_origin_select_control(data, signals),
-        escape_html(&calculator_route_text(
+        origin_control = origin_control,
+        destination_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.trade_destination",
         )),
-        render_trade_destination_select_control(data, signals),
-        escape_html(&calculator_route_text(
+        destination_control = destination_control,
+        distance_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.distance_bonus",
         )),
-        escape_html(&calculator_route_text(
+        distance_helper = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.helper.distance_bonus",
         )),
-        escape_html(&calculator_route_text(
+        price_curve_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.trade_price_curve",
         )),
-        escape_html(&calculator_route_text(
+        price_curve_helper = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.helper.trade_price_curve",
         )),
-        escape_html(&calculator_route_text(
+        trade_level_label = escape_html(&calculator_route_text(
             data.lang,
-            "calculator.server.helper.apply_trade_settings",
+            "calculator.server.field.trade_level"
         )),
-        escape_html(&calculator_route_text(
+        trade_level_control = trade_level_control,
+        bargain_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.stat.bargain_bonus",
         )),
-        escape_html(&calculator_route_text(
+        apply_trade_label = escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.helper.apply_trade_settings",
+        )),
+        sale_multiplier_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.stat.sale_multiplier",
         )),
@@ -17082,6 +17173,10 @@ mod tests {
         assert!(text.contains("data-calculator-section-id=\"session\""));
         assert!(text.contains("calculator-loot-window"));
         assert!(text.contains("calculator-trade-window"));
+        assert!(text.contains("class=\"input input-lg input-primary w-full text-2xl font-semibold\" data-bind=\"tradeDistanceBonus\""));
+        assert!(!text.contains("data-bind=\"tradeDistanceBonus\" readonly"));
+        assert!(text.contains("badge badge-primary badge-lg font-semibold\" data-text=\"$_calc.trade_bargain_bonus_text\""));
+        assert!(text.contains("text-3xl font-bold leading-none text-base-content\" data-text=\"$_calc.trade_sale_multiplier_text\""));
         assert!(text.contains("data-calculator-section-id=\"trade\""));
         assert!(text.contains("data-calculator-section-id=\"food\""));
         assert!(text.contains("data-calculator-section-id=\"buffs\""));
@@ -17180,6 +17275,10 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: None,
+                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -17226,6 +17325,10 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: None,
+                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -17260,6 +17363,10 @@ mod tests {
                 target_fish_select: Some(true),
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: None,
+                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
@@ -17291,6 +17398,10 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: Some(true),
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: None,
+                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"tradeOriginRegion":"1"}"#),
@@ -17312,6 +17423,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn eval_custom_distance_switches_destination_to_custom_option() {
+        let response = post_calculator_datastar_eval(
+            State(test_state()),
+            Ok(Query(CalculatorQuery {
+                lang: Some("en".to_string()),
+                locale: Some("en-US".to_string()),
+                r#ref: None,
+                pet_cards: Some(false),
+                target_fish_select: None,
+                trade_origin_select: None,
+                trade_destination_select: Some(true),
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: Some(123.45),
+                trade_distance_custom: Some(true),
+            })),
+            Extension(RequestId("req-test".to_string())),
+            Bytes::from_static(
+                br#"{"tradeOriginRegion":"1","tradeDestinationNpc":"200","tradeDistanceBonus":34}"#,
+            ),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("\"tradeDestinationNpc\":\"custom:123.45\""));
+        assert!(text.contains("\"tradeDistanceBonus\":123.45"));
+        assert!(text.contains("Custom distance"));
+        assert!(text.contains("Manual distance bonus"));
+        assert!(text.contains("data:selector #calculator-trade-destination-control"));
+        assert!(!text.contains("data:selector #calculator-trade-window"));
+    }
+
+    #[tokio::test]
     async fn eval_can_patch_trade_origin_and_destination_controls_without_replacing_trade_window() {
         let response = post_calculator_datastar_eval(
             State(test_state()),
@@ -17323,6 +17471,10 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: Some(true),
                 trade_destination_select: Some(true),
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: None,
+                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
@@ -17869,6 +18021,10 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_origin_region: None,
+                trade_destination_npc: None,
+                trade_distance_bonus: None,
+                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"active":true,"rod":"item:16162"}"#),
@@ -19631,6 +19787,23 @@ mod tests {
         assert_eq!(signals.trade_origin_region, "1");
         assert_eq!(signals.trade_destination_npc, "200");
         assert!((signals.trade_distance_bonus - 34.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn normalize_trade_selection_preserves_custom_distance_destination() {
+        let catalog = test_trade_catalog();
+        let mut signals = CalculatorSignals {
+            trade_origin_region: "1".to_string(),
+            trade_destination_npc: "custom:123.45".to_string(),
+            trade_distance_bonus: 34.0,
+            ..CalculatorSignals::default()
+        };
+
+        normalize_trade_selection(&mut signals, &catalog, None);
+
+        assert_eq!(signals.trade_origin_region, "1");
+        assert_eq!(signals.trade_destination_npc, "custom:123.45");
+        assert!((signals.trade_distance_bonus - 123.45).abs() < 0.0001);
     }
 
     #[test]

@@ -491,6 +491,18 @@ test("calculator eval URL classifies direct Datastar patch payloads", () => {
   assert.match(tradeOriginUrl, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(tradeOriginUrl, /[?&]trade_origin_select=true\b/);
   assert.match(tradeOriginUrl, /[?&]trade_destination_select=true\b/);
+  assert.match(tradeOriginUrl, /[?&]trade_origin_region=740\b/);
+
+  const tradeDistanceUrl = env.window.__fishystuffCalculator.evalUrl({ tradeDistanceBonus: 123.45 });
+  assert.match(tradeDistanceUrl, /[?&]pet_cards=false\b/);
+  assert.match(tradeDistanceUrl, /[?&]trade_destination_select=true\b/);
+  assert.match(tradeDistanceUrl, /[?&]trade_distance_bonus=123\.45\b/);
+  assert.match(tradeDistanceUrl, /[?&]trade_distance_custom=true\b/);
+
+  const tradeDestinationUrl = env.window.__fishystuffCalculator.evalUrl({ tradeDestinationNpc: "200" });
+  assert.match(tradeDestinationUrl, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(tradeDestinationUrl, /[?&]trade_destination_select=true\b/);
+  assert.match(tradeDestinationUrl, /[?&]trade_destination_npc=200\b/);
 
   const petUrl = env.window.__fishystuffCalculator.evalUrl({ pet1: { tier: "4" } });
   assert.doesNotMatch(petUrl, /[?&]pet_cards=false\b/);

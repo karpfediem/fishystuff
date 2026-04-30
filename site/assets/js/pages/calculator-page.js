@@ -12,6 +12,7 @@
   const CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN = /^zone$/;
   const CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN = /^zone$/;
   const CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN = /^tradeOriginRegion$/;
+  const CALCULATOR_TRADE_DISTANCE_SIGNAL_PATTERN = /^tradeDistanceBonus$/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
   const CALCULATOR_PRESET_SIGNAL_FILTER = {
@@ -438,6 +439,7 @@
     const paths = calculatorEvalPatchPaths(patch);
     const touchesPetCards = paths.some((path) => CALCULATOR_PET_CARD_SIGNAL_PATTERN.test(path))
       && !paths.every((path) => CALCULATOR_PACK_LEADER_SIGNAL_PATTERN.test(path));
+    const touchesTradeDistance = paths.some((path) => CALCULATOR_TRADE_DISTANCE_SIGNAL_PATTERN.test(path));
     return {
       includePetCards: touchesPetCards,
       includeTargetFishSelect: paths.some((path) => CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN.test(path)),
@@ -445,7 +447,8 @@
       includeTradeDestinationSelect: paths.some((path) => (
         CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN.test(path)
         || CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)
-      )),
+      )) || touchesTradeDistance,
+      customTradeDistance: touchesTradeDistance,
     };
   }
 
@@ -1992,6 +1995,17 @@
     );
   }
 
+  function appendCalculatorEvalSignalParam(params, patch, path, name) {
+    if (!patch || typeof patch !== "object") {
+      return;
+    }
+    const value = readSignalPath(patch, path);
+    if (value === undefined || value === null) {
+      return;
+    }
+    params.set(name, String(value));
+  }
+
   function calculatorEvalUrl(patch = null) {
     const language = calculatorSurfaceLanguage();
     const patchOptions = patch && typeof patch === "object"
@@ -2010,12 +2024,29 @@
       ? patchOptions.includeTradeDestinationSelect
       : calculatorState.pendingEvalNeedsTradeDestinationSelect === true;
     clearPendingEvalElementPatches();
-    const petCardsParam = includePetCards ? "" : "&pet_cards=false";
-    const targetFishSelectParam = includeTargetFishSelect ? "&target_fish_select=true" : "";
-    const tradeOriginSelectParam = includeTradeOriginSelect ? "&trade_origin_select=true" : "";
-    const tradeDestinationSelectParam = includeTradeDestinationSelect ? "&trade_destination_select=true" : "";
+    const params = new URLSearchParams();
+    params.set("lang", language.apiLang);
+    params.set("locale", language.locale);
+    if (!includePetCards) {
+      params.set("pet_cards", "false");
+    }
+    if (includeTargetFishSelect) {
+      params.set("target_fish_select", "true");
+    }
+    if (includeTradeOriginSelect) {
+      params.set("trade_origin_select", "true");
+    }
+    if (includeTradeDestinationSelect) {
+      params.set("trade_destination_select", "true");
+    }
+    appendCalculatorEvalSignalParam(params, patch, "tradeOriginRegion", "trade_origin_region");
+    appendCalculatorEvalSignalParam(params, patch, "tradeDestinationNpc", "trade_destination_npc");
+    appendCalculatorEvalSignalParam(params, patch, "tradeDistanceBonus", "trade_distance_bonus");
+    if (patchOptions?.customTradeDistance) {
+      params.set("trade_distance_custom", "true");
+    }
     return window.__fishystuffResolveApiUrl(
-      `/api/v1/calculator/datastar/eval?lang=${language.apiLang}&locale=${encodeURIComponent(language.locale)}${petCardsParam}${targetFishSelectParam}${tradeOriginSelectParam}${tradeDestinationSelectParam}`,
+      `/api/v1/calculator/datastar/eval?${params.toString()}`,
     );
   }
 

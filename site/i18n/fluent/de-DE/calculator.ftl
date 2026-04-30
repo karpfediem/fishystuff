@@ -145,6 +145,7 @@ calculator.overlay.error.import_unavailable = Overlay-Import ist nicht verfügba
 
 # Server-rendered calculator UI
 calculator.server.option.none = Keine
+calculator.server.option.custom_trade_distance = Eigener Distanzbonus
 
 calculator.server.result.no_matching_options = Keine passenden Optionen
 calculator.server.result.no_matching_zones = Keine passenden Zonen
@@ -284,7 +285,8 @@ calculator.server.helper.target_missing_at_spot = Dieses Ziel erscheint aktuell 
 calculator.server.helper.target_pmf_auto = 0 = automatisch. Der letzte PMF-Bucket ist aktuell ≥{$count} (0,5-%-Schwanzgrenze).
 calculator.server.helper.target_pmf_fixed = Der letzte PMF-Bucket ist ≥{$count}.
 calculator.server.helper.normalize_rates = Raten normalisieren
-calculator.server.helper.distance_bonus = aus Handelsursprung und Ziel berechnet, im Verkaufsmodell auf +150 % gedeckelt
+calculator.server.helper.distance_bonus = wähle einen Händler zur Berechnung oder gib einen eigenen Distanzbonus ein; im Verkaufsmodell auf +150 % gedeckelt
+calculator.server.helper.custom_trade_distance = Manueller Distanzbonus
 calculator.server.helper.trade_price_curve = manuelle %-Kurve, häufig etwa 105–130 %
 calculator.server.helper.apply_trade_settings = Handelseinstellungen anwenden
 calculator.server.helper.food_family = Pro Nahrungskategorie wirkt immer nur eine Familie gleichzeitig. Höherstufige Nahrung ersetzt niedrigerstufige Nahrung derselben Familie.
