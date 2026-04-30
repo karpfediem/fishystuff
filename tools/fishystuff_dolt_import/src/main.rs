@@ -178,6 +178,15 @@ const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess
 const MANUAL_COMMUNITY_GUESS_SOURCE_LABEL: &str = "Manual community zone fish rate guess";
 const FLOCKFISH_SOURCE_ID: &str = "flockfish_workbook";
 const FLOCKFISH_ZONE_GROUP_SOURCE_LABEL: &str = "Flockfish final combined zone group table";
+const COMMUNITY_SUBGROUP_OVERLAY_TABLE: &str = "community_item_sub_group_overlay";
+const COMMUNITY_SUBGROUP_OVERLAY_IMPORT_TABLE: &str = "community_item_sub_group_overlay_import";
+const COMMUNITY_SUBGROUP_UNRESOLVED_TABLE: &str = "community_item_sub_group_unresolved_overlay";
+const COMMUNITY_SUBGROUP_UNRESOLVED_IMPORT_TABLE: &str =
+    "community_item_sub_group_unresolved_overlay_import";
+const COMMUNITY_ACTIVE_OVERLAYS_TABLE: &str = "community_active_overlays";
+const COMMUNITY_SUBGROUP_OVERLAY_KIND: &str = "item_sub_group";
+const DEFAULT_COMMUNITY_SUBGROUP_SOURCE_ID: &str = "community_subgroups_no_formulas_workbook";
+const DEFAULT_COMMUNITY_SUBGROUP_SOURCE_LABEL: &str = "Community Subgroups(no formulas) workbook";
 const SETUP_SPOT_NAME_COL: usize = 0;
 const SETUP_SPOT_R_COL: usize = 1;
 const SETUP_SPOT_G_COL: usize = 2;
@@ -195,6 +204,104 @@ const FLOCKFISH_JALLO_FINAL_B_COL: usize = 16;
 const FLOCKFISH_JALLO_FINAL_ZONE_NAME_COL: usize = 17;
 const FLOCKFISH_JALLO_FINAL_DROP_LABEL_COL: usize = 18;
 const FLOCKFISH_JALLO_FINAL_GROUP_VALUE_COL: usize = 19;
+const COMMUNITY_SUBGROUP_KEY_COL: usize = 0;
+const COMMUNITY_SUBGROUP_ITEM_COL: usize = 1;
+const COMMUNITY_SUBGROUP_SPOTTED_COL: usize = 2;
+const COMMUNITY_SUBGROUP_COMMENT_COL: usize = 3;
+const COMMUNITY_SUBGROUP_TABLE_COL: usize = 4;
+const COMMUNITY_SUBGROUP_GRADE_COL: usize = 5;
+const COMMUNITY_SUBGROUP_ITEM_NAME_COL: usize = 6;
+const COMMUNITY_SUBGROUP_REMOVED_COL: usize = 8;
+const COMMUNITY_SUBGROUP_ADDED_COL: usize = 9;
+const COMMUNITY_SUBGROUP_ENCHANT_COL: usize = 10;
+const COMMUNITY_SUBGROUP_DO_PET_COL: usize = 11;
+const COMMUNITY_SUBGROUP_DO_SECHI_COL: usize = 12;
+const COMMUNITY_SUBGROUP_FOR_HUMANS_COL: usize = 13;
+const COMMUNITY_SUBGROUP_SELECT_RATE_0_COL: usize = 14;
+const COMMUNITY_SUBGROUP_MIN_COUNT_0_COL: usize = 15;
+const COMMUNITY_SUBGROUP_MAX_COUNT_0_COL: usize = 16;
+const COMMUNITY_SUBGROUP_SELECT_RATE_1_COL: usize = 17;
+const COMMUNITY_SUBGROUP_MIN_COUNT_1_COL: usize = 18;
+const COMMUNITY_SUBGROUP_MAX_COUNT_1_COL: usize = 19;
+const COMMUNITY_SUBGROUP_SELECT_RATE_2_COL: usize = 20;
+const COMMUNITY_SUBGROUP_MIN_COUNT_2_COL: usize = 21;
+const COMMUNITY_SUBGROUP_MAX_COUNT_2_COL: usize = 22;
+const COMMUNITY_SUBGROUP_INTIMACY_VARIATION_COL: usize = 23;
+const COMMUNITY_SUBGROUP_EXPLORATION_POINT_COL: usize = 24;
+const COMMUNITY_SUBGROUP_APPLY_RANDOM_PRICE_COL: usize = 25;
+const COMMUNITY_SUBGROUP_RENT_TIME_COL: usize = 26;
+const COMMUNITY_SUBGROUP_PRICE_OPTION_COL: usize = 27;
+
+const COMMUNITY_SUBGROUP_OVERLAY_HEADERS: [&str; 32] = [
+    "source_id",
+    "source_label",
+    "source_sha256",
+    "source_sheet",
+    "source_row",
+    "source_spotted_auto",
+    "source_comment",
+    "source_table",
+    "source_grade",
+    "source_item_name",
+    "source_for_humans",
+    "source_removed",
+    "source_added",
+    "ItemSubGroupKey",
+    "ItemKey",
+    "EnchantLevel",
+    "DoPetAddDrop",
+    "DoSechiAddDrop",
+    "SelectRate_0",
+    "MinCount_0",
+    "MaxCount_0",
+    "SelectRate_1",
+    "MinCount_1",
+    "MaxCount_1",
+    "SelectRate_2",
+    "MinCount_2",
+    "MaxCount_2",
+    "IntimacyVariation",
+    "ExplorationPoint",
+    "ApplyRandomPrice",
+    "RentTime",
+    "PriceOption",
+];
+
+const COMMUNITY_SUBGROUP_UNRESOLVED_HEADERS: [&str; 33] = [
+    "source_id",
+    "source_label",
+    "source_sha256",
+    "source_sheet",
+    "source_row",
+    "source_reason",
+    "source_item_sub_group_key_raw",
+    "source_item_key_raw",
+    "source_enchant_level_raw",
+    "source_spotted_auto",
+    "source_comment",
+    "source_table",
+    "source_grade",
+    "source_item_name",
+    "source_for_humans",
+    "source_removed",
+    "source_added",
+    "DoPetAddDrop_raw",
+    "DoSechiAddDrop_raw",
+    "SelectRate_0_raw",
+    "MinCount_0_raw",
+    "MaxCount_0_raw",
+    "SelectRate_1_raw",
+    "MinCount_1_raw",
+    "MaxCount_1_raw",
+    "SelectRate_2_raw",
+    "MinCount_2_raw",
+    "MaxCount_2_raw",
+    "IntimacyVariation_raw",
+    "ExplorationPoint_raw",
+    "ApplyRandomPrice_raw",
+    "RentTime_raw",
+    "PriceOption_raw",
+];
 
 #[derive(Parser)]
 #[command(name = "fishystuff_dolt_import")]
@@ -299,6 +406,28 @@ enum Commands {
         workbook_xlsx: PathBuf,
         #[arg(long)]
         output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
+    ImportCommunitySubgroupOverlayXlsx {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        subgroups_xlsx: PathBuf,
+        #[arg(long, default_value = "no formulas")]
+        sheet: String,
+        #[arg(long, default_value = DEFAULT_COMMUNITY_SUBGROUP_SOURCE_ID)]
+        source_id: String,
+        #[arg(long, default_value = DEFAULT_COMMUNITY_SUBGROUP_SOURCE_LABEL)]
+        source_label: String,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        emit_only: bool,
+        #[arg(long, default_value_t = false)]
+        activate: bool,
         #[arg(long, default_value_t = false)]
         commit: bool,
         #[arg(long)]
@@ -620,6 +749,35 @@ struct FlockfishZoneGroupSlotsImport {
     row_count: usize,
     numeric_rows: usize,
     unresolved_rows: usize,
+}
+
+struct CommunitySubgroupOverlayImportCommand {
+    dolt_repo: PathBuf,
+    subgroups_xlsx: PathBuf,
+    sheet: String,
+    source_id: String,
+    source_label: String,
+    output_dir: Option<PathBuf>,
+    emit_only: bool,
+    activate: bool,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct CommunitySubgroupOverlayOutputs {
+    overlay_csv: PathBuf,
+    unresolved_csv: PathBuf,
+}
+
+struct CommunitySubgroupOverlayImport {
+    row_count: usize,
+    active_rows: usize,
+    removed_rows: usize,
+    added_rows: usize,
+    note_rows: usize,
+    unresolved_rows: usize,
+    unresolved_symbolic_key_rows: usize,
+    unresolved_missing_item_key_rows: usize,
 }
 
 struct CalculatorEffectsImportCommand {
@@ -963,6 +1121,29 @@ fn main() -> Result<()> {
             dolt_repo,
             workbook_xlsx,
             output_dir,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportCommunitySubgroupOverlayXlsx {
+            dolt_repo,
+            subgroups_xlsx,
+            sheet,
+            source_id,
+            source_label,
+            output_dir,
+            emit_only,
+            activate,
+            commit,
+            commit_msg,
+        } => run_community_subgroup_overlay_import(CommunitySubgroupOverlayImportCommand {
+            dolt_repo,
+            subgroups_xlsx,
+            sheet,
+            source_id,
+            source_label,
+            output_dir,
+            emit_only,
+            activate,
             commit,
             commit_msg,
         }),
@@ -3181,6 +3362,119 @@ fn run_flockfish_subgroup_import(command: FlockfishSubgroupImportCommand) -> Res
     Ok(())
 }
 
+fn run_community_subgroup_overlay_import(
+    command: CommunitySubgroupOverlayImportCommand,
+) -> Result<()> {
+    let CommunitySubgroupOverlayImportCommand {
+        dolt_repo,
+        subgroups_xlsx,
+        sheet,
+        source_id,
+        source_label,
+        output_dir,
+        emit_only,
+        activate,
+        commit,
+        commit_msg,
+    } = command;
+
+    validate_import_source_id(&source_id)?;
+    if source_label.trim().is_empty() {
+        bail!("--source-label cannot be empty");
+    }
+    if emit_only && activate {
+        bail!("--emit-only cannot be combined with --activate");
+    }
+    if emit_only && commit {
+        bail!("--emit-only cannot be combined with --commit");
+    }
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    let workbook_sha = sha256_file(&subgroups_xlsx)?;
+    let outputs = CommunitySubgroupOverlayOutputs {
+        overlay_csv: output_dir.join("community_item_sub_group_overlay.csv"),
+        unresolved_csv: output_dir.join("community_item_sub_group_unresolved_overlay.csv"),
+    };
+    let stats = import_community_subgroup_overlay_sheet(
+        &subgroups_xlsx,
+        &workbook_sha,
+        &sheet,
+        &source_id,
+        &source_label,
+        &outputs.overlay_csv,
+        &outputs.unresolved_csv,
+    )?;
+
+    if !emit_only {
+        replace_community_subgroup_overlay_source(
+            &dolt_repo,
+            &source_id,
+            &outputs.overlay_csv,
+            &outputs.unresolved_csv,
+        )?;
+        if activate {
+            activate_community_subgroup_overlay_source(
+                &dolt_repo,
+                &source_id,
+                &source_label,
+                &workbook_sha,
+            )?;
+        }
+
+        if commit {
+            let msg = match commit_msg {
+                Some(msg) => format!("{msg} (CommunitySubgroups={workbook_sha})"),
+                None => {
+                    format!("Import community subgroup overlay (CommunitySubgroups={workbook_sha})")
+                }
+            };
+            run_dolt_commit(&dolt_repo, &msg)?;
+        }
+    }
+
+    println!(
+        "community subgroup overlay rows emitted: {}",
+        stats.row_count
+    );
+    println!("community subgroup active rows: {}", stats.active_rows);
+    println!("community subgroup removed rows: {}", stats.removed_rows);
+    println!("community subgroup added rows: {}", stats.added_rows);
+    println!("community subgroup note rows skipped: {}", stats.note_rows);
+    println!(
+        "community subgroup unresolved rows preserved: {}",
+        stats.unresolved_rows
+    );
+    println!(
+        "community subgroup unresolved symbolic key rows: {}",
+        stats.unresolved_symbolic_key_rows
+    );
+    println!(
+        "community subgroup unresolved missing item-key rows: {}",
+        stats.unresolved_missing_item_key_rows
+    );
+    println!("community subgroup source id: {source_id}");
+    println!("community subgroup workbook sha256: {workbook_sha}");
+    println!("output overlay csv: {}", outputs.overlay_csv.display());
+    println!(
+        "output unresolved overlay csv: {}",
+        outputs.unresolved_csv.display()
+    );
+    if emit_only {
+        println!("emit only: Dolt import skipped");
+    }
+    if activate {
+        println!("activated community subgroup overlay source: {source_id}");
+    }
+
+    Ok(())
+}
+
 fn import_flockfish_group_tables(
     workbook_xlsx: &Path,
     workbook_sha: &str,
@@ -3413,6 +3707,815 @@ fn ensure_flockfish_zone_group_slots_table(dolt_repo: &Path) -> Result<()> {
         );",
         "ensure flockfish_zone_group_slots table",
     )
+}
+
+fn import_community_subgroup_overlay_sheet(
+    workbook_xlsx: &Path,
+    workbook_sha: &str,
+    sheet_name: &str,
+    source_id: &str,
+    source_label: &str,
+    output_csv: &Path,
+    unresolved_csv: &Path,
+) -> Result<CommunitySubgroupOverlayImport> {
+    let range = read_sheet(workbook_xlsx, sheet_name)?;
+    let rows = range.rows().collect::<Vec<_>>();
+    if rows.is_empty() {
+        bail!("{}:{sheet_name} has no rows", workbook_xlsx.display());
+    }
+    validate_community_subgroup_overlay_headers(rows[0], workbook_xlsx, sheet_name)?;
+
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(COMMUNITY_SUBGROUP_OVERLAY_HEADERS)?;
+    let mut unresolved_writer = build_csv_writer(unresolved_csv)?;
+    unresolved_writer.write_record(COMMUNITY_SUBGROUP_UNRESOLVED_HEADERS)?;
+
+    let mut seen_keys = BTreeSet::<(i64, i64, i64)>::new();
+    let mut row_count = 0usize;
+    let mut active_rows = 0usize;
+    let mut removed_rows = 0usize;
+    let mut added_rows = 0usize;
+    let mut note_rows = 0usize;
+    let mut unresolved_rows = 0usize;
+    let mut unresolved_symbolic_key_rows = 0usize;
+    let mut unresolved_missing_item_key_rows = 0usize;
+
+    for (idx, row) in rows.into_iter().enumerate().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+        let first_cell = cell_to_source_string_opt(row.get(COMMUNITY_SUBGROUP_KEY_COL));
+        if first_cell.as_deref() == Some("<Note>") {
+            note_rows += 1;
+            continue;
+        }
+        let item_sub_group_key = cell_to_i64_import_key_opt(row.get(COMMUNITY_SUBGROUP_KEY_COL))?;
+        let Some(item_sub_group_key) = item_sub_group_key.filter(|value| *value > 0) else {
+            if row_has_community_subgroup_unresolved_payload(row) {
+                let source_item_key =
+                    cell_to_i64_import_key_opt(row.get(COMMUNITY_SUBGROUP_ITEM_COL))?;
+                let reason = if source_item_key.filter(|value| *value > 0).is_some() {
+                    unresolved_symbolic_key_rows += 1;
+                    "symbolic_subgroup_key"
+                } else {
+                    "unresolved_subgroup_key"
+                };
+                let source_removed = cell_to_bool_flag(row.get(COMMUNITY_SUBGROUP_REMOVED_COL))?;
+                let source_added = cell_to_bool_flag(row.get(COMMUNITY_SUBGROUP_ADDED_COL))?;
+                unresolved_writer.write_record(build_community_subgroup_unresolved_record(
+                    row,
+                    source_id,
+                    source_label,
+                    workbook_sha,
+                    sheet_name,
+                    idx + 1,
+                    reason,
+                    source_removed,
+                    source_added,
+                )?)?;
+                unresolved_rows += 1;
+            }
+            continue;
+        };
+        let Some(item_key) = cell_to_i64_import_key_opt(row.get(COMMUNITY_SUBGROUP_ITEM_COL))?
+            .filter(|value| *value > 0)
+        else {
+            if row_has_community_subgroup_unresolved_payload(row) {
+                unresolved_missing_item_key_rows += 1;
+                let source_removed = cell_to_bool_flag(row.get(COMMUNITY_SUBGROUP_REMOVED_COL))?;
+                let source_added = cell_to_bool_flag(row.get(COMMUNITY_SUBGROUP_ADDED_COL))?;
+                unresolved_writer.write_record(build_community_subgroup_unresolved_record(
+                    row,
+                    source_id,
+                    source_label,
+                    workbook_sha,
+                    sheet_name,
+                    idx + 1,
+                    "missing_item_key",
+                    source_removed,
+                    source_added,
+                )?)?;
+                unresolved_rows += 1;
+            }
+            continue;
+        };
+        let enchant_level = cell_to_i64_opt(row.get(COMMUNITY_SUBGROUP_ENCHANT_COL))?.unwrap_or(0);
+        let key = (item_sub_group_key, item_key, enchant_level);
+        if !seen_keys.insert(key) {
+            bail!(
+                "duplicate community subgroup overlay key in {}:{sheet_name}: ItemSubGroupKey={} ItemKey={} EnchantLevel={}",
+                workbook_xlsx.display(),
+                item_sub_group_key,
+                item_key,
+                enchant_level
+            );
+        }
+
+        let source_removed = cell_to_bool_flag(row.get(COMMUNITY_SUBGROUP_REMOVED_COL))?;
+        let source_added = cell_to_bool_flag(row.get(COMMUNITY_SUBGROUP_ADDED_COL))?;
+        let record = build_community_subgroup_overlay_record(
+            row,
+            source_id,
+            source_label,
+            workbook_sha,
+            sheet_name,
+            idx + 1,
+            source_removed,
+            source_added,
+        )?;
+        writer.write_record(record)?;
+        row_count += 1;
+        if source_removed {
+            removed_rows += 1;
+        } else {
+            active_rows += 1;
+        }
+        if source_added {
+            added_rows += 1;
+        }
+    }
+
+    writer.flush()?;
+    unresolved_writer.flush()?;
+    Ok(CommunitySubgroupOverlayImport {
+        row_count,
+        active_rows,
+        removed_rows,
+        added_rows,
+        note_rows,
+        unresolved_rows,
+        unresolved_symbolic_key_rows,
+        unresolved_missing_item_key_rows,
+    })
+}
+
+fn build_community_subgroup_overlay_record(
+    row: &[Data],
+    source_id: &str,
+    source_label: &str,
+    workbook_sha: &str,
+    sheet_name: &str,
+    source_row: usize,
+    source_removed: bool,
+    source_added: bool,
+) -> Result<Vec<String>> {
+    let core_cols = [
+        COMMUNITY_SUBGROUP_KEY_COL,
+        COMMUNITY_SUBGROUP_ITEM_COL,
+        COMMUNITY_SUBGROUP_ENCHANT_COL,
+        COMMUNITY_SUBGROUP_DO_PET_COL,
+        COMMUNITY_SUBGROUP_DO_SECHI_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_0_COL,
+        COMMUNITY_SUBGROUP_MIN_COUNT_0_COL,
+        COMMUNITY_SUBGROUP_MAX_COUNT_0_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_1_COL,
+        COMMUNITY_SUBGROUP_MIN_COUNT_1_COL,
+        COMMUNITY_SUBGROUP_MAX_COUNT_1_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_2_COL,
+        COMMUNITY_SUBGROUP_MIN_COUNT_2_COL,
+        COMMUNITY_SUBGROUP_MAX_COUNT_2_COL,
+        COMMUNITY_SUBGROUP_INTIMACY_VARIATION_COL,
+        COMMUNITY_SUBGROUP_EXPLORATION_POINT_COL,
+        COMMUNITY_SUBGROUP_APPLY_RANDOM_PRICE_COL,
+        COMMUNITY_SUBGROUP_RENT_TIME_COL,
+        COMMUNITY_SUBGROUP_PRICE_OPTION_COL,
+    ];
+
+    let mut record = vec![
+        source_id.to_string(),
+        source_label.to_string(),
+        workbook_sha.to_string(),
+        sheet_name.to_string(),
+        source_row.to_string(),
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_SPOTTED_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_COMMENT_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_TABLE_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_GRADE_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_ITEM_NAME_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_FOR_HUMANS_COL))?,
+        bool_flag_to_string(source_removed).to_string(),
+        bool_flag_to_string(source_added).to_string(),
+    ];
+    for col in core_cols {
+        let value = normalized_optional_cell(row.get(col))?;
+        record.push(normalize_flockfish_numeric_literal(&value));
+    }
+    Ok(record)
+}
+
+fn build_community_subgroup_unresolved_record(
+    row: &[Data],
+    source_id: &str,
+    source_label: &str,
+    workbook_sha: &str,
+    sheet_name: &str,
+    source_row: usize,
+    source_reason: &str,
+    source_removed: bool,
+    source_added: bool,
+) -> Result<Vec<String>> {
+    let raw_cols = [
+        COMMUNITY_SUBGROUP_DO_PET_COL,
+        COMMUNITY_SUBGROUP_DO_SECHI_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_0_COL,
+        COMMUNITY_SUBGROUP_MIN_COUNT_0_COL,
+        COMMUNITY_SUBGROUP_MAX_COUNT_0_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_1_COL,
+        COMMUNITY_SUBGROUP_MIN_COUNT_1_COL,
+        COMMUNITY_SUBGROUP_MAX_COUNT_1_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_2_COL,
+        COMMUNITY_SUBGROUP_MIN_COUNT_2_COL,
+        COMMUNITY_SUBGROUP_MAX_COUNT_2_COL,
+        COMMUNITY_SUBGROUP_INTIMACY_VARIATION_COL,
+        COMMUNITY_SUBGROUP_EXPLORATION_POINT_COL,
+        COMMUNITY_SUBGROUP_APPLY_RANDOM_PRICE_COL,
+        COMMUNITY_SUBGROUP_RENT_TIME_COL,
+        COMMUNITY_SUBGROUP_PRICE_OPTION_COL,
+    ];
+
+    let mut record = vec![
+        source_id.to_string(),
+        source_label.to_string(),
+        workbook_sha.to_string(),
+        sheet_name.to_string(),
+        source_row.to_string(),
+        source_reason.to_string(),
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_KEY_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_ITEM_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_ENCHANT_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_SPOTTED_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_COMMENT_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_TABLE_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_GRADE_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_ITEM_NAME_COL))?,
+        normalized_optional_source_cell(row.get(COMMUNITY_SUBGROUP_FOR_HUMANS_COL))?,
+        bool_flag_to_string(source_removed).to_string(),
+        bool_flag_to_string(source_added).to_string(),
+    ];
+    for col in raw_cols {
+        record.push(normalized_optional_source_cell(row.get(col))?);
+    }
+    Ok(record)
+}
+
+fn row_has_community_subgroup_unresolved_payload(row: &[Data]) -> bool {
+    [
+        COMMUNITY_SUBGROUP_KEY_COL,
+        COMMUNITY_SUBGROUP_ITEM_COL,
+        COMMUNITY_SUBGROUP_GRADE_COL,
+        COMMUNITY_SUBGROUP_ITEM_NAME_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_0_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_1_COL,
+        COMMUNITY_SUBGROUP_SELECT_RATE_2_COL,
+    ]
+    .iter()
+    .any(|col| cell_to_source_string_opt(row.get(*col)).is_some())
+}
+
+fn validate_community_subgroup_overlay_headers(
+    row: &[Data],
+    workbook_xlsx: &Path,
+    sheet_name: &str,
+) -> Result<()> {
+    let headers: Vec<String> = row.iter().map(header_cell_to_string).collect();
+    let expected = [
+        (COMMUNITY_SUBGROUP_KEY_COL, "ItemSubGroupKey"),
+        (COMMUNITY_SUBGROUP_ITEM_COL, "%ItemKey"),
+        (COMMUNITY_SUBGROUP_SPOTTED_COL, "spotted(auto)"),
+        (COMMUNITY_SUBGROUP_COMMENT_COL, "comment"),
+        (COMMUNITY_SUBGROUP_TABLE_COL, "table"),
+        (COMMUNITY_SUBGROUP_REMOVED_COL, "removed"),
+        (COMMUNITY_SUBGROUP_ADDED_COL, "added"),
+        (COMMUNITY_SUBGROUP_ENCHANT_COL, "%EnchantLevel"),
+        (COMMUNITY_SUBGROUP_DO_PET_COL, "DoPetAddDrop"),
+        (COMMUNITY_SUBGROUP_DO_SECHI_COL, "DoSechiAddDrop"),
+        (COMMUNITY_SUBGROUP_FOR_HUMANS_COL, "for humans"),
+        (COMMUNITY_SUBGROUP_SELECT_RATE_0_COL, "%SelectRate_0"),
+        (COMMUNITY_SUBGROUP_MIN_COUNT_0_COL, "%MinCount_0"),
+        (COMMUNITY_SUBGROUP_MAX_COUNT_0_COL, "%MaxCount_0"),
+        (COMMUNITY_SUBGROUP_SELECT_RATE_1_COL, "%SelectRate_1"),
+        (COMMUNITY_SUBGROUP_MIN_COUNT_1_COL, "%MinCount_1"),
+        (COMMUNITY_SUBGROUP_MAX_COUNT_1_COL, "%MaxCount_1"),
+        (COMMUNITY_SUBGROUP_SELECT_RATE_2_COL, "%SelectRate_2"),
+        (COMMUNITY_SUBGROUP_MIN_COUNT_2_COL, "%MinCount_2"),
+        (COMMUNITY_SUBGROUP_MAX_COUNT_2_COL, "%MaxCount_2"),
+        (
+            COMMUNITY_SUBGROUP_INTIMACY_VARIATION_COL,
+            "IntimacyVariation",
+        ),
+        (COMMUNITY_SUBGROUP_EXPLORATION_POINT_COL, "ExplorationPoint"),
+        (
+            COMMUNITY_SUBGROUP_APPLY_RANDOM_PRICE_COL,
+            "ApplyRandomPrice",
+        ),
+        (COMMUNITY_SUBGROUP_RENT_TIME_COL, "RentTime"),
+        (COMMUNITY_SUBGROUP_PRICE_OPTION_COL, "PriceOption"),
+    ];
+    for (idx, expected_value) in expected {
+        let actual = headers.get(idx).map(|value| value.trim()).unwrap_or("");
+        if actual != expected_value {
+            bail!(
+                "unexpected community subgroup overlay workbook header in {}:{sheet_name} at column {}. expected '{}' got '{}'",
+                workbook_xlsx.display(),
+                idx,
+                expected_value,
+                actual
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_import_source_id(source_id: &str) -> Result<()> {
+    if source_id.is_empty() {
+        bail!("--source-id cannot be empty");
+    }
+    if source_id.len() > 64 {
+        bail!("--source-id must be at most 64 bytes");
+    }
+    if !source_id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
+    {
+        bail!("--source-id may only contain ASCII letters, numbers, '_' and '-'");
+    }
+    Ok(())
+}
+
+fn normalized_optional_cell(cell: Option<&Data>) -> Result<String> {
+    Ok(cell_to_string_opt(cell)?.unwrap_or_default())
+}
+
+fn normalized_optional_source_cell(cell: Option<&Data>) -> Result<String> {
+    Ok(cell_to_source_string_opt(cell).unwrap_or_default())
+}
+
+fn cell_to_source_string_opt(cell: Option<&Data>) -> Option<String> {
+    let cell = cell?;
+    match cell {
+        Data::Empty => None,
+        Data::String(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || is_null_marker(trimmed) {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Data::DateTimeIso(value) | Data::DurationIso(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || is_null_marker(trimmed) {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Data::Float(value) => Some(format_float(*value)),
+        Data::Int(value) => Some(value.to_string()),
+        Data::Bool(value) => Some(if *value { "1" } else { "0" }.to_string()),
+        Data::DateTime(value) => Some(format_float(value.as_f64())),
+        Data::Error(err) => Some(err.to_string()),
+    }
+}
+
+fn cell_to_i64_import_key_opt(cell: Option<&Data>) -> Result<Option<i64>> {
+    match cell {
+        Some(Data::String(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || is_null_marker(trimmed) {
+                return Ok(None);
+            }
+            Ok(trimmed.parse::<i64>().ok())
+        }
+        Some(Data::Error(_)) => Ok(None),
+        _ => cell_to_i64_opt(cell),
+    }
+}
+
+fn cell_to_bool_flag(cell: Option<&Data>) -> Result<bool> {
+    let Some(value) = cell_to_string_opt(cell)? else {
+        return Ok(false);
+    };
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" => Ok(false),
+        "1" | "true" | "yes" => Ok(true),
+        other => bail!("expected boolean flag, got {other}"),
+    }
+}
+
+fn bool_flag_to_string(value: bool) -> &'static str {
+    if value {
+        "1"
+    } else {
+        "0"
+    }
+}
+
+fn replace_community_subgroup_overlay_source(
+    dolt_repo: &Path,
+    source_id: &str,
+    overlay_csv: &Path,
+    unresolved_csv: &Path,
+) -> Result<()> {
+    ensure_community_subgroup_overlay_table(dolt_repo)?;
+    ensure_community_subgroup_unresolved_table(dolt_repo)?;
+    prepare_community_subgroup_overlay_import_table(dolt_repo)?;
+    run_dolt_sql_table_import_or_remote(
+        dolt_repo,
+        COMMUNITY_SUBGROUP_OVERLAY_IMPORT_TABLE,
+        overlay_csv,
+    )?;
+    prepare_community_subgroup_unresolved_import_table(dolt_repo)?;
+    run_dolt_sql_table_import_or_remote(
+        dolt_repo,
+        COMMUNITY_SUBGROUP_UNRESOLVED_IMPORT_TABLE,
+        unresolved_csv,
+    )?;
+
+    let columns = COMMUNITY_SUBGROUP_OVERLAY_HEADERS
+        .iter()
+        .map(|header| sql_ident(header))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let select_columns = community_subgroup_overlay_staging_select_columns().join(", ");
+    let query = format!(
+        "DELETE FROM {target} WHERE `source_id` = {source_id};\
+         INSERT INTO {target} ({columns}) SELECT {select_columns} FROM {staging};\
+         DROP TABLE {staging};",
+        target = sql_ident(COMMUNITY_SUBGROUP_OVERLAY_TABLE),
+        staging = sql_ident(COMMUNITY_SUBGROUP_OVERLAY_IMPORT_TABLE),
+        source_id = sql_value(source_id),
+        columns = columns,
+        select_columns = select_columns,
+    );
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        &query,
+        "replace community item subgroup overlay source",
+    )?;
+
+    let unresolved_columns = COMMUNITY_SUBGROUP_UNRESOLVED_HEADERS
+        .iter()
+        .map(|header| sql_ident(header))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let unresolved_select_columns =
+        community_subgroup_unresolved_staging_select_columns().join(", ");
+    let unresolved_query = format!(
+        "DELETE FROM {target} WHERE `source_id` = {source_id};\
+         INSERT INTO {target} ({columns}) SELECT {select_columns} FROM {staging};\
+         DROP TABLE {staging};",
+        target = sql_ident(COMMUNITY_SUBGROUP_UNRESOLVED_TABLE),
+        staging = sql_ident(COMMUNITY_SUBGROUP_UNRESOLVED_IMPORT_TABLE),
+        source_id = sql_value(source_id),
+        columns = unresolved_columns,
+        select_columns = unresolved_select_columns,
+    );
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        &unresolved_query,
+        "replace community item subgroup unresolved overlay source",
+    )
+}
+
+fn community_subgroup_overlay_staging_select_columns() -> Vec<&'static str> {
+    vec![
+        "`source_id`",
+        "`source_label`",
+        "`source_sha256`",
+        "`source_sheet`",
+        "CAST(`source_row` AS UNSIGNED)",
+        "NULLIF(`source_spotted_auto`, '')",
+        "NULLIF(`source_comment`, '')",
+        "NULLIF(`source_table`, '')",
+        "NULLIF(`source_grade`, '')",
+        "NULLIF(`source_item_name`, '')",
+        "NULLIF(`source_for_humans`, '')",
+        "CAST(`source_removed` AS UNSIGNED)",
+        "CAST(`source_added` AS UNSIGNED)",
+        "CAST(`ItemSubGroupKey` AS SIGNED)",
+        "CAST(`ItemKey` AS SIGNED)",
+        "CAST(`EnchantLevel` AS SIGNED)",
+        "CAST(NULLIF(`DoPetAddDrop`, '') AS SIGNED)",
+        "CAST(NULLIF(`DoSechiAddDrop`, '') AS SIGNED)",
+        "CAST(NULLIF(`SelectRate_0`, '') AS SIGNED)",
+        "CAST(NULLIF(`MinCount_0`, '') AS SIGNED)",
+        "CAST(NULLIF(`MaxCount_0`, '') AS SIGNED)",
+        "CAST(NULLIF(`SelectRate_1`, '') AS SIGNED)",
+        "CAST(NULLIF(`MinCount_1`, '') AS SIGNED)",
+        "CAST(NULLIF(`MaxCount_1`, '') AS SIGNED)",
+        "CAST(NULLIF(`SelectRate_2`, '') AS SIGNED)",
+        "CAST(NULLIF(`MinCount_2`, '') AS SIGNED)",
+        "CAST(NULLIF(`MaxCount_2`, '') AS SIGNED)",
+        "CAST(NULLIF(`IntimacyVariation`, '') AS SIGNED)",
+        "CAST(NULLIF(`ExplorationPoint`, '') AS SIGNED)",
+        "CAST(NULLIF(`ApplyRandomPrice`, '') AS SIGNED)",
+        "CAST(NULLIF(`RentTime`, '') AS SIGNED)",
+        "CAST(NULLIF(`PriceOption`, '') AS SIGNED)",
+    ]
+}
+
+fn community_subgroup_unresolved_staging_select_columns() -> Vec<&'static str> {
+    vec![
+        "`source_id`",
+        "`source_label`",
+        "`source_sha256`",
+        "`source_sheet`",
+        "CAST(`source_row` AS UNSIGNED)",
+        "`source_reason`",
+        "NULLIF(`source_item_sub_group_key_raw`, '')",
+        "NULLIF(`source_item_key_raw`, '')",
+        "NULLIF(`source_enchant_level_raw`, '')",
+        "NULLIF(`source_spotted_auto`, '')",
+        "NULLIF(`source_comment`, '')",
+        "NULLIF(`source_table`, '')",
+        "NULLIF(`source_grade`, '')",
+        "NULLIF(`source_item_name`, '')",
+        "NULLIF(`source_for_humans`, '')",
+        "CAST(`source_removed` AS UNSIGNED)",
+        "CAST(`source_added` AS UNSIGNED)",
+        "NULLIF(`DoPetAddDrop_raw`, '')",
+        "NULLIF(`DoSechiAddDrop_raw`, '')",
+        "NULLIF(`SelectRate_0_raw`, '')",
+        "NULLIF(`MinCount_0_raw`, '')",
+        "NULLIF(`MaxCount_0_raw`, '')",
+        "NULLIF(`SelectRate_1_raw`, '')",
+        "NULLIF(`MinCount_1_raw`, '')",
+        "NULLIF(`MaxCount_1_raw`, '')",
+        "NULLIF(`SelectRate_2_raw`, '')",
+        "NULLIF(`MinCount_2_raw`, '')",
+        "NULLIF(`MaxCount_2_raw`, '')",
+        "NULLIF(`IntimacyVariation_raw`, '')",
+        "NULLIF(`ExplorationPoint_raw`, '')",
+        "NULLIF(`ApplyRandomPrice_raw`, '')",
+        "NULLIF(`RentTime_raw`, '')",
+        "NULLIF(`PriceOption_raw`, '')",
+    ]
+}
+
+fn prepare_community_subgroup_overlay_import_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "DROP TABLE IF EXISTS `community_item_sub_group_overlay_import`;\
+         CREATE TABLE `community_item_sub_group_overlay_import` (\
+            `source_id` VARCHAR(64) NULL,\
+            `source_label` VARCHAR(255) NULL,\
+            `source_sha256` CHAR(64) NULL,\
+            `source_sheet` VARCHAR(128) NULL,\
+            `source_row` VARCHAR(32) NULL,\
+            `source_spotted_auto` VARCHAR(255) NULL,\
+            `source_comment` TEXT NULL,\
+            `source_table` VARCHAR(64) NULL,\
+            `source_grade` VARCHAR(16) NULL,\
+            `source_item_name` VARCHAR(255) NULL,\
+            `source_for_humans` VARCHAR(255) NULL,\
+            `source_removed` VARCHAR(8) NULL,\
+            `source_added` VARCHAR(8) NULL,\
+            `ItemSubGroupKey` VARCHAR(32) NULL,\
+            `ItemKey` VARCHAR(32) NULL,\
+            `EnchantLevel` VARCHAR(32) NULL,\
+            `DoPetAddDrop` VARCHAR(32) NULL,\
+            `DoSechiAddDrop` VARCHAR(32) NULL,\
+            `SelectRate_0` VARCHAR(32) NULL,\
+            `MinCount_0` VARCHAR(32) NULL,\
+            `MaxCount_0` VARCHAR(32) NULL,\
+            `SelectRate_1` VARCHAR(32) NULL,\
+            `MinCount_1` VARCHAR(32) NULL,\
+            `MaxCount_1` VARCHAR(32) NULL,\
+            `SelectRate_2` VARCHAR(32) NULL,\
+            `MinCount_2` VARCHAR(32) NULL,\
+            `MaxCount_2` VARCHAR(32) NULL,\
+            `IntimacyVariation` VARCHAR(32) NULL,\
+            `ExplorationPoint` VARCHAR(32) NULL,\
+            `ApplyRandomPrice` VARCHAR(32) NULL,\
+            `RentTime` VARCHAR(32) NULL,\
+            `PriceOption` VARCHAR(32) NULL\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "prepare community item subgroup overlay import table",
+    )
+}
+
+fn prepare_community_subgroup_unresolved_import_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "DROP TABLE IF EXISTS `community_item_sub_group_unresolved_overlay_import`;\
+         CREATE TABLE `community_item_sub_group_unresolved_overlay_import` (\
+            `source_id` VARCHAR(64) NULL,\
+            `source_label` VARCHAR(255) NULL,\
+            `source_sha256` CHAR(64) NULL,\
+            `source_sheet` VARCHAR(128) NULL,\
+            `source_row` VARCHAR(32) NULL,\
+            `source_reason` VARCHAR(64) NULL,\
+            `source_item_sub_group_key_raw` VARCHAR(255) NULL,\
+            `source_item_key_raw` VARCHAR(255) NULL,\
+            `source_enchant_level_raw` VARCHAR(255) NULL,\
+            `source_spotted_auto` VARCHAR(255) NULL,\
+            `source_comment` TEXT NULL,\
+            `source_table` VARCHAR(64) NULL,\
+            `source_grade` VARCHAR(16) NULL,\
+            `source_item_name` VARCHAR(255) NULL,\
+            `source_for_humans` VARCHAR(255) NULL,\
+            `source_removed` VARCHAR(8) NULL,\
+            `source_added` VARCHAR(8) NULL,\
+            `DoPetAddDrop_raw` VARCHAR(255) NULL,\
+            `DoSechiAddDrop_raw` VARCHAR(255) NULL,\
+            `SelectRate_0_raw` VARCHAR(255) NULL,\
+            `MinCount_0_raw` VARCHAR(255) NULL,\
+            `MaxCount_0_raw` VARCHAR(255) NULL,\
+            `SelectRate_1_raw` VARCHAR(255) NULL,\
+            `MinCount_1_raw` VARCHAR(255) NULL,\
+            `MaxCount_1_raw` VARCHAR(255) NULL,\
+            `SelectRate_2_raw` VARCHAR(255) NULL,\
+            `MinCount_2_raw` VARCHAR(255) NULL,\
+            `MaxCount_2_raw` VARCHAR(255) NULL,\
+            `IntimacyVariation_raw` VARCHAR(255) NULL,\
+            `ExplorationPoint_raw` VARCHAR(255) NULL,\
+            `ApplyRandomPrice_raw` VARCHAR(255) NULL,\
+            `RentTime_raw` VARCHAR(255) NULL,\
+            `PriceOption_raw` VARCHAR(255) NULL\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "prepare community item subgroup unresolved overlay import table",
+    )
+}
+
+fn ensure_community_subgroup_overlay_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `community_item_sub_group_overlay` (\
+            `source_id` VARCHAR(64) NOT NULL,\
+            `source_label` VARCHAR(255) NOT NULL,\
+            `source_sha256` CHAR(64) NOT NULL,\
+            `source_sheet` VARCHAR(128) NOT NULL,\
+            `source_row` INT UNSIGNED NOT NULL,\
+            `source_spotted_auto` VARCHAR(255) NULL,\
+            `source_comment` TEXT NULL,\
+            `source_table` VARCHAR(64) NULL,\
+            `source_grade` VARCHAR(16) NULL,\
+            `source_item_name` VARCHAR(255) NULL,\
+            `source_for_humans` VARCHAR(255) NULL,\
+            `source_removed` TINYINT NOT NULL DEFAULT 0,\
+            `source_added` TINYINT NOT NULL DEFAULT 0,\
+            `ItemSubGroupKey` BIGINT NOT NULL,\
+            `ItemKey` BIGINT NOT NULL,\
+            `EnchantLevel` INT NOT NULL,\
+            `DoPetAddDrop` TINYINT NULL,\
+            `DoSechiAddDrop` TINYINT NULL,\
+            `SelectRate_0` BIGINT NULL,\
+            `MinCount_0` INT NULL,\
+            `MaxCount_0` INT NULL,\
+            `SelectRate_1` BIGINT NULL,\
+            `MinCount_1` INT NULL,\
+            `MaxCount_1` INT NULL,\
+            `SelectRate_2` BIGINT NULL,\
+            `MinCount_2` INT NULL,\
+            `MaxCount_2` INT NULL,\
+            `IntimacyVariation` INT NULL,\
+            `ExplorationPoint` INT NULL,\
+            `ApplyRandomPrice` TINYINT NULL,\
+            `RentTime` INT NULL,\
+            `PriceOption` INT NULL,\
+            PRIMARY KEY (`source_id`, `ItemSubGroupKey`, `ItemKey`, `EnchantLevel`),\
+            KEY `idx_community_subgroup_overlay_key` (`ItemSubGroupKey`, `ItemKey`, `EnchantLevel`),\
+            KEY `idx_community_subgroup_overlay_source_flags` (`source_id`, `source_removed`, `source_added`)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "ensure community item subgroup overlay table",
+    )
+}
+
+fn ensure_community_subgroup_unresolved_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `community_item_sub_group_unresolved_overlay` (\
+            `source_id` VARCHAR(64) NOT NULL,\
+            `source_label` VARCHAR(255) NOT NULL,\
+            `source_sha256` CHAR(64) NOT NULL,\
+            `source_sheet` VARCHAR(128) NOT NULL,\
+            `source_row` INT UNSIGNED NOT NULL,\
+            `source_reason` VARCHAR(64) NOT NULL,\
+            `source_item_sub_group_key_raw` VARCHAR(255) NULL,\
+            `source_item_key_raw` VARCHAR(255) NULL,\
+            `source_enchant_level_raw` VARCHAR(255) NULL,\
+            `source_spotted_auto` VARCHAR(255) NULL,\
+            `source_comment` TEXT NULL,\
+            `source_table` VARCHAR(64) NULL,\
+            `source_grade` VARCHAR(16) NULL,\
+            `source_item_name` VARCHAR(255) NULL,\
+            `source_for_humans` VARCHAR(255) NULL,\
+            `source_removed` TINYINT NOT NULL DEFAULT 0,\
+            `source_added` TINYINT NOT NULL DEFAULT 0,\
+            `DoPetAddDrop_raw` VARCHAR(255) NULL,\
+            `DoSechiAddDrop_raw` VARCHAR(255) NULL,\
+            `SelectRate_0_raw` VARCHAR(255) NULL,\
+            `MinCount_0_raw` VARCHAR(255) NULL,\
+            `MaxCount_0_raw` VARCHAR(255) NULL,\
+            `SelectRate_1_raw` VARCHAR(255) NULL,\
+            `MinCount_1_raw` VARCHAR(255) NULL,\
+            `MaxCount_1_raw` VARCHAR(255) NULL,\
+            `SelectRate_2_raw` VARCHAR(255) NULL,\
+            `MinCount_2_raw` VARCHAR(255) NULL,\
+            `MaxCount_2_raw` VARCHAR(255) NULL,\
+            `IntimacyVariation_raw` VARCHAR(255) NULL,\
+            `ExplorationPoint_raw` VARCHAR(255) NULL,\
+            `ApplyRandomPrice_raw` VARCHAR(255) NULL,\
+            `RentTime_raw` VARCHAR(255) NULL,\
+            `PriceOption_raw` VARCHAR(255) NULL,\
+            PRIMARY KEY (`source_id`, `source_sheet`, `source_row`),\
+            KEY `idx_community_subgroup_unresolved_reason` (`source_id`, `source_reason`)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "ensure community item subgroup unresolved overlay table",
+    )
+}
+
+fn activate_community_subgroup_overlay_source(
+    dolt_repo: &Path,
+    source_id: &str,
+    source_label: &str,
+    source_sha256: &str,
+) -> Result<()> {
+    ensure_community_subgroup_overlay_table(dolt_repo)?;
+    ensure_community_active_overlays_table(dolt_repo)?;
+    let query = format!(
+        "DELETE FROM {table} WHERE `overlay_kind` = {overlay_kind};\
+         INSERT INTO {table} (`overlay_kind`, `source_id`, `source_label`, `source_sha256`) \
+         VALUES ({overlay_kind}, {source_id}, {source_label}, {source_sha256});",
+        table = sql_ident(COMMUNITY_ACTIVE_OVERLAYS_TABLE),
+        overlay_kind = sql_value(COMMUNITY_SUBGROUP_OVERLAY_KIND),
+        source_id = sql_value(source_id),
+        source_label = sql_value(source_label),
+        source_sha256 = sql_value(source_sha256),
+    );
+    run_dolt_sql_query_or_remote(dolt_repo, &query, "activate community subgroup overlay")?;
+    replace_item_sub_group_effective_views(dolt_repo)
+}
+
+fn ensure_community_active_overlays_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `community_active_overlays` (\
+            `overlay_kind` VARCHAR(64) NOT NULL,\
+            `source_id` VARCHAR(64) NOT NULL,\
+            `source_label` VARCHAR(255) NOT NULL,\
+            `source_sha256` CHAR(64) NOT NULL,\
+            PRIMARY KEY (`overlay_kind`)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "ensure community active overlays table",
+    )
+}
+
+fn replace_item_sub_group_effective_views(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        &item_sub_group_effective_views_query(),
+        "replace item subgroup effective views",
+    )
+}
+
+fn item_sub_group_effective_views_query() -> String {
+    "DROP VIEW IF EXISTS `item_sub_group_item_variants`;\
+     DROP VIEW IF EXISTS `item_sub_group_effective_table`;\
+     CREATE VIEW `item_sub_group_effective_table` AS \
+     SELECT \
+       base.`ItemSubGroupKey`, base.`ItemKey`, base.`EnchantLevel`, \
+       base.`DoPetAddDrop`, base.`DoSechiAddDrop`, \
+       base.`SelectRate_0`, base.`MinCount_0`, base.`MaxCount_0`, \
+       base.`SelectRate_1`, base.`MinCount_1`, base.`MaxCount_1`, \
+       base.`SelectRate_2`, base.`MinCount_2`, base.`MaxCount_2`, \
+       base.`IntimacyVariation`, base.`ExplorationPoint`, \
+       base.`ApplyRandomPrice`, base.`RentTime`, base.`PriceOption` \
+     FROM `item_sub_group_table` base \
+     LEFT JOIN `community_active_overlays` active \
+       ON active.`overlay_kind` = 'item_sub_group' \
+     LEFT JOIN `community_item_sub_group_overlay` overlay \
+       ON overlay.`source_id` = active.`source_id` \
+      AND overlay.`ItemSubGroupKey` = base.`ItemSubGroupKey` \
+      AND overlay.`ItemKey` = base.`ItemKey` \
+      AND overlay.`EnchantLevel` = base.`EnchantLevel` \
+     WHERE overlay.`source_id` IS NULL \
+     UNION ALL \
+     SELECT \
+       overlay.`ItemSubGroupKey`, overlay.`ItemKey`, overlay.`EnchantLevel`, \
+       overlay.`DoPetAddDrop`, overlay.`DoSechiAddDrop`, \
+       overlay.`SelectRate_0`, overlay.`MinCount_0`, overlay.`MaxCount_0`, \
+       overlay.`SelectRate_1`, overlay.`MinCount_1`, overlay.`MaxCount_1`, \
+       overlay.`SelectRate_2`, overlay.`MinCount_2`, overlay.`MaxCount_2`, \
+       overlay.`IntimacyVariation`, overlay.`ExplorationPoint`, \
+       overlay.`ApplyRandomPrice`, overlay.`RentTime`, overlay.`PriceOption` \
+     FROM `community_item_sub_group_overlay` overlay \
+     JOIN `community_active_overlays` active \
+       ON active.`overlay_kind` = 'item_sub_group' \
+      AND active.`source_id` = overlay.`source_id` \
+     WHERE overlay.`source_removed` = 0;\
+     CREATE VIEW `item_sub_group_item_variants` AS \
+     SELECT ItemSubGroupKey AS item_sub_group_key, ItemKey AS item_key, EnchantLevel AS enchant_level, 0 AS variant_idx, \
+            SelectRate_0 AS select_rate, MinCount_0 AS min_count, MaxCount_0 AS max_count \
+     FROM item_sub_group_effective_table WHERE SelectRate_0 IS NOT NULL AND SelectRate_0 > 0 \
+     UNION ALL \
+     SELECT ItemSubGroupKey, ItemKey, EnchantLevel, 1, SelectRate_1, MinCount_1, MaxCount_1 \
+     FROM item_sub_group_effective_table WHERE SelectRate_1 IS NOT NULL AND SelectRate_1 > 0 \
+     UNION ALL \
+     SELECT ItemSubGroupKey, ItemKey, EnchantLevel, 2, SelectRate_2, MinCount_2, MaxCount_2 \
+     FROM item_sub_group_effective_table WHERE SelectRate_2 IS NOT NULL AND SelectRate_2 > 0;"
+        .to_string()
 }
 
 fn flockfish_drop_label_to_slot_idx(value: &str) -> Option<u8> {
@@ -5021,6 +6124,7 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use calamine::CellErrorType;
 
     fn empty_row(len: usize) -> Vec<Data> {
         vec![Data::Empty; len]
@@ -5165,6 +6269,154 @@ mod tests {
             "test",
         )
         .unwrap();
+    }
+
+    fn community_subgroup_header_row() -> Vec<Data> {
+        let mut row = empty_row(COMMUNITY_SUBGROUP_PRICE_OPTION_COL + 1);
+        let headers = [
+            (COMMUNITY_SUBGROUP_KEY_COL, "ItemSubGroupKey"),
+            (COMMUNITY_SUBGROUP_ITEM_COL, "%ItemKey"),
+            (COMMUNITY_SUBGROUP_SPOTTED_COL, "spotted(auto)"),
+            (COMMUNITY_SUBGROUP_COMMENT_COL, "comment"),
+            (COMMUNITY_SUBGROUP_TABLE_COL, "table"),
+            (COMMUNITY_SUBGROUP_REMOVED_COL, "removed"),
+            (COMMUNITY_SUBGROUP_ADDED_COL, "added"),
+            (COMMUNITY_SUBGROUP_ENCHANT_COL, "%EnchantLevel"),
+            (COMMUNITY_SUBGROUP_DO_PET_COL, "DoPetAddDrop"),
+            (COMMUNITY_SUBGROUP_DO_SECHI_COL, "DoSechiAddDrop"),
+            (COMMUNITY_SUBGROUP_FOR_HUMANS_COL, "for humans"),
+            (COMMUNITY_SUBGROUP_SELECT_RATE_0_COL, "%SelectRate_0"),
+            (COMMUNITY_SUBGROUP_MIN_COUNT_0_COL, "%MinCount_0"),
+            (COMMUNITY_SUBGROUP_MAX_COUNT_0_COL, "%MaxCount_0"),
+            (COMMUNITY_SUBGROUP_SELECT_RATE_1_COL, "%SelectRate_1"),
+            (COMMUNITY_SUBGROUP_MIN_COUNT_1_COL, "%MinCount_1"),
+            (COMMUNITY_SUBGROUP_MAX_COUNT_1_COL, "%MaxCount_1"),
+            (COMMUNITY_SUBGROUP_SELECT_RATE_2_COL, "%SelectRate_2"),
+            (COMMUNITY_SUBGROUP_MIN_COUNT_2_COL, "%MinCount_2"),
+            (COMMUNITY_SUBGROUP_MAX_COUNT_2_COL, "%MaxCount_2"),
+            (
+                COMMUNITY_SUBGROUP_INTIMACY_VARIATION_COL,
+                "IntimacyVariation",
+            ),
+            (COMMUNITY_SUBGROUP_EXPLORATION_POINT_COL, "ExplorationPoint"),
+            (
+                COMMUNITY_SUBGROUP_APPLY_RANDOM_PRICE_COL,
+                "ApplyRandomPrice",
+            ),
+            (COMMUNITY_SUBGROUP_RENT_TIME_COL, "RentTime"),
+            (COMMUNITY_SUBGROUP_PRICE_OPTION_COL, "PriceOption"),
+        ];
+        for (idx, value) in headers {
+            row[idx] = Data::String(value.to_string());
+        }
+        row
+    }
+
+    #[test]
+    fn validate_community_subgroup_overlay_headers_accepts_no_formulas_layout() {
+        let row = community_subgroup_header_row();
+        validate_community_subgroup_overlay_headers(
+            &row,
+            Path::new("Subgroups(no formulas).xlsx"),
+            "no formulas",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn community_subgroup_overlay_record_keeps_source_flags_and_core_columns() {
+        let mut row = empty_row(COMMUNITY_SUBGROUP_PRICE_OPTION_COL + 1);
+        row[COMMUNITY_SUBGROUP_KEY_COL] = Data::Float(10952.0);
+        row[COMMUNITY_SUBGROUP_ITEM_COL] = Data::Float(8245.0);
+        row[COMMUNITY_SUBGROUP_GRADE_COL] = Data::String("g".to_string());
+        row[COMMUNITY_SUBGROUP_ITEM_NAME_COL] = Data::String("Bass".to_string());
+        row[COMMUNITY_SUBGROUP_ADDED_COL] = Data::Bool(true);
+        row[COMMUNITY_SUBGROUP_ENCHANT_COL] = Data::Float(0.0);
+        row[COMMUNITY_SUBGROUP_DO_PET_COL] = Data::Float(0.0);
+        row[COMMUNITY_SUBGROUP_DO_SECHI_COL] = Data::Float(0.0);
+        row[COMMUNITY_SUBGROUP_SELECT_RATE_0_COL] = Data::String("350_000".to_string());
+        row[COMMUNITY_SUBGROUP_MIN_COUNT_0_COL] = Data::Float(1.0);
+        row[COMMUNITY_SUBGROUP_MAX_COUNT_0_COL] = Data::Float(1.0);
+        row[COMMUNITY_SUBGROUP_SELECT_RATE_1_COL] = Data::String("350_000".to_string());
+        row[COMMUNITY_SUBGROUP_MIN_COUNT_1_COL] = Data::Float(1.0);
+        row[COMMUNITY_SUBGROUP_MAX_COUNT_1_COL] = Data::Float(1.0);
+        row[COMMUNITY_SUBGROUP_SELECT_RATE_2_COL] = Data::String("350_000".to_string());
+        row[COMMUNITY_SUBGROUP_MIN_COUNT_2_COL] = Data::Float(1.0);
+        row[COMMUNITY_SUBGROUP_MAX_COUNT_2_COL] = Data::Float(1.0);
+        row[COMMUNITY_SUBGROUP_APPLY_RANDOM_PRICE_COL] = Data::Float(0.0);
+        row[COMMUNITY_SUBGROUP_PRICE_OPTION_COL] = Data::String("1_000_000".to_string());
+
+        let record = build_community_subgroup_overlay_record(
+            &row,
+            "community_subgroups_no_formulas_workbook",
+            "Community workbook",
+            "abc123",
+            "no formulas",
+            42,
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(record[0], "community_subgroups_no_formulas_workbook");
+        assert_eq!(record[4], "42");
+        assert_eq!(record[8], "g");
+        assert_eq!(record[9], "Bass");
+        assert_eq!(record[11], "0");
+        assert_eq!(record[12], "1");
+        assert_eq!(record[13], "10952");
+        assert_eq!(record[14], "8245");
+        assert_eq!(record[18], "350000");
+        assert_eq!(record[31], "1000000");
+    }
+
+    #[test]
+    fn community_subgroup_source_cells_preserve_excel_errors() {
+        let value = normalized_optional_source_cell(Some(&Data::Error(CellErrorType::NA))).unwrap();
+        assert_eq!(value, "#N/A");
+    }
+
+    #[test]
+    fn community_subgroup_unresolved_record_keeps_raw_symbolic_row() {
+        let mut row = empty_row(COMMUNITY_SUBGROUP_PRICE_OPTION_COL + 1);
+        row[COMMUNITY_SUBGROUP_KEY_COL] = Data::String("New_Margoria_South".to_string());
+        row[COMMUNITY_SUBGROUP_ITEM_COL] = Data::Float(40218.0);
+        row[COMMUNITY_SUBGROUP_GRADE_COL] = Data::String("g".to_string());
+        row[COMMUNITY_SUBGROUP_ITEM_NAME_COL] =
+            Data::String("Ancient Relic Crystal Shard".to_string());
+        row[COMMUNITY_SUBGROUP_SELECT_RATE_0_COL] = Data::String("920_000".to_string());
+        row[COMMUNITY_SUBGROUP_SELECT_RATE_1_COL] = Data::String("920_000".to_string());
+        row[COMMUNITY_SUBGROUP_SELECT_RATE_2_COL] = Data::String("920_000".to_string());
+
+        let record = build_community_subgroup_unresolved_record(
+            &row,
+            "community_subgroups_no_formulas_workbook",
+            "Community workbook",
+            "abc123",
+            "no formulas",
+            2218,
+            "symbolic_subgroup_key",
+            false,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(record[4], "2218");
+        assert_eq!(record[5], "symbolic_subgroup_key");
+        assert_eq!(record[6], "New_Margoria_South");
+        assert_eq!(record[7], "40218");
+        assert_eq!(record[12], "g");
+        assert_eq!(record[13], "Ancient Relic Crystal Shard");
+        assert_eq!(record[19], "920_000");
+    }
+
+    #[test]
+    fn item_sub_group_effective_view_uses_active_overlay_and_removed_rows() {
+        let query = item_sub_group_effective_views_query();
+        assert!(query.contains("community_active_overlays"));
+        assert!(query.contains("overlay.`source_removed` = 0"));
+        assert!(query.contains("DROP VIEW IF EXISTS `item_sub_group_item_variants`"));
+        assert!(query.contains("CREATE VIEW `item_sub_group_item_variants`"));
     }
 
     #[test]
