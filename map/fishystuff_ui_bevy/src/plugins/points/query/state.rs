@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use fishystuff_api::models::events::EventsQueryMode;
 
+use crate::plugins::api::PointSampleSummary;
+
 #[derive(Resource)]
 pub struct PointsState {
     pub status: String,
@@ -86,4 +88,5 @@ pub struct RenderPoint {
     pub zone_rgb_u32: Option<u32>,
     pub sample_count: u32,
     pub aggregated: bool,
+    pub point_samples: Vec<PointSampleSummary>,
 }

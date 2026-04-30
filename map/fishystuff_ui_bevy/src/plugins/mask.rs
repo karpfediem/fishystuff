@@ -13,11 +13,13 @@ use crate::map::selection_query::selected_info_at_world_point;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{
-    build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverState,
-    LayerEffectiveFilterState, MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
+    build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverInfo, HoverState,
+    LayerEffectiveFilterState, MapDisplayState, PatchFilterState, PendingRequests,
+    PointSampleSummary, SelectedInfo, SelectionState,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
+use crate::plugins::points::{point_at_world_point, PointsState};
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
@@ -69,7 +71,15 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
-    let Some(next_hover) = hover_info_at_world_point(
+    let point_samples = point_at_world_point(
+        world_point,
+        &context.points,
+        &context.display_state,
+        &context.point_camera_q,
+    )
+    .map(|point| point.point_samples.clone())
+    .unwrap_or_default();
+    let Some(mut next_hover) = hover_info_at_world_point(
         world_point,
         &WorldPointQueryContext {
             layer_registry: &context.layer_registry,
@@ -81,10 +91,14 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
             layer_filters: &context.layer_filters,
             map_to_world: MapToWorld::default(),
         },
-    ) else {
+    )
+    .or_else(|| point_hover_info(world_point, point_samples.clone())) else {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
+    if !point_samples.is_empty() {
+        next_hover.point_samples = point_samples;
+    }
     set_hover_state(
         &mut context.hover,
         &mut context.display_state,
@@ -109,7 +123,15 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     else {
         return;
     };
-    let Some(selected_info) = selected_info_at_world_point(
+    let point_samples = point_at_world_point(
+        world_point,
+        &context.points,
+        &context.display_state,
+        &context.point_camera_q,
+    )
+    .map(|point| point.point_samples.clone())
+    .unwrap_or_default();
+    let Some(mut selected_info) = selected_info_at_world_point(
         world_point,
         &WorldPointQueryContext {
             layer_registry: &context.layer_registry,
@@ -124,9 +146,13 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
         None,
         Some(&context.bootstrap.zones),
-    ) else {
+    )
+    .or_else(|| point_selected_info(world_point, point_samples.clone())) else {
         return;
     };
+    if !point_samples.is_empty() {
+        selected_info.point_samples = point_samples;
+    }
     let zone_rgb = selected_info.zone_rgb();
     let zone_rgb_u32 = selected_info.zone_rgb_u32();
     context.selection.info = Some(selected_info);
@@ -155,6 +181,50 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
 
 fn hover_world_point(context: &HoverUpdateContext<'_, '_>) -> Option<WorldPoint> {
     interaction_world_point(&context.windows, &context.camera_q, &context.touches)
+}
+
+fn map_pixel_for_world_point(world_point: WorldPoint) -> (i32, i32) {
+    let map = MapToWorld::default().world_to_map(world_point);
+    (map.x.floor() as i32, map.y.floor() as i32)
+}
+
+fn point_hover_info(
+    world_point: WorldPoint,
+    point_samples: Vec<PointSampleSummary>,
+) -> Option<HoverInfo> {
+    if point_samples.is_empty() {
+        return None;
+    }
+    let (map_px, map_py) = map_pixel_for_world_point(world_point);
+    Some(HoverInfo {
+        map_px,
+        map_py,
+        world_x: world_point.x,
+        world_z: world_point.z,
+        layer_samples: Vec::new(),
+        point_samples,
+    })
+}
+
+fn point_selected_info(
+    world_point: WorldPoint,
+    point_samples: Vec<PointSampleSummary>,
+) -> Option<SelectedInfo> {
+    if point_samples.is_empty() {
+        return None;
+    }
+    let (map_px, map_py) = map_pixel_for_world_point(world_point);
+    Some(SelectedInfo {
+        map_px,
+        map_py,
+        world_x: world_point.x,
+        world_z: world_point.z,
+        sampled_world_point: true,
+        point_kind: Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked),
+        point_label: Some("Ranking Samples".to_string()),
+        layer_samples: Vec::new(),
+        point_samples,
+    })
 }
 
 fn interaction_world_point(
@@ -195,10 +265,12 @@ struct HoverUpdateContext<'w, 's> {
     ui_capture: Res<'w, UiPointerCapture>,
     hover: ResMut<'w, HoverState>,
     pan: Res<'w, PanState>,
+    points: Res<'w, PointsState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
+    point_camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
 }
 
 #[derive(SystemParam)]
@@ -216,10 +288,13 @@ struct MaskClickContext<'w, 's> {
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,
+    points: Res<'w, PointsState>,
+    display_state: Res<'w, MapDisplayState>,
     pan: Res<'w, PanState>,
     bootstrap: Res<'w, ApiBootstrapState>,
     patch_filter: Res<'w, PatchFilterState>,
     ui_capture: Res<'w, UiPointerCapture>,
+    point_camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
     _marker: std::marker::PhantomData<&'s ()>,
 }
 
@@ -255,6 +330,7 @@ mod tests {
                 detail_pane: None,
                 detail_sections: Vec::new(),
             }],
+            point_samples: Vec::new(),
         };
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
         assert_eq!(hovered_zone_rgb(None), None);

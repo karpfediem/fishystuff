@@ -53,6 +53,74 @@ function baseStateBundle() {
   };
 }
 
+function pointStateBundle() {
+  return {
+    state: {
+      ready: true,
+      catalog: {
+        layers: [
+          {
+            layerId: "fish_evidence",
+            name: "Fish Evidence",
+            kind: "fish-evidence",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 10,
+            supportsPointIcons: true,
+            pointIconsVisible: true,
+            pointIconsDefault: true,
+            pointIconScale: 1,
+            pointIconScaleDefault: 1,
+          },
+        ],
+      },
+    },
+    inputState: {
+      filters: {
+        layerIdsVisible: ["fish_evidence"],
+      },
+    },
+  };
+}
+
+function inputMarkupFor(container, attributeName) {
+  const marker = `${attributeName}="fish_evidence"`;
+  const markerIndex = container.innerHTML.indexOf(marker);
+  if (markerIndex < 0) {
+    return "";
+  }
+  const start = container.innerHTML.lastIndexOf("<input", markerIndex);
+  const end = container.innerHTML.indexOf(">", markerIndex);
+  return start >= 0 && end >= 0 ? container.innerHTML.slice(start, end + 1) : "";
+}
+
+test("renderLayerStack renders the sample hover toggle next to point icons", () => {
+  const container = createContainer();
+  renderLayerStack(
+    container,
+    pointStateBundle(),
+    renderOptions({
+      expandedLayerIds: new Set(["fish_evidence"]),
+    }),
+  );
+
+  assert.match(container.innerHTML, /data-layer-point-icons="fish_evidence"/);
+  assert.match(container.innerHTML, /data-layer-sample-hover="fish_evidence"/);
+  assert.match(inputMarkupFor(container, "data-layer-sample-hover"), /checked/);
+
+  renderLayerStack(
+    container,
+    pointStateBundle(),
+    renderOptions({
+      expandedLayerIds: new Set(["fish_evidence"]),
+      sampleHoverVisibleByLayer: { fish_evidence: false },
+    }),
+  );
+
+  assert.doesNotMatch(inputMarkupFor(container, "data-layer-sample-hover"), /checked/);
+});
+
 test("renderLayerStack prefers hover fact preview over selection preview", () => {
   const container = createContainer();
   renderLayerStack(

@@ -153,6 +153,7 @@ function defaultSignals() {
       layers: {
         expandedLayerIds: [],
         hoverFactsVisibleByLayer: {},
+        sampleHoverVisibleByLayer: {},
       },
     },
     _map_bookmarks: {

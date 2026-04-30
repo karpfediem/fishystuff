@@ -90,6 +90,7 @@ function createSignals() {
           region_groups: { resource_group: true },
           regions: { origin_region: false },
         },
+        sampleHoverVisibleByLayer: {},
       },
     },
   };
@@ -208,8 +209,10 @@ test("FishyMapHoverTooltipElement renders ordered visible hover facts only", asy
   shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));
 
   const layers = tooltip.querySelector("#fishymap-hover-layers");
+  const samples = tooltip.querySelector("#fishymap-hover-samples");
   assert.equal(tooltip.hidden, false);
   assert.equal(layers.hidden, false);
+  assert.equal(samples.hidden, true);
   assert.match(layers.innerHTML, /Valencia Sea - Depth 5/);
   assert.match(layers.innerHTML, /57,229,141/);
   assert.match(layers.innerHTML, /\(RG212\|Arehaza\)/);
@@ -219,6 +222,130 @@ test("FishyMapHoverTooltipElement renders ordered visible hover facts only", asy
   assert.ok(
     layers.innerHTML.indexOf("Valencia Sea - Depth 5") < layers.innerHTML.indexOf("(RG212|Arehaza)"),
   );
+});
+
+test("FishyMapHoverTooltipElement renders ranking point sample summaries", async () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const { FishyMapHoverTooltipElement } = await loadModule();
+  const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
+  shell.__fishymapLiveSignals = {
+    ...createSignals(),
+    _map_runtime: {
+      catalog: {
+        layers: [],
+        fish: [
+          { fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" },
+          { fishId: 20, itemId: 900020, name: "Mako Shark", grade: "rare" },
+        ],
+      },
+    },
+  };
+
+  tooltip.connectedCallback();
+  shell.dispatchEvent(
+    new CustomEvent(FISHYMAP_ZONE_CATALOG_READY_EVENT, {
+      detail: {
+        zoneCatalog: [
+          { zoneRgb: 0x39e58d, name: "Velia Coast" },
+          { zoneRgb: 0x123456, name: "Demi River" },
+          { zoneRgb: 0x654321, name: "Balenos River" },
+        ],
+      },
+    }),
+  );
+  canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 50, clientY: 70 }));
+  shell.dispatchEvent(
+    new CustomEvent("fishymap:hover-changed", {
+      detail: {
+        hover: {
+          pointSamples: [
+            {
+              fishId: 20,
+              sampleCount: 1,
+              lastTsUtc: 1_700_200_000,
+              zoneRgbs: [0x123456, 0x654321],
+              fullZoneRgbs: [],
+            },
+            {
+              fishId: 10,
+              sampleCount: 2,
+              lastTsUtc: 1_700_000_000,
+              zoneRgbs: [0x39e58d],
+              fullZoneRgbs: [0x39e58d],
+            },
+          ],
+          layerSamples: [],
+        },
+      },
+    }),
+  );
+
+  const layers = tooltip.querySelector("#fishymap-hover-layers");
+  const samples = tooltip.querySelector("#fishymap-hover-samples");
+  assert.equal(tooltip.hidden, false);
+  assert.equal(layers.hidden, true);
+  assert.equal(samples.hidden, false);
+  assert.equal(tooltip.dataset.pointSamples, "true");
+  assert.match(samples.innerHTML, /Sea Eel/);
+  assert.match(samples.innerHTML, /Mako Shark/);
+  assert.match(samples.innerHTML, /fishy-item-icon-frame is-native/);
+  assert.match(samples.innerHTML, /fishy-item-icon-frame is-hover-rest/);
+  assert.ok(samples.innerHTML.indexOf("Sea Eel") < samples.innerHTML.indexOf("Mako Shark"));
+  assert.match(samples.innerHTML, /x2/);
+  assert.match(samples.innerHTML, /2023-11-14/);
+  assert.match(samples.innerHTML, /Velia Coast/);
+  assert.doesNotMatch(samples.innerHTML, /Demi River/);
+  assert.doesNotMatch(samples.innerHTML, /Balenos River/);
+  assert.match(samples.innerHTML, /href="#fishy-date-confirmed"/);
+});
+
+test("FishyMapHoverTooltipElement hides ranking sample summaries when disabled", async () => {
+  const { FishyMapHoverTooltipElement } = await loadModule();
+  const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
+  shell.__fishymapLiveSignals = {
+    ...createSignals(),
+    _map_runtime: {
+      catalog: {
+        layers: [],
+        fish: [{ fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" }],
+      },
+    },
+    _map_ui: {
+      layers: {
+        hoverFactsVisibleByLayer: {},
+        sampleHoverVisibleByLayer: { fish_evidence: false },
+      },
+    },
+  };
+
+  tooltip.connectedCallback();
+  canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 50, clientY: 70 }));
+  shell.dispatchEvent(
+    new CustomEvent("fishymap:hover-changed", {
+      detail: {
+        hover: {
+          pointSamples: [
+            {
+              fishId: 10,
+              sampleCount: 2,
+              lastTsUtc: 1_700_000_000,
+              zoneRgbs: [0x39e58d],
+              fullZoneRgbs: [0x39e58d],
+            },
+          ],
+          layerSamples: [],
+        },
+      },
+    }),
+  );
+
+  const layers = tooltip.querySelector("#fishymap-hover-layers");
+  const samples = tooltip.querySelector("#fishymap-hover-samples");
+  assert.equal(tooltip.hidden, true);
+  assert.equal(layers.hidden, true);
+  assert.equal(samples.hidden, true);
+  assert.equal(tooltip.dataset.pointSamples, undefined);
 });
 
 test("FishyMapHoverTooltipElement hides the tooltip on pointerleave", async () => {

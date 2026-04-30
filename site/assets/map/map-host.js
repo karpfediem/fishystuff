@@ -280,23 +280,55 @@ function normalizeWorldCoordinate(value) {
 
 function normalizeHoverSnapshotValue(value) {
   const layerSamples = Array.isArray(value?.layerSamples) ? cloneJson(value.layerSamples) : [];
+  const pointSamples = normalizePointSamples(value?.pointSamples);
   return {
     worldX: normalizeWorldCoordinate(value?.worldX),
     worldZ: normalizeWorldCoordinate(value?.worldZ),
     layerSamples,
+    ...(pointSamples.length ? { pointSamples } : {}),
   };
 }
 
 function normalizeSelectionSnapshotValue(value) {
   const layerSamples = Array.isArray(value?.layerSamples) ? cloneJson(value.layerSamples) : [];
+  const pointSamples = normalizePointSamples(value?.pointSamples);
+  const normalized = isPlainObject(value) ? cloneJson(value) : {};
+  delete normalized.pointSamples;
   return {
-    ...(isPlainObject(value) ? cloneJson(value) : {}),
+    ...normalized,
     worldX: normalizeWorldCoordinate(value?.worldX),
     worldZ: normalizeWorldCoordinate(value?.worldZ),
     pointKind: normalizeSelectionPointKind(value?.pointKind),
     pointLabel: normalizeNullableString(value?.pointLabel),
     layerSamples,
+    ...(pointSamples.length ? { pointSamples } : {}),
   };
+}
+
+function normalizePointSamples(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((sample) => {
+    if (!isPlainObject(sample)) {
+      return [];
+    }
+    const fishId = Number.parseInt(sample.fishId, 10);
+    const sampleCount = Math.max(1, Number.parseInt(sample.sampleCount, 10) || 1);
+    const lastTsUtc = Number.parseInt(sample.lastTsUtc, 10);
+    if (!Number.isInteger(fishId) || !Number.isInteger(lastTsUtc)) {
+      return [];
+    }
+    return [
+      {
+        fishId,
+        sampleCount,
+        lastTsUtc,
+        zoneRgbs: normalizeZoneRgbs(sample.zoneRgbs),
+        fullZoneRgbs: normalizeZoneRgbs(sample.fullZoneRgbs),
+      },
+    ];
+  });
 }
 
 function performanceNowMs() {
@@ -3305,6 +3337,7 @@ class FishyMapBridgeImpl {
           worldX: payload.worldX,
           worldZ: payload.worldZ,
           layerSamples: Array.isArray(payload.layerSamples) ? payload.layerSamples : [],
+          pointSamples: Array.isArray(payload.pointSamples) ? payload.pointSamples : [],
         });
         this.currentState = {
           ...this.currentState,
@@ -3355,6 +3388,7 @@ class FishyMapBridgeImpl {
             pointKind: payload.pointKind,
             pointLabel: payload.pointLabel,
             layerSamples: Array.isArray(payload.layerSamples) ? payload.layerSamples : [],
+            pointSamples: Array.isArray(payload.pointSamples) ? payload.pointSamples : [],
           }),
         };
       }

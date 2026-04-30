@@ -218,6 +218,7 @@ mod tests {
             point_kind: Some(FishyMapSelectionPointKind::Clicked),
             point_label: None,
             layer_samples: Vec::new(),
+            point_samples: Vec::new(),
         };
 
         apply_selected_info(

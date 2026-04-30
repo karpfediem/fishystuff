@@ -16,7 +16,10 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
   assert.match(shellHtml, /discardMapPresetToken: 0/);
   assert.match(shellHtml, /_user_presets: \{[\s\S]*'map-presets': \{[\s\S]*canSave: false,[\s\S]*canDiscard: false/);
   assert.match(shellHtml, /layers: \{ open: true, collapsed: false, x: null, y: null \}/);
-  assert.match(shellHtml, /layers: \{ expandedLayerIds: \[\], hoverFactsVisibleByLayer: \{\} \}/);
+  assert.match(
+    shellHtml,
+    /layers: \{ expandedLayerIds: \[\], hoverFactsVisibleByLayer: \{\}, sampleHoverVisibleByLayer: \{\} \}/,
+  );
   assert.match(shellHtml, /id="fishymap-search-window"[\s\S]*data-show="\$_map_ui\.windowUi\.search\.open"/);
   assert.match(
     shellHtml,

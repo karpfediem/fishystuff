@@ -144,6 +144,73 @@ function fishIdentityMarkup(entry, accessoryMarkup = "") {
   return `<span class="fishy-item-row fishy-item-row--surface fishymap-zone-loot-item-surface ${toneClass}">${iconMarkup}<span class="fishy-item-label fishymap-zone-loot-item-label truncate">${escapeHtml(name)}</span>${accessoryMarkup}</span>`;
 }
 
+function pointSampleZoneMarkup(row) {
+  const zones = Array.isArray(row?.zones) ? row.zones : [];
+  if (!zones.length) {
+    return "";
+  }
+  return `
+    <div class="fishymap-point-sample-zones">
+      ${spriteIcon("hover-zone", "size-4")}
+      <span class="fishymap-point-sample-zone-list">
+        ${zones
+          .map((zone) => `
+            <span class="fishymap-point-sample-zone">
+              ${
+                trimString(zone?.swatchRgb)
+                  ? `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeHtml(zone.swatchRgb)};"></span>`
+                  : ""
+              }
+              <span class="truncate">${escapeHtml(zone?.name || "")}</span>
+            </span>
+          `)
+          .join("")}
+      </span>
+    </div>
+  `;
+}
+
+function pointSampleMarkup(row) {
+  const name = trimString(row?.fishName) || mapText("info.fish.unknown");
+  const gradeTone = itemGradeTone(row?.grade, row?.isPrize === true);
+  const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
+  const iconUrl = trimString(row?.iconUrl);
+  const itemId = Number.parseInt(row?.itemId, 10);
+  const fishId = Number.parseInt(row?.fishId, 10);
+  const count = Math.max(1, Number.parseInt(row?.sampleCount, 10) || 1);
+  const detailParts = [
+    Number.isInteger(itemId) ? `Item ${itemId}` : "",
+    Number.isInteger(fishId) ? `Fish ${fishId}` : "",
+  ].filter(Boolean);
+  const iconMarkup = iconUrl
+    ? `<span class="fishy-item-icon-frame is-xs ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishy-item-icon-frame is-xs ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
+  return `
+    <div class="fishymap-point-sample-card" data-zone-kind="${escapeHtml(row?.zoneKind || "")}">
+      <div class="fishymap-point-sample-main">
+        <span class="fishy-item-row min-w-0">
+          ${iconMarkup}
+          <span class="fishymap-point-sample-fish min-w-0">
+            <span class="fishymap-point-sample-name truncate">${escapeHtml(name)}</span>
+            ${
+              detailParts.length
+                ? `<span class="fishymap-point-sample-ids truncate">${escapeHtml(detailParts.join(" / "))}</span>`
+                : ""
+            }
+          </span>
+        </span>
+        ${count > 1 ? `<span class="badge badge-soft badge-sm">${escapeHtml(`x${count}`)}</span>` : ""}
+      </div>
+      ${
+        trimString(row?.dateText)
+          ? `<div class="fishymap-point-sample-date">${spriteIcon("date-confirmed", "size-4")}<span>${escapeHtml(row.dateText)}</span></div>`
+          : ""
+      }
+      ${pointSampleZoneMarkup(row)}
+    </div>
+  `;
+}
+
 function zoneLootMetricTone(entry) {
   return {
     fillColor: trimString(entry?.fillColor) || "var(--color-base-200)",
@@ -429,8 +496,27 @@ function zoneLootSectionMarkup(section) {
   `;
 }
 
+function pointSampleSectionMarkup(section) {
+  const rows = Array.isArray(section?.rows) ? section.rows : [];
+  if (!rows.length) {
+    return "";
+  }
+  return `
+    <section class="space-y-2">
+      ${
+        trimString(section?.title)
+          ? `<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title)}</p>`
+          : ""
+      }
+      <div class="fishymap-point-sample-list">${rows.map((row) => pointSampleMarkup(row)).join("")}</div>
+    </section>
+  `;
+}
+
 function sectionMarkup(section) {
   switch (trimString(section?.kind)) {
+    case "point-samples":
+      return pointSampleSectionMarkup(section);
     case "facts":
       return `
         <section class="space-y-2">

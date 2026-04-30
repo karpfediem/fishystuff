@@ -75,6 +75,10 @@ export function renderLayerStack(container, stateBundle, options = {}) {
     options.hoverFactVisibilityByLayer && typeof options.hoverFactVisibilityByLayer === "object"
       ? options.hoverFactVisibilityByLayer
       : {};
+  const sampleHoverVisibleByLayer =
+    options.sampleHoverVisibleByLayer && typeof options.sampleHoverVisibleByLayer === "object"
+      ? options.sampleHoverVisibleByLayer
+      : {};
   const hoverFactPreviewByLayer = new Map(
     layers.map((layer) => [
       layer.layerId,
@@ -112,6 +116,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
       layer.waypointLabelsVisible ? 1 : 0,
       layer.supportsPointIcons ? 1 : 0,
       layer.pointIconsVisible ? 1 : 0,
+      layer.supportsPointIcons && sampleHoverVisibleByLayer[layer.layerId] !== false ? 1 : 0,
       Math.round(clampPointIconScale(layer.pointIconScale) * 1000),
       Math.round(clampPointIconScale(layer.pointIconScaleDefault) * 1000),
       Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
@@ -234,6 +239,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
       }
       const pointControls = [];
       if (layer.supportsPointIcons) {
+        const sampleHoverVisible = sampleHoverVisibleByLayer[layer.layerId] !== false;
         pointControls.push(`
           <label class="label cursor-pointer justify-start gap-3 py-0">
             <input
@@ -243,6 +249,15 @@ export function renderLayerStack(container, stateBundle, options = {}) {
               ${layer.pointIconsVisible ? "checked" : ""}
             >
             <span class="label-text text-xs text-base-content/70">${escapeHtml(mapText("layers.icons"))}</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3 py-0">
+            <input
+              class="toggle toggle-xs toggle-primary"
+              data-layer-sample-hover="${escapeAttribute(layer.layerId)}"
+              type="checkbox"
+              ${sampleHoverVisible ? "checked" : ""}
+            >
+            <span class="label-text text-xs text-base-content/70">${escapeHtml(mapText("layers.sample_hover"))}</span>
           </label>
         `);
       }

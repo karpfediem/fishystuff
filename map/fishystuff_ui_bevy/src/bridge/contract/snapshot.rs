@@ -51,6 +51,8 @@ pub struct FishyMapSelectionSnapshot {
     pub point_kind: Option<FishyMapSelectionPointKind>,
     pub point_label: Option<String>,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub point_samples: Vec<FishyMapPointSampleSnapshot>,
     pub zone_stats: Option<FishyMapZoneStatsSnapshot>,
 }
 
@@ -74,6 +76,18 @@ pub struct FishyMapHoverSnapshot {
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub point_samples: Vec<FishyMapPointSampleSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FishyMapPointSampleSnapshot {
+    pub fish_id: i32,
+    pub sample_count: u32,
+    pub last_ts_utc: i64,
+    pub zone_rgbs: Vec<u32>,
+    pub full_zone_rgbs: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

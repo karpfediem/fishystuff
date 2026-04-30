@@ -1429,6 +1429,7 @@ mod tests {
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group, regions],
+            point_samples: Vec::new(),
         };
 
         let layer_registry = LayerRegistry::default();
@@ -1484,6 +1485,7 @@ mod tests {
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group, region],
+            point_samples: Vec::new(),
         };
 
         let layer_registry = LayerRegistry::default();
@@ -1523,6 +1525,7 @@ mod tests {
             sampled_world_point: true,
             point_kind: None,
             point_label: None,
+            point_samples: Vec::new(),
         };
 
         let layer_registry = LayerRegistry::default();
@@ -1559,6 +1562,7 @@ mod tests {
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group.clone(), region.clone()],
+            point_samples: Vec::new(),
         };
 
         let (layer_registry, mut layer_runtime) = hover_layer_state();
@@ -1630,6 +1634,7 @@ mod tests {
             point_kind: None,
             point_label: None,
             layer_samples: vec![region_group, region],
+            point_samples: Vec::new(),
         };
 
         let (layer_registry, mut layer_runtime) = hover_layer_state();
@@ -1666,6 +1671,7 @@ mod tests {
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group.clone()],
+            point_samples: Vec::new(),
         };
 
         let selection_info = SelectedInfo {
@@ -1677,6 +1683,7 @@ mod tests {
             point_kind: None,
             point_label: None,
             layer_samples: vec![region_group],
+            point_samples: Vec::new(),
         };
 
         let (layer_registry, layer_runtime) = hover_layer_state();

@@ -1,3 +1,4 @@
+mod hit;
 mod loading;
 mod query;
 mod render;
@@ -8,6 +9,7 @@ use crate::bridge::BrowserInputStateSet;
 use crate::map::events::EventsSnapshotState;
 use crate::plugins::api::LayerEffectiveFilterState;
 
+pub use hit::point_at_world_point;
 pub use query::{PointsState, RenderPoint};
 #[cfg(target_arch = "wasm32")]
 pub(crate) use render::PointIconCache;

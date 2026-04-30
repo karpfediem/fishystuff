@@ -90,12 +90,131 @@ function overviewRowMarkup(row) {
   `;
 }
 
+function itemIconMarkup(row, size = "is-xs") {
+  const name = trimString(row?.fishName) || "Unknown fish";
+  const gradeTone = itemGradeTone(row?.grade, row?.isPrize === true);
+  const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
+  const iconUrl = trimString(row?.iconUrl);
+  return iconUrl
+    ? `<span class="fishy-item-icon-frame ${escapeHtml(size)} ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishy-item-icon-frame ${escapeHtml(size)} ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
+}
+
+function itemGradeTone(grade, isPrize) {
+  const resolver = globalThis.window?.__fishystuffItemPresentation?.resolveGradeTone;
+  if (typeof resolver === "function") {
+    return resolver(grade, isPrize);
+  }
+  const normalized = trimString(grade).toLowerCase();
+  if (isPrize === true || normalized === "prize" || normalized === "red") {
+    return "red";
+  }
+  switch (normalized) {
+    case "rare":
+    case "yellow":
+      return "yellow";
+    case "highquality":
+    case "high_quality":
+    case "high-quality":
+    case "blue":
+      return "blue";
+    case "general":
+    case "green":
+      return "green";
+    case "trash":
+    case "white":
+      return "white";
+    default:
+      return "unknown";
+  }
+}
+
+function pointSampleZoneMarkup(row) {
+  const zones = Array.isArray(row?.zones) ? row.zones : [];
+  if (!zones.length) {
+    return "";
+  }
+  return `
+    <div class="fishymap-point-sample-zones">
+      <span class="fishymap-point-sample-zone-list">
+        ${zones
+          .map((zone) => `
+            <span class="fishymap-point-sample-zone">
+              ${
+                trimString(zone?.swatchRgb)
+                  ? `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeHtml(zone.swatchRgb)};"></span>`
+                  : ""
+              }
+              <span class="truncate">${escapeHtml(zone?.name || "")}</span>
+            </span>
+          `)
+          .join("")}
+      </span>
+    </div>
+  `;
+}
+
+function pointSampleMarkup(row) {
+  const name = trimString(row?.fishName) || "Unknown fish";
+  const count = Math.max(1, Number.parseInt(row?.sampleCount, 10) || 1);
+  return `
+    <div class="fishymap-point-sample-card" data-zone-kind="${escapeHtml(row?.zoneKind || "")}">
+      <div class="fishymap-point-sample-main">
+        <span class="fishy-item-row min-w-0">
+          ${itemIconMarkup(row, "is-native")}
+          <span class="fishymap-point-sample-fish min-w-0">
+            <span class="fishymap-point-sample-name truncate">${escapeHtml(name)}</span>
+          </span>
+        </span>
+        ${count > 1 ? `<span class="badge badge-soft badge-sm">${escapeHtml(`x${count}`)}</span>` : ""}
+      </div>
+      ${
+        trimString(row?.dateText)
+          ? `<div class="fishymap-point-sample-date">${spriteIcon("date-confirmed", "size-4")}<span>${escapeHtml(row.dateText)}</span></div>`
+          : ""
+      }
+      ${pointSampleZoneMarkup(row)}
+    </div>
+  `;
+}
+
+function remainingPointSampleMarkup(row) {
+  const name = trimString(row?.fishName) || "Unknown fish";
+  const count = Math.max(1, Number.parseInt(row?.sampleCount, 10) || 1);
+  return `
+    <span class="fishymap-point-sample-rest-item" title="${escapeHtml(`${name} x${count}`)}">
+      ${itemIconMarkup(row, "is-hover-rest")}
+      <span class="fishymap-point-sample-rest-count">${escapeHtml(`x${count}`)}</span>
+    </span>
+  `;
+}
+
+function pointSampleGroupMarkup(pointRows) {
+  if (!pointRows.length) {
+    return "";
+  }
+  const [topRow, ...remainingRows] = pointRows;
+  return `
+    <div class="fishymap-point-sample-group">
+      ${pointSampleMarkup(topRow)}
+      ${
+        remainingRows.length
+          ? `<div class="fishymap-point-sample-rest">${remainingRows.map((row) => remainingPointSampleMarkup(row)).join("")}</div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 function buildStateBundle(signals) {
   return {
     state: {
       catalog: {
         layers: Array.isArray(signals?._map_runtime?.catalog?.layers)
           ? cloneJson(signals._map_runtime.catalog.layers)
+          : [],
+        fish: Array.isArray(signals?._map_runtime?.catalog?.fish)
+          ? cloneJson(signals._map_runtime.catalog.fish)
           : [],
       },
     },
@@ -119,19 +238,32 @@ export function readMapHoverTooltipShellSignals(shell) {
 }
 
 function ensureHoverTooltipMarkup(host, documentRef = globalThis.document) {
-  const existing = host.querySelector?.("#fishymap-hover-layers");
-  if (existing) {
-    return existing;
+  const existingLayers = host.querySelector?.("#fishymap-hover-layers");
+  const existingSamples = host.querySelector?.("#fishymap-hover-samples");
+  if (existingLayers && existingSamples) {
+    return {
+      hoverLayers: existingLayers,
+      hoverSamples: existingSamples,
+    };
   }
   if (documentRef && typeof documentRef.createElement === "function") {
     const layers = documentRef.createElement("div");
     layers.id = "fishymap-hover-layers";
     layers.hidden = true;
-    host.replaceChildren?.(layers);
-    return layers;
+    const samples = documentRef.createElement("div");
+    samples.id = "fishymap-hover-samples";
+    samples.hidden = true;
+    host.replaceChildren?.(layers, samples);
+    return {
+      hoverLayers: layers,
+      hoverSamples: samples,
+    };
   }
-  host.innerHTML = '<div id="fishymap-hover-layers" hidden></div>';
-  return host.querySelector?.("#fishymap-hover-layers") || null;
+  host.innerHTML = '<div id="fishymap-hover-layers" hidden></div><div id="fishymap-hover-samples" hidden></div>';
+  return {
+    hoverLayers: host.querySelector?.("#fishymap-hover-layers") || null,
+    hoverSamples: host.querySelector?.("#fishymap-hover-samples") || null,
+  };
 }
 
 export class FishyMapHoverTooltipElement extends HTMLElementBase {
@@ -156,6 +288,7 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     this._handleCanvasPointerLeave = () => {
       this._state.pointerActive = false;
       setBooleanProperty(this._elements?.hoverLayers, "hidden", true);
+      setBooleanProperty(this._elements?.hoverSamples, "hidden", true);
       setBooleanProperty(this, "hidden", true);
     };
     this._handleHoverChanged = (event) => {
@@ -178,11 +311,7 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
   connectedCallback() {
     this._shell = this.closest?.("#map-page-shell") || null;
     this._canvas = this._shell?.querySelector?.("#bevy") || globalThis.document?.getElementById?.("bevy") || null;
-    const hoverLayers =
-      ensureHoverTooltipMarkup(this, globalThis.document) || this.querySelector?.("#fishymap-hover-layers");
-    this._elements = {
-      hoverLayers,
-    };
+    this._elements = ensureHoverTooltipMarkup(this, globalThis.document);
     this._canvas?.addEventListener?.("pointermove", this._handleCanvasPointerMove);
     this._canvas?.addEventListener?.("pointerleave", this._handleCanvasPointerLeave);
     this._shell?.addEventListener?.("fishymap:hover-changed", this._handleHoverChanged);
@@ -221,20 +350,38 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
       hover: this._state.hover,
       stateBundle: buildStateBundle(this.signals()),
       visibilityByLayer: this.signals()?._map_ui?.layers?.hoverFactsVisibleByLayer || {},
+      pointSamplesEnabled:
+        this.signals()?._map_ui?.layers?.sampleHoverVisibleByLayer?.fish_evidence !== false,
       zoneCatalog: this._zoneCatalog,
     });
     if (!this._state.pointerActive || rows.length === 0) {
       setMarkup(this._elements?.hoverLayers, "[]", "");
+      setMarkup(this._elements?.hoverSamples, "[]", "");
       setBooleanProperty(this._elements?.hoverLayers, "hidden", true);
+      setBooleanProperty(this._elements?.hoverSamples, "hidden", true);
       setBooleanProperty(this, "hidden", true);
+      delete this.dataset.pointSamples;
       return;
+    }
+    const pointRows = rows.filter((row) => row?.kind === "point-sample");
+    const factRows = rows.filter((row) => row?.kind !== "point-sample");
+    if (pointRows.length) {
+      this.dataset.pointSamples = "true";
+    } else {
+      delete this.dataset.pointSamples;
     }
     setMarkup(
       this._elements?.hoverLayers,
-      JSON.stringify(rows.map((row) => [row.layerId, row.key, row.value])),
-      rows.map((row) => overviewRowMarkup(row)).join(""),
+      JSON.stringify(factRows.map((row) => [row.layerId, row.key, row.value])),
+      factRows.map((row) => overviewRowMarkup(row)).join(""),
     );
-    setBooleanProperty(this._elements?.hoverLayers, "hidden", false);
+    setMarkup(
+      this._elements?.hoverSamples,
+      JSON.stringify(pointRows.map((row) => [row.key, row.sampleCount, row.dateText])),
+      pointSampleGroupMarkup(pointRows),
+    );
+    setBooleanProperty(this._elements?.hoverLayers, "hidden", factRows.length === 0);
+    setBooleanProperty(this._elements?.hoverSamples, "hidden", pointRows.length === 0);
     setBooleanProperty(this, "hidden", false);
   }
 

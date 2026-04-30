@@ -52,6 +52,7 @@ export const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   layers: Object.freeze({
     expandedLayerIds: [],
     hoverFactsVisibleByLayer: {},
+    sampleHoverVisibleByLayer: {},
   }),
 });
 
@@ -385,6 +386,9 @@ export function normalizeMapUiSignalState(raw) {
       expandedLayerIds: normalizeExpandedLayerIds(normalizedLayers.expandedLayerIds),
       hoverFactsVisibleByLayer: isPlainObject(normalizedLayers.hoverFactsVisibleByLayer)
         ? cloneJsonValue(normalizedLayers.hoverFactsVisibleByLayer)
+        : {},
+      sampleHoverVisibleByLayer: isPlainObject(normalizedLayers.sampleHoverVisibleByLayer)
+        ? cloneJsonValue(normalizedLayers.sampleHoverVisibleByLayer)
         : {},
     },
   };

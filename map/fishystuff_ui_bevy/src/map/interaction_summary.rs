@@ -181,6 +181,7 @@ mod tests {
             point_kind: Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked),
             point_label: None,
             layer_samples,
+            point_samples: Vec::new(),
         }
     }
 

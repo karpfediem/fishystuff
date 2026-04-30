@@ -39,6 +39,7 @@ pub struct HoverInfo {
     pub world_x: f64,
     pub world_z: f64,
     pub layer_samples: Vec<LayerQuerySample>,
+    pub point_samples: Vec<PointSampleSummary>,
 }
 
 impl HoverInfo {
@@ -65,6 +66,7 @@ pub struct SelectedInfo {
     pub point_kind: Option<FishyMapSelectionPointKind>,
     pub point_label: Option<String>,
     pub layer_samples: Vec<LayerQuerySample>,
+    pub point_samples: Vec<PointSampleSummary>,
 }
 
 impl SelectedInfo {
@@ -89,4 +91,13 @@ impl SelectedInfo {
         }
         Some((self.world_x, self.world_z))
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointSampleSummary {
+    pub fish_id: i32,
+    pub sample_count: u32,
+    pub last_ts_utc: i64,
+    pub zone_rgbs: Vec<u32>,
+    pub full_zone_rgbs: Vec<u32>,
 }

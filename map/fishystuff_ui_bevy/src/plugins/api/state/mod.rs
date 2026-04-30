@@ -13,7 +13,9 @@ pub use self::filters::{
     Patch, PatchFilterState, SearchExpressionState, SemanticFieldFilterState, ZoneMembershipFilter,
     POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
-pub use self::interaction::{HoverInfo, HoverState, SelectedInfo, SelectionState};
+pub use self::interaction::{
+    HoverInfo, HoverState, PointSampleSummary, SelectedInfo, SelectionState,
+};
 pub use self::pending::PendingRequests;
 
 pub(crate) use self::catalog::FishCatalogPayload;

@@ -1,6 +1,5 @@
 import { resolveLayerEntries } from "./map-layer-state.js";
 import {
-  zoneCatalogEntryForRgb,
   zoneDisplayNameFromCatalog,
 } from "./map-zone-catalog.js";
 import { mapText } from "./map-i18n.js";
@@ -48,6 +47,150 @@ function rgbDisplayValue(rgb) {
 
 function rgbSwatchValue(rgb) {
   return Array.isArray(rgb) ? `${rgb[0]} ${rgb[1]} ${rgb[2]}` : "";
+}
+
+function rgbTripletFromU32(value) {
+  const rgb = Number.parseInt(value, 10);
+  if (!Number.isInteger(rgb) || rgb < 0) {
+    return null;
+  }
+  return [(rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff];
+}
+
+function normalizeIntegerList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set();
+  const values = [];
+  for (const entry of value) {
+    const parsed = Number.parseInt(entry, 10);
+    if (!Number.isInteger(parsed) || parsed < 0 || seen.has(parsed)) {
+      continue;
+    }
+    seen.add(parsed);
+    values.push(parsed);
+  }
+  return values;
+}
+
+function formatSampleDate(tsUtc) {
+  const seconds = Number.parseInt(tsUtc, 10);
+  if (!Number.isInteger(seconds)) {
+    return "";
+  }
+  const date = new Date(seconds * 1000);
+  if (!Number.isFinite(date.getTime())) {
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function fishCatalogLookup(stateBundle) {
+  const fish = Array.isArray(stateBundle?.state?.catalog?.fish)
+    ? stateBundle.state.catalog.fish
+    : [];
+  return new Map(
+    fish
+      .map((entry) => [Number.parseInt(entry?.fishId, 10), entry])
+      .filter(([fishId]) => Number.isInteger(fishId)),
+  );
+}
+
+function fishItemIconUrl(itemId) {
+  const parsed = Number.parseInt(itemId, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return "";
+  }
+  const resolver = globalThis.window?.__fishystuffResolveFishItemIconUrl;
+  if (typeof resolver === "function") {
+    return trimString(resolver(parsed));
+  }
+  return `/images/items/${String(parsed).padStart(8, "0")}.webp`;
+}
+
+function zoneSummary(zoneRgb, zoneCatalog) {
+  const rgb = rgbTripletFromU32(zoneRgb);
+  const name =
+    trimString(zoneDisplayNameFromCatalog(zoneCatalog, zoneRgb)) ||
+    mapText("search.zone.fallback", { zone: `#${Number(zoneRgb).toString(16).padStart(6, "0")}` });
+  return {
+    zoneRgb,
+    name,
+    ...(rgb ? { swatchRgb: rgbSwatchValue(rgb) } : {}),
+  };
+}
+
+function normalizePointSamples(samples) {
+  return (Array.isArray(samples) ? samples : [])
+    .flatMap((sample) => {
+      if (!isPlainObject(sample)) {
+        return [];
+      }
+      const fishId = Number.parseInt(sample.fishId, 10);
+      const sampleCount = Math.max(1, Number.parseInt(sample.sampleCount, 10) || 1);
+      const lastTsUtc = Number.parseInt(sample.lastTsUtc, 10);
+      if (!Number.isInteger(fishId) || !Number.isInteger(lastTsUtc)) {
+        return [];
+      }
+      return [
+        {
+          fishId,
+          sampleCount,
+          lastTsUtc,
+          zoneRgbs: normalizeIntegerList(sample.zoneRgbs),
+          fullZoneRgbs: normalizeIntegerList(sample.fullZoneRgbs),
+        },
+      ];
+    })
+    .sort((left, right) =>
+      right.sampleCount - left.sampleCount ||
+      right.lastTsUtc - left.lastTsUtc ||
+      left.fishId - right.fishId,
+    );
+}
+
+function currentZoneRgbFromSource(source) {
+  const zoneSample = (Array.isArray(source?.layerSamples) ? source.layerSamples : []).find(
+    (sample) => trimString(sample?.layerId) === "zone_mask",
+  );
+  const zoneRgb = Number.parseInt(zoneSample?.rgbU32, 10);
+  return Number.isInteger(zoneRgb) && zoneRgb >= 0 ? zoneRgb : null;
+}
+
+function visibleSampleZones(zones, currentZoneRgb) {
+  if (!Number.isInteger(currentZoneRgb)) {
+    return zones;
+  }
+  if (zones.every((zone) => zone?.zoneRgb === currentZoneRgb)) {
+    return [];
+  }
+  return zones.filter((zone) => zone?.zoneRgb !== currentZoneRgb);
+}
+
+export function buildPointSampleRows({ source = null, stateBundle = null, zoneCatalog = [] } = {}) {
+  const fishById = fishCatalogLookup(stateBundle);
+  const currentZoneRgb = currentZoneRgbFromSource(source);
+  return normalizePointSamples(source?.pointSamples).map((sample, index) => {
+    const fish = fishById.get(sample.fishId) || {};
+    const itemId = Number.parseInt(fish?.itemId, 10);
+    const zones = (sample.fullZoneRgbs.length ? sample.fullZoneRgbs : sample.zoneRgbs)
+      .map((zoneRgb) => zoneSummary(zoneRgb, zoneCatalog));
+    return {
+      kind: "point-sample",
+      key: `point-sample:${sample.fishId}:${sample.sampleCount}:${sample.lastTsUtc}:${sample.zoneRgbs.join(",")}:${sample.fullZoneRgbs.join(",")}:${index}`,
+      fishId: sample.fishId,
+      itemId: Number.isInteger(itemId) ? itemId : null,
+      fishName: trimString(fish?.name) || mapText("info.fish.unknown"),
+      grade: trimString(fish?.grade),
+      isPrize: fish?.isPrize === true,
+      iconUrl: Number.isInteger(itemId) ? fishItemIconUrl(itemId) : "",
+      sampleCount: sample.sampleCount,
+      dateText: formatSampleDate(sample.lastTsUtc),
+      zoneKind: sample.fullZoneRgbs.length ? "full" : "partial",
+      zones: visibleSampleZones(zones, currentZoneRgb),
+    };
+  });
 }
 
 function normalizeDetailFacts(sample) {
@@ -301,7 +444,9 @@ export function patchTouchesHoverTooltipSignals(patch) {
   }
   return Boolean(
     patch._map_runtime?.catalog?.layers != null ||
+      patch._map_runtime?.catalog?.fish != null ||
       patch._map_ui?.layers?.hoverFactsVisibleByLayer != null ||
+      patch._map_ui?.layers?.sampleHoverVisibleByLayer != null ||
       patch._map_bridged?.filters?.layerIdsOrdered != null,
   );
 }
@@ -310,18 +455,22 @@ export function buildHoverTooltipRows({
   hover = null,
   stateBundle = null,
   visibilityByLayer = {},
+  pointSamplesEnabled = true,
   zoneCatalog = [],
 } = {}) {
   const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
+  const pointRows = pointSamplesEnabled
+    ? buildPointSampleRows({ source: hover, stateBundle, zoneCatalog })
+    : [];
   if (!layerSamples.length) {
-    return [];
+    return pointRows;
   }
   const sampleByLayerId = new Map(
     layerSamples
       .map((sample) => [trimString(sample?.layerId), sample])
       .filter(([layerId]) => layerId),
   );
-  return orderedHoverLayerIds(hover, stateBundle).flatMap((layerId) => {
+  const layerRows = orderedHoverLayerIds(hover, stateBundle).flatMap((layerId) => {
     const sample = sampleByLayerId.get(layerId);
     if (!sample) {
       return [];
@@ -337,6 +486,7 @@ export function buildHoverTooltipRows({
       ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
     }));
   });
+  return [...pointRows, ...layerRows];
 }
 
 function previewSampleForLayer(layerId, sources = []) {

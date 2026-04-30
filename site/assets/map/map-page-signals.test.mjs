@@ -14,6 +14,9 @@ test("map-page-signals applies exact replacement branches", () => {
           regions: { origin_region: true },
           region_groups: { resource_group: true },
         },
+        sampleHoverVisibleByLayer: {
+          fish_evidence: false,
+        },
       },
     },
   };
@@ -30,6 +33,23 @@ test("map-page-signals applies exact replacement branches", () => {
 
   assert.deepEqual(signals._map_ui.layers.hoverFactsVisibleByLayer, {
     zone_mask: { zone_name: true },
+  });
+  assert.deepEqual(signals._map_ui.layers.sampleHoverVisibleByLayer, {
+    fish_evidence: false,
+  });
+
+  applyMapPageSignalsPatch(signals, {
+    _map_ui: {
+      layers: {
+        sampleHoverVisibleByLayer: {
+          fish_evidence: true,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(signals._map_ui.layers.sampleHoverVisibleByLayer, {
+    fish_evidence: true,
   });
 });
 
@@ -105,6 +125,18 @@ test("map-page-signals persists only durable map branches", () => {
         filters: {
           layerFilterBindingIdsDisabledByLayer: {
             fish_evidence: ["zone_mask"],
+          },
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    patchMatchesMapPagePersistFilter({
+      _map_ui: {
+        layers: {
+          sampleHoverVisibleByLayer: {
+            fish_evidence: false,
           },
         },
       },

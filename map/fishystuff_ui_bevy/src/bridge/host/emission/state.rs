@@ -1,4 +1,4 @@
-use super::super::snapshot::hover_layer_samples_snapshot;
+use super::super::snapshot::{hover_layer_samples_snapshot, point_sample_snapshots};
 use super::super::*;
 use crate::plugins::api::SelectedInfo;
 
@@ -46,6 +46,11 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
             .as_ref()
             .map(|info| hover_layer_samples_snapshot(&info.layer_samples))
             .unwrap_or_default(),
+        point_samples: selection
+            .info
+            .as_ref()
+            .map(|info| point_sample_snapshots(&info.point_samples))
+            .unwrap_or_default(),
     };
     super::super::emit_event(&payload);
 }
@@ -64,6 +69,11 @@ pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) 
             .info
             .as_ref()
             .map(|info| hover_layer_samples_snapshot(&info.layer_samples))
+            .unwrap_or_default(),
+        point_samples: hover
+            .info
+            .as_ref()
+            .map(|info| point_sample_snapshots(&info.point_samples))
             .unwrap_or_default(),
     };
     let Ok(serialized) = serde_json::to_string(&payload) else {

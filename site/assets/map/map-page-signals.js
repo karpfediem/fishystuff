@@ -4,6 +4,7 @@ export const MAP_PAGE_PERSIST_SIGNAL_FILTER =
 export const MAP_PAGE_EXACT_PATCH_PATHS = Object.freeze([
   "_map_ui.layers.expandedLayerIds",
   "_map_ui.layers.hoverFactsVisibleByLayer",
+  "_map_ui.layers.sampleHoverVisibleByLayer",
   "_map_ui.search.expression",
   "_map_bridged.filters.searchExpression",
   "_map_bridged.filters.semanticFieldIdsByLayer",

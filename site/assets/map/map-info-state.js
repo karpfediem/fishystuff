@@ -5,6 +5,7 @@ import {
   buildZonePaneFacts,
   preferredOverviewRow,
 } from "./map-overview-facts.js";
+import { buildPointSampleRows } from "./map-hover-facts.js";
 import { mapText } from "./map-i18n.js";
 
 function cloneJson(value) {
@@ -361,6 +362,19 @@ function buildZoneLootSection(
   };
 }
 
+function buildPointSampleSection(selection, stateBundle, zoneCatalog) {
+  const rows = buildPointSampleRows({ source: selection, stateBundle, zoneCatalog });
+  if (!rows.length) {
+    return null;
+  }
+  return {
+    id: "point-samples",
+    kind: "point-samples",
+    title: "Ranking Samples",
+    rows,
+  };
+}
+
 function paneDescriptor(id, label, icon, summary, sections) {
   return {
     id,
@@ -378,6 +392,7 @@ export function patchTouchesInfoSignals(patch) {
   return Boolean(
     patch._map_runtime?.selection != null ||
       patch._map_runtime?.catalog?.layers != null ||
+      patch._map_runtime?.catalog?.fish != null ||
       patch._map_ui?.windowUi?.zoneInfo != null ||
       patch._map_ui?.windowUi?.settings?.normalizeRates != null,
   );
@@ -400,6 +415,16 @@ export function buildInfoViewModel(
   const runtimeLayers = Array.isArray(signals?._map_runtime?.catalog?.layers)
     ? cloneJson(signals._map_runtime.catalog.layers)
     : [];
+  const runtimeFish = Array.isArray(signals?._map_runtime?.catalog?.fish)
+    ? cloneJson(signals._map_runtime.catalog.fish)
+    : [];
+  const pointSampleStateBundle = {
+    state: {
+      catalog: {
+        fish: runtimeFish,
+      },
+    },
+  };
   const zoneFacts = buildZonePaneFacts(layerSamples, {
     zoneCatalog,
     runtimeLayers,
@@ -412,7 +437,21 @@ export function buildInfoViewModel(
     zoneLootConditionSelection,
     typeof normalizeRates === "boolean" ? normalizeRates : normalizeRatesFromSignals(signals),
   );
+  const pointSampleSection = buildPointSampleSection(
+    selection,
+    pointSampleStateBundle,
+    zoneCatalog,
+  );
   const panes = [
+    pointSampleSection
+      ? paneDescriptor(
+          "samples",
+          "Samples",
+          "date-confirmed",
+          pointSampleSection.rows[0]?.fishName || "",
+          [pointSampleSection],
+        )
+      : null,
     paneDescriptor(
       "zone",
       mapText("info.pane.zone"),
@@ -462,7 +501,7 @@ export function buildInfoViewModel(
           ]
         : [],
     ),
-  ].filter((pane) => pane.sections.length > 0);
+  ].filter((pane) => pane && pane.sections.length > 0);
 
   const requestedPaneId = trimString(signals?._map_ui?.windowUi?.zoneInfo?.tab);
   const activePaneId =

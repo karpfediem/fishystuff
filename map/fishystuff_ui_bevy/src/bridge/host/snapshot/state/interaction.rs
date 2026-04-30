@@ -14,6 +14,9 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
         layer_samples: info
             .map(|value| hover_layer_samples_snapshot(&value.layer_samples))
             .unwrap_or_default(),
+        point_samples: info
+            .map(|value| point_sample_snapshots(&value.point_samples))
+            .unwrap_or_default(),
         zone_stats: zone_stats.map(zone_stats_snapshot),
     }
 }
@@ -27,7 +30,27 @@ pub(in crate::bridge::host::snapshot) fn effective_hover_snapshot(
         layer_samples: info
             .map(|value| hover_layer_samples_snapshot(&value.layer_samples))
             .unwrap_or_default(),
+        point_samples: info
+            .map(|value| point_sample_snapshots(&value.point_samples))
+            .unwrap_or_default(),
     }
+}
+
+pub(in crate::bridge::host) fn point_sample_snapshots(
+    samples: &[crate::plugins::api::PointSampleSummary],
+) -> Vec<crate::bridge::contract::FishyMapPointSampleSnapshot> {
+    samples
+        .iter()
+        .map(
+            |sample| crate::bridge::contract::FishyMapPointSampleSnapshot {
+                fish_id: sample.fish_id,
+                sample_count: sample.sample_count,
+                last_ts_utc: sample.last_ts_utc,
+                zone_rgbs: sample.zone_rgbs.clone(),
+                full_zone_rgbs: sample.full_zone_rgbs.clone(),
+            },
+        )
+        .collect()
 }
 
 pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
@@ -131,6 +154,7 @@ mod tests {
                 detail_pane: None,
                 detail_sections: Vec::new(),
             }],
+            point_samples: Vec::new(),
         };
 
         assert_eq!(info.effective_world_point(), None);
@@ -157,6 +181,7 @@ mod tests {
                 detail_pane: None,
                 detail_sections: Vec::new(),
             }],
+            point_samples: Vec::new(),
         };
 
         assert_eq!(info.effective_world_point(), Some((123.0, 456.0)));

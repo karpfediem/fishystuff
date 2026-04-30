@@ -361,6 +361,67 @@ test("buildInfoViewModel switches zone loot rates from the normalize rates signa
   assert.equal(rawGroup.rows[0].dropRateTooltip, "raw species");
 });
 
+test("buildInfoViewModel exposes clicked ranking samples as the first pane", () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const viewModel = buildInfoViewModel(
+    {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "",
+          layerSamples: [],
+          pointSamples: [
+            {
+              fishId: 20,
+              sampleCount: 1,
+              lastTsUtc: 1_700_200_000,
+              zoneRgbs: [0x123456, 0x654321],
+              fullZoneRgbs: [],
+            },
+            {
+              fishId: 10,
+              sampleCount: 4,
+              lastTsUtc: 1_700_000_000,
+              zoneRgbs: [0x39e58d],
+              fullZoneRgbs: [0x39e58d],
+            },
+          ],
+        },
+        catalog: {
+          fish: [
+            { fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" },
+            { fishId: 20, itemId: 900020, name: "Mako Shark", grade: "rare" },
+          ],
+          layers: [],
+        },
+      },
+    },
+    {
+      zoneCatalog: [
+        { zoneRgb: 0x39e58d, name: "Velia Coast" },
+        { zoneRgb: 0x123456, name: "Demi River" },
+        { zoneRgb: 0x654321, name: "Balenos River" },
+      ],
+    },
+  );
+
+  assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["samples"]);
+  assert.equal(viewModel.activePaneId, "samples");
+  assert.equal(viewModel.activePane.sections[0].kind, "point-samples");
+  assert.deepEqual(
+    viewModel.activePane.sections[0].rows.map((row) => [row.fishName, row.sampleCount, row.zoneKind]),
+    [
+      ["Sea Eel", 4, "full"],
+      ["Mako Shark", 1, "partial"],
+    ],
+  );
+  assert.deepEqual(
+    viewModel.activePane.sections[0].rows[1].zones.map((zone) => zone.name),
+    ["Demi River", "Balenos River"],
+  );
+});
+
 test("buildInfoViewModel lets zone loot condition selection switch branch rows", () => {
   const viewModel = buildInfoViewModel(
     {
@@ -468,6 +529,12 @@ test("patchTouchesInfoSignals stays narrow to selection, pane tab, rate display,
   assert.equal(
     patchTouchesInfoSignals({
       _map_runtime: { catalog: { layers: [] } },
+    }),
+    true,
+  );
+  assert.equal(
+    patchTouchesInfoSignals({
+      _map_runtime: { catalog: { fish: [] } },
     }),
     true,
   );

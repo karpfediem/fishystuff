@@ -171,7 +171,7 @@ function defaultSignals() {
         bookmarks: { open: false, collapsed: false, x: null, y: null },
       },
       search: { query: "", selectedTerms: [] },
-      layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
+      layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {}, sampleHoverVisibleByLayer: {} },
     },
     _map_bridged: {
       ui: {

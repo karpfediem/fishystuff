@@ -182,6 +182,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
             zone_rgb_u32: None,
             sample_count: point.sample_count,
             aggregated: point.aggregated,
+            point_samples: point.point_samples,
         })
         .collect();
 

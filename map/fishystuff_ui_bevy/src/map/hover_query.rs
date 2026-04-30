@@ -79,6 +79,7 @@ pub fn hover_info_at_world_point(
         world_x: world_point.x,
         world_z: world_point.z,
         layer_samples,
+        point_samples: Vec::new(),
     })
 }
 

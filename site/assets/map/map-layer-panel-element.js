@@ -112,6 +112,20 @@ function normalizeExpandedLayerIds(values) {
   return next;
 }
 
+function nextSampleHoverVisibleByLayer(current, layerIdInput, visible) {
+  const layerId = String(layerIdInput ?? "").trim();
+  const next = isPlainObject(current) ? cloneJson(current) : {};
+  if (!layerId) {
+    return next;
+  }
+  if (visible === false) {
+    next[layerId] = false;
+  } else {
+    delete next[layerId];
+  }
+  return next;
+}
+
 function syncLayerOpacityControl(container, layerId, opacity) {
   if (!container || !layerId) {
     return false;
@@ -279,6 +293,27 @@ export class FishyMapLayerPanelElement extends HTMLElementBase {
         this.writeBridgedFilters((filters) => {
           filters.layerPointIconsVisible = next;
         });
+        return;
+      }
+
+      const sampleHoverToggle = event.target.closest("input[data-layer-sample-hover]");
+      if (sampleHoverToggle) {
+        const layerId = String(sampleHoverToggle.getAttribute("data-layer-sample-hover") || "").trim();
+        if (!layerId) {
+          return;
+        }
+        this.dispatchPatch({
+          _map_ui: {
+            layers: {
+              sampleHoverVisibleByLayer: nextSampleHoverVisibleByLayer(
+                this.signals()?._map_ui?.layers?.sampleHoverVisibleByLayer,
+                layerId,
+                sampleHoverToggle.checked,
+              ),
+            },
+          },
+        });
+        this.scheduleRender();
         return;
       }
 
@@ -604,6 +639,8 @@ export class FishyMapLayerPanelElement extends HTMLElementBase {
           zoneCatalog: this._zoneCatalog,
           hoverFactVisibilityByLayer:
             liveSignals?._map_ui?.layers?.hoverFactsVisibleByLayer || {},
+          sampleHoverVisibleByLayer:
+            liveSignals?._map_ui?.layers?.sampleHoverVisibleByLayer || {},
           renderLoadingPanelMarkup,
           escapeHtml,
           dragHandleIcon,

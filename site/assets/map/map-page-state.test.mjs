@@ -104,6 +104,9 @@ test("map-page-state createPersistedState captures durable map branches", () => 
         hoverFactsVisibleByLayer: {
           regions: { origin_region: true },
         },
+        sampleHoverVisibleByLayer: {
+          fish_evidence: false,
+        },
       },
       search: {
         query: "eel",
@@ -143,6 +146,9 @@ test("map-page-state createPersistedState captures durable map branches", () => 
       expandedLayerIds: ["zone_mask"],
       hoverFactsVisibleByLayer: {
         regions: { origin_region: true },
+      },
+      sampleHoverVisibleByLayer: {
+        fish_evidence: false,
       },
     },
     search: {
@@ -198,6 +204,9 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
         hoverFactsVisibleByLayer: {
           regions: { origin_region: true },
         },
+        sampleHoverVisibleByLayer: {
+          fish_evidence: false,
+        },
       },
       search: {
         query: "eel",
@@ -237,6 +246,7 @@ test("map-page-state map preset payload excludes bookmarks and runtime catalog d
   assert.equal(payload.windowUi.settings.normalizeRates, false);
   assert.equal(payload.search.query, "eel");
   assert.deepEqual(payload.search.selectedTerms, [{ kind: "fish", fishId: 77 }]);
+  assert.deepEqual(payload.layers.sampleHoverVisibleByLayer, { fish_evidence: false });
   assert.deepEqual(payload.bridgedFilters.layerIdsVisible, ["bookmarks", "zone_mask"]);
   assert.deepEqual(payload.bridgedFilters.layerOpacities, { zone_mask: 0.5 });
   assert.deepEqual(payload.view, { viewMode: "3d", camera: {} });
@@ -284,6 +294,11 @@ test("map-page-state map preset restore patch applies UI and view without bookma
       query: "tuna",
       selectedTerms: [{ kind: "fish", fishId: 912 }],
     },
+    layers: {
+      sampleHoverVisibleByLayer: {
+        fish_evidence: false,
+      },
+    },
     bridgedUi: {
       showPoints: false,
       showPointIcons: true,
@@ -308,6 +323,7 @@ test("map-page-state map preset restore patch applies UI and view without bookma
   assert.equal(patch._map_ui.windowUi.settings.y, 90);
   assert.equal(patch._map_ui.search.query, "tuna");
   assert.deepEqual(patch._map_ui.search.selectedTerms, [{ kind: "fish", fishId: 912 }]);
+  assert.deepEqual(patch._map_ui.layers.sampleHoverVisibleByLayer, { fish_evidence: false });
   assert.equal(patch._map_bridged.ui.showPoints, false);
   assert.deepEqual(patch._map_bridged.filters.layerIdsVisible, ["zone_mask"]);
   assert.deepEqual(patch._map_session.view, { viewMode: "3d", camera: { zoom: 4 } });

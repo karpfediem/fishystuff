@@ -26,10 +26,10 @@ pub use snapshot::{
     FishyMapEffectiveSemanticFieldFilterSnapshot, FishyMapEffectiveZoneMembershipFilterSnapshot,
     FishyMapFishSummary, FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot,
     FishyMapLayerFilterBindingSummary, FishyMapLayerSummary, FishyMapPatchSummary,
-    FishyMapSelectionPointKind, FishyMapSelectionSnapshot, FishyMapSemanticTermSummary,
-    FishyMapStateSnapshot, FishyMapStatusSnapshot, FishyMapViewSnapshot,
-    FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot, FishyMapZoneEvidenceEntrySnapshot,
-    FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
+    FishyMapPointSampleSnapshot, FishyMapSelectionPointKind, FishyMapSelectionSnapshot,
+    FishyMapSemanticTermSummary, FishyMapStateSnapshot, FishyMapStatusSnapshot,
+    FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot,
+    FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
 };
 
 pub const FISHYMAP_CONTRACT_VERSION: u8 = 1;
@@ -552,6 +552,7 @@ mod tests {
             point_kind: Some(FishyMapSelectionPointKind::Waypoint),
             point_label: Some("Olvia Academy".to_string()),
             layer_samples: Vec::new(),
+            point_samples: Vec::new(),
         })
         .expect("serialize");
 

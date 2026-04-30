@@ -529,7 +529,7 @@ pub(super) fn view_bbox_map_px(
     })
 }
 
-fn point_icon_world_size(
+pub(super) fn point_icon_world_size(
     display_state: &MapDisplayState,
     camera_q: &Query<&Projection, With<Map2dCamera>>,
 ) -> f32 {
@@ -548,7 +548,7 @@ fn point_icon_world_size(
     ICON_SIZE_SCREEN_PX * current_scale * user_scale
 }
 
-fn ring_style_for_point(point: &RenderPoint) -> (f32, f32) {
+pub(super) fn ring_style_for_point(point: &RenderPoint) -> (f32, f32) {
     if !point.aggregated {
         return (1.0, 1.0);
     }
@@ -559,7 +559,7 @@ fn ring_style_for_point(point: &RenderPoint) -> (f32, f32) {
     (scale, alpha)
 }
 
-fn map_point_to_world(point: &RenderPoint) -> WorldPoint {
+pub(super) fn map_point_to_world(point: &RenderPoint) -> WorldPoint {
     if let (Some(world_x), Some(world_z)) = (point.world_x, point.world_z) {
         return WorldPoint::new(world_x as f64, world_z as f64);
     }
@@ -672,6 +672,7 @@ mod tests {
             zone_rgb_u32: None,
             sample_count: 4,
             aggregated: true,
+            point_samples: Vec::new(),
         };
         let mut cache = PointIconCache::default();
         let mut remote_images = RemoteImageCache::default();

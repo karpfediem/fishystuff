@@ -51,7 +51,10 @@ fn preferred_point_label_from_layer_samples(
 }
 
 pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
-    if hover.zone_rgb().is_none() && hover.layer_samples.is_empty() {
+    if hover.zone_rgb().is_none()
+        && hover.layer_samples.is_empty()
+        && hover.point_samples.is_empty()
+    {
         return None;
     }
     Some(SelectedInfo {
@@ -63,6 +66,7 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
         point_kind: Some(FishyMapSelectionPointKind::Clicked),
         point_label: preferred_point_label_from_layer_samples(&hover.layer_samples, None, None),
         layer_samples: hover.layer_samples.clone(),
+        point_samples: hover.point_samples.clone(),
     })
 }
 
@@ -134,6 +138,7 @@ pub fn selected_info_at_world_point(
             zone_names,
         ),
         layer_samples,
+        point_samples: Vec::new(),
     })
 }
 
@@ -156,6 +161,7 @@ pub fn selected_info_for_zone_rgb(
         point_kind: None,
         point_label: preferred_point_label_from_layer_samples(&layer_samples, None, zone_names),
         layer_samples,
+        point_samples: Vec::new(),
     }
 }
 
@@ -178,6 +184,7 @@ pub fn selected_info_for_semantic_field(
         point_kind: None,
         point_label: preferred_point_label_from_layer_samples(&layer_samples, None, zone_names),
         layer_samples,
+        point_samples: Vec::new(),
     })
 }
 
@@ -378,6 +385,13 @@ mod tests {
                 detail_pane: None,
                 detail_sections: Vec::new(),
             }],
+            point_samples: vec![crate::plugins::api::PointSampleSummary {
+                fish_id: 88,
+                sample_count: 2,
+                last_ts_utc: 1_700_000_000,
+                zone_rgbs: vec![0x123456],
+                full_zone_rgbs: vec![0x123456],
+            }],
         };
 
         let selected = selected_info_from_hover(&hover).expect("selected info");
@@ -393,6 +407,7 @@ mod tests {
         assert_eq!(selected.world_x, 1.25);
         assert_eq!(selected.world_z, 2.5);
         assert_eq!(selected.layer_samples, hover.layer_samples);
+        assert_eq!(selected.point_samples, hover.point_samples);
     }
 
     #[test]
@@ -413,6 +428,7 @@ mod tests {
                 detail_pane: None,
                 detail_sections: Vec::new(),
             }],
+            point_samples: Vec::new(),
         };
 
         let selected = selected_info_from_hover(&hover).expect("selected info");
@@ -423,6 +439,29 @@ mod tests {
             Some(FishyMapSelectionPointKind::Clicked)
         );
         assert_eq!(selected.layer_samples, hover.layer_samples);
+    }
+
+    #[test]
+    fn selected_info_from_hover_accepts_point_only_selection() {
+        let hover = HoverInfo {
+            map_px: 7,
+            map_py: 9,
+            world_x: 3.5,
+            world_z: 4.5,
+            layer_samples: Vec::new(),
+            point_samples: vec![crate::plugins::api::PointSampleSummary {
+                fish_id: 88,
+                sample_count: 2,
+                last_ts_utc: 1_700_000_000,
+                zone_rgbs: vec![0x123456],
+                full_zone_rgbs: Vec::new(),
+            }],
+        };
+
+        let selected = selected_info_from_hover(&hover).expect("selected info");
+        assert_eq!(selected.zone_rgb_u32(), None);
+        assert!(selected.layer_samples.is_empty());
+        assert_eq!(selected.point_samples, hover.point_samples);
     }
 
     #[test]

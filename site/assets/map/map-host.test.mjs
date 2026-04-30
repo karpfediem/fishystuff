@@ -1263,6 +1263,15 @@ test("hover output events are redispatched without cloning the full map state", 
           version: 1,
           worldX: 11,
           worldZ: 22,
+          pointSamples: [
+            {
+              fishId: 10,
+              sampleCount: 2,
+              lastTsUtc: 1_700_000_000,
+              zoneRgbs: [0x39e58d],
+              fullZoneRgbs: [0x39e58d],
+            },
+          ],
           layerSamples: [
             {
               layerId: "zone_mask",
@@ -1292,6 +1301,15 @@ test("hover output events are redispatched without cloning the full map state", 
     assert.deepEqual(received.hover, {
       worldX: 11,
       worldZ: 22,
+      pointSamples: [
+        {
+          fishId: 10,
+          sampleCount: 2,
+          lastTsUtc: 1_700_000_000,
+          zoneRgbs: [0x39e58d],
+          fullZoneRgbs: [0x39e58d],
+        },
+      ],
       layerSamples: [
         {
           layerId: "zone_mask",
@@ -1396,6 +1414,15 @@ test("selection output events include semantic payload and refreshed state", asy
           worldZ: 22,
           pointKind: "waypoint",
           pointLabel: "Olvia Academy",
+          pointSamples: [
+            {
+              fishId: 10,
+              sampleCount: 2,
+              lastTsUtc: 1_700_000_000,
+              zoneRgbs: [0x39e58d],
+              fullZoneRgbs: [0x39e58d],
+            },
+          ],
           layerSamples: semanticSelection.layerSamples,
         }),
       );
@@ -1407,11 +1434,29 @@ test("selection output events include semantic payload and refreshed state", asy
     assert.equal(received.worldZ, 22);
     assert.equal(received.pointKind, "waypoint");
     assert.equal(received.pointLabel, "Olvia Academy");
+    assert.deepEqual(received.pointSamples, [
+      {
+        fishId: 10,
+        sampleCount: 2,
+        lastTsUtc: 1_700_000_000,
+        zoneRgbs: [0x39e58d],
+        fullZoneRgbs: [0x39e58d],
+      },
+    ]);
     assert.deepEqual(received.layerSamples, semanticSelection.layerSamples);
     assert.deepEqual(received.state.selection, {
       ...semanticSelection,
       pointKind: "waypoint",
       pointLabel: "Olvia Academy",
+      pointSamples: [
+        {
+          fishId: 10,
+          sampleCount: 2,
+          lastTsUtc: 1_700_000_000,
+          zoneRgbs: [0x39e58d],
+          fullZoneRgbs: [0x39e58d],
+        },
+      ],
     });
     assert.deepEqual(received.inputState.filters.fishIds, [77]);
     assert.deepEqual(received.inputState.filters.zoneRgbs, [0xc17f7f]);

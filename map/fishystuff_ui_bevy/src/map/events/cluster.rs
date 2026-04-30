@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use fishystuff_api::models::events::{EventPointCompact, EventsQueryMode, MapBboxPx};
 
+use crate::plugins::api::PointSampleSummary;
+
 const RAW_RENDER_THRESHOLD: usize = 2_000;
 const FULL_DETAIL_VIEWPORT_MAX_SPAN_PX: i32 = 256;
 
@@ -14,6 +16,7 @@ pub struct DerivedRenderPoint {
     pub fish_id: Option<i32>,
     pub sample_count: u32,
     pub aggregated: bool,
+    pub point_samples: Vec<PointSampleSummary>,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +66,7 @@ pub fn cluster_view_events(
                 fish_id: Some(event.fish_id),
                 sample_count: 1,
                 aggregated: false,
+                point_samples: vec![point_sample_summary_for_event(event)],
             });
         }
         return ClusterOutput {
@@ -123,6 +127,7 @@ struct ClusterAcc {
     sum_world_z: i64,
     world_count: u32,
     fish_counts: HashMap<i32, u32>,
+    point_samples: BTreeMap<PointSampleSummaryKey, PointSampleAccumulator>,
 }
 
 impl ClusterAcc {
@@ -136,6 +141,16 @@ impl ClusterAcc {
             self.world_count = self.world_count.saturating_add(1);
         }
         *self.fish_counts.entry(event.fish_id).or_insert(0) += 1;
+        self.point_samples
+            .entry(PointSampleSummaryKey::from_event(event))
+            .or_insert_with(|| PointSampleAccumulator {
+                fish_id: event.fish_id,
+                sample_count: 0,
+                last_ts_utc: event.ts_utc,
+                zone_rgbs: normalized_zone_rgbs(event),
+                full_zone_rgbs: normalized_full_zone_rgbs(event),
+            })
+            .push(event);
     }
 
     fn to_render_point(&self) -> DerivedRenderPoint {
@@ -165,6 +180,7 @@ impl ClusterAcc {
             fish_id: top_fish_id,
             sample_count: self.count.max(1),
             aggregated: true,
+            point_samples: sorted_point_samples(&self.point_samples),
         }
     }
 
@@ -182,6 +198,101 @@ impl ClusterAcc {
         }
         best.map(|(fish_id, _)| fish_id)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PointSampleSummaryKey {
+    fish_id: i32,
+    zone_rgbs: Vec<u32>,
+    full_zone_rgbs: Vec<u32>,
+}
+
+impl PointSampleSummaryKey {
+    fn from_event(event: &EventPointCompact) -> Self {
+        Self {
+            fish_id: event.fish_id,
+            zone_rgbs: normalized_zone_rgbs(event),
+            full_zone_rgbs: normalized_full_zone_rgbs(event),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PointSampleAccumulator {
+    fish_id: i32,
+    sample_count: u32,
+    last_ts_utc: i64,
+    zone_rgbs: Vec<u32>,
+    full_zone_rgbs: Vec<u32>,
+}
+
+impl PointSampleAccumulator {
+    fn push(&mut self, event: &EventPointCompact) {
+        self.sample_count = self.sample_count.saturating_add(1);
+        self.last_ts_utc = self.last_ts_utc.max(event.ts_utc);
+    }
+
+    fn to_summary(&self) -> PointSampleSummary {
+        PointSampleSummary {
+            fish_id: self.fish_id,
+            sample_count: self.sample_count.max(1),
+            last_ts_utc: self.last_ts_utc,
+            zone_rgbs: self.zone_rgbs.clone(),
+            full_zone_rgbs: self.full_zone_rgbs.clone(),
+        }
+    }
+}
+
+fn point_sample_summary_for_event(event: &EventPointCompact) -> PointSampleSummary {
+    PointSampleSummary {
+        fish_id: event.fish_id,
+        sample_count: 1,
+        last_ts_utc: event.ts_utc,
+        zone_rgbs: normalized_zone_rgbs(event),
+        full_zone_rgbs: normalized_full_zone_rgbs(event),
+    }
+}
+
+fn sorted_point_samples(
+    samples: &BTreeMap<PointSampleSummaryKey, PointSampleAccumulator>,
+) -> Vec<PointSampleSummary> {
+    let mut summaries = samples
+        .values()
+        .map(PointSampleAccumulator::to_summary)
+        .collect::<Vec<_>>();
+    summaries.sort_by(|left, right| {
+        right
+            .sample_count
+            .cmp(&left.sample_count)
+            .then_with(|| right.last_ts_utc.cmp(&left.last_ts_utc))
+            .then_with(|| left.fish_id.cmp(&right.fish_id))
+            .then_with(|| left.zone_rgbs.cmp(&right.zone_rgbs))
+            .then_with(|| left.full_zone_rgbs.cmp(&right.full_zone_rgbs))
+    });
+    summaries
+}
+
+fn normalized_zone_rgbs(event: &EventPointCompact) -> Vec<u32> {
+    if !event.zone_rgbs.is_empty() {
+        return sorted_deduped(event.zone_rgbs.clone());
+    }
+    event.zone_rgb_u32.into_iter().collect()
+}
+
+fn normalized_full_zone_rgbs(event: &EventPointCompact) -> Vec<u32> {
+    if !event.full_zone_rgbs.is_empty() {
+        return sorted_deduped(event.full_zone_rgbs.clone());
+    }
+    if event.zone_rgbs.is_empty() {
+        return event.zone_rgb_u32.into_iter().collect();
+    }
+    Vec::new()
+}
+
+fn sorted_deduped(mut values: Vec<u32>) -> Vec<u32> {
+    values.sort_unstable();
+    values.dedup();
+    values
 }
 
 #[cfg(test)]
@@ -265,6 +376,58 @@ mod tests {
         assert_eq!(clustered.points[0].fish_id, Some(10));
         assert!(clustered.points[0].aggregated);
         assert_eq!(clustered.points[0].sample_count, 2501);
+    }
+
+    #[test]
+    fn aggregated_clusters_keep_sorted_point_sample_summaries() {
+        let mut events = Vec::new();
+        for idx in 0..2501 {
+            let (fish_id, zone_rgbs, full_zone_rgbs) = if idx < 1200 {
+                (10, vec![0x39e58d], vec![0x39e58d])
+            } else if idx < 2000 {
+                (20, vec![0x123456, 0x654321], Vec::new())
+            } else {
+                (30, vec![0x0abcde], vec![0x0abcde])
+            };
+            events.push(EventPointCompact {
+                event_id: idx as i64,
+                fish_id,
+                ts_utc: 1_700_000_000 + idx as i64,
+                map_px_x: 1000 + (idx % 8) as i32,
+                map_px_y: 2000 + (idx % 8) as i32,
+                length_milli: 1000,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: None,
+                zone_rgbs,
+                full_zone_rgbs,
+                source_kind: None,
+                source_id: None,
+            });
+        }
+
+        let indices: Vec<usize> = (0..events.len()).collect();
+        let viewport_bbox = MapBboxPx {
+            min_x: 0,
+            min_y: 0,
+            max_x: 2_000,
+            max_y: 2_000,
+        };
+        let clustered = cluster_view_events(&events, &indices, &viewport_bbox, 64);
+        let summaries = &clustered.points[0].point_samples;
+
+        assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
+        assert_eq!(clustered.points.len(), 1);
+        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries[0].fish_id, 10);
+        assert_eq!(summaries[0].sample_count, 1200);
+        assert_eq!(summaries[0].full_zone_rgbs, vec![0x39e58d]);
+        assert_eq!(summaries[1].fish_id, 20);
+        assert_eq!(summaries[1].sample_count, 800);
+        assert_eq!(summaries[1].zone_rgbs, vec![0x123456, 0x654321]);
+        assert!(summaries[1].full_zone_rgbs.is_empty());
+        assert_eq!(summaries[2].fish_id, 30);
+        assert_eq!(summaries[2].sample_count, 501);
     }
 
     #[test]

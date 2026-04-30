@@ -184,6 +184,81 @@ test("render switches loaded zone loot rates from the Datastar normalize rates p
   assert.doesNotMatch(panelSlot.innerHTML, /22\.2%/);
 });
 
+test("render shows clicked ranking sample rows in the selected samples pane", () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  element._shell = {
+    __fishymapInitialSignals: {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Ranking cluster",
+          layerSamples: [],
+          pointSamples: [
+            {
+              fishId: 10,
+              sampleCount: 3,
+              lastTsUtc: 1_700_000_000,
+              zoneRgbs: [0x39e58d],
+              fullZoneRgbs: [0x39e58d],
+            },
+            {
+              fishId: 20,
+              sampleCount: 1,
+              lastTsUtc: 1_700_200_000,
+              zoneRgbs: [0x123456, 0x654321],
+              fullZoneRgbs: [],
+            },
+          ],
+        },
+        catalog: {
+          fish: [
+            { fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" },
+            { fishId: 20, itemId: 900020, name: "Mako Shark", grade: "rare" },
+          ],
+          layers: [],
+        },
+      },
+    },
+  };
+  element._state = {
+    zoneCatalog: [
+      { zoneRgb: 0x39e58d, name: "Velia Coast", biteTimeMin: 5, biteTimeMax: 7 },
+      { zoneRgb: 0x123456, name: "Demi River", biteTimeMin: 5, biteTimeMax: 7 },
+      { zoneRgb: 0x654321, name: "Balenos River", biteTimeMin: 5, biteTimeMax: 7 },
+    ],
+    zoneLootStatus: "idle",
+    zoneLootSummary: null,
+    zoneLootRgb: null,
+    zoneLootRequestToken: 0,
+    zoneLootConditionSelection: {},
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+
+  element.render();
+
+  assert.match(panelSlot.innerHTML, /Ranking Samples/);
+  assert.match(panelSlot.innerHTML, /Sea Eel/);
+  assert.match(panelSlot.innerHTML, /Item 900010/);
+  assert.match(panelSlot.innerHTML, /Fish 10/);
+  assert.match(panelSlot.innerHTML, /x3/);
+  assert.match(panelSlot.innerHTML, /2023-11-14/);
+  assert.match(panelSlot.innerHTML, /Velia Coast/);
+  assert.match(panelSlot.innerHTML, /Mako Shark/);
+  assert.match(panelSlot.innerHTML, /Demi River/);
+  assert.match(panelSlot.innerHTML, /Balenos River/);
+  assert.match(panelSlot.innerHTML, /href="#fishy-date-confirmed"/);
+});
+
 test("normalize rates signal patch swaps loaded zone loot rates in place", () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();

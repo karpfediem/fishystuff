@@ -15,7 +15,7 @@ use crate::map::field_metadata::FieldMetadataCache;
 use crate::plugins::bookmarks::BookmarkState;
 
 pub(super) use self::filters::{current_layer_order, effective_filter_snapshot, effective_filters};
-pub(super) use self::state::hover_layer_samples_snapshot;
+pub(super) use self::state::{hover_layer_samples_snapshot, point_sample_snapshots};
 pub(super) use self::view::effective_view_snapshot;
 
 thread_local! {

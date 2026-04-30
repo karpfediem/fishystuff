@@ -711,6 +711,7 @@ mod tests {
             world_x: 101.0,
             world_z: 101.0,
             layer_samples: Vec::new(),
+            point_samples: Vec::new(),
         };
 
         assert_eq!(hovered_bookmark_index(&entries, Some(&hover), 1.0), Some(0));

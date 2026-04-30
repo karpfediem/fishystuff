@@ -75,17 +75,18 @@ function normalizeLayerBooleanRecord(value) {
   }
   const normalized = {};
   for (const [key, enabled] of Object.entries(value)) {
-    if (!String(key || "").trim()) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) {
       continue;
     }
-    if (enabled === true) {
-      normalized[key] = true;
+    if (typeof enabled === "boolean") {
+      normalized[normalizedKey] = enabled;
       continue;
     }
     if (isPlainObject(enabled)) {
       const nested = normalizeLayerBooleanRecord(enabled);
       if (Object.keys(nested).length) {
-        normalized[key] = nested;
+        normalized[normalizedKey] = nested;
       }
     }
   }
@@ -239,6 +240,9 @@ function storedUiSignals(signals) {
         hoverFactsVisibleByLayer: isPlainObject(signals?._map_ui?.layers?.hoverFactsVisibleByLayer)
           ? cloneJson(signals._map_ui.layers.hoverFactsVisibleByLayer)
           : {},
+        sampleHoverVisibleByLayer: isPlainObject(signals?._map_ui?.layers?.sampleHoverVisibleByLayer)
+          ? cloneJson(signals._map_ui.layers.sampleHoverVisibleByLayer)
+          : {},
       },
       search: {
         query: String(search?.query || ""),
@@ -324,6 +328,9 @@ function uiStorageSnapshot(stored) {
       hoverFactsVisibleByLayer: normalizeLayerBooleanRecord(
         stored?._map_ui?.layers?.hoverFactsVisibleByLayer,
       ),
+      sampleHoverVisibleByLayer: normalizeLayerBooleanRecord(
+        stored?._map_ui?.layers?.sampleHoverVisibleByLayer,
+      ),
     },
     search: {
       query: String(stored?._map_ui?.search?.query || ""),
@@ -388,6 +395,7 @@ function restoreUiPatch(parsed) {
         ? cloneJson(parsed.layers.expandedLayerIds)
         : [],
       hoverFactsVisibleByLayer: normalizeLayerBooleanRecord(parsed.layers.hoverFactsVisibleByLayer),
+      sampleHoverVisibleByLayer: normalizeLayerBooleanRecord(parsed.layers.sampleHoverVisibleByLayer),
     };
   }
   const search = isPlainObject(parsed.search)
@@ -525,6 +533,7 @@ function ensureUiSnapshot(stored) {
         layers: {
           expandedLayerIds: [],
           hoverFactsVisibleByLayer: {},
+          sampleHoverVisibleByLayer: {},
         },
         search: { query: "", expression: cloneJson(EMPTY_SEARCH_EXPRESSION), selectedTerms: [] },
         bridgedUi: {
@@ -566,6 +575,7 @@ function defaultMapPresetSnapshot() {
     layers: {
       expandedLayerIds: [],
       hoverFactsVisibleByLayer: {},
+      sampleHoverVisibleByLayer: {},
     },
     search: {
       query: "",
