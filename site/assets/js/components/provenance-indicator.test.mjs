@@ -2,6 +2,7 @@ import { test } from "bun:test";
 import assert from "node:assert/strict";
 
 import {
+    buildProvenanceDetailCards,
     buildProvenanceSegments,
     provenanceAriaLabel,
     provenanceIndicatorColor,
@@ -20,7 +21,7 @@ const ACTIVE_YELLOW_COLOR =
 const INACTIVE_GREY_COLOR =
     "color-mix(in oklab, var(--color-neutral) 28%, var(--color-base-300) 72%)";
 
-test("buildProvenanceSegments keeps community-only presence grey and community rate yellow", () => {
+test("buildProvenanceSegments marks community confirmed presence green and community rate yellow", () => {
     const [presenceSegment, rateSegment] = buildProvenanceSegments({
         rateSourceKind: "community",
         rateDetail: "Community guess · Prize subgroup 11054",
@@ -34,9 +35,9 @@ test("buildProvenanceSegments keeps community-only presence grey and community r
     assert.equal(presenceSegment.sourceLabel, "Community");
     assert.equal(rateSegment.sourceIcon, "source-community");
     assert.equal(presenceSegment.sourceIcon, "source-community");
-    assert.equal(presenceSegment.sourceTone, "community");
+    assert.equal(presenceSegment.sourceTone, "community-presence");
     assert.equal(rateSegment.color, ACTIVE_YELLOW_COLOR);
-    assert.equal(presenceSegment.color, ACTIVE_GREY_COLOR);
+    assert.equal(presenceSegment.color, ACTIVE_GREEN_COLOR);
     assert.match(provenanceAriaLabel(presenceSegment), /Presence: Community/);
     assert.match(provenanceAriaLabel(rateSegment), /Rate: Community guess/);
 });
@@ -95,6 +96,7 @@ test("buildProvenanceSegments prefers fully contained rings when mixed presence 
     });
 
     assert.equal(presenceSegment.sourceLabel, "Mixed support");
+    assert.equal(presenceSegment.sourceTone, "mixed");
     assert.equal(presenceSegment.color, ACTIVE_GREEN_COLOR);
 });
 
@@ -154,9 +156,37 @@ test("provenanceIndicatorColor derives presence color from resolved ring evidenc
         ACTIVE_YELLOW_COLOR,
     );
     assert.equal(
-        provenanceIndicatorColor("presence", "community", {
-            detail: "Community confirmed×2 · Prize subgroup",
+        provenanceIndicatorColor("presence", "mixed", {
+            detail: "Ranking ring overlaps zone edge ×3 | Community confirmed×2 · Prize subgroup",
         }),
-        ACTIVE_GREY_COLOR,
+        ACTIVE_GREEN_COLOR,
     );
+});
+
+test("buildProvenanceDetailCards separates source evidence into toned cards", () => {
+    const cards = buildProvenanceDetailCards(
+        "Community confirmed×1 · Prize subgroup 11054 · Row import: 2026-04-30 14:00 UTC · Source: Community workbook | Ranking ring overlaps zone edge ×3 · Last seen: 2026-04-29 13:00 UTC",
+    );
+
+    assert.equal(cards.length, 2);
+    assert.equal(cards[0].tone, "community-presence");
+    assert.equal(cards[0].icon, "source-community");
+    assert.equal(cards[0].badge, "Community support");
+    assert.equal(cards[0].rows[0].label, "Row import");
+    assert.equal(cards[0].rows[0].value, "2026-04-30 14:00 UTC");
+    assert.equal(cards[0].rows[0].label && cards[0].rows[0].value ? "date-confirmed" : "", "date-confirmed");
+    assert.equal(cards[1].tone, "ranking-partial");
+    assert.equal(cards[1].icon, "ring-partial");
+    assert.equal(cards[1].badge, "Partial ring");
+    assert.equal(cards[1].rows[0].label, "Last seen");
+});
+
+test("buildProvenanceDetailCards keeps community rate guesses yellow", () => {
+    const cards = buildProvenanceDetailCards(
+        "Community guess 5% · Community support: community_zone_fish_support",
+    );
+
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].tone, "community-rate-guess");
+    assert.equal(cards[0].badge, "Community guess");
 });

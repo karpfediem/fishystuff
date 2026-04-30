@@ -86,6 +86,7 @@ const iconSources = {
   "stopwatch-2-fill": { type: "mingcute", name: "stopwatch-2-fill" },
   "stopwatch-fill": { type: "mingcute", name: "stopwatch-fill" },
   "time-fill": { type: "mingcute", name: "time-fill" },
+  "date-confirmed": { type: "mingcute", name: "calendar-time-add-fill" },
   "source-community": { type: "mingcute", name: "group-3-fill" },
   "source-database": { type: "mingcute", name: "server-fill" },
   "ring-full": { type: "mingcute", name: "check-circle-fill" },

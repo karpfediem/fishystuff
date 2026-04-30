@@ -5813,18 +5813,44 @@ fn evidence_display_rate_for_setting(
 fn loot_species_rate_evidence(
     entry: &CalculatorZoneLootEntry,
 ) -> Option<&CalculatorZoneLootEvidence> {
-    entry
-        .evidence
-        .iter()
-        .find(|evidence| {
-            evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
-        })
-        .or_else(|| {
-            entry.evidence.iter().find(|evidence| {
-                evidence.source_family == "community"
-                    && evidence.claim_kind == "guessed_in_group_rate"
-            })
-        })
+    loot_species_database_rate_evidence(entry)
+        .or_else(|| loot_species_distinct_community_guess_evidence(entry))
+}
+
+fn loot_species_database_rate_evidence(
+    entry: &CalculatorZoneLootEntry,
+) -> Option<&CalculatorZoneLootEvidence> {
+    entry.evidence.iter().find(|evidence| {
+        evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
+    })
+}
+
+fn loot_species_community_guess_evidence(
+    entry: &CalculatorZoneLootEntry,
+) -> Option<&CalculatorZoneLootEvidence> {
+    entry.evidence.iter().find(|evidence| {
+        evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
+    })
+}
+
+fn evidence_rates_differ(
+    left: &CalculatorZoneLootEvidence,
+    right: &CalculatorZoneLootEvidence,
+) -> bool {
+    match (left.rate, right.rate) {
+        (Some(left), Some(right)) => (left - right).abs() > 0.000_000_001,
+        _ => true,
+    }
+}
+
+fn loot_species_distinct_community_guess_evidence(
+    entry: &CalculatorZoneLootEntry,
+) -> Option<&CalculatorZoneLootEvidence> {
+    let community = loot_species_community_guess_evidence(entry)?;
+    loot_species_database_rate_evidence(entry)
+        .map(|database| evidence_rates_differ(community, database))
+        .unwrap_or(true)
+        .then_some(community)
 }
 
 fn fish_group_label(slot_idx: u8) -> Option<&'static str> {
@@ -6863,12 +6889,19 @@ fn build_zone_loot_summary_condition_options(
                 chart_row,
                 &option_entries,
             );
+            let presence_text = loot_entries_presence_text(&option_entries, data.lang);
+            let presence_source_kind = loot_entries_presence_source_kind(&option_entries);
+            let presence_tooltip =
+                loot_entries_presence_tooltip(&option_entries, data.lang).unwrap_or_default();
             slot_options.push(ZoneLootSummaryConditionOption {
                 condition_text,
                 condition_tooltip,
                 drop_rate_text,
                 drop_rate_source_kind,
                 drop_rate_tooltip,
+                presence_text,
+                presence_source_kind,
+                presence_tooltip,
                 raw_drop_rate_text,
                 raw_drop_rate_tooltip,
                 normalized_drop_rate_text,
@@ -6978,6 +7011,28 @@ fn loot_species_presence_evidence(
 ) -> Vec<&CalculatorZoneLootEvidence> {
     let mut evidence = entry.evidence.iter().collect::<Vec<_>>();
     evidence.retain(|evidence| evidence.claim_kind == "presence");
+    evidence.sort_by(|left, right| {
+        loot_species_presence_priority(right)
+            .cmp(&loot_species_presence_priority(left))
+            .then_with(|| {
+                right
+                    .claim_count
+                    .unwrap_or_default()
+                    .cmp(&left.claim_count.unwrap_or_default())
+            })
+            .then_with(|| left.source_family.cmp(&right.source_family))
+            .then_with(|| left.scope.cmp(&right.scope))
+    });
+    evidence
+}
+
+fn loot_entries_presence_evidence(
+    entries: &[CalculatorZoneLootEntry],
+) -> Vec<&CalculatorZoneLootEvidence> {
+    let mut evidence = entries
+        .iter()
+        .flat_map(|entry| loot_species_presence_evidence(entry))
+        .collect::<Vec<_>>();
     evidence.sort_by(|left, right| {
         loot_species_presence_priority(right)
             .cmp(&loot_species_presence_priority(left))
@@ -7133,6 +7188,48 @@ fn loot_species_presence_source_kind(entry: &CalculatorZoneLootEntry) -> String 
     }
 }
 
+fn loot_entries_presence_text(
+    entries: &[CalculatorZoneLootEntry],
+    lang: CalculatorLocale,
+) -> Option<String> {
+    loot_entries_presence_evidence(entries)
+        .into_iter()
+        .next()
+        .map(|evidence| loot_species_presence_line(evidence, false, false, lang))
+}
+
+fn loot_entries_presence_tooltip(
+    entries: &[CalculatorZoneLootEntry],
+    lang: CalculatorLocale,
+) -> Option<String> {
+    let mut seen = HashSet::new();
+    let parts = loot_entries_presence_evidence(entries)
+        .into_iter()
+        .filter_map(|evidence| {
+            let line = loot_species_presence_line(evidence, true, true, lang);
+            seen.insert(line.clone()).then_some(line)
+        })
+        .collect::<Vec<_>>();
+    (!parts.is_empty()).then_some(parts.join(" | "))
+}
+
+fn loot_entries_presence_source_kind(entries: &[CalculatorZoneLootEntry]) -> String {
+    let mut families = loot_entries_presence_evidence(entries)
+        .into_iter()
+        .map(|evidence| evidence.source_family.as_str())
+        .collect::<Vec<_>>();
+    families.sort_unstable();
+    families.dedup();
+    match families.as_slice() {
+        [] => String::new(),
+        ["community"] => "community".to_string(),
+        ["ranking"] => "ranking".to_string(),
+        ["database"] => "database".to_string(),
+        [_] => families[0].to_string(),
+        _ => "mixed".to_string(),
+    }
+}
+
 fn loot_species_drop_rate_text(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
@@ -7165,13 +7262,19 @@ fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'stat
             "community"
         };
     }
-    loot_species_rate_evidence(entry)
-        .map(|evidence| match evidence.source_family.as_str() {
-            "database" => "database",
-            "community" => "community",
-            _ => "derived",
-        })
-        .unwrap_or("derived")
+    let has_database_rate = loot_species_database_rate_evidence(entry).is_some();
+    let has_distinct_community_guess =
+        loot_species_distinct_community_guess_evidence(entry).is_some();
+    if has_database_rate && has_distinct_community_guess {
+        return "mixed";
+    }
+    if has_distinct_community_guess {
+        return "community";
+    }
+    if has_database_rate {
+        return "database";
+    }
+    "derived"
 }
 
 fn loot_species_has_community_subgroup_source(entry: &CalculatorZoneLootEntry) -> bool {
@@ -7246,20 +7349,19 @@ fn contribution_lineage_detail(
         parts.push(format!("{label}: {source}"));
     }
     if include_item_source {
-        if let Some(drop_row) = contribution_drop_row_detail(contribution) {
-            parts.push(drop_row);
+        for detail in contribution_drop_row_details(contribution) {
+            parts.push(detail);
         }
     }
 
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-fn contribution_drop_row_detail(
-    contribution: &CalculatorZoneLootRateContribution,
-) -> Option<String> {
+fn contribution_drop_row_details(contribution: &CalculatorZoneLootRateContribution) -> Vec<String> {
     match contribution.item_source_family.as_deref() {
         Some("community") => {
             let mut parts = Vec::new();
+            let mut details = Vec::new();
             parts.push(
                 non_empty_owned(contribution.item_source_label.as_deref())
                     .or_else(|| non_empty_owned(contribution.item_source_id.as_deref()))
@@ -7278,15 +7380,16 @@ fn contribution_drop_row_detail(
             if let Some(imported_at_utc) =
                 provenance_datetime_text(contribution.item_source_imported_at_utc.as_deref())
             {
-                parts.push(format!("row import {imported_at_utc}"));
+                details.push(format!("Row import: {imported_at_utc}"));
             }
-            Some(format!("Drop row: {}", parts.join(", ")))
+            details.push(format!("Drop row: {}", parts.join(", ")));
+            details
         }
-        Some("database") => Some("Drop row: item_sub_group_table".to_string()),
+        Some("database") => vec!["Drop row: item_sub_group_table".to_string()],
         _ if contribution.source_family == "database" => {
-            Some("Drop row: item_sub_group_table".to_string())
+            vec!["Drop row: item_sub_group_table".to_string()]
         }
-        _ => None,
+        _ => Vec::new(),
     }
 }
 
@@ -7434,12 +7537,7 @@ fn loot_species_drop_rate_tooltip_for_setting(
         );
     }
 
-    let db_rate_text = entry
-        .evidence
-        .iter()
-        .find(|evidence| {
-            evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
-        })
+    let db_rate_text = loot_species_database_rate_evidence(entry)
         .and_then(|evidence| evidence_display_rate_for_setting(show_normalized_rates, evidence))
         .map(|rate| {
             append_provenance_detail(
@@ -7451,12 +7549,7 @@ fn loot_species_drop_rate_tooltip_for_setting(
             )
         });
 
-    let guessed_rate_text = entry
-        .evidence
-        .iter()
-        .find(|evidence| {
-            evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
-        })
+    let guessed_rate_text = loot_species_distinct_community_guess_evidence(entry)
         .and_then(|evidence| evidence_display_rate_for_setting(show_normalized_rates, evidence))
         .map(|rate| {
             append_provenance_detail(
@@ -18476,6 +18569,45 @@ mod tests {
     }
 
     #[test]
+    fn loot_species_rate_tooltip_omits_community_guess_matching_db_rate() {
+        let signals = CalculatorSignals {
+            show_normalized_select_rates: false,
+            ..CalculatorSignals::default()
+        };
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.02,
+            evidence: vec![
+                CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.02),
+                    normalized_rate: Some(0.02),
+                    status: Some("best_effort".to_string()),
+                    ..CalculatorZoneLootEvidence::default()
+                },
+                CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "guessed_in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.02),
+                    normalized_rate: Some(0.02),
+                    status: Some("guessed".to_string()),
+                    source_id: Some("community_zone_fish_support".to_string()),
+                    ..CalculatorZoneLootEvidence::default()
+                },
+            ],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(loot_species_drop_rate_source_kind(&entry), "database");
+        assert_eq!(
+            loot_species_drop_rate_tooltip(&signals, &entry, CalculatorLocale::EnUs),
+            "DB 2%"
+        );
+    }
+
+    #[test]
     fn loot_species_rate_tooltip_includes_group_subgroup_and_source_lineage() {
         let signals = CalculatorSignals {
             show_normalized_select_rates: false,
@@ -18559,7 +18691,7 @@ mod tests {
         assert_eq!(loot_species_drop_rate_source_kind(&entry), "mixed");
         assert_eq!(
             loot_species_drop_rate_tooltip(&signals, &entry, CalculatorLocale::EnUs),
-            "DB 35% · Group path: main group 10952 -> subgroup 10952, option 0 · Zone mapping: Flockfish final combined zone group table (DropID GENERAL) · Drop row: Community Subgroups(no formulas) workbook, no formulas row 327, added row, row import 2026-04-30 14:00 UTC"
+            "DB 35% · Group path: main group 10952 -> subgroup 10952, option 0 · Zone mapping: Flockfish final combined zone group table (DropID GENERAL) · Row import: 2026-04-30 14:00 UTC · Drop row: Community Subgroups(no formulas) workbook, no formulas row 327, added row"
         );
     }
 

@@ -47,6 +47,9 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "Default General source",
+            presenceText: "Community confirmed×1 · General subgroup",
+            presenceSourceKind: "community",
+            presenceTooltip: "Community confirmed×1 · General subgroup 11054",
             rawDropRateText: "120%",
             rawDropRateTooltip: "Default raw General source",
             normalizedDropRateText: "80%",
@@ -110,6 +113,8 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
   assert.equal(summary.groups[0].conditionOptions[0].dropRateText, "80%");
   assert.equal(summary.groups[0].conditionOptions[0].dropRateSourceKind, "database");
   assert.equal(summary.groups[0].conditionOptions[0].dropRateTooltip, "Default General source");
+  assert.equal(summary.groups[0].conditionOptions[0].presenceSourceKind, "community");
+  assert.match(summary.groups[0].conditionOptions[0].presenceTooltip, /General subgroup 11054/);
   assert.equal(summary.groups[0].conditionOptions[0].rawDropRateTooltip, "Default raw General source");
   assert.equal(summary.groups[0].conditionOptions[0].normalizedDropRateText, "80%");
   assert.equal(summary.groups[0].conditionOptions[0].active, true);

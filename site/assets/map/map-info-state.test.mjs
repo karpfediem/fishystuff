@@ -91,6 +91,9 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
                 dropRateText: "80%",
                 dropRateSourceKind: "database",
                 dropRateTooltip: "Default General group lineage",
+                presenceText: "Community confirmed×1 · General subgroup",
+                presenceSourceKind: "community",
+                presenceTooltip: "Community confirmed×1 · General subgroup 11054",
                 rawDropRateText: "80%",
                 rawDropRateTooltip: "Default General group lineage",
                 normalizedDropRateText: "80%",
@@ -237,6 +240,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.conditionText,
     "Default",
+  );
+  assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.presenceSourceKind,
+    "community",
   );
   assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.profiles?.[0]?.groups?.[0]?.dropRateText,

@@ -174,6 +174,9 @@ function provenanceRailMarkup(entry) {
               aria-label="${escapeHtml(provenanceAriaLabel(segment))}"
               data-fishy-provenance-label="${escapeHtml(segment.label)}"
               data-fishy-provenance-source="${escapeHtml(segment.sourceLabel)}"
+              data-fishy-provenance-source-kind="${escapeHtml(segment.sourceKind)}"
+              data-fishy-provenance-source-tone="${escapeHtml(segment.sourceTone)}"
+              data-fishy-provenance-source-icon="${escapeHtml(segment.sourceIcon)}"
               data-fishy-provenance-detail="${escapeHtml(segment.detail)}"
               data-fishy-provenance-color="${escapeHtml(segment.color)}"
             ></span>

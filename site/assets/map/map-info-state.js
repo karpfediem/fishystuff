@@ -132,6 +132,9 @@ function normalizeZoneLootConditionOptions(group, normalizeRates = true) {
       conditionTooltip: trimString(option?.conditionTooltip),
       ...zoneLootRateDisplayFields(option, normalizeRates),
       dropRateSourceKind: trimString(option?.dropRateSourceKind),
+      presenceText: trimString(option?.presenceText),
+      presenceSourceKind: trimString(option?.presenceSourceKind),
+      presenceTooltip: trimString(option?.presenceTooltip),
       active: option?.active === true,
       speciesRows: Array.isArray(option?.speciesRows)
         ? option.speciesRows.map((row) => normalizeZoneLootSpeciesRow(row, normalizeRates))
@@ -230,6 +233,9 @@ function buildZoneLootGroups(summary, conditionSelection = {}, normalizeRates = 
           selectedConditionRateLineage ||
           trimString(selectedConditionRateFields?.dropRateTooltip) ||
           groupRateFields.dropRateTooltip,
+        presenceText: trimString(selectedCondition?.presenceText),
+        presenceSourceKind: trimString(selectedCondition?.presenceSourceKind),
+        presenceTooltip: trimString(selectedCondition?.presenceTooltip),
         conditionText: trimString(selectedCondition?.conditionText) || trimString(group?.conditionText),
         conditionTooltip:
           trimString(selectedCondition?.conditionTooltip) || trimString(group?.conditionTooltip),

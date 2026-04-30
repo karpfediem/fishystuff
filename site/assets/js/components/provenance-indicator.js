@@ -17,7 +17,7 @@ const PROVENANCE_PRESENCE_FULL_COLOR =
     "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
 const PROVENANCE_PRESENCE_PARTIAL_COLOR =
     "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260430-2";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260430-3";
 
 function normalizeSourceKind(value) {
     const normalized = trimString(value).toLowerCase();
@@ -50,7 +50,7 @@ function sourceLabel(channel, sourceKind) {
         return channel === "presence" ? "Ranking ring" : "Ranking";
     }
     if (sourceKind === "community") {
-        return channel === "rate" ? "Community guess" : "Community";
+        return "Community";
     }
     if (sourceKind === "derived") {
         return "Derived";
@@ -87,6 +87,28 @@ function sourceKindFromLabel(value) {
     return "unknown";
 }
 
+function communityPresenceSupport(detail, valueText = "") {
+    const normalized = `${trimString(detail)} | ${trimString(valueText)}`.toLowerCase();
+    if (normalized.includes("unconfirmed")) {
+        return "unconfirmed";
+    }
+    if (normalized.includes("data incomplete") || normalized.includes("data_incomplete")) {
+        return "incomplete";
+    }
+    if (normalized.includes("community confirmed") || normalized.includes("confirmed×")) {
+        return "confirmed";
+    }
+    if (normalized.includes("community guessed") || normalized.includes("guessed×")) {
+        return "guessed";
+    }
+    return "none";
+}
+
+function communityRateGuessSupport(detail, valueText = "") {
+    const normalized = `${trimString(detail)} | ${trimString(valueText)}`.toLowerCase();
+    return normalized.includes("community guess") || normalized.includes("guessed_in_group_rate");
+}
+
 function sourceTone(channel, sourceKind, detail, valueText = "") {
     const normalizedSourceKind = normalizeSourceKind(sourceKind);
     if (normalizedSourceKind === "mixed") {
@@ -95,8 +117,15 @@ function sourceTone(channel, sourceKind, detail, valueText = "") {
     if (normalizedSourceKind === "database") {
         return "database";
     }
-    if (normalizedSourceKind === "community") {
+    if (channel === "presence" && normalizedSourceKind === "community") {
+        const support = communityPresenceSupport(detail, valueText);
+        if (support === "confirmed" || support === "guessed") {
+            return "community-presence";
+        }
         return "community";
+    }
+    if (channel === "rate" && normalizedSourceKind === "community") {
+        return communityRateGuessSupport(detail, valueText) ? "community-rate-guess" : "community";
     }
     if (channel === "presence" && normalizedSourceKind === "ranking") {
         const ringSupport = presenceRingSupport(detail, valueText);
@@ -109,6 +138,9 @@ function sourceTone(channel, sourceKind, detail, valueText = "") {
     }
     if (normalizedSourceKind === "ranking") {
         return "ranking";
+    }
+    if (normalizedSourceKind === "community") {
+        return "community";
     }
     if (normalizedSourceKind === "overlay") {
         return "overlay";
@@ -137,10 +169,15 @@ function sourceIconAlias(channel, sourceKind, detail, valueText = "") {
 }
 
 function sourceBadgeClass(tone) {
-    if (tone === "ranking" || tone === "ranking-full") {
+    if (
+        tone === "ranking"
+        || tone === "ranking-full"
+        || tone === "community"
+        || tone === "community-presence"
+    ) {
         return "badge-success";
     }
-    if (tone === "ranking-partial" || tone === "community") {
+    if (tone === "ranking-partial" || tone === "community-rate-guess") {
         return "badge-warning";
     }
     if (tone === "database") {
@@ -150,7 +187,7 @@ function sourceBadgeClass(tone) {
         return "badge-secondary";
     }
     if (tone === "mixed") {
-        return "badge-accent";
+        return "badge-neutral";
     }
     return "badge-neutral";
 }
@@ -240,6 +277,13 @@ export function provenanceIndicatorColor(
         return PROVENANCE_INACTIVE_COLOR;
     }
     if (channel === "presence") {
+        const communitySupport = communityPresenceSupport(detail, valueText);
+        if (communitySupport === "confirmed") {
+            return PROVENANCE_PRESENCE_FULL_COLOR;
+        }
+        if (communitySupport === "guessed") {
+            return PROVENANCE_PRESENCE_PARTIAL_COLOR;
+        }
         const ringSupport = presenceRingSupport(detail, valueText);
         if (ringSupport === "full") {
             return PROVENANCE_PRESENCE_FULL_COLOR;
@@ -248,6 +292,9 @@ export function provenanceIndicatorColor(
             return PROVENANCE_PRESENCE_PARTIAL_COLOR;
         }
         return PROVENANCE_NEUTRAL_COLOR;
+    }
+    if (communityRateGuessSupport(detail, valueText)) {
+        return PROVENANCE_RATE_COMMUNITY_COLOR;
     }
     const normalizedSourceKind = normalizedRateSourceKind(sourceKind, detail);
     if (normalizedSourceKind === "database") {
@@ -285,7 +332,11 @@ function buildSegment({
         channel,
         label,
         sourceKind: normalizedSourceKind,
-        sourceLabel: source,
+        sourceLabel: channel === "rate"
+            && normalizedSourceKind === "community"
+            && communityRateGuessSupport(resolvedDetail, normalizedValueText)
+            ? "Community guess"
+            : source,
         sourceTone: sourceTone(channel, normalizedSourceKind, resolvedDetail, normalizedValueText),
         sourceIcon: sourceIconAlias(channel, normalizedSourceKind, resolvedDetail, normalizedValueText),
         detail: resolvedDetail,
@@ -344,13 +395,13 @@ function ensureTooltipElement() {
     }
     tooltipElement = documentRef.createElement("div");
     tooltipElement.className =
-        "fishy-provenance-tooltip card card-compact border border-base-300 bg-base-100 shadow-xl";
+        "fishy-provenance-tooltip border border-base-300 bg-base-100 shadow-xl";
     tooltipElement.hidden = true;
     tooltipElement.setAttribute("role", "tooltip");
     tooltipElement.innerHTML = `
         <div class="fishy-provenance-tooltip__header">
-            <span class="fishy-provenance-tooltip__title">
-                <span class="fishy-provenance-tooltip__source-icon-shell" aria-hidden="true"></span>
+            <span class="fishy-provenance-tooltip__badge badge badge-sm badge-outline">
+                <span class="fishy-provenance-tooltip__swatch" aria-hidden="true"></span>
                 <span class="fishy-provenance-tooltip__label"></span>
             </span>
             <span class="fishy-provenance-tooltip__source badge badge-sm badge-soft badge-neutral"></span>
@@ -361,26 +412,180 @@ function ensureTooltipElement() {
     return tooltipElement;
 }
 
-function detailRows(detail) {
+function parseDetailRow(part) {
+    const separatorIndex = part.indexOf(":");
+    if (separatorIndex > 0 && separatorIndex <= 28) {
+        return {
+            label: part.slice(0, separatorIndex).trim(),
+            value: part.slice(separatorIndex + 1).trim(),
+        };
+    }
+    return { label: "", value: part };
+}
+
+function detailRowIsDate(row) {
+    const label = trimString(row?.label).toLowerCase();
+    const value = trimString(row?.value).toLowerCase();
+    return label === "row import"
+        || label === "last seen"
+        || label.includes("import date")
+        || label.includes("seen date")
+        || value.includes("row import ")
+        || value.includes("last seen ");
+}
+
+function detailBlockSourceKind(text) {
+    const normalized = trimString(text).toLowerCase();
+    if (
+        normalized.includes("ring fully inside zone")
+        || normalized.includes("ring overlaps zone")
+        || normalized.includes("ranking")
+        || normalized.includes("ring_full")
+        || normalized.includes("ring_partial")
+    ) {
+        return "ranking";
+    }
+    if (
+        normalized.startsWith("db ")
+        || normalized.includes("database")
+        || normalized.includes("db-backed")
+        || normalized.includes("zone mapping")
+        || normalized.includes("drop row: item_sub_group_table")
+    ) {
+        return "database";
+    }
+    if (normalized.includes("community") || normalized.includes("workbook")) {
+        return "community";
+    }
+    if (normalized.includes("overlay") || normalized.includes("personal")) {
+        return "overlay";
+    }
+    if (normalized.includes("derived")) {
+        return "derived";
+    }
+    return "unknown";
+}
+
+function detailBlockTone(text) {
+    const sourceKind = detailBlockSourceKind(text);
+    if (sourceKind === "community") {
+        const support = communityPresenceSupport(text);
+        if (support === "confirmed" || support === "guessed") {
+            return "community-presence";
+        }
+        if (communityRateGuessSupport(text)) {
+            return "community-rate-guess";
+        }
+        return "community";
+    }
+    if (sourceKind === "ranking") {
+        const ringSupport = presenceRingSupport(text);
+        if (ringSupport === "full") {
+            return "ranking-full";
+        }
+        if (ringSupport === "partial") {
+            return "ranking-partial";
+        }
+        return "ranking";
+    }
+    if (sourceKind === "database") {
+        return "database";
+    }
+    if (sourceKind === "overlay") {
+        return "overlay";
+    }
+    return "neutral";
+}
+
+function detailBlockIconAlias(text) {
+    const sourceKind = detailBlockSourceKind(text);
+    if (sourceKind === "ranking") {
+        const ringSupport = presenceRingSupport(text);
+        if (ringSupport === "full") {
+            return "ring-full";
+        }
+        if (ringSupport === "partial") {
+            return "ring-partial";
+        }
+    }
+    if (sourceKind === "community") {
+        return "source-community";
+    }
+    if (sourceKind === "database") {
+        return "source-database";
+    }
+    return "";
+}
+
+function detailBlockBadgeLabel(text) {
+    const sourceKind = detailBlockSourceKind(text);
+    if (sourceKind === "community") {
+        const support = communityPresenceSupport(text);
+        if (support === "confirmed" || support === "guessed") {
+            return "Community support";
+        }
+        if (communityRateGuessSupport(text)) {
+            return "Community guess";
+        }
+        return "Community";
+    }
+    if (sourceKind === "ranking") {
+        const ringSupport = presenceRingSupport(text);
+        if (ringSupport === "full") {
+            return "Full ring";
+        }
+        if (ringSupport === "partial") {
+            return "Partial ring";
+        }
+        return "Ranking";
+    }
+    if (sourceKind === "database") {
+        return "Database";
+    }
+    if (sourceKind === "overlay") {
+        return "Overlay";
+    }
+    if (sourceKind === "derived") {
+        return "Derived";
+    }
+    return "Detail";
+}
+
+function detailSourceCards(detail) {
     return trimString(detail)
-        .split(/\s*(?:\n+|\s+\|\s+|\s+·\s+)\s*/u)
+        .split(/\s+\|\s+/u)
         .map((part) => part.trim())
         .filter(Boolean)
-        .map((part) => {
-            const separatorIndex = part.indexOf(":");
-            if (separatorIndex > 0 && separatorIndex <= 28) {
-                return {
-                    label: part.slice(0, separatorIndex).trim(),
-                    value: part.slice(separatorIndex + 1).trim(),
-                };
-            }
-            return { label: "", value: part };
+        .map((block) => {
+            const parts = block
+                .split(/\s*(?:\n+|\s+·\s+)\s*/u)
+                .map((part) => part.trim())
+                .filter(Boolean);
+            const summary = parts.shift() || block;
+            const rows = parts
+                .map(parseDetailRow)
+                .filter((row) => row.label || row.value)
+                .sort((left, right) => Number(detailRowIsDate(right)) - Number(detailRowIsDate(left)));
+            return {
+                summary,
+                badge: detailBlockBadgeLabel(block),
+                icon: detailBlockIconAlias(block),
+                rows,
+                tone: detailBlockTone(block),
+            };
         })
-        .filter((row) => row.label || row.value);
+        .filter((card) => card.summary || card.rows.length > 0);
+}
+
+export function buildProvenanceDetailCards(detail) {
+    return detailSourceCards(detail);
 }
 
 function detailIconAlias(row) {
     const normalized = `${trimString(row.label)} ${trimString(row.value)}`.toLowerCase();
+    if (detailRowIsDate(row)) {
+        return "date-confirmed";
+    }
     if (normalized.includes("ring fully inside zone") || normalized.includes("ring_full")) {
         return "ring-full";
     }
@@ -413,7 +618,14 @@ function detailRowTone(row) {
         return "ranking-partial";
     }
     if (normalized.includes("community") || normalized.includes("workbook")) {
-        return "community";
+        const support = communityPresenceSupport(normalized);
+        if (support === "confirmed" || support === "guessed") {
+            return "community-presence";
+        }
+        if (communityRateGuessSupport(normalized)) {
+            return "community-rate-guess";
+        }
+        return "";
     }
     if (normalized.includes("database") || normalized.includes("db ")) {
         return "database";
@@ -451,24 +663,6 @@ function appendDetailIcon(rowElement, alias) {
     rowElement.appendChild(svg);
 }
 
-function renderSourceIcon(tooltip, alias) {
-    const documentRef = globalThis.document;
-    const shell = tooltip.querySelector(".fishy-provenance-tooltip__source-icon-shell");
-    if (!documentRef || !shell) {
-        return;
-    }
-    shell.replaceChildren();
-    const svg = createSpriteIcon(documentRef, "fishy-provenance-tooltip__source-icon", alias);
-    if (svg) {
-        shell.appendChild(svg);
-        return;
-    }
-    const status = documentRef.createElement("span");
-    status.className = "fishy-provenance-tooltip__source-status status status-sm";
-    status.setAttribute("aria-hidden", "true");
-    shell.appendChild(status);
-}
-
 function renderTooltipDetails(tooltip, detail) {
     const documentRef = globalThis.document;
     const container = tooltip.querySelector(".fishy-provenance-tooltip__details");
@@ -476,29 +670,79 @@ function renderTooltipDetails(tooltip, detail) {
         return;
     }
     container.replaceChildren();
-    const rows = detailRows(detail);
-    container.hidden = rows.length === 0;
-    for (const row of rows) {
-        const rowElement = documentRef.createElement("div");
-        rowElement.className = row.label
-            ? "fishy-provenance-tooltip__detail-row fishy-provenance-tooltip__detail-row--keyed"
-            : "fishy-provenance-tooltip__detail-row";
-        const rowTone = detailRowTone(row);
-        if (rowTone) {
-            rowElement.dataset.detailTone = rowTone;
+    const cards = detailSourceCards(detail);
+    container.hidden = cards.length === 0;
+    for (const card of cards) {
+        const cardElement = documentRef.createElement("div");
+        cardElement.className = "fishy-provenance-tooltip__source-card card card-xs card-border";
+        cardElement.dataset.sourceTone = card.tone;
+
+        const cardBody = documentRef.createElement("div");
+        cardBody.className = "fishy-provenance-tooltip__source-card-body card-body";
+
+        const headerElement = documentRef.createElement("div");
+        headerElement.className = "fishy-provenance-tooltip__source-card-header";
+
+        const iconShell = documentRef.createElement("span");
+        iconShell.className = "fishy-provenance-tooltip__source-card-icon-shell";
+        iconShell.setAttribute("aria-hidden", "true");
+        const icon = createSpriteIcon(
+            documentRef,
+            "fishy-provenance-tooltip__source-card-icon",
+            card.icon,
+        );
+        if (icon) {
+            iconShell.appendChild(icon);
+        } else {
+            const status = documentRef.createElement("span");
+            status.className = "fishy-provenance-tooltip__source-card-status status status-sm";
+            status.setAttribute("aria-hidden", "true");
+            iconShell.appendChild(status);
         }
-        if (row.label) {
-            const keyElement = documentRef.createElement("span");
-            keyElement.className = "fishy-provenance-tooltip__detail-key";
-            keyElement.textContent = row.label;
-            rowElement.appendChild(keyElement);
+        headerElement.appendChild(iconShell);
+
+        const summaryElement = documentRef.createElement("span");
+        summaryElement.className = "fishy-provenance-tooltip__source-card-summary";
+        summaryElement.textContent = card.summary;
+        headerElement.appendChild(summaryElement);
+
+        const badgeElement = documentRef.createElement("span");
+        badgeElement.className =
+            `fishy-provenance-tooltip__source-card-badge badge badge-xs badge-soft ${sourceBadgeClass(card.tone)}`;
+        badgeElement.textContent = card.badge;
+        headerElement.appendChild(badgeElement);
+        cardBody.appendChild(headerElement);
+
+        if (card.rows.length > 0) {
+            const rowsElement = documentRef.createElement("div");
+            rowsElement.className = "fishy-provenance-tooltip__source-card-rows";
+            for (const row of card.rows) {
+                const rowElement = documentRef.createElement("div");
+                rowElement.className = row.label
+                    ? "fishy-provenance-tooltip__detail-row fishy-provenance-tooltip__detail-row--keyed"
+                    : "fishy-provenance-tooltip__detail-row";
+                const rowTone = detailRowTone(row);
+                if (rowTone) {
+                    rowElement.dataset.detailTone = rowTone;
+                }
+                if (row.label) {
+                    const keyElement = documentRef.createElement("span");
+                    keyElement.className = "fishy-provenance-tooltip__detail-key";
+                    keyElement.textContent = row.label;
+                    rowElement.appendChild(keyElement);
+                }
+                appendDetailIcon(rowElement, detailIconAlias(row));
+                const valueElement = documentRef.createElement("span");
+                valueElement.className = "fishy-provenance-tooltip__detail-value";
+                valueElement.textContent = row.value;
+                rowElement.appendChild(valueElement);
+                rowsElement.appendChild(rowElement);
+            }
+            cardBody.appendChild(rowsElement);
         }
-        appendDetailIcon(rowElement, detailIconAlias(row));
-        const valueElement = documentRef.createElement("span");
-        valueElement.className = "fishy-provenance-tooltip__detail-value";
-        valueElement.textContent = row.value;
-        rowElement.appendChild(valueElement);
-        container.appendChild(rowElement);
+
+        cardElement.appendChild(cardBody);
+        container.appendChild(cardElement);
     }
 }
 
@@ -562,8 +806,6 @@ function showTooltip(anchor, event) {
     const color = trimString(anchor.dataset.fishyProvenanceColor);
     const tone = trimString(anchor.dataset.fishyProvenanceSourceTone)
         || sourceTone(label.toLowerCase(), sourceKind, detail);
-    const icon = trimString(anchor.dataset.fishyProvenanceSourceIcon)
-        || sourceIconAlias(label.toLowerCase(), sourceKind, detail);
     tooltip.querySelector(".fishy-provenance-tooltip__label").textContent = label;
     const sourceElement = tooltip.querySelector(".fishy-provenance-tooltip__source");
     sourceElement.className =
@@ -571,7 +813,6 @@ function showTooltip(anchor, event) {
     sourceElement.textContent = source;
     tooltip.dataset.sourceKind = sourceKind;
     tooltip.dataset.sourceTone = tone;
-    renderSourceIcon(tooltip, icon);
     renderTooltipDetails(tooltip, detail);
     tooltip.style.setProperty("--fishy-provenance-tooltip-color", color);
     tooltip.hidden = false;
