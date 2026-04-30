@@ -29,6 +29,7 @@ jaeger_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/jaeger-current"
 grafana_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/grafana-current"
 cdn_content_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/cdn-content-current"
 cdn_content_mode="realise"
+cdn_retained_roots="${FISHYSTUFF_RETAINED_CDN_ROOTS:-}"
 mgmt_modules_dir="${FISHYSTUFF_MGMT_MODULES_DIR:-/home/carp/code/mgmt-fishystuff-beta/modules}"
 services_csv="api,dolt,edge,loki,otel_collector,vector,prometheus,jaeger,grafana"
 deployment_environment="beta"
@@ -95,6 +96,7 @@ for arg in "${overrides[@]}"; do
     cdn_content_gcroot=*) cdn_content_gcroot="${arg#cdn_content_gcroot=}" ;;
     cdn_content=*) cdn_content_override="${arg#cdn_content=}" ;;
     cdn_content_mode=*) cdn_content_mode="${arg#cdn_content_mode=}" ;;
+    cdn_retained_roots=*) cdn_retained_roots="${arg#cdn_retained_roots=}" ;;
     mgmt_modules_dir=*) mgmt_modules_dir="${arg#mgmt_modules_dir=}" ;;
     services_csv=*) services_csv="${arg#services_csv=}" ;;
     deployment_environment=*) deployment_environment="${arg#deployment_environment=}" ;;
@@ -431,8 +433,59 @@ site_content=""
 cdn_base_content=""
 cdn_content=""
 cdn_content_drv=""
+cdn_generation_drv=""
 minimap_display_tiles=""
 minimap_source_tiles=""
+
+resolve_cdn_retained_roots() {
+  local configured_roots="${cdn_retained_roots:-}"
+  local -a candidates=()
+  local -a configured_candidates=()
+  local -a resolved_roots=()
+  local -A seen_roots=()
+  local candidate=""
+  local resolved=""
+
+  if [[ -e "$cdn_content_gcroot" ]]; then
+    candidates+=("$cdn_content_gcroot")
+  fi
+
+  if [[ -n "$configured_roots" ]]; then
+    IFS=":" read -r -a configured_candidates <<< "$configured_roots"
+    for candidate in "${configured_candidates[@]}"; do
+      [[ -n "$candidate" ]] || continue
+      candidates+=("$candidate")
+    done
+  fi
+
+  for candidate in "${candidates[@]}"; do
+    if [[ ! -e "$candidate" ]]; then
+      echo "retained CDN root does not exist locally: $candidate" >&2
+      exit 2
+    fi
+    resolved="$(readlink -f "$candidate")"
+    case "$resolved" in
+      /nix/store/*) ;;
+      *)
+        echo "retained CDN root is not a Nix store path: $resolved" >&2
+        exit 2
+        ;;
+    esac
+    if [[ -z "${seen_roots[$resolved]+x}" ]]; then
+      seen_roots["$resolved"]=1
+      resolved_roots+=("$resolved")
+    fi
+  done
+
+  local joined=""
+  for resolved in "${resolved_roots[@]}"; do
+    if [[ -n "$joined" ]]; then
+      joined+=":"
+    fi
+    joined+="$resolved"
+  done
+  printf '%s' "$joined"
+}
 
 if service_selected api && [[ -z "$api_bundle" ]]; then
   api_bundle="$(nix build .#api-service-bundle --no-link --print-out-paths)"
@@ -523,11 +576,16 @@ if service_selected edge; then
     esac
   else
     build_release_map_runtime "$site_content"
+    retained_cdn_roots="$(resolve_cdn_retained_roots)"
+    if [[ -n "$retained_cdn_roots" ]]; then
+      echo "[resident-push] retaining immutable CDN assets from: $retained_cdn_roots"
+    fi
     case "$cdn_content_mode" in
       local | substitute)
         cdn_content="$(
           FISHYSTUFF_OPERATOR_ROOT="$operator_repo_root" \
-            nix build --impure .#cdn-content --no-link --print-out-paths
+          FISHYSTUFF_RETAINED_CDN_ROOTS="$retained_cdn_roots" \
+            nix build --impure .#cdn-serving-root --no-link --print-out-paths
         )"
         cdn_content_drv=""
         ;;
@@ -543,9 +601,14 @@ if service_selected edge; then
         )
         cdn_base_content="${cdn_operator_paths[0]:-}"
         minimap_source_tiles="${cdn_operator_paths[1]:-}"
-        cdn_content_drv="$(
+        cdn_generation_drv="$(
           FISHYSTUFF_OPERATOR_ROOT="$operator_repo_root" \
             nix path-info --impure .#cdn-content --derivation
+        )"
+        cdn_content_drv="$(
+          FISHYSTUFF_OPERATOR_ROOT="$operator_repo_root" \
+          FISHYSTUFF_RETAINED_CDN_ROOTS="$retained_cdn_roots" \
+            nix path-info --impure .#cdn-serving-root --derivation
         )"
         cdn_content="$(nix derivation show "$cdn_content_drv" | jq -r 'to_entries[0].value.outputs.out.path')"
         ;;
@@ -665,6 +728,7 @@ add_content_push_path site_push_paths site_push_seen "$site_content"
 add_content_push_path site_push_paths site_push_seen "$cdn_base_content"
 add_content_push_path site_push_paths site_push_seen "$minimap_display_tiles"
 add_content_push_path site_push_paths site_push_seen "$minimap_source_tiles"
+add_content_push_path site_push_paths site_push_seen "$cdn_generation_drv"
 add_content_push_path site_push_paths site_push_seen "$cdn_content_drv"
 if [[ -n "$cdn_content" && -z "$cdn_content_drv" ]]; then
   if content_is_remote_only "$cdn_content"; then

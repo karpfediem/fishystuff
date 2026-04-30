@@ -151,6 +151,14 @@
           cdnContent = pkgs.callPackage ./nix/packages/cdn-content.nix {
             inherit cdnBaseContent cdnMinimapVisual;
           };
+          retainedCdnRootEnv = builtins.getEnv "FISHYSTUFF_RETAINED_CDN_ROOTS";
+          retainedCdnRootStrings =
+            pkgs.lib.filter (root: root != "") (pkgs.lib.splitString ":" retainedCdnRootEnv);
+          retainedCdnRoots = map builtins.storePath retainedCdnRootStrings;
+          cdnServingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
+            currentRoot = cdnContent;
+            previousRoots = retainedCdnRoots;
+          };
           siteContentFor =
             deploymentEnvironment: mapAssetCacheKey:
             pkgs.callPackage ./nix/packages/site-content.nix {
@@ -267,6 +275,37 @@
           modularServiceRuntime = pkgs.callPackage ./nix/tests/modular-service-runtime.nix {
             inherit serviceModules;
           };
+          cdnServingRootRetentionCheck =
+            let
+              currentFixture = pkgs.runCommand "cdn-serving-current-fixture" { } ''
+                mkdir -p "$out/map"
+                printf 'current-manifest' > "$out/map/runtime-manifest.json"
+                printf 'current-metadata' > "$out/.cdn-metadata.json"
+                printf 'new-runtime' > "$out/map/fishystuff_ui_bevy.new.js"
+              '';
+              previousFixture = pkgs.runCommand "cdn-serving-previous-fixture" { } ''
+                mkdir -p "$out/map"
+                printf 'previous-manifest' > "$out/map/runtime-manifest.json"
+                printf 'previous-metadata' > "$out/.cdn-metadata.json"
+                printf 'old-runtime' > "$out/map/fishystuff_ui_bevy.old.js"
+              '';
+              servingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
+                currentRoot = currentFixture;
+                previousRoots = [ previousFixture ];
+              };
+            in
+            pkgs.runCommand "cdn-serving-root-retention-check" { nativeBuildInputs = [ pkgs.jq ]; } ''
+              set -euo pipefail
+
+              test "$(cat ${servingRoot}/map/runtime-manifest.json)" = "current-manifest"
+              test "$(cat ${servingRoot}/.cdn-metadata.json)" = "current-metadata"
+              test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js)" = "new-runtime"
+              test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.old.js)" = "old-runtime"
+
+              test "$(jq -r '.retained_root_count' ${servingRoot}/cdn-serving-manifest.json)" = "1"
+              test "$(jq -r '[.assets[] | select(.source == "retained")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "1"
+              touch "$out"
+            '';
 
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
@@ -294,6 +333,7 @@
             api-service-bundle = apiServiceBundle;
             cdn-base-content = cdnBaseContent;
             cdn-content = cdnContent;
+            cdn-serving-root = cdnServingRoot;
             dolt-service-bundle = doltServiceBundle;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
@@ -316,6 +356,7 @@
           checks =
             serviceBundleChecks
             // {
+              cdn-serving-root-retention = cdnServingRootRetentionCheck;
               modular-service-runtime = modularServiceRuntime;
             };
         };

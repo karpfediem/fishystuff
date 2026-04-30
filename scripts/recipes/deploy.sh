@@ -93,6 +93,70 @@ remote_exec_with_operator_key() {
   trap - RETURN
 }
 
+copy_remote_store_paths_to_local() {
+  local ssh_target="$1"
+  shift
+  local tmp_key=""
+  local remote_nix_daemon_path=""
+  local nix_copy_target=""
+
+  if (( $# == 0 )); then
+    return 0
+  fi
+
+  tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-deploy-nix-copy.XXXXXX)"
+  trap 'rm -f "$tmp_key"' RETURN
+
+  remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
+  require_value "$remote_nix_daemon_path" "could not detect remote nix-daemon path on $ssh_target"
+  nix_copy_target="$(build_nix_copy_target "$ssh_target" "$tmp_key" "$remote_nix_daemon_path")"
+
+  printf '[deploy] copying %s retained store path(s) from %s\n' "$#" "$ssh_target" >&2
+  nix copy --no-check-sigs --from "$nix_copy_target" "$@"
+
+  rm -f "$tmp_key"
+  trap - RETURN
+}
+
+collect_remote_cdn_retained_roots() {
+  local gcroot_path=""
+  local remote_store_path=""
+  local joined=""
+  local -a gcroot_paths=()
+  local -a retained_roots=()
+  local -A seen_roots=()
+
+  gcroot_paths+=("$(deploy_service_gcroot_path cdn)")
+  gcroot_paths+=("$(status_service_previous_content_gcroot_path cdn)")
+
+  for gcroot_path in "${gcroot_paths[@]}"; do
+    [[ -n "$gcroot_path" ]] || continue
+    remote_store_path="$(bash "$SCRIPT_DIR/remote-gcroot-target.sh" "$resident_target" "$gcroot_path")"
+    [[ -n "$remote_store_path" ]] || continue
+    case "$remote_store_path" in
+      /nix/store/*) ;;
+      *)
+        echo "remote CDN gcroot is not a Nix store path: $remote_store_path" >&2
+        exit 2
+        ;;
+    esac
+    if [[ -z "${seen_roots[$remote_store_path]+x}" ]]; then
+      seen_roots["$remote_store_path"]=1
+      retained_roots+=("$remote_store_path")
+    fi
+  done
+
+  copy_remote_store_paths_to_local "$resident_target" "${retained_roots[@]}"
+
+  for remote_store_path in "${retained_roots[@]}"; do
+    if [[ -n "$joined" ]]; then
+      joined+=":"
+    fi
+    joined+="$remote_store_path"
+  done
+  printf '%s' "$joined"
+}
+
 production_origin_post_apply() {
   local restart_api="false"
   local refresh_dolt="false"
@@ -272,6 +336,13 @@ done
 if [[ -z "${selected_services[dolt]:-}" ]]; then
   backend_args+=("dolt_refresh_enabled=false")
   backend_args+=("dolt_repo_snapshot_mode=off")
+fi
+
+if [[ -n "${selected_services[cdn]:-}" ]]; then
+  cdn_retained_roots="$(collect_remote_cdn_retained_roots)"
+  if [[ -n "$cdn_retained_roots" ]]; then
+    backend_args+=("cdn_retained_roots=$cdn_retained_roots")
+  fi
 fi
 
 FISHYSTUFF_DEPLOY_EXPECTED_MANIFEST="$expected_manifest" \
