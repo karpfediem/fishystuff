@@ -317,21 +317,32 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     this._shell = null;
     this._canvas = null;
     this._rafId = 0;
+    this._pointerRafId = 0;
     this._zoneCatalog = [];
     this._elements = null;
     this._state = {
       pointerActive: false,
+      pointerX: 0,
+      pointerY: 0,
+      pointerDirty: false,
       hover: null,
     };
     this._handleCanvasPointerMove = (event) => {
       this._state.pointerActive = true;
-      this.writePointerPosition(event?.clientX ?? 0, event?.clientY ?? 0);
+      this.setPointerPosition(event?.clientX ?? 0, event?.clientY ?? 0);
       if (this.hidden) {
         this.scheduleRender();
+      } else {
+        this.schedulePointerPositionWrite();
       }
     };
     this._handleCanvasPointerLeave = () => {
       this._state.pointerActive = false;
+      this._state.pointerDirty = false;
+      if (this._pointerRafId && typeof globalThis.cancelAnimationFrame === "function") {
+        globalThis.cancelAnimationFrame(this._pointerRafId);
+      }
+      this._pointerRafId = 0;
       setBooleanProperty(this._elements?.hoverLayers, "hidden", true);
       setBooleanProperty(this._elements?.hoverSamples, "hidden", true);
       setBooleanProperty(this, "hidden", true);
@@ -374,7 +385,11 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
       globalThis.cancelAnimationFrame(this._rafId);
     }
+    if (this._pointerRafId && typeof globalThis.cancelAnimationFrame === "function") {
+      globalThis.cancelAnimationFrame(this._pointerRafId);
+    }
     this._rafId = 0;
+    this._pointerRafId = 0;
     this._shell = null;
     this._canvas = null;
     this._elements = null;
@@ -384,9 +399,50 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     return readMapShellSignals(this._shell);
   }
 
-  writePointerPosition(clientX, clientY) {
-    this.style.setProperty("--fishymap-hover-x", `${Math.round(clientX)}px`);
-    this.style.setProperty("--fishymap-hover-y", `${Math.round(clientY)}px`);
+  setPointerPosition(clientX, clientY) {
+    const pointerX = Math.round(clientX);
+    const pointerY = Math.round(clientY);
+    if (this._state.pointerX === pointerX && this._state.pointerY === pointerY) {
+      return;
+    }
+    this._state.pointerX = pointerX;
+    this._state.pointerY = pointerY;
+    this._state.pointerDirty = true;
+  }
+
+  writePointerPosition() {
+    if (!this._state.pointerDirty) {
+      return;
+    }
+    this._state.pointerDirty = false;
+    const x = this._state.pointerX;
+    const y = this._state.pointerY;
+    if (this._elements?.hoverLayers?.style) {
+      this._elements.hoverLayers.style.transform = `translate3d(${x + 18}px, ${y + 22}px, 0)`;
+    }
+    if (this._elements?.hoverSamples?.style) {
+      this._elements.hoverSamples.style.transform = `translate3d(calc(${x}px - 50%), calc(${y}px - 100% - 18px), 0)`;
+    }
+  }
+
+  schedulePointerPositionWrite() {
+    if (this._pointerRafId) {
+      return;
+    }
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      this._pointerRafId = globalThis.requestAnimationFrame(() => {
+        this._pointerRafId = 0;
+        if (this._state.pointerActive && !this.hidden) {
+          this.writePointerPosition();
+        }
+      }) || 0;
+      if (this._pointerRafId) {
+        return;
+      }
+    }
+    if (this._state.pointerActive && !this.hidden) {
+      this.writePointerPosition();
+    }
   }
 
   render() {
@@ -415,6 +471,7 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     } else {
       delete this.dataset.pointSamples;
     }
+    this.writePointerPosition();
     setMarkup(
       this._elements?.hoverLayers,
       JSON.stringify(factRows.map((row) => [row.layerId, row.key, row.value])),

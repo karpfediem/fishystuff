@@ -818,25 +818,16 @@ fishymap-search-panel {
   background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
   box-shadow: 0 16px 34px -26px color-mix(in oklab, var(--color-base-content, #1f2937) 46%, transparent);
   pointer-events: none;
+  transform: translate3d(0, 0, 0);
   will-change: transform;
 }
 
 #fishymap-hover-layers {
   max-width: min(22rem, calc(100vw - 2rem));
-  transform: translate3d(
-    calc(var(--fishymap-hover-x, 0px) + 18px),
-    calc(var(--fishymap-hover-y, 0px) + 22px),
-    0
-  );
 }
 
 #fishymap-hover-samples {
   max-width: min(18rem, calc(100vw - 2rem));
-  transform: translate3d(
-    calc(var(--fishymap-hover-x, 0px) - 50%),
-    calc(var(--fishymap-hover-y, 0px) - 100% - 18px),
-    0
-  );
 }
 
 .fishymap-point-sample-list {

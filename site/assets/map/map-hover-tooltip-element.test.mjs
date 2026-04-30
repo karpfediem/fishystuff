@@ -6,6 +6,8 @@ import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const originalHTMLElement = globalThis.HTMLElement;
 const originalDocument = globalThis.document;
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
 
 class FakeStyle {
   constructor() {
@@ -364,6 +366,43 @@ test("FishyMapHoverTooltipElement hides the tooltip on pointerleave", async () =
   canvas.dispatchEvent(new Event("pointerleave"));
   assert.equal(tooltip.hidden, true);
   tooltip.render();
+});
+
+test("FishyMapHoverTooltipElement batches visible pointer position writes", async () => {
+  try {
+    globalThis.requestAnimationFrame = undefined;
+    globalThis.cancelAnimationFrame = undefined;
+    const { FishyMapHoverTooltipElement } = await loadModule();
+    const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
+    shell.__fishymapLiveSignals = createSignals();
+
+    tooltip.connectedCallback();
+    canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 10, clientY: 20 }));
+    shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));
+    const layers = tooltip.querySelector("#fishymap-hover-layers");
+    const samples = tooltip.querySelector("#fishymap-hover-samples");
+    assert.equal(layers.style.transform, "translate3d(28px, 42px, 0)");
+    assert.equal(samples.style.transform, "translate3d(calc(10px - 50%), calc(20px - 100% - 18px), 0)");
+
+    const scheduled = [];
+    globalThis.requestAnimationFrame = (callback) => {
+      scheduled.push(callback);
+      return scheduled.length;
+    };
+    globalThis.cancelAnimationFrame = () => {};
+
+    canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 20, clientY: 30 }));
+    canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 40, clientY: 50 }));
+
+    assert.equal(scheduled.length, 1);
+    assert.equal(layers.style.transform, "translate3d(28px, 42px, 0)");
+    scheduled.shift()();
+    assert.equal(layers.style.transform, "translate3d(58px, 72px, 0)");
+    assert.equal(samples.style.transform, "translate3d(calc(40px - 50%), calc(50px - 100% - 18px), 0)");
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+  }
 });
 
 test("FishyMapHoverTooltipElement rerenders on shell-local patch events", async () => {
