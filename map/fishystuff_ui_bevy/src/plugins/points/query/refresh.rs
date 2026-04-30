@@ -4,7 +4,6 @@ use fishystuff_api::models::events::EventPointCompact;
 use fishystuff_api::models::events::{EventsQueryMode, MapBboxPx};
 
 use crate::bridge::contract::FishyMapSearchExpressionNode;
-use crate::config::DRAG_THRESHOLD;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::events::{
     cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, ViewSelection,
@@ -21,7 +20,6 @@ use crate::plugins::api::{
     SemanticFieldFilterState, ZoneMembershipFilter,
 };
 use crate::plugins::camera::Map2dCamera;
-use crate::plugins::input::PanState;
 use crate::plugins::points::query::evidence::zone_membership_binding_support;
 
 use super::super::render::view_bbox_map_px;
@@ -68,17 +66,6 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
     }
-    if refresh.pan.dragging
-        && refresh.pan.drag_distance > DRAG_THRESHOLD
-        && !refresh.points.points.is_empty()
-    {
-        refresh.points.status = format!(
-            "{}; pan-refresh deferred",
-            points_status_line(&refresh.points, &refresh.snapshot)
-        );
-        return;
-    }
-
     let Some(viewport_bbox) = view_bbox_map_px(&refresh.windows, &refresh.camera_q) else {
         refresh.points.status = "points: missing viewport".to_string();
         clear_render_points(&mut refresh.points, &mut refresh.render_state);
@@ -118,13 +105,8 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     signature_fish_ids.sort_unstable();
     signature_fish_ids.dedup();
 
-    let tile_scope = MapBboxPx {
-        min_x: viewport_bbox.min_x,
-        min_y: viewport_bbox.min_y,
-        max_x: viewport_bbox.max_x,
-        max_y: viewport_bbox.max_y,
-    };
     let cluster_bucket_px = suggested_cluster_bucket_px(&viewport_bbox);
+    let query_bbox = stable_point_query_bbox(&viewport_bbox, cluster_bucket_px);
     let inactive_filter = ZoneMembershipFilter::default();
     let zone_filter = refresh
         .layer_filters
@@ -146,14 +128,14 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
             .as_ref()
             .map(search_expression_key)
             .unwrap_or_default(),
-        viewport_min_x: viewport_bbox.min_x,
-        viewport_min_y: viewport_bbox.min_y,
-        viewport_max_x: viewport_bbox.max_x,
-        viewport_max_y: viewport_bbox.max_y,
-        tile_scope_min_x: tile_scope.min_x,
-        tile_scope_min_y: tile_scope.min_y,
-        tile_scope_max_x: tile_scope.max_x,
-        tile_scope_max_y: tile_scope.max_y,
+        viewport_min_x: query_bbox.min_x,
+        viewport_min_y: query_bbox.min_y,
+        viewport_max_x: query_bbox.max_x,
+        viewport_max_y: query_bbox.max_y,
+        tile_scope_min_x: query_bbox.min_x,
+        tile_scope_min_y: query_bbox.min_y,
+        tile_scope_max_x: query_bbox.max_x,
+        tile_scope_max_y: query_bbox.max_y,
         cluster_bucket_px,
     };
 
@@ -162,10 +144,10 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         return;
     }
 
-    let visible_scope = VisibleTileScope::from_bbox(&tile_scope, VISIBLE_TILE_SCOPE_PX);
+    let visible_scope = VisibleTileScope::from_bbox(&query_bbox, VISIBLE_TILE_SCOPE_PX);
     let selection = select_snapshot_indices_for_point_layer(
         &refresh.snapshot,
-        &viewport_bbox,
+        &query_bbox,
         visible_scope,
         from_ts_utc,
         to_ts_utc,
@@ -234,7 +216,6 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     fish_catalog: Res<'w, FishCatalog>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     display_state: Res<'w, MapDisplayState>,
-    pan: Res<'w, PanState>,
     view_mode: Res<'w, ViewModeState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
@@ -254,9 +235,43 @@ fn normalized_time_bounds(patch_filter: &PatchFilterState) -> Option<(Option<i64
     Some((patch_filter.from_ts, patch_filter.to_ts))
 }
 
+fn stable_point_query_bbox(viewport_bbox: &MapBboxPx, cluster_bucket_px: i32) -> MapBboxPx {
+    let (min_x, max_x) = normalized_axis(viewport_bbox.min_x, viewport_bbox.max_x);
+    let (min_y, max_y) = normalized_axis(viewport_bbox.min_y, viewport_bbox.max_y);
+    let width = (max_x - min_x + 1).max(1);
+    let height = (max_y - min_y + 1).max(1);
+    let snap_px = stable_query_snap_px(width.max(height), cluster_bucket_px);
+    let expanded_min_x = min_x.saturating_sub(width);
+    let expanded_max_x = max_x.saturating_add(width);
+    let expanded_min_y = min_y.saturating_sub(height);
+    let expanded_max_y = max_y.saturating_add(height);
+    MapBboxPx {
+        min_x: clamp_i64_to_i32(expanded_min_x.div_euclid(snap_px) * snap_px),
+        min_y: clamp_i64_to_i32(expanded_min_y.div_euclid(snap_px) * snap_px),
+        max_x: clamp_i64_to_i32((expanded_max_x.div_euclid(snap_px) + 1) * snap_px - 1),
+        max_y: clamp_i64_to_i32((expanded_max_y.div_euclid(snap_px) + 1) * snap_px - 1),
+    }
+}
+
+fn stable_query_snap_px(viewport_span_px: i64, cluster_bucket_px: i32) -> i64 {
+    let bucket_px = i64::from(cluster_bucket_px.max(1));
+    let multiplier = (viewport_span_px / (bucket_px * 2)).max(4);
+    bucket_px * multiplier
+}
+
+fn normalized_axis(a: i32, b: i32) -> (i64, i64) {
+    let a = i64::from(a);
+    let b = i64::from(b);
+    (a.min(b), a.max(b))
+}
+
+fn clamp_i64_to_i32(value: i64) -> i32 {
+    value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+}
+
 fn select_snapshot_indices_for_point_layer(
     snapshot: &EventsSnapshotState,
-    viewport_bbox: &MapBboxPx,
+    query_bbox: &MapBboxPx,
     visible_scope: VisibleTileScope,
     from_ts_utc: Option<i64>,
     to_ts_utc: Option<i64>,
@@ -268,7 +283,7 @@ fn select_snapshot_indices_for_point_layer(
         crate::perf_scope!("events.spatial_index_query");
         snapshot
             .spatial_index
-            .query_bbox(viewport_bbox, &snapshot.events)
+            .query_bbox(query_bbox, &snapshot.events)
     };
     let empty_community = CommunityFishZoneSupportIndex::default();
     let mut evaluator = LayerSearchEvaluator::new(
@@ -334,6 +349,56 @@ mod tests {
     };
     use crate::map::events::SpatialIndex;
     use crate::plugins::api::{FishCatalog, FishEntry, SearchExpressionState};
+
+    #[test]
+    fn stable_point_query_bbox_is_stable_for_small_pans() {
+        let first = stable_point_query_bbox(
+            &MapBboxPx {
+                min_x: 10_000,
+                min_y: 20_000,
+                max_x: 17_999,
+                max_y: 27_999,
+            },
+            256,
+        );
+        let small_pan = stable_point_query_bbox(
+            &MapBboxPx {
+                min_x: 10_120,
+                min_y: 20_140,
+                max_x: 18_119,
+                max_y: 28_139,
+            },
+            256,
+        );
+
+        assert_eq!(
+            (
+                small_pan.min_x,
+                small_pan.min_y,
+                small_pan.max_x,
+                small_pan.max_y
+            ),
+            (first.min_x, first.min_y, first.max_x, first.max_y)
+        );
+    }
+
+    #[test]
+    fn stable_point_query_bbox_includes_whole_edge_cluster_buckets() {
+        let bbox = stable_point_query_bbox(
+            &MapBboxPx {
+                min_x: 250,
+                min_y: -40,
+                max_x: 320,
+                max_y: 40,
+            },
+            256,
+        );
+
+        assert!(bbox.min_x <= 0);
+        assert!(bbox.max_x >= 511);
+        assert_eq!(bbox.min_x.rem_euclid(256), 0);
+        assert_eq!((bbox.max_x + 1).rem_euclid(256), 0);
+    }
 
     #[test]
     fn precomputed_zone_filter_keeps_events_with_matching_zone_support() {
