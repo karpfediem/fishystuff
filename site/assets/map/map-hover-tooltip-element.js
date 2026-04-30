@@ -7,7 +7,8 @@ import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const HOVER_TOOLTIP_TAG_NAME = "fishymap-hover-tooltip";
-const HOVER_REST_SAMPLE_LIMIT = 4;
+const HOVER_REST_SAMPLE_LIMIT = 3;
+const HOVER_SAMPLE_ZONE_LIMIT = 3;
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function escapeHtml(value) {
@@ -147,10 +148,12 @@ function pointSampleZoneMarkup(row) {
   if (!zones.length) {
     return "";
   }
+  const visibleZones = zones.slice(0, HOVER_SAMPLE_ZONE_LIMIT);
+  const hiddenZoneCount = Math.max(0, zones.length - visibleZones.length);
   return `
     <div class="fishymap-point-sample-zones">
       <span class="fishymap-point-sample-zone-list">
-        ${zones
+        ${visibleZones
           .map((zone) => `
             <span class="fishymap-point-sample-zone">
               ${pointSampleZoneIndicatorMarkup(zone)}
@@ -158,6 +161,11 @@ function pointSampleZoneMarkup(row) {
             </span>
           `)
           .join("")}
+        ${
+          hiddenZoneCount
+            ? `<span class="fishymap-point-sample-zone fishymap-point-sample-zone-more">+${hiddenZoneCount} zones</span>`
+            : ""
+        }
       </span>
     </div>
   `;
@@ -212,13 +220,17 @@ function remainingPointRows(rows) {
       byFish.set(key, { ...row, sampleCount });
     }
   }
-  return [...byFish.values()]
-    .sort((left, right) =>
+  const sortedRows = [...byFish.values()].sort(
+    (left, right) =>
       Math.max(1, Number.parseInt(right?.sampleCount, 10) || 1) -
         Math.max(1, Number.parseInt(left?.sampleCount, 10) || 1) ||
       trimString(left?.fishName).localeCompare(trimString(right?.fishName)),
-    )
-    .slice(0, HOVER_REST_SAMPLE_LIMIT);
+  );
+  const visibleRows = sortedRows.slice(0, HOVER_REST_SAMPLE_LIMIT);
+  const hiddenSampleCount = sortedRows
+    .slice(HOVER_REST_SAMPLE_LIMIT)
+    .reduce((total, row) => total + Math.max(1, Number.parseInt(row?.sampleCount, 10) || 1), 0);
+  return { hiddenSampleCount, visibleRows };
 }
 
 function remainingPointSampleMarkup(row) {
@@ -238,13 +250,17 @@ function pointSampleGroupMarkup(pointRows) {
     return "";
   }
   const [topRow, ...remainingRows] = pointRows;
-  const restRows = remainingPointRows(remainingRows);
+  const { hiddenSampleCount, visibleRows: restRows } = remainingPointRows(remainingRows);
   return `
     <div class="fishymap-point-sample-group">
       ${pointSampleMarkup(topRow)}
       ${
         restRows.length
-          ? `<div class="fishymap-point-sample-rest">${restRows.map((row) => remainingPointSampleMarkup(row)).join("")}</div>`
+          ? `<div class="fishymap-point-sample-rest">${restRows.map((row) => remainingPointSampleMarkup(row)).join("")}${
+              hiddenSampleCount > 0
+                ? `<span class="fishymap-point-sample-rest-more" title="${escapeHtml(`${hiddenSampleCount} more samples`)}">+${escapeHtml(hiddenSampleCount)}</span>`
+                : ""
+            }</div>`
           : ""
       }
     </div>

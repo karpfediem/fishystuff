@@ -239,6 +239,11 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
         fish: [
           { fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" },
           { fishId: 20, itemId: 900020, name: "Mako Shark", grade: "rare" },
+          { fishId: 30, itemId: 900030, name: "Koi", grade: "rare" },
+          { fishId: 40, itemId: 900040, name: "Morning River Goby", grade: "general" },
+          { fishId: 50, itemId: 900050, name: "Giant Grouper", grade: "rare" },
+          { fishId: 60, itemId: 900060, name: "Dace", grade: "general" },
+          { fishId: 70, itemId: 900070, name: "Cod", grade: "general" },
         ],
       },
     },
@@ -252,6 +257,8 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
           { zoneRgb: 0x39e58d, name: "Velia Coast" },
           { zoneRgb: 0x123456, name: "Demi River" },
           { zoneRgb: 0x654321, name: "Balenos River" },
+          { zoneRgb: 0x111111, name: "Ancado Coast" },
+          { zoneRgb: 0x222222, name: "Epheria Sea" },
         ],
       },
     }),
@@ -264,7 +271,7 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
           pointSamples: [
             {
               fishId: 20,
-              sampleCount: 1,
+              sampleCount: 5,
               sampleId: 77,
               lastTsUtc: 1_700_200_000,
               zoneRgbs: [0x123456, 0x654321],
@@ -272,11 +279,16 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
             },
             {
               fishId: 10,
-              sampleCount: 2,
+              sampleCount: 9,
               lastTsUtc: 1_700_000_000,
-              zoneRgbs: [0x39e58d, 0x123456],
+              zoneRgbs: [0x39e58d, 0x123456, 0x654321, 0x111111, 0x222222],
               fullZoneRgbs: [],
             },
+            { fishId: 30, sampleCount: 4, lastTsUtc: 1_700_100_000, zoneRgbs: [], fullZoneRgbs: [] },
+            { fishId: 40, sampleCount: 3, lastTsUtc: 1_700_100_000, zoneRgbs: [], fullZoneRgbs: [] },
+            { fishId: 50, sampleCount: 2, lastTsUtc: 1_700_100_000, zoneRgbs: [], fullZoneRgbs: [] },
+            { fishId: 60, sampleCount: 1, lastTsUtc: 1_700_100_000, zoneRgbs: [], fullZoneRgbs: [] },
+            { fishId: 70, sampleCount: 1, lastTsUtc: 1_700_100_000, zoneRgbs: [], fullZoneRgbs: [] },
           ],
           layerSamples: [],
         },
@@ -295,12 +307,18 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
   assert.match(samples.innerHTML, /fishy-item-icon-frame is-native/);
   assert.match(samples.innerHTML, /fishy-item-icon-frame is-hover-rest/);
   assert.ok(samples.innerHTML.indexOf("Sea Eel") < samples.innerHTML.indexOf("Mako Shark"));
-  assert.match(samples.innerHTML, /x2/);
+  assert.match(samples.innerHTML, /x9/);
+  assert.match(samples.innerHTML, /fishymap-point-sample-rest-more[^>]*>\+4</);
+  assert.doesNotMatch(samples.innerHTML, /Dace/);
+  assert.doesNotMatch(samples.innerHTML, /Cod/);
   assert.doesNotMatch(samples.innerHTML, /#77/);
   assert.match(samples.innerHTML, /2023-11-14/);
   assert.match(samples.innerHTML, /Velia Coast/);
   assert.match(samples.innerHTML, /Demi River/);
-  assert.doesNotMatch(samples.innerHTML, /Balenos River/);
+  assert.match(samples.innerHTML, /Balenos River/);
+  assert.match(samples.innerHTML, /\+2 zones/);
+  assert.doesNotMatch(samples.innerHTML, /Ancado Coast/);
+  assert.doesNotMatch(samples.innerHTML, /Epheria Sea/);
   assert.match(samples.innerHTML, /href="#fishy-date-confirmed"/);
   assert.match(samples.innerHTML, /href="#fishy-ring-partial"/);
 });
