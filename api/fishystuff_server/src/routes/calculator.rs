@@ -11300,7 +11300,7 @@ fn render_calculator_app(
 <div id="calculator-app" class="grid gap-6">
     __CANONICAL_SIGNAL_COMPUTEDS__
     <div class="hidden"
-         data-on-signal-patch__debounce.150ms="window.__fishystuffCalculator.shouldEvalSignalPatch(patch) ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"
+         data-on-signal-patch__debounce.150ms="!Object.prototype.hasOwnProperty.call(patch || {}, '_calc') ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"
          data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
 
     <section class="card card-border bg-base-100">
@@ -16883,6 +16883,8 @@ mod tests {
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #calculator-app"));
         assert!(text.contains("<div id=\"calculator-app\""));
+        assert!(text.contains("hasOwnProperty.call(patch || {}, '_calc')"));
+        assert!(!text.contains("shouldEvalSignalPatch(patch)"));
         assert!(text.contains("fishy-zone-rgb-indicator"));
         assert!(text.contains("--fishy-zone-rgb: 240 74 74"));
         assert!(text.contains("placeholder=\"Search zones\""));
