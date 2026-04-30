@@ -4,7 +4,9 @@
   stdenvNoCC,
   bun,
   chromium,
+  esbuild,
   imagemagick,
+  lightningcss,
   nodejs,
   python3Packages,
   siteSrc,
@@ -81,7 +83,9 @@ stdenvNoCC.mkDerivation {
   nativeBuildInputs = [
     bun
     chromium
+    esbuild
     imagemagick
+    lightningcss
     nodejs
     python3Packages.fonttools
     writableTmpDirAsHomeHook
@@ -142,6 +146,7 @@ stdenvNoCC.mkDerivation {
     FISHYSTUFF_WEB_FONT_OUTPUT_ROOT="$PWD/.release-out/css/fonts" \
       bash ./scripts/build-web-fonts.sh
     bun run ./scripts/write-runtime-config.mjs --out "$PWD/.release-out/runtime-config.js"
+    bun run ./scripts/finalize-assets.mjs --root "$PWD/.release-out"
 
     runHook postBuild
   '';

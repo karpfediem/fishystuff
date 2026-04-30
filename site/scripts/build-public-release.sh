@@ -28,6 +28,7 @@ FISHYSTUFF_WEB_FONT_OUTPUT_ROOT="$BUILD_DIR/css/fonts" bash ./scripts/build-web-
 bun run ./scripts/write-runtime-config.mjs --out "$BUILD_DIR/runtime-config.js"
 bun run tailwind:scan
 bunx @tailwindcss/cli -i tailwind.input.css -o "$BUILD_DIR/css/site.css" --minify
+bun run ./scripts/finalize-assets.mjs --root "$BUILD_DIR"
 
 rm -rf "$PREV_DIR"
 if [ -e "$SITE_DIR/public" ]; then

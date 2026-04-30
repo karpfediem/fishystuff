@@ -10,7 +10,8 @@ let
   inherit (lib) mkOption optional optionalString types;
   cfg = config.fishystuff.edge;
   caddyExe = lib.getExe' cfg.package "caddy";
-  siteStaticFilePattern = "\\.(css|js|mjs|png|webp|jpe?g|gif|ico|woff2?|ttf|json|xml|txt|ziggy)$";
+  siteImmutableFilePattern = "\\.[0-9a-f]{16}\\.(css|js)(\\.map)?$";
+  siteStaticFilePattern = "\\.(css|js|mjs|map|svg|png|webp|jpe?g|gif|ico|woff2?|ttf|json|xml|txt|ziggy)$";
   # Paths in this matcher must be content-addressed or otherwise versioned by
   # their path. Browsers may keep them for a year without revalidation.
   cdnImmutablePaths = lib.concatStringsSep " " [
@@ -47,16 +48,16 @@ let
       root * ${cfg.siteRoot}
       encode zstd gzip
 
-      @runtime_config path /runtime-config.js
-      @site_svg path_regexp \.svg$
+      @site_runtime path /runtime-config.js /asset-manifest.json /build-info.json
+      @site_immutable path_regexp ${siteImmutableFilePattern}
       @site_static path_regexp ${siteStaticFilePattern}
 
-      handle @runtime_config {
+      handle @site_runtime {
         header Cache-Control "no-store"
         file_server
       }
 
-      handle @site_svg {
+      handle @site_immutable {
         header Cache-Control "public, max-age=31536000, immutable"
         file_server
       }

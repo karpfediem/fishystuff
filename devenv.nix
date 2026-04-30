@@ -28,7 +28,8 @@ let
   siteHost = "127.0.0.1";
   sitePort = 1990;
   telemetryHost = "telemetry.localhost";
-  siteStaticFilePattern = "\\.(css|js|mjs|png|webp|jpe?g|gif|ico|woff2?|ttf|json|xml|txt|ziggy)$";
+  siteImmutableFilePattern = "\\.[0-9a-f]{16}\\.(css|js)(\\.map)?$";
+  siteStaticFilePattern = "\\.(css|js|mjs|map|svg|png|webp|jpe?g|gif|ico|woff2?|ttf|json|xml|txt|ziggy)$";
   toString = builtins.toString;
   # Paths in this matcher must be content-addressed or otherwise versioned by
   # their path. Browsers may keep them for a year without revalidation.
@@ -68,10 +69,12 @@ in {
       secretspec
       curl
       dolt
+      esbuild
       flyctl
       gawk
       hyperfine
       jq
+      lightningcss
       libX11
       libXcursor
       libXext
@@ -147,7 +150,7 @@ in {
         enable = true;
         name = "CDN map runtime";
         entry = "./tools/scripts/check_cdn_map_runtime_assets_pre_push.sh";
-        files = "^(Cargo\\.lock|Cargo\\.toml|devenv\\.nix|lib/fishystuff_(api|client|core)/|map/fishystuff_ui_bevy/|site/assets/map/|site/scripts/(build-public-release|write-runtime-config)\\.mjs|tools/scripts/(build_map|check_cdn_map_runtime_assets|check_cdn_map_runtime_assets_pre_push|resolve_map_runtime_cache_key|push_bunnycdn|stage_cdn_assets)\\.sh)";
+        files = "^(Cargo\\.lock|Cargo\\.toml|devenv\\.nix|lib/fishystuff_(api|client|core)/|map/fishystuff_ui_bevy/|site/assets/map/|site/scripts/(finalize-assets|write-runtime-config)\\.mjs|site/scripts/build-public-release\\.sh|tools/scripts/(build_map|check_cdn_map_runtime_assets|check_cdn_map_runtime_assets_pre_push|resolve_map_runtime_cache_key|push_bunnycdn|stage_cdn_assets)\\.sh)";
         language = "system";
         pass_filenames = false;
         stages = [ "pre-push" ];
@@ -219,16 +222,16 @@ in {
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
 
-      @runtime_config path /runtime-config.js
-      @site_svg path_regexp \.svg$
+      @site_runtime path /runtime-config.js /asset-manifest.json /build-info.json
+      @site_immutable path_regexp ${siteImmutableFilePattern}
       @site_static path_regexp ${siteStaticFilePattern}
 
-      handle @runtime_config {
+      handle @site_runtime {
         header Cache-Control "no-store"
         file_server
       }
 
-      handle @site_svg {
+      handle @site_immutable {
         header Cache-Control "public, max-age=31536000, immutable"
         file_server
       }
@@ -247,16 +250,16 @@ in {
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
 
-      @runtime_config path /runtime-config.js
-      @site_svg path_regexp \.svg$
+      @site_runtime path /runtime-config.js /asset-manifest.json /build-info.json
+      @site_immutable path_regexp ${siteImmutableFilePattern}
       @site_static path_regexp ${siteStaticFilePattern}
 
-      handle @runtime_config {
+      handle @site_runtime {
         header Cache-Control "no-store"
         file_server
       }
 
-      handle @site_svg {
+      handle @site_immutable {
         header Cache-Control "public, max-age=31536000, immutable"
         file_server
       }
