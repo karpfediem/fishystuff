@@ -256,6 +256,9 @@ struct FishCatalogRow {
     vendor_price: Option<i64>,
 }
 
+// Fish visibility is keyed to English item names; requested languages only affect display labels.
+const CANONICAL_FISH_DATA_LANG: &str = "en";
+
 impl QueryParams {
     fn validate(&self) -> AppResult<()> {
         if self.from_ts_utc >= self.to_ts_utc {
@@ -984,18 +987,28 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
+        let item_lang = lang.code().replace('\'', "''");
+        let canonical_lang = CANONICAL_FISH_DATA_LANG.replace('\'', "''");
         let query = format!(
             "SELECT \
                 k.fish_id, \
-                loc.`text` AS fish_name \
+                COALESCE( \
+                    NULLIF(TRIM(localized_loc.`text`), ''), \
+                    NULLIF(TRIM(canonical_loc.`text`), ''), \
+                    NULLIF(TRIM(k.name_ko), '') \
+                ) AS fish_name \
              FROM fish_names_ko{as_of} k \
-             JOIN languagedata{as_of} loc \
-               ON loc.`lang` = '{}' \
-              AND loc.`id` = CAST(k.fish_id AS SIGNED) \
-              AND loc.`format` = 'A' \
-              AND loc.`category` = '' \
-              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL",
-            lang.code().replace('\'', "''")
+             JOIN languagedata{as_of} canonical_loc \
+               ON canonical_loc.`lang` = '{canonical_lang}' \
+              AND canonical_loc.`id` = CAST(k.fish_id AS SIGNED) \
+              AND canonical_loc.`format` = 'A' \
+              AND canonical_loc.`category` = '' \
+              AND NULLIF(TRIM(canonical_loc.`text`), '') IS NOT NULL \
+             LEFT JOIN languagedata{as_of} localized_loc \
+               ON localized_loc.`lang` = '{item_lang}' \
+              AND localized_loc.`id` = CAST(k.fish_id AS SIGNED) \
+              AND localized_loc.`format` = 'A' \
+              AND localized_loc.`category` = ''"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
@@ -1036,11 +1049,18 @@ impl DoltMySqlStore {
             String::new()
         };
         // fish_names_ko can lag newer releases, so union the fish_table-only rows.
+        let item_lang = lang.code().replace('\'', "''");
+        let canonical_lang = CANONICAL_FISH_DATA_LANG.replace('\'', "''");
         let query = format!(
             "SELECT \
                 f.fish_id, \
                 ft.encyclopedia_key, \
-                loc.`text` AS fish_name, \
+                COALESCE( \
+                    NULLIF(TRIM(localized_loc.`text`), ''), \
+                    NULLIF(TRIM(canonical_loc.`text`), ''), \
+                    NULLIF(TRIM(f.name_ko), ''), \
+                    NULLIF(TRIM(it.`ItemName`), '') \
+                ) AS fish_name, \
                 it.`GradeType` AS grade_type, \
                 NULLIF(ft.icon, '') AS fish_table_icon_file, \
                 NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
@@ -1049,19 +1069,28 @@ impl DoltMySqlStore {
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
              FROM fish_names_ko{as_of} f \
-             JOIN languagedata{as_of} loc \
-               ON loc.`lang` = '{item_lang}' \
-              AND loc.`id` = CAST(f.fish_id AS SIGNED) \
-              AND loc.`format` = 'A' \
-              AND loc.`category` = '' \
-              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL \
+             JOIN languagedata{as_of} canonical_loc \
+               ON canonical_loc.`lang` = '{canonical_lang}' \
+              AND canonical_loc.`id` = CAST(f.fish_id AS SIGNED) \
+              AND canonical_loc.`format` = 'A' \
+              AND canonical_loc.`category` = '' \
+              AND NULLIF(TRIM(canonical_loc.`text`), '') IS NOT NULL \
+             LEFT JOIN languagedata{as_of} localized_loc \
+               ON localized_loc.`lang` = '{item_lang}' \
+              AND localized_loc.`id` = CAST(f.fish_id AS SIGNED) \
+              AND localized_loc.`format` = 'A' \
+              AND localized_loc.`category` = '' \
              JOIN item_table{as_of} it ON it.`Index` = f.fish_id \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = f.fish_id \
              UNION ALL \
              SELECT \
                 ft.item_key AS fish_id, \
                 ft.encyclopedia_key, \
-                loc.`text` AS fish_name, \
+                COALESCE( \
+                    NULLIF(TRIM(localized_loc.`text`), ''), \
+                    NULLIF(TRIM(canonical_loc.`text`), ''), \
+                    NULLIF(TRIM(it.`ItemName`), '') \
+                ) AS fish_name, \
                 it.`GradeType` AS grade_type, \
                 NULLIF(ft.icon, '') AS fish_table_icon_file, \
                 NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
@@ -1070,16 +1099,20 @@ impl DoltMySqlStore {
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
              FROM fish_table{as_of} ft \
-             JOIN languagedata{as_of} loc \
-               ON loc.`lang` = '{item_lang}' \
-              AND loc.`id` = CAST(ft.item_key AS SIGNED) \
-              AND loc.`format` = 'A' \
-              AND loc.`category` = '' \
-              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL \
+             JOIN languagedata{as_of} canonical_loc \
+               ON canonical_loc.`lang` = '{canonical_lang}' \
+              AND canonical_loc.`id` = CAST(ft.item_key AS SIGNED) \
+              AND canonical_loc.`format` = 'A' \
+              AND canonical_loc.`category` = '' \
+              AND NULLIF(TRIM(canonical_loc.`text`), '') IS NOT NULL \
+             LEFT JOIN languagedata{as_of} localized_loc \
+               ON localized_loc.`lang` = '{item_lang}' \
+              AND localized_loc.`id` = CAST(ft.item_key AS SIGNED) \
+              AND localized_loc.`format` = 'A' \
+              AND localized_loc.`category` = '' \
              LEFT JOIN item_table{as_of} it ON it.`Index` = ft.item_key \
              LEFT JOIN fish_names_ko{as_of} f ON f.fish_id = ft.item_key \
-             WHERE f.fish_id IS NULL",
-            item_lang = lang.code().replace('\'', "''")
+             WHERE f.fish_id IS NULL"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
@@ -1401,21 +1434,30 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
+        let item_lang = lang.code().replace('\'', "''");
+        let canonical_lang = CANONICAL_FISH_DATA_LANG.replace('\'', "''");
         let query = format!(
             "SELECT \
                 ft.encyclopedia_key, \
                 ft.item_key, \
-                loc.`text` AS localized_name, \
+                COALESCE( \
+                    NULLIF(TRIM(localized_loc.`text`), ''), \
+                    NULLIF(TRIM(canonical_loc.`text`), '') \
+                ) AS localized_name, \
                 ft.icon, \
                 ft.encyclopedia_icon \
              FROM fish_table{as_of} ft \
-             JOIN languagedata{as_of} loc \
-               ON loc.`lang` = '{}' \
-              AND loc.`id` = ft.item_key \
-              AND loc.`format` = 'A' \
-              AND loc.`category` = '' \
-              AND NULLIF(TRIM(loc.`text`), '') IS NOT NULL",
-            lang.code().replace('\'', "''")
+             JOIN languagedata{as_of} canonical_loc \
+               ON canonical_loc.`lang` = '{canonical_lang}' \
+              AND canonical_loc.`id` = ft.item_key \
+              AND canonical_loc.`format` = 'A' \
+              AND canonical_loc.`category` = '' \
+              AND NULLIF(TRIM(canonical_loc.`text`), '') IS NOT NULL \
+             LEFT JOIN languagedata{as_of} localized_loc \
+               ON localized_loc.`lang` = '{item_lang}' \
+              AND localized_loc.`id` = ft.item_key \
+              AND localized_loc.`format` = 'A' \
+              AND localized_loc.`category` = ''"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
