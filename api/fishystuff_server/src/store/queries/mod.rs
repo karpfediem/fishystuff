@@ -112,7 +112,9 @@ pub const RANKING_RING_SUPPORT_BY_ZONE_SQL: &str = "
 SELECT
   e.fish_id,
   CAST(SUM(CASE WHEN ring.ring_fully_contained = 1 THEN 1 ELSE 0 END) AS SIGNED) AS full_count,
-  CAST(SUM(CASE WHEN ring.ring_fully_contained = 0 THEN 1 ELSE 0 END) AS SIGNED) AS partial_count
+  CAST(SUM(CASE WHEN ring.ring_fully_contained = 0 THEN 1 ELSE 0 END) AS SIGNED) AS partial_count,
+  DATE_FORMAT(MAX(CASE WHEN ring.ring_fully_contained = 1 THEN e.ts_utc ELSE NULL END), '%Y-%m-%d %H:%i:%s') AS full_last_seen_utc,
+  DATE_FORMAT(MAX(CASE WHEN ring.ring_fully_contained = 0 THEN e.ts_utc ELSE NULL END), '%Y-%m-%d %H:%i:%s') AS partial_last_seen_utc
 FROM events e
 JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ?
 WHERE e.water_ok = 1

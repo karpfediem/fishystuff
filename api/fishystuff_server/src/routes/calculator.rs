@@ -6963,10 +6963,10 @@ fn loot_species_presence_priority(evidence: &CalculatorZoneLootEvidence) -> u8 {
         evidence.scope.as_str(),
         evidence.status.as_deref(),
     ) {
+        ("community", _, Some("confirmed")) => 7,
+        ("community", _, Some("guessed")) => 6,
         ("ranking", "ring_full", _) => 5,
-        ("community", _, Some("confirmed")) => 4,
-        ("community", _, Some("guessed")) => 4,
-        ("ranking", "ring_partial", _) => 3,
+        ("ranking", "ring_partial", _) => 4,
         ("community", _, Some("unconfirmed")) => 2,
         ("community", _, Some("data_incomplete")) => 1,
         _ => 0,
@@ -6991,6 +6991,24 @@ fn loot_species_presence_evidence(
             .then_with(|| left.scope.cmp(&right.scope))
     });
     evidence
+}
+
+fn provenance_datetime_text(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let without_fraction = value.split_once('.').map(|(head, _)| head).unwrap_or(value);
+    if let Some((date, time)) = without_fraction.split_once(' ') {
+        let time = time.get(..5).unwrap_or(time);
+        return Some(format!("{date} {time} UTC"));
+    }
+    Some(value.to_string())
+}
+
+fn evidence_source_display(evidence: &CalculatorZoneLootEvidence) -> Option<String> {
+    non_empty_owned(evidence.source_label.as_deref())
+        .or_else(|| non_empty_owned(evidence.source_id.as_deref()))
 }
 
 fn loot_species_presence_line(
@@ -7018,19 +7036,17 @@ fn loot_species_presence_line(
                 &[("scope", &scope), ("claims", &spaced_claims)],
             );
             if include_source_id {
-                if let Some(source_id) = evidence
-                    .source_id
-                    .as_deref()
-                    .filter(|value| !value.trim().is_empty())
+                let mut details = Vec::new();
+                if let Some(observed_at_utc) =
+                    provenance_datetime_text(evidence.observed_at_utc.as_deref())
                 {
-                    value = text_with_vars(
-                        "calculator.server.presence.line.ranking_with_source",
-                        &[
-                            ("scope", &scope),
-                            ("claims", &spaced_claims),
-                            ("source", source_id),
-                        ],
-                    );
+                    details.push(format!("Last seen: {observed_at_utc}"));
+                }
+                if let Some(source) = evidence_source_display(evidence) {
+                    details.push(format!("Source: {source}"));
+                }
+                if !details.is_empty() {
+                    value = format!("{value} · {}", details.join(" · "));
                 }
             }
             value
@@ -7054,20 +7070,17 @@ fn loot_species_presence_line(
                 ],
             );
             if include_source_id {
-                if let Some(source_id) = evidence
-                    .source_id
-                    .as_deref()
-                    .filter(|value| !value.trim().is_empty())
+                let mut details = Vec::new();
+                if let Some(imported_at_utc) =
+                    provenance_datetime_text(evidence.imported_at_utc.as_deref())
                 {
-                    value = text_with_vars(
-                        "calculator.server.presence.line.community_with_source",
-                        &[
-                            ("status", &status),
-                            ("claims", &compact_claims),
-                            ("scope", &scope),
-                            ("source", source_id),
-                        ],
-                    );
+                    details.push(format!("Row import: {imported_at_utc}"));
+                }
+                if let Some(source) = evidence_source_display(evidence) {
+                    details.push(format!("Source: {source}"));
+                }
+                if !details.is_empty() {
+                    value = format!("{value} · {}", details.join(" · "));
                 }
             }
             value
@@ -7261,6 +7274,11 @@ fn contribution_drop_row_detail(
             }
             if contribution.item_source_added.unwrap_or(false) {
                 parts.push("added row".to_string());
+            }
+            if let Some(imported_at_utc) =
+                provenance_datetime_text(contribution.item_source_imported_at_utc.as_deref())
+            {
+                parts.push(format!("row import {imported_at_utc}"));
             }
             Some(format!("Drop row: {}", parts.join(", ")))
         }
@@ -18528,6 +18546,7 @@ mod tests {
                 item_source_sheet: Some("no formulas".to_string()),
                 item_source_row: Some(327),
                 item_source_added: Some(true),
+                item_source_imported_at_utc: Some("2026-04-30 14:00:30.480000".to_string()),
                 item_main_group_key: Some(10952),
                 option_idx: Some(0),
                 subgroup_key: Some(10952),
@@ -18540,7 +18559,7 @@ mod tests {
         assert_eq!(loot_species_drop_rate_source_kind(&entry), "mixed");
         assert_eq!(
             loot_species_drop_rate_tooltip(&signals, &entry, CalculatorLocale::EnUs),
-            "DB 35% · Group path: main group 10952 -> subgroup 10952, option 0 · Zone mapping: Flockfish final combined zone group table (DropID GENERAL) · Drop row: Community Subgroups(no formulas) workbook, no formulas row 327, added row"
+            "DB 35% · Group path: main group 10952 -> subgroup 10952, option 0 · Zone mapping: Flockfish final combined zone group table (DropID GENERAL) · Drop row: Community Subgroups(no formulas) workbook, no formulas row 327, added row, row import 2026-04-30 14:00 UTC"
         );
     }
 
@@ -18616,7 +18635,7 @@ mod tests {
 
         assert_eq!(
             loot_species_evidence_text(&raw_signals, &entry, CalculatorLocale::EnUs),
-            "Community confirmed×2 · Prize subgroup 11054 · source community_presence_sheet"
+            "Community confirmed×2 · Prize subgroup 11054 · Source: community_presence_sheet"
         );
         assert_eq!(
             loot_species_presence_text(&entry, CalculatorLocale::EnUs),
@@ -18625,7 +18644,7 @@ mod tests {
     }
 
     #[test]
-    fn loot_species_presence_prefers_full_ranking_ring_and_marks_mixed_sources() {
+    fn loot_species_presence_prefers_community_over_ranking_and_marks_mixed_sources() {
         let entry = CalculatorZoneLootEntry {
             within_group_rate: 0.02,
             evidence: vec![
@@ -18636,6 +18655,8 @@ mod tests {
                     status: Some("confirmed".to_string()),
                     claim_count: Some(2),
                     source_id: Some("community_zone_fish_support".to_string()),
+                    source_label: Some("Community zone fish support".to_string()),
+                    imported_at_utc: Some("2026-04-30 14:00:30.480000".to_string()),
                     slot_idx: Some(1),
                     item_main_group_key: Some(11056),
                     ..CalculatorZoneLootEvidence::default()
@@ -18647,6 +18668,7 @@ mod tests {
                     status: Some("observed".to_string()),
                     claim_count: Some(3),
                     source_id: Some("layer_revision:v1".to_string()),
+                    observed_at_utc: Some("2026-04-11 07:25:00".to_string()),
                     ..CalculatorZoneLootEvidence::default()
                 },
                 CalculatorZoneLootEvidence {
@@ -18656,6 +18678,7 @@ mod tests {
                     status: Some("observed".to_string()),
                     claim_count: Some(8),
                     source_id: Some("layer_revision:v1".to_string()),
+                    observed_at_utc: Some("2026-04-18 13:46:45".to_string()),
                     ..CalculatorZoneLootEvidence::default()
                 },
             ],
@@ -18664,13 +18687,13 @@ mod tests {
 
         assert_eq!(
             loot_species_presence_text(&entry, CalculatorLocale::EnUs),
-            Some("Ranking ring fully inside zone ×8".to_string())
+            Some("Community confirmed×2 · Prize group".to_string())
         );
         assert_eq!(loot_species_presence_source_kind(&entry), "mixed");
         assert_eq!(
             loot_species_presence_tooltip(&entry, CalculatorLocale::EnUs),
             Some(
-                "Ranking ring fully inside zone ×8 · source layer_revision:v1 | Community confirmed×2 · Prize group 11056 · source community_zone_fish_support | Ranking ring overlaps zone edge ×3 · source layer_revision:v1".to_string()
+                "Community confirmed×2 · Prize group 11056 · Row import: 2026-04-30 14:00 UTC · Source: Community zone fish support | Ranking ring fully inside zone ×8 · Last seen: 2026-04-18 13:46 UTC · Source: layer_revision:v1 | Ranking ring overlaps zone edge ×3 · Last seen: 2026-04-11 07:25 UTC · Source: layer_revision:v1".to_string()
             )
         );
     }

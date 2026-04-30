@@ -17,6 +17,7 @@ const PROVENANCE_PRESENCE_FULL_COLOR =
     "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
 const PROVENANCE_PRESENCE_PARTIAL_COLOR =
     "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260430-2";
 
 function normalizeSourceKind(value) {
     const normalized = trimString(value).toLowerCase();
@@ -61,6 +62,97 @@ function sourceLabel(channel, sourceKind) {
         return channel === "presence" ? "Mixed support" : "Mixed sources";
     }
     return "Unspecified";
+}
+
+function sourceKindFromLabel(value) {
+    const normalized = trimString(value).toLowerCase();
+    if (normalized.includes("database")) {
+        return "database";
+    }
+    if (normalized.includes("ranking")) {
+        return "ranking";
+    }
+    if (normalized.includes("community")) {
+        return "community";
+    }
+    if (normalized.includes("derived")) {
+        return "derived";
+    }
+    if (normalized.includes("overlay")) {
+        return "overlay";
+    }
+    if (normalized.includes("mixed")) {
+        return "mixed";
+    }
+    return "unknown";
+}
+
+function sourceTone(channel, sourceKind, detail, valueText = "") {
+    const normalizedSourceKind = normalizeSourceKind(sourceKind);
+    if (normalizedSourceKind === "mixed") {
+        return "mixed";
+    }
+    if (normalizedSourceKind === "database") {
+        return "database";
+    }
+    if (normalizedSourceKind === "community") {
+        return "community";
+    }
+    if (channel === "presence" && normalizedSourceKind === "ranking") {
+        const ringSupport = presenceRingSupport(detail, valueText);
+        if (ringSupport === "full") {
+            return "ranking-full";
+        }
+        if (ringSupport === "partial") {
+            return "ranking-partial";
+        }
+    }
+    if (normalizedSourceKind === "ranking") {
+        return "ranking";
+    }
+    if (normalizedSourceKind === "overlay") {
+        return "overlay";
+    }
+    return "neutral";
+}
+
+function sourceIconAlias(channel, sourceKind, detail, valueText = "") {
+    const normalizedSourceKind = normalizeSourceKind(sourceKind);
+    if (normalizedSourceKind === "community") {
+        return "source-community";
+    }
+    if (normalizedSourceKind === "database") {
+        return "source-database";
+    }
+    if (channel === "presence" && normalizedSourceKind === "ranking") {
+        const ringSupport = presenceRingSupport(detail, valueText);
+        if (ringSupport === "full") {
+            return "ring-full";
+        }
+        if (ringSupport === "partial") {
+            return "ring-partial";
+        }
+    }
+    return "";
+}
+
+function sourceBadgeClass(tone) {
+    if (tone === "ranking" || tone === "ranking-full") {
+        return "badge-success";
+    }
+    if (tone === "ranking-partial" || tone === "community") {
+        return "badge-warning";
+    }
+    if (tone === "database") {
+        return "badge-info";
+    }
+    if (tone === "overlay") {
+        return "badge-secondary";
+    }
+    if (tone === "mixed") {
+        return "badge-accent";
+    }
+    return "badge-neutral";
 }
 
 function defaultDetail(channel, sourceKind, valueText) {
@@ -194,6 +286,8 @@ function buildSegment({
         label,
         sourceKind: normalizedSourceKind,
         sourceLabel: source,
+        sourceTone: sourceTone(channel, normalizedSourceKind, resolvedDetail, normalizedValueText),
+        sourceIcon: sourceIconAlias(channel, normalizedSourceKind, resolvedDetail, normalizedValueText),
         detail: resolvedDetail,
         color: provenanceIndicatorColor(channel, normalizedSourceKind, {
             active,
@@ -255,11 +349,11 @@ function ensureTooltipElement() {
     tooltipElement.setAttribute("role", "tooltip");
     tooltipElement.innerHTML = `
         <div class="fishy-provenance-tooltip__header">
-            <span class="fishy-provenance-tooltip__badge badge badge-sm badge-outline">
-                <span class="fishy-provenance-tooltip__swatch" aria-hidden="true"></span>
+            <span class="fishy-provenance-tooltip__title">
+                <span class="fishy-provenance-tooltip__source-icon-shell" aria-hidden="true"></span>
                 <span class="fishy-provenance-tooltip__label"></span>
             </span>
-            <span class="fishy-provenance-tooltip__source"></span>
+            <span class="fishy-provenance-tooltip__source badge badge-sm badge-soft badge-neutral"></span>
         </div>
         <div class="fishy-provenance-tooltip__details"></div>
     `;
@@ -285,6 +379,96 @@ function detailRows(detail) {
         .filter((row) => row.label || row.value);
 }
 
+function detailIconAlias(row) {
+    const normalized = `${trimString(row.label)} ${trimString(row.value)}`.toLowerCase();
+    if (normalized.includes("ring fully inside zone") || normalized.includes("ring_full")) {
+        return "ring-full";
+    }
+    if (
+        normalized.includes("ring overlaps zone edge")
+        || normalized.includes("ring overlaps zone")
+        || normalized.includes("ring_partial")
+    ) {
+        return "ring-partial";
+    }
+    if (normalized.includes("community") || normalized.includes("workbook")) {
+        return "source-community";
+    }
+    if (normalized.includes("database") || normalized.includes("db ")) {
+        return "source-database";
+    }
+    return "";
+}
+
+function detailRowTone(row) {
+    const normalized = `${trimString(row.label)} ${trimString(row.value)}`.toLowerCase();
+    if (normalized.includes("ring fully inside zone") || normalized.includes("ring_full")) {
+        return "ranking-full";
+    }
+    if (
+        normalized.includes("ring overlaps zone edge")
+        || normalized.includes("ring overlaps zone")
+        || normalized.includes("ring_partial")
+    ) {
+        return "ranking-partial";
+    }
+    if (normalized.includes("community") || normalized.includes("workbook")) {
+        return "community";
+    }
+    if (normalized.includes("database") || normalized.includes("db ")) {
+        return "database";
+    }
+    if (normalized.includes("overlay") || normalized.includes("personal")) {
+        return "overlay";
+    }
+    return "";
+}
+
+function createSpriteIcon(documentRef, className, alias) {
+    if (!documentRef || !alias) {
+        return null;
+    }
+    const svg = documentRef.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", className);
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const use = documentRef.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("width", "100%");
+    use.setAttribute("height", "100%");
+    use.setAttribute("href", `${ICON_SPRITE_URL}#fishy-${alias}`);
+    svg.appendChild(use);
+    return svg;
+}
+
+function appendDetailIcon(rowElement, alias) {
+    const documentRef = globalThis.document;
+    if (!documentRef || !alias) {
+        return;
+    }
+    rowElement.classList.add("has-icon");
+    const svg = createSpriteIcon(documentRef, "fishy-provenance-tooltip__detail-icon", alias);
+    rowElement.appendChild(svg);
+}
+
+function renderSourceIcon(tooltip, alias) {
+    const documentRef = globalThis.document;
+    const shell = tooltip.querySelector(".fishy-provenance-tooltip__source-icon-shell");
+    if (!documentRef || !shell) {
+        return;
+    }
+    shell.replaceChildren();
+    const svg = createSpriteIcon(documentRef, "fishy-provenance-tooltip__source-icon", alias);
+    if (svg) {
+        shell.appendChild(svg);
+        return;
+    }
+    const status = documentRef.createElement("span");
+    status.className = "fishy-provenance-tooltip__source-status status status-sm";
+    status.setAttribute("aria-hidden", "true");
+    shell.appendChild(status);
+}
+
 function renderTooltipDetails(tooltip, detail) {
     const documentRef = globalThis.document;
     const container = tooltip.querySelector(".fishy-provenance-tooltip__details");
@@ -299,12 +483,17 @@ function renderTooltipDetails(tooltip, detail) {
         rowElement.className = row.label
             ? "fishy-provenance-tooltip__detail-row fishy-provenance-tooltip__detail-row--keyed"
             : "fishy-provenance-tooltip__detail-row";
+        const rowTone = detailRowTone(row);
+        if (rowTone) {
+            rowElement.dataset.detailTone = rowTone;
+        }
         if (row.label) {
             const keyElement = documentRef.createElement("span");
             keyElement.className = "fishy-provenance-tooltip__detail-key";
             keyElement.textContent = row.label;
             rowElement.appendChild(keyElement);
         }
+        appendDetailIcon(rowElement, detailIconAlias(row));
         const valueElement = documentRef.createElement("span");
         valueElement.className = "fishy-provenance-tooltip__detail-value";
         valueElement.textContent = row.value;
@@ -365,10 +554,24 @@ function showTooltip(anchor, event) {
     }
     const label = trimString(anchor.dataset.fishyProvenanceLabel) || "Provenance";
     const source = trimString(anchor.dataset.fishyProvenanceSource) || "Unspecified";
+    let sourceKind = normalizeSourceKind(anchor.dataset.fishyProvenanceSourceKind);
+    if (sourceKind === "unknown") {
+        sourceKind = sourceKindFromLabel(source);
+    }
     const detail = trimString(anchor.dataset.fishyProvenanceDetail);
     const color = trimString(anchor.dataset.fishyProvenanceColor);
+    const tone = trimString(anchor.dataset.fishyProvenanceSourceTone)
+        || sourceTone(label.toLowerCase(), sourceKind, detail);
+    const icon = trimString(anchor.dataset.fishyProvenanceSourceIcon)
+        || sourceIconAlias(label.toLowerCase(), sourceKind, detail);
     tooltip.querySelector(".fishy-provenance-tooltip__label").textContent = label;
-    tooltip.querySelector(".fishy-provenance-tooltip__source").textContent = source;
+    const sourceElement = tooltip.querySelector(".fishy-provenance-tooltip__source");
+    sourceElement.className =
+        `fishy-provenance-tooltip__source badge badge-sm badge-soft ${sourceBadgeClass(tone)}`;
+    sourceElement.textContent = source;
+    tooltip.dataset.sourceKind = sourceKind;
+    tooltip.dataset.sourceTone = tone;
+    renderSourceIcon(tooltip, icon);
     renderTooltipDetails(tooltip, detail);
     tooltip.style.setProperty("--fishy-provenance-tooltip-color", color);
     tooltip.hidden = false;

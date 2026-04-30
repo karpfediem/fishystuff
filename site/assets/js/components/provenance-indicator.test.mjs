@@ -32,6 +32,9 @@ test("buildProvenanceSegments keeps community-only presence grey and community r
 
     assert.equal(rateSegment.sourceLabel, "Community guess");
     assert.equal(presenceSegment.sourceLabel, "Community");
+    assert.equal(rateSegment.sourceIcon, "source-community");
+    assert.equal(presenceSegment.sourceIcon, "source-community");
+    assert.equal(presenceSegment.sourceTone, "community");
     assert.equal(rateSegment.color, ACTIVE_YELLOW_COLOR);
     assert.equal(presenceSegment.color, ACTIVE_GREY_COLOR);
     assert.match(provenanceAriaLabel(presenceSegment), /Presence: Community/);
@@ -56,6 +59,7 @@ test("buildProvenanceSegments keeps non-ring database presence grey and preserve
     });
 
     assert.equal(presenceSegment.sourceLabel, "Database");
+    assert.equal(presenceSegment.sourceIcon, "source-database");
     assert.equal(presenceSegment.detail, "Database-backed presence");
     assert.equal(presenceSegment.color, ACTIVE_GREY_COLOR);
 });
@@ -67,6 +71,8 @@ test("buildProvenanceSegments marks fully contained ranking rings green", () => 
     });
 
     assert.equal(presenceSegment.sourceLabel, "Ranking ring");
+    assert.equal(presenceSegment.sourceIcon, "ring-full");
+    assert.equal(presenceSegment.sourceTone, "ranking-full");
     assert.equal(presenceSegment.color, ACTIVE_GREEN_COLOR);
     assert.match(provenanceAriaLabel(presenceSegment), /Presence: Ranking ring/);
 });
@@ -78,6 +84,8 @@ test("buildProvenanceSegments marks partial-only ranking rings yellow", () => {
     });
 
     assert.equal(presenceSegment.color, ACTIVE_YELLOW_COLOR);
+    assert.equal(presenceSegment.sourceIcon, "ring-partial");
+    assert.equal(presenceSegment.sourceTone, "ranking-partial");
 });
 
 test("buildProvenanceSegments prefers fully contained rings when mixed presence sources contribute", () => {
@@ -103,6 +111,8 @@ test("buildProvenanceSegments recognizes database and derived rate provenance la
     });
 
     assert.equal(databaseRateSegment.sourceLabel, "Database");
+    assert.equal(databaseRateSegment.sourceIcon, "source-database");
+    assert.equal(databaseRateSegment.sourceTone, "database");
     assert.equal(databaseRateSegment.color, ACTIVE_BLUE_COLOR);
     assert.equal(derivedRateSegment.sourceLabel, "Derived");
     assert.equal(derivedRateSegment.color, ACTIVE_GREY_COLOR);

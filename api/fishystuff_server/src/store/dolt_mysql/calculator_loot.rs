@@ -55,21 +55,25 @@ struct CommunitySupportMeta {
     subgroup_key: Option<i64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct CommunityPresenceMeta {
     source_id: String,
+    source_label: Option<String>,
     item_id: i32,
     support_status: String,
     claim_count: u32,
     slot_idx: Option<u8>,
     item_main_group_key: Option<i64>,
     subgroup_key: Option<i64>,
+    imported_at_utc: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 struct RankingPresenceMeta {
     full_count: u32,
     partial_count: u32,
+    full_last_seen_utc: Option<String>,
+    partial_last_seen_utc: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +114,7 @@ struct SubgroupVariantSourceMeta {
     source_sheet: Option<String>,
     source_row: Option<u32>,
     source_added: Option<bool>,
+    source_imported_at_utc: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -262,11 +267,35 @@ fn build_community_presence_evidence(meta: &CommunityPresenceMeta) -> Calculator
         status: Some(meta.support_status.clone()),
         claim_count: Some(meta.claim_count),
         source_id: Some(meta.source_id.clone()),
+        source_label: meta.source_label.clone(),
+        imported_at_utc: meta.imported_at_utc.clone(),
         slot_idx: meta.slot_idx,
         item_main_group_key: meta.item_main_group_key,
         subgroup_key: meta.subgroup_key,
         ..CalculatorZoneLootEvidence::default()
     }
+}
+
+fn build_subgroup_overlay_presence_evidence(
+    contribution: &CalculatorZoneLootRateContribution,
+    slot_idx: u8,
+) -> Option<CalculatorZoneLootEvidence> {
+    (contribution.item_source_family.as_deref() == Some("community")).then(|| {
+        CalculatorZoneLootEvidence {
+            source_family: "community".to_string(),
+            claim_kind: "presence".to_string(),
+            scope: "subgroup".to_string(),
+            status: Some("confirmed".to_string()),
+            claim_count: Some(1),
+            source_id: contribution.item_source_id.clone(),
+            source_label: contribution.item_source_label.clone(),
+            imported_at_utc: contribution.item_source_imported_at_utc.clone(),
+            slot_idx: Some(slot_idx),
+            item_main_group_key: contribution.item_main_group_key,
+            subgroup_key: contribution.subgroup_key,
+            ..CalculatorZoneLootEvidence::default()
+        }
+    })
 }
 
 fn push_ranking_presence_evidence(
@@ -284,6 +313,7 @@ fn push_ranking_presence_evidence(
             status: Some("observed".to_string()),
             claim_count: Some(meta.full_count),
             source_id: Some(format!("layer_revision:{layer_revision_id}")),
+            observed_at_utc: meta.full_last_seen_utc.clone(),
             ..CalculatorZoneLootEvidence::default()
         });
     }
@@ -297,6 +327,7 @@ fn push_ranking_presence_evidence(
             status: Some("observed".to_string()),
             claim_count: Some(meta.partial_count),
             source_id: Some(format!("layer_revision:{layer_revision_id}")),
+            observed_at_utc: meta.partial_last_seen_utc.clone(),
             ..CalculatorZoneLootEvidence::default()
         });
     }
@@ -682,7 +713,8 @@ impl DoltMySqlStore {
                     overlay.source_label, \
                     overlay.source_sheet, \
                     CAST(overlay.source_row AS UNSIGNED), \
-                    CAST(overlay.source_added AS UNSIGNED) \
+                    CAST(overlay.source_added AS UNSIGNED), \
+                    DATE_FORMAT(active_import.source_imported_at, '%Y-%m-%d %H:%i:%s') \
                  FROM item_sub_group_item_variants{as_of} v \
                  LEFT JOIN community_active_overlays{as_of} active \
                    ON active.overlay_kind = 'item_sub_group' \
@@ -692,6 +724,14 @@ impl DoltMySqlStore {
                   AND overlay.ItemKey = v.item_key \
                   AND overlay.EnchantLevel = v.enchant_level \
                   AND overlay.source_removed = 0 \
+                 LEFT JOIN ( \
+                   SELECT to_source_id, MAX(to_commit_date) AS source_imported_at \
+                   FROM dolt_diff_community_active_overlays \
+                   WHERE to_overlay_kind = 'item_sub_group' \
+                     AND to_source_id IS NOT NULL \
+                     AND diff_type IN ('added', 'modified') \
+                   GROUP BY to_source_id \
+                 ) active_import ON active_import.to_source_id = active.source_id \
                  WHERE v.item_sub_group_key IN ({subgroup_id_csv})"
             );
             let subgroup_rows: Vec<(
@@ -703,6 +743,7 @@ impl DoltMySqlStore {
                 Option<String>,
                 Option<u64>,
                 Option<u64>,
+                Option<String>,
             )> = conn.query(subgroup_query).map_err(db_unavailable)?;
 
             for (
@@ -714,6 +755,7 @@ impl DoltMySqlStore {
                 source_sheet,
                 source_row,
                 source_added,
+                source_imported_at_utc,
             ) in subgroup_rows
             {
                 let Ok(item_id) = i32::try_from(item_key) else {
@@ -733,6 +775,7 @@ impl DoltMySqlStore {
                         source_sheet: normalize_optional_string(source_sheet),
                         source_row: source_row.and_then(|value| u32::try_from(value).ok()),
                         source_added: source_added.map(|value| value > 0),
+                        source_imported_at_utc: normalize_optional_string(source_imported_at_utc),
                     }
                 });
                 push_unique_subgroup_variant(
@@ -796,6 +839,10 @@ impl DoltMySqlStore {
                                 .source
                                 .as_ref()
                                 .and_then(|source| source.source_added),
+                            item_source_imported_at_utc: variant
+                                .source
+                                .as_ref()
+                                .and_then(|source| source.source_imported_at_utc.clone()),
                             item_main_group_key: Some(slot_row.item_main_group_key),
                             option_idx: Some(option.option_idx),
                             subgroup_key: Some(option.subgroup_key),
@@ -841,17 +888,18 @@ impl DoltMySqlStore {
         let mut community_guess_by_key =
             HashMap::<(u8, i32), (String, CommunityPrizeGuessMeta)>::new();
         let community_query = format!(
-            "SELECT source_id, CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED), notes \
+            "SELECT source_id, source_label, CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED), notes \
              FROM community_zone_fish_support{as_of} \
              WHERE zone_rgb = ?"
         );
-        let community_rows: Vec<(String, i64, String, i64, Option<String>)> =
+        let community_rows: Vec<(String, String, i64, String, i64, Option<String>)> =
             match conn.exec(community_query, (zone_rgb.to_u32(),)) {
                 Ok(rows) => rows,
                 Err(err) if is_missing_table(&err, "community_zone_fish_support") => Vec::new(),
                 Err(err) => return Err(db_unavailable(err)),
             };
-        for (source_id, item_id, support_status, claim_count, notes) in community_rows {
+        for (source_id, source_label, item_id, support_status, claim_count, notes) in community_rows
+        {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
@@ -869,12 +917,14 @@ impl DoltMySqlStore {
                     .insert((guess.slot_idx, item_id), (source_id.clone(), guess));
                 community_presence_rows.push(CommunityPresenceMeta {
                     source_id,
+                    source_label: normalize_optional_string(Some(source_label)),
                     item_id,
                     support_status,
                     claim_count,
                     slot_idx: parsed_meta.slot_idx.or(Some(guess.slot_idx)),
                     item_main_group_key: parsed_meta.item_main_group_key,
                     subgroup_key: parsed_meta.subgroup_key.or(guess.subgroup_key),
+                    imported_at_utc: None,
                 });
             } else {
                 let meta = notes
@@ -883,12 +933,14 @@ impl DoltMySqlStore {
                     .unwrap_or_default();
                 community_presence_rows.push(CommunityPresenceMeta {
                     source_id,
+                    source_label: normalize_optional_string(Some(source_label)),
                     item_id,
                     support_status,
                     claim_count,
                     slot_idx: meta.slot_idx,
                     item_main_group_key: meta.item_main_group_key,
                     subgroup_key: meta.subgroup_key,
+                    imported_at_utc: None,
                 });
             }
         }
@@ -905,23 +957,26 @@ impl DoltMySqlStore {
             Err(err) if err.0.code == ApiErrorCode::NotFound => None,
             Err(err) => return Err(err),
         };
-        let ranking_presence_rows: Vec<(i64, i64, i64)> = match layer_revision_id {
-            Some(ref layer_revision_id) => match conn.exec(
-                queries::RANKING_RING_SUPPORT_BY_ZONE_SQL,
-                (
-                    layer_revision_id,
-                    super::SOURCE_KIND_RANKING,
-                    zone_rgb.to_u32(),
-                ),
-            ) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "event_zone_ring_support") => Vec::new(),
-                Err(err) => return Err(db_unavailable(err)),
-            },
-            None => Vec::new(),
-        };
+        let ranking_presence_rows: Vec<(i64, i64, i64, Option<String>, Option<String>)> =
+            match layer_revision_id {
+                Some(ref layer_revision_id) => match conn.exec(
+                    queries::RANKING_RING_SUPPORT_BY_ZONE_SQL,
+                    (
+                        layer_revision_id,
+                        super::SOURCE_KIND_RANKING,
+                        zone_rgb.to_u32(),
+                    ),
+                ) {
+                    Ok(rows) => rows,
+                    Err(err) if is_missing_table(&err, "event_zone_ring_support") => Vec::new(),
+                    Err(err) => return Err(db_unavailable(err)),
+                },
+                None => Vec::new(),
+            };
         let mut ranking_presence_by_item = HashMap::<i32, RankingPresenceMeta>::new();
-        for (fish_id, full_count, partial_count) in ranking_presence_rows {
+        for (fish_id, full_count, partial_count, full_last_seen_utc, partial_last_seen_utc) in
+            ranking_presence_rows
+        {
             let Ok(fish_id) = i32::try_from(fish_id) else {
                 continue;
             };
@@ -937,6 +992,22 @@ impl DoltMySqlStore {
             meta.partial_count = meta
                 .partial_count
                 .saturating_add(u32::try_from(partial_count.max(0)).unwrap_or(u32::MAX));
+            if let Some(full_last_seen_utc) = normalize_optional_string(full_last_seen_utc) {
+                meta.full_last_seen_utc = Some(
+                    meta.full_last_seen_utc
+                        .as_deref()
+                        .map(|current| current.max(full_last_seen_utc.as_str()).to_string())
+                        .unwrap_or(full_last_seen_utc),
+                );
+            }
+            if let Some(partial_last_seen_utc) = normalize_optional_string(partial_last_seen_utc) {
+                meta.partial_last_seen_utc = Some(
+                    meta.partial_last_seen_utc
+                        .as_deref()
+                        .map(|current| current.max(partial_last_seen_utc.as_str()).to_string())
+                        .unwrap_or(partial_last_seen_utc),
+                );
+            }
         }
 
         let community_guess_meta_by_key = community_guess_by_key
@@ -1155,6 +1226,22 @@ impl DoltMySqlStore {
                     .get(&(slot_idx, item_id))
                     .cloned()
                     .unwrap_or_default();
+                let mut subgroup_overlay_presence_keys = HashSet::new();
+                for contribution in &rate_contributions {
+                    let Some(presence) =
+                        build_subgroup_overlay_presence_evidence(contribution, slot_idx)
+                    else {
+                        continue;
+                    };
+                    let dedupe_key = (
+                        presence.source_id.clone(),
+                        presence.subgroup_key,
+                        presence.imported_at_utc.clone(),
+                    );
+                    if subgroup_overlay_presence_keys.insert(dedupe_key) {
+                        evidence.push(presence);
+                    }
+                }
                 let mut group_conditions_raw = Vec::<String>::new();
                 for contribution in &rate_contributions {
                     for condition in &contribution.group_conditions_raw {
@@ -1194,7 +1281,7 @@ impl DoltMySqlStore {
                     matched_community_presence_indexes.insert(index);
                     evidence.push(build_community_presence_evidence(meta));
                 }
-                if let Some(meta) = ranking_presence_by_item.get(&item_id).copied() {
+                if let Some(meta) = ranking_presence_by_item.get(&item_id).cloned() {
                     matched_ranking_items.insert(item_id);
                     if let Some(layer_revision_id) = layer_revision_id.as_deref() {
                         push_ranking_presence_evidence(&mut evidence, meta, layer_revision_id);
@@ -1405,6 +1492,7 @@ mod tests {
             slot_idx: None,
             item_main_group_key: None,
             subgroup_key: None,
+            ..CommunityPresenceMeta::default()
         };
         let group = CommunityPresenceMeta {
             item_main_group_key: Some(9001),
@@ -1431,6 +1519,7 @@ mod tests {
             slot_idx: Some(1),
             item_main_group_key: Some(9001),
             subgroup_key: Some(11054),
+            ..CommunityPresenceMeta::default()
         };
 
         assert!(community_presence_matches_row(
@@ -1464,6 +1553,7 @@ mod tests {
             slot_idx: None,
             item_main_group_key: Some(9001),
             subgroup_key: Some(11054),
+            ..CommunityPresenceMeta::default()
         };
 
         assert_eq!(
