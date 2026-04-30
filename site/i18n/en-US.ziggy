@@ -1011,6 +1011,7 @@
   "map.layers.connections": "Connections",
   "map.layers.names": "Names",
   "map.layers.icons": "Icons",
+  "map.layers.sample_hover": "Sample hover",
   "map.layers.search_filters": "Search filters",
   "map.layers.hover_facts": "Hover facts",
   "map.layers.table.icon": "Icon",

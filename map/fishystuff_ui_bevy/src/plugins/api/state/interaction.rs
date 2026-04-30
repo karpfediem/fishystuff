@@ -98,6 +98,7 @@ pub struct PointSampleSummary {
     pub fish_id: i32,
     pub sample_count: u32,
     pub last_ts_utc: i64,
+    pub sample_id: Option<i64>,
     pub zone_rgbs: Vec<u32>,
     pub full_zone_rgbs: Vec<u32>,
 }

@@ -70,6 +70,18 @@ function trimString(value) {
   return normalized || "";
 }
 
+function pointSampleZoneIndicatorMarkup(zone) {
+  if (zone?.zoneKind === "partial") {
+    const style = trimString(zone?.swatchRgb)
+      ? ` style="--fishymap-layer-fact-rgb:${escapeHtml(zone.swatchRgb)};"`
+      : "";
+    return `<svg class="fishy-icon size-4 fishymap-point-sample-zone-icon" viewBox="0 0 24 24" aria-hidden="true"${style}><use width="100%" height="100%" href="#fishy-ring-partial"></use></svg>`;
+  }
+  return trimString(zone?.swatchRgb)
+    ? `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeHtml(zone.swatchRgb)};"></span>`
+    : "";
+}
+
 function factIconMarkup(fact) {
   if (trimString(fact?.swatchRgb)) {
     return `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeHtml(fact.swatchRgb)};" aria-hidden="true"></span>`;
@@ -156,11 +168,7 @@ function pointSampleZoneMarkup(row) {
         ${zones
           .map((zone) => `
             <span class="fishymap-point-sample-zone">
-              ${
-                trimString(zone?.swatchRgb)
-                  ? `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeHtml(zone.swatchRgb)};"></span>`
-                  : ""
-              }
+              ${pointSampleZoneIndicatorMarkup(zone)}
               <span class="truncate">${escapeHtml(zone?.name || "")}</span>
             </span>
           `)
@@ -178,13 +186,19 @@ function pointSampleMarkup(row) {
   const itemId = Number.parseInt(row?.itemId, 10);
   const fishId = Number.parseInt(row?.fishId, 10);
   const count = Math.max(1, Number.parseInt(row?.sampleCount, 10) || 1);
+  const sampleId = Number.parseInt(row?.sampleId, 10);
+  const sampleBadge = count > 1
+    ? `x${count}`
+    : Number.isInteger(sampleId) && sampleId > 0
+      ? `#${sampleId}`
+      : "";
   const detailParts = [
     Number.isInteger(itemId) ? `Item ${itemId}` : "",
     Number.isInteger(fishId) ? `Fish ${fishId}` : "",
   ].filter(Boolean);
   const iconMarkup = iconUrl
-    ? `<span class="fishy-item-icon-frame is-xs ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
-    : `<span class="fishy-item-icon-frame is-xs ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
+    ? `<span class="fishy-item-icon-frame is-native ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishy-item-icon-frame is-native ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
   return `
     <div class="fishymap-point-sample-card" data-zone-kind="${escapeHtml(row?.zoneKind || "")}">
       <div class="fishymap-point-sample-main">
@@ -199,7 +213,7 @@ function pointSampleMarkup(row) {
             }
           </span>
         </span>
-        ${count > 1 ? `<span class="badge badge-soft badge-sm">${escapeHtml(`x${count}`)}</span>` : ""}
+        ${sampleBadge ? `<span class="badge badge-soft badge-sm">${escapeHtml(sampleBadge)}</span>` : ""}
       </div>
       ${
         trimString(row?.dateText)

@@ -127,7 +127,7 @@ struct ClusterAcc {
     sum_world_z: i64,
     world_count: u32,
     fish_counts: HashMap<i32, u32>,
-    point_samples: BTreeMap<PointSampleSummaryKey, PointSampleAccumulator>,
+    point_samples: Vec<PointSampleSummary>,
 }
 
 impl ClusterAcc {
@@ -142,15 +142,7 @@ impl ClusterAcc {
         }
         *self.fish_counts.entry(event.fish_id).or_insert(0) += 1;
         self.point_samples
-            .entry(PointSampleSummaryKey::from_event(event))
-            .or_insert_with(|| PointSampleAccumulator {
-                fish_id: event.fish_id,
-                sample_count: 0,
-                last_ts_utc: event.ts_utc,
-                zone_rgbs: normalized_zone_rgbs(event),
-                full_zone_rgbs: normalized_full_zone_rgbs(event),
-            })
-            .push(event);
+            .push(point_sample_summary_for_event(event));
     }
 
     fn to_render_point(&self) -> DerivedRenderPoint {
@@ -180,7 +172,7 @@ impl ClusterAcc {
             fish_id: top_fish_id,
             sample_count: self.count.max(1),
             aggregated: true,
-            point_samples: sorted_point_samples(&self.point_samples),
+            point_samples: sorted_point_samples(&self.point_samples, &self.fish_counts),
         }
     }
 
@@ -200,72 +192,32 @@ impl ClusterAcc {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct PointSampleSummaryKey {
-    fish_id: i32,
-    zone_rgbs: Vec<u32>,
-    full_zone_rgbs: Vec<u32>,
-}
-
-impl PointSampleSummaryKey {
-    fn from_event(event: &EventPointCompact) -> Self {
-        Self {
-            fish_id: event.fish_id,
-            zone_rgbs: normalized_zone_rgbs(event),
-            full_zone_rgbs: normalized_full_zone_rgbs(event),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PointSampleAccumulator {
-    fish_id: i32,
-    sample_count: u32,
-    last_ts_utc: i64,
-    zone_rgbs: Vec<u32>,
-    full_zone_rgbs: Vec<u32>,
-}
-
-impl PointSampleAccumulator {
-    fn push(&mut self, event: &EventPointCompact) {
-        self.sample_count = self.sample_count.saturating_add(1);
-        self.last_ts_utc = self.last_ts_utc.max(event.ts_utc);
-    }
-
-    fn to_summary(&self) -> PointSampleSummary {
-        PointSampleSummary {
-            fish_id: self.fish_id,
-            sample_count: self.sample_count.max(1),
-            last_ts_utc: self.last_ts_utc,
-            zone_rgbs: self.zone_rgbs.clone(),
-            full_zone_rgbs: self.full_zone_rgbs.clone(),
-        }
-    }
-}
-
 fn point_sample_summary_for_event(event: &EventPointCompact) -> PointSampleSummary {
     PointSampleSummary {
         fish_id: event.fish_id,
         sample_count: 1,
         last_ts_utc: event.ts_utc,
+        sample_id: Some(event.event_id),
         zone_rgbs: normalized_zone_rgbs(event),
         full_zone_rgbs: normalized_full_zone_rgbs(event),
     }
 }
 
 fn sorted_point_samples(
-    samples: &BTreeMap<PointSampleSummaryKey, PointSampleAccumulator>,
+    samples: &[PointSampleSummary],
+    fish_counts: &HashMap<i32, u32>,
 ) -> Vec<PointSampleSummary> {
-    let mut summaries = samples
-        .values()
-        .map(PointSampleAccumulator::to_summary)
-        .collect::<Vec<_>>();
+    let mut summaries = samples.to_vec();
     summaries.sort_by(|left, right| {
-        right
-            .sample_count
-            .cmp(&left.sample_count)
+        fish_counts
+            .get(&right.fish_id)
+            .copied()
+            .unwrap_or_default()
+            .cmp(&fish_counts.get(&left.fish_id).copied().unwrap_or_default())
+            .then_with(|| right.sample_count.cmp(&left.sample_count))
             .then_with(|| right.last_ts_utc.cmp(&left.last_ts_utc))
             .then_with(|| left.fish_id.cmp(&right.fish_id))
+            .then_with(|| left.sample_id.cmp(&right.sample_id))
             .then_with(|| left.zone_rgbs.cmp(&right.zone_rgbs))
             .then_with(|| left.full_zone_rgbs.cmp(&right.full_zone_rgbs))
     });
@@ -299,6 +251,41 @@ fn sorted_deduped(mut values: Vec<u32>) -> Vec<u32> {
 mod tests {
     use super::cluster_view_events;
     use fishystuff_api::models::events::{EventPointCompact, EventsQueryMode, MapBboxPx};
+
+    fn compact_event(
+        event_id: i64,
+        fish_id: i32,
+        ts_utc: i64,
+        map_px_x: i32,
+        map_px_y: i32,
+        zone_rgbs: Vec<u32>,
+        full_zone_rgbs: Vec<u32>,
+    ) -> EventPointCompact {
+        EventPointCompact {
+            event_id,
+            fish_id,
+            ts_utc,
+            map_px_x,
+            map_px_y,
+            length_milli: 1000,
+            world_x: None,
+            world_z: None,
+            zone_rgb_u32: None,
+            zone_rgbs,
+            full_zone_rgbs,
+            source_kind: None,
+            source_id: None,
+        }
+    }
+
+    fn aggregate_viewport_bbox() -> MapBboxPx {
+        MapBboxPx {
+            min_x: 0,
+            min_y: 0,
+            max_x: 2_000,
+            max_y: 2_000,
+        }
+    }
 
     #[test]
     fn clustering_is_deterministic_for_same_inputs() {
@@ -418,16 +405,72 @@ mod tests {
 
         assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
         assert_eq!(clustered.points.len(), 1);
-        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries.len(), 2501);
         assert_eq!(summaries[0].fish_id, 10);
-        assert_eq!(summaries[0].sample_count, 1200);
+        assert_eq!(summaries[0].sample_count, 1);
+        assert_eq!(summaries[0].sample_id, Some(1199));
         assert_eq!(summaries[0].full_zone_rgbs, vec![0x39e58d]);
-        assert_eq!(summaries[1].fish_id, 20);
-        assert_eq!(summaries[1].sample_count, 800);
-        assert_eq!(summaries[1].zone_rgbs, vec![0x123456, 0x654321]);
-        assert!(summaries[1].full_zone_rgbs.is_empty());
-        assert_eq!(summaries[2].fish_id, 30);
-        assert_eq!(summaries[2].sample_count, 501);
+        assert_eq!(summaries[1].fish_id, 10);
+        assert_eq!(summaries[1].sample_count, 1);
+        assert_eq!(summaries[1].sample_id, Some(1198));
+        assert_eq!(summaries[1200].fish_id, 20);
+        assert_eq!(summaries[1200].sample_id, Some(1999));
+        assert_eq!(summaries[1200].zone_rgbs, vec![0x123456, 0x654321]);
+        assert!(summaries[1200].full_zone_rgbs.is_empty());
+        assert_eq!(summaries[2000].fish_id, 30);
+        assert_eq!(summaries[2000].sample_id, Some(2500));
+    }
+
+    #[test]
+    fn aggregated_clusters_keep_individual_samples_across_zone_footprints() {
+        let mut events = Vec::new();
+        for idx in 0..2501 {
+            let (fish_id, zone_rgbs, full_zone_rgbs) = if idx < 1000 {
+                (10, vec![0x39e58d], vec![0x39e58d])
+            } else if idx < 1500 {
+                (10, vec![0x39e58d, 0x654321], Vec::new())
+            } else if idx < 2200 {
+                (20, vec![0x123456], vec![0x123456])
+            } else {
+                (30, vec![0x0abcde], vec![0x0abcde])
+            };
+            events.push(compact_event(
+                idx as i64,
+                fish_id,
+                1_700_000_000 + idx as i64,
+                1000 + (idx % 8) as i32,
+                2000 + (idx % 8) as i32,
+                zone_rgbs,
+                full_zone_rgbs,
+            ));
+        }
+
+        let indices: Vec<usize> = (0..events.len()).collect();
+        let clustered = cluster_view_events(&events, &indices, &aggregate_viewport_bbox(), 64);
+        let summaries = &clustered.points[0].point_samples;
+
+        assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
+        assert_eq!(summaries.len(), 2501);
+        assert_eq!(
+            summaries
+                .iter()
+                .filter(|sample| sample.fish_id == 10)
+                .count(),
+            1500,
+        );
+        assert_eq!(summaries[0].fish_id, 10);
+        assert_eq!(summaries[0].sample_count, 1);
+        assert_eq!(summaries[0].sample_id, Some(1499));
+        assert_eq!(summaries[0].zone_rgbs, vec![0x39e58d, 0x654321]);
+        assert!(summaries[0].full_zone_rgbs.is_empty());
+        assert!(summaries.iter().any(|sample| {
+            sample.fish_id == 10
+                && sample.sample_id == Some(999)
+                && sample.zone_rgbs == vec![0x39e58d]
+                && sample.full_zone_rgbs == vec![0x39e58d]
+        }));
+        assert_eq!(summaries[1500].fish_id, 20);
+        assert_eq!(summaries[1500].sample_count, 1);
     }
 
     #[test]

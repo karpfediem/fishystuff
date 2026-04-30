@@ -263,6 +263,7 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
             {
               fishId: 20,
               sampleCount: 1,
+              sampleId: 77,
               lastTsUtc: 1_700_200_000,
               zoneRgbs: [0x123456, 0x654321],
               fullZoneRgbs: [],
@@ -271,8 +272,8 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
               fishId: 10,
               sampleCount: 2,
               lastTsUtc: 1_700_000_000,
-              zoneRgbs: [0x39e58d],
-              fullZoneRgbs: [0x39e58d],
+              zoneRgbs: [0x39e58d, 0x123456],
+              fullZoneRgbs: [],
             },
           ],
           layerSamples: [],
@@ -293,11 +294,13 @@ test("FishyMapHoverTooltipElement renders ranking point sample summaries", async
   assert.match(samples.innerHTML, /fishy-item-icon-frame is-hover-rest/);
   assert.ok(samples.innerHTML.indexOf("Sea Eel") < samples.innerHTML.indexOf("Mako Shark"));
   assert.match(samples.innerHTML, /x2/);
+  assert.doesNotMatch(samples.innerHTML, /#77/);
   assert.match(samples.innerHTML, /2023-11-14/);
   assert.match(samples.innerHTML, /Velia Coast/);
-  assert.doesNotMatch(samples.innerHTML, /Demi River/);
+  assert.match(samples.innerHTML, /Demi River/);
   assert.doesNotMatch(samples.innerHTML, /Balenos River/);
   assert.match(samples.innerHTML, /href="#fishy-date-confirmed"/);
+  assert.match(samples.innerHTML, /href="#fishy-ring-partial"/);
 });
 
 test("FishyMapHoverTooltipElement hides ranking sample summaries when disabled", async () => {

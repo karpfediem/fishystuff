@@ -207,6 +207,7 @@ test("render shows clicked ranking sample rows in the selected samples pane", ()
             {
               fishId: 20,
               sampleCount: 1,
+              sampleId: 88,
               lastTsUtc: 1_700_200_000,
               zoneRgbs: [0x123456, 0x654321],
               fullZoneRgbs: [],
@@ -248,15 +249,18 @@ test("render shows clicked ranking sample rows in the selected samples pane", ()
 
   assert.match(panelSlot.innerHTML, /Ranking Samples/);
   assert.match(panelSlot.innerHTML, /Sea Eel/);
+  assert.match(panelSlot.innerHTML, /fishy-item-icon-frame is-native/);
   assert.match(panelSlot.innerHTML, /Item 900010/);
   assert.match(panelSlot.innerHTML, /Fish 10/);
   assert.match(panelSlot.innerHTML, /x3/);
   assert.match(panelSlot.innerHTML, /2023-11-14/);
   assert.match(panelSlot.innerHTML, /Velia Coast/);
   assert.match(panelSlot.innerHTML, /Mako Shark/);
+  assert.match(panelSlot.innerHTML, /#88/);
   assert.match(panelSlot.innerHTML, /Demi River/);
   assert.match(panelSlot.innerHTML, /Balenos River/);
   assert.match(panelSlot.innerHTML, /href="#fishy-date-confirmed"/);
+  assert.match(panelSlot.innerHTML, /href="#fishy-ring-partial"/);
 });
 
 test("normalize rates signal patch swaps loaded zone loot rates in place", () => {

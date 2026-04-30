@@ -121,8 +121,13 @@ function zoneSummary(zoneRgb, zoneCatalog) {
   };
 }
 
+function normalizedSampleId(value) {
+  const sampleId = Number.parseInt(value, 10);
+  return Number.isInteger(sampleId) && sampleId > 0 ? sampleId : null;
+}
+
 function normalizePointSamples(samples) {
-  return (Array.isArray(samples) ? samples : [])
+  const normalized = (Array.isArray(samples) ? samples : [])
     .flatMap((sample) => {
       if (!isPlainObject(sample)) {
         return [];
@@ -130,6 +135,7 @@ function normalizePointSamples(samples) {
       const fishId = Number.parseInt(sample.fishId, 10);
       const sampleCount = Math.max(1, Number.parseInt(sample.sampleCount, 10) || 1);
       const lastTsUtc = Number.parseInt(sample.lastTsUtc, 10);
+      const sampleId = normalizedSampleId(sample.sampleId);
       if (!Number.isInteger(fishId) || !Number.isInteger(lastTsUtc)) {
         return [];
       }
@@ -138,16 +144,23 @@ function normalizePointSamples(samples) {
           fishId,
           sampleCount,
           lastTsUtc,
+          sampleId,
           zoneRgbs: normalizeIntegerList(sample.zoneRgbs),
           fullZoneRgbs: normalizeIntegerList(sample.fullZoneRgbs),
         },
       ];
-    })
-    .sort((left, right) =>
-      right.sampleCount - left.sampleCount ||
-      right.lastTsUtc - left.lastTsUtc ||
-      left.fishId - right.fishId,
-    );
+    });
+  const fishCounts = new Map();
+  for (const sample of normalized) {
+    fishCounts.set(sample.fishId, (fishCounts.get(sample.fishId) || 0) + sample.sampleCount);
+  }
+  return normalized.sort((left, right) =>
+    (fishCounts.get(right.fishId) || 0) - (fishCounts.get(left.fishId) || 0) ||
+    right.sampleCount - left.sampleCount ||
+    right.lastTsUtc - left.lastTsUtc ||
+    left.fishId - right.fishId ||
+    (left.sampleId || 0) - (right.sampleId || 0),
+  );
 }
 
 function currentZoneRgbFromSource(source) {
@@ -162,10 +175,10 @@ function visibleSampleZones(zones, currentZoneRgb) {
   if (!Number.isInteger(currentZoneRgb)) {
     return zones;
   }
-  if (zones.every((zone) => zone?.zoneRgb === currentZoneRgb)) {
+  if (zones.length === 1 && zones[0]?.zoneRgb === currentZoneRgb) {
     return [];
   }
-  return zones.filter((zone) => zone?.zoneRgb !== currentZoneRgb);
+  return zones;
 }
 
 export function buildPointSampleRows({ source = null, stateBundle = null, zoneCatalog = [] } = {}) {
@@ -174,12 +187,22 @@ export function buildPointSampleRows({ source = null, stateBundle = null, zoneCa
   return normalizePointSamples(source?.pointSamples).map((sample, index) => {
     const fish = fishById.get(sample.fishId) || {};
     const itemId = Number.parseInt(fish?.itemId, 10);
-    const zones = (sample.fullZoneRgbs.length ? sample.fullZoneRgbs : sample.zoneRgbs)
-      .map((zoneRgb) => zoneSummary(zoneRgb, zoneCatalog));
+    const fullZoneSet = new Set(sample.fullZoneRgbs);
+    const zoneKind =
+      sample.fullZoneRgbs.length && sample.zoneRgbs.every((zoneRgb) => fullZoneSet.has(zoneRgb))
+        ? "full"
+        : "partial";
+    const zoneRgbs = zoneKind === "full" ? sample.fullZoneRgbs : sample.zoneRgbs;
+    const zones = zoneRgbs
+      .map((zoneRgb) => ({
+        ...zoneSummary(zoneRgb, zoneCatalog),
+        zoneKind: fullZoneSet.has(zoneRgb) ? "full" : "partial",
+      }));
     return {
       kind: "point-sample",
-      key: `point-sample:${sample.fishId}:${sample.sampleCount}:${sample.lastTsUtc}:${sample.zoneRgbs.join(",")}:${sample.fullZoneRgbs.join(",")}:${index}`,
+      key: `point-sample:${sample.fishId}:${sample.sampleCount}:${sample.sampleId || ""}:${sample.lastTsUtc}:${sample.zoneRgbs.join(",")}:${sample.fullZoneRgbs.join(",")}:${index}`,
       fishId: sample.fishId,
+      sampleId: sample.sampleId,
       itemId: Number.isInteger(itemId) ? itemId : null,
       fishName: trimString(fish?.name) || mapText("info.fish.unknown"),
       grade: trimString(fish?.grade),
@@ -187,7 +210,7 @@ export function buildPointSampleRows({ source = null, stateBundle = null, zoneCa
       iconUrl: Number.isInteger(itemId) ? fishItemIconUrl(itemId) : "",
       sampleCount: sample.sampleCount,
       dateText: formatSampleDate(sample.lastTsUtc),
-      zoneKind: sample.fullZoneRgbs.length ? "full" : "partial",
+      zoneKind,
       zones: visibleSampleZones(zones, currentZoneRgb),
     };
   });

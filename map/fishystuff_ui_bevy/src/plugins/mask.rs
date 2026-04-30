@@ -19,7 +19,9 @@ use crate::plugins::api::{
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
-use crate::plugins::points::{point_at_world_point, PointsState};
+use crate::plugins::points::{
+    point_hover_samples_at_world_point, point_samples_at_world_point, PointsState,
+};
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
@@ -71,14 +73,12 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
-    let point_samples = point_at_world_point(
+    let point_samples = point_hover_samples_at_world_point(
         world_point,
         &context.points,
         &context.display_state,
         &context.point_camera_q,
-    )
-    .map(|point| point.point_samples.clone())
-    .unwrap_or_default();
+    );
     let Some(mut next_hover) = hover_info_at_world_point(
         world_point,
         &WorldPointQueryContext {
@@ -123,14 +123,12 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     else {
         return;
     };
-    let point_samples = point_at_world_point(
+    let point_samples = point_samples_at_world_point(
         world_point,
         &context.points,
         &context.display_state,
         &context.point_camera_q,
-    )
-    .map(|point| point.point_samples.clone())
-    .unwrap_or_default();
+    );
     let Some(mut selected_info) = selected_info_at_world_point(
         world_point,
         &WorldPointQueryContext {

@@ -316,6 +316,7 @@ function normalizePointSamples(value) {
     const fishId = Number.parseInt(sample.fishId, 10);
     const sampleCount = Math.max(1, Number.parseInt(sample.sampleCount, 10) || 1);
     const lastTsUtc = Number.parseInt(sample.lastTsUtc, 10);
+    const sampleId = Number.parseInt(sample.sampleId, 10);
     if (!Number.isInteger(fishId) || !Number.isInteger(lastTsUtc)) {
       return [];
     }
@@ -324,6 +325,7 @@ function normalizePointSamples(value) {
         fishId,
         sampleCount,
         lastTsUtc,
+        ...(Number.isInteger(sampleId) && sampleId > 0 ? { sampleId } : {}),
         zoneRgbs: normalizeZoneRgbs(sample.zoneRgbs),
         fullZoneRgbs: normalizeZoneRgbs(sample.fullZoneRgbs),
       },

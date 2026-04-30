@@ -100,6 +100,14 @@ test("buildHoverTooltipRows prepends ranking sample summaries sorted by occurren
           zoneRgbs: [0x39e58d],
           fullZoneRgbs: [0x39e58d],
         },
+        {
+          fishId: 10,
+          sampleCount: 1,
+          sampleId: 4242,
+          lastTsUtc: 1_700_086_400,
+          zoneRgbs: [0x39e58d, 0x123456],
+          fullZoneRgbs: [],
+        },
       ],
       layerSamples: [
         {
@@ -130,19 +138,27 @@ test("buildHoverTooltipRows prepends ranking sample summaries sorted by occurren
   });
 
   assert.deepEqual(
-    rows.slice(0, 3).map((row) => [row.kind || "fact", row.fishName || row.value, row.sampleCount || 0]),
+    rows.slice(0, 4).map((row) => [row.kind || "fact", row.fishName || row.value, row.sampleCount || 0]),
     [
       ["point-sample", "Sea Eel", 3],
+      ["point-sample", "Sea Eel", 1],
       ["point-sample", "Mako Shark", 2],
       ["fact", "Velia Coast", 0],
     ],
+  );
+  assert.equal(
+    rows.filter((row) => row.kind === "point-sample" && row.fishName === "Sea Eel").length,
+    2,
   );
   assert.equal(rows[0].dateText, "2023-11-14");
   assert.equal(rows[0].zoneKind, "full");
   assert.deepEqual(rows[0].zones.map((zone) => zone.name), []);
   assert.equal(rows[0].iconUrl, "/items/900010.webp");
+  assert.equal(rows[1].sampleId, 4242);
   assert.equal(rows[1].zoneKind, "partial");
-  assert.deepEqual(rows[1].zones.map((zone) => zone.name), ["Balenos River"]);
+  assert.deepEqual(rows[1].zones.map((zone) => zone.name), ["Velia Coast", "Demi River"]);
+  assert.equal(rows[2].zoneKind, "partial");
+  assert.deepEqual(rows[2].zones.map((zone) => zone.name), ["Velia Coast", "Balenos River"]);
 });
 
 test("buildHoverTooltipRows can suppress ranking sample summaries", () => {

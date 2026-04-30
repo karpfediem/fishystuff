@@ -46,6 +46,7 @@ pub(in crate::bridge::host) fn point_sample_snapshots(
                 fish_id: sample.fish_id,
                 sample_count: sample.sample_count,
                 last_ts_utc: sample.last_ts_utc,
+                sample_id: sample.sample_id,
                 zone_rgbs: sample.zone_rgbs.clone(),
                 full_zone_rgbs: sample.full_zone_rgbs.clone(),
             },
