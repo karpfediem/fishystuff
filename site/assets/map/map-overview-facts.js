@@ -3,6 +3,7 @@ import {
   zoneDisplayNameFromCatalog,
 } from "./map-zone-catalog.js";
 import { mapText } from "./map-i18n.js";
+import { tradeManagerFactsForOrigin } from "./map-trade-summary.js";
 
 export const PRIMARY_OVERVIEW_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
 const POINT_LABEL_PRIMARY_FACT_KEYS = Object.freeze([
@@ -263,9 +264,18 @@ export function buildTerritoryPaneFacts(layerSamples, { runtimeLayers = [] } = {
   return row ? [row] : [];
 }
 
-export function buildTradePaneFacts(layerSamples, { runtimeLayers = [] } = {}) {
+export function buildTradePaneFacts(
+  layerSamples,
+  { runtimeLayers = [], tradeNpcMapCatalog = null, tradeNpcMapStatus = "idle" } = {},
+) {
   const row = buildOriginFactRow(layerSamples, runtimeLayers);
-  return row ? [row] : [];
+  const rows = row ? [row] : [];
+  rows.push(
+    ...tradeManagerFactsForOrigin(layerSamples, tradeNpcMapCatalog, {
+      status: tradeNpcMapStatus,
+    }),
+  );
+  return rows;
 }
 
 export function buildOverviewRowsForLayerSamples(

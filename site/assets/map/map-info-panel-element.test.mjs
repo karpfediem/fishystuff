@@ -66,6 +66,7 @@ test("info panel element exposes refresh and signal patch handlers", () => {
   const element = new FishyMapInfoPanelElement();
   assert.equal(typeof element.handleSignalPatch, "function");
   assert.equal(typeof element.refreshZoneLootSummary, "function");
+  assert.equal(typeof element.refreshTradeNpcMapCatalog, "function");
   assert.equal(typeof element.render, "function");
 });
 

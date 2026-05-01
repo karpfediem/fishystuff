@@ -127,6 +127,50 @@ test("buildTerritoryPaneFacts and buildTradePaneFacts normalize semantic labels"
   ]);
 });
 
+test("buildTradePaneFacts enriches selected origins with trade managers sorted by distance", () => {
+  const layerSamples = [
+    {
+      layerId: "regions",
+      detailSections: [detailSectionFact("origin_region", "Origin", "Hakoven Islands (R430)", "trade-origin")],
+      targets: [{ key: "origin_node", label: "Origin: Hakoven Islands (R430)", worldX: 10, worldZ: 20 }],
+    },
+  ];
+  const tradeNpcMapCatalog = {
+    features: [
+      {
+        properties: {
+          id: "near",
+          npcName: "Near Trader",
+          sellOriginLabel: "Velia (R5)",
+          sellDestinationTradeOrigin: { region_id: 5, world_x: 1_000, world_z: 20 },
+        },
+        geometry: { coordinates: [1_000, 20] },
+      },
+      {
+        properties: {
+          id: "far",
+          npcName: "Far Trader",
+          sellOriginLabel: "Valencia City (R42)",
+          sellDestinationTradeOrigin: { region_id: 42, world_x: 20_000, world_z: 20 },
+        },
+        geometry: { coordinates: [20_000, 20] },
+      },
+    ],
+  };
+
+  assert.deepEqual(
+    buildTradePaneFacts(layerSamples, { tradeNpcMapCatalog, tradeNpcMapStatus: "loaded" }).map(
+      (row) => [row.key, row.label, row.value],
+    ),
+    [
+      ["origin", "Origin", "Hakoven Islands (R430)"],
+      ["trade_manager_count", "Trade Managers", "2 destination traders"],
+      ["trade_manager:far", "Far Trader", "1.4% · Valencia City (R42)"],
+      ["trade_manager:near", "Near Trader", "0.1% · Velia (R5)"],
+    ],
+  );
+});
+
 test("preferredOverviewRow prefers zone over territory and trade facts", () => {
   const preferred = preferredOverviewRow([
     {

@@ -406,6 +406,8 @@ export function buildInfoViewModel(
     zoneLootStatus = "idle",
     zoneLootConditionSelection = {},
     normalizeRates = null,
+    tradeNpcMapCatalog = null,
+    tradeNpcMapStatus = "idle",
   } = {},
 ) {
   const selection = isPlainObject(signals?._map_runtime?.selection)
@@ -430,7 +432,11 @@ export function buildInfoViewModel(
     runtimeLayers,
   });
   const territoryFacts = buildTerritoryPaneFacts(layerSamples, { runtimeLayers });
-  const tradeFacts = buildTradePaneFacts(layerSamples, { runtimeLayers });
+  const tradeFacts = buildTradePaneFacts(layerSamples, {
+    runtimeLayers,
+    tradeNpcMapCatalog,
+    tradeNpcMapStatus,
+  });
   const zoneLootSection = buildZoneLootSection(
     zoneLootSummary,
     zoneLootStatus,

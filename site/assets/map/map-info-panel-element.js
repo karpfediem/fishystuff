@@ -5,6 +5,10 @@ import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 import {
+  loadTradeNpcMapCatalog,
+  selectedTradeOriginFromLayerSamples,
+} from "./map-trade-summary.js";
+import {
   attachProvenanceTooltip,
   buildProvenanceSegments,
   provenanceAriaLabel,
@@ -678,6 +682,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneLootConditionSelection: {},
       pointSamplePage: 0,
       pointSampleSectionKey: "",
+      tradeNpcMapCatalog: null,
+      tradeNpcMapStatus: "idle",
+      tradeNpcMapOriginKey: "",
+      tradeNpcMapRequestToken: 0,
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
@@ -692,6 +700,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._handleLiveInit = () => {
       this.scheduleRender();
       void this.refreshZoneLootSummary();
+      void this.refreshTradeNpcMapCatalog();
     };
     this._handleUserOverlaysChanged = () => {
       void this.refreshZoneLootSummary({ force: true });
@@ -789,6 +798,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     );
     attachProvenanceTooltip(this._shell);
     this.render();
+    void this.refreshTradeNpcMapCatalog();
   }
 
   disconnectedCallback() {
@@ -834,6 +844,8 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneLootStatus: this._state.zoneLootStatus,
       zoneLootConditionSelection: this._state.zoneLootConditionSelection,
       normalizeRates: this.normalizeRatesEnabled(signals),
+      tradeNpcMapCatalog: this._state.tradeNpcMapCatalog,
+      tradeNpcMapStatus: this._state.tradeNpcMapStatus,
     });
     const activePointSampleSection = (viewModel.activePane?.sections || []).find(
       (section) => trimString(section?.kind) === "point-samples",
@@ -897,6 +909,66 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     }
     if (patch?._map_runtime?.selection != null) {
       void this.refreshZoneLootSummary();
+      void this.refreshTradeNpcMapCatalog();
+    }
+    this.scheduleRender();
+  }
+
+  async refreshTradeNpcMapCatalog({ force = false } = {}) {
+    const signals = this.signals();
+    const layerSamples = Array.isArray(signals?._map_runtime?.selection?.layerSamples)
+      ? signals._map_runtime.selection.layerSamples
+      : [];
+    const origin = selectedTradeOriginFromLayerSamples(layerSamples);
+    const originKey = origin
+      ? [origin.regionId ?? "", origin.worldX ?? "", origin.worldZ ?? "", origin.label || ""].join(":")
+      : "";
+    if (!originKey) {
+      this._state.tradeNpcMapRequestToken += 1;
+      this._state.tradeNpcMapOriginKey = "";
+      this._state.tradeNpcMapStatus = "idle";
+      this.scheduleRender();
+      return;
+    }
+    if (
+      !force &&
+      this._state.tradeNpcMapOriginKey === originKey &&
+      (this._state.tradeNpcMapStatus === "loading" ||
+        this._state.tradeNpcMapStatus === "loaded" ||
+        this._state.tradeNpcMapStatus === "error")
+    ) {
+      return;
+    }
+    this._state.tradeNpcMapOriginKey = originKey;
+    if (!this._state.tradeNpcMapCatalog || force) {
+      this._state.tradeNpcMapStatus = "loading";
+      this.scheduleRender();
+    } else {
+      this._state.tradeNpcMapStatus = "loaded";
+      this.scheduleRender();
+      return;
+    }
+
+    const requestToken = this._state.tradeNpcMapRequestToken + 1;
+    this._state.tradeNpcMapRequestToken = requestToken;
+    try {
+      const catalog = await loadTradeNpcMapCatalog({ force });
+      if (
+        this._state.tradeNpcMapRequestToken !== requestToken ||
+        this._state.tradeNpcMapOriginKey !== originKey
+      ) {
+        return;
+      }
+      this._state.tradeNpcMapCatalog = catalog;
+      this._state.tradeNpcMapStatus = "loaded";
+    } catch (_error) {
+      if (
+        this._state.tradeNpcMapRequestToken !== requestToken ||
+        this._state.tradeNpcMapOriginKey !== originKey
+      ) {
+        return;
+      }
+      this._state.tradeNpcMapStatus = "error";
     }
     this.scheduleRender();
   }
