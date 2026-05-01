@@ -4,11 +4,17 @@ use async_channel::{Receiver, TryRecvError};
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::text::{Font, Justify, TextLayout};
+use fishystuff_api::models::trade::TRADE_NPC_MAP_LAYER_ID;
+use fishystuff_api::Rgb;
+use fishystuff_core::field_metadata::{
+    FieldDetailSection, FieldHoverTarget, FIELD_HOVER_TARGET_KEY_TRADE_NPC,
+};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
+use crate::map::layer_query::LayerQuerySample;
 use crate::map::layers::{
     GeometrySpace, LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, WaypointSourceSpec,
 };
@@ -25,6 +31,7 @@ use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::runtime_io;
 
 const WAYPOINT_MARKER_SIZE_SCREEN_PX: f32 = 18.0;
+const WAYPOINT_HIT_PADDING_SCREEN_PX: f32 = 8.0;
 const WAYPOINT_CONNECTION_THICKNESS_SCREEN_PX: f32 = 2.0;
 const WAYPOINT_LABEL_FONT_SIZE_SCREEN_PX: f32 = 7.0;
 const WAYPOINT_LABEL_GAP_SCREEN_PX: f32 = 1.0;
@@ -48,7 +55,7 @@ impl Plugin for WaypointLayersPlugin {
 }
 
 #[derive(Resource, Default)]
-struct WaypointLayerRuntime {
+pub(crate) struct WaypointLayerRuntime {
     states: HashMap<LayerId, WaypointLayerState>,
 }
 
@@ -75,7 +82,16 @@ struct WaypointPointRecord {
     feature_id: Option<String>,
     node_type: Option<String>,
     node_type_label: Option<String>,
+    detail_sections: Vec<FieldDetailSection>,
     default_visible: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WaypointLayerInteractionSample {
+    pub world_x: f64,
+    pub world_z: f64,
+    pub point_label: Option<String>,
+    pub layer_sample: LayerQuerySample,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -156,7 +172,6 @@ fn update_waypoint_layers(
     layer_runtime.sync_to_registry(&registry);
     prune_stale_waypoint_layers(&registry, &mut runtime, &mut commands);
 
-    let icon = icon_assets.handle(UiSvgIconKind::MapPin);
     let ui_root = ui_root_q.single().ok();
 
     for layer in registry.ordered() {
@@ -176,11 +191,12 @@ fn update_waypoint_layers(
             continue;
         };
 
+        let request_url = resolve_waypoint_source_url(&source.url);
         let state = runtime.states.entry(layer.id).or_default();
-        let source_key = format!("{}#{}", source.url, source.revision);
+        let source_key = format!("{}#{}", request_url, source.revision);
         if state.source_key.as_deref() != Some(source_key.as_str()) {
             state.source_key = Some(source_key);
-            state.pending = Some(runtime_io::spawn_json_request(source.url.clone()));
+            state.pending = Some(runtime_io::spawn_json_request(request_url));
             state.features = ParsedWaypointFeatures::default();
             clear_waypoint_layer_entities(&mut state.entities, &mut commands);
             runtime_state.manifest_status = LayerManifestStatus::Loading;
@@ -201,7 +217,7 @@ fn update_waypoint_layers(
                             bevy::log::warn!(
                                 "failed to load waypoint layer {} from {}: {}",
                                 layer.key,
-                                source.url,
+                                resolve_waypoint_source_url(&source.url),
                                 err
                             );
                             state.features = ParsedWaypointFeatures::default();
@@ -225,6 +241,7 @@ fn update_waypoint_layers(
             && state.entities.is_empty()
             && (!state.features.points.is_empty() || !state.features.connections.is_empty())
         {
+            let icon = icon_assets.handle(waypoint_icon_kind_for_layer(&layer.key));
             if let Some(icon) = icon.clone() {
                 state.entities = spawn_waypoint_entities(
                     &mut commands,
@@ -236,6 +253,14 @@ fn update_waypoint_layers(
                 );
             }
         }
+    }
+}
+
+fn waypoint_icon_kind_for_layer(layer_key: &str) -> UiSvgIconKind {
+    if layer_key == TRADE_NPC_MAP_LAYER_ID {
+        UiSvgIconKind::TradeOrigin
+    } else {
+        UiSvgIconKind::MapPin
     }
 }
 
@@ -759,6 +784,7 @@ fn waypoint_point_from_feature(
         .and_then(|key| string_property(&properties, key));
     let node_type = string_property(&properties, "node_type");
     let node_type_label = string_property(&properties, "node_type_label");
+    let detail_sections = detail_sections_property(&properties);
     let default_visible = bool_property(&properties, "default_visible").unwrap_or(true);
     Some(WaypointPointRecord {
         world_x,
@@ -768,6 +794,7 @@ fn waypoint_point_from_feature(
         feature_id,
         node_type,
         node_type_label,
+        detail_sections,
         default_visible,
     })
 }
@@ -826,6 +853,168 @@ fn bool_property(properties: &Map<String, Value>, key: &str) -> Option<bool> {
     properties.get(key).and_then(Value::as_bool)
 }
 
+fn resolve_waypoint_source_url(url: &str) -> String {
+    if is_api_path(url) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            return crate::plugins::api::resolve_api_request_url(url);
+        }
+    }
+    url.to_string()
+}
+
+fn is_api_path(url: &str) -> bool {
+    let value = url.trim_start();
+    value.starts_with("/api/")
+}
+
+fn detail_sections_property(properties: &Map<String, Value>) -> Vec<FieldDetailSection> {
+    properties
+        .get("detailSections")
+        .or_else(|| properties.get("detail_sections"))
+        .and_then(|value| serde_json::from_value::<Vec<FieldDetailSection>>(value.clone()).ok())
+        .unwrap_or_default()
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn waypoint_sample_at_world_point(
+    world_point: WorldPoint,
+    waypoint_runtime: &WaypointLayerRuntime,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    layer_filters: &LayerEffectiveFilterState,
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+) -> Option<WaypointLayerInteractionSample> {
+    let hit_radius_world = waypoint_hit_radius_world(camera_q);
+    let hit_radius_sq = hit_radius_world * hit_radius_world;
+    let inactive_filter = ZoneMembershipFilter::default();
+    let mut hits = Vec::new();
+
+    for layer in layer_registry.ordered() {
+        if !layer.is_waypoints() || !layer_runtime.visible(layer.id) {
+            continue;
+        }
+        let Some(layer_state) = waypoint_runtime.states.get(&layer.id) else {
+            continue;
+        };
+        if layer_state.pending.is_some() {
+            continue;
+        }
+        let zone_filter = layer_filters
+            .zone_membership_filter(layer.key.as_str())
+            .unwrap_or(&inactive_filter);
+        for point in &layer_state.features.points {
+            if !point.default_visible {
+                continue;
+            }
+            if !world_point_visible_in_layer_clip(
+                layer.id,
+                WorldPoint::new(point.world_x as f64, point.world_z as f64),
+                layer_registry,
+                layer_runtime,
+                exact_lookups,
+                tile_cache,
+                vector_runtime,
+                zone_filter,
+            ) {
+                continue;
+            }
+            let dx = world_point.x - point.world_x as f64;
+            let dz = world_point.z - point.world_z as f64;
+            let distance_sq = dx * dx + dz * dz;
+            if distance_sq > hit_radius_sq {
+                continue;
+            }
+            hits.push(WaypointHit {
+                distance_sq,
+                display_order: layer_runtime
+                    .get(layer.id)
+                    .map(|state| state.display_order)
+                    .unwrap_or(layer.display_order),
+                sample: waypoint_interaction_sample(layer, point),
+            });
+        }
+    }
+
+    hits.sort_by(|left, right| {
+        right
+            .display_order
+            .cmp(&left.display_order)
+            .then_with(|| left.distance_sq.total_cmp(&right.distance_sq))
+            .then_with(|| {
+                left.sample
+                    .point_label
+                    .as_deref()
+                    .unwrap_or("")
+                    .cmp(right.sample.point_label.as_deref().unwrap_or(""))
+            })
+    });
+    hits.into_iter().map(|hit| hit.sample).next()
+}
+
+struct WaypointHit {
+    distance_sq: f64,
+    display_order: i32,
+    sample: WaypointLayerInteractionSample,
+}
+
+fn waypoint_hit_radius_world(
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+) -> f64 {
+    let camera_scale = camera_q
+        .single()
+        .ok()
+        .and_then(|projection| match projection {
+            Projection::Orthographic(ortho) => Some(ortho.scale.max(f32::EPSILON)),
+            _ => None,
+        })
+        .unwrap_or(1.0);
+    f64::from(
+        (WAYPOINT_MARKER_SIZE_SCREEN_PX * 0.5 + WAYPOINT_HIT_PADDING_SCREEN_PX) * camera_scale,
+    )
+}
+
+fn waypoint_interaction_sample(
+    layer: &crate::map::layers::LayerSpec,
+    point: &WaypointPointRecord,
+) -> WaypointLayerInteractionSample {
+    let point_label = point
+        .label
+        .clone()
+        .or_else(|| point.map_label.clone())
+        .or_else(|| point.feature_id.clone());
+    let target_label = point_label.clone().unwrap_or_else(|| layer.name.clone());
+    let target_key = if layer.key == TRADE_NPC_MAP_LAYER_ID {
+        FIELD_HOVER_TARGET_KEY_TRADE_NPC
+    } else {
+        "waypoint"
+    };
+    WaypointLayerInteractionSample {
+        world_x: point.world_x as f64,
+        world_z: point.world_z as f64,
+        point_label,
+        layer_sample: LayerQuerySample {
+            layer_id: layer.key.clone(),
+            layer_name: layer.name.clone(),
+            kind: "waypoint".to_string(),
+            rgb: Rgb::new(255, 196, 66),
+            rgb_u32: Rgb::new(255, 196, 66).to_u32(),
+            field_id: None,
+            targets: vec![FieldHoverTarget {
+                key: target_key.to_string(),
+                label: target_label,
+                world_x: point.world_x as f64,
+                world_z: point.world_z as f64,
+            }],
+            detail_pane: None,
+            detail_sections: point.detail_sections.clone(),
+        },
+    }
+}
+
 fn world_to_viewport(
     camera: &Camera,
     camera_transform: &GlobalTransform,
@@ -838,8 +1027,24 @@ fn world_to_viewport(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_waypoint_features, GeometrySpace, WaypointFeatureCollection};
+    use super::{
+        parse_waypoint_features, waypoint_icon_kind_for_layer, GeometrySpace,
+        WaypointFeatureCollection,
+    };
     use crate::map::layers::WaypointSourceSpec;
+    use crate::plugins::svg_icons::UiSvgIconKind;
+
+    #[test]
+    fn waypoint_icon_kind_uses_trade_icon_for_trade_npc_layer() {
+        assert_eq!(
+            waypoint_icon_kind_for_layer(fishystuff_api::models::trade::TRADE_NPC_MAP_LAYER_ID),
+            UiSvgIconKind::TradeOrigin
+        );
+        assert_eq!(
+            waypoint_icon_kind_for_layer("region_nodes"),
+            UiSvgIconKind::MapPin
+        );
+    }
 
     #[test]
     fn parse_waypoint_features_reads_world_space_points_and_connections() {
@@ -850,10 +1055,21 @@ mod tests {
                         "properties": {
                             "r": 204,
                             "label": "Stonebeak Shore (R204)",
-                            "name": "Stonebeak Shore",
-                            "node_type": "connection",
-                            "node_type_label": "Connection",
-                            "default_visible": false
+                        "name": "Stonebeak Shore",
+                        "node_type": "connection",
+                        "node_type_label": "Connection",
+                        "default_visible": false,
+                        "detailSections": [
+                            {
+                                "id": "trade_npc",
+                                "kind": "facts",
+                                "title": "Trade NPCs",
+                                "facts": [
+                                    {"key": "trade_npc", "label": "NPC", "value": "Crio"}
+                                ],
+                                "targets": []
+                            }
+                        ]
                         },
                         "geometry": {"type": "Point", "coordinates": [303191.0, -1694.35]}
                     },
@@ -897,6 +1113,8 @@ mod tests {
             features.points[0].node_type_label.as_deref(),
             Some("Connection")
         );
+        assert_eq!(features.points[0].detail_sections.len(), 1);
+        assert_eq!(features.points[0].detail_sections[0].facts[0].value, "Crio");
         assert!(!features.points[0].default_visible);
         assert!((features.points[0].world_x - 303191.0).abs() < f32::EPSILON);
         assert!((features.points[0].world_z + 1694.35).abs() < 0.01);

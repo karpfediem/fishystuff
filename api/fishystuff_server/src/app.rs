@@ -60,6 +60,14 @@ pub fn build_router(state: SharedState) -> Router {
             get(routes::calculator::get_calculator_datastar_option_search),
         )
         .route(
+            "/trade_npcs/map",
+            get(routes::trade::trade_npc_map_features),
+        )
+        .route(
+            "/trade_npcs/map/",
+            get(routes::trade::trade_npc_map_features),
+        )
+        .route(
             "/zone_loot_summary",
             post(routes::calculator::post_zone_loot_summary),
         )
@@ -141,6 +149,7 @@ mod tests {
     use fishystuff_api::models::fish::FishListResponse;
     use fishystuff_api::models::meta::MetaResponse;
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::trade::TradeNpcCatalogResponse;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
@@ -180,6 +189,12 @@ mod tests {
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<CalculatorCatalogResponse> {
             Ok(CalculatorCatalogResponse::default())
+        }
+        async fn trade_npc_catalog(
+            &self,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<TradeNpcCatalogResponse> {
+            Ok(TradeNpcCatalogResponse::default())
         }
         async fn list_zones(
             &self,
@@ -247,6 +262,12 @@ mod tests {
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<CalculatorCatalogResponse> {
             Ok(CalculatorCatalogResponse::default())
+        }
+        async fn trade_npc_catalog(
+            &self,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<TradeNpcCatalogResponse> {
+            Ok(TradeNpcCatalogResponse::default())
         }
         async fn list_zones(
             &self,

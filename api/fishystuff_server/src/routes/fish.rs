@@ -140,6 +140,7 @@ mod tests {
     };
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::trade::TradeNpcCatalogResponse;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
@@ -249,6 +250,13 @@ mod tests {
             _lang: DataLang,
             _ref_id: Option<String>,
         ) -> AppResult<CalculatorCatalogResponse> {
+            panic!("unused in test")
+        }
+
+        async fn trade_npc_catalog(
+            &self,
+            _ref_id: Option<String>,
+        ) -> AppResult<TradeNpcCatalogResponse> {
             panic!("unused in test")
         }
 

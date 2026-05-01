@@ -37,6 +37,7 @@ use fishystuff_api::models::meta::{
     CanonicalMapInfo, MapVersionInfo, MetaDefaults, MetaResponse, PatchInfo,
 };
 use fishystuff_api::models::region_groups::{RegionGroupDescriptor, RegionGroupsResponse};
+use fishystuff_api::models::trade::TradeNpcCatalogResponse;
 use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
 use fishystuff_api::models::zone_stats::{
     DriftInfo, ZoneConfidence, ZoneFishEvidence, ZoneStatsRequest, ZoneStatsResponse,
@@ -2582,6 +2583,17 @@ impl Store for DoltMySqlStore {
         })
         .await
         .map_err(|err| AppError::internal(err.to_string()))?
+    }
+
+    #[instrument(name = "store.trade_npc_catalog", skip_all)]
+    async fn trade_npc_catalog(
+        &self,
+        ref_id: Option<String>,
+    ) -> AppResult<TradeNpcCatalogResponse> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || this.query_trade_npc_catalog(ref_id.as_deref()))
+            .await
+            .map_err(|err| AppError::internal(err.to_string()))?
     }
 
     #[instrument(name = "store.calculator_zone_loot", skip_all)]

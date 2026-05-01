@@ -25,6 +25,9 @@ use crate::plugins::points::{
 };
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
+use crate::plugins::waypoint_layers::{
+    waypoint_sample_at_world_point, WaypointLayerInteractionSample, WaypointLayerRuntime,
+};
 use crate::prelude::*;
 
 pub struct MaskPlugin;
@@ -32,6 +35,7 @@ pub struct MaskPlugin;
 impl Plugin for MaskPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ExactLookupCache>()
+            .init_resource::<WaypointLayerRuntime>()
             .add_systems(Update, (update_hover, handle_click).chain());
     }
 }
@@ -121,20 +125,37 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         &context.display_state,
         &context.point_camera_q,
     );
-    let Some(mut next_hover) = hover_info_at_world_point(
+    let waypoint_sample = waypoint_sample_at_world_point(
         world_point,
-        &WorldPointQueryContext {
-            layer_registry: &context.layer_registry,
-            layer_runtime: &context.layer_runtime,
-            exact_lookups: &context.exact_lookups,
-            field_metadata: &context.field_metadata,
-            tile_cache: &context.tile_cache,
-            vector_runtime: &context.vector_runtime,
-            layer_filters: &context.layer_filters,
-            map_to_world: MapToWorld::default(),
-        },
-    )
-    .or_else(|| point_hover_info(world_point, point_samples.clone())) else {
+        &context.waypoint_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        &context.exact_lookups,
+        &context.tile_cache,
+        &context.vector_runtime,
+        &context.layer_filters,
+        &context.point_camera_q,
+    );
+    let Some(mut next_hover) = waypoint_sample
+        .as_ref()
+        .map(|sample| waypoint_hover_info(world_point, sample))
+        .or_else(|| {
+            hover_info_at_world_point(
+                world_point,
+                &WorldPointQueryContext {
+                    layer_registry: &context.layer_registry,
+                    layer_runtime: &context.layer_runtime,
+                    exact_lookups: &context.exact_lookups,
+                    field_metadata: &context.field_metadata,
+                    tile_cache: &context.tile_cache,
+                    vector_runtime: &context.vector_runtime,
+                    layer_filters: &context.layer_filters,
+                    map_to_world: MapToWorld::default(),
+                },
+            )
+        })
+        .or_else(|| point_hover_info(world_point, point_samples.clone()))
+    else {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
@@ -172,23 +193,40 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         &context.display_state,
         &context.point_camera_q,
     );
-    let Some(mut selected_info) = selected_info_at_world_point(
+    let waypoint_sample = waypoint_sample_at_world_point(
         world_point,
-        &WorldPointQueryContext {
-            layer_registry: &context.layer_registry,
-            layer_runtime: &context.layer_runtime,
-            exact_lookups: &context.exact_lookups,
-            field_metadata: &context.field_metadata,
-            tile_cache: &context.tile_cache,
-            vector_runtime: &context.vector_runtime,
-            layer_filters: &context.layer_filters,
-            map_to_world: MapToWorld::default(),
-        },
-        crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
-        None,
-        Some(&context.bootstrap.zones),
-    )
-    .or_else(|| point_selected_info(world_point, point_samples.clone())) else {
+        &context.waypoint_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        &context.exact_lookups,
+        &context.tile_cache,
+        &context.vector_runtime,
+        &context.layer_filters,
+        &context.point_camera_q,
+    );
+    let Some(mut selected_info) = waypoint_sample
+        .as_ref()
+        .map(waypoint_selected_info)
+        .or_else(|| {
+            selected_info_at_world_point(
+                world_point,
+                &WorldPointQueryContext {
+                    layer_registry: &context.layer_registry,
+                    layer_runtime: &context.layer_runtime,
+                    exact_lookups: &context.exact_lookups,
+                    field_metadata: &context.field_metadata,
+                    tile_cache: &context.tile_cache,
+                    vector_runtime: &context.vector_runtime,
+                    layer_filters: &context.layer_filters,
+                    map_to_world: MapToWorld::default(),
+                },
+                crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
+                None,
+                Some(&context.bootstrap.zones),
+            )
+        })
+        .or_else(|| point_selected_info(world_point, point_samples.clone()))
+    else {
         return;
     };
     if !point_samples.is_empty() {
@@ -247,6 +285,21 @@ fn point_hover_info(
     })
 }
 
+fn waypoint_hover_info(
+    cursor_world_point: WorldPoint,
+    sample: &WaypointLayerInteractionSample,
+) -> HoverInfo {
+    let (map_px, map_py) = map_pixel_for_world_point(cursor_world_point);
+    HoverInfo {
+        map_px,
+        map_py,
+        world_x: sample.world_x,
+        world_z: sample.world_z,
+        layer_samples: vec![sample.layer_sample.clone()],
+        point_samples: Vec::new(),
+    }
+}
+
 fn point_selected_info(
     world_point: WorldPoint,
     point_samples: Vec<PointSampleSummary>,
@@ -266,6 +319,22 @@ fn point_selected_info(
         layer_samples: Vec::new(),
         point_samples,
     })
+}
+
+fn waypoint_selected_info(sample: &WaypointLayerInteractionSample) -> SelectedInfo {
+    let (map_px, map_py) =
+        map_pixel_for_world_point(WorldPoint::new(sample.world_x, sample.world_z));
+    SelectedInfo {
+        map_px,
+        map_py,
+        world_x: sample.world_x,
+        world_z: sample.world_z,
+        sampled_world_point: true,
+        point_kind: Some(crate::bridge::contract::FishyMapSelectionPointKind::Waypoint),
+        point_label: sample.point_label.clone(),
+        layer_samples: vec![sample.layer_sample.clone()],
+        point_samples: Vec::new(),
+    }
 }
 
 fn interaction_world_point(
@@ -311,6 +380,7 @@ struct HoverUpdateContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
+    waypoint_runtime: Res<'w, WaypointLayerRuntime>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     point_camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
 }
@@ -327,6 +397,7 @@ struct MaskClickContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
+    waypoint_runtime: Res<'w, WaypointLayerRuntime>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,

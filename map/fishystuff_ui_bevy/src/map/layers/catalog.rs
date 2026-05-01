@@ -1,4 +1,5 @@
 use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
+use fishystuff_api::models::trade::{TRADE_NPC_MAP_LAYER_ID, TRADE_NPC_MAP_LAYER_NAME};
 
 use super::{
     default_layer_filter_bindings_for_runtime_layer, FieldColorMode, FieldMetadataSourceSpec,
@@ -6,7 +7,7 @@ use super::{
     WaypointSourceSpec, FISH_EVIDENCE_LAYER_KEY,
 };
 
-const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v4";
+const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v5";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AvailableLayerTemplate {
@@ -17,6 +18,7 @@ pub enum AvailableLayerTemplate {
     RegionGroups,
     Regions,
     RegionNodes,
+    TradeNpcs,
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +125,15 @@ impl Default for AvailableLayerCatalog {
                     opacity_default: 1.0,
                     z_base: 41.0,
                     display_order: 41,
+                },
+                AvailableLayerDefinition {
+                    layer_id: TRADE_NPC_MAP_LAYER_ID.to_string(),
+                    name: TRADE_NPC_MAP_LAYER_NAME.to_string(),
+                    template: AvailableLayerTemplate::TradeNpcs,
+                    visible_default: false,
+                    opacity_default: 1.0,
+                    z_base: 41.8,
+                    display_order: 42,
                 },
             ],
         }
@@ -377,6 +388,42 @@ fn build_local_layer_spec(
             pick_mode: PickMode::None,
             display_order: entry.display_order,
         },
+        AvailableLayerTemplate::TradeNpcs => LayerSpec {
+            id: super::LayerId::from_raw(raw_id),
+            key: entry.layer_id.clone(),
+            name: entry.name.clone(),
+            visible_default: entry.visible_default,
+            opacity_default: entry.opacity_default,
+            z_base: entry.z_base,
+            kind: LayerKind::Waypoints,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: String::new(),
+            vector_source: None,
+            waypoint_source: Some(WaypointSourceSpec {
+                url: "/api/v1/trade_npcs/map".to_string(),
+                revision: "trade-npcs-v1".to_string(),
+                geometry_space: GeometrySpace::World,
+                feature_id_property: Some("id".to_string()),
+                label_property: Some("label".to_string()),
+                name_property: Some("name".to_string()),
+                supports_connections: false,
+                supports_labels: true,
+                show_connections_default: false,
+                show_labels_default: false,
+            }),
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 0,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            filter_bindings: Vec::new(),
+            lod_policy: default_lod_policy(),
+            request_weight: 1.0,
+            pick_mode: PickMode::None,
+            display_order: entry.display_order,
+        },
     }
 }
 
@@ -578,5 +625,31 @@ mod tests {
             .is_some_and(|source| {
                 source.url.starts_with("/fields/region_groups.v1.meta.json")
             }));
+    }
+
+    #[test]
+    fn trade_npc_layer_uses_api_waypoint_source() {
+        let (_, layers) = build_local_layer_specs(
+            &[AvailableLayerDefinition {
+                layer_id: "trade_npcs".to_string(),
+                name: "Trade NPCs".to_string(),
+                template: AvailableLayerTemplate::TradeNpcs,
+                visible_default: false,
+                opacity_default: 1.0,
+                z_base: 41.8,
+                display_order: 42,
+            }],
+            Some("v1"),
+        );
+
+        assert_eq!(layers.len(), 1);
+        assert_eq!(layers[0].kind, LayerKind::Waypoints);
+        assert!(layers[0].filter_bindings.is_empty());
+        let source = layers[0].waypoint_source.as_ref().expect("waypoint source");
+        assert_eq!(source.url, "/api/v1/trade_npcs/map");
+        assert_eq!(source.feature_id_property.as_deref(), Some("id"));
+        assert!(!source.supports_connections);
+        assert!(source.supports_labels);
+        assert!(!source.show_labels_default);
     }
 }

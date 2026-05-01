@@ -10,6 +10,7 @@ use fishystuff_api::models::fish::{
 };
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
+use fishystuff_api::models::trade::TradeNpcCatalogResponse;
 use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZoneEntry;
@@ -156,6 +157,8 @@ pub trait Store: Send + Sync {
         lang: DataLang,
         ref_id: Option<String>,
     ) -> AppResult<CalculatorCatalogResponse>;
+    async fn trade_npc_catalog(&self, ref_id: Option<String>)
+        -> AppResult<TradeNpcCatalogResponse>;
     async fn calculator_zone_loot(
         &self,
         _lang: DataLang,

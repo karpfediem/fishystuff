@@ -25,6 +25,7 @@ pub const FIELD_DETAIL_PRIMARY_FACT_KEYS: [&str; 6] = [
 pub const FIELD_HOVER_TARGET_KEY_RESOURCE_NODE: &str = "resource_node";
 pub const FIELD_HOVER_TARGET_KEY_ORIGIN_NODE: &str = "origin_node";
 pub const FIELD_HOVER_TARGET_KEY_REGION_NODE: &str = "region_node";
+pub const FIELD_HOVER_TARGET_KEY_TRADE_NPC: &str = "trade_npc";
 
 pub const FIELD_DETAIL_PANE_ID_ZONE_MASK: &str = "zone_mask";
 pub const FIELD_DETAIL_PANE_ID_TERRITORY: &str = "territory";

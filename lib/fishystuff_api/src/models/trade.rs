@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+pub const TRADE_NPC_MAP_LAYER_ID: &str = "trade_npcs";
+pub const TRADE_NPC_MAP_LAYER_NAME: &str = "Trade NPCs";
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct TradeNpcCatalogSummary {
     pub character_function_trade_rows: usize,

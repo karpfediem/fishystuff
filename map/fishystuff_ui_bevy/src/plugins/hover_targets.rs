@@ -7,6 +7,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::text::{Justify, TextLayout};
 use bevy::window::PrimaryWindow;
 use bevy_flair::prelude::{ClassList, NodeStyleSheet};
+use fishystuff_core::field_metadata::FIELD_HOVER_TARGET_KEY_TRADE_NPC;
 
 use crate::bridge::contract::FishyMapThemeColors;
 use crate::bridge::theme::parse_css_color;
@@ -75,6 +76,7 @@ const VIEW_EDGE_PADDING_SCREEN_PX: f32 = 12.0;
 const RESOURCE_BAR_MARKER_COLOR: [u8; 3] = [77, 211, 255];
 const ORIGIN_NODE_MARKER_COLOR: [u8; 3] = [255, 196, 66];
 const REGION_NODE_MARKER_COLOR: [u8; 3] = [244, 240, 232];
+const TRADE_NPC_MARKER_COLOR: [u8; 3] = [255, 196, 66];
 const TERRITORY_DETAIL_PANE_ID: &str = "territory";
 
 pub struct HoverTargetsPlugin;
@@ -1039,6 +1041,12 @@ fn hover_target_visual(
                 ORIGIN_NODE_MARKER_COLOR,
                 UiSvgIconKind::TradeOrigin,
             ),
+            FIELD_HOVER_TARGET_KEY_TRADE_NPC => (
+                REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                TRADE_NPC_MARKER_COLOR,
+                UiSvgIconKind::TradeOrigin,
+            ),
             _ => return None,
         };
     Some(HoverTargetVisual {
@@ -1340,7 +1348,7 @@ mod tests {
         LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
     };
     use fishystuff_api::Rgb;
-    use fishystuff_core::field_metadata::FieldHoverTarget;
+    use fishystuff_core::field_metadata::{FieldHoverTarget, FIELD_HOVER_TARGET_KEY_TRADE_NPC};
 
     fn sample(layer_id: &str) -> LayerQuerySample {
         LayerQuerySample {
@@ -1786,6 +1794,40 @@ mod tests {
                 label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
                 color_rgb: REGION_NODE_MARKER_COLOR,
                 icon_kind: UiSvgIconKind::MapPin,
+            }]
+        );
+    }
+
+    #[test]
+    fn hover_targets_use_trade_icon_for_trade_npc_targets() {
+        let sample = crate::map::layer_query::LayerQuerySample {
+            layer_id: "trade_npcs".to_string(),
+            layer_name: "Trade NPCs".to_string(),
+            kind: "waypoint".to_string(),
+            rgb: fishystuff_api::Rgb { r: 0, g: 0, b: 0 },
+            rgb_u32: 0,
+            field_id: None,
+            detail_pane: None,
+            detail_sections: Vec::new(),
+            targets: vec![FieldHoverTarget {
+                key: FIELD_HOVER_TARGET_KEY_TRADE_NPC.to_string(),
+                label: "Bahar".to_string(),
+                world_x: 1.0,
+                world_z: 2.0,
+            }],
+        };
+
+        assert_eq!(
+            super::hover_targets_from_sample(&sample),
+            vec![HoverTargetVisual {
+                world_x: 1.0,
+                world_z: 2.0,
+                label: "Bahar".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: super::TRADE_NPC_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::TradeOrigin,
             }]
         );
     }

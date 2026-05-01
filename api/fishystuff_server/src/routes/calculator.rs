@@ -17017,6 +17017,13 @@ mod tests {
             })
         }
 
+        async fn trade_npc_catalog(
+            &self,
+            _ref_id: Option<String>,
+        ) -> AppResult<TradeNpcCatalogResponse> {
+            Ok(TradeNpcCatalogResponse::default())
+        }
+
         async fn list_zones(&self, _ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {
             Ok(vec![ZoneEntry {
                 rgb_u32: 0,
