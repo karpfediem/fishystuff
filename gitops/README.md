@@ -23,6 +23,7 @@ just gitops-unify auto gitops/fixtures/beta-single-host.example.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test closure-roots
+just gitops-vm-test served-candidate
 ```
 
 The flake checks added by this milestone are:
@@ -31,6 +32,7 @@ The flake checks added by this milestone are:
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
+nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 ```
 
 ## Desired State
@@ -118,6 +120,8 @@ The VM runtime test binds mgmt's embedded etcd to `127.0.0.1` inside the test VM
 
 The closure and gcroot resources are both declared for each enabled artifact. A strict `nix:closure -> nix:gcroot` resource edge is intentionally deferred: the pinned mgmt build verified closures but did not progress the dependent gcroot behind that edge in the VM test. Reintroduce that edge only with a VM regression test proving the ordered behavior.
 
+`gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
+
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 
 ## Admission
@@ -152,6 +156,12 @@ Status includes:
 - `admission_state`
 - `served`
 - `failure_reason`
+
+Local active selection is written only when a VM/local desired state is explicitly serving:
+
+```text
+/var/lib/fishystuff/gitops-test/active/<environment>.json
+```
 
 KV publication can be added later when the status consumer is clear.
 

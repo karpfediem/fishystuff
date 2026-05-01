@@ -1,7 +1,9 @@
 import "encoding"
+import "fmt"
 import "os"
 import "sys"
 
+import "modules/fishy/activation.mcl" as fishy_activation
 import "modules/fishy/admission.mcl" as fishy_admission
 import "modules/fishy/desired.mcl" as fishy_desired
 import "modules/fishy/instance.mcl" as fishy_instance
@@ -98,6 +100,7 @@ if $example_release->generation != 0 {
 if $local_test_environment->enabled {
 	$admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
 	$served = $local_test_environment->serve and ($admission_state == "passed_fixture")
+	$instance_name = fmt.printf("%s-%s", "local-test", $local_test_environment->active_release)
 
 	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")
 	panic(not $vm_single_host->enabled, "local-test environment references a disabled host")
@@ -127,6 +130,16 @@ if $local_test_environment->enabled {
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
 		state => $admission_state,
+	})
+
+	include fishy_activation.active(struct {
+		mode => $mode,
+		environment => "local-test",
+		host => $vm_single_host->hostname,
+		release_id => $local_test_environment->active_release,
+		instance_name => $instance_name,
+		admission_state => $admission_state,
+		served => $served,
 	})
 
 	include fishy_status.publish(struct {

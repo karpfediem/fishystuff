@@ -15,4 +15,8 @@
   gitops-closure-roots-vm = import ./closure-roots.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
+
+  gitops-served-candidate-vm = import ./served-candidate.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
 }

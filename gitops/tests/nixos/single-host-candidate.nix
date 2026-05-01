@@ -35,6 +35,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"jq -e '.desired_generation == 1 and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\" and (.admission_state == \"passed_fixture\" or .admission_state == \"not_run\")' {status}")
     machine.succeed(f"jq -e '.instance_name == \"local-test-example-release\" and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\"' {instance}")
     machine.succeed(f"jq -e '.admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
 
     machine.fail("systemctl is-active fishystuff-api.service")
