@@ -537,7 +537,7 @@ in {
       site-build = {
         cwd = config.devenv.root;
         exec = ''
-          exec env LOG_TS_LABEL=site-build LOG_TS_FILE=${config.devenv.root}/data/vector/process/site-build.log ${logTimestampRunner} watchexec -r --postpone \
+          exec env LOG_TS_LABEL=site-build LOG_TS_FILE=${config.devenv.root}/data/vector/process/site-build.log ${logTimestampRunner} watchexec --postpone --on-busy-update=do-nothing \
             -w site/content \
             -w site/layouts \
             -w site/assets \
@@ -548,7 +548,13 @@ in {
             -w site/tailwind.input.css \
             -w site/zine.ziggy \
             --ignore 'site/assets/js/datastar.js' \
+            --ignore 'site/assets/js/d3.js' \
+            --ignore 'site/assets/js/otel.js' \
+            --ignore 'site/assets/js/generated/**' \
+            --ignore 'site/assets/embed.png' \
             --ignore 'site/assets/img/icons.svg' \
+            --ignore 'site/assets/img/embed*.png' \
+            --ignore 'site/assets/*/embed.png' \
             --ignore 'site/assets/img/guides/*-320.webp' \
             --ignore 'site/assets/img/guides/*-640.webp' \
             --ignore 'site/assets/img/favicon-16x16.png' \
