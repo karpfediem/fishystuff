@@ -31,7 +31,6 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
         .info
         .as_ref()
         .and_then(SelectedInfo::effective_world_point);
-    crate::perf_counter_add!("bridge.emit.selection.count", 1);
     let payload = FishyMapOutputEvent::SelectionChanged {
         version: 1,
         world_x: selected_world_point.map(|value| value.0),
@@ -52,7 +51,18 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
             .map(|info| point_sample_snapshots(&info.point_samples))
             .unwrap_or_default(),
     };
-    super::super::emit_event(&payload);
+    let Ok(serialized) = serde_json::to_string(&payload) else {
+        return;
+    };
+    LAST_SELECTION_PAYLOAD.with(|last_payload| {
+        let mut last_payload = last_payload.borrow_mut();
+        if last_payload.as_deref() == Some(serialized.as_str()) {
+            return;
+        }
+        crate::perf_counter_add!("bridge.emit.selection.count", 1);
+        super::super::emit_event(&payload);
+        *last_payload = Some(serialized);
+    });
 }
 
 pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) {

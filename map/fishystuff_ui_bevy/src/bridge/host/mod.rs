@@ -43,6 +43,7 @@ thread_local! {
     static READY_EMITTED: RefCell<bool> = const { RefCell::new(false) };
     static LAST_VIEW_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
     static LAST_VIEW_EMIT_SECS: RefCell<f64> = const { RefCell::new(0.0) };
+    static LAST_SELECTION_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
     static LAST_HOVER_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
     static LAST_DIAGNOSTIC_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
 }
@@ -254,6 +255,7 @@ pub fn fishymap_destroy() {
     READY_EMITTED.with(|value| *value.borrow_mut() = false);
     LAST_VIEW_PAYLOAD.with(|value| *value.borrow_mut() = None);
     LAST_VIEW_EMIT_SECS.with(|value| *value.borrow_mut() = 0.0);
+    LAST_SELECTION_PAYLOAD.with(|value| *value.borrow_mut() = None);
     LAST_HOVER_PAYLOAD.with(|value| *value.borrow_mut() = None);
     LAST_DIAGNOSTIC_PAYLOAD.with(|value| *value.borrow_mut() = None);
 }

@@ -34,6 +34,10 @@ function renderSlot() {
   };
 }
 
+function nextTimer() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 test("readMapInfoPanelShellSignals prefers live shell signals over initial signals", () => {
   const initialSignals = { _map_runtime: { selection: { pointLabel: "Initial" } } };
   const liveSignals = { _map_runtime: { selection: { pointLabel: "Live" } } };
@@ -68,6 +72,25 @@ test("info panel element exposes refresh and signal patch handlers", () => {
   assert.equal(typeof element.refreshZoneLootSummary, "function");
   assert.equal(typeof element.refreshTradeNpcMapCatalog, "function");
   assert.equal(typeof element.render, "function");
+});
+
+test("scheduleRender coalesces info renders onto a short task", async () => {
+  const element = new FishyMapInfoPanelElement();
+  let renderCount = 0;
+  element.render = () => {
+    renderCount += 1;
+  };
+
+  element.scheduleRender();
+  element.scheduleRender();
+
+  assert.equal(renderCount, 0);
+  await nextTimer();
+  assert.equal(renderCount, 1);
+
+  element.scheduleRender();
+  await nextTimer();
+  assert.equal(renderCount, 2);
 });
 
 test("trade manager rows render full-height detail focus buttons and dispatch focus patches", () => {
@@ -218,7 +241,86 @@ test("normalize rates Datastar prop re-renders without refetching zone loot", ()
   assert.equal(renderCount, 1);
 });
 
-test("render switches loaded zone loot rates from the Datastar normalize rates prop", () => {
+test("selection signal patches coalesce into one info data refresh", async () => {
+  const element = new FishyMapInfoPanelElement();
+  const signals = {
+    _map_runtime: {
+      selection: {
+        pointKind: "clicked",
+        pointLabel: "Velia Coast",
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rgbU32: 0x39e58d,
+            rgb: [57, 229, 141],
+            detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+          },
+        ],
+      },
+    },
+    _map_ui: {
+      windowUi: {
+        settings: { normalizeRates: true },
+      },
+    },
+  };
+  let zoneRefreshCount = 0;
+  let tradeRefreshCount = 0;
+  let renderCount = 0;
+  element._shell = { __fishymapLiveSignals: signals };
+  element.refreshZoneLootSummary = () => {
+    zoneRefreshCount += 1;
+    return Promise.resolve();
+  };
+  element.refreshTradeNpcMapCatalog = () => {
+    tradeRefreshCount += 1;
+    return Promise.resolve();
+  };
+  element.scheduleRender = () => {
+    renderCount += 1;
+  };
+
+  element.handleSignalPatch({ _map_runtime: { selection: { worldX: 10 } } });
+  element.handleSignalPatch({ _map_runtime: { selection: { pointLabel: "Velia Coast" } } });
+  element.handleSignalPatch({ _map_runtime: { selection: { layerSamples: signals._map_runtime.selection.layerSamples } } });
+
+  assert.equal(zoneRefreshCount, 0);
+  assert.equal(tradeRefreshCount, 0);
+  assert.equal(renderCount, 1);
+
+  await nextTimer();
+
+  assert.equal(zoneRefreshCount, 1);
+  assert.equal(tradeRefreshCount, 1);
+
+  element.handleSignalPatch({ _map_runtime: { selection: { worldZ: 20 } } });
+  await nextTimer();
+
+  assert.equal(zoneRefreshCount, 1);
+  assert.equal(tradeRefreshCount, 1);
+  assert.equal(renderCount, 1);
+
+  signals._map_runtime.selection = {
+    ...signals._map_runtime.selection,
+    pointLabel: "Margoria South",
+    layerSamples: [
+      {
+        layerId: "zone_mask",
+        rgbU32: 0xff78ff,
+        rgb: [255, 120, 255],
+        detailSections: [detailSectionFact("zone", "Zone", "Margoria South", "hover-zone")],
+      },
+    ],
+  };
+  element.handleSignalPatch({ _map_runtime: { selection: { layerSamples: signals._map_runtime.selection.layerSamples } } });
+  await nextTimer();
+
+  assert.equal(zoneRefreshCount, 2);
+  assert.equal(tradeRefreshCount, 2);
+  assert.equal(renderCount, 2);
+});
+
+test("render switches loaded zone loot rates from the Datastar normalize rates prop", async () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();
   let normalizeRates = "true";
@@ -308,6 +410,7 @@ test("render switches loaded zone loot rates from the Datastar normalize rates p
 
   normalizeRates = "false";
   element.attributeChangedCallback("data-normalize-rates", "true", "false");
+  await nextTimer();
 
   assert.match(panelSlot.innerHTML, /12\.3%/);
   assert.match(panelSlot.innerHTML, /4\.5%/);
@@ -446,7 +549,7 @@ test("render caps large clicked ranking sample panes to one page", () => {
   assert.equal((panelSlot.innerHTML.match(/fishymap-point-sample-card/g) || []).length, 50);
 });
 
-test("normalize rates signal patch swaps loaded zone loot rates in place", () => {
+test("normalize rates signal patch swaps loaded zone loot rates in place", async () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();
   const signals = {
@@ -535,6 +638,7 @@ test("normalize rates signal patch swaps loaded zone loot rates in place", () =>
   element.handleSignalPatch({
     _map_ui: { windowUi: { settings: { normalizeRates: false } } },
   });
+  await nextTimer();
 
   assert.equal(refreshCount, 0);
   assert.match(panelSlot.innerHTML, /12\.3%/);
@@ -632,7 +736,7 @@ test("render shows the calculator warning and a consolidated calculator notice w
   assert.doesNotMatch(panelSlot.innerHTML, /Calculator defaults/);
 });
 
-test("condition arrow buttons switch the visible zone loot branch", () => {
+test("condition arrow buttons switch the visible zone loot branch", async () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();
   element._shell = {
@@ -768,6 +872,7 @@ test("condition arrow buttons switch the visible zone loot branch", () => {
       },
     },
   });
+  await nextTimer();
 
   assert.equal(element._state.zoneLootConditionSelection["2:Rare"], 1);
   assert.match(panelSlot.innerHTML, /Fishing Level Guru 1\+/);

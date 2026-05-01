@@ -229,6 +229,33 @@ function focusWorldPointFromButton(button) {
   };
 }
 
+function selectionDataRefreshKey(signals, normalizeRates) {
+  const selection = signals?._map_runtime?.selection || null;
+  const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
+  const zoneRgb = zoneRgbFromSelection(selection);
+  const origin = selectedTradeOriginFromLayerSamples(layerSamples);
+  return JSON.stringify({
+    zoneRgb: Number.isInteger(zoneRgb) && zoneRgb >= 0 ? zoneRgb : null,
+    normalizeRates: Boolean(normalizeRates),
+    tradeOrigin: origin
+      ? [
+          origin.regionId ?? "",
+          origin.worldX ?? "",
+          origin.worldZ ?? "",
+          origin.label || "",
+        ]
+      : null,
+  });
+}
+
+function selectionRenderKey(signals) {
+  try {
+    return JSON.stringify(signals?._map_runtime?.selection || null);
+  } catch (_error) {
+    return "";
+  }
+}
+
 function itemGradeTone(grade, isPrize) {
   const resolver = globalThis.window?.__fishystuffItemPresentation?.resolveGradeTone;
   if (typeof resolver === "function") {
@@ -779,7 +806,8 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
-    this._rafId = 0;
+    this._renderTimerId = null;
+    this._selectionDataRefreshQueued = false;
     this._elements = null;
     this._state = {
       zoneCatalog: [],
@@ -794,6 +822,8 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       tradeNpcMapStatus: "idle",
       tradeNpcMapOriginKey: "",
       tradeNpcMapRequestToken: 0,
+      selectionDataRefreshKey: null,
+      selectionRenderKey: null,
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
@@ -933,10 +963,11 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       globalThis.window?.__fishystuffLanguage?.event || "fishystuff:languagechange",
       this._handleLanguageChanged,
     );
-    if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
-      globalThis.cancelAnimationFrame(this._rafId);
+    if (this._renderTimerId != null && typeof globalThis.clearTimeout === "function") {
+      globalThis.clearTimeout(this._renderTimerId);
     }
-    this._rafId = 0;
+    this._renderTimerId = null;
+    this._selectionDataRefreshQueued = false;
     this._shell = null;
     this._elements = null;
   }
@@ -955,7 +986,6 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   }
 
   render() {
-    this._rafId = 0;
     const signals = this.signals();
     const viewModel = buildInfoViewModel(signals, {
       zoneCatalog: this._state.zoneCatalog,
@@ -1008,16 +1038,15 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   }
 
   scheduleRender() {
-    if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
-      globalThis.cancelAnimationFrame(this._rafId);
+    if (this._renderTimerId != null) {
+      return;
     }
-    if (typeof globalThis.requestAnimationFrame === "function") {
-      this._rafId = globalThis.requestAnimationFrame(() => {
+    if (typeof globalThis.setTimeout === "function") {
+      this._renderTimerId = globalThis.setTimeout(() => {
+        this._renderTimerId = null;
         this.render();
-      }) || 0;
-      if (this._rafId) {
-        return;
-      }
+      }, 0);
+      return;
     }
     this.render();
   }
@@ -1026,11 +1055,49 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     if (!patchTouchesInfoSignals(patch)) {
       return;
     }
+    let shouldRender = true;
     if (patch?._map_runtime?.selection != null) {
+      this.scheduleSelectionDataRefresh();
+      const renderKey = selectionRenderKey(this.signals());
+      shouldRender = this._state.selectionRenderKey !== renderKey;
+      this._state.selectionRenderKey = renderKey;
+    }
+    if (shouldRender) {
+      this.scheduleRender();
+    }
+  }
+
+  scheduleSelectionDataRefresh() {
+    if (this._selectionDataRefreshQueued) {
+      return;
+    }
+    this._selectionDataRefreshQueued = true;
+    const run = () => {
+      this._selectionDataRefreshQueued = false;
+      if (!this._shell) {
+        return;
+      }
+      const signals = this.signals();
+      const refreshKey = selectionDataRefreshKey(
+        signals,
+        this.normalizeRatesEnabled(signals),
+      );
+      if (this._state.selectionDataRefreshKey === refreshKey) {
+        return;
+      }
+      this._state.selectionDataRefreshKey = refreshKey;
       void this.refreshZoneLootSummary();
       void this.refreshTradeNpcMapCatalog();
+    };
+    if (typeof globalThis.queueMicrotask === "function") {
+      globalThis.queueMicrotask(run);
+      return;
     }
-    this.scheduleRender();
+    if (typeof globalThis.Promise === "function") {
+      globalThis.Promise.resolve().then(run);
+      return;
+    }
+    run();
   }
 
   async refreshTradeNpcMapCatalog({ force = false } = {}) {
