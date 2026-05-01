@@ -2,6 +2,7 @@ import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-s
 import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { mapText, siteText } from "./map-i18n.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
+import { preferredPointLabelForLayerSamples } from "./map-overview-facts.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 import {
@@ -18,6 +19,7 @@ import {
 const INFO_PANEL_TAG_NAME = "fishymap-info-panel";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const POINT_SAMPLE_PAGE_SIZE = 50;
+const SELECTION_HISTORY_LIMIT = 8;
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -227,6 +229,147 @@ function focusWorldPointFromButton(button) {
       ? { pointLabel: trimString(button.getAttribute("data-focus-point-label")) }
       : {}),
   };
+}
+
+function finiteCoordinate(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizedSelectionPointKind(value) {
+  const pointKind = trimString(value).toLowerCase();
+  if (pointKind === "bookmark" || pointKind === "waypoint" || pointKind === "clicked") {
+    return pointKind;
+  }
+  return "";
+}
+
+function coordinateSelectionKeyPart(value) {
+  return Number(value).toFixed(3);
+}
+
+function selectionHistoryKey(selection) {
+  const worldX = finiteCoordinate(selection?.worldX);
+  const worldZ = finiteCoordinate(selection?.worldZ);
+  if (worldX != null && worldZ != null) {
+    return `point:${coordinateSelectionKeyPart(worldX)}:${coordinateSelectionKeyPart(worldZ)}`;
+  }
+  const zoneRgb = zoneRgbFromSelection(selection);
+  return Number.isInteger(zoneRgb) && zoneRgb >= 0 ? `zone:${zoneRgb}` : "";
+}
+
+function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = [] } = {}) {
+  const pointLabel = trimString(selection?.pointLabel);
+  if (pointLabel) {
+    return pointLabel;
+  }
+  const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
+  const layerLabel = preferredPointLabelForLayerSamples(layerSamples, {
+    zoneCatalog,
+    runtimeLayers,
+  });
+  if (layerLabel) {
+    return layerLabel;
+  }
+  const pointKind = normalizedSelectionPointKind(selection?.pointKind);
+  switch (pointKind) {
+    case "bookmark":
+      return mapText("info.status.bookmark");
+    case "waypoint":
+      return mapText("info.status.waypoint");
+    case "clicked":
+      return mapText("info.status.clicked");
+    default:
+      return mapText("info.status.no_selection");
+  }
+}
+
+function selectionHistoryEntryFromSignals(signals, { zoneCatalog = [] } = {}) {
+  const selection = signals?._map_runtime?.selection || null;
+  if (!selection || typeof selection !== "object") {
+    return null;
+  }
+  const key = selectionHistoryKey(selection);
+  const worldX = finiteCoordinate(selection.worldX);
+  const worldZ = finiteCoordinate(selection.worldZ);
+  if (!key || worldX == null || worldZ == null) {
+    return null;
+  }
+  const runtimeLayers = Array.isArray(signals?._map_runtime?.catalog?.layers)
+    ? signals._map_runtime.catalog.layers
+    : [];
+  const label = selectionHistoryLabel(selection, { zoneCatalog, runtimeLayers });
+  const pointKind = normalizedSelectionPointKind(selection.pointKind) || "clicked";
+  return {
+    key,
+    label,
+    worldX,
+    worldZ,
+    pointKind,
+    pointLabel: trimString(selection.pointLabel) || label,
+  };
+}
+
+function pushSelectionHistoryEntry(history, entry) {
+  if (!entry?.key) {
+    return Array.isArray(history) ? history.slice(0, SELECTION_HISTORY_LIMIT) : [];
+  }
+  const next = [entry];
+  for (const existing of Array.isArray(history) ? history : []) {
+    if (!existing?.key || existing.key === entry.key) {
+      continue;
+    }
+    next.push(existing);
+    if (next.length >= SELECTION_HISTORY_LIMIT) {
+      break;
+    }
+  }
+  return next;
+}
+
+function selectionHistoryButtonLabel(entry) {
+  return trimString(entry?.label) || mapText("info.history.unknown");
+}
+
+function selectionHistoryMarkup(entries) {
+  const historyEntries = Array.isArray(entries) ? entries.filter((entry) => entry?.key) : [];
+  if (!historyEntries.length) {
+    return "";
+  }
+  const first = historyEntries[0];
+  return `
+    <div class="rounded-box border border-base-300/70 bg-base-200/75 p-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/50">
+          ${spriteIcon("time-fill", "size-4")}
+          <span>${escapeHtml(mapText("info.history.title"))}</span>
+        </span>
+        <button
+          class="btn btn-ghost btn-xs"
+          type="button"
+          data-selection-history-back="true"
+          aria-label="${escapeHtml(mapText("info.history.back"))}"
+          title="${escapeHtml(mapText("info.history.back"))}"
+        >
+          ${spriteIcon("right-fill", "size-3 rotate-180")}
+        </button>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-1">
+        ${historyEntries
+          .map((entry, index) => {
+            const label = selectionHistoryButtonLabel(entry);
+            return `<button
+              class="btn ${entry.key === first.key ? "btn-soft" : "btn-ghost"} btn-xs max-w-full"
+              type="button"
+              data-selection-history-index="${escapeHtml(index)}"
+              title="${escapeHtml(mapText("info.history.go", { name: label }))}"
+              aria-label="${escapeHtml(mapText("info.history.go", { name: label }))}"
+            ><span class="truncate">${escapeHtml(label)}</span></button>`;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
 }
 
 function selectionDataRefreshKey(signals, normalizeRates) {
@@ -785,6 +928,7 @@ function ensureInfoPanelMarkup(host) {
     return;
   }
   host.innerHTML = `
+    <div id="fishymap-selection-history" hidden></div>
     <div
       id="fishymap-zone-info-tabs"
       role="tablist"
@@ -824,6 +968,9 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       tradeNpcMapRequestToken: 0,
       selectionDataRefreshKey: null,
       selectionRenderKey: null,
+      currentSelectionKey: "",
+      currentSelectionEntry: null,
+      selectionHistory: [],
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
@@ -848,6 +995,22 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       void this.refreshZoneLootSummary({ force: true });
     };
     this._handleClick = (event) => {
+      const historyBackButton = event.target.closest("button[data-selection-history-back]");
+      if (historyBackButton) {
+        event.preventDefault?.();
+        this.restoreSelectionHistoryEntry(0);
+        return;
+      }
+
+      const historyButton = event.target.closest("button[data-selection-history-index]");
+      if (historyButton) {
+        event.preventDefault?.();
+        this.restoreSelectionHistoryEntry(
+          Number.parseInt(historyButton.getAttribute("data-selection-history-index"), 10),
+        );
+        return;
+      }
+
       const focusButton = event.target.closest("button[data-fishy-focus-world-point]");
       if (focusButton) {
         event.preventDefault?.();
@@ -930,6 +1093,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       titleIcon: this._shell?.querySelector?.("#fishymap-zone-info-title-icon") || null,
       statusIcon: this._shell?.querySelector?.("#fishymap-zone-info-status-icon") || null,
       statusText: this._shell?.querySelector?.("#fishymap-zone-info-status-text") || null,
+      history: this.querySelector("#fishymap-selection-history"),
       tabs: this.querySelector("#fishymap-zone-info-tabs"),
       panel: this.querySelector("#fishymap-zone-info-panel"),
     };
@@ -982,6 +1146,53 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     return attrValue !== "false" && attrValue !== "0";
   }
 
+  recordCurrentSelectionForHistory() {
+    const entry = selectionHistoryEntryFromSignals(this.signals(), {
+      zoneCatalog: this._state.zoneCatalog,
+    });
+    if (!entry) {
+      return;
+    }
+    if (
+      this._state.currentSelectionKey &&
+      this._state.currentSelectionKey !== entry.key &&
+      this._state.currentSelectionEntry
+    ) {
+      this._state.selectionHistory = pushSelectionHistoryEntry(
+        this._state.selectionHistory,
+        this._state.currentSelectionEntry,
+      );
+    }
+    this._state.currentSelectionKey = entry.key;
+    this._state.currentSelectionEntry = entry;
+  }
+
+  restoreSelectionHistoryEntry(index) {
+    const historyIndex = Number.parseInt(index, 10);
+    const entry = Number.isInteger(historyIndex)
+      ? this._state.selectionHistory?.[historyIndex]
+      : null;
+    if (!entry) {
+      return;
+    }
+    this._state.selectionHistory = (this._state.selectionHistory || []).filter(
+      (_entry, candidateIndex) => candidateIndex !== historyIndex,
+    );
+    this.scheduleRender();
+    const patch = buildFocusWorldPointSignalPatch(
+      {
+        worldX: entry.worldX,
+        worldZ: entry.worldZ,
+        pointKind: entry.pointKind,
+        pointLabel: entry.pointLabel || entry.label,
+      },
+      this.signals(),
+    );
+    if (patch) {
+      dispatchShellSignalPatch(this._shell, patch);
+    }
+  }
+
   render() {
     const signals = this.signals();
     const viewModel = buildInfoViewModel(signals, {
@@ -1018,6 +1229,16 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       this._elements?.statusIcon,
       viewModel.descriptor.statusIcon,
       spriteIcon(viewModel.descriptor.statusIcon || "information-circle", "size-4"),
+    );
+    setBooleanProperty(
+      this._elements?.history,
+      "hidden",
+      !this._state.selectionHistory?.length,
+    );
+    setMarkup(
+      this._elements?.history,
+      JSON.stringify((this._state.selectionHistory || []).map((entry) => [entry.key, entry.label])),
+      selectionHistoryMarkup(this._state.selectionHistory),
     );
     setBooleanProperty(this._elements?.tabs, "hidden", viewModel.panes.length === 0);
     setMarkup(
@@ -1068,6 +1289,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     }
     let shouldRender = true;
     if (patch?._map_runtime?.selection != null) {
+      this.recordCurrentSelectionForHistory();
       this.scheduleSelectionDataRefresh();
       const renderKey = selectionRenderKey(this.signals());
       shouldRender = this._state.selectionRenderKey !== renderKey;

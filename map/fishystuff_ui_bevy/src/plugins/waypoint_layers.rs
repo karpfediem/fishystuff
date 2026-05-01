@@ -888,13 +888,48 @@ pub(crate) fn waypoint_sample_at_world_point(
     layer_filters: &LayerEffectiveFilterState,
     camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
 ) -> Option<WaypointLayerInteractionSample> {
+    waypoint_sample_at_world_point_with_options(
+        world_point,
+        waypoint_runtime,
+        layer_registry,
+        layer_runtime,
+        exact_lookups,
+        tile_cache,
+        vector_runtime,
+        layer_filters,
+        camera_q,
+        WaypointSampleOptions::default(),
+    )
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct WaypointSampleOptions {
+    pub include_hidden_layers: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn waypoint_sample_at_world_point_with_options(
+    world_point: WorldPoint,
+    waypoint_runtime: &WaypointLayerRuntime,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    layer_filters: &LayerEffectiveFilterState,
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+    options: WaypointSampleOptions,
+) -> Option<WaypointLayerInteractionSample> {
     let hit_radius_world = waypoint_hit_radius_world(camera_q);
     let hit_radius_sq = hit_radius_world * hit_radius_world;
     let inactive_filter = ZoneMembershipFilter::default();
     let mut hits = Vec::new();
 
     for layer in layer_registry.ordered() {
-        if !layer.is_waypoints() || !layer_runtime.visible(layer.id) {
+        if !layer.is_waypoints() {
+            continue;
+        }
+        if !options.include_hidden_layers && !layer_runtime.visible(layer.id) {
             continue;
         }
         let Some(layer_state) = waypoint_runtime.states.get(&layer.id) else {
@@ -907,19 +942,21 @@ pub(crate) fn waypoint_sample_at_world_point(
             .zone_membership_filter(layer.key.as_str())
             .unwrap_or(&inactive_filter);
         for point in &layer_state.features.points {
-            if !point.default_visible {
+            if !options.include_hidden_layers && !point.default_visible {
                 continue;
             }
-            if !world_point_visible_in_layer_clip(
-                layer.id,
-                WorldPoint::new(point.world_x as f64, point.world_z as f64),
-                layer_registry,
-                layer_runtime,
-                exact_lookups,
-                tile_cache,
-                vector_runtime,
-                zone_filter,
-            ) {
+            if !options.include_hidden_layers
+                && !world_point_visible_in_layer_clip(
+                    layer.id,
+                    WorldPoint::new(point.world_x as f64, point.world_z as f64),
+                    layer_registry,
+                    layer_runtime,
+                    exact_lookups,
+                    tile_cache,
+                    vector_runtime,
+                    zone_filter,
+                )
+            {
                 continue;
             }
             let dx = world_point.x - point.world_x as f64;
@@ -953,6 +990,23 @@ pub(crate) fn waypoint_sample_at_world_point(
             })
     });
     hits.into_iter().map(|hit| hit.sample).next()
+}
+
+pub(crate) fn waypoint_layers_pending(
+    waypoint_runtime: &WaypointLayerRuntime,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    options: WaypointSampleOptions,
+) -> bool {
+    layer_registry.ordered().iter().any(|layer| {
+        layer.is_waypoints()
+            && (options.include_hidden_layers || layer_runtime.visible(layer.id))
+            && waypoint_runtime
+                .states
+                .get(&layer.id)
+                .and_then(|state| state.pending.as_ref())
+                .is_some()
+    })
 }
 
 struct WaypointHit {

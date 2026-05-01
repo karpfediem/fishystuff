@@ -52,6 +52,7 @@ function normalizeSelectionLayerSamples(selection) {
 
 const INFO_WINDOW_TITLE_ICON = "inspect-fill";
 const INFO_WINDOW_STATUS_ICON = "information-circle";
+const LANDMARK_LAYER_IDS = Object.freeze(["trade_npcs", "region_nodes", "bookmarks"]);
 
 function pointKindStatusText(pointKind, pointLabel) {
   const normalizedLabel = trimString(pointLabel);
@@ -375,6 +376,82 @@ function buildPointSampleSection(selection, stateBundle, zoneCatalog) {
   };
 }
 
+function normalizeDetailFacts(sample) {
+  if (!Array.isArray(sample?.detailSections)) {
+    return [];
+  }
+  const rows = [];
+  for (const section of sample.detailSections) {
+    if (!isPlainObject(section) || trimString(section.kind) !== "facts") {
+      continue;
+    }
+    const sectionTitle = trimString(section.title);
+    for (const fact of Array.isArray(section.facts) ? section.facts : []) {
+      if (!isPlainObject(fact)) {
+        continue;
+      }
+      const key = trimString(fact.key);
+      const label = trimString(fact.label) || sectionTitle || key.replace(/_/g, " ");
+      const value = trimString(fact.value);
+      if (!key || !label || !value) {
+        continue;
+      }
+      rows.push({
+        key,
+        label,
+        value,
+        icon: trimString(fact.icon),
+        statusIcon: trimString(fact.statusIcon),
+        statusIconTone: trimString(fact.statusIconTone),
+      });
+    }
+  }
+  return rows;
+}
+
+function isLandmarkSample(sample) {
+  const layerId = trimString(sample?.layerId);
+  const kind = trimString(sample?.kind);
+  if (kind === "waypoint" || LANDMARK_LAYER_IDS.includes(layerId)) {
+    return true;
+  }
+  return false;
+}
+
+function landmarkFactIcon(layerId, fact) {
+  if (trimString(fact?.icon)) {
+    return trimString(fact.icon);
+  }
+  if (trimString(layerId) === "trade_npcs") {
+    return "trade-origin";
+  }
+  return "map-pin";
+}
+
+function buildLandmarkPaneFacts(layerSamples) {
+  const facts = [];
+  const seen = new Set();
+  for (const sample of layerSamples.filter(isLandmarkSample)) {
+    const layerId = trimString(sample?.layerId);
+    for (const fact of normalizeDetailFacts(sample)) {
+      const key = `${layerId}:${fact.key}:${fact.value}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      facts.push({
+        key: `landmark:${layerId}:${fact.key}`,
+        label: fact.label,
+        value: fact.value,
+        icon: landmarkFactIcon(layerId, fact),
+        ...(fact.statusIcon ? { statusIcon: fact.statusIcon } : {}),
+        ...(fact.statusIconTone ? { statusIconTone: fact.statusIconTone } : {}),
+      });
+    }
+  }
+  return facts;
+}
+
 function paneDescriptor(id, label, icon, summary, sections) {
   return {
     id,
@@ -431,6 +508,7 @@ export function buildInfoViewModel(
     zoneCatalog,
     runtimeLayers,
   });
+  const landmarkFacts = buildLandmarkPaneFacts(layerSamples);
   const territoryFacts = buildTerritoryPaneFacts(layerSamples, { runtimeLayers });
   const tradeFacts = buildTradePaneFacts(layerSamples, {
     runtimeLayers,
@@ -458,6 +536,22 @@ export function buildInfoViewModel(
           [pointSampleSection],
         )
       : null,
+    paneDescriptor(
+      "landmark",
+      mapText("info.pane.landmark"),
+      landmarkFacts[0]?.icon || "map-pin",
+      landmarkFacts[0]?.value || "",
+      landmarkFacts.length
+        ? [
+            {
+              id: "landmark-facts",
+              kind: "facts",
+              title: mapText("info.section.landmark"),
+              facts: landmarkFacts,
+            },
+          ]
+        : [],
+    ),
     paneDescriptor(
       "zone",
       mapText("info.pane.zone"),

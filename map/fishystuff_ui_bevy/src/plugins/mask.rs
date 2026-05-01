@@ -28,7 +28,9 @@ use crate::plugins::points::{
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::plugins::waypoint_layers::{
-    waypoint_sample_at_world_point, WaypointLayerInteractionSample, WaypointLayerRuntime,
+    waypoint_layers_pending, waypoint_sample_at_world_point,
+    waypoint_sample_at_world_point_with_options, WaypointLayerInteractionSample,
+    WaypointLayerRuntime, WaypointSampleOptions,
 };
 use crate::prelude::*;
 
@@ -273,7 +275,13 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
     match request.stage {
         PendingSelectionDetailsStage::ProbeWaypoint => {
             crate::perf_scope!("selection.click.details.waypoint");
-            let waypoint_sample = waypoint_sample_at_world_point(
+            let waypoint_options = WaypointSampleOptions {
+                include_hidden_layers: matches!(
+                    request.point_kind,
+                    FishyMapSelectionPointKind::Waypoint
+                ),
+            };
+            let waypoint_sample = waypoint_sample_at_world_point_with_options(
                 request.click_world_point,
                 &context.waypoint_runtime,
                 &context.layer_registry,
@@ -283,7 +291,20 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
                 &context.vector_runtime,
                 &context.layer_filters,
                 &context.point_camera_q,
+                waypoint_options,
             );
+            if waypoint_sample.is_none()
+                && waypoint_options.include_hidden_layers
+                && waypoint_layers_pending(
+                    &context.waypoint_runtime,
+                    &context.layer_registry,
+                    &context.layer_runtime,
+                    waypoint_options,
+                )
+            {
+                context.pending_selection_details.request = Some(request);
+                return;
+            }
             request.selected_world_point = waypoint_sample
                 .as_ref()
                 .map(|sample| WorldPoint::new(sample.world_x, sample.world_z))

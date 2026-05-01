@@ -1,3 +1,9 @@
+map.info.pane.landmark = 랜드마크
+map.info.section.landmark = 랜드마크
+map.info.history.title = 기록
+map.info.history.back = 이전 선택으로 돌아가기
+map.info.history.go = {$name}(으)로 돌아가기
+map.info.history.unknown = 선택
 map.info.trade.managers = 무역 관리자
 map.info.trade.manager_count = 목적지 무역상 {$count}명
 map.info.trade.loading = 불러오는 중

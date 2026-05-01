@@ -519,6 +519,59 @@ test("buildInfoViewModel lets zone loot condition selection switch branch rows",
   assert.equal(group.conditionOptionKey, "2:Rare");
 });
 
+test("buildInfoViewModel exposes selected waypoint detail sections as a landmark pane", () => {
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        pointKind: "waypoint",
+        pointLabel: "Chunsu",
+        layerSamples: [
+          {
+            layerId: "trade_npcs",
+            layerName: "Trade NPCs",
+            kind: "waypoint",
+            detailSections: [
+              {
+                id: "trade-npc",
+                kind: "facts",
+                title: "Trade NPC",
+                facts: [
+                  { key: "trade_npc", label: "NPC", value: "Chunsu", icon: "trade-origin" },
+                  { key: "npc_key", label: "NPC Key", value: "1", icon: "information-circle" },
+                ],
+              },
+            ],
+          },
+          {
+            layerId: "zone_mask",
+            rgbU32: 0x39e58d,
+            rgb: [57, 229, 141],
+            detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+          },
+        ],
+      },
+      catalog: {
+        layers: [
+          { layerId: "zone_mask", displayOrder: 20 },
+          { layerId: "trade_npcs", displayOrder: 42 },
+        ],
+      },
+    },
+  });
+
+  assert.equal(viewModel.descriptor.title, "Chunsu");
+  assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["landmark", "zone"]);
+  assert.equal(viewModel.activePaneId, "landmark");
+  assert.equal(viewModel.activePane.sections[0].title, "Landmark");
+  assert.deepEqual(
+    viewModel.activePane.sections[0].facts.map((fact) => [fact.key, fact.label, fact.value, fact.icon]),
+    [
+      ["landmark:trade_npcs:trade_npc", "NPC", "Chunsu", "trade-origin"],
+      ["landmark:trade_npcs:npc_key", "NPC Key", "1", "information-circle"],
+    ],
+  );
+});
+
 test("patchTouchesInfoSignals stays narrow to selection, pane tab, rate display, and runtime layer inputs", () => {
   assert.equal(
     patchTouchesInfoSignals({

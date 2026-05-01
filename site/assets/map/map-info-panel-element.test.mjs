@@ -324,6 +324,113 @@ test("selection signal patches coalesce into one info data refresh", async () =>
   assert.equal(renderCount, 2);
 });
 
+test("selection history records previous selections and restores them through focus patches", () => {
+  const element = new FishyMapInfoPanelElement();
+  const historySlot = renderSlot();
+  const dispatched = [];
+  const signals = {
+    _map_runtime: {
+      selection: {
+        pointKind: "clicked",
+        pointLabel: "Velia Coast",
+        worldX: 10,
+        worldZ: 20,
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rgbU32: 0x39e58d,
+            rgb: [57, 229, 141],
+            detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+          },
+        ],
+      },
+      catalog: {
+        layers: [{ layerId: "zone_mask", displayOrder: 20 }],
+      },
+    },
+    _map_actions: {
+      focusWorldPointToken: 2,
+    },
+    _map_session: {
+      view: {
+        viewMode: "2d",
+        camera: { zoom: 512 },
+      },
+    },
+  };
+  element._shell = {
+    __fishymapLiveSignals: signals,
+    dispatchEvent(event) {
+      dispatched.push(event.detail);
+      return true;
+    },
+  };
+  element._state.zoneCatalog = [
+    { zoneRgb: 0x39e58d, name: "Velia Coast", biteTimeMin: 5, biteTimeMax: 7 },
+  ];
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    history: historySlot,
+    tabs: renderSlot(),
+    panel: renderSlot(),
+  };
+
+  element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
+  assert.equal(element._state.selectionHistory.length, 0);
+
+  signals._map_runtime.selection = {
+    pointKind: "waypoint",
+    pointLabel: "Chunsu",
+    worldX: 1_100,
+    worldZ: 120,
+    layerSamples: [],
+  };
+  element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
+  element.render();
+
+  assert.equal(element._state.selectionHistory.length, 1);
+  assert.match(historySlot.innerHTML, /History/);
+  assert.match(historySlot.innerHTML, /Velia Coast/);
+  assert.match(historySlot.innerHTML, /data-selection-history-back="true"/);
+
+  element._handleClick({
+    target: {
+      closest(selector) {
+        return selector === "button[data-selection-history-back]" ? {} : null;
+      },
+    },
+    preventDefault() {},
+  });
+
+  assert.deepEqual(dispatched, [
+    {
+      _map_actions: {
+        focusWorldPointToken: 3,
+        focusWorldPoint: {
+          worldX: 10,
+          worldZ: 20,
+          pointKind: "clicked",
+          pointLabel: "Velia Coast",
+        },
+      },
+      _map_session: {
+        view: {
+          viewMode: "2d",
+          camera: {
+            zoom: 512,
+            centerWorldX: 10,
+            centerWorldZ: 20,
+          },
+        },
+      },
+    },
+  ]);
+  assert.equal(element._state.selectionHistory.length, 0);
+});
+
 test("render switches loaded zone loot rates from the Datastar normalize rates prop", async () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();
