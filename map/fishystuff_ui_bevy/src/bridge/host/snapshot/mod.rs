@@ -10,7 +10,6 @@ use self::filters::{
 };
 use self::state::{effective_hover_snapshot, effective_selection_snapshot, effective_ui_state};
 use super::*;
-use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::plugins::bookmarks::BookmarkState;
 
@@ -40,8 +39,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
     let ui_changed = context.bridge.is_changed()
         || context.debug_layers.is_changed()
         || context.bookmarks.is_changed()
-        || context.exact_lookups.is_changed()
-        || context.field_metadata.is_changed();
+        || context.layer_registry.is_changed()
+        || context.layer_runtime.is_changed();
     let view_changed = context.view_mode.is_changed() || context.map_view.is_changed();
     let selection_changed = context.selection.is_changed();
     let hover_changed = context.hover.is_changed();
@@ -117,8 +116,6 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
                     &context.bookmarks,
                     &context.layer_registry,
                     &context.layer_runtime,
-                    &context.exact_lookups,
-                    &context.field_metadata,
                     Some(&context.bootstrap.zones),
                 ),
             );
@@ -250,7 +247,6 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     debug_layers: Res<'w, LayerDebugSettings>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
-    exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
     view_mode: Res<'w, ViewModeState>,
     map_view: Res<'w, Map2dViewState>,

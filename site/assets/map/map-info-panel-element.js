@@ -806,7 +806,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
-    this._renderTimerId = null;
+    this._renderQueued = false;
     this._selectionDataRefreshQueued = false;
     this._elements = null;
     this._state = {
@@ -963,10 +963,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       globalThis.window?.__fishystuffLanguage?.event || "fishystuff:languagechange",
       this._handleLanguageChanged,
     );
-    if (this._renderTimerId != null && typeof globalThis.clearTimeout === "function") {
-      globalThis.clearTimeout(this._renderTimerId);
-    }
-    this._renderTimerId = null;
+    this._renderQueued = false;
     this._selectionDataRefreshQueued = false;
     this._shell = null;
     this._elements = null;
@@ -1038,16 +1035,30 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   }
 
   scheduleRender() {
-    if (this._renderTimerId != null) {
+    if (this._renderQueued) {
+      return;
+    }
+    this._renderQueued = true;
+    const run = () => {
+      if (!this._renderQueued) {
+        return;
+      }
+      this._renderQueued = false;
+      this.render();
+    };
+    if (typeof globalThis.queueMicrotask === "function") {
+      globalThis.queueMicrotask(run);
+      return;
+    }
+    if (typeof globalThis.Promise === "function") {
+      globalThis.Promise.resolve().then(run);
       return;
     }
     if (typeof globalThis.setTimeout === "function") {
-      this._renderTimerId = globalThis.setTimeout(() => {
-        this._renderTimerId = null;
-        this.render();
-      }, 0);
+      globalThis.setTimeout(run, 0);
       return;
     }
+    this._renderQueued = false;
     this.render();
   }
 

@@ -14,6 +14,9 @@ use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState,
     LayerEffectiveFilterState, PatchFilterState, PendingRequests, SelectedInfo, SelectionState,
 };
+use crate::plugins::mask::{
+    queue_selection_details, quick_world_point_selection_info, PendingSelectionDetails,
+};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use fishystuff_core::field_metadata::FieldHoverTarget;
 
@@ -95,39 +98,30 @@ pub(super) fn apply_semantic_field_selection_command(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_world_point_selection_command(
-    bootstrap: &ApiBootstrapState,
-    patch_filter: &PatchFilterState,
-    layer_registry: &LayerRegistry,
-    layer_runtime: &LayerRuntime,
-    exact_lookups: &ExactLookupCache,
-    field_metadata: &FieldMetadataCache,
-    tile_cache: &RasterTileCache,
-    vector_runtime: &VectorLayerRuntime,
-    layer_filters: &LayerEffectiveFilterState,
     selection: &mut SelectionState,
     pending: &mut PendingRequests,
+    pending_selection_details: &mut PendingSelectionDetails,
     world_x: f64,
     world_z: f64,
     point_kind: Option<FishyMapSelectionPointKind>,
     point_label: Option<&str>,
 ) {
-    let selected_info = selected_info_at_world_point(
-        WorldPoint::new(world_x, world_z),
-        &WorldPointQueryContext {
-            layer_registry,
-            layer_runtime,
-            exact_lookups,
-            field_metadata,
-            tile_cache,
-            vector_runtime,
-            layer_filters,
-            map_to_world: MapToWorld::default(),
-        },
-        point_kind.unwrap_or(FishyMapSelectionPointKind::Clicked),
+    let world_point = WorldPoint::new(world_x, world_z);
+    let point_kind = point_kind.unwrap_or(FishyMapSelectionPointKind::Clicked);
+    selection.info = Some(quick_world_point_selection_info(
+        world_point,
+        point_kind,
         point_label,
-        Some(&bootstrap.zones),
+    ));
+    selection.zone_stats = None;
+    selection.zone_stats_status = "zone stats: pending details".to_string();
+    pending.zone_stats = None;
+    queue_selection_details(
+        pending_selection_details,
+        world_point,
+        point_kind,
+        point_label.map(ToOwned::to_owned),
     );
-    apply_selected_info(bootstrap, patch_filter, selection, pending, selected_info);
 }
 
 fn preferred_selection_target<'a>(

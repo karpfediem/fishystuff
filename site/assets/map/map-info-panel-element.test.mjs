@@ -38,6 +38,10 @@ function nextTimer() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function nextMicrotask() {
+  return Promise.resolve();
+}
+
 test("readMapInfoPanelShellSignals prefers live shell signals over initial signals", () => {
   const initialSignals = { _map_runtime: { selection: { pointLabel: "Initial" } } };
   const liveSignals = { _map_runtime: { selection: { pointLabel: "Live" } } };
@@ -74,7 +78,7 @@ test("info panel element exposes refresh and signal patch handlers", () => {
   assert.equal(typeof element.render, "function");
 });
 
-test("scheduleRender coalesces info renders onto a short task", async () => {
+test("scheduleRender coalesces info renders onto a microtask", async () => {
   const element = new FishyMapInfoPanelElement();
   let renderCount = 0;
   element.render = () => {
@@ -85,11 +89,11 @@ test("scheduleRender coalesces info renders onto a short task", async () => {
   element.scheduleRender();
 
   assert.equal(renderCount, 0);
-  await nextTimer();
+  await nextMicrotask();
   assert.equal(renderCount, 1);
 
   element.scheduleRender();
-  await nextTimer();
+  await nextMicrotask();
   assert.equal(renderCount, 2);
 });
 

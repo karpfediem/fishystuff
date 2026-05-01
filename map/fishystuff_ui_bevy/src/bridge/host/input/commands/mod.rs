@@ -13,6 +13,7 @@ use crate::plugins::api::{
     ApiBootstrapState, LayerEffectiveFilterState, PatchFilterState, PendingRequests, SelectionState,
 };
 use crate::plugins::camera::CameraZoomBounds;
+use crate::plugins::mask::PendingSelectionDetails;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
@@ -30,6 +31,7 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     layer_filters: Res<LayerEffectiveFilterState>,
     mut selection: ResMut<SelectionState>,
     mut pending: ResMut<PendingRequests>,
+    mut pending_selection_details: ResMut<PendingSelectionDetails>,
     mut view_mode: ResMut<ViewModeState>,
     mut map_view: ResMut<Map2dViewState>,
 ) {
@@ -73,17 +75,9 @@ pub(in crate::bridge::host) fn apply_browser_commands(
         }
         if let Some(world_point) = command.select_world_point {
             selection::apply_world_point_selection_command(
-                &bootstrap,
-                &patch_filter,
-                &layer_registry,
-                &layer_runtime,
-                &exact_lookups,
-                &field_metadata,
-                &tile_cache,
-                &vector_runtime,
-                &layer_filters,
                 &mut selection,
                 &mut pending,
+                &mut pending_selection_details,
                 world_point.world_x,
                 world_point.world_z,
                 world_point.point_kind,

@@ -1,16 +1,9 @@
 use super::super::super::*;
 use crate::bridge::contract::FishyMapBookmarkEntry;
-use crate::map::exact_lookup::ExactLookupCache;
-use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::layer_query::sample_semantic_layers_at_world_point;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::map::spaces::world::MapToWorld;
-use crate::map::spaces::WorldPoint;
 use crate::plugins::bookmarks::BookmarkState;
 use fishystuff_core::field_metadata::{detail_facts, preferred_detail_fact_value};
 use std::collections::HashMap;
-
-use super::hover_layer_samples_snapshot;
 
 pub(in crate::bridge::host::snapshot) fn effective_ui_state(
     bridge_input: &FishyMapInputState,
@@ -19,8 +12,6 @@ pub(in crate::bridge::host::snapshot) fn effective_ui_state(
     bookmarks: &BookmarkState,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
-    exact_lookups: &ExactLookupCache,
-    field_metadata: &FieldMetadataCache,
     zone_names: Option<&HashMap<u32, Option<String>>>,
 ) -> crate::bridge::contract::FishyMapUiState {
     crate::bridge::contract::FishyMapUiState {
@@ -35,14 +26,7 @@ pub(in crate::bridge::host::snapshot) fn effective_ui_state(
         shared_fish_state: bridge_input.ui.shared_fish_state.clone(),
         active_detail_pane_id: bridge_input.ui.active_detail_pane_id.clone(),
         bookmark_selected_ids: bookmarks.selected_ids.clone(),
-        bookmarks: effective_ui_bookmarks(
-            bookmarks,
-            layer_registry,
-            layer_runtime,
-            exact_lookups,
-            field_metadata,
-            zone_names,
-        ),
+        bookmarks: effective_ui_bookmarks(bookmarks, layer_registry, layer_runtime, zone_names),
     }
 }
 
@@ -50,23 +34,12 @@ fn effective_ui_bookmarks(
     bookmarks: &BookmarkState,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
-    exact_lookups: &ExactLookupCache,
-    field_metadata: &FieldMetadataCache,
     zone_names: Option<&HashMap<u32, Option<String>>>,
 ) -> Vec<FishyMapBookmarkEntry> {
     bookmarks
         .entries
         .iter()
-        .map(|bookmark| {
-            enrich_bookmark_entry(
-                bookmark,
-                layer_registry,
-                layer_runtime,
-                exact_lookups,
-                field_metadata,
-                zone_names,
-            )
-        })
+        .map(|bookmark| enrich_bookmark_entry(bookmark, layer_registry, layer_runtime, zone_names))
         .collect()
 }
 
@@ -131,15 +104,9 @@ fn enrich_bookmark_entry(
     bookmark: &FishyMapBookmarkEntry,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
-    exact_lookups: &ExactLookupCache,
-    field_metadata: &FieldMetadataCache,
     zone_names: Option<&HashMap<u32, Option<String>>>,
 ) -> FishyMapBookmarkEntry {
     let mut enriched = bookmark.clone();
-    if enriched.layer_samples.is_empty() {
-        enriched.layer_samples =
-            collect_bookmark_layer_samples(bookmark, layer_registry, exact_lookups, field_metadata);
-    }
     enriched.point_label = preferred_bookmark_point_label(
         &enriched.layer_samples,
         layer_registry,
@@ -147,22 +114,6 @@ fn enrich_bookmark_entry(
         zone_names,
     );
     enriched
-}
-
-fn collect_bookmark_layer_samples(
-    bookmark: &FishyMapBookmarkEntry,
-    layer_registry: &LayerRegistry,
-    exact_lookups: &ExactLookupCache,
-    field_metadata: &FieldMetadataCache,
-) -> Vec<crate::bridge::contract::FishyMapHoverLayerSampleSnapshot> {
-    let samples = sample_semantic_layers_at_world_point(
-        layer_registry,
-        exact_lookups,
-        field_metadata,
-        WorldPoint::new(bookmark.world_x, bookmark.world_z),
-        MapToWorld::default(),
-    );
-    hover_layer_samples_snapshot(&samples)
 }
 
 #[cfg(test)]
@@ -254,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn bookmark_enrichment_fills_missing_semantic_layer_samples() {
+    fn bookmark_enrichment_leaves_missing_samples_for_async_runtime_details() {
         let registry = field_registry();
         let mut layer_runtime = LayerRuntime::default();
         layer_runtime.sync_to_registry(&registry);
@@ -332,27 +283,18 @@ mod tests {
             &bookmark,
             &registry,
             &layer_runtime,
-            &exact_lookups,
-            &field_metadata,
             Some(&std::collections::HashMap::from([(
                 0x123456,
                 Some("Mediah Sea".to_string()),
             )])),
         );
 
-        assert_eq!(
-            enriched
-                .layer_samples
-                .iter()
-                .map(|sample| sample.layer_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["zone_mask", "region_groups", "regions"]
-        );
-        assert_eq!(enriched.point_label.as_deref(), Some("Mediah"));
+        assert!(enriched.layer_samples.is_empty());
+        assert_eq!(enriched.point_label, None);
     }
 
     #[test]
-    fn bookmark_enrichment_preserves_fact_based_semantic_samples() {
+    fn bookmark_enrichment_does_not_sample_missing_runtime_details_in_snapshot() {
         let registry = field_registry();
         let mut layer_runtime = LayerRuntime::default();
         layer_runtime.sync_to_registry(&registry);
@@ -436,25 +378,14 @@ mod tests {
             &bookmark,
             &registry,
             &layer_runtime,
-            &exact_lookups,
-            &field_metadata,
             Some(&std::collections::HashMap::from([(
                 0x445566,
                 Some("Zone 0x445566".to_string()),
             )])),
         );
 
-        assert_eq!(
-            enriched
-                .layer_samples
-                .iter()
-                .filter_map(|sample| sample.detail_sections.first())
-                .filter_map(|section| section.facts.first())
-                .map(|fact| fact.value.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Zone 0x445566", "RG16", "R76"]
-        );
-        assert_eq!(enriched.point_label.as_deref(), Some("Zone 0x445566"));
+        assert!(enriched.layer_samples.is_empty());
+        assert_eq!(enriched.point_label, None);
     }
 
     #[test]
@@ -533,8 +464,6 @@ mod tests {
             &bookmark,
             &registry,
             &layer_runtime,
-            &ExactLookupCache::default(),
-            &FieldMetadataCache::default(),
             Some(&std::collections::HashMap::from([(
                 0x123456,
                 Some("Mediah".to_string()),

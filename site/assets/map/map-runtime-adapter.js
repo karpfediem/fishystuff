@@ -89,6 +89,24 @@ function normalizeBookmarkEntries(bookmarks) {
     if (typeof bookmark.label === "string" && bookmark.label.trim()) {
       normalized.label = bookmark.label.trim();
     }
+    if (typeof bookmark.pointLabel === "string" && bookmark.pointLabel.trim()) {
+      normalized.pointLabel = bookmark.pointLabel.trim();
+    }
+    if (Array.isArray(bookmark.layerSamples)) {
+      const layerSamples = bookmark.layerSamples
+        .filter((sample) => isPlainObject(sample))
+        .map((sample) => cloneJson(sample));
+      if (layerSamples.length) {
+        normalized.layerSamples = layerSamples;
+      }
+    }
+    const zoneRgb = Number.parseInt(bookmark.zoneRgb, 10);
+    if (Number.isInteger(zoneRgb)) {
+      normalized.zoneRgb = zoneRgb;
+    }
+    if (typeof bookmark.createdAt === "string" && bookmark.createdAt.trim()) {
+      normalized.createdAt = bookmark.createdAt.trim();
+    }
     return [normalized];
   });
 }

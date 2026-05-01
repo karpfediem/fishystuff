@@ -1,23 +1,34 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::color::Alpha;
 use bevy::ecs::system::SystemParam;
 use bevy::image::Image;
+use bevy::input::touch::Touches;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::text::{Justify, TextLayout};
 use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 
-use crate::bridge::contract::{FishyMapBookmarkEntry, FishyMapThemeColors};
+use crate::bridge::contract::{
+    FishyMapBookmarkEntry, FishyMapHoverLayerSampleSnapshot, FishyMapThemeColors,
+};
 use crate::bridge::theme::parse_css_color;
+use crate::config::DRAG_THRESHOLD;
+use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
+use crate::map::field_metadata::FieldMetadataCache;
+use crate::map::layer_query::{sample_semantic_layers_at_world_point, LayerQuerySample};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
+use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
-use crate::plugins::api::{HoverInfo, HoverState, LayerEffectiveFilterState, ZoneMembershipFilter};
+use crate::plugins::api::{
+    ApiBootstrapState, HoverInfo, HoverState, LayerEffectiveFilterState, ZoneMembershipFilter,
+};
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::input::PanState;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 use crate::plugins::ui::{UiFonts, UiRoot};
@@ -65,9 +76,15 @@ impl Plugin for BookmarksPlugin {
         app.init_resource::<BookmarkState>()
             .init_resource::<BookmarkRenderAssets>()
             .init_resource::<BookmarkMarkerPool>()
+            .init_resource::<BookmarkDetailProgress>()
             .add_systems(
                 Update,
-                (ensure_bookmark_render_assets, sync_bookmark_markers).chain(),
+                (
+                    ensure_bookmark_render_assets,
+                    enrich_next_bookmark_details,
+                    sync_bookmark_markers,
+                )
+                    .chain(),
             );
     }
 }
@@ -108,6 +125,11 @@ struct BookmarkMarkerPool {
     markers: Vec<BookmarkVisualSet>,
 }
 
+#[derive(Resource, Default)]
+struct BookmarkDetailProgress {
+    cursor: usize,
+}
+
 #[derive(SystemParam)]
 struct BookmarkRenderContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
@@ -125,6 +147,20 @@ struct BookmarkRenderContext<'w, 's> {
     _marker: std::marker::PhantomData<&'s ()>,
 }
 
+#[derive(SystemParam)]
+struct BookmarkDetailContext<'w> {
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    touches: Res<'w, Touches>,
+    pan: Res<'w, PanState>,
+    hover: Res<'w, HoverState>,
+    map_view: Res<'w, Map2dViewState>,
+    bootstrap: Res<'w, ApiBootstrapState>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
+    exact_lookups: Res<'w, ExactLookupCache>,
+    field_metadata: Res<'w, FieldMetadataCache>,
+}
+
 fn ensure_bookmark_render_assets(
     mut render_assets: ResMut<BookmarkRenderAssets>,
     mut images: ResMut<Assets<Image>>,
@@ -132,6 +168,165 @@ fn ensure_bookmark_render_assets(
     if render_assets.marker_texture.is_none() {
         render_assets.marker_texture = Some(images.add(build_bookmark_marker_texture()));
     }
+}
+
+fn enrich_next_bookmark_details(
+    mut bookmarks: ResMut<BookmarkState>,
+    mut progress: ResMut<BookmarkDetailProgress>,
+    context: BookmarkDetailContext<'_>,
+) {
+    if bookmark_details_should_yield(&context) || bookmarks.entries.is_empty() {
+        return;
+    }
+
+    if progress.cursor >= bookmarks.entries.len() {
+        progress.cursor = 0;
+    }
+
+    for offset in 0..bookmarks.entries.len() {
+        let index = (progress.cursor + offset) % bookmarks.entries.len();
+        if !bookmark_needs_runtime_details(&bookmarks.entries[index], &context) {
+            continue;
+        }
+        let mut next = bookmarks.entries[index].clone();
+        enrich_bookmark_runtime_details(&mut next, &context);
+        progress.cursor = (index + 1) % bookmarks.entries.len();
+        if next != bookmarks.entries[index] {
+            bookmarks.entries[index] = next;
+        }
+        return;
+    }
+}
+
+fn bookmark_details_should_yield(context: &BookmarkDetailContext<'_>) -> bool {
+    context.mouse_buttons.pressed(MouseButton::Left)
+        || context.mouse_buttons.just_released(MouseButton::Left)
+        || context.touches.iter().next().is_some()
+        || context.touches.any_just_released()
+        || context.pan.drag_distance > DRAG_THRESHOLD
+        || context.hover.is_changed()
+        || context.map_view.is_changed()
+}
+
+fn bookmark_needs_runtime_details(
+    bookmark: &FishyMapBookmarkEntry,
+    context: &BookmarkDetailContext<'_>,
+) -> bool {
+    if bookmark.layer_samples.is_empty() {
+        return true;
+    }
+    bookmark.point_label
+        != preferred_bookmark_point_label(
+            &bookmark.layer_samples,
+            &context.layer_registry,
+            &context.layer_runtime,
+            Some(&context.bootstrap.zones),
+        )
+}
+
+fn enrich_bookmark_runtime_details(
+    bookmark: &mut FishyMapBookmarkEntry,
+    context: &BookmarkDetailContext<'_>,
+) {
+    if bookmark.layer_samples.is_empty() {
+        let layer_samples = sample_semantic_layers_at_world_point(
+            &context.layer_registry,
+            &context.exact_lookups,
+            &context.field_metadata,
+            WorldPoint::new(bookmark.world_x, bookmark.world_z),
+            MapToWorld::default(),
+        );
+        bookmark.layer_samples = hover_layer_samples_snapshot(&layer_samples);
+        if bookmark.zone_rgb.is_none() {
+            bookmark.zone_rgb = zone_rgb_from_bookmark_samples(&bookmark.layer_samples);
+        }
+    }
+    bookmark.point_label = preferred_bookmark_point_label(
+        &bookmark.layer_samples,
+        &context.layer_registry,
+        &context.layer_runtime,
+        Some(&context.bootstrap.zones),
+    );
+}
+
+fn hover_layer_samples_snapshot(
+    samples: &[LayerQuerySample],
+) -> Vec<FishyMapHoverLayerSampleSnapshot> {
+    samples
+        .iter()
+        .map(|sample| FishyMapHoverLayerSampleSnapshot {
+            layer_id: sample.layer_id.clone(),
+            layer_name: sample.layer_name.clone(),
+            kind: sample.kind.clone(),
+            rgb: sample.rgb.as_array(),
+            rgb_u32: sample.rgb_u32,
+            field_id: sample.field_id,
+            targets: sample.targets.clone(),
+            detail_pane: sample.detail_pane.clone(),
+            detail_sections: sample.detail_sections.clone(),
+        })
+        .collect()
+}
+
+fn zone_rgb_from_bookmark_samples(samples: &[FishyMapHoverLayerSampleSnapshot]) -> Option<u32> {
+    samples
+        .iter()
+        .find(|sample| sample.layer_id == "zone_mask")
+        .map(|sample| sample.rgb_u32)
+}
+
+fn normalized_bookmark_label(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn preferred_bookmark_sample_point_label(
+    sample: &FishyMapHoverLayerSampleSnapshot,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
+) -> Option<String> {
+    if let Some(value) = preferred_detail_fact_value(detail_sections(sample)) {
+        return normalized_bookmark_label(Some(value));
+    }
+    if sample.layer_id == "zone_mask" {
+        if let Some(value) = zone_names
+            .and_then(|zones| zones.get(&sample.rgb_u32))
+            .and_then(|value| value.as_deref())
+        {
+            return normalized_bookmark_label(Some(value));
+        }
+    }
+    sample
+        .targets
+        .iter()
+        .find_map(|target| normalized_bookmark_label(Some(target.label.as_str())))
+}
+
+fn preferred_bookmark_point_label(
+    layer_samples: &[FishyMapHoverLayerSampleSnapshot],
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
+) -> Option<String> {
+    let mut ordered_samples: Vec<(usize, &FishyMapHoverLayerSampleSnapshot)> = layer_samples
+        .iter()
+        .enumerate()
+        .map(|(index, sample)| {
+            let layer_order = layer_registry
+                .ordered()
+                .iter()
+                .find(|layer| layer.key == sample.layer_id)
+                .map(|layer| layer_runtime.display_order(layer.id))
+                .map(|order| order as usize)
+                .unwrap_or(1000 + index);
+            (layer_order, sample)
+        })
+        .collect();
+    ordered_samples.sort_by_key(|(order, _sample)| *order);
+    ordered_samples
+        .into_iter()
+        .find_map(|(_order, sample)| preferred_bookmark_sample_point_label(sample, zone_names))
 }
 
 fn sync_bookmark_markers(
