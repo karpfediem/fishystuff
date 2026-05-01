@@ -731,6 +731,48 @@ test("searchable dropdown accepts valid ISO date custom options", async (t) => {
     assert.equal(button?.getAttribute?.("data-label"), "2026-04-16");
 });
 
+test("searchable dropdown accepts numeric trade distance bonus custom options", async (t) => {
+    t.after(restoreGlobals);
+
+    const { FishySearchableDropdown, normalizeTradeDistanceBonusCustomValue } = await loadModule();
+    const dropdown = new FishySearchableDropdown();
+    dropdown.setAttribute("custom-option-mode", "trade-distance-bonus");
+    dropdown.setAttribute("custom-option-label", "Custom distance");
+    dropdown.setAttribute("custom-option-description", "Manual distance bonus");
+
+    assert.deepEqual(normalizeTradeDistanceBonusCustomValue("123"), {
+        value: "custom:123",
+        label: "123.0",
+        displayText: "123.0%",
+    });
+    assert.deepEqual(normalizeTradeDistanceBonusCustomValue("123.4"), {
+        value: "custom:123.4",
+        label: "123.4",
+        displayText: "123.4%",
+    });
+    assert.deepEqual(normalizeTradeDistanceBonusCustomValue("123%"), {
+        value: "custom:123",
+        label: "123.0",
+        displayText: "123.0%",
+    });
+    assert.deepEqual(normalizeTradeDistanceBonusCustomValue("123 %"), {
+        value: "custom:123",
+        label: "123.0",
+        displayText: "123.0%",
+    });
+    assert.equal(normalizeTradeDistanceBonusCustomValue("123 fish"), null);
+
+    const customOption = dropdown._buildCustomOption("123 %", "", []);
+    const button = customOption?.childNodes?.[0] ?? null;
+
+    assert.ok(customOption);
+    assert.equal(button?.getAttribute?.("data-value"), "custom:123");
+    assert.equal(button?.getAttribute?.("data-label"), "Custom distance");
+
+    assert.equal(dropdown._buildCustomOption("", "47600", []), null);
+    assert.equal(dropdown._buildCustomOption("", "custom:123", []), null);
+});
+
 test("searchable dropdown can anchor its detached panel to a wider ancestor", async (t) => {
     t.after(restoreGlobals);
 

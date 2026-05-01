@@ -49,8 +49,28 @@ calculator.title.unoptimized_time = Durchschnittliche unoptimierte Zeit: {$secon
 
 # Breakdown labels used in visible overlays and group fallbacks
 calculator.breakdown.kind.computed_stat = Berechneter Wert
+calculator.breakdown.title.trade_distance_bonus = Distanzbonus
+calculator.breakdown.title.trade_bargain_bonus = Feilschbonus
+calculator.breakdown.title.trade_sale_multiplier = Finaler Verkaufsmultiplikator
+calculator.breakdown.section.inputs = Eingaben
+calculator.breakdown.section.composition = Zusammensetzung
+calculator.breakdown.label.distance_bonus_used = Genutzter Distanzbonus
 calculator.breakdown.label.silver_share = Silberanteil
 calculator.breakdown.label.unassigned = Nicht zugewiesen
+calculator.breakdown.summary.trade_distance_bonus = Distanzbonus vom gewählten Verkaufshändler oder manuellen Distanzeintrag.
+calculator.breakdown.summary.trade_bargain_bonus = Feilschbonus aus der gewählten Handelsstufe.
+calculator.breakdown.summary.trade_sale_multiplier = Finaler Fisch-Verkaufsmultiplikator nach Distanz-, Feilsch- und Preiskurven-Einstellungen.
+calculator.breakdown.formula.trade_distance_bonus = Genutzter Distanzbonus = min(gewählter Distanzbonus, 150%).
+calculator.breakdown.formula.trade_bargain_bonus = Feilschbonus = 5% + 0,5% × Handelsstufenindex.
+calculator.breakdown.formula.trade_sale_multiplier = Finaler Verkaufsmultiplikator = (1 + min(Distanzbonus, 150%)) × Handelspreiskurve × (1 + Feilschbonus).
+calculator.breakdown.detail.trade_destination_distance_bonus = Distanzbonus vom gewählten Verkaufshändler oder von der manuellen Distanz.
+calculator.breakdown.detail.trade_distance_bonus_used = Die Verkaufsformel begrenzt den Distanzbonus auf 150%.
+calculator.breakdown.detail.trade_level_selected = Gewählte Handelsstufe.
+calculator.breakdown.detail.trade_level_bargain_bonus = Feilschbonus aus der gewählten Handelsstufe.
+calculator.breakdown.detail.trade_sale_distance_bonus = Distanzbonus nach der 150%-Begrenzung der Verkaufsformel.
+calculator.breakdown.detail.trade_sale_price_curve = Handelspreiskurve als Anteil des Verkaufsmultiplikators.
+calculator.breakdown.detail.trade_sale_bargain_bonus = Feilschbonus als Anteil des Verkaufsmultiplikators.
+calculator.breakdown.detail.trade_sale_multiplier_result = Finaler Multiplikator, der aktuell auf Fischverkäufe angewendet wird.
 
 # Personal overlay panel
 calculator.overlay.title = Persönliches Overlay
@@ -184,7 +204,7 @@ calculator.server.search.foods = Nahrung nach Name oder Effekt suchen
 calculator.server.search.buffs = Buffs nach Name oder Effekt suchen
 calculator.server.search.trade_levels = Handelsstufen suchen
 calculator.server.search.trade_origins = Handelsursprünge suchen
-calculator.server.search.trade_destinations = Handels-NPCs suchen
+calculator.server.search.trade_destinations = NPC, Region oder Distanz %
 calculator.server.search.loot_rows = Beutezeilen an diesem Spot suchen
 calculator.server.search.pet_tiers = Haustierstufen suchen
 calculator.server.search.pet_specials = Haustier-Spezialisierungen suchen
@@ -264,7 +284,7 @@ calculator.server.stat.expected_catches_per_hour = Erwartete Fänge / Stunde
 calculator.server.stat.expected_profit = Erwarteter Gewinn
 calculator.server.stat.profit_per_hour = Gewinn / Stunde
 calculator.server.stat.bargain_bonus = Feilschbonus
-calculator.server.stat.sale_multiplier = Verkaufsmultiplikator
+calculator.server.stat.sale_multiplier = Finaler Verkaufsmultiplikator
 
 calculator.server.panel.expand_overlay_proposal = Overlay-Vorschlag aufklappen
 calculator.server.panel.collapse_overlay_proposal = Overlay-Vorschlag einklappen
@@ -285,7 +305,6 @@ calculator.server.helper.target_missing_at_spot = Dieses Ziel erscheint aktuell 
 calculator.server.helper.target_pmf_auto = 0 = automatisch. Der letzte PMF-Bucket ist aktuell ≥{$count} (0,5-%-Schwanzgrenze).
 calculator.server.helper.target_pmf_fixed = Der letzte PMF-Bucket ist ≥{$count}.
 calculator.server.helper.normalize_rates = Raten normalisieren
-calculator.server.helper.distance_bonus = wähle einen Händler zur Berechnung oder gib einen eigenen Distanzbonus ein; im Verkaufsmodell auf +150 % gedeckelt
 calculator.server.helper.custom_trade_distance = Manueller Distanzbonus
 calculator.server.helper.trade_price_curve = manuelle %-Kurve, häufig etwa 105–130 %
 calculator.server.helper.apply_trade_settings = Handelseinstellungen anwenden

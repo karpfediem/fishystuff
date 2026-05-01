@@ -330,6 +330,14 @@ function defaultSignals() {
   };
 }
 
+function patchCalculatorSignals(env, patch, options = {}) {
+  env.window.__fishystuffCalculator.patchSignals(patch, options);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: cloneTestValue(patch),
+  });
+}
+
 test("calculator restore canonicalizes stored signals", () => {
   const env = createContext({
     "fishystuff.calculator.data.v1": JSON.stringify({
@@ -402,7 +410,13 @@ test("pack leader change applies exclusivity without scheduling full pet card re
 
   assert.equal(signals.pet1.packLeader, false);
   assert.equal(signals.pet2.packLeader, true);
-  assert.match(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
+  assert.match(
+    env.window.__fishystuffCalculator.evalUrl({
+      pet1: { packLeader: false },
+      pet2: { packLeader: true },
+    }),
+    /[?&]pet_cards=false\b/,
+  );
 });
 
 test("pack leader change keeps full pet card replacement for other pending pet edits", () => {
@@ -412,10 +426,16 @@ test("pack leader change keeps full pet card replacement for other pending pet e
   signals.pet2 = { tier: "5", packLeader: false, skills: [] };
 
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({ pet1: { tier: "4" } });
+  patchCalculatorSignals(env, { pet1: { tier: "4" } });
   env.window.__fishystuffCalculator.applyPackLeaderChange({ checked: true }, 2);
 
-  assert.doesNotMatch(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(
+    env.window.__fishystuffCalculator.evalUrl({
+      pet1: { tier: "4" },
+      pet2: { packLeader: true },
+    }),
+    /[?&]pet_cards=false\b/,
+  );
 });
 
 test("pack leader change clears stale non-tier-five selections", () => {
@@ -427,7 +447,6 @@ test("pack leader change clears stale non-tier-five selections", () => {
   env.window.__fishystuffCalculator.applyPackLeaderChange({ checked: true }, 1);
 
   assert.equal(signals.pet1.packLeader, false);
-  assert.match(env.window.__fishystuffCalculator.evalUrl(), /[?&]pet_cards=false\b/);
 });
 
 test("session duration changes request signal-only eval updates", () => {
@@ -435,9 +454,8 @@ test("session duration changes request signal-only eval updates", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({ timespanAmount: 3 });
 
-  const url = env.window.__fishystuffCalculator.evalUrl();
+  const url = env.window.__fishystuffCalculator.evalUrl({ timespanAmount: 3 });
   assert.match(url, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
   assert.doesNotMatch(url, /[?&]trade_origin_select=true\b/);
@@ -449,9 +467,8 @@ test("zone changes request zone-dependent fish and trade controls", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({ zone: "240,74,74" });
 
-  const url = env.window.__fishystuffCalculator.evalUrl();
+  const url = env.window.__fishystuffCalculator.evalUrl({ zone: "240,74,74" });
   assert.match(url, /[?&]pet_cards=false\b/);
   assert.match(url, /[?&]target_fish_select=true\b/);
   assert.match(url, /[?&]trade_origin_select=true\b/);
@@ -463,9 +480,8 @@ test("trade origin changes request only the trade destination control", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({ tradeOriginRegion: "740" });
 
-  const url = env.window.__fishystuffCalculator.evalUrl();
+  const url = env.window.__fishystuffCalculator.evalUrl({ tradeOriginRegion: "740" });
   assert.match(url, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
   assert.doesNotMatch(url, /[?&]trade_origin_select=true\b/);
@@ -493,16 +509,15 @@ test("calculator eval URL classifies direct Datastar patch payloads", () => {
   assert.match(tradeOriginUrl, /[?&]trade_destination_select=true\b/);
   assert.match(tradeOriginUrl, /[?&]trade_origin_region=740\b/);
 
-  const tradeDistanceUrl = env.window.__fishystuffCalculator.evalUrl({ tradeDistanceBonus: 123.45 });
-  assert.match(tradeDistanceUrl, /[?&]pet_cards=false\b/);
-  assert.match(tradeDistanceUrl, /[?&]trade_destination_select=true\b/);
-  assert.match(tradeDistanceUrl, /[?&]trade_distance_bonus=123\.45\b/);
-  assert.match(tradeDistanceUrl, /[?&]trade_distance_custom=true\b/);
-
   const tradeDestinationUrl = env.window.__fishystuffCalculator.evalUrl({ tradeDestinationNpc: "200" });
   assert.match(tradeDestinationUrl, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(tradeDestinationUrl, /[?&]trade_destination_select=true\b/);
   assert.match(tradeDestinationUrl, /[?&]trade_destination_npc=200\b/);
+
+  const customTradeDestinationUrl = env.window.__fishystuffCalculator.evalUrl({ tradeDestinationNpc: "custom:123.4" });
+  assert.match(customTradeDestinationUrl, /[?&]pet_cards=false\b/);
+  assert.doesNotMatch(customTradeDestinationUrl, /[?&]trade_destination_select=true\b/);
+  assert.match(customTradeDestinationUrl, /[?&]trade_destination_npc=custom%3A123\.4\b/);
 
   const petUrl = env.window.__fishystuffCalculator.evalUrl({ pet1: { tier: "4" } });
   assert.doesNotMatch(petUrl, /[?&]pet_cards=false\b/);
@@ -825,6 +840,12 @@ test("calculator layout presets register a shared adapter and apply layout-only 
   });
 
   env.window.__fishystuffUserPresets.activatePreset("calculator-layouts", preset.id);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_ui: cloneTestValue(signals._calculator_ui),
+    },
+  });
   env.flushTimers();
 
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
@@ -1040,7 +1061,7 @@ test("calculator restore reapplies the persisted selected calculator preset afte
   env.window.__fishystuffCalculator.restore(signals);
   const initDefaults = cloneTestValue(signals._defaults);
   Object.assign(signals, cloneTestValue(initDefaults));
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: initDefaults,
   });
@@ -1094,7 +1115,7 @@ test("calculator restore keeps selected calculator preset through late server de
   signals.resources = "";
   env.window.__fishystuffCalculator.restore(signals);
 
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _defaults: initDefaults,
     level: 42,
     resources: 15,
@@ -1102,7 +1123,7 @@ test("calculator restore keeps selected calculator preset through late server de
   assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), preset.id);
   assert.equal(signals.level, 42);
 
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     ...cloneTestValue(initDefaults),
     _loading: false,
     _defaults: initDefaults,
@@ -1126,7 +1147,7 @@ test("calculator presets wait for init defaults before tracking default current 
   env.window.__fishystuffCalculator.restore(signals);
 
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: initDefaults,
   });
@@ -1166,7 +1187,7 @@ test("calculator preset action signals refresh when late defaults make discard p
 
   assert.equal(signals._user_presets.collections["calculator-presets"].hasCurrent, true);
   assert.equal(signals._user_presets.collections["calculator-presets"].canDiscard, false);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: initDefaults,
     level: 42,
@@ -1175,6 +1196,7 @@ test("calculator preset action signals refresh when late defaults make discard p
 
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets")?.payload?.level, 42);
   assert.equal(env.window.__fishystuffUserPresets.datastarSnapshot().collections["calculator-presets"].canDiscard, true);
+  env.window.__fishystuffUserPresets.refreshDatastar();
   assert.equal(signals._user_presets.collections["calculator-presets"].canDiscard, true);
 });
 
@@ -1198,7 +1220,7 @@ test("calculator restore applies the persisted selected layout preset when UI st
   delete signals._calculator_ui;
   env.window.__fishystuffCalculator.restore(signals);
   const initDefaults = cloneTestValue(signals._defaults);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: initDefaults,
   });
@@ -1229,7 +1251,7 @@ test("calculator restore loads the persisted layout working copy over older UI s
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
     _calculator_ui: defaultCalculatorUiState(),
@@ -1268,7 +1290,7 @@ test("calculator restore keeps selected layout preset and tab after init", () =>
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
   });
@@ -1312,7 +1334,7 @@ test("calculator restore preserves a persisted modified current layout preset wh
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
     _calculator_ui: defaultCalculatorUiState(),
@@ -1352,7 +1374,7 @@ test("calculator restore loads a persisted modified layout working copy over old
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
     _calculator_ui: defaultCalculatorUiState(),
@@ -1385,7 +1407,7 @@ test("calculator restore loads a persisted modified default layout working copy 
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
     _calculator_ui: defaultCalculatorUiState(),
@@ -1420,7 +1442,7 @@ test("calculator restore loads a persisted modified default calculator working c
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
   });
@@ -1455,7 +1477,7 @@ test("calculator restore keeps stored calculator data ahead of stale fixed prese
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
     level: 0,
@@ -1479,7 +1501,7 @@ test("calculator restore reapplies persisted calculator UI after init defaults",
   });
   const signals = defaultSignals();
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.patchSignals({
+  patchCalculatorSignals(env, {
     _loading: false,
     _defaults: cloneTestValue(signals._defaults),
     _calculator_ui: defaultCalculatorUiState(),
@@ -1552,49 +1574,6 @@ test("calculator API URLs keep locale and apiLang separate", () => {
   assert.equal(german.window.__fishystuffCalculator.apiLang, "en");
   assert.match(german.window.__fishystuffCalculator.initUrl(), /\?lang=en&locale=de-DE$/);
   assert.match(german.window.__fishystuffCalculator.evalUrl(), /\?lang=en&locale=de-DE$/);
-});
-
-test("calculator eval filter ignores internal signal branches", () => {
-  const env = createContext();
-  const exclude = env.window.__fishystuffCalculator.evalSignalPatchFilter().exclude;
-
-  assert.equal(exclude.test("_user_presets.version"), true);
-  assert.equal(exclude.test("_calculator_actions.discardCalculatorToken"), true);
-  assert.equal(exclude.test("_calculator_ui.custom_sections.0"), true);
-  assert.equal(exclude.test("_food_slots.0"), true);
-  assert.equal(exclude.test("food.0"), false);
-  assert.equal(exclude.test("timespanAmount"), false);
-});
-
-test("calculator eval trigger ignores server signal patches", () => {
-  const env = createContext();
-
-  assert.equal(env.window.__fishystuffCalculator.shouldEvalSignalPatch({ timespanAmount: 10 }), true);
-  assert.equal(env.window.__fishystuffCalculator.shouldEvalSignalPatch({
-    _calc: { zone_name: "Velia Beach" },
-    tradeDistanceBonus: 134.15,
-  }), false);
-});
-
-test("calculator server signal patches do not schedule dependent control refreshes", () => {
-  const env = createContext();
-  const signals = defaultSignals();
-
-  env.window.__fishystuffCalculator.restore(signals);
-  env.document.dispatchEvent({
-    type: "datastar-signal-patch",
-    detail: {
-      _calc: { zone_name: "Velia Beach" },
-      zone: "240,74,74",
-      tradeOriginRegion: "740",
-      tradeDistanceBonus: 134.15,
-    },
-  });
-
-  const url = env.window.__fishystuffCalculator.evalUrl();
-  assert.doesNotMatch(url, /[?&]target_fish_select=true\b/);
-  assert.doesNotMatch(url, /[?&]trade_origin_select=true\b/);
-  assert.doesNotMatch(url, /[?&]trade_destination_select=true\b/);
 });
 
 test("calculator persist stores canonical page state and excludes transient branches", () => {

@@ -10,6 +10,7 @@ const SELECTED_QUERY_PARAM = "selected";
 export const SEARCHABLE_DROPDOWN_OPEN_EVENT = "fishystuff:searchable-dropdown-open";
 export const SEARCHABLE_DROPDOWN_CLOSE_EVENT = "fishystuff:searchable-dropdown-close";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TRADE_DISTANCE_BONUS_PATTERN = /^\s*(\d+(?:\.\d+)?|\.\d+)\s*%?\s*$/;
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const URL_SCOPE_RESOLVERS = Object.freeze({
     api: "__fishystuffResolveApiUrl",
@@ -88,6 +89,26 @@ export function normalizeIsoDateValue(value) {
         return "";
     }
     return normalized;
+}
+
+export function normalizeTradeDistanceBonusCustomValue(value) {
+    const raw = String(value ?? "").trim();
+    const normalized = raw.startsWith("custom:") ? raw.slice("custom:".length) : raw;
+    const match = normalized.match(TRADE_DISTANCE_BONUS_PATTERN);
+    if (!match) {
+        return null;
+    }
+    const number = Number(match[1]);
+    if (!Number.isFinite(number) || number < 0) {
+        return null;
+    }
+    const rounded = Math.round(number * 10) / 10;
+    const fixed = rounded.toFixed(1);
+    return {
+        value: `custom:${fixed.replace(/\.0$/, "")}`,
+        label: fixed,
+        displayText: `${fixed}%`,
+    };
 }
 
 function loadMoreThreshold(maxScrollTop) {
@@ -553,7 +574,11 @@ export class FishySearchableDropdown extends HTMLElementBase {
     }
 
     _buildCustomOption(rawQuery, selectedValue, templates) {
-        if (getStringAttribute(this, "custom-option-mode") !== "iso-date") {
+        const mode = getStringAttribute(this, "custom-option-mode");
+        if (mode === "trade-distance-bonus") {
+            return this._buildTradeDistanceBonusCustomOption(rawQuery, selectedValue, templates);
+        }
+        if (mode !== "iso-date") {
             return null;
         }
         const queryValue = normalizeIsoDateValue(rawQuery);
@@ -595,6 +620,87 @@ export class FishySearchableDropdown extends HTMLElementBase {
         button.append(selectedTemplate);
 
         if (customValue === selectedValue) {
+            const badge = document.createElement("span");
+            badge.className = "badge badge-soft badge-primary badge-xs";
+            badge.textContent = "Selected";
+            button.append(badge);
+        }
+
+        item.append(button);
+        return item;
+    }
+
+    _tradeDistanceBonusCustomLabels(custom) {
+        const label = getStringAttribute(this, "custom-option-label") || "Custom distance";
+        const description = getStringAttribute(this, "custom-option-description") || "Manual distance bonus";
+        return {
+            label,
+            description,
+            badge: custom?.displayText ?? "",
+        };
+    }
+
+    _buildTradeDistanceBonusCustomContent(custom) {
+        const labels = this._tradeDistanceBonusCustomLabels(custom);
+        const root = document.createElement("span");
+        root.className = "min-w-0 flex-1";
+
+        const title = document.createElement("span");
+        title.className = "block truncate font-medium text-base-content";
+        title.textContent = labels.label;
+        root.append(title);
+
+        const meta = document.createElement("span");
+        meta.className = "mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/65";
+
+        const description = document.createElement("span");
+        description.className = "truncate";
+        description.textContent = labels.description;
+        meta.append(description);
+
+        const badge = document.createElement("span");
+        badge.className = "badge badge-sm badge-warning";
+        badge.textContent = labels.badge;
+        meta.append(badge);
+
+        root.append(meta);
+        return root;
+    }
+
+    _buildTradeDistanceBonusCustomOption(rawQuery, selectedValue, templates) {
+        const custom = normalizeTradeDistanceBonusCustomValue(rawQuery);
+        if (!custom) {
+            return null;
+        }
+        const templateValues = new Set(
+            (Array.isArray(templates) ? templates : [])
+                .map((template) => String(template.getAttribute("data-value") ?? "").trim())
+                .filter(Boolean),
+        );
+        if (templateValues.has(custom.value)) {
+            return null;
+        }
+
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `justify-between gap-3 text-left${custom.value === selectedValue ? " menu-active" : ""}`;
+        button.dataset.searchableDropdownOption = "";
+        button.setAttribute("data-value", custom.value);
+        button.setAttribute("data-label", this._tradeDistanceBonusCustomLabels(custom).label);
+
+        const optionContent = document.createElement("span");
+        optionContent.dataset.role = "option-content";
+        optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
+        optionContent.append(this._buildTradeDistanceBonusCustomContent(custom));
+        button.append(optionContent);
+
+        const selectedTemplate = document.createElement("template");
+        selectedTemplate.dataset.role = "selected-content";
+        selectedTemplate.content.append(this._buildTradeDistanceBonusCustomContent(custom));
+        button.append(selectedTemplate);
+
+        if (custom.value === selectedValue) {
             const badge = document.createElement("span");
             badge.className = "badge badge-soft badge-primary badge-xs";
             badge.textContent = "Selected";
@@ -1164,7 +1270,9 @@ export class FishySearchableDropdown extends HTMLElementBase {
         }
 
         const templates = this._catalogTemplates();
+        const customOption = this._buildCustomOption(rawQuery, selectedValue, templates);
         if (!templates.length) {
+            results.replaceChildren(...(customOption ? [customOption] : []));
             this._setResultsNextOffset(results, null);
             this._positionOpenDetachedPanel();
             return;
@@ -1184,7 +1292,6 @@ export class FishySearchableDropdown extends HTMLElementBase {
                 const rightSelected = rightValue === selectedValue ? 0 : 1;
                 return leftSelected - rightSelected;
             });
-        const customOption = this._buildCustomOption(rawQuery, selectedValue, templates);
         this._localSearchState = {
             matches,
             nextOffset: 0,
@@ -1810,6 +1917,18 @@ export class FishySearchableDropdown extends HTMLElementBase {
                 text.className = "truncate font-medium";
                 text.textContent = customIsoDate;
                 container.replaceChildren(text);
+            }
+            return;
+        }
+
+        if (getStringAttribute(this, "custom-option-mode") === "trade-distance-bonus") {
+            const customDistance = normalizeTradeDistanceBonusCustomValue(value);
+            if (customDistance) {
+                this.label = this._tradeDistanceBonusCustomLabels(customDistance).label;
+                const container = this.selectedContentElement();
+                if (container instanceof HTMLElement) {
+                    container.replaceChildren(this._buildTradeDistanceBonusCustomContent(customDistance));
+                }
             }
         }
     }

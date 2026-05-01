@@ -56,8 +56,6 @@ pub struct CalculatorQuery {
     pub trade_destination_select: Option<bool>,
     pub trade_origin_region: Option<String>,
     pub trade_destination_npc: Option<String>,
-    pub trade_distance_bonus: Option<f64>,
-    pub trade_distance_custom: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,6 +129,7 @@ struct CalculatorDerivedSignals {
     loot_fish_multiplier_text: String,
     loot_total_profit: String,
     loot_profit_per_hour: String,
+    trade_distance_bonus_text: String,
     trade_bargain_bonus_text: String,
     trade_sale_multiplier_text: String,
     raw_prize_rate_text: String,
@@ -223,6 +222,9 @@ struct CalculatorStatBreakdownSignals {
     loot_fish_per_hour: String,
     loot_total_profit: String,
     loot_profit_per_hour: String,
+    trade_distance_bonus: String,
+    trade_bargain_bonus: String,
+    trade_sale_multiplier: String,
     raw_prize_rate: String,
     target_expected_count: String,
     target_time_to_target: String,
@@ -542,6 +544,7 @@ struct SelectOption<'a> {
     pet_skill_learn_chance: Option<f32>,
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
+    trade_bargain_bonus: Option<f64>,
     presentation: SelectOptionPresentation,
     sort_priority: u8,
 }
@@ -599,6 +602,9 @@ struct SearchableDropdownConfig<'a> {
     search_url: &'a str,
     search_url_root: Option<&'a str>,
     exclude_selected_inputs: Option<&'a str>,
+    custom_option_mode: Option<&'a str>,
+    custom_option_label: Option<&'a str>,
+    custom_option_description: Option<&'a str>,
     search_placeholder: &'a str,
 }
 
@@ -667,6 +673,7 @@ static NONE_SELECT_OPTION_EN: LazyLock<SelectOption<'static>> = LazyLock::new(||
     pet_skill_learn_chance: None,
     item: None,
     lifeskill_level: None,
+    trade_bargain_bonus: None,
     presentation: SelectOptionPresentation::Default,
     sort_priority: 1,
 });
@@ -686,6 +693,7 @@ static NONE_SELECT_OPTION_DE: LazyLock<SelectOption<'static>> = LazyLock::new(||
     pet_skill_learn_chance: None,
     item: None,
     lifeskill_level: None,
+    trade_bargain_bonus: None,
     presentation: SelectOptionPresentation::Default,
     sort_priority: 1,
 });
@@ -705,6 +713,7 @@ static NONE_SELECT_OPTION_KO: LazyLock<SelectOption<'static>> = LazyLock::new(||
     pet_skill_learn_chance: None,
     item: None,
     lifeskill_level: None,
+    trade_bargain_bonus: None,
     presentation: SelectOptionPresentation::Default,
     sort_priority: 1,
 });
@@ -1041,13 +1050,6 @@ fn apply_trade_eval_query_overrides(signals: &mut CalculatorSignals, query: &Cal
     }
     if let Some(destination) = query.trade_destination_npc.as_deref() {
         signals.trade_destination_npc = destination.trim().to_string();
-    }
-    if let Some(distance_bonus) = query.trade_distance_bonus {
-        signals.trade_distance_bonus = distance_bonus.max(0.0);
-    }
-    if query.trade_distance_custom.unwrap_or(false) {
-        signals.trade_destination_npc =
-            custom_trade_destination_value(signals.trade_distance_bonus);
     }
 }
 
@@ -1842,7 +1844,9 @@ fn normalize_trade_selection(
     if catalog.origin_regions.is_empty() || catalog.destinations.is_empty() {
         signals.trade_origin_region = signals.trade_origin_region.trim().to_string();
         signals.trade_destination_npc = signals.trade_destination_npc.trim().to_string();
-        if custom_trade_destination_bonus(&signals.trade_destination_npc).is_some() {
+        if let Some(distance_bonus) = custom_trade_destination_bonus(&signals.trade_destination_npc)
+        {
+            signals.trade_distance_bonus = round_trade_distance_bonus(distance_bonus);
             signals.trade_destination_npc =
                 custom_trade_destination_value(signals.trade_distance_bonus);
         }
@@ -1892,7 +1896,7 @@ fn normalize_trade_selection(
         if let Some(selected_origin) = origin {
             signals.trade_origin_region = selected_origin.region_id.to_string();
         }
-        signals.trade_distance_bonus = distance_bonus.max(0.0);
+        signals.trade_distance_bonus = round_trade_distance_bonus(distance_bonus);
         signals.trade_destination_npc =
             custom_trade_destination_value(signals.trade_distance_bonus);
         return;
@@ -1924,7 +1928,7 @@ fn custom_trade_destination_value(distance_bonus: f64) -> String {
     format!(
         "{}{}",
         TRADE_CUSTOM_DESTINATION_PREFIX,
-        trim_float(distance_bonus.max(0.0))
+        trim_float_to(round_trade_distance_bonus(distance_bonus), 1)
     )
 }
 
@@ -4969,6 +4973,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
         loot_total_profit: loot_chart.total_profit_text.clone(),
         loot_profit_per_hour: loot_chart.profit_per_hour_text.clone(),
+        trade_distance_bonus_text: format_trade_distance_bonus(signals.trade_distance_bonus),
         trade_bargain_bonus_text: loot_chart.trade_bargain_bonus_text.clone(),
         trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
         raw_prize_rate_text: fish_group_chart.raw_prize_rate_text.clone(),
@@ -6709,7 +6714,7 @@ fn loot_species_silver_share_breakdown(
                         computed_stat_breakdown_row(
                             text("calculator.breakdown.label.trade_sale_multiplier"),
                             sale_multiplier_text.clone(),
-                            text("calculator.breakdown.detail.current_sale_multiplier_after_trade_settings"),
+                            String::new(),
                         ),
                         text("calculator.breakdown.label.trade_sale_multiplier"),
                         3,
@@ -8603,7 +8608,7 @@ fn derive_loot_chart(
         available: true,
         note: text("calculator.server.loot.note.available"),
         fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
-        trade_bargain_bonus_text: format!("+{}%", trim_float(bargain_bonus_raw * 100.0)),
+        trade_bargain_bonus_text: format_trade_bargain_bonus(bargain_bonus_raw),
         trade_sale_multiplier_text: if signals.apply_trade_modifiers {
             format!("×{}", trim_float(sale_multiplier_raw))
         } else {
@@ -10629,9 +10634,7 @@ fn derive_stat_breakdowns(
                     computed_stat_breakdown_row(
                         breakdown_text("calculator.breakdown.label.trade_sale_multiplier"),
                         loot_chart.trade_sale_multiplier_text.clone(),
-                        breakdown_text(
-                            "calculator.breakdown.detail.current_sale_multiplier_after_trade_settings",
-                        ),
+                        String::new(),
                     ),
                     computed_stat_breakdown_row(
                         breakdown_text("calculator.breakdown.label.expected_profit"),
@@ -10715,6 +10718,158 @@ fn derive_stat_breakdowns(
         computed_stat_formula_term(
             breakdown_text("calculator.breakdown.label.session_hours"),
             session_hours_text.clone(),
+        ),
+    ]);
+
+    let trade_distance_bonus_text = format_trade_distance_bonus(signals.trade_distance_bonus);
+    let trade_distance_bonus_used_raw = signals.trade_distance_bonus.max(0.0).min(150.0);
+    let trade_distance_bonus_used_text = format_trade_distance_bonus(trade_distance_bonus_used_raw);
+    let trade_bargain_bonus_raw = trade_bargain_bonus_from_level_key(&signals.trade_level);
+    let trade_bargain_bonus_text = format_trade_bargain_bonus(trade_bargain_bonus_raw);
+    let trade_price_curve_text = format_trade_distance_bonus(signals.trade_price_curve);
+    let trade_level_label = data
+        .catalog
+        .trade_levels
+        .iter()
+        .find(|level| level.key == signals.trade_level)
+        .map(|level| level.label.clone())
+        .unwrap_or_else(|| signals.trade_level.clone());
+    let trade_level_value_text = trade_level_label.clone();
+
+    let trade_distance_bonus_breakdown = computed_stat_breakdown(
+        breakdown_text("calculator.breakdown.title.trade_distance_bonus"),
+        trade_distance_bonus_text.clone(),
+        breakdown_text("calculator.breakdown.summary.trade_distance_bonus"),
+        breakdown_text("calculator.breakdown.formula.trade_distance_bonus"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.server.field.trade_destination"),
+                    trade_distance_bonus_text.clone(),
+                    breakdown_text("calculator.breakdown.detail.trade_destination_distance_bonus"),
+                )],
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.breakdown.label.distance_bonus_used"),
+                    trade_distance_bonus_used_text.clone(),
+                    breakdown_text("calculator.breakdown.detail.trade_distance_bonus_used"),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.server.field.distance_bonus"),
+            trade_distance_bonus_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.distance_bonus_used"),
+            trade_distance_bonus_used_text.clone(),
+        ),
+    ]);
+
+    let trade_bargain_bonus_breakdown = computed_stat_breakdown(
+        breakdown_text("calculator.breakdown.title.trade_bargain_bonus"),
+        trade_bargain_bonus_text.clone(),
+        breakdown_text("calculator.breakdown.summary.trade_bargain_bonus"),
+        breakdown_text("calculator.breakdown.formula.trade_bargain_bonus"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.server.field.trade_level"),
+                    trade_level_label,
+                    breakdown_text("calculator.breakdown.detail.trade_level_selected"),
+                )],
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.server.stat.bargain_bonus"),
+                    trade_bargain_bonus_text.clone(),
+                    breakdown_text("calculator.breakdown.detail.trade_level_bargain_bonus"),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.server.field.trade_level"),
+            trade_level_value_text,
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.server.stat.bargain_bonus"),
+            trade_bargain_bonus_text.clone(),
+        ),
+    ]);
+
+    let trade_sale_multiplier_breakdown = computed_stat_breakdown(
+        breakdown_text("calculator.breakdown.title.trade_sale_multiplier"),
+        loot_chart.trade_sale_multiplier_text.clone(),
+        breakdown_text("calculator.breakdown.summary.trade_sale_multiplier"),
+        breakdown_text("calculator.breakdown.formula.trade_sale_multiplier"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.breakdown.label.distance_bonus_used"),
+                            trade_distance_bonus_used_text.clone(),
+                            breakdown_text("calculator.breakdown.detail.trade_sale_distance_bonus"),
+                        ),
+                        breakdown_text("calculator.breakdown.label.distance_bonus_used"),
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.server.field.trade_price_curve"),
+                            trade_price_curve_text.clone(),
+                            breakdown_text("calculator.breakdown.detail.trade_sale_price_curve"),
+                        ),
+                        breakdown_text("calculator.server.field.trade_price_curve"),
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.server.stat.bargain_bonus"),
+                            trade_bargain_bonus_text.clone(),
+                            breakdown_text("calculator.breakdown.detail.trade_sale_bargain_bonus"),
+                        ),
+                        breakdown_text("calculator.server.stat.bargain_bonus"),
+                        3,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.server.stat.sale_multiplier"),
+                    loot_chart.trade_sale_multiplier_text.clone(),
+                    breakdown_text("calculator.breakdown.detail.trade_sale_multiplier_result"),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.server.stat.sale_multiplier"),
+            loot_chart.trade_sale_multiplier_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.distance_bonus_used"),
+            trade_distance_bonus_used_text,
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.server.field.trade_price_curve"),
+            trade_price_curve_text,
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.server.stat.bargain_bonus"),
+            trade_bargain_bonus_text.clone(),
         ),
     ]);
 
@@ -10980,6 +11135,9 @@ fn derive_stat_breakdowns(
         loot_fish_per_hour: stat_breakdown_json(loot_fish_per_hour_breakdown),
         loot_total_profit: stat_breakdown_json(loot_total_profit_breakdown),
         loot_profit_per_hour: stat_breakdown_json(loot_profit_per_hour_breakdown),
+        trade_distance_bonus: stat_breakdown_json(trade_distance_bonus_breakdown),
+        trade_bargain_bonus: stat_breakdown_json(trade_bargain_bonus_breakdown),
+        trade_sale_multiplier: stat_breakdown_json(trade_sale_multiplier_breakdown),
         raw_prize_rate: stat_breakdown_json(raw_prize_breakdown),
         target_expected_count: stat_breakdown_json(target_expected_count_breakdown),
         target_time_to_target: stat_breakdown_json(target_time_to_target_breakdown),
@@ -11233,8 +11391,16 @@ fn trim_float(value: f64) -> String {
     trim_float_to(value, 2)
 }
 
+fn round_trade_distance_bonus(value: f64) -> f64 {
+    (value.max(0.0) * 10.0).round() / 10.0
+}
+
 fn format_trade_distance_bonus(value: f64) -> String {
-    format!("{}%", trim_float(value.max(0.0)))
+    format!("{:.1}%", round_trade_distance_bonus(value))
+}
+
+fn format_trade_bargain_bonus(value: f64) -> String {
+    format!("+{}%", trim_float(value.max(0.0) * 100.0))
 }
 
 fn format_evidence_percent(rate: f64) -> String {
@@ -11288,7 +11454,7 @@ fn render_calculator_app(
     );
     let fishing_levels = select_options_from_catalog(&data.catalog.fishing_levels);
     let lifeskill_levels = sorted_lifeskill_options(&data.catalog.lifeskill_levels);
-    let trade_levels = select_options_from_catalog(&data.catalog.trade_levels);
+    let trade_levels = trade_level_options(&data.catalog.trade_levels);
     let session_units = select_options_from_catalog(&data.catalog.session_units);
     let rods = item_options_by_type(&data.catalog.items, "rod");
     let floats = item_options_by_type(&data.catalog.items, "float");
@@ -11347,6 +11513,9 @@ fn render_calculator_app(
             search_url: &zone_search_url,
             search_url_root: Some("api"),
             exclude_selected_inputs: None,
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder: &calculator_route_text(data.lang, "calculator.server.search.zones"),
         },
         &zone_results,
@@ -11357,8 +11526,7 @@ fn render_calculator_app(
 <div id="calculator-app" class="grid gap-6">
     __CANONICAL_SIGNAL_COMPUTEDS__
     <div class="hidden"
-         data-on-signal-patch__debounce.150ms="!Object.prototype.hasOwnProperty.call(patch || {}, '_calc') ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"
-         data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
+         data-on-signal-patch__debounce.150ms="!Object.prototype.hasOwnProperty.call(patch || {}, '_calc') && Object.keys(patch || {}).some((key) => key && key[0] !== '_') ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"></div>
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-4">
@@ -12540,6 +12708,29 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
+            presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
+        })
+        .collect()
+}
+
+fn trade_level_options(options: &[CalculatorOptionEntry]) -> Vec<SelectOption<'_>> {
+    options
+        .iter()
+        .map(|option| SelectOption {
+            value: option.key.as_str(),
+            label: option.label.as_str(),
+            icon: None,
+            grade_tone: "unknown",
+            pet_variant_talent: None,
+            pet_variant_special: None,
+            pet_skill: None,
+            pet_effective_talent_effects: None,
+            pet_skill_learn_chance: None,
+            item: None,
+            lifeskill_level: None,
+            trade_bargain_bonus: Some(trade_bargain_bonus_from_level_key(&option.key)),
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         })
@@ -12561,6 +12752,7 @@ fn select_options_from_pet_options(options: &[CalculatorPetOptionEntry]) -> Vec<
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         })
@@ -12641,6 +12833,7 @@ fn select_options_from_pet_entries_for_tier<'a>(
                 pet_skill_learn_chance: None,
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::PetCard,
                 sort_priority: if same_variant_group { 0 } else { 1 },
             }
@@ -12973,6 +13166,9 @@ fn render_trade_origin_select_control(
             search_url: "",
             search_url_root: None,
             exclude_selected_inputs: None,
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder: &calculator_route_text(
                 data.lang,
                 "calculator.server.search.trade_origins",
@@ -13032,6 +13228,15 @@ fn render_trade_destination_select_control(
             search_url: "",
             search_url_root: None,
             exclude_selected_inputs: None,
+            custom_option_mode: Some("trade-distance-bonus"),
+            custom_option_label: Some(&calculator_route_text(
+                data.lang,
+                "calculator.server.option.custom_trade_distance",
+            )),
+            custom_option_description: Some(&calculator_route_text(
+                data.lang,
+                "calculator.server.helper.custom_trade_distance",
+            )),
             search_placeholder: &calculator_route_text(
                 data.lang,
                 "calculator.server.search.trade_destinations",
@@ -13894,38 +14099,37 @@ fn render_trade_window(
                         </fieldset>
                     </div>
 
-                    <div class="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                        <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
-                            <legend class="fieldset-legend">{distance_label}</legend>
-                            <input type="number" min="0" step="any" inputmode="decimal" class="input input-lg input-primary w-full text-2xl font-semibold" data-bind="tradeDistanceBonus">
-                            <p class="label text-xs leading-snug">{distance_helper}</p>
-                        </fieldset>
+                    <div class="grid gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
                         <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
                             <legend class="fieldset-legend">{price_curve_label}</legend>
                             <input type="number" min="0" step="any" inputmode="decimal" class="input input-md w-full font-semibold" data-bind="tradePriceCurve">
                             <p class="label text-xs leading-snug">{price_curve_helper}</p>
                         </fieldset>
-                    </div>
-
-                    <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.75fr)]">
                         <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
                             <legend class="fieldset-legend">{trade_level_label}</legend>
                             {trade_level_control}
-                            <div class="mt-3 flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2 text-sm">
-                                <span class="text-base-content/70">{bargain_label}</span>
-                                <span class="badge badge-primary badge-lg font-semibold" data-text="$_calc.trade_bargain_bonus_text"></span>
-                            </div>
                         </fieldset>
-                        <div class="grid gap-3">
-                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3">
-                                <input data-bind="applyTradeModifiers" type="checkbox" class="checkbox checkbox-primary checkbox-sm">
-                                <span class="text-sm font-medium">{apply_trade_label}</span>
-                            </label>
-                            <div class="rounded-box border border-primary/40 bg-primary/10 px-4 py-4">
-                                <span class="block text-xs font-semibold uppercase text-primary/80">{sale_multiplier_label}</span>
-                                <span class="mt-1 block text-3xl font-bold leading-none text-base-content" data-text="$_calc.trade_sale_multiplier_text"></span>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,0.42fr)]">
+                        <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 sm:stats-horizontal">
+                            <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.trade_distance_bonus || ''" data-fishy-stat-color="var(--color-success)">
+                                <div class="stat-title whitespace-normal leading-snug">{distance_label}</div>
+                                <div class="stat-value text-2xl" data-text="$_calc.trade_distance_bonus_text"></div>
+                            </div>
+                            <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.trade_bargain_bonus || ''" data-fishy-stat-color="var(--color-success)">
+                                <div class="stat-title whitespace-normal leading-snug">{bargain_label}</div>
+                                <div class="stat-value text-2xl" data-text="$_calc.trade_bargain_bonus_text"></div>
+                            </div>
+                            <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.trade_sale_multiplier || ''" data-fishy-stat-color="var(--color-success)">
+                                <div class="stat-title whitespace-normal leading-snug">{sale_multiplier_label}</div>
+                                <div class="stat-value text-2xl" data-text="$_calc.trade_sale_multiplier_text"></div>
                             </div>
                         </div>
+                        <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3">
+                            <input data-bind="applyTradeModifiers" type="checkbox" class="checkbox checkbox-primary checkbox-sm">
+                            <span class="text-sm font-medium">{apply_trade_label}</span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -13944,10 +14148,6 @@ fn render_trade_window(
         distance_label = escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.field.distance_bonus",
-        )),
-        distance_helper = escape_html(&calculator_route_text(
-            data.lang,
-            "calculator.server.helper.distance_bonus",
         )),
         price_curve_label = escape_html(&calculator_route_text(
             data.lang,
@@ -14549,6 +14749,18 @@ fn render_searchable_dropdown_option_content_html(
             option.pet_effective_talent_effects,
         );
     }
+    if let Some(bargain_bonus) = option.trade_bargain_bonus {
+        return format!(
+            "<span class=\"min-w-0 flex-1\">\
+                <span class=\"flex min-w-0 items-center justify-between gap-3\">\
+                    <span class=\"truncate font-medium text-base-content\">{}</span>\
+                    <span class=\"badge badge-sm badge-primary shrink-0\">{}</span>\
+                </span>\
+            </span>",
+            escape_html(option.label),
+            escape_html(&format_trade_bargain_bonus(bargain_bonus)),
+        );
+    }
 
     let uses_item_presentation = option.icon.is_some();
     let grade_tone = escape_html(option.grade_tone);
@@ -14673,6 +14885,11 @@ fn render_select_option_search_text(option: SelectOption<'_>) -> String {
             );
         }
     }
+    if let Some(bargain_bonus) = option.trade_bargain_bonus {
+        parts.push(format_trade_bargain_bonus(bargain_bonus));
+        parts.push(trim_float(bargain_bonus * 100.0));
+        parts.push("bargain".to_string());
+    }
     parts.join(" ")
 }
 
@@ -14709,10 +14926,9 @@ fn searchable_options_for_kind<'a>(
             sorted_lifeskill_options(&data.catalog.lifeskill_levels),
             false,
         ),
-        CalculatorSearchableOptionKind::TradeLevel => (
-            select_options_from_catalog(&data.catalog.trade_levels),
-            false,
-        ),
+        CalculatorSearchableOptionKind::TradeLevel => {
+            (trade_level_options(&data.catalog.trade_levels), false)
+        }
         CalculatorSearchableOptionKind::TargetFish => (target_fish_options(data), true),
         CalculatorSearchableOptionKind::Rod => {
             (item_options_by_type(&data.catalog.items, "rod"), false)
@@ -15021,6 +15237,9 @@ fn render_searchable_select_control(
             search_url: &search_url,
             search_url_root: Some("api"),
             exclude_selected_inputs: None,
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder,
         },
         &results_html,
@@ -15096,6 +15315,9 @@ fn render_pet_select_control(
             search_url: &search_url,
             search_url_root: Some("api"),
             exclude_selected_inputs: None,
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder,
         },
         &results_html,
@@ -15192,6 +15414,9 @@ fn render_pet_skill_select_control(
             search_url: "",
             search_url_root: None,
             exclude_selected_inputs: Some(exclude_selected_inputs),
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder,
         },
         &results_html,
@@ -15315,6 +15540,7 @@ fn select_pet_fixed_option_entries_by_keys<'a>(
                 pet_skill_learn_chance: None,
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 1,
             }
@@ -15360,6 +15586,9 @@ fn render_pet_variant_fixed_option_select_control(
             search_url: "",
             search_url_root: None,
             exclude_selected_inputs: None,
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder,
         },
         &results_html,
@@ -15435,6 +15664,9 @@ fn render_target_fish_select_control(
             search_url: &search_url,
             search_url_root: Some("api"),
             exclude_selected_inputs: None,
+            custom_option_mode: None,
+            custom_option_label: None,
+            custom_option_description: None,
             search_placeholder: &calculator_route_text(
                 data.lang,
                 "calculator.server.search.loot_rows",
@@ -15878,6 +16110,18 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         .exclude_selected_inputs
         .map(|value| format!(" exclude-selected-inputs=\"{}\"", escape_html(value)))
         .unwrap_or_default();
+    let custom_option_mode_attr = config
+        .custom_option_mode
+        .map(|value| format!(" custom-option-mode=\"{}\"", escape_html(value)))
+        .unwrap_or_default();
+    let custom_option_label_attr = config
+        .custom_option_label
+        .map(|value| format!(" custom-option-label=\"{}\"", escape_html(value)))
+        .unwrap_or_default();
+    let custom_option_description_attr = config
+        .custom_option_description
+        .map(|value| format!(" custom-option-description=\"{}\"", escape_html(value)))
+        .unwrap_or_default();
     let mut html = String::new();
     write!(
         html,
@@ -15887,7 +16131,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
      label="{label}"
      value="{value}"
      search-url="{search_url}"{search_url_root_attr}
-     {exclude_selected_inputs_attr}
+     {exclude_selected_inputs_attr}{custom_option_mode_attr}{custom_option_label_attr}{custom_option_description_attr}
      placeholder="{search_placeholder}"{trigger_size_attr}{panel_attrs}{panel_placement_attr}{results_layout_attr}{trigger_style_attr}>
     <button type="button"
             data-role="trigger"
@@ -15930,6 +16174,9 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         search_url = escape_html(config.search_url),
         search_url_root_attr = search_url_root_attr,
         exclude_selected_inputs_attr = exclude_selected_inputs_attr,
+        custom_option_mode_attr = custom_option_mode_attr,
+        custom_option_label_attr = custom_option_label_attr,
+        custom_option_description_attr = custom_option_description_attr,
         panel_id = escape_html(&panel_id),
         search_input_id = escape_html(&search_input_id),
         search_placeholder = escape_html(config.search_placeholder),
@@ -15965,6 +16212,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: Some(level),
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         })
@@ -15990,6 +16238,7 @@ fn item_options_by_type<'a>(
             pet_skill_learn_chance: None,
             item: Some(item),
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         })
@@ -16017,6 +16266,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         })
@@ -16181,6 +16431,7 @@ fn select_pet_option_entries_by_keys<'a>(
             pet_skill_learn_chance: skill_chances.get(&option.key).copied(),
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         })
@@ -16975,7 +17226,8 @@ mod tests {
         assert!(text.contains("data:selector #calculator-app"));
         assert!(text.contains("<div id=\"calculator-app\""));
         assert!(text.contains("hasOwnProperty.call(patch || {}, '_calc')"));
-        assert!(!text.contains("shouldEvalSignalPatch(patch)"));
+        assert!(text.contains("Object.keys(patch || {}).some((key) => key && key[0] !== '_')"));
+        assert!(!text.contains("data-on-signal-patch-filter"));
         assert!(text.contains("fishy-zone-rgb-indicator"));
         assert!(text.contains("--fishy-zone-rgb: 240 74 74"));
         assert!(text.contains("placeholder=\"Search zones\""));
@@ -17151,6 +17403,15 @@ mod tests {
         assert!(text.contains(
             "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_profit || ''\""
         ));
+        assert!(text.contains(
+            "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.trade_distance_bonus || ''\""
+        ));
+        assert!(text.contains(
+            "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.trade_bargain_bonus || ''\""
+        ));
+        assert!(text.contains(
+            "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.trade_sale_multiplier || ''\""
+        ));
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
@@ -17173,10 +17434,18 @@ mod tests {
         assert!(text.contains("data-calculator-section-id=\"session\""));
         assert!(text.contains("calculator-loot-window"));
         assert!(text.contains("calculator-trade-window"));
-        assert!(text.contains("class=\"input input-lg input-primary w-full text-2xl font-semibold\" data-bind=\"tradeDistanceBonus\""));
-        assert!(!text.contains("data-bind=\"tradeDistanceBonus\" readonly"));
-        assert!(text.contains("badge badge-primary badge-lg font-semibold\" data-text=\"$_calc.trade_bargain_bonus_text\""));
-        assert!(text.contains("text-3xl font-bold leading-none text-base-content\" data-text=\"$_calc.trade_sale_multiplier_text\""));
+        assert!(!text.contains("data-bind=\"tradeDistanceBonus\""));
+        assert!(text.contains("custom-option-mode=\"trade-distance-bonus\""));
+        assert!(text.contains("placeholder=\"NPC, region, or distance %\""));
+        assert!(text.contains("data-text=\"$_calc.trade_distance_bonus_text\""));
+        assert!(text.contains("data-text=\"$_calc.trade_bargain_bonus_text\""));
+        assert!(!text.contains("badge badge-primary badge-lg font-semibold\" data-text=\"$_calc.trade_bargain_bonus_text\""));
+        assert!(text.contains("Final Sale Multiplier"));
+        assert!(!text.contains("select a trader to calculate it"));
+        assert!(!text.contains("Current sale multiplier after trade settings."));
+        assert!(
+            text.contains("stat-value text-2xl\" data-text=\"$_calc.trade_sale_multiplier_text\"")
+        );
         assert!(text.contains("data-calculator-section-id=\"trade\""));
         assert!(text.contains("data-calculator-section-id=\"food\""));
         assert!(text.contains("data-calculator-section-id=\"buffs\""));
@@ -17277,8 +17546,6 @@ mod tests {
                 trade_destination_select: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: None,
-                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -17327,8 +17594,6 @@ mod tests {
                 trade_destination_select: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: None,
-                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
@@ -17365,8 +17630,6 @@ mod tests {
                 trade_destination_select: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: None,
-                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
@@ -17400,8 +17663,6 @@ mod tests {
                 trade_destination_select: Some(true),
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: None,
-                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"tradeOriginRegion":"1"}"#),
@@ -17436,12 +17697,10 @@ mod tests {
                 trade_destination_select: Some(true),
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: Some(123.45),
-                trade_distance_custom: Some(true),
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(
-                br#"{"tradeOriginRegion":"1","tradeDestinationNpc":"200","tradeDistanceBonus":34}"#,
+                br#"{"tradeOriginRegion":"1","tradeDestinationNpc":"custom:123.45","tradeDistanceBonus":34}"#,
             ),
         )
         .await
@@ -17451,8 +17710,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("\"tradeDestinationNpc\":\"custom:123.45\""));
-        assert!(text.contains("\"tradeDistanceBonus\":123.45"));
+        assert!(text.contains("\"tradeDestinationNpc\":\"custom:123.5\""));
+        assert!(text.contains("\"tradeDistanceBonus\":123.5"));
         assert!(text.contains("Custom distance"));
         assert!(text.contains("Manual distance bonus"));
         assert!(text.contains("data:selector #calculator-trade-destination-control"));
@@ -17473,8 +17732,6 @@ mod tests {
                 trade_destination_select: Some(true),
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: None,
-                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"zone":"Velia Beach"}"#),
@@ -17671,6 +17928,7 @@ mod tests {
                 pet_skill_learn_chance: Some(0.03),
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 1,
             },
@@ -17686,6 +17944,7 @@ mod tests {
                 pet_skill_learn_chance: Some(0.01),
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 1,
             },
@@ -17701,6 +17960,7 @@ mod tests {
                 pet_skill_learn_chance: Some(0.15),
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 1,
             },
@@ -17978,6 +18238,30 @@ mod tests {
         assert_eq!(time_saved["title"], "Time Saved");
         assert_eq!(time_saved["sections"][1]["rows"][1]["label"], "Saved share");
 
+        let trade_distance =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.trade_distance_bonus).unwrap();
+        assert_eq!(trade_distance["title"], "Distance Bonus");
+        assert_eq!(
+            trade_distance["sections"][1]["rows"][0]["label"],
+            "Distance bonus used"
+        );
+
+        let trade_bargain =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.trade_bargain_bonus).unwrap();
+        assert_eq!(trade_bargain["title"], "Bargain Bonus");
+        assert_eq!(
+            trade_bargain["sections"][0]["rows"][0]["label"],
+            "Trade Level"
+        );
+
+        let trade_multiplier =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.trade_sale_multiplier).unwrap();
+        assert_eq!(trade_multiplier["title"], "Final Sale Multiplier");
+        assert_eq!(
+            trade_multiplier["formula_terms"][1]["label"],
+            "Distance bonus used"
+        );
+
         assert_eq!(derived.fishing_timeline_chart.segments.len(), 4);
         assert_eq!(
             derived.fishing_timeline_chart.segments[0].label,
@@ -18023,8 +18307,6 @@ mod tests {
                 trade_destination_select: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
-                trade_distance_bonus: None,
-                trade_distance_custom: None,
             })),
             Extension(RequestId("req-test".to_string())),
             Bytes::from_static(br#"{"active":true,"rod":"item:16162"}"#),
@@ -18119,6 +18401,7 @@ mod tests {
                 pet_skill_learn_chance: None,
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 1,
             })
@@ -18214,6 +18497,7 @@ mod tests {
                 pet_skill_learn_chance: None,
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 0,
             },
@@ -18229,6 +18513,7 @@ mod tests {
                 pet_skill_learn_chance: None,
                 item: None,
                 lifeskill_level: None,
+                trade_bargain_bonus: None,
                 presentation: SelectOptionPresentation::Default,
                 sort_priority: 1,
             },
@@ -19431,6 +19716,7 @@ mod tests {
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::PetCard,
             sort_priority: 1,
         };
@@ -19461,6 +19747,7 @@ mod tests {
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::PetCard,
             sort_priority: 1,
         };
@@ -19499,6 +19786,7 @@ mod tests {
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::PetCard,
             sort_priority: 1,
         };
@@ -19802,8 +20090,8 @@ mod tests {
         normalize_trade_selection(&mut signals, &catalog, None);
 
         assert_eq!(signals.trade_origin_region, "1");
-        assert_eq!(signals.trade_destination_npc, "custom:123.45");
-        assert!((signals.trade_distance_bonus - 123.45).abs() < 0.0001);
+        assert_eq!(signals.trade_destination_npc, "custom:123.5");
+        assert!((signals.trade_distance_bonus - 123.5).abs() < 0.0001);
     }
 
     #[test]
@@ -22064,6 +22352,7 @@ mod tests {
             pet_skill_learn_chance: None,
             item: None,
             lifeskill_level: None,
+            trade_bargain_bonus: None,
             presentation: SelectOptionPresentation::Default,
             sort_priority: 1,
         }];

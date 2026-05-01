@@ -3,7 +3,6 @@
   const CALCULATOR_DATA_STORAGE_KEY = "fishystuff.calculator.data.v1";
   const CALCULATOR_UI_STORAGE_KEY = "fishystuff.calculator.ui.v1";
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
-  const CALCULATOR_REACTIVE_SIGNAL_PATCH_EVENT = "fishystuff-calculator-patch-signals";
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN =
     /^_(?:loading|calc|live|defaults|user_presets|preset_manager_ui)(?:\.|$)/;
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN = /^_/;
@@ -12,7 +11,6 @@
   const CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN = /^zone$/;
   const CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN = /^zone$/;
   const CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN = /^tradeOriginRegion$/;
-  const CALCULATOR_TRADE_DISTANCE_SIGNAL_PATTERN = /^tradeDistanceBonus$/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_LAYOUT_UI_SIGNAL_PATTERN = /^_calculator_ui(?:\.|$)/;
   const CALCULATOR_PRESET_SIGNAL_FILTER = {
@@ -80,7 +78,6 @@
 
   const calculatorState = {
     persistBinding: null,
-    evalPatchBinding: null,
     actionBinding: null,
     layoutPresetBinding: null,
     calculatorPresetBinding: null,
@@ -91,11 +88,6 @@
     pendingLayoutPresetRestore: false,
     pendingCalculatorDataState: null,
     pendingCalculatorUiState: null,
-    pendingEvalNeedsPetCards: null,
-    pendingEvalNeedsTargetFishSelect: null,
-    pendingEvalNeedsTradeOriginSelect: null,
-    pendingEvalNeedsTradeDestinationSelect: null,
-    reactivePatchApplied: false,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -338,54 +330,6 @@
       ), source);
   }
 
-  function writeControlValue(control, value) {
-    if (!(control instanceof HTMLElement)) {
-      return;
-    }
-    if (control instanceof HTMLInputElement) {
-      if (control.type === "checkbox") {
-        control.checked = typeof value === "string" ? value === control.value : Boolean(value);
-        return;
-      }
-      if (control.type === "radio") {
-        control.checked = value === (typeof value === "number" ? Number(control.value) : control.value);
-        return;
-      }
-      control.value = value == null ? "" : String(value);
-      return;
-    }
-    if (control instanceof HTMLSelectElement) {
-      if (control.multiple) {
-        const selected = new Set((Array.isArray(value) ? value : []).map(String));
-        for (const option of Array.from(control.options)) {
-          option.selected = selected.has(option.value);
-        }
-        return;
-      }
-      control.value = value == null ? "" : String(value);
-      return;
-    }
-    if (control instanceof HTMLTextAreaElement) {
-      control.value = value == null ? "" : String(value);
-    }
-  }
-
-  function syncBoundCalculatorControls(patch) {
-    if (!isPlainObject(patch) || typeof document.querySelectorAll !== "function") {
-      return;
-    }
-    for (const control of Array.from(document.querySelectorAll("[data-bind]"))) {
-      const path = String(control.getAttribute("data-bind") || "").trim();
-      if (!path) {
-        continue;
-      }
-      const value = readSignalPath(patch, path);
-      if (value !== undefined) {
-        writeControlValue(control, value);
-      }
-    }
-  }
-
   function signalPatchLeafPaths(patch, prefix = "") {
     if (!isPlainObject(patch)) {
       return [];
@@ -402,44 +346,15 @@
     return paths;
   }
 
-  function isCalculatorServerSignalPatch(patch) {
-    return isPlainObject(patch) && Object.prototype.hasOwnProperty.call(patch, "_calc");
-  }
-
-  function patchMatchesCalculatorEvalFilter(patch) {
-    if (isCalculatorServerSignalPatch(patch)) {
-      return false;
-    }
-    const helper = datastarPersistHelper();
-    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
-      ? helper.patchMatchesSignalFilter
-      : null;
-    return patchMatches
-      ? patchMatches(patch, calculatorEvalSignalPatchFilter())
-      : signalPatchLeafPaths(patch).some((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
-  }
-
-  function shouldEvalSignalPatch(patch) {
-    return patchMatchesCalculatorEvalFilter(patch);
-  }
-
   function calculatorEvalPatchPaths(patch) {
     return signalPatchLeafPaths(patch)
       .filter((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
-  }
-
-  function clearPendingEvalElementPatches() {
-    calculatorState.pendingEvalNeedsPetCards = null;
-    calculatorState.pendingEvalNeedsTargetFishSelect = null;
-    calculatorState.pendingEvalNeedsTradeOriginSelect = null;
-    calculatorState.pendingEvalNeedsTradeDestinationSelect = null;
   }
 
   function calculatorEvalOptionsForPatch(patch) {
     const paths = calculatorEvalPatchPaths(patch);
     const touchesPetCards = paths.some((path) => CALCULATOR_PET_CARD_SIGNAL_PATTERN.test(path))
       && !paths.every((path) => CALCULATOR_PACK_LEADER_SIGNAL_PATTERN.test(path));
-    const touchesTradeDistance = paths.some((path) => CALCULATOR_TRADE_DISTANCE_SIGNAL_PATTERN.test(path));
     return {
       includePetCards: touchesPetCards,
       includeTargetFishSelect: paths.some((path) => CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN.test(path)),
@@ -447,39 +362,8 @@
       includeTradeDestinationSelect: paths.some((path) => (
         CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN.test(path)
         || CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)
-      )) || touchesTradeDistance,
-      customTradeDistance: touchesTradeDistance,
+      )),
     };
-  }
-
-  function noteCalculatorEvalPatch(patch) {
-    if (!calculatorState.uiStateRestored) {
-      return;
-    }
-    if (!patchMatchesCalculatorEvalFilter(patch)) {
-      return;
-    }
-    const paths = calculatorEvalPatchPaths(patch);
-    if (!paths.length) {
-      return;
-    }
-    const options = calculatorEvalOptionsForPatch(patch);
-    if (options.includeTargetFishSelect) {
-      calculatorState.pendingEvalNeedsTargetFishSelect = true;
-    }
-    if (options.includeTradeOriginSelect) {
-      calculatorState.pendingEvalNeedsTradeOriginSelect = true;
-    }
-    if (options.includeTradeDestinationSelect) {
-      calculatorState.pendingEvalNeedsTradeDestinationSelect = true;
-    }
-    if (!options.includePetCards) {
-      if (calculatorState.pendingEvalNeedsPetCards !== true) {
-        calculatorState.pendingEvalNeedsPetCards = false;
-      }
-      return;
-    }
-    calculatorState.pendingEvalNeedsPetCards = true;
   }
 
   function bindPersistListener() {
@@ -507,21 +391,6 @@
       },
     });
     calculatorState.persistBinding.bind();
-  }
-
-  function bindEvalPatchListener() {
-    if (calculatorState.evalPatchBinding) {
-      return;
-    }
-    const handleSignalPatch = (event) => {
-      noteCalculatorEvalPatch(event && event.detail ? event.detail : null);
-    };
-    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-    calculatorState.evalPatchBinding = {
-      dispose() {
-        document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-      },
-    };
   }
 
   function bindActionListener() {
@@ -1087,52 +956,15 @@
     });
   }
 
-  function dispatchCalculatorSignalPatch(patch) {
-    document.dispatchEvent(new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
-      detail: cloneCalculatorSignals(patch),
-    }));
-  }
-
-  function applyReactiveSignalPatch(signals, detail) {
-    const current = signals && typeof signals === "object"
-      ? signals
-      : signalStore.signalObject();
-    const patch = detail && Object.prototype.hasOwnProperty.call(detail, "patch")
-      ? detail.patch
-      : detail;
-    if (!current || !isPlainObject(patch)) {
-      return null;
-    }
-    const normalizedPatch = cloneCalculatorSignals(patch);
-    calculatorState.reactivePatchApplied = true;
-    signalStore.connect(current);
-    assignCalculatorSignalPatch(current, normalizedPatch, {
-      replaceCalculatorData: detail?.replaceCalculatorData === true,
-      replaceTopLevel: detail?.replaceTopLevel === true,
-    });
-    syncBoundCalculatorControls(normalizedPatch);
-    dispatchCalculatorSignalPatch(normalizedPatch);
-    return current;
-  }
-
   function patchCalculatorSignals(patch, options = {}) {
     if (!isPlainObject(patch)) {
       return null;
     }
     const normalizedPatch = cloneCalculatorSignals(patch);
-    const detail = {
-      patch: normalizedPatch,
-      eval: options.eval === true || (options.eval !== false && patchMatchesCalculatorEvalFilter(normalizedPatch)),
+    assignCalculatorSignalPatch(signalStore.signalObject(), normalizedPatch, {
       replaceCalculatorData: options.replaceCalculatorData === true,
       replaceTopLevel: options.replaceTopLevel === true,
-    };
-    calculatorState.reactivePatchApplied = false;
-    if (typeof window.dispatchEvent === "function") {
-      window.dispatchEvent(new CustomEvent(CALCULATOR_REACTIVE_SIGNAL_PATCH_EVENT, { detail }));
-    }
-    if (!calculatorState.reactivePatchApplied) {
-      applyReactiveSignalPatch(signalStore.signalObject(), detail);
-    }
+    });
     return signalStore.signalObject();
   }
 
@@ -2013,17 +1845,16 @@
       : null;
     const includePetCards = patchOptions
       ? patchOptions.includePetCards
-      : calculatorState.pendingEvalNeedsPetCards !== false;
+      : true;
     const includeTargetFishSelect = patchOptions
       ? patchOptions.includeTargetFishSelect
-      : calculatorState.pendingEvalNeedsTargetFishSelect === true;
+      : false;
     const includeTradeOriginSelect = patchOptions
       ? patchOptions.includeTradeOriginSelect
-      : calculatorState.pendingEvalNeedsTradeOriginSelect === true;
+      : false;
     const includeTradeDestinationSelect = patchOptions
       ? patchOptions.includeTradeDestinationSelect
-      : calculatorState.pendingEvalNeedsTradeDestinationSelect === true;
-    clearPendingEvalElementPatches();
+      : false;
     const params = new URLSearchParams();
     params.set("lang", language.apiLang);
     params.set("locale", language.locale);
@@ -2041,19 +1872,9 @@
     }
     appendCalculatorEvalSignalParam(params, patch, "tradeOriginRegion", "trade_origin_region");
     appendCalculatorEvalSignalParam(params, patch, "tradeDestinationNpc", "trade_destination_npc");
-    appendCalculatorEvalSignalParam(params, patch, "tradeDistanceBonus", "trade_distance_bonus");
-    if (patchOptions?.customTradeDistance) {
-      params.set("trade_distance_custom", "true");
-    }
     return window.__fishystuffResolveApiUrl(
       `/api/v1/calculator/datastar/eval?${params.toString()}`,
     );
-  }
-
-  function calculatorEvalSignalPatchFilter() {
-    return {
-      exclude: CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN,
-    };
   }
 
   function calculatorPresetUrl(signals) {
@@ -2148,7 +1969,6 @@
     bindCalculatorLayoutPresetAdapter();
     sharedUserPresets()?.bindDatastar?.(signals);
     bindPersistListener();
-    bindEvalPatchListener();
     bindActionListener();
     bindCalculatorPresetListener();
     bindLayoutPresetListener();
@@ -2187,7 +2007,6 @@
     }
     bindPetImageFallbackListener();
     calculatorState.uiStateRestored = true;
-    clearPendingEvalElementPatches();
   }
 
   function persistCalculator(signals) {
@@ -3001,7 +2820,7 @@
             calculatorBreakdownRow(
               breakdownLabel("trade_sale_multiplier"),
               String(current.trade_sale_multiplier_text ?? "").trim(),
-              breakdownDetail("current_sale_multiplier_after_trade_settings"),
+              "",
             ),
             calculatorBreakdownRow(
               breakdownLabel("expected_profit"),
@@ -3115,8 +2934,6 @@
     ready: languageReady,
     initUrl: calculatorInitUrl,
     evalUrl: calculatorEvalUrl,
-    evalSignalPatchFilter: calculatorEvalSignalPatchFilter,
-    shouldEvalSignalPatch,
     signalObject() {
       return signalStore.signalObject();
     },
@@ -3125,7 +2942,6 @@
     patchSignals(patch, options = {}) {
       patchCalculatorSignals(patch, options);
     },
-    applyReactiveSignalPatch,
     applyPackLeaderChange,
     petSkillSlots,
     restore: restoreCalculator,
