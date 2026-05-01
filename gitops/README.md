@@ -107,7 +107,7 @@ The current release ID is the desired-state release key. That is acceptable for 
 
 This graph does not import Hetzner, Cloudflare, or SSH providers. It does not call deploy scripts. It does not start FishyStuff system services. The VM fixture disables closure realization, so it never tries to realize fake `/nix/store` paths.
 
-`gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `local-apply` mode. In `validate` and `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the local `~/code/mgmt-fishystuff-beta/` mgmt package because it contains the integrated Nix primitives needed to type-check this graph.
+`gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `local-apply` mode. In `validate` and `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
 
 The VM runtime test binds mgmt's embedded etcd to `127.0.0.1` inside the test VM. It does not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
 
