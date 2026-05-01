@@ -768,6 +768,8 @@ test("searchable dropdown accepts numeric trade distance bonus custom options", 
     assert.ok(customOption);
     assert.equal(button?.getAttribute?.("data-value"), "custom:123");
     assert.equal(button?.getAttribute?.("data-label"), "Custom distance");
+    const customBadge = button?.childNodes?.[0]?.childNodes?.[0]?.childNodes?.[1]?.childNodes?.[1] ?? null;
+    assert.equal(customBadge?.className, "badge badge-sm badge-soft badge-warning");
 
     assert.equal(dropdown._buildCustomOption("", "47600", []), null);
     assert.equal(dropdown._buildCustomOption("", "custom:123", []), null);

@@ -659,7 +659,7 @@ export class FishySearchableDropdown extends HTMLElementBase {
         meta.append(description);
 
         const badge = document.createElement("span");
-        badge.className = "badge badge-sm badge-warning";
+        badge.className = "badge badge-sm badge-soft badge-warning";
         badge.textContent = labels.badge;
         meta.append(badge);
 

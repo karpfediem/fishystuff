@@ -13039,7 +13039,7 @@ fn render_trade_origin_option_content(
 ) -> String {
     let badge = if option.preferred_for_zone {
         format!(
-            "<span class=\"badge badge-sm badge-primary\">{}</span>",
+            "<span class=\"badge badge-sm badge-soft badge-info\">{}</span>",
             escape_html(&calculator_route_text(
                 lang,
                 "calculator.server.badge.zone_origin",
@@ -13060,6 +13060,13 @@ fn render_trade_origin_option_content(
 }
 
 fn render_trade_destination_option_content(option: &TradeDestinationSelectOption) -> String {
+    let distance_badge_class = if option.custom {
+        "badge-soft badge-warning"
+    } else if option.distance_bonus >= 150.0 {
+        "badge-soft badge-success"
+    } else {
+        "badge-outline badge-neutral"
+    };
     format!(
         "<span class=\"min-w-0 flex-1\">\
             <span class=\"block truncate font-medium text-base-content\">{}</span>\
@@ -13070,13 +13077,7 @@ fn render_trade_destination_option_content(option: &TradeDestinationSelectOption
         </span>",
         escape_html(&option.npc_name),
         escape_html(&option.assigned_origin),
-        if option.custom {
-            "badge-warning"
-        } else if option.distance_bonus >= 150.0 {
-            "badge-primary"
-        } else {
-            "badge-ghost"
-        },
+        distance_badge_class,
         escape_html(&format_trade_distance_bonus(option.distance_bonus)),
     )
 }
@@ -14754,7 +14755,7 @@ fn render_searchable_dropdown_option_content_html(
             "<span class=\"min-w-0 flex-1\">\
                 <span class=\"flex min-w-0 items-center justify-between gap-3\">\
                     <span class=\"truncate font-medium text-base-content\">{}</span>\
-                    <span class=\"badge badge-sm badge-primary shrink-0\">{}</span>\
+                    <span class=\"badge badge-sm badge-soft badge-success shrink-0\">{}</span>\
                 </span>\
             </span>",
             escape_html(option.label),
@@ -16752,8 +16753,9 @@ mod tests {
         apply_calculator_condition_context_to_loot_entries, auto_target_fish_pmf_tail_count,
         base_price_for_species, buff_category_label, build_pet_value_aliases,
         build_zone_loot_summary_condition_options, calculator_section_icon_alias,
-        calculator_workspace_icon_alias, default_reset_signals_patch_map, derive_fish_group_chart,
-        derive_loot_chart, derive_target_fish_summary, derive_zone_loot_summary_response,
+        calculator_workspace_icon_alias, custom_trade_destination_select_option,
+        default_reset_signals_patch_map, derive_fish_group_chart, derive_loot_chart,
+        derive_target_fish_summary, derive_zone_loot_summary_response,
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
         filtered_loot_flow_rows, find_trade_origin, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
@@ -16767,9 +16769,11 @@ mod tests {
         pet_skill_limit_for_tier_key, pmf_bucket_contains_target, poisson_probability_at_least,
         post_calculator_datastar_eval, render_pet_cards, render_pet_dropdown_option_content_html,
         render_pet_dropdown_selected_content_html, render_pet_effective_talent_badges,
-        render_pet_talent_badges, render_searchable_select_results,
-        render_select_option_search_text, render_target_fish_panel,
-        select_options_from_pet_entries_for_tier, trade_destination_select_options,
+        render_pet_talent_badges, render_searchable_dropdown_option_content_html,
+        render_searchable_select_results, render_select_option_search_text,
+        render_target_fish_panel, render_trade_destination_option_content,
+        render_trade_origin_option_content, select_options_from_pet_entries_for_tier,
+        trade_bargain_bonus_from_level_key, trade_destination_select_options,
         trade_origin_select_options, trade_sale_multiplier_for_species,
         zone_loot_group_lineage_detail, zone_loot_summary_cache_key, CalculatorData,
         CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
@@ -20120,6 +20124,19 @@ mod tests {
         assert_eq!(options[1].npc_name, "Closer Trader");
         assert!((options[0].distance_bonus - 34.0).abs() < 0.0001);
         assert!((options[1].distance_bonus - 6.8).abs() < 0.0001);
+
+        let normal_html = render_trade_destination_option_content(&options[0]);
+        assert!(normal_html.contains("badge badge-sm badge-outline badge-neutral"));
+
+        let mut capped_option = options[0].clone();
+        capped_option.distance_bonus = 150.0;
+        let capped_html = render_trade_destination_option_content(&capped_option);
+        assert!(capped_html.contains("badge badge-sm badge-soft badge-success"));
+
+        let custom_html = render_trade_destination_option_content(
+            &custom_trade_destination_select_option(CalculatorLocale::EnUs, 123.4),
+        );
+        assert!(custom_html.contains("badge badge-sm badge-soft badge-warning"));
     }
 
     #[test]
@@ -20132,6 +20149,35 @@ mod tests {
         assert_eq!(options[0].zone_pixel_count, 42);
         assert_eq!(options[1].label, "Near Origin (R1)");
         assert!(!options[1].preferred_for_zone);
+
+        let preferred_html =
+            render_trade_origin_option_content(&options[0], CalculatorLocale::EnUs);
+        assert!(preferred_html.contains("badge badge-sm badge-soft badge-info"));
+    }
+
+    #[test]
+    fn trade_level_option_uses_soft_success_badge_for_bargain_bonus() {
+        let option = SelectOption {
+            value: "73",
+            label: "Guru 23",
+            icon: None,
+            grade_tone: "unknown",
+            pet_variant_talent: None,
+            pet_variant_special: None,
+            pet_skill: None,
+            pet_effective_talent_effects: None,
+            pet_skill_learn_chance: None,
+            item: None,
+            lifeskill_level: None,
+            trade_bargain_bonus: Some(trade_bargain_bonus_from_level_key("73")),
+            presentation: SelectOptionPresentation::Default,
+            sort_priority: 1,
+        };
+        let html =
+            render_searchable_dropdown_option_content_html(CalculatorLocale::EnUs, "", option);
+
+        assert!(html.contains("badge badge-sm badge-soft badge-success shrink-0"));
+        assert!(html.contains("+41.5%"));
     }
 
     #[test]
