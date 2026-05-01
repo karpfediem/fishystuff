@@ -12,6 +12,7 @@ use anyhow::{bail, Context, Result};
 use calamine::{open_workbook_auto, Data, Range, Reader};
 use clap::{Parser, Subcommand, ValueEnum};
 use csv::{QuoteStyle, Writer, WriterBuilder};
+use fishystuff_api::models::trade::TradeNpcCatalogResponse;
 use fishystuff_core::calculator_effects::{
     normalized_effect_lines, parse_unique_calculator_effect_text, CalculatorEffectValues,
 };
@@ -48,6 +49,13 @@ const FISHING_HEADERS: [&str; 18] = [
     "MinWaitTime",
     "MaxWaitTime",
 ];
+
+const TRADE_NPC_CATALOG_META_TABLE: &str = "trade_npc_catalog_meta";
+const TRADE_NPC_CATALOG_SOURCES_TABLE: &str = "trade_npc_catalog_sources";
+const TRADE_ORIGIN_REGIONS_TABLE: &str = "trade_origin_regions";
+const TRADE_ZONE_ORIGIN_REGIONS_TABLE: &str = "trade_zone_origin_regions";
+const TRADE_NPC_DESTINATIONS_TABLE: &str = "trade_npc_destinations";
+const TRADE_NPC_EXCLUDED_TABLE: &str = "trade_npc_excluded";
 
 const MAIN_GROUP_HEADERS: [&str; 17] = [
     "ItemMainGroupKey",
@@ -411,6 +419,18 @@ enum Commands {
         #[arg(long)]
         commit_msg: Option<String>,
     },
+    ImportTradeNpcCatalog {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        catalog_json: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
     ImportCommunitySubgroupOverlayXlsx {
         #[arg(long)]
         dolt_repo: PathBuf,
@@ -729,6 +749,14 @@ struct FlockfishSubgroupImportCommand {
     commit_msg: Option<String>,
 }
 
+struct TradeNpcCatalogImportCommand {
+    dolt_repo: PathBuf,
+    catalog_json: PathBuf,
+    output_dir: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
 struct FlockfishTableImportStats {
     row_count: usize,
 }
@@ -749,6 +777,15 @@ struct FlockfishZoneGroupSlotsImport {
     row_count: usize,
     numeric_rows: usize,
     unresolved_rows: usize,
+}
+
+struct TradeNpcCatalogOutputs {
+    meta_csv: PathBuf,
+    sources_csv: PathBuf,
+    origin_regions_csv: PathBuf,
+    zone_origin_regions_csv: PathBuf,
+    destinations_csv: PathBuf,
+    excluded_csv: PathBuf,
 }
 
 struct CommunitySubgroupOverlayImportCommand {
@@ -1120,6 +1157,19 @@ fn main() -> Result<()> {
         } => run_flockfish_subgroup_import(FlockfishSubgroupImportCommand {
             dolt_repo,
             workbook_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportTradeNpcCatalog {
+            dolt_repo,
+            catalog_json,
+            output_dir,
+            commit,
+            commit_msg,
+        } => run_trade_npc_catalog_import(TradeNpcCatalogImportCommand {
+            dolt_repo,
+            catalog_json,
             output_dir,
             commit,
             commit_msg,
@@ -3362,6 +3412,104 @@ fn run_flockfish_subgroup_import(command: FlockfishSubgroupImportCommand) -> Res
     Ok(())
 }
 
+fn run_trade_npc_catalog_import(command: TradeNpcCatalogImportCommand) -> Result<()> {
+    let TradeNpcCatalogImportCommand {
+        dolt_repo,
+        catalog_json,
+        output_dir,
+        commit,
+        commit_msg,
+    } = command;
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    let catalog_sha = sha256_file(&catalog_json)?;
+    let catalog_file = File::open(&catalog_json)
+        .with_context(|| format!("open trade NPC catalog json: {}", catalog_json.display()))?;
+    let catalog: TradeNpcCatalogResponse = serde_json::from_reader(catalog_file)
+        .with_context(|| format!("parse trade NPC catalog json: {}", catalog_json.display()))?;
+
+    let outputs = TradeNpcCatalogOutputs {
+        meta_csv: output_dir.join("trade_npc_catalog_meta.csv"),
+        sources_csv: output_dir.join("trade_npc_catalog_sources.csv"),
+        origin_regions_csv: output_dir.join("trade_origin_regions.csv"),
+        zone_origin_regions_csv: output_dir.join("trade_zone_origin_regions.csv"),
+        destinations_csv: output_dir.join("trade_npc_destinations.csv"),
+        excluded_csv: output_dir.join("trade_npc_excluded.csv"),
+    };
+    write_trade_npc_catalog_csvs(&catalog, &outputs)?;
+
+    ensure_trade_npc_catalog_tables(&dolt_repo)?;
+    run_dolt_sql_table_import_or_remote(
+        &dolt_repo,
+        TRADE_NPC_CATALOG_META_TABLE,
+        &outputs.meta_csv,
+    )?;
+    run_dolt_sql_table_import_or_remote(
+        &dolt_repo,
+        TRADE_NPC_CATALOG_SOURCES_TABLE,
+        &outputs.sources_csv,
+    )?;
+    run_dolt_sql_table_import_or_remote(
+        &dolt_repo,
+        TRADE_ORIGIN_REGIONS_TABLE,
+        &outputs.origin_regions_csv,
+    )?;
+    run_dolt_sql_table_import_or_remote(
+        &dolt_repo,
+        TRADE_ZONE_ORIGIN_REGIONS_TABLE,
+        &outputs.zone_origin_regions_csv,
+    )?;
+    run_dolt_sql_table_import_or_remote(
+        &dolt_repo,
+        TRADE_NPC_DESTINATIONS_TABLE,
+        &outputs.destinations_csv,
+    )?;
+    run_dolt_sql_table_import_or_remote(
+        &dolt_repo,
+        TRADE_NPC_EXCLUDED_TABLE,
+        &outputs.excluded_csv,
+    )?;
+
+    if commit {
+        let msg = match commit_msg {
+            Some(msg) => format!("{msg} (TradeNpcCatalog={catalog_sha})"),
+            None => format!("Import trade NPC catalog (TradeNpcCatalog={catalog_sha})"),
+        };
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!(
+        "trade origin rows emitted: {}",
+        catalog.origin_regions.len()
+    );
+    println!(
+        "trade zone-origin rows emitted: {}",
+        catalog
+            .zone_origin_regions
+            .iter()
+            .map(|entry| entry.origins.len())
+            .sum::<usize>()
+    );
+    println!(
+        "trade destination rows emitted: {}",
+        catalog.destinations.len()
+    );
+    println!("trade excluded rows emitted: {}", catalog.excluded.len());
+    println!("output trade meta csv: {}", outputs.meta_csv.display());
+    println!(
+        "output trade destinations csv: {}",
+        outputs.destinations_csv.display()
+    );
+
+    Ok(())
+}
+
 fn run_community_subgroup_overlay_import(
     command: CommunitySubgroupOverlayImportCommand,
 ) -> Result<()> {
@@ -3706,6 +3854,286 @@ fn ensure_flockfish_zone_group_slots_table(dolt_repo: &Path) -> Result<()> {
             KEY `idx_resolution_status` (`resolution_status`)\
         );",
         "ensure flockfish_zone_group_slots table",
+    )
+}
+
+fn write_trade_npc_catalog_csvs(
+    catalog: &TradeNpcCatalogResponse,
+    outputs: &TradeNpcCatalogOutputs,
+) -> Result<()> {
+    {
+        let mut writer = build_csv_writer(&outputs.meta_csv)?;
+        writer.write_record([
+            "catalog_schema",
+            "version",
+            "coordinate_space",
+            "character_function_trade_rows",
+            "character_function_barter_rows",
+            "character_function_trade_barter_overlap_rows",
+            "selling_to_npc_rows",
+            "title_trade_manager_rows",
+            "candidate_npcs",
+            "origin_regions",
+            "zone_origin_regions",
+            "destinations",
+            "excluded_missing_spawn",
+            "excluded_missing_trade_origin",
+        ])?;
+        writer.write_record([
+            catalog.schema.clone(),
+            catalog.version.to_string(),
+            catalog.coordinate_space.clone(),
+            catalog.summary.character_function_trade_rows.to_string(),
+            catalog.summary.character_function_barter_rows.to_string(),
+            catalog
+                .summary
+                .character_function_trade_barter_overlap_rows
+                .to_string(),
+            catalog.summary.selling_to_npc_rows.to_string(),
+            catalog.summary.title_trade_manager_rows.to_string(),
+            catalog.summary.candidate_npcs.to_string(),
+            catalog.summary.origin_regions.to_string(),
+            catalog.summary.zone_origin_regions.to_string(),
+            catalog.summary.destinations.to_string(),
+            catalog.summary.excluded_missing_spawn.to_string(),
+            catalog.summary.excluded_missing_trade_origin.to_string(),
+        ])?;
+        writer.flush()?;
+    }
+
+    {
+        let mut writer = build_csv_writer(&outputs.sources_csv)?;
+        writer.write_record(["source_id", "file", "role"])?;
+        for source in &catalog.sources {
+            writer.write_record([
+                source.id.as_str(),
+                source.file.as_str(),
+                source.role.as_str(),
+            ])?;
+        }
+        writer.flush()?;
+    }
+
+    {
+        let mut writer = build_csv_writer(&outputs.origin_regions_csv)?;
+        writer.write_record([
+            "region_id",
+            "region_name",
+            "waypoint_id",
+            "waypoint_name",
+            "world_x",
+            "world_z",
+        ])?;
+        for origin in &catalog.origin_regions {
+            writer.write_record([
+                origin.region_id.to_string(),
+                optional_string_csv(origin.region_name.as_deref()),
+                optional_u32_csv(origin.waypoint_id),
+                optional_string_csv(origin.waypoint_name.as_deref()),
+                origin.world_x.to_string(),
+                origin.world_z.to_string(),
+            ])?;
+        }
+        writer.flush()?;
+    }
+
+    {
+        let mut writer = build_csv_writer(&outputs.zone_origin_regions_csv)?;
+        writer.write_record([
+            "zone_rgb_key",
+            "zone_rgb_u32",
+            "origin_region_id",
+            "pixel_count",
+        ])?;
+        for zone in &catalog.zone_origin_regions {
+            for origin in &zone.origins {
+                writer.write_record([
+                    zone.zone_rgb_key.clone(),
+                    zone.zone_rgb_u32.to_string(),
+                    origin.region_id.to_string(),
+                    origin.pixel_count.to_string(),
+                ])?;
+            }
+        }
+        writer.flush()?;
+    }
+
+    {
+        let mut writer = build_csv_writer(&outputs.destinations_csv)?;
+        writer.write_record([
+            "destination_id",
+            "npc_key",
+            "npc_name",
+            "role_source",
+            "source_tags_json",
+            "item_main_group_key",
+            "trade_group_type",
+            "npc_spawn_region_id",
+            "npc_spawn_region_name",
+            "npc_spawn_world_x",
+            "npc_spawn_world_y",
+            "npc_spawn_world_z",
+            "assigned_region_id",
+            "assigned_region_name",
+            "assigned_waypoint_id",
+            "assigned_waypoint_name",
+            "assigned_world_x",
+            "assigned_world_z",
+            "sell_origin_region_id",
+            "sell_origin_region_name",
+            "sell_origin_waypoint_id",
+            "sell_origin_waypoint_name",
+            "sell_origin_world_x",
+            "sell_origin_world_z",
+        ])?;
+        for destination in &catalog.destinations {
+            writer.write_record([
+                destination.id.clone(),
+                destination.npc_key.to_string(),
+                destination.npc_name.clone(),
+                destination.role_source.clone(),
+                serde_json::to_string(&destination.source_tags)?,
+                optional_u32_csv(destination.trade.item_main_group_key),
+                optional_string_csv(destination.trade.trade_group_type.as_deref()),
+                destination.npc_spawn.region_id.to_string(),
+                optional_string_csv(destination.npc_spawn.region_name.as_deref()),
+                destination.npc_spawn.world_x.to_string(),
+                destination.npc_spawn.world_y.to_string(),
+                destination.npc_spawn.world_z.to_string(),
+                optional_u32_csv(destination.assigned_region.region_id),
+                optional_string_csv(destination.assigned_region.region_name.as_deref()),
+                optional_u32_csv(destination.assigned_region.waypoint_id),
+                optional_string_csv(destination.assigned_region.waypoint_name.as_deref()),
+                optional_f64_csv(destination.assigned_region.world_x),
+                optional_f64_csv(destination.assigned_region.world_z),
+                optional_u32_csv(destination.sell_destination_trade_origin.region_id),
+                optional_string_csv(
+                    destination
+                        .sell_destination_trade_origin
+                        .region_name
+                        .as_deref(),
+                ),
+                optional_u32_csv(destination.sell_destination_trade_origin.waypoint_id),
+                optional_string_csv(
+                    destination
+                        .sell_destination_trade_origin
+                        .waypoint_name
+                        .as_deref(),
+                ),
+                optional_f64_csv(destination.sell_destination_trade_origin.world_x),
+                optional_f64_csv(destination.sell_destination_trade_origin.world_z),
+            ])?;
+        }
+        writer.flush()?;
+    }
+
+    {
+        let mut writer = build_csv_writer(&outputs.excluded_csv)?;
+        writer.write_record(["npc_key", "npc_name", "reason", "source_tags_json"])?;
+        for excluded in &catalog.excluded {
+            writer.write_record([
+                excluded.npc_key.to_string(),
+                excluded.npc_name.clone(),
+                excluded.reason.clone(),
+                serde_json::to_string(&excluded.source_tags)?,
+            ])?;
+        }
+        writer.flush()?;
+    }
+
+    Ok(())
+}
+
+fn optional_string_csv(value: Option<&str>) -> String {
+    value.unwrap_or_default().to_string()
+}
+
+fn optional_u32_csv(value: Option<u32>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
+}
+
+fn optional_f64_csv(value: Option<f64>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
+}
+
+fn ensure_trade_npc_catalog_tables(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `trade_npc_catalog_meta` (\
+            `catalog_schema` VARCHAR(128) NOT NULL PRIMARY KEY,\
+            `version` INT UNSIGNED NOT NULL,\
+            `coordinate_space` VARCHAR(64) NOT NULL,\
+            `character_function_trade_rows` BIGINT UNSIGNED NOT NULL,\
+            `character_function_barter_rows` BIGINT UNSIGNED NOT NULL,\
+            `character_function_trade_barter_overlap_rows` BIGINT UNSIGNED NOT NULL,\
+            `selling_to_npc_rows` BIGINT UNSIGNED NOT NULL,\
+            `title_trade_manager_rows` BIGINT UNSIGNED NOT NULL,\
+            `candidate_npcs` BIGINT UNSIGNED NOT NULL,\
+            `origin_regions` BIGINT UNSIGNED NOT NULL,\
+            `zone_origin_regions` BIGINT UNSIGNED NOT NULL,\
+            `destinations` BIGINT UNSIGNED NOT NULL,\
+            `excluded_missing_spawn` BIGINT UNSIGNED NOT NULL,\
+            `excluded_missing_trade_origin` BIGINT UNSIGNED NOT NULL\
+        );\
+        CREATE TABLE IF NOT EXISTS `trade_npc_catalog_sources` (\
+            `source_id` VARCHAR(64) NOT NULL PRIMARY KEY,\
+            `file` VARCHAR(255) NOT NULL,\
+            `role` TEXT NOT NULL\
+        );\
+        CREATE TABLE IF NOT EXISTS `trade_origin_regions` (\
+            `region_id` INT UNSIGNED NOT NULL PRIMARY KEY,\
+            `region_name` VARCHAR(255) NULL,\
+            `waypoint_id` INT UNSIGNED NULL,\
+            `waypoint_name` VARCHAR(255) NULL,\
+            `world_x` DOUBLE NOT NULL,\
+            `world_z` DOUBLE NOT NULL,\
+            KEY `idx_waypoint_id` (`waypoint_id`)\
+        );\
+        CREATE TABLE IF NOT EXISTS `trade_zone_origin_regions` (\
+            `zone_rgb_key` VARCHAR(32) NOT NULL,\
+            `zone_rgb_u32` INT UNSIGNED NOT NULL,\
+            `origin_region_id` INT UNSIGNED NOT NULL,\
+            `pixel_count` INT UNSIGNED NOT NULL,\
+            PRIMARY KEY (`zone_rgb_u32`, `origin_region_id`),\
+            KEY `idx_origin_region_id` (`origin_region_id`)\
+        );\
+        CREATE TABLE IF NOT EXISTS `trade_npc_destinations` (\
+            `destination_id` VARCHAR(64) NOT NULL PRIMARY KEY,\
+            `npc_key` INT UNSIGNED NOT NULL,\
+            `npc_name` VARCHAR(255) NOT NULL,\
+            `role_source` VARCHAR(64) NOT NULL,\
+            `source_tags_json` LONGTEXT NULL,\
+            `item_main_group_key` INT UNSIGNED NULL,\
+            `trade_group_type` VARCHAR(64) NULL,\
+            `npc_spawn_region_id` INT UNSIGNED NOT NULL,\
+            `npc_spawn_region_name` VARCHAR(255) NULL,\
+            `npc_spawn_world_x` DOUBLE NOT NULL,\
+            `npc_spawn_world_y` DOUBLE NOT NULL,\
+            `npc_spawn_world_z` DOUBLE NOT NULL,\
+            `assigned_region_id` INT UNSIGNED NULL,\
+            `assigned_region_name` VARCHAR(255) NULL,\
+            `assigned_waypoint_id` INT UNSIGNED NULL,\
+            `assigned_waypoint_name` VARCHAR(255) NULL,\
+            `assigned_world_x` DOUBLE NULL,\
+            `assigned_world_z` DOUBLE NULL,\
+            `sell_origin_region_id` INT UNSIGNED NULL,\
+            `sell_origin_region_name` VARCHAR(255) NULL,\
+            `sell_origin_waypoint_id` INT UNSIGNED NULL,\
+            `sell_origin_waypoint_name` VARCHAR(255) NULL,\
+            `sell_origin_world_x` DOUBLE NULL,\
+            `sell_origin_world_z` DOUBLE NULL,\
+            KEY `idx_npc_key` (`npc_key`),\
+            KEY `idx_spawn_region` (`npc_spawn_region_id`),\
+            KEY `idx_sell_origin_region` (`sell_origin_region_id`)\
+        );\
+        CREATE TABLE IF NOT EXISTS `trade_npc_excluded` (\
+            `npc_key` INT UNSIGNED NOT NULL,\
+            `npc_name` VARCHAR(255) NOT NULL,\
+            `reason` VARCHAR(128) NOT NULL,\
+            `source_tags_json` LONGTEXT NULL,\
+            PRIMARY KEY (`npc_key`, `reason`)\
+        );",
+        "ensure trade NPC catalog tables",
     )
 }
 

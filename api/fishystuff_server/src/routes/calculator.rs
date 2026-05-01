@@ -2,7 +2,6 @@ use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Write as _;
-use std::path::Path;
 use std::sync::LazyLock;
 
 use async_stream::stream;
@@ -41,7 +40,6 @@ use crate::store::{
     CalculatorZoneLootRateContribution, DataLang,
 };
 
-const TRADE_NPC_CATALOG_PATH: &str = "trade/trade_npc_destinations.v1.json";
 const TRADE_DISTANCE_BONUS_SCALE: f64 = 68.0 / 1_000_000.0;
 const TRADE_CUSTOM_DESTINATION_PREFIX: &str = "custom:";
 
@@ -801,11 +799,7 @@ pub async fn get_calculator_catalog(
     )
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
-    attach_runtime_trade_catalog(
-        &mut catalog,
-        state.config.runtime_cdn_root.as_deref(),
-        &request_id,
-    )?;
+    normalize_trade_defaults(&mut catalog.defaults, &catalog.trade_npcs);
 
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -1771,11 +1765,7 @@ async fn load_calculator_data(
             .map_err(|err| map_request_id(err, request_id))
         }
     )?;
-    attach_runtime_trade_catalog(
-        &mut catalog,
-        state.config.runtime_cdn_root.as_deref(),
-        request_id,
-    )?;
+    normalize_trade_defaults(&mut catalog.defaults, &catalog.trade_npcs);
     let zone_group_rates = catalog
         .zone_group_rates
         .iter()
@@ -1791,43 +1781,6 @@ async fn load_calculator_data(
         zone_group_rates,
         zone_loot_entries: Vec::new(),
     })
-}
-
-fn attach_runtime_trade_catalog(
-    catalog: &mut CalculatorCatalogResponse,
-    runtime_cdn_root: Option<&Path>,
-    request_id: &RequestId,
-) -> AppResult<()> {
-    catalog.trade_npcs = load_runtime_trade_npc_catalog(runtime_cdn_root, request_id)?;
-    normalize_trade_defaults(&mut catalog.defaults, &catalog.trade_npcs);
-    Ok(())
-}
-
-fn load_runtime_trade_npc_catalog(
-    runtime_cdn_root: Option<&Path>,
-    request_id: &RequestId,
-) -> AppResult<TradeNpcCatalogResponse> {
-    let Some(root) = runtime_cdn_root else {
-        return Ok(TradeNpcCatalogResponse::default());
-    };
-    let path = root.join(TRADE_NPC_CATALOG_PATH);
-    if !path.exists() {
-        tracing::warn!(
-            path = %path.display(),
-            "trade NPC catalog is not staged; calculator trade selectors will be empty"
-        );
-        return Ok(TradeNpcCatalogResponse::default());
-    }
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|err| {
-            AppError::internal(format!("read trade NPC catalog {}: {err}", path.display()))
-        })
-        .map_err(|err| map_request_id(err, request_id))?;
-    serde_json::from_str(&contents)
-        .map_err(|err| {
-            AppError::internal(format!("parse trade NPC catalog {}: {err}", path.display()))
-        })
-        .map_err(|err| map_request_id(err, request_id))
 }
 
 fn normalize_trade_defaults(signals: &mut CalculatorSignals, catalog: &TradeNpcCatalogResponse) {
@@ -17120,7 +17073,6 @@ mod tests {
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
             runtime_cdn_base_url: "http://127.0.0.1:4040".to_string(),
-            runtime_cdn_root: None,
             defaults: MetaDefaults::default(),
             status_cfg: ZoneStatusConfig::default(),
             cache_zone_stats_max: 4,

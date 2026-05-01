@@ -3125,7 +3125,9 @@ dependencies = [
  "calamine",
  "clap",
  "csv",
+ "fishystuff_api",
  "fishystuff_core",
+ "serde_json",
  "sha2",
 ]
 

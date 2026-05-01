@@ -60,7 +60,7 @@ impl DoltMySqlStore {
         let result: AppResult<CalculatorCatalogResponse> = (|| {
             self.validate_data_lang_available(&lang, query_ref)?;
             let worker_span = tracing::Span::current();
-            let (source_data, mastery_prize_curve, zone_group_rates, pets) =
+            let (source_data, mastery_prize_curve, zone_group_rates, pets, trade_npcs) =
                 std::thread::scope(|scope| -> AppResult<_> {
                     let source_lang = lang.clone();
                     let source_revision = revision.clone();
@@ -112,6 +112,15 @@ impl DoltMySqlStore {
                             self.query_calculator_pet_catalog(&pet_lang, query_ref)
                         }
                     });
+                    let trade_npcs_handle = scope.spawn({
+                        let worker_span = worker_span.clone();
+                        move || {
+                            let _worker = worker_span.enter();
+                            let _span = tracing::info_span!("store.calculator_catalog.trade_npcs")
+                                .entered();
+                            self.query_trade_npc_catalog(query_ref)
+                        }
+                    });
 
                     let source_data = source_data_handle.join().map_err(|_| {
                         AppError::internal("calculator catalog source data worker panicked")
@@ -126,7 +135,16 @@ impl DoltMySqlStore {
                     let pets = pets_handle.join().map_err(|_| {
                         AppError::internal("calculator catalog pet catalog worker panicked")
                     })??;
-                    Ok((source_data, mastery_prize_curve, zone_group_rates, pets))
+                    let trade_npcs = trade_npcs_handle.join().map_err(|_| {
+                        AppError::internal("calculator catalog trade NPC worker panicked")
+                    })??;
+                    Ok((
+                        source_data,
+                        mastery_prize_curve,
+                        zone_group_rates,
+                        pets,
+                        trade_npcs,
+                    ))
                 })?;
             let items = {
                 let _span = tracing::info_span!("store.calculator_catalog.build_items").entered();
@@ -146,7 +164,7 @@ impl DoltMySqlStore {
                 trade_levels: build_calculator_trade_levels(&lang),
                 session_units: build_calculator_session_units(&lang),
                 session_presets: build_calculator_session_presets(&lang),
-                trade_npcs: Default::default(),
+                trade_npcs,
                 defaults,
                 pets,
             })

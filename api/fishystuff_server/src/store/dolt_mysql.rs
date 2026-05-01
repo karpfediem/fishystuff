@@ -6,6 +6,7 @@ mod calculator_loot;
 mod calculator_pets;
 mod calculator_progression;
 mod calculator_sources;
+mod calculator_trade_npcs;
 mod catalog;
 mod fish_best_spots;
 mod item_metadata;
