@@ -70,6 +70,136 @@ test("info panel element exposes refresh and signal patch handlers", () => {
   assert.equal(typeof element.render, "function");
 });
 
+test("trade manager rows render full-height detail focus buttons and dispatch focus patches", () => {
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  const dispatched = [];
+  element._shell = {
+    __fishymapInitialSignals: {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Hakoven Islands",
+          layerSamples: [
+            {
+              layerId: "regions",
+              fieldId: 430,
+              detailSections: [detailSectionFact("origin_region", "Origin", "Hakoven Islands (R430)", "trade-origin")],
+              targets: [{ key: "origin_node", label: "Origin: Hakoven Islands (R430)", worldX: 10, worldZ: 20 }],
+            },
+          ],
+        },
+        catalog: {
+          layers: [{ layerId: "regions", displayOrder: 40 }],
+        },
+      },
+      _map_ui: {
+        windowUi: {
+          zoneInfo: { tab: "trade" },
+          settings: {},
+        },
+      },
+      _map_actions: {
+        focusWorldPointToken: 7,
+      },
+      _map_session: {
+        view: {
+          viewMode: "2d",
+          camera: { zoom: 512 },
+        },
+      },
+    },
+    dispatchEvent(event) {
+      dispatched.push(event.detail);
+      return true;
+    },
+  };
+  element._state = {
+    zoneCatalog: [],
+    zoneLootStatus: "idle",
+    zoneLootSummary: null,
+    zoneLootRgb: null,
+    zoneLootRequestToken: 0,
+    zoneLootConditionSelection: {},
+    tradeNpcMapStatus: "loaded",
+    tradeNpcMapCatalog: {
+      features: [
+        {
+          npcKey: 1,
+          npcName: "Chunsu",
+          spawn: { worldX: 1_100, worldZ: 120 },
+          sellOrigin: { regionId: 5, regionName: "Velia", worldX: 1_000, worldZ: 20 },
+        },
+      ],
+    },
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+
+  element.render();
+
+  assert.match(panelSlot.innerHTML, /data-fishy-focus-world-point="true"/);
+  assert.match(panelSlot.innerHTML, /badge badge-info badge-soft badge-sm/);
+  assert.match(panelSlot.innerHTML, /Chunsu/);
+  assert.match(panelSlot.innerHTML, /Velia \(R5\)/);
+  assert.match(panelSlot.innerHTML, /title="Chunsu"/);
+  assert.match(panelSlot.innerHTML, /title="Velia \(R5\)"/);
+  assert.match(panelSlot.innerHTML, /border-0/);
+  assert.doesNotMatch(panelSlot.innerHTML, /border-l/);
+  assert.doesNotMatch(panelSlot.innerHTML, /badge-ghost badge-xs/);
+  assert.match(panelSlot.innerHTML, /href="#fishy-right-fill"/);
+  assert.match(panelSlot.innerHTML, /aria-label="Focus Chunsu"/);
+
+  const button = {
+    getAttribute(name) {
+      return {
+        "data-focus-world-x": "1100",
+        "data-focus-world-z": "120",
+        "data-focus-point-kind": "waypoint",
+        "data-focus-point-label": "Chunsu",
+      }[name] ?? null;
+    },
+  };
+  element._handleClick({
+    target: {
+      closest(selector) {
+        return selector === "button[data-fishy-focus-world-point]" ? button : null;
+      },
+    },
+    preventDefault() {},
+  });
+
+  assert.deepEqual(dispatched, [
+    {
+      _map_actions: {
+        focusWorldPointToken: 8,
+        focusWorldPoint: {
+          worldX: 1_100,
+          worldZ: 120,
+          pointKind: "waypoint",
+          pointLabel: "Chunsu",
+        },
+      },
+      _map_session: {
+        view: {
+          viewMode: "2d",
+          camera: {
+            zoom: 512,
+            centerWorldX: 1_100,
+            centerWorldZ: 120,
+          },
+        },
+      },
+    },
+  ]);
+});
+
 test("normalize rates Datastar prop re-renders without refetching zone loot", () => {
   const element = new FishyMapInfoPanelElement();
   let refreshCount = 0;

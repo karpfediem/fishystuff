@@ -158,6 +158,19 @@ test("parseQuerySignalPatch supports multiple fish selectors and defers fish-nam
   });
 });
 
+test("parseQuerySignalPatch supports NPC selectors", () => {
+  assert.deepEqual(
+    parseQuerySignalPatch("https://fishystuff.fish/map/?npc=chunsu,nampo&npc=missing"),
+    {
+      _map_ui: {
+        search: {
+          pendingQueryNpcSelectors: ["chunsu", "nampo", "missing"],
+        },
+      },
+    },
+  );
+});
+
 test("parseQuerySignalPatch returns null when there are no relevant params", () => {
   assert.equal(parseQuerySignalPatch("https://fishystuff.fish/map/"), null);
 });

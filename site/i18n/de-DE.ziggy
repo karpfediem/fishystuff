@@ -955,6 +955,8 @@
   "map.info.trade.loading": "lädt",
   "map.info.trade.unavailable": "nicht verfügbar",
   "map.info.trade.request_failed": "Handelsverwalter-Anfrage fehlgeschlagen ({$status})",
+  "map.info.trade.focus_target": "{$name} fokussieren",
+  "map.info.trade.focus_target_generic": "Ziel fokussieren",
   "map.info.notice.title": "Hinweis",
   "map.info.zone_loot.title": "Fangprofil",
   "map.info.zone_loot.summary.default": "Rechner-Standardwerte",

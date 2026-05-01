@@ -62,6 +62,7 @@ const iconSources = {
   crosshair: { type: "mingcute", name: "aiming-2-line" },
   "hover-origin": { type: "mingcute", name: "map-pin-fill" },
   "trade-origin": { type: "mingcute", name: "wheel-fill" },
+  "right-fill": { type: "mingcute", name: "right-fill" },
   "hover-resources": { type: "mingcute", name: "chart-bar-fill" },
   "question-mark": { type: "mingcute", name: "question-2-fill" },
   bookmark: { type: "mingcute", name: "bookmark-fill" },

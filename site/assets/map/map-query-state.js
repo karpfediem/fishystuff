@@ -138,6 +138,7 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
     params,
     params.has("focusFish") ? ["focusFish"] : ["fish"],
   ) || [];
+  const npcSelectors = parseFishSelectors(params, ["npc"]) || [];
   const patchId = params.get("patch");
   const fromPatchId = params.get("fromPatch") ?? params.get("patchFrom");
   const toPatchId =
@@ -211,6 +212,14 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
     patch._map_ui.search = {
       ...(isPlainObject(patch._map_ui.search) ? patch._map_ui.search : {}),
       pendingQueryFishSelectors,
+    };
+  }
+
+  if (npcSelectors.length) {
+    patch._map_ui = patch._map_ui || {};
+    patch._map_ui.search = {
+      ...(isPlainObject(patch._map_ui.search) ? patch._map_ui.search : {}),
+      pendingQueryNpcSelectors: npcSelectors,
     };
   }
 

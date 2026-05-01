@@ -50,6 +50,20 @@ fn preferred_point_label_from_layer_samples(
         .or_else(|| normalized_point_label(fallback_point_label))
 }
 
+fn selected_point_label(
+    point_kind: FishyMapSelectionPointKind,
+    layer_samples: &[LayerQuerySample],
+    fallback_point_label: Option<&str>,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
+) -> Option<String> {
+    if matches!(point_kind, FishyMapSelectionPointKind::Waypoint) {
+        if let Some(label) = normalized_point_label(fallback_point_label) {
+            return Some(label);
+        }
+    }
+    preferred_point_label_from_layer_samples(layer_samples, fallback_point_label, zone_names)
+}
+
 pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
     if hover.zone_rgb().is_none()
         && hover.layer_samples.is_empty()
@@ -132,11 +146,7 @@ pub fn selected_info_at_world_point(
         world_z: world_point.z,
         sampled_world_point: true,
         point_kind: Some(point_kind),
-        point_label: preferred_point_label_from_layer_samples(
-            &layer_samples,
-            point_label,
-            zone_names,
-        ),
+        point_label: selected_point_label(point_kind, &layer_samples, point_label, zone_names),
         layer_samples,
         point_samples: Vec::new(),
     })
@@ -758,5 +768,80 @@ mod tests {
         .expect("selected info");
 
         assert_eq!(selected.point_label.as_deref(), Some("Margoria South"));
+    }
+
+    #[test]
+    fn selected_info_at_world_point_prefers_waypoint_label_for_landmarks() {
+        let registry = semantic_registry();
+        let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
+        let regions_layer = registry.get_by_key("regions").expect("regions layer");
+
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[0x123456; 4]).expect("zone field"),
+        );
+        exact_lookups.insert_ready(
+            regions_layer.id,
+            "/fields/regions.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[76; 4]).expect("region field"),
+        );
+
+        let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    0x123456,
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ZONE,
+                        "Zone",
+                        "Velia Bay",
+                        "hover-zone",
+                    ),
+                )]),
+            },
+        );
+        field_metadata.insert_ready(
+            regions_layer.id,
+            "/fields/regions.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    76,
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+                        "Region",
+                        "Velia (R5)",
+                        "hover-origin",
+                    ),
+                )]),
+            },
+        );
+
+        let map_to_world = MapToWorld::default();
+        let layer_filters = LayerEffectiveFilterState::default();
+        let selected = selected_info_at_world_point(
+            map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
+            &WorldPointQueryContext {
+                layer_registry: &registry,
+                layer_runtime: &LayerRuntime::default(),
+                exact_lookups: &exact_lookups,
+                field_metadata: &field_metadata,
+                tile_cache: &RasterTileCache::default(),
+                vector_runtime: &VectorLayerRuntime::default(),
+                layer_filters: &layer_filters,
+                map_to_world,
+            },
+            FishyMapSelectionPointKind::Waypoint,
+            Some("Chunsu"),
+            None,
+        )
+        .expect("selected info");
+
+        assert_eq!(selected.point_label.as_deref(), Some("Chunsu"));
+        assert_eq!(selected.layer_samples.len(), 2);
+        assert_eq!(selected.zone_rgb_u32(), Some(0x123456));
     }
 }

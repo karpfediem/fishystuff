@@ -955,6 +955,8 @@
   "map.info.trade.loading": "loading",
   "map.info.trade.unavailable": "unavailable",
   "map.info.trade.request_failed": "trade manager request failed ({$status})",
+  "map.info.trade.focus_target": "Focus {$name}",
+  "map.info.trade.focus_target_generic": "Focus target",
   "map.info.notice.title": "Notice",
   "map.info.zone_loot.title": "Catch Profile",
   "map.info.zone_loot.summary.default": "Calculator defaults",

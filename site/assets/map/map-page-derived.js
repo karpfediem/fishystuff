@@ -7,6 +7,11 @@ import {
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
+import {
+  buildFocusWorldPointSignalPatch,
+  loadTradeNpcMapCatalog,
+  tradeNpcFocusTargetForSelectors,
+} from "./map-trade-summary.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -64,6 +69,10 @@ function normalizePendingQueryFishSelectors(values) {
     next.push(normalized);
   }
   return next;
+}
+
+function normalizePendingQueryNpcSelectors(values) {
+  return normalizePendingQueryFishSelectors(values);
 }
 
 function normalizeFishLookupKey(value) {
@@ -173,6 +182,43 @@ export function buildQueryFishSelectionSignalPatch(signals) {
   return patch;
 }
 
+export async function buildQueryNpcFocusSignalPatch(
+  signals,
+  { loadTradeNpcMapCatalogImpl = loadTradeNpcMapCatalog } = {},
+) {
+  const pendingQueryNpcSelectors = normalizePendingQueryNpcSelectors(
+    signals?._map_ui?.search?.pendingQueryNpcSelectors,
+  );
+  if (!pendingQueryNpcSelectors.length) {
+    return null;
+  }
+  let catalog = null;
+  try {
+    catalog = await loadTradeNpcMapCatalogImpl();
+  } catch (_error) {
+    return {
+      _map_ui: {
+        search: {
+          pendingQueryNpcSelectors: [],
+        },
+      },
+    };
+  }
+  const focusWorldPoint = tradeNpcFocusTargetForSelectors(pendingQueryNpcSelectors, catalog);
+  const patch = {
+    _map_ui: {
+      search: {
+        pendingQueryNpcSelectors: [],
+      },
+    },
+  };
+  const focusPatch = buildFocusWorldPointSignalPatch(focusWorldPoint, signals);
+  if (!focusPatch) {
+    return patch;
+  }
+  return mergeProjectionPatch(focusPatch, patch);
+}
+
 export function createMapPageDerivedController({
   globalRef = globalThis,
   shell = null,
@@ -215,6 +261,11 @@ export function createMapPageDerivedController({
     if (projectionPatch) {
       dispatchPatch(projectionPatch);
     }
+    void buildQueryNpcFocusSignalPatch(readSignals() || {}).then((queryNpcFocusPatch) => {
+      if (queryNpcFocusPatch) {
+        dispatchPatch(queryNpcFocusPatch);
+      }
+    });
     return Object.freeze({
       queryPatch,
       queryFishSelectionPatch,

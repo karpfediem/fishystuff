@@ -955,6 +955,8 @@
   "map.info.trade.loading": "불러오는 중",
   "map.info.trade.unavailable": "사용할 수 없음",
   "map.info.trade.request_failed": "무역 관리자 요청 실패 ({$status})",
+  "map.info.trade.focus_target": "{$name}에 초점 맞추기",
+  "map.info.trade.focus_target_generic": "대상에 초점 맞추기",
   "map.info.notice.title": "Notice",
   "map.info.zone_loot.title": "Catch Profile",
   "map.info.zone_loot.summary.default": "Calculator defaults",

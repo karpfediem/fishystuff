@@ -4,6 +4,7 @@ import { mapText } from "./map-i18n.js";
 const DEFAULT_TRADE_NPCS_MAP_PATH = "/api/v1/trade_npcs/map";
 const TRADE_DISTANCE_BONUS_SCALE = 68 / 1_000_000;
 const ORIGIN_TARGET_KEY = "origin_node";
+const DEFAULT_FOCUS_VIEW_MODE = "2d";
 
 let cachedTradeNpcMapCatalog = null;
 let cachedTradeNpcMapPromise = null;
@@ -29,6 +30,40 @@ function integerValue(value) {
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeLookupKey(value) {
+  return trimString(value).toLowerCase().replace(/\s+/g, " ");
+}
+
+function slugifyLookupKey(value) {
+  const normalized = normalizeLookupKey(value);
+  const ascii =
+    typeof normalized.normalize === "function"
+      ? normalized.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      : normalized;
+  return ascii
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeSelectorList(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  const next = [];
+  const seen = new Set();
+  for (const value of values) {
+    const normalized = trimString(value);
+    const lookupKey = normalizeLookupKey(normalized);
+    if (!lookupKey || seen.has(lookupKey)) {
+      continue;
+    }
+    seen.add(lookupKey);
+    next.push(normalized);
+  }
+  return next;
 }
 
 function regionIdFromLabel(value) {
@@ -169,7 +204,7 @@ function normalizeTradeNpcFeature(feature) {
       properties.sell_destination_trade_origin,
   );
   const assignedRegion = normalizeRegionRef(properties.assignedRegion ?? properties.assigned_region);
-  const spawn = normalizeRegionRef(properties.npcSpawn ?? properties.npc_spawn);
+  const spawn = normalizeRegionRef(properties.spawn ?? properties.npcSpawn ?? properties.npc_spawn);
   const fallbackPoint = {
     worldX: finiteNumber(geometryCoordinates[0]),
     worldZ: finiteNumber(geometryCoordinates[1]),
@@ -197,7 +232,6 @@ function normalizeTradeNpcFeature(feature) {
     },
     sellOriginLabel: trimString(properties.sellOriginLabel) || formatRegionRef(sellOrigin),
     assignedRegionLabel: trimString(properties.assignedRegionLabel) || formatRegionRef(assignedRegion),
-    spawnRegionLabel: trimString(properties.npcRegionLabel) || formatRegionRef(spawn),
   };
 }
 
@@ -223,6 +257,93 @@ function distanceBonusPercent(origin, destination) {
   const dx = origin.worldX - destination.sellOrigin.worldX;
   const dz = origin.worldZ - destination.sellOrigin.worldZ;
   return Math.hypot(dx, dz) * TRADE_DISTANCE_BONUS_SCALE;
+}
+
+function focusWorldPointForNpc(destination) {
+  if (!Number.isFinite(destination?.spawn?.worldX) || !Number.isFinite(destination?.spawn?.worldZ)) {
+    return null;
+  }
+  return {
+    worldX: destination.spawn.worldX,
+    worldZ: destination.spawn.worldZ,
+    pointKind: "waypoint",
+    pointLabel: destination.npcName,
+  };
+}
+
+function tradeNpcMatchesSelector(destination, selector) {
+  const normalizedSelector = normalizeLookupKey(selector);
+  const slugSelector = slugifyLookupKey(selector);
+  const numericSelector = Number.parseInt(selector, 10);
+  if (Number.isInteger(numericSelector) && destination.npcKey === numericSelector) {
+    return "exact";
+  }
+  const normalizedName = normalizeLookupKey(destination.npcName);
+  const slugName = slugifyLookupKey(destination.npcName);
+  if (normalizedName === normalizedSelector || slugName === slugSelector) {
+    return "exact";
+  }
+  if (
+    normalizedSelector &&
+    (normalizedName.includes(normalizedSelector) ||
+      (slugSelector && slugName.includes(slugSelector)))
+  ) {
+    return "partial";
+  }
+  return "";
+}
+
+export function tradeNpcFocusTargetForSelectors(selectors, rawCatalog) {
+  const catalog = normalizeTradeNpcMapCatalog(rawCatalog);
+  const normalizedSelectors = normalizeSelectorList(selectors);
+  for (const selector of normalizedSelectors) {
+    const exact = catalog.features.find((destination) => (
+      tradeNpcMatchesSelector(destination, selector) === "exact" &&
+      focusWorldPointForNpc(destination)
+    ));
+    if (exact) {
+      return focusWorldPointForNpc(exact);
+    }
+    const partialMatches = catalog.features.filter((destination) => (
+      tradeNpcMatchesSelector(destination, selector) === "partial" &&
+      focusWorldPointForNpc(destination)
+    ));
+    if (partialMatches.length === 1) {
+      return focusWorldPointForNpc(partialMatches[0]);
+    }
+  }
+  return null;
+}
+
+export function buildFocusWorldPointSignalPatch(focusWorldPoint, signals = {}) {
+  if (
+    !Number.isFinite(focusWorldPoint?.worldX) ||
+    !Number.isFinite(focusWorldPoint?.worldZ)
+  ) {
+    return null;
+  }
+  const currentToken = Number(signals?._map_actions?.focusWorldPointToken || 0);
+  const currentView = isPlainObject(signals?._map_session?.view)
+    ? signals._map_session.view
+    : {};
+  const currentCamera = isPlainObject(currentView.camera) ? currentView.camera : {};
+  const viewMode = trimString(currentView.viewMode) || DEFAULT_FOCUS_VIEW_MODE;
+  return {
+    _map_actions: {
+      focusWorldPointToken: currentToken + 1,
+      focusWorldPoint: cloneJson(focusWorldPoint),
+    },
+    _map_session: {
+      view: {
+        viewMode,
+        camera: {
+          ...cloneJson(currentCamera),
+          centerWorldX: focusWorldPoint.worldX,
+          centerWorldZ: focusWorldPoint.worldZ,
+        },
+      },
+    },
+  };
 }
 
 export function formatTradeDistanceBonus(value) {
@@ -300,11 +421,20 @@ export function tradeManagerFactsForOrigin(layerSamples, rawCatalog, { status = 
     },
     ...rows.map((row) => ({
       key: `trade_manager:${row.id}`,
+      variant: "trade-manager",
       icon: "trade-origin",
       label: row.npcName,
       value: [row.distanceBonusText, row.sellOriginLabel || row.assignedRegionLabel]
         .filter(Boolean)
         .join(" · "),
+      distanceBonusText: row.distanceBonusText,
+      tradeDistanceRegionLabel: row.sellOriginLabel || row.assignedRegionLabel,
+      action: focusWorldPointForNpc(row)
+        ? {
+            kind: "focus-world-point",
+            focusWorldPoint: focusWorldPointForNpc(row),
+          }
+        : null,
     })),
   ];
 }

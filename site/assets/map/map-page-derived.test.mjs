@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildQueryFishSelectionSignalPatch,
+  buildQueryNpcFocusSignalPatch,
   buildSearchProjectionPatchForSignalPatch,
   createMapPageDerivedController,
 } from "./map-page-derived.js";
@@ -146,6 +147,68 @@ test("buildQueryFishSelectionSignalPatch resolves pending fish-name selectors fr
             { type: "term", term: { kind: "fish", fishId: 179 } },
           ],
         },
+      },
+    },
+  });
+});
+
+test("buildQueryNpcFocusSignalPatch resolves pending NPC selectors into focus patches", async () => {
+  const patch = await buildQueryNpcFocusSignalPatch(
+    {
+      _map_ui: {
+        search: {
+          pendingQueryNpcSelectors: ["chunsu"],
+        },
+      },
+      _map_actions: {
+        focusWorldPointToken: 4,
+      },
+      _map_session: {
+        view: {
+          viewMode: "2d",
+          camera: {
+            zoom: 700,
+          },
+        },
+      },
+    },
+    {
+      loadTradeNpcMapCatalogImpl: async () => ({
+        features: [
+          {
+            npcKey: 1,
+            npcName: "Chunsu",
+            spawn: { worldX: 10, worldZ: 20 },
+            sellOrigin: { worldX: 30, worldZ: 40 },
+          },
+        ],
+      }),
+    },
+  );
+
+  assert.deepEqual(patch, {
+    _map_actions: {
+      focusWorldPointToken: 5,
+      focusWorldPoint: {
+        worldX: 10,
+        worldZ: 20,
+        pointKind: "waypoint",
+        pointLabel: "Chunsu",
+      },
+    },
+    _map_session: {
+      view: {
+        viewMode: "2d",
+        camera: {
+          zoom: 700,
+          centerWorldX: 10,
+          centerWorldZ: 20,
+        },
+      },
+    },
+    _map_ui: {
+      search: {
+        pendingQueryNpcSelectors: [],
       },
     },
   });

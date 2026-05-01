@@ -5,6 +5,7 @@ import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 import {
+  buildFocusWorldPointSignalPatch,
   loadTradeNpcMapCatalog,
   selectedTradeOriginFromLayerSamples,
 } from "./map-trade-summary.js";
@@ -94,6 +95,25 @@ function factIconMarkup(fact) {
   return spriteIcon(fact?.icon || "information-circle", "size-4");
 }
 
+function factFocusAction(fact) {
+  const action = fact?.action;
+  if (action?.kind !== "focus-world-point") {
+    return null;
+  }
+  const focusWorldPoint = action.focusWorldPoint;
+  const worldX = Number(focusWorldPoint?.worldX);
+  const worldZ = Number(focusWorldPoint?.worldZ);
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) {
+    return null;
+  }
+  return {
+    worldX,
+    worldZ,
+    pointKind: trimString(focusWorldPoint?.pointKind),
+    pointLabel: trimString(focusWorldPoint?.pointLabel),
+  };
+}
+
 function tabButtonMarkup(tab, activePaneId) {
   const isActive = tab.id === activePaneId;
   return `
@@ -111,14 +131,102 @@ function tabButtonMarkup(tab, activePaneId) {
   `;
 }
 
+function focusWorldPointButtonMarkup(focusAction, label) {
+  if (!focusAction) {
+    return "";
+  }
+  const normalizedLabel = trimString(label);
+  const ariaLabel = normalizedLabel
+    ? mapText("info.trade.focus_target", { name: normalizedLabel })
+    : mapText("info.trade.focus_target_generic");
+  return `<button
+    type="button"
+    class="btn btn-ghost btn-sm h-auto min-h-0 self-stretch rounded-none rounded-r-box border-0 px-2 text-base-content/55 hover:bg-base-200 hover:text-base-content"
+    data-fishy-focus-world-point="true"
+    data-focus-world-x="${escapeHtml(focusAction.worldX)}"
+    data-focus-world-z="${escapeHtml(focusAction.worldZ)}"
+    data-focus-point-kind="${escapeHtml(focusAction.pointKind)}"
+    data-focus-point-label="${escapeHtml(focusAction.pointLabel)}"
+    aria-label="${escapeHtml(ariaLabel)}"
+    title="${escapeHtml(ariaLabel)}"
+  >${spriteIcon("right-fill", "size-4")}</button>`;
+}
+
+function tradeManagerFactMarkup(fact, focusAction) {
+  const tradeDistanceRegionLabel = trimString(fact?.tradeDistanceRegionLabel);
+  const distanceBonusText = trimString(fact?.distanceBonusText);
+  const npcLabel = trimString(fact?.label);
+  return `
+    <div class="rounded-box overflow-hidden border border-base-300/80 bg-base-100/80 shadow-xs">
+      <div class="flex min-w-0 items-stretch">
+        <span class="m-2 inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-base-200 text-base-content/70" aria-hidden="true">
+          ${factIconMarkup(fact)}
+        </span>
+        <div class="min-w-0 flex-1 py-2 pr-2">
+          <span class="block truncate text-sm font-semibold text-base-content" title="${escapeHtml(npcLabel)}">${escapeHtml(npcLabel)}</span>
+          ${
+            tradeDistanceRegionLabel
+              ? `<span class="mt-0.5 block truncate text-xs font-medium text-base-content/60" title="${escapeHtml(tradeDistanceRegionLabel)}">${escapeHtml(tradeDistanceRegionLabel)}</span>`
+              : ""
+          }
+        </div>
+        <div class="flex shrink-0 items-center px-2">
+          ${
+            distanceBonusText
+              ? `<span class="badge badge-info badge-soft badge-sm whitespace-nowrap">${escapeHtml(distanceBonusText)}</span>`
+              : ""
+          }
+        </div>
+        ${focusWorldPointButtonMarkup(focusAction, fact.label)}
+      </div>
+    </div>
+  `;
+}
+
 function factMarkup(fact) {
+  const focusAction = factFocusAction(fact);
+  if (fact?.variant === "trade-manager") {
+    return tradeManagerFactMarkup(fact, focusAction);
+  }
+  const labelMarkup = focusAction
+    ? `<button
+        type="button"
+        class="link link-primary text-left font-semibold"
+        data-fishy-focus-world-point="true"
+        data-focus-world-x="${escapeHtml(focusAction.worldX)}"
+        data-focus-world-z="${escapeHtml(focusAction.worldZ)}"
+        data-focus-point-kind="${escapeHtml(focusAction.pointKind)}"
+        data-focus-point-label="${escapeHtml(focusAction.pointLabel)}"
+      >${escapeHtml(fact.label)}</button>`
+    : escapeHtml(fact.label);
   return `
     <div class="fishymap-overview-row">
       <span class="fishymap-overview-row-icon" aria-hidden="true">${factIconMarkup(fact)}</span>
-      <span class="fishymap-overview-row-label">${escapeHtml(fact.label)}</span>
+      <span class="fishymap-overview-row-label">${labelMarkup}</span>
       <span class="fishymap-overview-row-value">${escapeHtml(fact.value)}</span>
     </div>
   `;
+}
+
+function focusWorldPointFromButton(button) {
+  if (!button) {
+    return null;
+  }
+  const worldX = Number(button.getAttribute("data-focus-world-x"));
+  const worldZ = Number(button.getAttribute("data-focus-world-z"));
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) {
+    return null;
+  }
+  return {
+    worldX,
+    worldZ,
+    ...(trimString(button.getAttribute("data-focus-point-kind"))
+      ? { pointKind: trimString(button.getAttribute("data-focus-point-kind")) }
+      : {}),
+    ...(trimString(button.getAttribute("data-focus-point-label"))
+      ? { pointLabel: trimString(button.getAttribute("data-focus-point-label")) }
+      : {}),
+  };
 }
 
 function itemGradeTone(grade, isPrize) {
@@ -710,6 +818,17 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       void this.refreshZoneLootSummary({ force: true });
     };
     this._handleClick = (event) => {
+      const focusButton = event.target.closest("button[data-fishy-focus-world-point]");
+      if (focusButton) {
+        event.preventDefault?.();
+        const focusWorldPoint = focusWorldPointFromButton(focusButton);
+        const patch = buildFocusWorldPointSignalPatch(focusWorldPoint, this.signals());
+        if (patch) {
+          dispatchShellSignalPatch(this._shell, patch);
+        }
+        return;
+      }
+
       const conditionButton = event.target.closest(
         "button[data-zone-loot-condition-direction]",
       );

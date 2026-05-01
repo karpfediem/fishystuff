@@ -186,13 +186,6 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     else {
         return;
     };
-    let point_samples = point_samples_at_world_point(
-        world_point,
-        &context.points,
-        &context.snapshot,
-        &context.display_state,
-        &context.point_camera_q,
-    );
     let waypoint_sample = waypoint_sample_at_world_point(
         world_point,
         &context.waypoint_runtime,
@@ -204,22 +197,40 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         &context.layer_filters,
         &context.point_camera_q,
     );
+    let selected_world_point = waypoint_sample
+        .as_ref()
+        .map(|sample| WorldPoint::new(sample.world_x, sample.world_z))
+        .unwrap_or(world_point);
+    let point_samples = point_samples_at_world_point(
+        selected_world_point,
+        &context.points,
+        &context.snapshot,
+        &context.display_state,
+        &context.point_camera_q,
+    );
+    let query_context = WorldPointQueryContext {
+        layer_registry: &context.layer_registry,
+        layer_runtime: &context.layer_runtime,
+        exact_lookups: &context.exact_lookups,
+        field_metadata: &context.field_metadata,
+        tile_cache: &context.tile_cache,
+        vector_runtime: &context.vector_runtime,
+        layer_filters: &context.layer_filters,
+        map_to_world: MapToWorld::default(),
+    };
     let Some(mut selected_info) = waypoint_sample
         .as_ref()
-        .map(waypoint_selected_info)
+        .map(|sample| {
+            waypoint_selected_info_at_exact_world_point(
+                sample,
+                &query_context,
+                Some(&context.bootstrap.zones),
+            )
+        })
         .or_else(|| {
             selected_info_at_world_point(
                 world_point,
-                &WorldPointQueryContext {
-                    layer_registry: &context.layer_registry,
-                    layer_runtime: &context.layer_runtime,
-                    exact_lookups: &context.exact_lookups,
-                    field_metadata: &context.field_metadata,
-                    tile_cache: &context.tile_cache,
-                    vector_runtime: &context.vector_runtime,
-                    layer_filters: &context.layer_filters,
-                    map_to_world: MapToWorld::default(),
-                },
+                &query_context,
                 crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
                 None,
                 Some(&context.bootstrap.zones),
@@ -335,6 +346,33 @@ fn waypoint_selected_info(sample: &WaypointLayerInteractionSample) -> SelectedIn
         layer_samples: vec![sample.layer_sample.clone()],
         point_samples: Vec::new(),
     }
+}
+
+fn waypoint_selected_info_at_exact_world_point(
+    sample: &WaypointLayerInteractionSample,
+    query_context: &WorldPointQueryContext<'_>,
+    zone_names: Option<&std::collections::HashMap<u32, Option<String>>>,
+) -> SelectedInfo {
+    let exact_world_point = WorldPoint::new(sample.world_x, sample.world_z);
+    let mut selected = selected_info_at_world_point(
+        exact_world_point,
+        query_context,
+        crate::bridge::contract::FishyMapSelectionPointKind::Waypoint,
+        sample.point_label.as_deref(),
+        zone_names,
+    )
+    .unwrap_or_else(|| waypoint_selected_info(sample));
+    selected.world_x = sample.world_x;
+    selected.world_z = sample.world_z;
+    selected.sampled_world_point = true;
+    selected.point_kind = Some(crate::bridge::contract::FishyMapSelectionPointKind::Waypoint);
+    if sample.point_label.is_some() {
+        selected.point_label = sample.point_label.clone();
+    }
+    selected
+        .layer_samples
+        .insert(0, sample.layer_sample.clone());
+    selected
 }
 
 fn interaction_world_point(
