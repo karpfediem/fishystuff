@@ -1,0 +1,56 @@
+{
+  "cluster": "local-test",
+  "generation": 1,
+  "mode": "vm-test",
+  "hosts": {
+    "vm-single-host": {
+      "enabled": true,
+      "role": "single-site",
+      "hostname": "vm-single-host"
+    }
+  },
+  "releases": {
+    "example-release": {
+      "generation": 1,
+      "git_rev": "example",
+      "dolt_commit": "example",
+      "closures": {
+        "api": {
+          "enabled": false,
+          "store_path": "",
+          "gcroot_path": ""
+        },
+        "site": {
+          "enabled": false,
+          "store_path": "",
+          "gcroot_path": ""
+        },
+        "cdn_runtime": {
+          "enabled": false,
+          "store_path": "",
+          "gcroot_path": ""
+        },
+        "dolt_service": {
+          "enabled": false,
+          "store_path": "",
+          "gcroot_path": ""
+        }
+      },
+      "dolt": {
+        "repository": "fishystuff/fishystuff",
+        "commit": "example",
+        "branch_context": "local-test",
+        "mode": "read_only"
+      }
+    }
+  },
+  "environments": {
+    "local-test": {
+      "enabled": true,
+      "strategy": "single_active",
+      "host": "vm-single-host",
+      "active_release": "example-release",
+      "serve": false
+    }
+  }
+}

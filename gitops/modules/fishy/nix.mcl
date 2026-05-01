@@ -1,0 +1,36 @@
+import "fmt"
+import "strings" as core_strings
+
+class artifact($st) {
+	$name str = $st->name
+	$store_path str = $st->store_path || ""
+	$gcroot_path str = $st->gcroot_path || ""
+	$enabled bool = $st->enabled || false
+	$mode str = $st->mode || "validate"
+	$should_manage = $enabled and ($mode == "local-apply")
+	$phase = if not $enabled {
+		"disabled"
+	} else {
+		if $should_manage { "managed" } else { "validation_noop" }
+	}
+
+	panic($name == "", "fishy nix artifact requires name")
+	panic($should_manage and ($store_path == ""), fmt.printf("enabled local-apply artifact %s requires store_path", $name))
+	panic($should_manage and ($gcroot_path == ""), fmt.printf("enabled local-apply artifact %s requires gcroot_path", $name))
+	panic($should_manage and (not core_strings.has_prefix($store_path, "/nix/store/")), fmt.printf("artifact %s store_path must be under /nix/store", $name))
+
+	if $should_manage {
+		nix:closure "${name}" {
+			paths => [$store_path,],
+			mode => "verify",
+		}
+
+		nix:gcroot "${gcroot_path}" {
+			target => $store_path,
+			state => "exists",
+			force => true,
+		}
+
+		Nix:Closure["${name}"] -> Nix:Gcroot["${gcroot_path}"]
+	}
+}

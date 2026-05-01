@@ -1,0 +1,63 @@
+import "fmt"
+
+import "nix.mcl" as fishy_nix
+
+class candidate($st) {
+	$mode str = $st->mode || "validate"
+	$release_id str = $st->release_id
+	$generation int = $st->generation || 0
+	$git_rev str = $st->git_rev || ""
+	$dolt_commit str = $st->dolt_commit || ""
+	$closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = $st->closures || {}
+	$empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
+		enabled => false,
+		store_path => "",
+		gcroot_path => "",
+	}
+	$api_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["api"] || $empty_artifact
+	$site_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["site"] || $empty_artifact
+	$cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["cdn_runtime"] || $empty_artifact
+	$dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["dolt_service"] || $empty_artifact
+	$identity str = fmt.printf(
+		"%s:generation=%d:git=%s:dolt=%s",
+		$release_id,
+		$generation,
+		$git_rev,
+		$dolt_commit
+	)
+
+	panic($release_id == "", "release candidate requires release_id")
+	panic($generation == 0, fmt.printf("release %s requires non-zero generation", $release_id))
+
+	include fishy_nix.artifact(struct {
+		mode => $mode,
+		name => fmt.printf("%s-api", $release_id),
+		store_path => $api_artifact->store_path,
+		gcroot_path => $api_artifact->gcroot_path,
+		enabled => $api_artifact->enabled,
+	})
+
+	include fishy_nix.artifact(struct {
+		mode => $mode,
+		name => fmt.printf("%s-site", $release_id),
+		store_path => $site_artifact->store_path,
+		gcroot_path => $site_artifact->gcroot_path,
+		enabled => $site_artifact->enabled,
+	})
+
+	include fishy_nix.artifact(struct {
+		mode => $mode,
+		name => fmt.printf("%s-cdn-runtime", $release_id),
+		store_path => $cdn_runtime_artifact->store_path,
+		gcroot_path => $cdn_runtime_artifact->gcroot_path,
+		enabled => $cdn_runtime_artifact->enabled,
+	})
+
+	include fishy_nix.artifact(struct {
+		mode => $mode,
+		name => fmt.printf("%s-dolt-service", $release_id),
+		store_path => $dolt_service_artifact->store_path,
+		gcroot_path => $dolt_service_artifact->gcroot_path,
+		enabled => $dolt_service_artifact->enabled,
+	})
+}

@@ -8,6 +8,9 @@
     nix2container.url = "github:nlewo/nix2container";
     nix2container.inputs.nixpkgs.follows = "nixpkgs";
     mk-shell-bin.url = "github:rrbutani/nix-mk-shell-bin";
+    mgmt-fishystuff-beta.url = "git+file:///home/carp/code/mgmt-fishystuff-beta";
+    mgmt-fishystuff-beta.inputs.flake-parts.follows = "flake-parts";
+    mgmt-fishystuff-beta.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
     crane.url = "github:ipetkov/crane";
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -17,7 +20,7 @@
     waypoints.flake = false;
   };
 
-  outputs = inputs@{ self, flake-parts, crane, ... }:
+  outputs = inputs@{ self, flake-parts, crane, mgmt-fishystuff-beta, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, ... }: {
       systems = [ "x86_64-linux" ];
 
@@ -275,6 +278,11 @@
           modularServiceRuntime = pkgs.callPackage ./nix/tests/modular-service-runtime.nix {
             inherit serviceModules;
           };
+          gitopsTests = import ./gitops/tests/nixos {
+            inherit pkgs;
+            gitopsSrc = ./gitops;
+            mgmtPackage = mgmt-fishystuff-beta.packages.${system}.minimal;
+          };
           cdnServingRootRetentionCheck =
             let
               currentFixture = pkgs.runCommand "cdn-serving-current-fixture" { } ''
@@ -355,6 +363,7 @@
           };
           checks =
             serviceBundleChecks
+            // gitopsTests
             // {
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               modular-service-runtime = modularServiceRuntime;

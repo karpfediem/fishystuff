@@ -1,0 +1,51 @@
+class model($st) {
+	$empty_hosts map{str: struct{enabled bool; role str; hostname str}} = {}
+	$empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
+	$empty_releases map{str: struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	}} = {}
+	$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = {}
+
+	$empty_host struct{enabled bool; role str; hostname str} = struct {
+		enabled => false,
+		role => "",
+		hostname => "",
+	}
+	$empty_release struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	} = struct {
+		generation => 0,
+		git_rev => "",
+		dolt_commit => "",
+		closures => $empty_closures,
+		dolt => struct {
+			repository => "",
+			commit => "",
+			branch_context => "",
+			mode => "",
+		},
+	}
+
+	$cluster str = $st->cluster || "local-test"
+	$generation int = $st->generation || 0
+	$mode str = $st->mode || "validate"
+	$hosts map{str: struct{enabled bool; role str; hostname str}} = $st->hosts || $empty_hosts
+	$releases map{str: struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	}} = $st->releases || $empty_releases
+	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = $st->environments || $empty_environments
+
+	panic(($mode != "validate") and ($mode != "vm-test") and ($mode != "local-apply"), "unsupported gitops desired-state mode")
+}

@@ -1,0 +1,38 @@
+import "fmt"
+
+class publish($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$release_id str = $st->release_id
+	$environment str = $st->environment
+	$host str = $st->host
+	$phase str = $st->phase || "candidate"
+	$admission_state str = $st->admission_state || "not_run"
+	$served bool = $st->served || false
+	$failure_reason str = $st->failure_reason || ""
+	$write_vm_state = $mode == "vm-test"
+	$write_local_state = ($mode == "vm-test") or ($mode == "local-apply")
+	$status_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test/status" } else { "/tmp/fishystuff-gitops-test/status" }
+	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"release_id\": \"%s\",\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"phase\": \"%s\",\n  \"admission_state\": \"%s\",\n  \"served\": %t,\n  \"failure_reason\": \"%s\"\n}\n", $desired_generation, $release_id, $environment, $host, $phase, $admission_state, $served, $failure_reason)
+
+	panic($environment == "", "status publication requires environment")
+	panic($host == "", "status publication requires host")
+	panic($release_id == "", "status publication requires release_id")
+
+	if $write_local_state {
+		file "${status_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${status_path}" {
+			state => "exists",
+			content => $content,
+			mode => "0644",
+		}
+
+		File["${status_dir}/"] -> File["${status_path}"]
+	}
+}

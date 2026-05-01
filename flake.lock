@@ -33,6 +33,28 @@
         "type": "github"
       }
     },
+    "mgmt-fishystuff-beta": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs-unstable"
+        ]
+      },
+      "locked": {
+        "dirtyRev": "8ff41165c88368b84828ea2e37c24414be3f9532-dirty",
+        "dirtyShortRev": "8ff4116-dirty",
+        "lastModified": 1776848146,
+        "narHash": "sha256-UmZuMvkkXrGvVnPhD0LkgEv2+uj0LPPDFhfngS9Mj5M=",
+        "type": "git",
+        "url": "file:///home/carp/code/mgmt-fishystuff-beta"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///home/carp/code/mgmt-fishystuff-beta"
+      }
+    },
     "mk-shell-bin": {
       "locked": {
         "lastModified": 1677004959,
@@ -119,6 +141,7 @@
       "inputs": {
         "crane": "crane",
         "flake-parts": "flake-parts",
+        "mgmt-fishystuff-beta": "mgmt-fishystuff-beta",
         "mk-shell-bin": "mk-shell-bin",
         "nix2container": "nix2container",
         "nixpkgs": "nixpkgs",

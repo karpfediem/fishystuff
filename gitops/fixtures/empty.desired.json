@@ -1,0 +1,8 @@
+{
+  "cluster": "local-test",
+  "generation": 0,
+  "mode": "validate",
+  "hosts": {},
+  "releases": {},
+  "environments": {}
+}

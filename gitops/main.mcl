@@ -1,0 +1,191 @@
+import "encoding"
+import "os"
+import "sys"
+
+import "modules/fishy/admission.mcl" as fishy_admission
+import "modules/fishy/desired.mcl" as fishy_desired
+import "modules/fishy/instance.mcl" as fishy_instance
+import "modules/fishy/release.mcl" as fishy_release
+import "modules/fishy/status.mcl" as fishy_status
+
+$state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "gitops/fixtures/empty.desired.json")
+
+$raw_desired = encoding.decode_json_flexible(
+	os.readfile($state_file),
+	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}}}"
+)
+
+include fishy_desired.model($raw_desired) as desired
+
+$empty_hosts map{str: struct{enabled bool; role str; hostname str}} = {}
+$empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
+$empty_dolt struct{repository str; commit str; branch_context str; mode str} = struct {
+	repository => "",
+	commit => "",
+	branch_context => "",
+	mode => "",
+}
+$empty_releases map{str: struct{
+	generation int;
+	git_rev str;
+	dolt_commit str;
+	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+	dolt struct{repository str; commit str; branch_context str; mode str}
+}} = {}
+$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = {}
+$empty_host struct{enabled bool; role str; hostname str} = struct {
+	enabled => false,
+	role => "",
+	hostname => "",
+}
+$empty_environment struct{enabled bool; strategy str; host str; active_release str; serve bool} = struct {
+	enabled => false,
+	strategy => "",
+	host => "",
+	active_release => "",
+	serve => false,
+}
+$empty_release struct{
+	generation int;
+	git_rev str;
+	dolt_commit str;
+	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+	dolt struct{repository str; commit str; branch_context str; mode str}
+} = struct {
+	generation => 0,
+	git_rev => "",
+	dolt_commit => "",
+	closures => $empty_closures,
+	dolt => $empty_dolt,
+}
+$cluster str = $raw_desired->cluster || "local-test"
+$generation int = $raw_desired->generation || 0
+$mode str = $raw_desired->mode || "validate"
+$hosts map{str: struct{enabled bool; role str; hostname str}} = $raw_desired->hosts || $empty_hosts
+$releases map{str: struct{
+	generation int;
+	git_rev str;
+	dolt_commit str;
+	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+	dolt struct{repository str; commit str; branch_context str; mode str}
+}} = $raw_desired->releases || $empty_releases
+$environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = $raw_desired->environments || $empty_environments
+
+$example_release struct{
+	generation int;
+	git_rev str;
+	dolt_commit str;
+	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+	dolt struct{repository str; commit str; branch_context str; mode str}
+} = $releases["example-release"] || $empty_release
+$local_test_environment struct{enabled bool; strategy str; host str; active_release str; serve bool} = $environments["local-test"] || $empty_environment
+$beta_environment struct{enabled bool; strategy str; host str; active_release str; serve bool} = $environments["beta"] || $empty_environment
+$vm_single_host struct{enabled bool; role str; hostname str} = $hosts["vm-single-host"] || $empty_host
+$beta_single_host struct{enabled bool; role str; hostname str} = $hosts["beta-single-host"] || $empty_host
+$example_dolt struct{repository str; commit str; branch_context str; mode str} = $example_release->dolt || $empty_dolt
+
+if $example_release->generation != 0 {
+	include fishy_release.candidate(struct {
+		mode => $mode,
+		release_id => "example-release",
+		generation => $example_release->generation,
+		git_rev => $example_release->git_rev,
+		dolt_commit => $example_release->dolt_commit,
+		closures => $example_release->closures,
+	})
+}
+
+if $local_test_environment->enabled {
+	$admission_state = if $mode == "vm-test" { "passed_fixture" } else { "not_run" }
+	$served = $local_test_environment->serve and ($admission_state == "passed_fixture")
+
+	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")
+	panic(not $vm_single_host->enabled, "local-test environment references a disabled host")
+	panic($local_test_environment->active_release != "example-release", "local-test environment currently expects example-release")
+	panic($example_release->generation == 0, "local-test environment references an unknown release")
+	panic($local_test_environment->serve and ($admission_state != "passed_fixture"), "serving requires passed admission")
+
+	include fishy_instance.candidate(struct {
+		mode => $mode,
+		cluster => $cluster,
+		desired_generation => $generation,
+		environment => "local-test",
+		host_name => $vm_single_host->hostname,
+		release_id => $local_test_environment->active_release,
+		release_generation => $example_release->generation,
+		closures => $example_release->closures,
+		dolt_repository => $example_dolt->repository,
+		dolt_commit => $example_dolt->commit,
+		dolt_branch_context => $example_dolt->branch_context,
+		dolt_mode => $example_dolt->mode,
+		serve => $local_test_environment->serve,
+	})
+
+	include fishy_admission.fixture(struct {
+		mode => $mode,
+		environment => "local-test",
+		host => $vm_single_host->hostname,
+		release_id => $local_test_environment->active_release,
+		state => $admission_state,
+	})
+
+	include fishy_status.publish(struct {
+		mode => $mode,
+		desired_generation => $generation,
+		environment => "local-test",
+		host => $vm_single_host->hostname,
+		release_id => $local_test_environment->active_release,
+		phase => if $served { "served" } else { "candidate" },
+		admission_state => $admission_state,
+		served => $served,
+		failure_reason => "",
+	})
+}
+
+if $beta_environment->enabled {
+	$admission_state = "not_run"
+	$served = false
+
+	panic($mode != "validate", "beta fixture is validation-only in this milestone")
+	panic($beta_environment->host != "beta-single-host", "beta environment currently expects beta-single-host")
+	panic(not $beta_single_host->enabled, "beta environment references a disabled host")
+	panic($beta_environment->active_release != "example-release", "beta environment currently expects example-release")
+	panic($example_release->generation == 0, "beta environment references an unknown release")
+	panic($beta_environment->serve, "beta fixture must not request serving")
+
+	include fishy_instance.candidate(struct {
+		mode => $mode,
+		cluster => $cluster,
+		desired_generation => $generation,
+		environment => "beta",
+		host_name => $beta_single_host->hostname,
+		release_id => $beta_environment->active_release,
+		release_generation => $example_release->generation,
+		closures => $example_release->closures,
+		dolt_repository => $example_dolt->repository,
+		dolt_commit => $example_dolt->commit,
+		dolt_branch_context => $example_dolt->branch_context,
+		dolt_mode => $example_dolt->mode,
+		serve => false,
+	})
+
+	include fishy_admission.fixture(struct {
+		mode => $mode,
+		environment => "beta",
+		host => $beta_single_host->hostname,
+		release_id => $beta_environment->active_release,
+		state => $admission_state,
+	})
+
+	include fishy_status.publish(struct {
+		mode => $mode,
+		desired_generation => $generation,
+		environment => "beta",
+		host => $beta_single_host->hostname,
+		release_id => $beta_environment->active_release,
+		phase => "candidate",
+		admission_state => $admission_state,
+		served => $served,
+		failure_reason => "",
+	})
+}

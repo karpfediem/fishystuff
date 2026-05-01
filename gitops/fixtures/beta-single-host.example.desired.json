@@ -1,0 +1,56 @@
+{
+  "cluster": "beta",
+  "generation": 1,
+  "mode": "validate",
+  "hosts": {
+    "beta-single-host": {
+      "enabled": true,
+      "role": "single-site",
+      "hostname": "beta-single-host"
+    }
+  },
+  "releases": {
+    "example-release": {
+      "generation": 1,
+      "git_rev": "example",
+      "dolt_commit": "example",
+      "closures": {
+        "api": {
+          "enabled": true,
+          "store_path": "/nix/store/example-api",
+          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/api"
+        },
+        "site": {
+          "enabled": true,
+          "store_path": "/nix/store/example-site",
+          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/site"
+        },
+        "cdn_runtime": {
+          "enabled": true,
+          "store_path": "/nix/store/example-cdn-runtime",
+          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/cdn-runtime"
+        },
+        "dolt_service": {
+          "enabled": true,
+          "store_path": "/nix/store/example-dolt-service",
+          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/dolt-service"
+        }
+      },
+      "dolt": {
+        "repository": "fishystuff/fishystuff",
+        "commit": "example",
+        "branch_context": "beta",
+        "mode": "read_only"
+      }
+    }
+  },
+  "environments": {
+    "beta": {
+      "enabled": true,
+      "strategy": "single_active",
+      "host": "beta-single-host",
+      "active_release": "example-release",
+      "serve": false
+    }
+  }
+}

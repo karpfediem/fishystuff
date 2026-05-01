@@ -1,0 +1,33 @@
+import "fmt"
+
+class fixture($st) {
+	$mode str = $st->mode || "validate"
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$state str = $st->state || "not_run"
+	$write_vm_state = $mode == "vm-test"
+	$path = fmt.printf("/run/fishystuff/gitops-test/admission/%s.json", $environment)
+	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $state)
+
+	panic($environment == "", "admission fixture requires environment")
+	panic($host == "", "admission fixture requires host")
+	panic($release_id == "", "admission fixture requires release_id")
+	panic(($state != "not_run") and ($state != "passed_fixture") and ($state != "failed_fixture"), "unsupported admission state")
+
+	if $write_vm_state {
+		file "/run/fishystuff/gitops-test/admission/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${path}" {
+			state => "exists",
+			content => $content,
+			mode => "0644",
+		}
+
+		File["/run/fishystuff/gitops-test/admission/"] -> File["${path}"]
+	}
+}
