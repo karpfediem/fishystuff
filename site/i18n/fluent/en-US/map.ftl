@@ -103,7 +103,6 @@ map.info.trade.focus_target_generic = Focus target
 map.info.notice.title = Notice
 map.info.zone_loot.title = Catch Profile
 map.info.zone_loot.summary.default = Calculator defaults
-map.info.zone_loot.notice.calculator_title = Calculator Inputs Used
 map.info.zone_loot.notice.status_title = Catch Profile Status
 map.info.zone_loot.method.fishing = Fishing
 map.info.zone_loot.method.harpoon = Harpoon

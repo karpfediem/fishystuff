@@ -782,7 +782,7 @@ test("normalize rates signal patch swaps loaded zone loot rates in place", async
   assert.doesNotMatch(panelSlot.innerHTML, /22\.2%/);
 });
 
-test("render shows the calculator warning and a consolidated calculator notice without the defaults badge", () => {
+test("render shows the calculator warning without the calculator inputs notice", () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();
   element._shell = {
@@ -865,9 +865,9 @@ test("render shows the calculator warning and a consolidated calculator notice w
 
   assert.match(panelSlot.innerHTML, /Data Quality Warning/);
   assert.match(panelSlot.innerHTML, /The data we currently have is INCOMPLETE/);
-  assert.match(panelSlot.innerHTML, /Calculator Inputs Used/);
-  assert.match(panelSlot.innerHTML, /Expected loot uses average session casts/);
-  assert.match(panelSlot.innerHTML, /Groups follow the current calculator ordering/);
+  assert.doesNotMatch(panelSlot.innerHTML, /Calculator Inputs Used/);
+  assert.doesNotMatch(panelSlot.innerHTML, /Expected loot uses average session casts/);
+  assert.doesNotMatch(panelSlot.innerHTML, /Groups follow the current calculator ordering/);
   assert.doesNotMatch(panelSlot.innerHTML, /Calculator defaults/);
 });
 

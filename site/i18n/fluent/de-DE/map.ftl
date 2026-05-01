@@ -98,7 +98,6 @@ map.info.trade.focus_target_generic = Ziel fokussieren
 map.info.notice.title = Hinweis
 map.info.zone_loot.title = Fangprofil
 map.info.zone_loot.summary.default = Rechner-Standardwerte
-map.info.zone_loot.notice.calculator_title = Verwendete Rechnerwerte
 map.info.zone_loot.notice.status_title = Fangprofil-Status
 map.info.zone_loot.method.fishing = Angeln
 map.info.zone_loot.method.harpoon = Harpune

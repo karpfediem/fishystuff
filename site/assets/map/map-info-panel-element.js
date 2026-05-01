@@ -733,24 +733,22 @@ function zoneLootDataQualityWarningMarkup(section) {
   });
 }
 
-function zoneLootCalculatorNoticeMarkup(section) {
-  const available = section?.available === true;
+function zoneLootStatusNoticeMarkup(section) {
+  if (section?.available === true) {
+    return "";
+  }
   return zoneLootNoticeCardMarkup({
     tone: "info",
     iconName: "information-circle",
-    title: available
-      ? mapText("info.zone_loot.notice.calculator_title")
-      : mapText("info.zone_loot.notice.status_title"),
-    paragraphs: available
-      ? [trimString(section?.dataQualityNote), trimString(section?.note)]
-      : [trimString(section?.note)],
+    title: mapText("info.zone_loot.notice.status_title"),
+    paragraphs: [trimString(section?.note)],
   });
 }
 
 function zoneLootNoticeDisclosureMarkup(section) {
   const notices = [
     zoneLootDataQualityWarningMarkup(section),
-    zoneLootCalculatorNoticeMarkup(section),
+    zoneLootStatusNoticeMarkup(section),
   ].filter(Boolean);
   if (!notices.length) {
     return "";
