@@ -5,6 +5,7 @@ Local checks:
 ```bash
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
+nix build .#checks.x86_64-linux.gitops-closure-roots-vm
 ```
 
 Recipe wrappers:
@@ -12,6 +13,7 @@ Recipe wrappers:
 ```bash
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
+just gitops-vm-test closure-roots
 ```
 
 `gitops-empty-unify` type-checks `gitops/main.mcl` with `fixtures/empty.desired.json` and asserts that no local test state paths are created.
@@ -20,5 +22,7 @@ just gitops-vm-test single-host-candidate
 
 - `/var/lib/fishystuff/gitops-test`
 - `/run/fishystuff/gitops-test`
+
+`gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.

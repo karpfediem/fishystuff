@@ -6,7 +6,7 @@ class fixture($st) {
 	$host str = $st->host
 	$release_id str = $st->release_id
 	$state str = $st->state || "not_run"
-	$write_vm_state = $mode == "vm-test"
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
 	$path = fmt.printf("/run/fishystuff/gitops-test/admission/%s.json", $environment)
 	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $state)
 

@@ -47,5 +47,5 @@ class model($st) {
 	}} = $st->releases || $empty_releases
 	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = $st->environments || $empty_environments
 
-	panic(($mode != "validate") and ($mode != "vm-test") and ($mode != "local-apply"), "unsupported gitops desired-state mode")
+	panic(($mode != "validate") and ($mode != "vm-test") and ($mode != "vm-test-closures") and ($mode != "local-apply"), "unsupported gitops desired-state mode")
 }

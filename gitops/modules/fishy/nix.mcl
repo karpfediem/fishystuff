@@ -7,7 +7,8 @@ class artifact($st) {
 	$gcroot_path str = $st->gcroot_path || ""
 	$enabled bool = $st->enabled || false
 	$mode str = $st->mode || "validate"
-	$should_manage = $enabled and ($mode == "local-apply")
+	$should_manage = $enabled and (($mode == "local-apply") or ($mode == "vm-test-closures"))
+	$gc_roots_dir = if $mode == "vm-test-closures" { "/var/lib/fishystuff/gitops-test/gcroots" } else { "/var/lib/fishystuff/gitops/gcroots" }
 	$phase = if not $enabled {
 		"disabled"
 	} else {
@@ -15,9 +16,10 @@ class artifact($st) {
 	}
 
 	panic($name == "", "fishy nix artifact requires name")
-	panic($should_manage and ($store_path == ""), fmt.printf("enabled local-apply artifact %s requires store_path", $name))
-	panic($should_manage and ($gcroot_path == ""), fmt.printf("enabled local-apply artifact %s requires gcroot_path", $name))
+	panic($should_manage and ($store_path == ""), fmt.printf("enabled artifact %s requires store_path", $name))
+	panic($should_manage and ($gcroot_path == ""), fmt.printf("enabled artifact %s requires gcroot_path", $name))
 	panic($should_manage and (not core_strings.has_prefix($store_path, "/nix/store/")), fmt.printf("artifact %s store_path must be under /nix/store", $name))
+	panic($should_manage and (not core_strings.has_prefix($gcroot_path, $gc_roots_dir)), fmt.printf("artifact %s gcroot_path must be under %s", $name, $gc_roots_dir))
 
 	if $should_manage {
 		nix:closure "${name}" {
@@ -29,8 +31,7 @@ class artifact($st) {
 			target => $store_path,
 			state => "exists",
 			force => true,
+			gc_roots_dir => $gc_roots_dir,
 		}
-
-		Nix:Closure["${name}"] -> Nix:Gcroot["${gcroot_path}"]
 	}
 }

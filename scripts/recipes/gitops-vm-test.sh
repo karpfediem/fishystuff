@@ -14,9 +14,12 @@ case "$test_name" in
   single-host-candidate)
     check_attr="gitops-single-host-candidate-vm"
     ;;
+  closure-roots)
+    check_attr="gitops-closure-roots-vm"
+    ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate" >&2
+    echo "known tests: empty-unify, single-host-candidate, closure-roots" >&2
     exit 2
     ;;
 esac

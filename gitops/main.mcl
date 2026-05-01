@@ -96,7 +96,7 @@ if $example_release->generation != 0 {
 }
 
 if $local_test_environment->enabled {
-	$admission_state = if $mode == "vm-test" { "passed_fixture" } else { "not_run" }
+	$admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
 	$served = $local_test_environment->serve and ($admission_state == "passed_fixture")
 
 	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")

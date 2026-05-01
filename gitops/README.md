@@ -22,6 +22,7 @@ just gitops-unify
 just gitops-unify auto gitops/fixtures/beta-single-host.example.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
+just gitops-vm-test closure-roots
 ```
 
 The flake checks added by this milestone are:
@@ -29,6 +30,7 @@ The flake checks added by this milestone are:
 ```bash
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
+nix build .#checks.x86_64-linux.gitops-closure-roots-vm
 ```
 
 ## Desired State
@@ -83,6 +85,7 @@ Supported modes:
 
 - `validate`: decode, shape, and unify only. It does not write local state and does not run admission.
 - `vm-test`: create only VM-local files under `/var/lib/fishystuff/gitops-test` and `/run/fishystuff/gitops-test`.
+- `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 - `local-apply`: reserved for future host-local activation. The first milestone does not include fixtures that use it.
 
 The first milestone intentionally recognizes the synthetic `example-release` release and the `local-test`/`beta` single-host environments used by the fixtures. This keeps the graph readable and testable while avoiding a premature generic controller. General release/environment traversal should be added with more mgmt language coverage and VM tests.
@@ -107,9 +110,13 @@ The current release ID is the desired-state release key. That is acceptable for 
 
 This graph does not import Hetzner, Cloudflare, or SSH providers. It does not call deploy scripts. It does not start FishyStuff system services. The VM fixture disables closure realization, so it never tries to realize fake `/nix/store` paths.
 
-`gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `local-apply` mode. In `validate` and `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
+`gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `vm-test-closures` and future `local-apply` mode. In `validate` and plain `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
 
 The VM runtime test binds mgmt's embedded etcd to `127.0.0.1` inside the test VM. It does not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
+
+`gitops-closure-roots-vm` generates desired state from tiny real Nix store artifacts inside the test derivation. It proves closure verification and gcroot creation without using fake enabled store paths or serving anything.
+
+The closure and gcroot resources are both declared for each enabled artifact. A strict `nix:closure -> nix:gcroot` resource edge is intentionally deferred: the pinned mgmt build verified closures but did not progress the dependent gcroot behind that edge in the VM test. Reintroduce that edge only with a VM regression test proving the ordered behavior.
 
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 

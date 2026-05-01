@@ -71,7 +71,7 @@ nix:gcroot "<path>" {
 
 Defaults: `state = "exists"`, `gc_roots_dir = "/nix/var/nix/gcroots"`, `store_dir = "/nix/store"`.
 
-The new graph only emits these in `local-apply` mode. `validate` and `vm-test` intentionally no-op closure realization.
+The new graph emits these in `vm-test-closures` and future `local-apply` mode. `validate` and plain `vm-test` intentionally no-op closure realization.
 
 ## Local Files
 
