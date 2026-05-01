@@ -142,6 +142,19 @@ body:has(#map-page-shell) #content > .site-content-clip {
   color: color-mix(in oklab, var(--color-base-content, #1f2937) 72%, transparent);
 }
 
+.fishymap-selection-history-nav {
+  flex: none;
+  width: 1.75rem;
+  min-height: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  touch-action: manipulation;
+}
+
+.fishymap-selection-history-nav[hidden] {
+  display: none !important;
+}
+
 .fishymap-window-body {
   display: flex;
   min-height: 0;

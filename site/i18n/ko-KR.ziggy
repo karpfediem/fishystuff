@@ -955,6 +955,8 @@
   "map.info.history.title": "기록",
   "map.info.history.back": "이전 선택으로 돌아가기",
   "map.info.history.go": "{$name}(으)로 돌아가기",
+  "map.info.history.previous": "이전 선택: {$name}",
+  "map.info.history.next": "다음 선택: {$name}",
   "map.info.history.unknown": "선택",
   "map.info.trade.managers": "무역 관리자",
   "map.info.trade.manager_count": "목적지 무역상 {$count}명",

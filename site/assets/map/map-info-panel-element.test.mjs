@@ -27,10 +27,18 @@ function detailSectionFact(key, label, value, icon) {
 
 function renderSlot() {
   return {
+    attributes: {},
     dataset: {},
+    disabled: false,
     hidden: false,
     innerHTML: "",
     textContent: "",
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    },
   };
 }
 
@@ -324,25 +332,19 @@ test("selection signal patches coalesce into one info data refresh", async () =>
   assert.equal(renderCount, 2);
 });
 
-test("selection history records previous selections and restores them through focus patches", () => {
+test("selection history ignores empty snapshots and restores back and forward targets from titlebar buttons", () => {
   const element = new FishyMapInfoPanelElement();
-  const historySlot = renderSlot();
+  const historyBack = renderSlot();
+  const historyForward = renderSlot();
   const dispatched = [];
   const signals = {
     _map_runtime: {
       selection: {
-        pointKind: "clicked",
-        pointLabel: "Velia Coast",
-        worldX: 10,
-        worldZ: 20,
-        layerSamples: [
-          {
-            layerId: "zone_mask",
-            rgbU32: 0x39e58d,
-            rgb: [57, 229, 141],
-            detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
-          },
-        ],
+        pointKind: null,
+        pointLabel: null,
+        worldX: null,
+        worldZ: null,
+        layerSamples: [],
       },
       catalog: {
         layers: [{ layerId: "zone_mask", displayOrder: 20 }],
@@ -373,13 +375,34 @@ test("selection history records previous selections and restores them through fo
     titleIcon: renderSlot(),
     statusIcon: renderSlot(),
     statusText: renderSlot(),
-    history: historySlot,
+    historyBack,
+    historyForward,
     tabs: renderSlot(),
     panel: renderSlot(),
   };
 
   element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
-  assert.equal(element._state.selectionHistory.length, 0);
+  element.render();
+
+  assert.equal(element._state.backSelectionHistory.length, 0);
+  assert.equal(historyBack.hidden, true);
+  assert.equal(historyBack.disabled, true);
+
+  signals._map_runtime.selection = {
+    pointKind: "clicked",
+    pointLabel: "Velia Coast",
+    worldX: 10,
+    worldZ: 20,
+    layerSamples: [
+      {
+        layerId: "zone_mask",
+        rgbU32: 0x39e58d,
+        rgb: [57, 229, 141],
+        detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+      },
+    ],
+  };
+  element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
 
   signals._map_runtime.selection = {
     pointKind: "waypoint",
@@ -391,18 +414,15 @@ test("selection history records previous selections and restores them through fo
   element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
   element.render();
 
-  assert.equal(element._state.selectionHistory.length, 1);
-  assert.match(historySlot.innerHTML, /History/);
-  assert.match(historySlot.innerHTML, /Velia Coast/);
-  assert.match(historySlot.innerHTML, /data-selection-history-back="true"/);
+  assert.equal(element._state.backSelectionHistory.length, 1);
+  assert.equal(historyBack.hidden, false);
+  assert.equal(historyBack.disabled, false);
+  assert.equal(historyBack.attributes.title, "Previous selection: Velia Coast");
+  assert.equal(historyForward.hidden, true);
 
-  element._handleClick({
-    target: {
-      closest(selector) {
-        return selector === "button[data-selection-history-back]" ? {} : null;
-      },
-    },
+  element._handleHistoryBackClick({
     preventDefault() {},
+    stopPropagation() {},
   });
 
   assert.deepEqual(dispatched, [
@@ -428,7 +448,11 @@ test("selection history records previous selections and restores them through fo
       },
     },
   ]);
-  assert.equal(element._state.selectionHistory.length, 0);
+  assert.equal(element._state.backSelectionHistory.length, 0);
+  assert.equal(element._state.forwardSelectionHistory.length, 1);
+  element.render();
+  assert.equal(historyForward.hidden, false);
+  assert.equal(historyForward.attributes.title, "Next selection: Chunsu");
 });
 
 test("render switches loaded zone loot rates from the Datastar normalize rates prop", async () => {

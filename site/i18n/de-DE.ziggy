@@ -955,6 +955,8 @@
   "map.info.history.title": "Verlauf",
   "map.info.history.back": "Zur vorherigen Auswahl",
   "map.info.history.go": "Zurück zu {$name}",
+  "map.info.history.previous": "Vorherige Auswahl: {$name}",
+  "map.info.history.next": "Nächste Auswahl: {$name}",
   "map.info.history.unknown": "Auswahl",
   "map.info.trade.managers": "Handelsverwalter",
   "map.info.trade.manager_count": "{$count} Zielhändler",

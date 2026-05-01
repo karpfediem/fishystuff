@@ -69,6 +69,18 @@ function setMarkup(element, renderKey, markup) {
   element.innerHTML = String(markup ?? "");
 }
 
+function setOptionalAttribute(element, name, value) {
+  if (!element) {
+    return;
+  }
+  const normalized = trimString(value);
+  if (!normalized) {
+    element.removeAttribute?.(name);
+    return;
+  }
+  element.setAttribute?.(name, normalized);
+}
+
 function spriteIcon(name, sizeClass = "size-5") {
   return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-${name}"></use></svg>`;
 }
@@ -232,6 +244,12 @@ function focusWorldPointFromButton(button) {
 }
 
 function finiteCoordinate(value) {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === "string" && !value.trim()) {
+    return null;
+  }
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -254,8 +272,7 @@ function selectionHistoryKey(selection) {
   if (worldX != null && worldZ != null) {
     return `point:${coordinateSelectionKeyPart(worldX)}:${coordinateSelectionKeyPart(worldZ)}`;
   }
-  const zoneRgb = zoneRgbFromSelection(selection);
-  return Number.isInteger(zoneRgb) && zoneRgb >= 0 ? `zone:${zoneRgb}` : "";
+  return "";
 }
 
 function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = [] } = {}) {
@@ -331,45 +348,21 @@ function selectionHistoryButtonLabel(entry) {
   return trimString(entry?.label) || mapText("info.history.unknown");
 }
 
-function selectionHistoryMarkup(entries) {
-  const historyEntries = Array.isArray(entries) ? entries.filter((entry) => entry?.key) : [];
-  if (!historyEntries.length) {
-    return "";
+function historyTargetText(entry, messageKey) {
+  const label = selectionHistoryButtonLabel(entry);
+  return entry?.key ? mapText(messageKey, { name: label }) : "";
+}
+
+function updateHistoryNavButton(button, entry, messageKey) {
+  if (!button) {
+    return;
   }
-  const first = historyEntries[0];
-  return `
-    <div class="rounded-box border border-base-300/70 bg-base-200/75 p-2">
-      <div class="flex items-center justify-between gap-2">
-        <span class="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/50">
-          ${spriteIcon("time-fill", "size-4")}
-          <span>${escapeHtml(mapText("info.history.title"))}</span>
-        </span>
-        <button
-          class="btn btn-ghost btn-xs"
-          type="button"
-          data-selection-history-back="true"
-          aria-label="${escapeHtml(mapText("info.history.back"))}"
-          title="${escapeHtml(mapText("info.history.back"))}"
-        >
-          ${spriteIcon("right-fill", "size-3 rotate-180")}
-        </button>
-      </div>
-      <div class="mt-2 flex flex-wrap gap-1">
-        ${historyEntries
-          .map((entry, index) => {
-            const label = selectionHistoryButtonLabel(entry);
-            return `<button
-              class="btn ${entry.key === first.key ? "btn-soft" : "btn-ghost"} btn-xs max-w-full"
-              type="button"
-              data-selection-history-index="${escapeHtml(index)}"
-              title="${escapeHtml(mapText("info.history.go", { name: label }))}"
-              aria-label="${escapeHtml(mapText("info.history.go", { name: label }))}"
-            ><span class="truncate">${escapeHtml(label)}</span></button>`;
-          })
-          .join("")}
-      </div>
-    </div>
-  `;
+  const hasTarget = Boolean(entry?.key);
+  button.hidden = !hasTarget;
+  button.disabled = !hasTarget;
+  const label = historyTargetText(entry, messageKey);
+  setOptionalAttribute(button, "title", label);
+  setOptionalAttribute(button, "aria-label", label);
 }
 
 function selectionDataRefreshKey(signals, normalizeRates) {
@@ -928,7 +921,6 @@ function ensureInfoPanelMarkup(host) {
     return;
   }
   host.innerHTML = `
-    <div id="fishymap-selection-history" hidden></div>
     <div
       id="fishymap-zone-info-tabs"
       role="tablist"
@@ -970,7 +962,9 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       selectionRenderKey: null,
       currentSelectionKey: "",
       currentSelectionEntry: null,
-      selectionHistory: [],
+      backSelectionHistory: [],
+      forwardSelectionHistory: [],
+      suppressHistoryForSelectionKey: "",
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
@@ -994,23 +988,17 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       this.scheduleRender();
       void this.refreshZoneLootSummary({ force: true });
     };
+    this._handleHistoryBackClick = (event) => {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      this.restoreSelectionHistoryEntry("back");
+    };
+    this._handleHistoryForwardClick = (event) => {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      this.restoreSelectionHistoryEntry("forward");
+    };
     this._handleClick = (event) => {
-      const historyBackButton = event.target.closest("button[data-selection-history-back]");
-      if (historyBackButton) {
-        event.preventDefault?.();
-        this.restoreSelectionHistoryEntry(0);
-        return;
-      }
-
-      const historyButton = event.target.closest("button[data-selection-history-index]");
-      if (historyButton) {
-        event.preventDefault?.();
-        this.restoreSelectionHistoryEntry(
-          Number.parseInt(historyButton.getAttribute("data-selection-history-index"), 10),
-        );
-        return;
-      }
-
       const focusButton = event.target.closest("button[data-fishy-focus-world-point]");
       if (focusButton) {
         event.preventDefault?.();
@@ -1091,9 +1079,10 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._elements = {
       title: this._shell?.querySelector?.("#fishymap-zone-info-title") || null,
       titleIcon: this._shell?.querySelector?.("#fishymap-zone-info-title-icon") || null,
+      historyBack: this._shell?.querySelector?.("#fishymap-zone-info-history-back") || null,
+      historyForward: this._shell?.querySelector?.("#fishymap-zone-info-history-forward") || null,
       statusIcon: this._shell?.querySelector?.("#fishymap-zone-info-status-icon") || null,
       statusText: this._shell?.querySelector?.("#fishymap-zone-info-status-text") || null,
-      history: this.querySelector("#fishymap-selection-history"),
       tabs: this.querySelector("#fishymap-zone-info-tabs"),
       panel: this.querySelector("#fishymap-zone-info-panel"),
     };
@@ -1101,6 +1090,8 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
+    this._elements.historyBack?.addEventListener?.("click", this._handleHistoryBackClick);
+    this._elements.historyForward?.addEventListener?.("click", this._handleHistoryForwardClick);
     globalThis.window?.addEventListener?.(
       globalThis.window?.__fishystuffUserOverlays?.CHANGED_EVENT || "fishystuff:user-overlays-changed",
       this._handleUserOverlaysChanged,
@@ -1116,6 +1107,8 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
 
   disconnectedCallback() {
     this.removeEventListener("click", this._handleClick);
+    this._elements?.historyBack?.removeEventListener?.("click", this._handleHistoryBackClick);
+    this._elements?.historyForward?.removeEventListener?.("click", this._handleHistoryForwardClick);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -1151,6 +1144,14 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       zoneCatalog: this._state.zoneCatalog,
     });
     if (!entry) {
+      this._state.currentSelectionKey = "";
+      this._state.currentSelectionEntry = null;
+      return;
+    }
+    if (this._state.suppressHistoryForSelectionKey === entry.key) {
+      this._state.suppressHistoryForSelectionKey = "";
+      this._state.currentSelectionKey = entry.key;
+      this._state.currentSelectionEntry = entry;
       return;
     }
     if (
@@ -1158,27 +1159,25 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       this._state.currentSelectionKey !== entry.key &&
       this._state.currentSelectionEntry
     ) {
-      this._state.selectionHistory = pushSelectionHistoryEntry(
-        this._state.selectionHistory,
+      this._state.backSelectionHistory = pushSelectionHistoryEntry(
+        this._state.backSelectionHistory,
         this._state.currentSelectionEntry,
       );
+      this._state.forwardSelectionHistory = [];
     }
     this._state.currentSelectionKey = entry.key;
     this._state.currentSelectionEntry = entry;
   }
 
-  restoreSelectionHistoryEntry(index) {
-    const historyIndex = Number.parseInt(index, 10);
-    const entry = Number.isInteger(historyIndex)
-      ? this._state.selectionHistory?.[historyIndex]
-      : null;
-    if (!entry) {
+  restoreSelectionHistoryEntry(direction) {
+    const isForward = direction === "forward";
+    const sourceStack = isForward
+      ? this._state.forwardSelectionHistory
+      : this._state.backSelectionHistory;
+    const entry = Array.isArray(sourceStack) ? sourceStack[0] : null;
+    if (!entry?.key) {
       return;
     }
-    this._state.selectionHistory = (this._state.selectionHistory || []).filter(
-      (_entry, candidateIndex) => candidateIndex !== historyIndex,
-    );
-    this.scheduleRender();
     const patch = buildFocusWorldPointSignalPatch(
       {
         worldX: entry.worldX,
@@ -1188,9 +1187,31 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       },
       this.signals(),
     );
-    if (patch) {
-      dispatchShellSignalPatch(this._shell, patch);
+    if (!patch || !dispatchShellSignalPatch(this._shell, patch)) {
+      return;
     }
+    const current = this._state.currentSelectionEntry;
+    if (isForward) {
+      this._state.forwardSelectionHistory = (this._state.forwardSelectionHistory || []).slice(1);
+      if (current?.key && current.key !== entry.key) {
+        this._state.backSelectionHistory = pushSelectionHistoryEntry(
+          this._state.backSelectionHistory,
+          current,
+        );
+      }
+    } else {
+      this._state.backSelectionHistory = (this._state.backSelectionHistory || []).slice(1);
+      if (current?.key && current.key !== entry.key) {
+        this._state.forwardSelectionHistory = pushSelectionHistoryEntry(
+          this._state.forwardSelectionHistory,
+          current,
+        );
+      }
+    }
+    this._state.currentSelectionKey = entry.key;
+    this._state.currentSelectionEntry = entry;
+    this._state.suppressHistoryForSelectionKey = entry.key;
+    this.scheduleRender();
   }
 
   render() {
@@ -1230,15 +1251,15 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       viewModel.descriptor.statusIcon,
       spriteIcon(viewModel.descriptor.statusIcon || "information-circle", "size-4"),
     );
-    setBooleanProperty(
-      this._elements?.history,
-      "hidden",
-      !this._state.selectionHistory?.length,
+    updateHistoryNavButton(
+      this._elements?.historyBack,
+      this._state.backSelectionHistory?.[0],
+      "info.history.previous",
     );
-    setMarkup(
-      this._elements?.history,
-      JSON.stringify((this._state.selectionHistory || []).map((entry) => [entry.key, entry.label])),
-      selectionHistoryMarkup(this._state.selectionHistory),
+    updateHistoryNavButton(
+      this._elements?.historyForward,
+      this._state.forwardSelectionHistory?.[0],
+      "info.history.next",
     );
     setBooleanProperty(this._elements?.tabs, "hidden", viewModel.panes.length === 0);
     setMarkup(
