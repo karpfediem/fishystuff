@@ -153,6 +153,52 @@ if $local_test_environment->enabled {
 	panic($active_release->generation == 0, "local-test environment references an unknown release")
 	panic($local_test_environment->serve and ($admission_state != "passed_fixture"), "serving requires passed admission")
 
+	for $index, $retained_release_id in $retained_releases {
+		$retained_release struct{
+			generation int;
+			git_rev str;
+			dolt_commit str;
+			closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+			dolt struct{repository str; commit str; branch_context str; mode str}
+		} = $releases[$retained_release_id] || $empty_release
+		$retained_dolt struct{repository str; commit str; branch_context str; mode str} = $retained_release->dolt || $empty_dolt
+		$retained_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["api"] || $empty_artifact
+		$retained_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["site"] || $empty_artifact
+		$retained_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["cdn_runtime"] || $empty_artifact
+		$retained_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["dolt_service"] || $empty_artifact
+		$retained_release_identity = if $retained_release->generation == 0 {
+			""
+		} else {
+			fmt.printf(
+				"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
+				$retained_release_id,
+				$retained_release->generation,
+				$retained_release->git_rev,
+				$retained_release->dolt_commit,
+				$retained_dolt->repository,
+				$retained_dolt->branch_context,
+				$retained_dolt->mode,
+				$retained_api_artifact->store_path,
+				$retained_site_artifact->store_path,
+				$retained_cdn_runtime_artifact->store_path,
+				$retained_dolt_service_artifact->store_path
+			)
+		}
+
+		panic($retained_release->generation == 0, fmt.printf("retained release %s is missing from releases", $retained_release_id))
+		panic($retained_release->dolt_commit != $retained_dolt->commit, fmt.printf("retained release %s dolt_commit must match dolt.commit", $retained_release_id))
+
+		include fishy_release.candidate(struct {
+			mode => $mode,
+			release_id => $retained_release_id,
+			release_identity => $retained_release_identity,
+			generation => $retained_release->generation,
+			git_rev => $retained_release->git_rev,
+			dolt_commit => $retained_release->dolt_commit,
+			closures => $retained_release->closures,
+		})
+	}
+
 	include fishy_instance.candidate(struct {
 		mode => $mode,
 		cluster => $cluster,

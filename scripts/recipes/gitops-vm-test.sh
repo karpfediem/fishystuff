@@ -26,6 +26,9 @@ case "$test_name" in
   generated-served-candidate)
     check_attr="gitops-generated-served-candidate-vm"
     ;;
+  missing-retained-release-refusal)
+    check_attr="gitops-missing-retained-release-refusal"
+    ;;
   raw-cdn-serve-refusal)
     check_attr="gitops-raw-cdn-serve-refusal"
     ;;
@@ -37,7 +40,7 @@ case "$test_name" in
     ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, closure-roots, json-status-escaping, served-candidate, generated-served-candidate, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, closure-roots, json-status-escaping, served-candidate, generated-served-candidate, missing-retained-release-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal" >&2
     exit 2
     ;;
 esac

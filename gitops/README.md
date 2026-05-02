@@ -26,6 +26,7 @@ just gitops-vm-test closure-roots
 just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
+just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
@@ -42,6 +43,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
@@ -56,6 +58,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-json-status-escaping-vm` proves the VM-local JSON outputs preserve quote/backslash characters from the exact release identity tuple instead of emitting malformed JSON.
 
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
+
+`gitops-missing-retained-release-refusal` proves retained rollback release IDs are not informational labels: each retained ID must reference a release object before candidate/admission/status/active state can be published.
 
 `gitops-raw-cdn-serve-refusal` is a negative VM check. It proves a `serve: true` desired state cannot pass admission when `cdn_runtime` points at a raw runtime directory instead of a finalized CDN serving root with `cdn-serving-manifest.json`.
 

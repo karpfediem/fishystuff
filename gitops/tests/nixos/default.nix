@@ -37,6 +37,10 @@
       ;
   };
 
+  gitops-missing-retained-release-refusal = import ./missing-retained-release-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-raw-cdn-serve-refusal = import ./raw-cdn-serve-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
