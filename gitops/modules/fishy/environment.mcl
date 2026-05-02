@@ -71,6 +71,7 @@ class single_host($st) {
 	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
 	$vm_state_dir = "/var/lib/fishystuff/gitops-test"
 	$vm_run_dir = "/run/fishystuff/gitops-test"
+	$local_state_dir = if $write_vm_state { $vm_state_dir } else { "/tmp/fishystuff-gitops-test" }
 	$active_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["api"] || $empty_artifact
 	$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
 	$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact
@@ -92,6 +93,16 @@ class single_host($st) {
 			$active_cdn_runtime_artifact->store_path,
 			$active_dolt_service_artifact->store_path
 		)
+	}
+	$active_dolt_cache_dir str = if ($active_dolt_materialization == "fetch_pin") and ($active_dolt->cache_dir == "") {
+		fmt.printf("%s/dolt-cache/%s", $local_state_dir, $active_dolt->repository)
+	} else {
+		$active_dolt->cache_dir
+	}
+	$active_dolt_release_ref str = if ($active_dolt_materialization == "fetch_pin") and ($active_dolt->release_ref == "") {
+		fmt.printf("fishystuff/gitops/%s", $active_release_id)
+	} else {
+		$active_dolt->release_ref
 	}
 	$requested_admission_fixture_state str = $environment->admission_fixture_state || ""
 	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
@@ -175,8 +186,8 @@ class single_host($st) {
 		access_mode => $active_dolt->mode,
 		materialization => $active_dolt_materialization,
 		remote_url => $active_dolt->remote_url,
-		cache_dir => $active_dolt->cache_dir,
-		release_ref => $active_dolt->release_ref,
+		cache_dir => $active_dolt_cache_dir,
+		release_ref => $active_dolt_release_ref,
 	})
 
 	include fishy_instance.candidate(struct {
@@ -195,8 +206,8 @@ class single_host($st) {
 		dolt_mode => $active_dolt->mode,
 		dolt_materialization => $active_dolt_materialization,
 		dolt_remote_url => $active_dolt->remote_url,
-		dolt_cache_dir => $active_dolt->cache_dir,
-		dolt_release_ref => $active_dolt->release_ref,
+		dolt_cache_dir => $active_dolt_cache_dir,
+		dolt_release_ref => $active_dolt_release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
 		serve => $environment->serve,
 	})
@@ -210,8 +221,8 @@ class single_host($st) {
 			release_identity => $active_release_identity,
 			dolt_commit => $active_dolt->commit,
 			dolt_materialization => $active_dolt_materialization,
-			dolt_cache_dir => $active_dolt->cache_dir,
-			dolt_release_ref => $active_dolt->release_ref,
+			dolt_cache_dir => $active_dolt_cache_dir,
+			dolt_release_ref => $active_dolt_release_ref,
 			dolt_status_path => $dolt_status_path,
 			query => $admission_probe->query,
 			expected_scalar => $admission_probe->expected_scalar,
@@ -227,7 +238,7 @@ class single_host($st) {
 			cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
 			dolt_commit => $active_dolt->commit,
 			dolt_materialization => $active_dolt_materialization,
-			dolt_release_ref => $active_dolt->release_ref,
+			dolt_release_ref => $active_dolt_release_ref,
 			requires_serving_artifacts => $environment->serve,
 			retained_release_count => len($retained_releases),
 			state => $admission_state,
@@ -270,8 +281,8 @@ class single_host($st) {
 		admission_state => $admission_state,
 		dolt_commit => $active_dolt->commit,
 		dolt_materialization => $active_dolt_materialization,
-		dolt_cache_dir => $active_dolt->cache_dir,
-		dolt_release_ref => $active_dolt->release_ref,
+		dolt_cache_dir => $active_dolt_cache_dir,
+		dolt_release_ref => $active_dolt_release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
 		served => $served,
 		failure_reason => if $admission_failed { "admission_failed" } else { "" },
