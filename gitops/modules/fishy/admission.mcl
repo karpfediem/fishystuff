@@ -1,4 +1,6 @@
+import "encoding"
 import "fmt"
+import "os"
 
 class fixture($st) {
 	$mode str = $st->mode || "validate"
@@ -6,16 +8,44 @@ class fixture($st) {
 	$host str = $st->host
 	$release_id str = $st->release_id
 	$release_identity str = $st->release_identity || ""
+	$site_content str = $st->site_content || ""
+	$cdn_runtime_content str = $st->cdn_runtime_content || ""
+	$requires_serving_artifacts bool = $st->requires_serving_artifacts || false
 	$state str = $st->state || "not_run"
 	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
 	$path = fmt.printf("/run/fishystuff/gitops-test/admission/%s.json", $environment)
-	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $release_identity, $state)
+	$site_index_path = fmt.printf("%s/index.html", $site_content)
+	$cdn_runtime_manifest_path = fmt.printf("%s/map/runtime-manifest.json", $cdn_runtime_content)
+	$empty_runtime_manifest struct{module str; wasm str} = struct {
+		module => "",
+		wasm => "",
+	}
+	$site_index_content = if $requires_serving_artifacts {
+		os.readfile($site_index_path)
+	} else {
+		""
+	}
+	$cdn_runtime_manifest struct{module str; wasm str} = if $requires_serving_artifacts {
+		encoding.decode_json_flexible(
+			os.readfile($cdn_runtime_manifest_path),
+			"struct{module str; wasm str}"
+		)
+	} else {
+		$empty_runtime_manifest
+	}
+	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"cdn_runtime_module\": \"%s\",\n  \"cdn_runtime_wasm\": \"%s\",\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $release_identity, $site_content, $cdn_runtime_content, $cdn_runtime_manifest->module, $cdn_runtime_manifest->wasm, $requires_serving_artifacts, $state)
 
 	panic($environment == "", "admission fixture requires environment")
 	panic($host == "", "admission fixture requires host")
 	panic($release_id == "", "admission fixture requires release_id")
 	panic($release_identity == "", "admission fixture requires release_identity")
 	panic(($state != "not_run") and ($state != "passed_fixture") and ($state != "failed_fixture"), "unsupported admission state")
+	panic($requires_serving_artifacts and ($state != "passed_fixture"), "serving artifact admission requires passed_fixture state")
+	panic($requires_serving_artifacts and ($site_content == ""), "serving artifact admission requires site_content")
+	panic($requires_serving_artifacts and ($cdn_runtime_content == ""), "serving artifact admission requires cdn_runtime_content")
+	panic($requires_serving_artifacts and ($site_index_content == ""), "serving artifact admission requires a readable site index")
+	panic($requires_serving_artifacts and ($cdn_runtime_manifest->module == ""), "serving artifact admission requires a CDN runtime module")
+	panic($requires_serving_artifacts and ($cdn_runtime_manifest->wasm == ""), "serving artifact admission requires a CDN runtime wasm")
 
 	if $write_vm_state {
 		file "/run/fishystuff/gitops-test/admission/" {

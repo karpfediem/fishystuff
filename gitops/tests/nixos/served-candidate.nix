@@ -10,15 +10,19 @@ let
   '';
   currentCdnRoot = pkgs.runCommand "fishystuff-gitops-served-current-cdn-root" { } ''
     mkdir -p "$out/map"
-    printf 'current manifest\n' > "$out/map/runtime-manifest.json"
+    printf '{"module":"fishystuff_ui_bevy.current.js","wasm":"fishystuff_ui_bevy_bg.current.wasm"}\n' > "$out/map/runtime-manifest.json"
     printf 'current runtime\n' > "$out/map/fishystuff_ui_bevy.current.js"
     printf 'current source map\n' > "$out/map/fishystuff_ui_bevy.current.js.map"
+    printf 'current wasm\n' > "$out/map/fishystuff_ui_bevy_bg.current.wasm"
+    printf 'current wasm source map\n' > "$out/map/fishystuff_ui_bevy_bg.current.wasm.map"
   '';
   previousCdnRoot = pkgs.runCommand "fishystuff-gitops-served-previous-cdn-root" { } ''
     mkdir -p "$out/map"
-    printf 'previous manifest\n' > "$out/map/runtime-manifest.json"
+    printf '{"module":"fishystuff_ui_bevy.previous.js","wasm":"fishystuff_ui_bevy_bg.previous.wasm"}\n' > "$out/map/runtime-manifest.json"
     printf 'previous runtime\n' > "$out/map/fishystuff_ui_bevy.previous.js"
     printf 'previous source map\n' > "$out/map/fishystuff_ui_bevy.previous.js.map"
+    printf 'previous wasm\n' > "$out/map/fishystuff_ui_bevy_bg.previous.wasm"
+    printf 'previous wasm source map\n' > "$out/map/fishystuff_ui_bevy_bg.previous.wasm.map"
   '';
   cdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
     currentRoot = currentCdnRoot;
@@ -149,12 +153,16 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"jq -e '.desired_generation == 3 and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
     machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .instance_name == \"local-test-example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
     machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"]' {instance}")
-    machine.succeed(f"jq -e '.release_identity == \"${expectedReleaseIdentity}\" and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
-    machine.succeed("test \"$(cat ${cdnServingRoot}/map/runtime-manifest.json)\" = \"current manifest\"")
+    machine.succeed(f"jq -e '.release_identity == \"${expectedReleaseIdentity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .cdn_runtime_module == \"fishystuff_ui_bevy.current.js\" and .cdn_runtime_wasm == \"fishystuff_ui_bevy_bg.current.wasm\" and .serving_artifacts_checked == true and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed("jq -e '.module == \"fishystuff_ui_bevy.current.js\" and .wasm == \"fishystuff_ui_bevy_bg.current.wasm\"' ${cdnServingRoot}/map/runtime-manifest.json")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.current.js)\" = \"current runtime\"")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.current.js.map)\" = \"current source map\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy_bg.current.wasm)\" = \"current wasm\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy_bg.current.wasm.map)\" = \"current wasm source map\"")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.previous.js)\" = \"previous runtime\"")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.previous.js.map)\" = \"previous source map\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy_bg.previous.wasm)\" = \"previous wasm\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy_bg.previous.wasm.map)\" = \"previous wasm source map\"")
 
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
 

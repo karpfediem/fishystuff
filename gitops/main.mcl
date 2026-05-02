@@ -170,6 +170,9 @@ if $local_test_environment->enabled {
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
 		release_identity => $example_release_identity,
+		site_content => $example_site_artifact->store_path,
+		cdn_runtime_content => $example_cdn_runtime_artifact->store_path,
+		requires_serving_artifacts => $local_test_environment->serve,
 		state => $admission_state,
 	})
 
