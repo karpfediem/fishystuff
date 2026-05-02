@@ -31,8 +31,8 @@ use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::plugins::waypoint_layers::{
     waypoint_layers_pending, waypoint_sample_at_world_point,
-    waypoint_sample_at_world_point_with_options, WaypointLayerInteractionSample,
-    WaypointLayerRuntime, WaypointSampleOptions,
+    waypoint_sample_at_world_point_with_options, waypoint_samples_at_world_point_with_options,
+    WaypointLayerInteractionSample, WaypointLayerRuntime, WaypointSampleOptions,
 };
 use crate::prelude::*;
 use fishystuff_api::Rgb;
@@ -183,10 +183,9 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         &context.display_state,
         &context.candidates.point_camera_q,
     );
-    let selection_candidate = selection_candidate_at_world_point(&context.candidates, world_point);
-    let Some(mut next_hover) = selection_candidate
-        .as_ref()
-        .map(|candidate| selection_candidate_hover_info(world_point, candidate))
+    let landmark_layer_samples =
+        landmark_hover_layer_samples_at_world_point(world_point, &context.candidates);
+    let Some(mut next_hover) = landmark_hover_info(world_point, landmark_layer_samples)
         .or_else(|| {
             hover_info_at_world_point(
                 world_point,
@@ -561,6 +560,54 @@ fn point_hover_info(
     })
 }
 
+fn landmark_hover_layer_samples_at_world_point(
+    world_point: WorldPoint,
+    context: &SelectionCandidateContext<'_, '_>,
+) -> Vec<LayerQuerySample> {
+    let mut layer_samples = bookmark_layer_samples_at_world_point(
+        world_point,
+        &context.bookmarks,
+        &context.layer_registry,
+        &context.layer_runtime,
+        &context.point_camera_q,
+    );
+    layer_samples.extend(
+        waypoint_samples_at_world_point_with_options(
+            world_point,
+            &context.waypoint_runtime,
+            &context.layer_registry,
+            &context.layer_runtime,
+            &context.exact_lookups,
+            &context.tile_cache,
+            &context.vector_runtime,
+            &context.layer_filters,
+            &context.point_camera_q,
+            WaypointSampleOptions::default(),
+        )
+        .into_iter()
+        .map(|sample| sample.layer_sample),
+    );
+    layer_samples
+}
+
+fn landmark_hover_info(
+    world_point: WorldPoint,
+    layer_samples: Vec<LayerQuerySample>,
+) -> Option<HoverInfo> {
+    if layer_samples.is_empty() {
+        return None;
+    }
+    let (map_px, map_py) = map_pixel_for_world_point(world_point);
+    Some(HoverInfo {
+        map_px,
+        map_py,
+        world_x: world_point.x,
+        world_z: world_point.z,
+        layer_samples,
+        point_samples: Vec::new(),
+    })
+}
+
 fn selection_candidate_at_world_point(
     context: &SelectionCandidateContext<'_, '_>,
     world_point: WorldPoint,
@@ -614,16 +661,38 @@ fn bookmark_selection_candidate_at_world_point(
     camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
 ) -> Option<SelectionCandidate> {
     let layer = layer_registry.get_by_key(BOOKMARK_LAYER_KEY)?;
-    if !layer_runtime.visible(layer.id) {
-        return None;
-    }
-    let scale = camera_scale(camera_q) as f64;
-    let max_distance_sq = (BOOKMARK_HOVER_RADIUS_SCREEN_PX * scale).powi(2);
     let display_order = layer_runtime
         .get(layer.id)
         .map(|state| state.display_order)
         .unwrap_or(layer.display_order);
-    bookmarks
+    bookmark_layer_samples_at_world_point(
+        world_point,
+        bookmarks,
+        layer_registry,
+        layer_runtime,
+        camera_q,
+    )
+    .into_iter()
+    .next()
+    .and_then(|layer_sample| selection_candidate_from_layer_sample(&layer_sample, display_order))
+}
+
+fn bookmark_layer_samples_at_world_point(
+    world_point: WorldPoint,
+    bookmarks: &BookmarkState,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+) -> Vec<LayerQuerySample> {
+    let Some(layer) = layer_registry.get_by_key(BOOKMARK_LAYER_KEY) else {
+        return Vec::new();
+    };
+    if !layer_runtime.visible(layer.id) {
+        return Vec::new();
+    }
+    let scale = camera_scale(camera_q) as f64;
+    let max_distance_sq = (BOOKMARK_HOVER_RADIUS_SCREEN_PX * scale).powi(2);
+    let mut hits = bookmarks
         .entries
         .iter()
         .enumerate()
@@ -631,14 +700,20 @@ fn bookmark_selection_candidate_at_world_point(
             let dx = bookmark.world_x - world_point.x;
             let dz = bookmark.world_z - world_point.z;
             let distance_sq = dx * dx + dz * dz;
-            (distance_sq <= max_distance_sq).then(|| (index, bookmark, distance_sq))
+            (distance_sq <= max_distance_sq).then_some((index, bookmark, distance_sq))
         })
-        .min_by(|left, right| left.2.total_cmp(&right.2))
-        .and_then(|(index, bookmark, _)| {
+        .collect::<Vec<_>>();
+    hits.sort_by(|left, right| {
+        left.2
+            .total_cmp(&right.2)
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    hits.into_iter()
+        .map(|(index, bookmark, _)| {
             let label = bookmark_display_label(index, bookmark);
-            let layer_sample = bookmark_layer_sample(bookmark.world_x, bookmark.world_z, &label);
-            selection_candidate_from_layer_sample(&layer_sample, display_order)
+            bookmark_layer_sample(bookmark.world_x, bookmark.world_z, &label)
         })
+        .collect()
 }
 
 fn bookmark_display_label(
@@ -737,21 +812,6 @@ fn layer_display_order(
                 .unwrap_or(layer.display_order)
         })
         .unwrap_or_default()
-}
-
-fn selection_candidate_hover_info(
-    cursor_world_point: WorldPoint,
-    candidate: &SelectionCandidate,
-) -> HoverInfo {
-    let (map_px, map_py) = map_pixel_for_world_point(cursor_world_point);
-    HoverInfo {
-        map_px,
-        map_py,
-        world_x: candidate.world_point.x,
-        world_z: candidate.world_point.z,
-        layer_samples: vec![candidate.layer_sample.clone()],
-        point_samples: Vec::new(),
-    }
 }
 
 fn point_selected_info(
@@ -1039,7 +1099,7 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
 mod tests {
     use super::{
         bookmark_layer_sample, hover_content_matches, hover_storage_update, hovered_zone_rgb,
-        quick_selected_info, quick_selected_info_for_candidate,
+        landmark_hover_info, quick_selected_info, quick_selected_info_for_candidate,
         selection_candidate_from_layer_sample, selection_details_should_probe_waypoint,
         waypoint_probe_target_key, waypoint_sample_matches_requested_label, HoverStorageUpdate,
         PendingSelectionDetailsRequest, PendingSelectionDetailsStage,
@@ -1072,6 +1132,32 @@ mod tests {
             rgb_u32: zone_rgb,
             field_id: Some(zone_rgb),
             targets: Vec::new(),
+            detail_pane: None,
+            detail_sections: Vec::new(),
+        }
+    }
+
+    fn landmark_sample(
+        layer_id: &str,
+        layer_name: &str,
+        target_key: &str,
+        label: &str,
+        world_x: f64,
+        world_z: f64,
+    ) -> LayerQuerySample {
+        LayerQuerySample {
+            layer_id: layer_id.to_string(),
+            layer_name: layer_name.to_string(),
+            kind: "waypoint".to_string(),
+            rgb: Rgb::from_u32(0x123456),
+            rgb_u32: 0x123456,
+            field_id: None,
+            targets: vec![FieldHoverTarget {
+                key: target_key.to_string(),
+                label: label.to_string(),
+                world_x,
+                world_z,
+            }],
             detail_pane: None,
             detail_sections: Vec::new(),
         }
@@ -1114,6 +1200,35 @@ mod tests {
         let next = hover_info(99, 88.0, 0x654321);
 
         assert!(!hover_content_matches(Some(&current), Some(&next)));
+    }
+
+    #[test]
+    fn landmark_hover_info_keeps_each_hovered_landmark_sample() {
+        let cursor = WorldPoint::new(100.0, 200.0);
+        let npc = landmark_sample(
+            "trade_npcs",
+            "Trade NPCs",
+            FIELD_HOVER_TARGET_KEY_TRADE_NPC,
+            "Trade Manager",
+            101.0,
+            201.0,
+        );
+        let waypoint = landmark_sample(
+            "node_waypoints",
+            "Node Waypoints",
+            "waypoint",
+            "Node Manager",
+            102.0,
+            202.0,
+        );
+
+        let hover =
+            landmark_hover_info(cursor, vec![npc.clone(), waypoint.clone()]).expect("hover info");
+
+        assert_eq!(hover.world_x, cursor.x);
+        assert_eq!(hover.world_z, cursor.z);
+        assert_eq!(hover.layer_samples, vec![npc, waypoint]);
+        assert!(hover.point_samples.is_empty());
     }
 
     #[test]

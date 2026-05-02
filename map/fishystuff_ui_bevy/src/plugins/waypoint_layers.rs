@@ -922,6 +922,35 @@ pub(crate) fn waypoint_sample_at_world_point_with_options(
     camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
     options: WaypointSampleOptions,
 ) -> Option<WaypointLayerInteractionSample> {
+    waypoint_samples_at_world_point_with_options(
+        world_point,
+        waypoint_runtime,
+        layer_registry,
+        layer_runtime,
+        exact_lookups,
+        tile_cache,
+        vector_runtime,
+        layer_filters,
+        camera_q,
+        options,
+    )
+    .into_iter()
+    .next()
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn waypoint_samples_at_world_point_with_options(
+    world_point: WorldPoint,
+    waypoint_runtime: &WaypointLayerRuntime,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    layer_filters: &LayerEffectiveFilterState,
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+    options: WaypointSampleOptions,
+) -> Vec<WaypointLayerInteractionSample> {
     let hit_radius_world = waypoint_hit_radius_world(camera_q);
     let hit_radius_sq = hit_radius_world * hit_radius_world;
     let inactive_filter = ZoneMembershipFilter::default();
@@ -997,7 +1026,7 @@ pub(crate) fn waypoint_sample_at_world_point_with_options(
                     .cmp(right.sample.point_label.as_deref().unwrap_or(""))
             })
     });
-    hits.into_iter().map(|hit| hit.sample).next()
+    hits.into_iter().map(|hit| hit.sample).collect()
 }
 
 pub(crate) fn waypoint_layers_pending(
