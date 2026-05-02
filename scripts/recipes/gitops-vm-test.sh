@@ -29,9 +29,12 @@ case "$test_name" in
   missing-cdn-runtime-file-refusal)
     check_attr="gitops-missing-cdn-runtime-file-refusal"
     ;;
+  missing-cdn-serving-manifest-entry-refusal)
+    check_attr="gitops-missing-cdn-serving-manifest-entry-refusal"
+    ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, closure-roots, served-candidate, generated-served-candidate, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, closure-roots, served-candidate, generated-served-candidate, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal" >&2
     exit 2
     ;;
 esac

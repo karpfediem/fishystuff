@@ -1,6 +1,7 @@
 import "encoding"
 import "fmt"
 import "os"
+import "strings" as core_strings
 
 class fixture($st) {
 	$mode str = $st->mode || "validate"
@@ -31,6 +32,11 @@ class fixture($st) {
 	} else {
 		""
 	}
+	$cdn_serving_manifest_content = if $requires_serving_artifacts {
+		os.readfile($cdn_serving_manifest_path)
+	} else {
+		""
+	}
 	$cdn_runtime_manifest struct{module str; wasm str} = if $requires_serving_artifacts {
 		encoding.decode_json_flexible(
 			os.readfile($cdn_runtime_manifest_path),
@@ -41,11 +47,29 @@ class fixture($st) {
 	}
 	$cdn_serving_manifest struct{schema_version int; current_root str; retained_root_count int} = if $requires_serving_artifacts {
 		encoding.decode_json_flexible(
-			os.readfile($cdn_serving_manifest_path),
+			$cdn_serving_manifest_content,
 			"struct{schema_version int; current_root str; retained_root_count int}"
 		)
 	} else {
 		$empty_serving_manifest
+	}
+	$cdn_serving_runtime_manifest_path = "\"path\":\"/map/runtime-manifest.json\""
+	$cdn_serving_module_path = fmt.printf("\"path\":\"/map/%s\"", $cdn_runtime_manifest->module)
+	$cdn_serving_wasm_path = fmt.printf("\"path\":\"/map/%s\"", $cdn_runtime_manifest->wasm)
+	$cdn_serving_manifest_lists_runtime_manifest = if $requires_serving_artifacts {
+		len(core_strings.split($cdn_serving_manifest_content, $cdn_serving_runtime_manifest_path)) > 1
+	} else {
+		false
+	}
+	$cdn_serving_manifest_lists_module = if $requires_serving_artifacts and ($cdn_runtime_manifest->module != "") {
+		len(core_strings.split($cdn_serving_manifest_content, $cdn_serving_module_path)) > 1
+	} else {
+		false
+	}
+	$cdn_serving_manifest_lists_wasm = if $requires_serving_artifacts and ($cdn_runtime_manifest->wasm != "") {
+		len(core_strings.split($cdn_serving_manifest_content, $cdn_serving_wasm_path)) > 1
+	} else {
+		false
 	}
 	$cdn_runtime_module_content = if $requires_serving_artifacts and ($cdn_runtime_manifest->module != "") {
 		os.readfile(fmt.printf("%s/map/%s", $cdn_runtime_content, $cdn_runtime_manifest->module))
@@ -57,7 +81,7 @@ class fixture($st) {
 	} else {
 		""
 	}
-	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"cdn_runtime_module\": \"%s\",\n  \"cdn_runtime_wasm\": \"%s\",\n  \"cdn_serving_current_root\": \"%s\",\n  \"cdn_serving_retained_root_count\": %d,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $release_identity, $site_content, $cdn_runtime_content, $cdn_runtime_manifest->module, $cdn_runtime_manifest->wasm, $cdn_serving_manifest->current_root, $cdn_serving_manifest->retained_root_count, $requires_serving_artifacts, $state)
+	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"cdn_runtime_module\": \"%s\",\n  \"cdn_runtime_wasm\": \"%s\",\n  \"cdn_serving_current_root\": \"%s\",\n  \"cdn_serving_retained_root_count\": %d,\n  \"cdn_serving_manifest_lists_runtime_manifest\": %t,\n  \"cdn_serving_manifest_lists_module\": %t,\n  \"cdn_serving_manifest_lists_wasm\": %t,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $release_identity, $site_content, $cdn_runtime_content, $cdn_runtime_manifest->module, $cdn_runtime_manifest->wasm, $cdn_serving_manifest->current_root, $cdn_serving_manifest->retained_root_count, $cdn_serving_manifest_lists_runtime_manifest, $cdn_serving_manifest_lists_module, $cdn_serving_manifest_lists_wasm, $requires_serving_artifacts, $state)
 
 	panic($environment == "", "admission fixture requires environment")
 	panic($host == "", "admission fixture requires host")
@@ -74,6 +98,8 @@ class fixture($st) {
 	panic($requires_serving_artifacts and ($cdn_runtime_wasm_content == ""), "serving artifact admission requires a readable CDN runtime wasm")
 	panic($requires_serving_artifacts and ($cdn_serving_manifest->schema_version == 0), "serving artifact admission requires a CDN serving manifest")
 	panic($requires_serving_artifacts and ($cdn_serving_manifest->current_root == ""), "serving artifact admission requires a CDN serving current root")
+	panic($requires_serving_artifacts and (not $cdn_serving_manifest_lists_runtime_manifest), "serving artifact admission requires CDN serving manifest to list runtime-manifest.json")
+	panic($requires_serving_artifacts and ((not $cdn_serving_manifest_lists_module) or (not $cdn_serving_manifest_lists_wasm)), "serving artifact admission requires CDN serving manifest to list selected runtime module and wasm")
 
 	if $write_vm_state {
 		file "/run/fishystuff/gitops-test/admission/" {

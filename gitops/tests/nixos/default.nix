@@ -40,4 +40,8 @@
   gitops-missing-cdn-runtime-file-refusal = import ./missing-cdn-runtime-file-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
+
+  gitops-missing-cdn-serving-manifest-entry-refusal = import ./missing-cdn-serving-manifest-entry-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
 }
