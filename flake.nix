@@ -222,7 +222,7 @@
             cluster = "beta";
             environment = "beta";
             hostKey = "beta-single-host";
-            activeRelease = "example-release";
+            activeRelease = "beta-validation-release";
             generation = 1;
             releaseGeneration = 1;
             gitRev = frontendSourceRevision;

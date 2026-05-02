@@ -94,7 +94,7 @@ Supported modes:
 - `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 - `local-apply`: reserved for future host-local activation. The first milestone does not include fixtures that use it.
 
-The first milestone intentionally recognizes the synthetic `example-release` release and the `local-test`/`beta` single-host environments used by the fixtures. This keeps the graph readable and testable while avoiding a premature generic controller. General release/environment traversal should be added with more mgmt language coverage and VM tests.
+The first milestone intentionally recognizes only one enabled environment at a time, currently the `local-test` or `beta` single-host environments used by the fixtures and generated validation state. The active release is selected by that environment's `active_release` key; the checked-in fixtures still use `example-release`, while the generated beta validation package uses a different release key to prove the graph is not hardcoded to the fixture name. General multi-environment traversal should be added with more mgmt language coverage and VM tests.
 
 ## Graph Shape
 
