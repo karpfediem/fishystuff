@@ -42,6 +42,10 @@
       ;
   };
 
+  gitops-served-symlink-transition-vm = import ./served-symlink-transition.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-missing-retained-release-refusal = import ./missing-retained-release-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
