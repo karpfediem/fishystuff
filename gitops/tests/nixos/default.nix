@@ -33,6 +33,11 @@
       cdnRuntimeArtifact
       desiredState
       doltServiceArtifact
+      previousApiArtifact
+      previousCdnRuntimeArtifact
+      previousCdnRuntimeCurrentArtifact
+      previousDoltServiceArtifact
+      previousSiteArtifact
       siteArtifact
       ;
   };

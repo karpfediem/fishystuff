@@ -17,6 +17,7 @@
   hostName ? hostKey,
   hostRole ? "single-site",
   mode ? "validate",
+  retainedReleaseObjects ? [ ],
   releaseGeneration ? generation,
   retainedReleases ? [ ],
   serve ? false,
@@ -41,13 +42,57 @@ let
     "release-${builtins.substring 0 16 (builtins.hashString "sha256" (builtins.toJSON releaseMaterial))}";
   releaseId = if activeRelease == null then derivedRelease else activeRelease;
   closure =
-    gcrootName: value:
+    releaseKey: gcrootName: value:
     {
       enabled = value != null;
       store_path = optionalStorePath value;
       gcroot_path =
-        if value == null then "" else "/var/lib/fishystuff/gitops/gcroots/${releaseId}/${gcrootName}";
+        if value == null then "" else "/var/lib/fishystuff/gitops/gcroots/${releaseKey}/${gcrootName}";
     };
+  mkRelease =
+    release:
+    {
+      generation = release.generation;
+      git_rev = release.gitRev;
+      dolt_commit = release.doltCommit;
+      closures = {
+        api = closure release.releaseId "api" (release.apiClosure or null);
+        site = closure release.releaseId "site" (release.siteClosure or null);
+        cdn_runtime = closure release.releaseId "cdn-runtime" (release.cdnRuntimeClosure or null);
+        dolt_service = closure release.releaseId "dolt-service" (release.doltServiceClosure or null);
+      };
+      dolt = {
+        repository = release.doltRepository or doltRepository;
+        commit = release.doltCommit;
+        branch_context = release.doltBranchContext or doltBranchContext;
+        mode = release.doltMode or doltMode;
+      };
+    };
+  retainedReleaseIds =
+    if retainedReleases != [ ] then retainedReleases else map (release: release.releaseId) retainedReleaseObjects;
+  retainedReleaseAttrs =
+    map (release: {
+      name = release.releaseId;
+      value = mkRelease release;
+    }) retainedReleaseObjects;
+  activeReleaseAttr = {
+    name = releaseId;
+    value = mkRelease {
+      inherit
+        releaseId
+        doltCommit
+        doltRepository
+        doltBranchContext
+        doltMode
+        gitRev
+        apiClosure
+        siteClosure
+        cdnRuntimeClosure
+        doltServiceClosure
+        ;
+      generation = releaseGeneration;
+    };
+  };
   payload = {
     inherit cluster generation mode;
     hosts.${hostKey} = {
@@ -55,29 +100,13 @@ let
       role = hostRole;
       hostname = hostName;
     };
-    releases.${releaseId} = {
-      generation = releaseGeneration;
-      git_rev = gitRev;
-      dolt_commit = doltCommit;
-      closures = {
-        api = closure "api" apiClosure;
-        site = closure "site" siteClosure;
-        cdn_runtime = closure "cdn-runtime" cdnRuntimeClosure;
-        dolt_service = closure "dolt-service" doltServiceClosure;
-      };
-      dolt = {
-        repository = doltRepository;
-        commit = doltCommit;
-        branch_context = doltBranchContext;
-        mode = doltMode;
-      };
-    };
+    releases = builtins.listToAttrs ([ activeReleaseAttr ] ++ retainedReleaseAttrs);
     environments.${environment} = {
       enabled = true;
       strategy = "single_active";
       host = hostKey;
       active_release = releaseId;
-      retained_releases = retainedReleases;
+      retained_releases = retainedReleaseIds;
       inherit serve;
     };
   };
@@ -90,6 +119,21 @@ assert lib.assertMsg (releaseGeneration > 0) "gitops desired state requires posi
 assert lib.assertMsg (gitRev != "") "gitops desired state requires gitRev";
 assert lib.assertMsg (doltCommit != "") "gitops desired state requires doltCommit";
 assert lib.assertMsg (doltBranchContext != "") "gitops desired state requires doltBranchContext";
+assert lib.assertMsg (
+  lib.all (release: release ? releaseId && release.releaseId != "") retainedReleaseObjects
+) "gitops retained release objects require releaseId";
+assert lib.assertMsg (
+  lib.all (release: release ? generation && release.generation > 0) retainedReleaseObjects
+) "gitops retained release objects require positive generation";
+assert lib.assertMsg (
+  lib.all (release: release ? gitRev && release.gitRev != "") retainedReleaseObjects
+) "gitops retained release objects require gitRev";
+assert lib.assertMsg (
+  lib.all (release: release ? doltCommit && release.doltCommit != "") retainedReleaseObjects
+) "gitops retained release objects require doltCommit";
+assert lib.assertMsg (
+  retainedReleases == [ ] || retainedReleases == map (release: release.releaseId) retainedReleaseObjects
+) "gitops retainedReleases must match retainedReleaseObjects when both are provided";
 assert lib.assertMsg (!serve || mode != "validate") "validate-mode desired state must not request serve";
 assert lib.assertMsg (!serve || apiClosure != null) "serving desired state requires apiClosure";
 assert lib.assertMsg (!serve || siteClosure != null) "serving desired state requires siteClosure";

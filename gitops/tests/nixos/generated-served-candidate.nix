@@ -8,6 +8,11 @@
   cdnRuntimeArtifact,
   cdnRuntimeCurrentArtifact,
   doltServiceArtifact,
+  previousApiArtifact,
+  previousSiteArtifact,
+  previousCdnRuntimeArtifact,
+  previousCdnRuntimeCurrentArtifact,
+  previousDoltServiceArtifact,
 }:
 pkgs.testers.runNixOSTest {
   name = "fishystuff-gitops-generated-served-candidate";
@@ -24,6 +29,11 @@ pkgs.testers.runNixOSTest {
         cdnRuntimeArtifact
         cdnRuntimeCurrentArtifact
         doltServiceArtifact
+        previousApiArtifact
+        previousSiteArtifact
+        previousCdnRuntimeArtifact
+        previousCdnRuntimeCurrentArtifact
+        previousDoltServiceArtifact
       ];
       environment.systemPackages = [
         mgmtPackage
@@ -35,7 +45,7 @@ pkgs.testers.runNixOSTest {
     start_all()
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
-    machine.succeed("jq -e '.mode == \"vm-test\" and .generation == 7 and .environments.\"local-test\".serve == true and ([.releases[.environments.\"local-test\".active_release].closures[] | .enabled] | all)' ${desiredState}")
+    machine.succeed("jq -e '.mode == \"vm-test\" and .generation == 7 and .environments.\"local-test\".serve == true and .environments.\"local-test\".retained_releases == [\"previous-release\"] and ([.releases[.environments.\"local-test\".active_release].closures[] | .enabled] | all) and ([.releases.\"previous-release\".closures[] | .enabled] | all)' ${desiredState}")
 
     release_id = machine.succeed("jq -r '.environments.\"local-test\".active_release' ${desiredState}").strip()
     assert release_id != "example-release"
@@ -53,18 +63,25 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file(instance)
     machine.wait_for_file(admission)
 
-    machine.succeed(f"jq -e '.desired_generation == 7 and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == []' {status}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .instance_name == \"local-test-{release_id}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .retained_release_ids == [] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
-    machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .api_bundle == \"${apiArtifact}\" and .dolt_service_bundle == \"${doltServiceArtifact}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .retained_release_ids == []' {instance}")
-    machine.succeed(f"jq -e '.release_identity == \"{expected_release_identity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .cdn_runtime_module == \"fishystuff_ui_bevy.fixture.js\" and .cdn_runtime_wasm == \"fishystuff_ui_bevy_bg.fixture.wasm\" and .cdn_serving_current_root == \"${cdnRuntimeCurrentArtifact}\" and .cdn_serving_retained_root_count == 0 and .serving_artifacts_checked == true and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed(f"jq -e '.desired_generation == 7 and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .instance_name == \"local-test-{release_id}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
+    machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .api_bundle == \"${apiArtifact}\" and .dolt_service_bundle == \"${doltServiceArtifact}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .retained_release_ids == [\"previous-release\"]' {instance}")
+    machine.succeed(f"jq -e '.release_identity == \"{expected_release_identity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .cdn_runtime_module == \"fishystuff_ui_bevy.fixture.js\" and .cdn_runtime_wasm == \"fishystuff_ui_bevy_bg.fixture.wasm\" and .cdn_serving_current_root == \"${cdnRuntimeCurrentArtifact}\" and .cdn_serving_retained_root_count == 1 and .serving_artifacts_checked == true and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed("jq -e '.releases.\"previous-release\".generation == 6 and .releases.\"previous-release\".closures.api.store_path == \"${previousApiArtifact}\" and .releases.\"previous-release\".closures.site.store_path == \"${previousSiteArtifact}\" and .releases.\"previous-release\".closures.cdn_runtime.store_path == \"${previousCdnRuntimeArtifact}\" and .releases.\"previous-release\".closures.dolt_service.store_path == \"${previousDoltServiceArtifact}\"' ${desiredState}")
 
     machine.succeed("test \"$(cat ${apiArtifact})\" = \"api fixture\"")
     machine.succeed("test \"$(cat ${doltServiceArtifact})\" = \"dolt service fixture\"")
     machine.succeed("test \"$(cat ${siteArtifact}/index.html)\" = \"served fixture site\"")
     machine.succeed("jq -e '.module == \"fishystuff_ui_bevy.fixture.js\" and .wasm == \"fishystuff_ui_bevy_bg.fixture.wasm\"' ${cdnRuntimeArtifact}/map/runtime-manifest.json")
-    machine.succeed("jq -e '.schema_version == 1 and .current_root == \"${cdnRuntimeCurrentArtifact}\" and .retained_root_count == 0 and ([.assets[] | select(.source == \"current\")] | length) == 3' ${cdnRuntimeArtifact}/cdn-serving-manifest.json")
+    machine.succeed("jq -e '.schema_version == 1 and .current_root == \"${cdnRuntimeCurrentArtifact}\" and .retained_root_count == 1 and ([.assets[] | select(.source == \"current\")] | length) == 3 and ([.assets[] | select(.source == \"retained\")] | length) == 2' ${cdnRuntimeArtifact}/cdn-serving-manifest.json")
     machine.succeed("test \"$(cat ${cdnRuntimeArtifact}/map/fishystuff_ui_bevy.fixture.js)\" = \"fixture module\"")
     machine.succeed("test \"$(cat ${cdnRuntimeArtifact}/map/fishystuff_ui_bevy_bg.fixture.wasm)\" = \"fixture wasm\"")
+    machine.succeed("test \"$(cat ${previousApiArtifact})\" = \"previous api fixture\"")
+    machine.succeed("test \"$(cat ${previousDoltServiceArtifact})\" = \"previous dolt service fixture\"")
+    machine.succeed("test \"$(cat ${previousSiteArtifact}/index.html)\" = \"previous served fixture site\"")
+    machine.succeed("jq -e '.current_root == \"${previousCdnRuntimeCurrentArtifact}\" and .retained_root_count == 0' ${previousCdnRuntimeArtifact}/cdn-serving-manifest.json")
+    machine.succeed("test \"$(cat ${cdnRuntimeArtifact}/map/fishystuff_ui_bevy.previous-fixture.js)\" = \"previous fixture module\"")
+    machine.succeed("test \"$(cat ${cdnRuntimeArtifact}/map/fishystuff_ui_bevy_bg.previous-fixture.wasm)\" = \"previous fixture wasm\"")
 
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
 

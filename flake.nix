@@ -228,10 +228,19 @@
           gitopsDesiredStateServeFixtureApi = pkgs.writeText "gitops-desired-state-serve-api-fixture" "api fixture\n";
           gitopsDesiredStateServeFixtureDoltService =
             pkgs.writeText "gitops-desired-state-serve-dolt-service-fixture" "dolt service fixture\n";
+          gitopsDesiredStateServeFixturePreviousApi =
+            pkgs.writeText "gitops-desired-state-serve-previous-api-fixture" "previous api fixture\n";
+          gitopsDesiredStateServeFixturePreviousDoltService =
+            pkgs.writeText "gitops-desired-state-serve-previous-dolt-service-fixture" "previous dolt service fixture\n";
           gitopsDesiredStateServeFixtureSite = pkgs.runCommand "gitops-desired-state-serve-site-fixture" { } ''
             mkdir -p "$out"
             printf 'served fixture site\n' > "$out/index.html"
           '';
+          gitopsDesiredStateServeFixturePreviousSite =
+            pkgs.runCommand "gitops-desired-state-serve-previous-site-fixture" { } ''
+              mkdir -p "$out"
+              printf 'previous served fixture site\n' > "$out/index.html"
+            '';
           gitopsDesiredStateServeFixtureCdnCurrent =
             pkgs.runCommand "gitops-desired-state-serve-cdn-current-fixture" { } ''
               mkdir -p "$out/map"
@@ -239,8 +248,19 @@
               printf 'fixture module\n' > "$out/map/fishystuff_ui_bevy.fixture.js"
               printf 'fixture wasm\n' > "$out/map/fishystuff_ui_bevy_bg.fixture.wasm"
             '';
+          gitopsDesiredStateServeFixturePreviousCdnCurrent =
+            pkgs.runCommand "gitops-desired-state-serve-previous-cdn-current-fixture" { } ''
+              mkdir -p "$out/map"
+              printf '{"module":"fishystuff_ui_bevy.previous-fixture.js","wasm":"fishystuff_ui_bevy_bg.previous-fixture.wasm"}\n' > "$out/map/runtime-manifest.json"
+              printf 'previous fixture module\n' > "$out/map/fishystuff_ui_bevy.previous-fixture.js"
+              printf 'previous fixture wasm\n' > "$out/map/fishystuff_ui_bevy_bg.previous-fixture.wasm"
+            '';
+          gitopsDesiredStateServeFixturePreviousCdn = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
+            currentRoot = gitopsDesiredStateServeFixturePreviousCdnCurrent;
+          };
           gitopsDesiredStateServeFixtureCdn = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
             currentRoot = gitopsDesiredStateServeFixtureCdnCurrent;
+            previousRoots = [ gitopsDesiredStateServeFixturePreviousCdnCurrent ];
           };
           gitopsDesiredStateVmServeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "local-test";
@@ -255,6 +275,19 @@
             siteClosure = gitopsDesiredStateServeFixtureSite;
             cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
             doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+            retainedReleaseObjects = [
+              {
+                releaseId = "previous-release";
+                generation = 6;
+                gitRev = "previous-serve-fixture";
+                doltCommit = "previous-serve-fixture";
+                doltBranchContext = "local-test";
+                apiClosure = gitopsDesiredStateServeFixturePreviousApi;
+                siteClosure = gitopsDesiredStateServeFixturePreviousSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
+              }
+            ];
             mode = "vm-test";
             serve = true;
           };
@@ -334,6 +367,11 @@
               cdnRuntimeArtifact = gitopsDesiredStateServeFixtureCdn;
               cdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixtureCdnCurrent;
               doltServiceArtifact = gitopsDesiredStateServeFixtureDoltService;
+              previousApiArtifact = gitopsDesiredStateServeFixturePreviousApi;
+              previousCdnRuntimeArtifact = gitopsDesiredStateServeFixturePreviousCdn;
+              previousCdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixturePreviousCdnCurrent;
+              previousDoltServiceArtifact = gitopsDesiredStateServeFixturePreviousDoltService;
+              previousSiteArtifact = gitopsDesiredStateServeFixturePreviousSite;
             };
           };
           cdnServingRootRetentionCheck =
