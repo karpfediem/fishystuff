@@ -25,6 +25,7 @@ just gitops-vm-test single-host-candidate
 just gitops-vm-test closure-roots
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
+just gitops-vm-test raw-cdn-serve-refusal
 ```
 
 The flake checks added by this milestone are:
@@ -37,6 +38,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 ```
 
 `.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It deliberately keeps `cdn_runtime` disabled so normal repo checks do not depend on private or ignored CDN staging state. Its release key is derived from the exact available tuple by default. It sets `serve: false`, `mode: validate`, and a placeholder Dolt commit; it is not a deploy/apply command.
@@ -46,6 +48,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, and a finalized CDN serving root. The package generator refuses `serve: true` unless all four release artifacts are present.
 
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
+
+`gitops-raw-cdn-serve-refusal` is a negative VM check. It proves a `serve: true` desired state cannot pass admission when `cdn_runtime` points at a raw runtime directory instead of a finalized CDN serving root with `cdn-serving-manifest.json`.
 
 ## Desired State
 

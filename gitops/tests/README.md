@@ -10,6 +10,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 ```
 
 Recipe wrappers:
@@ -20,6 +21,7 @@ just gitops-vm-test single-host-candidate
 just gitops-vm-test closure-roots
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
+just gitops-vm-test raw-cdn-serve-refusal
 ```
 
 `gitops-empty-unify` type-checks `gitops/main.mcl` with `fixtures/empty.desired.json` and asserts that no local test state paths are created.
@@ -38,5 +40,7 @@ just gitops-vm-test generated-served-candidate
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 
 `gitops-desired-state-vm-serve-fixture` type-checks a generated local `vm-test` serving desired-state package. It uses tiny local store artifacts and verifies the generator emits `serve: true` only with API, Dolt service, site, and finalized CDN runtime closures present.
+
+`gitops-raw-cdn-serve-refusal` boots a local NixOS VM and checks the negative path: a serving desired state with `cdn_runtime` pointed at a raw runtime directory must fail before activation because it lacks `cdn-serving-manifest.json`.
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
