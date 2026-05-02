@@ -3118,6 +3118,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fishystuff_deploy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fishystuff_dolt_import"
 version = "0.1.0"
 dependencies = [

@@ -12,6 +12,7 @@ members = [
   "lib/fishystuff_zones_meta",
   "map/fishystuff_ui_bevy",
   "tools/fishystuff_dolt_import",
+  "tools/fishystuff_deploy",
   "tools/fishystuff_ingest",
   "tools/fishystuff_tilegen",
   "tools/pazifista",

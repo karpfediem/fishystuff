@@ -198,11 +198,13 @@ Supported modes:
 The Dolt desired-state fields separate data identity from transport. `dolt.commit` is the exact data identity that may be served. `dolt.branch_context` is only the branch/ref context to fetch from. `dolt.materialization` controls how the host gets that commit locally:
 
 - `metadata_only`: record the exact Dolt identity but do not realize data locally. This is the default for validation-only fixtures.
-- `fetch_pin`: maintain a persistent host-local Dolt cache, fetch the requested branch from `remote_url`, and force `release_ref` to the exact `commit`. VM tests implement this with a local file remote only.
+- `fetch_pin`: maintain a persistent host-local Dolt cache, fetch the requested branch from `remote_url`, and force `release_ref` to the exact `commit`. VM tests implement this through the `fishystuff_deploy dolt fetch-pin` helper against a local file remote only.
 - `replica_pin`: reserved for a future read-replica cache that still pins and verifies the exact release commit before serving.
 - `snapshot`: reserved for bootstrap or disaster recovery. It should not be the normal deploy path because shipping a `.dolt` snapshot in a Nix closure repeats the large database transfer.
 
 `fetch_pin` is the intended normal deployment path. It avoids full clones on every deploy: expensive Dolt transfer happens as incremental fetch into a cache under `cache_dir`, while activation can only proceed after `release_ref` verifies to the exact desired commit. DoltHub may remain a source/public mirror, but production deployment should fetch from a faster FishyStuff-controlled remote or mirror.
+
+The Rust deployment helper is packaged as `.#fishystuff-deploy`. It is intentionally a narrow host-local helper, not a plan/apply deployment command: mgmt still owns desired-state reconciliation, while the helper only executes Dolt clone/fetch/ref-pin/status-file operations requested by the graph.
 
 ## Graph Shape
 
@@ -267,7 +269,7 @@ The closure and gcroot resources are both declared for each enabled artifact. A 
 
 `gitops-served-caddy-handoff-vm` adds a real local Caddy consumer for that handoff shape. Caddy serves the stable symlink roots while mgmt reconciles the underlying active release. The test verifies site content, current CDN runtime files, and retained prior CDN runtime files over HTTP before and after the selected release changes.
 
-`gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
+`gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses the `fishystuff_deploy dolt fetch-pin` helper, backed by Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM, to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
 
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 

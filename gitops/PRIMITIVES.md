@@ -197,7 +197,7 @@ Dolt's own CLI and SQL server procedures are sufficient for the first bandwidth-
 - `dolt sql -r csv -q "select dolt_hashof('<ref>') as hash"` or `dolt log -n 1 <ref> --oneline` can verify the pinned ref resolves to the exact desired commit.
 - SQL procedures `DOLT_FETCH()` and `DOLT_RESET()` mirror the CLI shape for a running SQL server, but the old branch-tip reset pattern is not exact enough for GitOps serving without a commit-hash verification gate.
 
-`gitops/modules/fishy/dolt.mcl` uses `exec` only in VM test mode to exercise this local `fetch_pin` path against a file-backed Dolt remote. Real beta/prod usage should become either a small reusable Dolt materialization primitive or a tightly-scoped local helper owned by the host-local GitOps graph.
+`gitops/modules/fishy/dolt.mcl` uses `exec` only in VM test mode to invoke the narrow `fishystuff_deploy dolt fetch-pin` Rust helper against a file-backed Dolt remote. The helper is a host-local bridge over Dolt's CLI, not a deployment controller. A future upstreamable primitive may still replace the bridge if the shape proves generally useful.
 
 Signal/debounce/stable-related pieces found:
 

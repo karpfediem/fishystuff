@@ -101,6 +101,13 @@
             src = apiCargoSrc;
             cargoExtraArgs = "-p fishystuff_server";
           };
+          deploymentToolsCargoSrc = craneLib.cleanCargoSource ./.;
+          fishystuffDeploy = craneLib.buildPackage {
+            pname = "fishystuff_deploy";
+            version = "0.1.0";
+            src = deploymentToolsCargoSrc;
+            cargoExtraArgs = "-p fishystuff_deploy";
+          };
 
           apiConfig = pkgs.callPackage ./nix/packages/api-config.nix { };
           apiEntrypoint = pkgs.callPackage ./nix/packages/api-entrypoint.nix {
@@ -359,6 +366,7 @@
           gitopsTests = import ./gitops/tests/nixos {
             inherit pkgs;
             gitopsSrc = ./gitops;
+            fishystuffDeployPackage = fishystuffDeploy;
             mgmtPackage = mgmt-fishystuff-beta.packages.${system}.minimal;
             generatedServeFixture = {
               desiredState = gitopsDesiredStateVmServeFixture;
@@ -535,6 +543,7 @@
             dolt-service-bundle = doltServiceBundle;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
+            fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;

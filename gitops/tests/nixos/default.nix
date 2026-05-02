@@ -1,6 +1,7 @@
 {
   pkgs,
   mgmtPackage ? pkgs.mgmt,
+  fishystuffDeployPackage,
   gitopsSrc,
   generatedServeFixture,
 }:
@@ -14,7 +15,7 @@
   };
 
   gitops-dolt-fetch-pin-vm = import ./dolt-fetch-pin.nix {
-    inherit gitopsSrc mgmtPackage pkgs;
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
   };
 
   gitops-multi-environment-candidates-vm = import ./multi-environment-candidates.nix {

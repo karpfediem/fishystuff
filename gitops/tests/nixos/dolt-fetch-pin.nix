@@ -1,6 +1,7 @@
 {
   pkgs,
   mgmtPackage,
+  fishystuffDeployPackage,
   gitopsSrc,
 }:
 pkgs.testers.runNixOSTest {
@@ -13,6 +14,7 @@ pkgs.testers.runNixOSTest {
       networking.hostName = "vm-single-host";
       virtualisation.memorySize = 4096;
       environment.systemPackages = [
+        fishystuffDeployPackage
         mgmtPackage
         pkgs.dolt
         pkgs.jq
@@ -51,7 +53,9 @@ pkgs.testers.runNixOSTest {
       machine.wait_until_succeeds(f"! kill -0 $(cat {mgmt_pid}) 2>/dev/null", timeout=30)
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
+    machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
     machine.succeed("test -x /run/current-system/sw/bin/dolt")
+    machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
     machine.succeed(f"mkdir -p {work}/source {work}/remote {work}/home")
     machine.succeed(f"env HOME={work}/home dolt config --global --add versioncheck.disabled true || true")
     machine.succeed(f"env HOME={work}/home dolt config --global --add metrics.disabled true || true")
