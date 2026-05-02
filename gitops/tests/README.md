@@ -8,6 +8,7 @@ nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
+nix build .#checks.x86_64-linux.gitops-unused-release-closure-noop-vm
 nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
 nix build .#checks.x86_64-linux.gitops-served-candidate-vm
@@ -38,6 +39,7 @@ just gitops-vm-test single-host-candidate
 just gitops-vm-test multi-environment-candidates
 just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
+just gitops-vm-test unused-release-closure-noop
 just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
@@ -65,6 +67,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 - `/run/fishystuff/gitops-test`
 
 `gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
+
+`gitops-unused-release-closure-noop-vm` boots a local NixOS VM in `vm-test-closures` mode with one selected release backed by real tiny store artifacts and one unselected release backed by bogus store paths. It checks that only the selected release is realized/rooted and that the unused release does not create gcroots or candidate files.
 
 `gitops-multi-environment-candidates-vm` boots a local NixOS VM with two enabled arbitrary single-host environments. It checks that each environment publishes its own candidate, admission, and status documents while no active route or served symlinks are created.
 

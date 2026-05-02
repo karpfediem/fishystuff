@@ -2,6 +2,16 @@ import "fmt"
 
 import "nix.mcl" as fishy_nix
 
+class catalog_entry($st) {
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$generation int = $st->generation || 0
+
+	panic($release_id == "", "release catalog entry requires release_id")
+	panic($release_identity == "", fmt.printf("release %s requires release_identity", $release_id))
+	panic($generation == 0, fmt.printf("release %s requires non-zero generation", $release_id))
+}
+
 class candidate($st) {
 	$mode str = $st->mode || "validate"
 	$release_id str = $st->release_id
@@ -18,9 +28,7 @@ class candidate($st) {
 	$cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["cdn_runtime"] || $empty_artifact
 	$dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["dolt_service"] || $empty_artifact
 
-	panic($release_id == "", "release candidate requires release_id")
-	panic($release_identity == "", fmt.printf("release %s requires release_identity", $release_id))
-	panic($generation == 0, fmt.printf("release %s requires non-zero generation", $release_id))
+	include catalog_entry($st)
 
 	include fishy_nix.artifact(struct {
 		mode => $mode,

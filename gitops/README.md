@@ -25,6 +25,7 @@ just gitops-vm-test single-host-candidate
 just gitops-vm-test multi-environment-candidates
 just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
+just gitops-vm-test unused-release-closure-noop
 just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
@@ -52,6 +53,7 @@ nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
+nix build .#checks.x86_64-linux.gitops-unused-release-closure-noop-vm
 nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
 nix build .#checks.x86_64-linux.gitops-served-candidate-vm
@@ -83,6 +85,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-desired-state-serve-without-retained-refusal` proves the generated desired-state helper refuses `serve: true` without at least one retained rollback release.
 
 `gitops-json-status-escaping-vm` proves the VM-local JSON outputs preserve quote/backslash characters from the exact release identity tuple instead of emitting malformed JSON.
+
+`gitops-unused-release-closure-noop-vm` boots a local NixOS VM in `vm-test-closures` mode with one selected release backed by real tiny store artifacts and one unselected release backed by bogus store paths. It proves the graph validates the release catalog but only realizes and roots releases requested by enabled environments as active or retained rollback releases.
 
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, verifies the generated retained `previous-release` object, writes the VM-local route selection document, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
 
@@ -188,6 +192,8 @@ desired state object
 ```
 
 The current `release_id` is the desired-state release key. Generated desired state derives that key from a content hash of the exact release tuple; fixture desired state may still use readable names such as `example-release`. The graph also emits `release_identity`, a deterministic string derived from the release key, generation, Git revision, Dolt identity/mode, and closure paths. The tuple is recorded directly in candidate, admission, active, and status documents so mismatched activation inputs are visible.
+
+All release objects are checked as catalog entries, but artifact realization is intentionally narrower: `nix:closure` and `nix:gcroot` are emitted only for releases selected by enabled environments as `active_release` or listed in `retained_releases`. This lets desired state carry preview, future, or stale release metadata without trying to root unused artifacts.
 
 ## Release Artifact Contract
 

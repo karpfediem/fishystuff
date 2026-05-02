@@ -25,6 +25,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-unused-release-closure-noop-vm = import ./unused-release-closure-noop.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-served-closure-roots-vm = import ./served-closure-roots.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

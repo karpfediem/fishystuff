@@ -23,6 +23,9 @@ case "$test_name" in
   closure-roots)
     check_attr="gitops-closure-roots-vm"
     ;;
+  unused-release-closure-noop)
+    check_attr="gitops-unused-release-closure-noop-vm"
+    ;;
   served-closure-roots)
     check_attr="gitops-served-closure-roots-vm"
     ;;
@@ -76,7 +79,7 @@ case "$test_name" in
     ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, multi-environment-candidates, multi-environment-served, closure-roots, served-closure-roots, json-status-escaping, served-candidate, generated-served-candidate, served-symlink-transition, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, missing-active-artifact-refusal, missing-retained-artifact-refusal, missing-retained-release-refusal, no-retained-release-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, multi-environment-candidates, multi-environment-served, closure-roots, unused-release-closure-noop, served-closure-roots, json-status-escaping, served-candidate, generated-served-candidate, served-symlink-transition, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, missing-active-artifact-refusal, missing-retained-artifact-refusal, missing-retained-release-refusal, no-retained-release-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
     exit 2
     ;;
 esac

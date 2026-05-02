@@ -1,5 +1,6 @@
 import "encoding"
 import "fmt"
+import "iter"
 import "map"
 import "os"
 import "sys"
@@ -43,6 +44,7 @@ $empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
 	store_path => "",
 	gcroot_path => "",
 }
+$empty_list []str = []
 $cluster str = $raw_desired->cluster || "local-test"
 $generation int = $raw_desired->generation || 0
 $mode str = $raw_desired->mode || "validate"
@@ -55,6 +57,9 @@ $releases map{str: struct{
 	dolt struct{repository str; commit str; branch_context str; mode str}
 }} = $raw_desired->releases || $empty_releases
 $environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = $raw_desired->environments || $empty_environments
+$enabled_environment_keys = iter.filter(map.keys($environments), func($environment_name) {
+	$environments[$environment_name]->enabled
+})
 
 for $index, $release_id in map.keys($releases) {
 	$release struct{
@@ -88,20 +93,35 @@ for $index, $release_id in map.keys($releases) {
 			$release_dolt_service_artifact->store_path
 		)
 	}
+	$selecting_environment_keys = iter.filter($enabled_environment_keys, func($environment_name) {
+		$environments[$environment_name]->active_release == $release_id
+	})
+	$retaining_environment_keys = iter.filter($enabled_environment_keys, func($environment_name) {
+		$release_id in ($environments[$environment_name]->retained_releases || $empty_list)
+	})
+	$release_requested = (len($selecting_environment_keys) > 0) or (len($retaining_environment_keys) > 0)
 
 	panic($release_id == "", "release map contains an empty release id")
 	panic($release->generation == 0, fmt.printf("release %s requires non-zero generation", $release_id))
 	panic($release->dolt_commit != $release_dolt->commit, fmt.printf("release %s dolt_commit must match dolt.commit", $release_id))
 
-	include fishy_release.candidate(struct {
-		mode => $mode,
+	include fishy_release.catalog_entry(struct {
 		release_id => $release_id,
 		release_identity => $release_identity,
 		generation => $release->generation,
-		git_rev => $release->git_rev,
-		dolt_commit => $release->dolt_commit,
-		closures => $release_closures,
 	})
+
+	if $release_requested {
+		include fishy_release.candidate(struct {
+			mode => $mode,
+			release_id => $release_id,
+			release_identity => $release_identity,
+			generation => $release->generation,
+			git_rev => $release->git_rev,
+			dolt_commit => $release->dolt_commit,
+			closures => $release_closures,
+		})
+	}
 }
 
 for $index, $environment_name in map.keys($environments) {
