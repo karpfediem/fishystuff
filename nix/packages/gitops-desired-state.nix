@@ -135,6 +135,7 @@ assert lib.assertMsg (
   retainedReleases == [ ] || retainedReleases == map (release: release.releaseId) retainedReleaseObjects
 ) "gitops retainedReleases must match retainedReleaseObjects when both are provided";
 assert lib.assertMsg (!serve || mode != "validate") "validate-mode desired state must not request serve";
+assert lib.assertMsg (!serve || retainedReleaseIds != [ ]) "serving desired state requires at least one retained rollback release";
 assert lib.assertMsg (!serve || apiClosure != null) "serving desired state requires apiClosure";
 assert lib.assertMsg (!serve || siteClosure != null) "serving desired state requires siteClosure";
 assert lib.assertMsg (!serve || cdnRuntimeClosure != null) "serving desired state requires cdnRuntimeClosure";

@@ -480,6 +480,31 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateServeWithoutRetainedCheck =
+            let
+              attempted = builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+                cluster = "local-test";
+                environment = "local-test";
+                hostKey = "vm-single-host";
+                generation = 8;
+                releaseGeneration = 8;
+                gitRev = "serve-without-retained-fixture";
+                doltCommit = "serve-without-retained-fixture";
+                doltBranchContext = "local-test";
+                apiClosure = gitopsDesiredStateServeFixtureApi;
+                siteClosure = gitopsDesiredStateServeFixtureSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+                mode = "vm-test";
+                serve = true;
+              }) true);
+            in
+            pkgs.runCommand "gitops-desired-state-serve-without-retained-check" { } ''
+              set -euo pipefail
+
+              test "${if attempted.success then "success" else "failure"}" = "failure"
+              touch "$out"
+            '';
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
             tag = "latest";
@@ -535,6 +560,7 @@
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               cdn-required-files = cdnRequiredFilesCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
+              gitops-desired-state-serve-without-retained-refusal = gitopsDesiredStateServeWithoutRetainedCheck;
               gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;
               modular-service-runtime = modularServiceRuntime;
               site-asset-finalizer = siteAssetFinalizerCheck;
