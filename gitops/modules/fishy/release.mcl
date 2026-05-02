@@ -1,5 +1,6 @@
 import "fmt"
 
+import "dolt.mcl" as fishy_dolt
 import "nix.mcl" as fishy_nix
 
 class catalog_entry($st) {
@@ -17,6 +18,16 @@ class candidate($st) {
 	$release_id str = $st->release_id
 	$release_identity str = $st->release_identity || ""
 	$generation int = $st->generation || 0
+	$dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = $st->dolt || struct {
+		repository => "",
+		commit => "",
+		branch_context => "",
+		mode => "",
+		materialization => "",
+		remote_url => "",
+		cache_dir => "",
+		release_ref => "",
+	}
 	$closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = $st->closures || {}
 	$empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
 		enabled => false,
@@ -29,6 +40,19 @@ class candidate($st) {
 	$dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $closures["dolt_service"] || $empty_artifact
 
 	include catalog_entry($st)
+
+	include fishy_dolt.release_metadata(struct {
+		release_id => $release_id,
+		release_identity => $release_identity,
+		repository => $dolt->repository,
+		commit => $dolt->commit,
+		branch_context => $dolt->branch_context,
+		access_mode => $dolt->mode,
+		materialization => $dolt->materialization,
+		remote_url => $dolt->remote_url,
+		cache_dir => $dolt->cache_dir,
+		release_ref => $dolt->release_ref,
+	})
 
 	include fishy_nix.artifact(struct {
 		mode => $mode,

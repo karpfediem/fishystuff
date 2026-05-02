@@ -22,6 +22,7 @@ just gitops-unify
 just gitops-unify auto gitops/fixtures/beta-single-host.example.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
+just gitops-vm-test dolt-fetch-pin
 just gitops-vm-test multi-environment-candidates
 just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
@@ -52,6 +53,7 @@ The flake checks added by this milestone are:
 ```bash
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
+nix build .#checks.x86_64-linux.gitops-dolt-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
@@ -87,6 +89,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, a finalized CDN serving root, and one retained previous release object. The package generator refuses `serve: true` unless all four active release artifacts are present.
 
 `gitops-desired-state-serve-without-retained-refusal` proves the generated desired-state helper refuses `serve: true` without at least one retained rollback release.
+
+`gitops-dolt-fetch-pin-vm` boots one local NixOS VM, creates a local file-backed Dolt remote, and reconciles a `fetch_pin` desired state against it. The test first pins commit 1 in a persistent VM-local cache, then pushes commit 2 to the same local remote and changes desired state. It verifies the existing cache is fetched forward, the release ref points at the exact desired commit, and no `.dolt` snapshot/full closure path is used.
 
 `gitops-json-status-escaping-vm` proves the VM-local JSON outputs preserve quote/backslash characters from the exact release identity tuple instead of emitting malformed JSON.
 
@@ -156,7 +160,11 @@ The minimal JSON shape is:
         "repository": "fishystuff/fishystuff",
         "commit": "example",
         "branch_context": "beta",
-        "mode": "read_only"
+        "mode": "read_only",
+        "materialization": "metadata_only",
+        "remote_url": "",
+        "cache_dir": "",
+        "release_ref": ""
       }
     }
   },
@@ -184,6 +192,17 @@ Supported modes:
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
 `main.mcl` traverses the desired-state `environments` map generically. Every enabled environment must use the `single_active` strategy, name an enabled host, and select a release by key. The checked-in fixtures still use readable names such as `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. This milestone supports generic single-host environments; richer placement strategies should be new modules with their own VM tests.
+
+## Dolt Materialization
+
+The Dolt desired-state fields separate data identity from transport. `dolt.commit` is the exact data identity that may be served. `dolt.branch_context` is only the branch/ref context to fetch from. `dolt.materialization` controls how the host gets that commit locally:
+
+- `metadata_only`: record the exact Dolt identity but do not realize data locally. This is the default for validation-only fixtures.
+- `fetch_pin`: maintain a persistent host-local Dolt cache, fetch the requested branch from `remote_url`, and force `release_ref` to the exact `commit`. VM tests implement this with a local file remote only.
+- `replica_pin`: reserved for a future read-replica cache that still pins and verifies the exact release commit before serving.
+- `snapshot`: reserved for bootstrap or disaster recovery. It should not be the normal deploy path because shipping a `.dolt` snapshot in a Nix closure repeats the large database transfer.
+
+`fetch_pin` is the intended normal deployment path. It avoids full clones on every deploy: expensive Dolt transfer happens as incremental fetch into a cache under `cache_dir`, while activation can only proceed after `release_ref` verifies to the exact desired commit. DoltHub may remain a source/public mirror, but production deployment should fetch from a faster FishyStuff-controlled remote or mirror.
 
 ## Graph Shape
 
@@ -216,6 +235,8 @@ A release candidate is the exact tuple of:
 - retained rollback release IDs for the selected environment
 - admission result for that exact tuple
 
+Dolt cache state is not itself a release artifact. A release artifact names the exact `dolt.commit`; the selected host materializes that commit through `fetch_pin`, `replica_pin`, or a bootstrap snapshot before admission can claim the tuple is ready.
+
 The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The `cdn-serving-root` derivation validates the current root's runtime manifest when present and refuses a root whose selected JS/WASM files are missing. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation. Serving admission requires this root to include `cdn-serving-manifest.json`, which records the current root and retained roots. When the desired environment retains rollback releases, serving admission checks that the active CDN serving manifest accounts for the CDN root required by each retained release. If a retained release's `cdn_runtime` is itself a serving root, admission checks its recorded `current_root`; otherwise it checks the retained `cdn_runtime` path directly.
 
 `retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Each retained ID must reference a release object in desired state, and serving requires at least one retained rollback release. Activation records this list in the local active/status documents so operators can tell which rollback set was selected with the active release.
@@ -246,6 +267,8 @@ The closure and gcroot resources are both declared for each enabled artifact. A 
 
 `gitops-served-caddy-handoff-vm` adds a real local Caddy consumer for that handoff shape. Caddy serves the stable symlink roots while mgmt reconciles the underlying active release. The test verifies site content, current CDN runtime files, and retained prior CDN runtime files over HTTP before and after the selected release changes.
 
+`gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
+
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 
 ## Admission
@@ -258,6 +281,7 @@ Future real admission should probe the exact candidate tuple:
 - API `/api/v1/meta`
 - A representative DB-backed API route that would catch schema/data mismatches such as the previous `languagedata` versus `languagedata_en` issue
 - Branch-qualified Dolt behavior when branch context matters
+- The candidate API is connected to the exact pinned Dolt commit/ref, not merely the current branch tip
 - Site content references the selected CDN runtime assets
 
 No hand-maintained API/schema compatibility contract should be added. Compatibility should be inferred by admission probes against the exact candidate API and Dolt state.
@@ -278,6 +302,10 @@ Status includes:
 - `host`
 - `phase`
 - `admission_state`
+- `dolt_commit`
+- `dolt_materialization`
+- `dolt_cache_dir`
+- `dolt_release_ref`
 - `served`
 - `failure_reason`
 
@@ -346,5 +374,5 @@ This first milestone addresses prior deployment failure classes by structure rat
 - Confusing graph acceptance with target health: admission is explicit and `not_run` in validate mode.
 - Site content moving live without matching CDN runtime content: site and CDN runtime are part of the same release candidate.
 - Slow rollback due to missing rooted previous closures: release closure/gcroot work is a prerequisite for future serving.
-- Dolt snapshot materialization preserving wrong ownership/mode: this graph records Dolt identity but does not materialize snapshots yet.
+- Dolt snapshot materialization preserving wrong ownership/mode: the tested path pins an exact commit through a host-local Dolt cache; snapshot mode remains documented but not implemented.
 - Diagnostic/manual processes conflicting with managed services: the first graph does not start real services.

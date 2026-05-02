@@ -2,6 +2,7 @@ import "fmt"
 
 import "activation.mcl" as fishy_activation
 import "admission.mcl" as fishy_admission
+import "dolt.mcl" as fishy_dolt
 import "instance.mcl" as fishy_instance
 import "json.mcl" as fishy_json
 import "route.mcl" as fishy_route
@@ -19,22 +20,26 @@ class single_host($st) {
 		git_rev str;
 		dolt_commit str;
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-		dolt struct{repository str; commit str; branch_context str; mode str}
+		dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 	}} = $st->releases
 	$empty_list []str = []
 	$empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
-	$empty_dolt struct{repository str; commit str; branch_context str; mode str} = struct {
+	$empty_dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = struct {
 		repository => "",
 		commit => "",
 		branch_context => "",
 		mode => "",
+		materialization => "",
+		remote_url => "",
+		cache_dir => "",
+		release_ref => "",
 	}
 	$empty_release struct{
 		generation int;
 		git_rev str;
 		dolt_commit str;
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-		dolt struct{repository str; commit str; branch_context str; mode str}
+		dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 	} = struct {
 		generation => 0,
 		git_rev => "",
@@ -53,9 +58,14 @@ class single_host($st) {
 		git_rev str;
 		dolt_commit str;
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-		dolt struct{repository str; commit str; branch_context str; mode str}
+		dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 	} = if $active_release_id != "" { $releases[$active_release_id] || $empty_release } else { $empty_release }
-	$active_dolt struct{repository str; commit str; branch_context str; mode str} = $active_release->dolt || $empty_dolt
+	$active_dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = $active_release->dolt || $empty_dolt
+	$raw_active_dolt_materialization str = $active_dolt->materialization || ""
+	$active_dolt_materialization str = if $raw_active_dolt_materialization == "" { "metadata_only" } else { $raw_active_dolt_materialization }
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
+	$vm_state_dir = "/var/lib/fishystuff/gitops-test"
+	$vm_run_dir = "/run/fishystuff/gitops-test"
 	$active_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["api"] || $empty_artifact
 	$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
 	$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact
@@ -86,6 +96,11 @@ class single_host($st) {
 	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
 	$retained_releases []str = $environment->retained_releases || $empty_list
 	$retained_release_ids_json = fishy_json.string_list($retained_releases)
+	$dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $active_release_id)
+	$admission_path = fmt.printf("%s/admission/%s.json", $vm_run_dir, $environment_name)
+	$status_path = fmt.printf("%s/status/%s.json", $vm_state_dir, $environment_name)
+	$active_path = fmt.printf("%s/active/%s.json", $vm_state_dir, $environment_name)
+	$route_path = fmt.printf("%s/routes/%s.json", $vm_run_dir, $environment_name)
 
 	panic($environment_name == "", "environment requires a name")
 	panic($desired_generation == 0, fmt.printf("environment %s requires desired_generation", $environment_name))
@@ -110,9 +125,9 @@ class single_host($st) {
 			git_rev str;
 			dolt_commit str;
 			closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-			dolt struct{repository str; commit str; branch_context str; mode str}
+			dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 		} = $releases[$retained_release_id] || $empty_release
-		$retained_dolt struct{repository str; commit str; branch_context str; mode str} = $retained_release->dolt || $empty_dolt
+		$retained_dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = $retained_release->dolt || $empty_dolt
 		$retained_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["api"] || $empty_artifact
 		$retained_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["site"] || $empty_artifact
 		$retained_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["cdn_runtime"] || $empty_artifact
@@ -133,6 +148,22 @@ class single_host($st) {
 		})
 	}
 
+	include fishy_dolt.materialization(struct {
+		mode => $mode,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		repository => $active_dolt->repository,
+		commit => $active_dolt->commit,
+		branch_context => $active_dolt->branch_context,
+		access_mode => $active_dolt->mode,
+		materialization => $active_dolt_materialization,
+		remote_url => $active_dolt->remote_url,
+		cache_dir => $active_dolt->cache_dir,
+		release_ref => $active_dolt->release_ref,
+	})
+
 	include fishy_instance.candidate(struct {
 		mode => $mode,
 		cluster => $cluster,
@@ -147,6 +178,10 @@ class single_host($st) {
 		dolt_commit => $active_dolt->commit,
 		dolt_branch_context => $active_dolt->branch_context,
 		dolt_mode => $active_dolt->mode,
+		dolt_materialization => $active_dolt_materialization,
+		dolt_remote_url => $active_dolt->remote_url,
+		dolt_cache_dir => $active_dolt->cache_dir,
+		dolt_release_ref => $active_dolt->release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
 		serve => $environment->serve,
 	})
@@ -159,6 +194,9 @@ class single_host($st) {
 		release_identity => $active_release_identity,
 		site_content => $active_site_artifact->store_path,
 		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+		dolt_commit => $active_dolt->commit,
+		dolt_materialization => $active_dolt_materialization,
+		dolt_release_ref => $active_dolt->release_ref,
 		requires_serving_artifacts => $environment->serve,
 		retained_release_count => len($retained_releases),
 		state => $admission_state,
@@ -198,8 +236,19 @@ class single_host($st) {
 		release_identity => $active_release_identity,
 		phase => if $served { "served" } else { "candidate" },
 		admission_state => $admission_state,
+		dolt_commit => $active_dolt->commit,
+		dolt_materialization => $active_dolt_materialization,
+		dolt_cache_dir => $active_dolt->cache_dir,
+		dolt_release_ref => $active_dolt->release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
 		served => $served,
 		failure_reason => if $admission_failed { "admission_failed" } else { "" },
 	})
+
+	if $write_vm_state and ($active_dolt_materialization == "fetch_pin") {
+		Exec["${dolt_exec_name}"] -> File["${admission_path}"]
+		Exec["${dolt_exec_name}"] -> File["${status_path}"]
+		Exec["${dolt_exec_name}"] -> File["${active_path}"]
+		Exec["${dolt_exec_name}"] -> File["${route_path}"]
+	}
 }

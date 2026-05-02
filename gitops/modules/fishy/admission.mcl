@@ -12,6 +12,9 @@ class fixture($st) {
 	$release_identity str = $st->release_identity || ""
 	$site_content str = $st->site_content || ""
 	$cdn_runtime_content str = $st->cdn_runtime_content || ""
+	$dolt_commit str = $st->dolt_commit || ""
+	$dolt_materialization str = $st->dolt_materialization || "metadata_only"
+	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$requires_serving_artifacts bool = $st->requires_serving_artifacts || false
 	$retained_release_count int = $st->retained_release_count || 0
 	$state str = $st->state || "not_run"
@@ -83,7 +86,7 @@ class fixture($st) {
 	} else {
 		""
 	}
-	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"cdn_runtime_module\": %s,\n  \"cdn_runtime_wasm\": %s,\n  \"cdn_serving_current_root\": %s,\n  \"cdn_serving_retained_root_count\": %d,\n  \"retained_release_count\": %d,\n  \"cdn_serving_manifest_lists_runtime_manifest\": %t,\n  \"cdn_serving_manifest_lists_module\": %t,\n  \"cdn_serving_manifest_lists_wasm\": %t,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": %s,\n  \"probe\": \"local-fixture\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($cdn_runtime_manifest->module), fishy_json.quote($cdn_runtime_manifest->wasm), fishy_json.quote($cdn_serving_manifest->current_root), $cdn_serving_manifest->retained_root_count, $retained_release_count, $cdn_serving_manifest_lists_runtime_manifest, $cdn_serving_manifest_lists_module, $cdn_serving_manifest_lists_wasm, $requires_serving_artifacts, fishy_json.quote($state))
+	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_materialization\": %s,\n  \"dolt_release_ref\": %s,\n  \"cdn_runtime_module\": %s,\n  \"cdn_runtime_wasm\": %s,\n  \"cdn_serving_current_root\": %s,\n  \"cdn_serving_retained_root_count\": %d,\n  \"retained_release_count\": %d,\n  \"cdn_serving_manifest_lists_runtime_manifest\": %t,\n  \"cdn_serving_manifest_lists_module\": %t,\n  \"cdn_serving_manifest_lists_wasm\": %t,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": %s,\n  \"probe\": \"local-fixture\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_release_ref), fishy_json.quote($cdn_runtime_manifest->module), fishy_json.quote($cdn_runtime_manifest->wasm), fishy_json.quote($cdn_serving_manifest->current_root), $cdn_serving_manifest->retained_root_count, $retained_release_count, $cdn_serving_manifest_lists_runtime_manifest, $cdn_serving_manifest_lists_module, $cdn_serving_manifest_lists_wasm, $requires_serving_artifacts, fishy_json.quote($state))
 
 	panic($environment == "", "admission fixture requires environment")
 	panic($host == "", "admission fixture requires host")

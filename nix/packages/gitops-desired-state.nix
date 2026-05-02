@@ -7,8 +7,12 @@
   cluster,
   doltBranchContext,
   doltCommit,
+  doltCacheDir ? "",
+  doltMaterialization ? "metadata_only",
   doltMode ? "read_only",
   doltRepository ? "fishystuff/fishystuff",
+  doltReleaseRef ? "",
+  doltRemoteUrl ? "",
   doltServiceClosure ? null,
   environment,
   generation ? 1,
@@ -66,6 +70,10 @@ let
         commit = release.doltCommit;
         branch_context = release.doltBranchContext or doltBranchContext;
         mode = release.doltMode or doltMode;
+        materialization = release.doltMaterialization or doltMaterialization;
+        remote_url = release.doltRemoteUrl or doltRemoteUrl;
+        cache_dir = release.doltCacheDir or doltCacheDir;
+        release_ref = release.doltReleaseRef or doltReleaseRef;
       };
     };
   retainedReleaseIds =
@@ -81,9 +89,13 @@ let
       inherit
         releaseId
         doltCommit
+        doltCacheDir
+        doltMaterialization
         doltRepository
         doltBranchContext
         doltMode
+        doltReleaseRef
+        doltRemoteUrl
         gitRev
         apiClosure
         siteClosure
@@ -119,6 +131,15 @@ assert lib.assertMsg (releaseGeneration > 0) "gitops desired state requires posi
 assert lib.assertMsg (gitRev != "") "gitops desired state requires gitRev";
 assert lib.assertMsg (doltCommit != "") "gitops desired state requires doltCommit";
 assert lib.assertMsg (doltBranchContext != "") "gitops desired state requires doltBranchContext";
+assert lib.assertMsg (
+  doltMaterialization == "metadata_only"
+  || doltMaterialization == "fetch_pin"
+  || doltMaterialization == "replica_pin"
+  || doltMaterialization == "snapshot"
+) "gitops desired state has unsupported doltMaterialization";
+assert lib.assertMsg (
+  doltMaterialization != "fetch_pin" || doltRemoteUrl != ""
+) "fetch_pin dolt materialization requires doltRemoteUrl";
 assert lib.assertMsg (
   lib.all (release: release ? releaseId && release.releaseId != "") retainedReleaseObjects
 ) "gitops retained release objects require releaseId";

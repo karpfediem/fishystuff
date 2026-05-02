@@ -1,0 +1,168 @@
+import "fmt"
+import "strings" as core_strings
+
+import "json.mcl" as fishy_json
+
+class release_metadata($st) {
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$repository str = $st->repository || ""
+	$commit str = $st->commit || ""
+	$branch_context str = $st->branch_context || ""
+	$access_mode str = $st->access_mode || ""
+	$raw_materialization str = $st->materialization || ""
+	$materialization str = if $raw_materialization == "" { "metadata_only" } else { $raw_materialization }
+	$remote_url str = $st->remote_url || ""
+
+	panic($release_id == "", "dolt release metadata requires release_id")
+	panic($release_identity == "", fmt.printf("release %s dolt metadata requires release_identity", $release_id))
+	panic($commit == "", fmt.printf("release %s dolt metadata requires exact commit", $release_id))
+	panic($repository == "", fmt.printf("release %s dolt metadata requires repository", $release_id))
+	panic($branch_context == "", fmt.printf("release %s dolt metadata requires branch_context", $release_id))
+	panic($access_mode == "", fmt.printf("release %s dolt metadata requires access mode", $release_id))
+	panic(($materialization != "metadata_only") and ($materialization != "fetch_pin") and ($materialization != "replica_pin") and ($materialization != "snapshot"), fmt.printf("release %s has unsupported dolt materialization %s", $release_id, $materialization))
+	panic(($materialization == "fetch_pin") and ($remote_url == ""), fmt.printf("release %s fetch_pin dolt materialization requires remote_url", $release_id))
+}
+
+class materialization($st) {
+	$mode str = $st->mode || "validate"
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$repository str = $st->repository || ""
+	$commit str = $st->commit || ""
+	$branch_context str = $st->branch_context || ""
+	$access_mode str = $st->access_mode || ""
+	$raw_materialization str = $st->materialization || ""
+	$materialization str = if $raw_materialization == "" { "metadata_only" } else { $raw_materialization }
+	$remote_url str = $st->remote_url || ""
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
+	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$run_dir = if $write_vm_state { "/run/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test/run" }
+	$cache_dir str = $st->cache_dir || fmt.printf("%s/dolt-cache/%s", $state_dir, $repository)
+	$release_ref str = $st->release_ref || fmt.printf("fishystuff/gitops/%s", $release_id)
+	$request_dir = fmt.printf("%s/dolt/requests", $state_dir)
+	$request_path = fmt.printf("%s/%s-%s.json", $request_dir, $environment, $release_id)
+	$status_dir = fmt.printf("%s/dolt", $run_dir)
+	$status_path = fmt.printf("%s/%s-%s.json", $status_dir, $environment, $release_id)
+	$exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment, $release_id)
+	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"repository\": %s,\n  \"remote_url\": %s,\n  \"branch_context\": %s,\n  \"commit\": %s,\n  \"access_mode\": %s,\n  \"materialization\": %s,\n  \"cache_dir\": %s,\n  \"release_ref\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($repository), fishy_json.quote($remote_url), fishy_json.quote($branch_context), fishy_json.quote($commit), fishy_json.quote($access_mode), fishy_json.quote($materialization), fishy_json.quote($cache_dir), fishy_json.quote($release_ref))
+	$fetch_pin_script =
+		"request=$1\n" +
+		"status=$2\n" +
+		"jq_bin=\"$(printenv FISHYSTUFF_GITOPS_JQ || true)\"\n" +
+		"if [ -z \"$jq_bin\" ]; then\n" +
+		"  jq_bin=/run/current-system/sw/bin/jq\n" +
+		"fi\n" +
+		"dolt_bin=\"$(printenv FISHYSTUFF_GITOPS_DOLT || true)\"\n" +
+		"if [ -z \"$dolt_bin\" ]; then\n" +
+		"  dolt_bin=/run/current-system/sw/bin/dolt\n" +
+		"fi\n" +
+		"remote_url=\"$($jq_bin -r .remote_url \"$request\")\"\n" +
+		"branch_context=\"$($jq_bin -r .branch_context \"$request\")\"\n" +
+		"commit=\"$($jq_bin -r .commit \"$request\")\"\n" +
+		"cache_dir=\"$($jq_bin -r .cache_dir \"$request\")\"\n" +
+		"release_ref=\"$($jq_bin -r .release_ref \"$request\")\"\n" +
+		"mkdir -p \"$(dirname \"$cache_dir\")\" \"$(dirname \"$status\")\"\n" +
+		"if [ ! -d \"$cache_dir/.dolt\" ]; then\n" +
+		"  tmp_cache=\"$cache_dir.tmp.$$\"\n" +
+		"  rm -rf \"$tmp_cache\"\n" +
+		"  \"$dolt_bin\" clone --branch \"$branch_context\" --single-branch \"$remote_url\" \"$tmp_cache\"\n" +
+		"  rm -rf \"$cache_dir\"\n" +
+		"  mv \"$tmp_cache\" \"$cache_dir\"\n" +
+		"fi\n" +
+		"cd \"$cache_dir\"\n" +
+		"\"$dolt_bin\" fetch origin \"$branch_context\"\n" +
+		"\"$dolt_bin\" branch -f \"$release_ref\" \"$commit\"\n" +
+		"actual=\"$($dolt_bin sql -r csv -q \"select dolt_hashof('$release_ref') as hash\" | tail -n 1)\"\n" +
+		"if [ \"$actual\" != \"$commit\" ]; then\n" +
+		"  echo \"expected dolt commit $commit, got $actual\" >&2\n" +
+		"  exit 65\n" +
+		"fi\n" +
+		"tmp_status=\"$status.tmp.$$\"\n" +
+		"{\n" +
+		"  printf '{\\n'\n" +
+		"  printf '  \"environment\": %s,\\n' \"$($jq_bin -c .environment \"$request\")\"\n" +
+		"  printf '  \"host\": %s,\\n' \"$($jq_bin -c .host \"$request\")\"\n" +
+		"  printf '  \"release_id\": %s,\\n' \"$($jq_bin -c .release_id \"$request\")\"\n" +
+		"  printf '  \"release_identity\": %s,\\n' \"$($jq_bin -c .release_identity \"$request\")\"\n" +
+		"  printf '  \"repository\": %s,\\n' \"$($jq_bin -c .repository \"$request\")\"\n" +
+		"  printf '  \"remote_url\": %s,\\n' \"$($jq_bin -c .remote_url \"$request\")\"\n" +
+		"  printf '  \"branch_context\": %s,\\n' \"$($jq_bin -c .branch_context \"$request\")\"\n" +
+		"  printf '  \"requested_commit\": %s,\\n' \"$($jq_bin -c .commit \"$request\")\"\n" +
+		"  printf '  \"verified_commit\": \"%s\",\\n' \"$actual\"\n" +
+		"  printf '  \"access_mode\": %s,\\n' \"$($jq_bin -c .access_mode \"$request\")\"\n" +
+		"  printf '  \"materialization\": %s,\\n' \"$($jq_bin -c .materialization \"$request\")\"\n" +
+		"  printf '  \"cache_dir\": %s,\\n' \"$($jq_bin -c .cache_dir \"$request\")\"\n" +
+		"  printf '  \"release_ref\": %s,\\n' \"$($jq_bin -c .release_ref \"$request\")\"\n" +
+		"  printf '  \"state\": \"pinned\"\\n'\n" +
+		"  printf '}\\n'\n" +
+		"} > \"$tmp_status\"\n" +
+		"mv \"$tmp_status\" \"$status\"\n"
+	$ifcmd = fmt.printf("test ! -e '%s' || test \"$(/run/current-system/sw/bin/jq -r .verified_commit '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .commit '%s')\"", $status_path, $status_path, $request_path)
+
+	include release_metadata(struct {
+		release_id => $release_id,
+		release_identity => $release_identity,
+		repository => $repository,
+		commit => $commit,
+		branch_context => $branch_context,
+		access_mode => $access_mode,
+		materialization => $materialization,
+		remote_url => $remote_url,
+		cache_dir => $cache_dir,
+		release_ref => $release_ref,
+	})
+
+	panic($environment == "", "dolt materialization requires environment")
+	panic($host == "", "dolt materialization requires host")
+	panic(len(core_strings.split($environment, "'")) > 1, "dolt materialization environment must not contain single quotes")
+	panic(len(core_strings.split($release_id, "'")) > 1, "dolt materialization release_id must not contain single quotes")
+	panic(len(core_strings.split($release_ref, "'")) > 1, "dolt materialization release_ref must not contain single quotes")
+	panic(($materialization == "fetch_pin") and ($cache_dir == ""), fmt.printf("release %s fetch_pin dolt materialization requires cache_dir", $release_id))
+	panic(($materialization == "fetch_pin") and ($release_ref == ""), fmt.printf("release %s fetch_pin dolt materialization requires release_ref", $release_id))
+	panic(($materialization == "fetch_pin") and ($mode != "validate") and (not $write_vm_state), "fetch_pin dolt materialization is implemented only for validate and VM test modes")
+
+	if $write_vm_state and ($materialization == "fetch_pin") {
+		file "${request_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${status_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${request_path}" {
+			state => "exists",
+			content => $request_content,
+			mode => "0644",
+		}
+
+		exec "${exec_name}" {
+			cmd => "/bin/sh",
+			args => [
+				"-eu",
+				"-c",
+				$fetch_pin_script,
+				"fishystuff-gitops-dolt-fetch-pin",
+				$request_path,
+				$status_path,
+			],
+			env => {
+				"PATH" => "/run/current-system/sw/bin:/usr/bin:/bin",
+			},
+			ifcmd => $ifcmd,
+			ifshell => "/bin/sh",
+			timeout => 300,
+		}
+
+		File["${request_dir}/"] -> File["${request_path}"]
+		File["${status_dir}/"] -> Exec["${exec_name}"]
+		File["${request_path}"] -> Exec["${exec_name}"]
+	}
+}

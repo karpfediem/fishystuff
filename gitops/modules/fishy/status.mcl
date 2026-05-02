@@ -10,6 +10,10 @@ class publish($st) {
 	$host str = $st->host
 	$phase str = $st->phase || "candidate"
 	$admission_state str = $st->admission_state || "not_run"
+	$dolt_commit str = $st->dolt_commit || ""
+	$dolt_materialization str = $st->dolt_materialization || "metadata_only"
+	$dolt_cache_dir str = $st->dolt_cache_dir || ""
+	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$retained_release_ids_json str = $st->retained_release_ids_json || "[]"
 	$served bool = $st->served || false
 	$failure_reason str = $st->failure_reason || ""
@@ -17,7 +21,7 @@ class publish($st) {
 	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
 	$status_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test/status" } else { "/tmp/fishystuff-gitops-test/status" }
 	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
-	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"environment\": %s,\n  \"host\": %s,\n  \"phase\": %s,\n  \"admission_state\": %s,\n  \"retained_release_ids\": %s,\n  \"served\": %t,\n  \"failure_reason\": %s\n}\n", $desired_generation, fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($phase), fishy_json.quote($admission_state), $retained_release_ids_json, $served, fishy_json.quote($failure_reason))
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"environment\": %s,\n  \"host\": %s,\n  \"phase\": %s,\n  \"admission_state\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_materialization\": %s,\n  \"dolt_cache_dir\": %s,\n  \"dolt_release_ref\": %s,\n  \"retained_release_ids\": %s,\n  \"served\": %t,\n  \"failure_reason\": %s\n}\n", $desired_generation, fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($phase), fishy_json.quote($admission_state), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), $retained_release_ids_json, $served, fishy_json.quote($failure_reason))
 
 	panic($environment == "", "status publication requires environment")
 	panic($host == "", "status publication requires host")

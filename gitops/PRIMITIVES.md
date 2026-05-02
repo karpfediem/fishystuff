@@ -189,6 +189,16 @@ No dedicated HTTP client probe/status resource was found. Existing FishyStuff he
 
 No `git/ref` mgmt resource or function was found in the inspected checkouts. Future Git/Dolt watching should either compose existing primitives or introduce a small Unix-like primitive if needed.
 
+Dolt's own CLI and SQL server procedures are sufficient for the first bandwidth-saving materialization path:
+
+- `dolt clone --branch <branch> --single-branch <remote-url> <dir>` bootstraps a persistent local cache.
+- `dolt fetch <remote> <refspec>` incrementally fetches changed objects into that cache.
+- `dolt branch -f <release-ref> <commit>` pins an exact desired commit under a local ref so rollback commits remain reachable.
+- `dolt sql -r csv -q "select dolt_hashof('<ref>') as hash"` or `dolt log -n 1 <ref> --oneline` can verify the pinned ref resolves to the exact desired commit.
+- SQL procedures `DOLT_FETCH()` and `DOLT_RESET()` mirror the CLI shape for a running SQL server, but the old branch-tip reset pattern is not exact enough for GitOps serving without a commit-hash verification gate.
+
+`gitops/modules/fishy/dolt.mcl` uses `exec` only in VM test mode to exercise this local `fetch_pin` path against a file-backed Dolt remote. Real beta/prod usage should become either a small reusable Dolt materialization primitive or a tightly-scoped local helper owned by the host-local GitOps graph.
+
 Signal/debounce/stable-related pieces found:
 
 - `history(value, index_ms)` can model simple time hysteresis.

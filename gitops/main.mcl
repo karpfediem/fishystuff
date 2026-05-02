@@ -13,25 +13,29 @@ $state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "gitops/fixtures/em
 
 $raw_desired = encoding.decode_json_flexible(
 	os.readfile($state_file),
-	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}}}"
+	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}}}"
 )
 
 include fishy_desired.model($raw_desired) as desired
 
 $empty_hosts map{str: struct{enabled bool; role str; hostname str}} = {}
 $empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
-$empty_dolt struct{repository str; commit str; branch_context str; mode str} = struct {
+$empty_dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = struct {
 	repository => "",
 	commit => "",
 	branch_context => "",
 	mode => "",
+	materialization => "",
+	remote_url => "",
+	cache_dir => "",
+	release_ref => "",
 }
 $empty_releases map{str: struct{
 	generation int;
 	git_rev str;
 	dolt_commit str;
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-	dolt struct{repository str; commit str; branch_context str; mode str}
+	dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 }} = {}
 $empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = {}
 $empty_host struct{enabled bool; role str; hostname str} = struct {
@@ -54,7 +58,7 @@ $releases map{str: struct{
 	git_rev str;
 	dolt_commit str;
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-	dolt struct{repository str; commit str; branch_context str; mode str}
+	dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 }} = $raw_desired->releases || $empty_releases
 $environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = $raw_desired->environments || $empty_environments
 $enabled_environment_keys = iter.filter(map.keys($environments), func($environment_name) {
@@ -67,9 +71,9 @@ for $index, $release_id in map.keys($releases) {
 		git_rev str;
 		dolt_commit str;
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-		dolt struct{repository str; commit str; branch_context str; mode str}
+		dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str}
 	} = $releases[$release_id]
-	$release_dolt struct{repository str; commit str; branch_context str; mode str} = $release->dolt || $empty_dolt
+	$release_dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = $release->dolt || $empty_dolt
 	$release_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = $release->closures || $empty_closures
 	$release_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $release_closures["api"] || $empty_artifact
 	$release_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $release_closures["site"] || $empty_artifact
@@ -119,6 +123,7 @@ for $index, $release_id in map.keys($releases) {
 			generation => $release->generation,
 			git_rev => $release->git_rev,
 			dolt_commit => $release->dolt_commit,
+			dolt => $release_dolt,
 			closures => $release_closures,
 		})
 	}

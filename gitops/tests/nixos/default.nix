@@ -13,6 +13,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-dolt-fetch-pin-vm = import ./dolt-fetch-pin.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-multi-environment-candidates-vm = import ./multi-environment-candidates.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

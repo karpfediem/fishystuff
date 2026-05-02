@@ -5,6 +5,7 @@ Local checks:
 ```bash
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
+nix build .#checks.x86_64-linux.gitops-dolt-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
@@ -38,6 +39,7 @@ Recipe wrappers:
 ```bash
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
+just gitops-vm-test dolt-fetch-pin
 just gitops-vm-test multi-environment-candidates
 just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
@@ -69,6 +71,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 - `/var/lib/fishystuff/gitops-test`
 - `/run/fishystuff/gitops-test`
+
+`gitops-dolt-fetch-pin-vm` boots a local NixOS VM, creates a local file-backed Dolt remote, and runs a `fetch_pin` desired state. It verifies mgmt pins an exact release ref in a persistent VM-local Dolt cache, then pushes a second commit to the same local remote and verifies the cache is fetched forward instead of recloned.
 
 `gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 

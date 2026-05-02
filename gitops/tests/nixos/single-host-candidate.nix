@@ -11,7 +11,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
-      virtualisation.memorySize = 2048;
+      virtualisation.memorySize = 4096;
       environment.systemPackages = [
         mgmtPackage
         pkgs.jq
@@ -21,6 +21,16 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     start_all()
 
+    mgmt_log = "/tmp/fishystuff-gitops-mgmt.log"
+
+    def wait_for_gitops_file(path):
+      try:
+        machine.wait_for_file(path, timeout=180)
+      except Exception:
+        _, output = machine.execute(f"echo '--- mgmt log head ---'; head -120 {mgmt_log} 2>/dev/null || true; echo '--- mgmt log tail ---'; tail -200 {mgmt_log} 2>/dev/null || true; echo '--- gitops state tree ---'; find /var/lib/fishystuff/gitops-test /run/fishystuff/gitops-test -maxdepth 5 -ls 2>/dev/null || true; echo '--- mgmt process ---'; ps -ef | grep '[m]gmt' || true")
+        print(output)
+        raise
+
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
     machine.succeed("env FISHYSTUFF_GITOPS_STATE_FILE=${gitopsSrc}/fixtures/vm-single-host.example.desired.json ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-mgmt.log 2>&1 & echo $! >/tmp/fishystuff-gitops-mgmt.pid")
 
@@ -29,10 +39,10 @@ pkgs.testers.runNixOSTest {
     admission = "/run/fishystuff/gitops-test/admission/local-test.json"
     marker = "/run/fishystuff/gitops-test/candidates/local-test-example-release.ready"
 
-    machine.wait_for_file(status)
-    machine.wait_for_file(instance)
-    machine.wait_for_file(admission)
-    machine.wait_for_file(marker)
+    wait_for_gitops_file(status)
+    wait_for_gitops_file(instance)
+    wait_for_gitops_file(admission)
+    wait_for_gitops_file(marker)
     machine.succeed(f"jq -e '.desired_generation == 1 and .release_id == \"example-release\" and .release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=;site=;cdn_runtime=;dolt_service=\" and .environment == \"local-test\" and .host == \"vm-single-host\" and (.admission_state == \"passed_fixture\" or .admission_state == \"not_run\")' {status}")
     machine.succeed(f"jq -e '.instance_name == \"local-test-example-release\" and .release_id == \"example-release\" and .release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=;site=;cdn_runtime=;dolt_service=\" and .environment == \"local-test\" and .host == \"vm-single-host\"' {instance}")
     machine.succeed(f"jq -e '.release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=;site=;cdn_runtime=;dolt_service=\" and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
