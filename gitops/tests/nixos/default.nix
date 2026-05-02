@@ -62,6 +62,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-served-caddy-handoff-vm = import ./served-caddy-handoff.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-served-rollback-transition-vm = import ./served-rollback-transition.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
