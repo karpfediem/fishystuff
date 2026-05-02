@@ -11,6 +11,7 @@ nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
+nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 ```
 
 Recipe wrappers:
@@ -22,6 +23,7 @@ just gitops-vm-test closure-roots
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test raw-cdn-serve-refusal
+just gitops-vm-test missing-cdn-runtime-file-refusal
 ```
 
 `gitops-empty-unify` type-checks `gitops/main.mcl` with `fixtures/empty.desired.json` and asserts that no local test state paths are created.
@@ -42,5 +44,7 @@ just gitops-vm-test raw-cdn-serve-refusal
 `gitops-desired-state-vm-serve-fixture` type-checks a generated local `vm-test` serving desired-state package. It uses tiny local store artifacts and verifies the generator emits `serve: true` only with API, Dolt service, site, and finalized CDN runtime closures present.
 
 `gitops-raw-cdn-serve-refusal` boots a local NixOS VM and checks the negative path: a serving desired state with `cdn_runtime` pointed at a raw runtime directory must fail before activation because it lacks `cdn-serving-manifest.json`.
+
+`gitops-missing-cdn-runtime-file-refusal` boots a local NixOS VM and checks a later negative path: a serving desired state with `runtime-manifest.json` and `cdn-serving-manifest.json` still fails before activation if the runtime manifest names a JS/WASM file that is not present in the finalized CDN root.
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
