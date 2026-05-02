@@ -114,6 +114,91 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
     assert_eq!(admission["dolt_verified_commit"], commit1);
     assert_eq!(admission["probe_value"], "one");
 
+    assert_probe_failure_contains(
+        probe_sql_fixture(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit1,
+            &fetch_status,
+            "select v from t as of 'fishystuff/gitops/example-release' where pk = 1",
+            "wrong",
+            &root.path().join("status/admission-wrong-scalar.json"),
+        ),
+        "expected scalar",
+    );
+
+    let stale_commit_status = root.path().join("status/fetch-stale-commit.json");
+    write_fetch_status(
+        &stale_commit_status,
+        "not-the-requested-commit",
+        &cache,
+        release_ref,
+    )?;
+    assert_probe_failure_contains(
+        probe_sql_fixture(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit1,
+            &stale_commit_status,
+            "select v from t as of 'fishystuff/gitops/example-release' where pk = 1",
+            "one",
+            &root.path().join("status/admission-stale-commit.json"),
+        ),
+        "does not match requested",
+    );
+
+    let wrong_cache_status = root.path().join("status/fetch-wrong-cache.json");
+    write_fetch_status(
+        &wrong_cache_status,
+        &commit1,
+        &root.path().join("other-cache"),
+        release_ref,
+    )?;
+    assert_probe_failure_contains(
+        probe_sql_fixture(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit1,
+            &wrong_cache_status,
+            "select v from t as of 'fishystuff/gitops/example-release' where pk = 1",
+            "one",
+            &root.path().join("status/admission-wrong-cache.json"),
+        ),
+        "does not match admission cache",
+    );
+
+    let wrong_ref_status = root.path().join("status/fetch-wrong-ref.json");
+    write_fetch_status(
+        &wrong_ref_status,
+        &commit1,
+        &cache,
+        "fishystuff/gitops/other",
+    )?;
+    assert_probe_failure_contains(
+        probe_sql_fixture(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit1,
+            &wrong_ref_status,
+            "select v from t as of 'fishystuff/gitops/example-release' where pk = 1",
+            "one",
+            &root.path().join("status/admission-wrong-ref.json"),
+        ),
+        "does not match admission release ref",
+    );
+
     fs::write(cache.join("cache-survives-fetch"), "yes")?;
     run(
         &dolt_bin,
@@ -130,6 +215,24 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
     )?;
     run(&dolt_bin, &home, Some(&source), ["push", "origin", "main"])?;
     let commit2 = dolt_hash_of(&dolt_bin, &home, &source, "main")?;
+
+    let fake_commit2_status = root.path().join("status/fetch-fake-commit2.json");
+    write_fetch_status(&fake_commit2_status, &commit2, &cache, release_ref)?;
+    assert_probe_failure_contains(
+        probe_sql_fixture(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit2,
+            &fake_commit2_status,
+            "select v from t as of 'fishystuff/gitops/example-release' where pk = 2",
+            "two",
+            &root.path().join("status/admission-fake-commit2.json"),
+        ),
+        "expected Dolt commit",
+    );
 
     fetch_pin(
         &root,
@@ -163,6 +266,15 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
     assert!(cache.join("cache-survives-fetch").is_file());
 
     Ok(())
+}
+
+fn assert_probe_failure_contains(result: Result<()>, expected: &str) {
+    let error = result.expect_err("probe unexpectedly succeeded");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains(expected),
+        "expected error containing {expected:?}, got:\n{message}"
+    );
 }
 
 fn find_dolt() -> Result<Option<PathBuf>> {
@@ -282,6 +394,23 @@ fn dolt_hash_of(dolt_bin: &Path, home: &Path, cwd: &Path, revision: &str) -> Res
         .nth(1)
         .map(str::to_owned)
         .context("Dolt hash query returned no hash row")
+}
+
+fn write_fetch_status(
+    path: &Path,
+    verified_commit: &str,
+    cache: &Path,
+    release_ref: &str,
+) -> Result<()> {
+    write_json(
+        path,
+        json!({
+            "verified_commit": verified_commit,
+            "cache_dir": cache,
+            "release_ref": release_ref,
+            "state": "pinned",
+        }),
+    )
 }
 
 fn run_helper<'a, I>(home: &Path, args: I) -> Result<()>
