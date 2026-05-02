@@ -17,6 +17,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-served-closure-roots-vm = import ./served-closure-roots.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-json-status-escaping-vm = import ./json-status-escaping.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

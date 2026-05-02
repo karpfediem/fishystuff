@@ -6,6 +6,7 @@ Local checks:
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
+nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
 nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
@@ -33,6 +34,7 @@ Recipe wrappers:
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test closure-roots
+just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
@@ -59,6 +61,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 - `/run/fishystuff/gitops-test`
 
 `gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
+
+`gitops-served-closure-roots-vm` boots a local NixOS VM with `serve: true` in `vm-test-closures` mode. It checks all active and retained rollback release artifacts are rooted under `/var/lib/fishystuff/gitops-test/gcroots`, then checks the selected active symlinks and route document.
 
 `gitops-json-status-escaping-vm` boots a local NixOS VM with quote/backslash characters in the exact release identity inputs and checks that candidate, admission, and status JSON files remain parseable and preserve the decoded strings.
 
