@@ -1815,7 +1815,8 @@ fn normalize_trade_selection(
     }
 
     let zone_origin_counts = trade_zone_origin_region_counts(catalog, zone_key);
-    let default_zone_origin_counts = default_trade_zone_origin_counts(&zone_origin_counts);
+    let default_zone_origin_counts =
+        default_candidate_trade_zone_origin_counts(&zone_origin_counts);
     let custom_destination_bonus = custom_trade_destination_bonus(&signals.trade_destination_npc);
     let mut origin = find_trade_origin(catalog, &signals.trade_origin_region);
     let mut destination = custom_destination_bonus
@@ -1931,7 +1932,9 @@ fn trade_zone_origin_region_counts(
         .unwrap_or_default()
 }
 
-fn default_trade_zone_origin_counts(zone_origin_counts: &HashMap<u32, u32>) -> HashMap<u32, u32> {
+fn default_candidate_trade_zone_origin_counts(
+    zone_origin_counts: &HashMap<u32, u32>,
+) -> HashMap<u32, u32> {
     let filtered = zone_origin_counts
         .iter()
         .filter(|(_, pixel_count)| **pixel_count >= TRADE_ZONE_ORIGIN_MIN_DEFAULT_PIXELS)
@@ -20195,6 +20198,39 @@ mod tests {
         assert_eq!(signals.trade_origin_region, "1");
         assert_eq!(signals.trade_destination_npc, "200");
         assert!((signals.trade_distance_bonus - 34.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn normalize_trade_selection_keeps_below_threshold_fallback_zone_limited() {
+        let mut catalog = test_trade_catalog();
+        catalog.origin_regions.push(TradeOriginRegion {
+            region_id: 3,
+            region_name: Some("Global Best Origin".to_string()),
+            world_x: 2_000_000.0,
+            world_z: 0.0,
+            ..TradeOriginRegion::default()
+        });
+        catalog.zone_origin_regions[0].origins = vec![
+            TradeZoneOriginRegion {
+                region_id: 1,
+                pixel_count: 2,
+            },
+            TradeZoneOriginRegion {
+                region_id: 2,
+                pixel_count: 1,
+            },
+        ];
+        let mut signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            trade_distance_bonus: 0.0,
+            ..CalculatorSignals::default()
+        };
+
+        normalize_trade_selection(&mut signals, &catalog, Some("240,74,74"));
+
+        assert_eq!(signals.trade_origin_region, "2");
+        assert_eq!(signals.trade_destination_npc, "100");
+        assert!((signals.trade_distance_bonus - 61.2).abs() < 0.0001);
     }
 
     #[test]
