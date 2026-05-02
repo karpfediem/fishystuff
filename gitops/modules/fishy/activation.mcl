@@ -1,4 +1,5 @@
 import "fmt"
+import "json.mcl" as fishy_json
 
 class active($st) {
 	$mode str = $st->mode || "validate"
@@ -17,7 +18,7 @@ class active($st) {
 	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
 	$active_dir = fmt.printf("%s/active", $state_dir)
 	$active_path = fmt.printf("%s/%s.json", $active_dir, $environment)
-	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"instance_name\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"retained_release_ids\": %s,\n  \"admission_state\": \"%s\",\n  \"served\": %t,\n  \"route_state\": \"selected_local_fixture\"\n}\n", $environment, $host, $release_id, $release_identity, $instance_name, $site_content, $cdn_runtime_content, $retained_release_ids_json, $admission_state, $served)
+	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"retained_release_ids\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_fixture\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), $retained_release_ids_json, fishy_json.quote($admission_state), $served)
 
 	panic($environment == "", "activation requires environment")
 	panic($host == "", "activation requires host")

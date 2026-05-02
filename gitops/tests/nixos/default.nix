@@ -17,6 +17,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-json-status-escaping-vm = import ./json-status-escaping.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-served-candidate-vm = import ./served-candidate.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

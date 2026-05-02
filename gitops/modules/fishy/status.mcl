@@ -1,4 +1,5 @@
 import "fmt"
+import "json.mcl" as fishy_json
 
 class publish($st) {
 	$mode str = $st->mode || "validate"
@@ -16,7 +17,7 @@ class publish($st) {
 	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
 	$status_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test/status" } else { "/tmp/fishystuff-gitops-test/status" }
 	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
-	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"phase\": \"%s\",\n  \"admission_state\": \"%s\",\n  \"retained_release_ids\": %s,\n  \"served\": %t,\n  \"failure_reason\": \"%s\"\n}\n", $desired_generation, $release_id, $release_identity, $environment, $host, $phase, $admission_state, $retained_release_ids_json, $served, $failure_reason)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"environment\": %s,\n  \"host\": %s,\n  \"phase\": %s,\n  \"admission_state\": %s,\n  \"retained_release_ids\": %s,\n  \"served\": %t,\n  \"failure_reason\": %s\n}\n", $desired_generation, fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($phase), fishy_json.quote($admission_state), $retained_release_ids_json, $served, fishy_json.quote($failure_reason))
 
 	panic($environment == "", "status publication requires environment")
 	panic($host == "", "status publication requires host")

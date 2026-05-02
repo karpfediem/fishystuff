@@ -1,4 +1,5 @@
 import "fmt"
+import "json.mcl" as fishy_json
 
 class candidate($st) {
 	$mode str = $st->mode || "validate"
@@ -36,7 +37,7 @@ class candidate($st) {
 	$site_store_path str = $site_artifact->store_path
 	$cdn_runtime_store_path str = $cdn_runtime_artifact->store_path
 	$dolt_service_store_path str = $dolt_service_artifact->store_path
-	$content = fmt.printf("{\n  \"cluster\": \"%s\",\n  \"desired_generation\": %d,\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"instance_name\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"release_generation\": %d,\n  \"retained_release_ids\": %s,\n  \"serve_requested\": %t,\n  \"api_bundle\": \"%s\",\n  \"dolt_service_bundle\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"dolt_repository\": \"%s\",\n  \"dolt_commit\": \"%s\",\n  \"dolt_branch_context\": \"%s\",\n  \"dolt_mode\": \"%s\"\n}\n", $cluster, $desired_generation, $environment, $host_name, $instance_name, $release_id, $release_identity, $release_generation, $retained_release_ids_json, $serve, $api_store_path, $dolt_service_store_path, $site_store_path, $cdn_runtime_store_path, $dolt_repository, $dolt_commit, $dolt_branch_context, $dolt_mode)
+	$content = fmt.printf("{\n  \"cluster\": %s,\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"instance_name\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"release_generation\": %d,\n  \"retained_release_ids\": %s,\n  \"serve_requested\": %t,\n  \"api_bundle\": %s,\n  \"dolt_service_bundle\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"dolt_repository\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_branch_context\": %s,\n  \"dolt_mode\": %s\n}\n", fishy_json.quote($cluster), $desired_generation, fishy_json.quote($environment), fishy_json.quote($host_name), fishy_json.quote($instance_name), fishy_json.quote($release_id), fishy_json.quote($release_identity), $release_generation, $retained_release_ids_json, $serve, fishy_json.quote($api_store_path), fishy_json.quote($dolt_service_store_path), fishy_json.quote($site_store_path), fishy_json.quote($cdn_runtime_store_path), fishy_json.quote($dolt_repository), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_branch_context), fishy_json.quote($dolt_mode))
 
 	panic($environment == "", "instance candidate requires environment")
 	panic($host_name == "", "instance candidate requires host hostname")

@@ -1,0 +1,23 @@
+import "fmt"
+import "golang/strings" as golang_strings
+import "iter"
+import "strings" as core_strings
+
+func quote($value) {
+	fmt.printf(
+		"\"%s\"",
+		core_strings.replace_all(
+			core_strings.replace_all(
+				$value,
+				core_strings.substr("\\ ${value}", 0, 1),
+				core_strings.substr("\\ ${value}", 0, 1) + core_strings.substr("\\ ${value}", 0, 1)
+			),
+			"\"",
+			core_strings.substr("\\ ${value}", 0, 1) + "\""
+		)
+	)
+}
+
+func string_list($values) {
+	fmt.printf("[%s]", golang_strings.join(iter.map($values, func($value) { quote($value) }), ", "))
+}

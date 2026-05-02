@@ -17,6 +17,9 @@ case "$test_name" in
   closure-roots)
     check_attr="gitops-closure-roots-vm"
     ;;
+  json-status-escaping)
+    check_attr="gitops-json-status-escaping-vm"
+    ;;
   served-candidate)
     check_attr="gitops-served-candidate-vm"
     ;;
@@ -34,7 +37,7 @@ case "$test_name" in
     ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, closure-roots, served-candidate, generated-served-candidate, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, closure-roots, json-status-escaping, served-candidate, generated-served-candidate, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal" >&2
     exit 2
     ;;
 esac
