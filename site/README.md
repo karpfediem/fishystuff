@@ -29,6 +29,13 @@ same public site base.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
+`site/scripts/finalize-assets.mjs` is the final browser asset hardening pass for
+site output. It minifies referenced JS/CSS, writes content-hashed files and
+public source maps, rewrites HTML with SRI, and injects a CSP meta tag. The CSP
+uses the resolved deployment URLs: production and beta builds do not include
+loopback script/connect sources, while local builds keep the localhost
+allowances needed by the Caddy development ingress.
+
 ## Frontend tests
 
 Run the frontend unit suite from `site/` with:

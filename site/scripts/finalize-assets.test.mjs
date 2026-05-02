@@ -83,6 +83,44 @@ test("buildCspPolicy keeps script inline execution hash-based", () => {
   assert.match(policy, /'unsafe-eval'/);
   assert.doesNotMatch(policy, /script-src[^;]*'unsafe-inline'/);
   assert.match(policy, /script-src-attr 'none'/);
+  assert.match(policy, /https:\/\/api\.fishystuff\.fish/);
+  assert.match(policy, /https:\/\/cdn\.fishystuff\.fish/);
+  assert.match(policy, /https:\/\/telemetry\.fishystuff\.fish/);
+  assert.doesNotMatch(policy, /localhost/);
+  assert.doesNotMatch(policy, /127\.0\.0\.1/);
+});
+
+test("buildCspPolicy derives beta sources from deployment env", () => {
+  const policy = buildCspPolicy({
+    env: {
+      FISHYSTUFF_PUBLIC_SITE_BASE_URL: "https://beta.fishystuff.fish",
+      FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT: "beta",
+    },
+  });
+
+  assert.match(policy, /https:\/\/api\.beta\.fishystuff\.fish/);
+  assert.match(policy, /https:\/\/cdn\.beta\.fishystuff\.fish/);
+  assert.match(policy, /https:\/\/telemetry\.beta\.fishystuff\.fish/);
+  assert.doesNotMatch(policy, /https:\/\/api\.fishystuff\.fish/);
+  assert.doesNotMatch(policy, /https:\/\/cdn\.fishystuff\.fish/);
+  assert.doesNotMatch(policy, /localhost/);
+});
+
+test("buildCspPolicy keeps loopback allowances local-only", () => {
+  const policy = buildCspPolicy({
+    env: {
+      FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT: "local",
+      FISHYSTUFF_RUNTIME_API_BASE_URL: "http://127.0.0.1:1818",
+      FISHYSTUFF_RUNTIME_CDN_BASE_URL: "http://cdn.localhost:1990",
+      FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT: "http://telemetry.localhost:1990/v1/traces",
+    },
+  });
+
+  assert.match(policy, /http:\/\/127\.0\.0\.1:\*/);
+  assert.match(policy, /http:\/\/localhost:\*/);
+  assert.match(policy, /http:\/\/\*\.localhost:\*/);
+  assert.match(policy, /http:\/\/cdn\.localhost:1990/);
+  assert.match(policy, /http:\/\/telemetry\.localhost:1990/);
 });
 
 test("getAttribute reads quoted and unquoted attributes", () => {

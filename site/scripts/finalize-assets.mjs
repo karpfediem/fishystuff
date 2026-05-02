@@ -11,6 +11,12 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isLoopbackHost,
+  normalizeBaseUrl,
+  normalizeEndpointUrl,
+  resolvePublicBaseUrls,
+} from "./write-runtime-config.mjs";
 
 const HASH_LENGTH = 16;
 const GENERATED_CSP_ATTRIBUTE = "data-fishystuff-generated-csp";
@@ -172,6 +178,101 @@ function sriHash(buffer) {
 
 function cspHash(text) {
   return `sha256-${createHash("sha256").update(text).digest("base64")}`;
+}
+
+function normalizedOrigin(value) {
+  const normalized = normalizeBaseUrl(value);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    const url = new URL(normalized);
+    url.pathname = "";
+    url.search = "";
+    url.hash = "";
+    return normalizeBaseUrl(url.toString());
+  } catch {
+    return normalized;
+  }
+}
+
+function normalizedEndpointOrigin(value) {
+  return normalizedOrigin(normalizeEndpointUrl(value));
+}
+
+function uniqueSources(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function envString(env, name) {
+  return String(env?.[name] ?? "").trim();
+}
+
+function isLocalCspEnvironment(env, urls) {
+  const deploymentEnvironment =
+    envString(env, "FISHYSTUFF_RUNTIME_OTEL_DEPLOYMENT_ENVIRONMENT")
+    || envString(env, "FISHYSTUFF_DEPLOYMENT_ENVIRONMENT");
+  if (deploymentEnvironment === "local") {
+    return true;
+  }
+  for (const value of Object.values(urls)) {
+    if (!value) {
+      continue;
+    }
+    try {
+      const url = new URL(value);
+      if (isLoopbackHost(url.hostname) || url.hostname.endsWith(".localhost")) {
+        return true;
+      }
+    } catch {
+      // Non-URL values are ignored for local environment detection.
+    }
+  }
+  return false;
+}
+
+function resolveCspSources(env = {}) {
+  const publicUrls = resolvePublicBaseUrls(env);
+  const urls = {
+    siteBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_SITE_BASE_URL)
+      || publicUrls.publicSiteBaseUrl,
+    apiBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_API_BASE_URL)
+      || publicUrls.publicApiBaseUrl,
+    cdnBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_CDN_BASE_URL)
+      || publicUrls.publicCdnBaseUrl,
+    telemetryBaseUrl:
+      normalizeBaseUrl(env.FISHYSTUFF_RUNTIME_TELEMETRY_BASE_URL)
+      || publicUrls.publicTelemetryBaseUrl,
+    telemetryTracesEndpoint:
+      normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_EXPORTER_ENDPOINT)
+      || publicUrls.publicTelemetryTracesEndpoint,
+    telemetryMetricsEndpoint:
+      normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_METRICS_ENDPOINT),
+    telemetryLogsEndpoint:
+      normalizeEndpointUrl(env.FISHYSTUFF_RUNTIME_OTEL_LOGS_ENDPOINT),
+  };
+  const localDevelopmentSources = isLocalCspEnvironment(env, urls)
+    ? ["http://127.0.0.1:*", "http://localhost:*", "http://*.localhost:*"]
+    : [];
+  return {
+    localDevelopmentSources,
+    scriptSources: uniqueSources([
+      normalizedOrigin(urls.cdnBaseUrl),
+      ...localDevelopmentSources,
+    ]),
+    connectSources: uniqueSources([
+      normalizedOrigin(urls.apiBaseUrl),
+      normalizedOrigin(urls.cdnBaseUrl),
+      normalizedOrigin(urls.telemetryBaseUrl),
+      normalizedEndpointOrigin(urls.telemetryTracesEndpoint),
+      normalizedEndpointOrigin(urls.telemetryMetricsEndpoint),
+      normalizedEndpointOrigin(urls.telemetryLogsEndpoint),
+      ...localDevelopmentSources,
+    ]),
+  };
 }
 
 async function assertFileExists(filePath, label) {
@@ -408,15 +509,13 @@ function inlineScriptHashes(html) {
   return [...new Set(hashes)].sort();
 }
 
-export function buildCspPolicy({ scriptHashes = [] } = {}) {
+export function buildCspPolicy({ scriptHashes = [], env = {} } = {}) {
+  const cspSources = resolveCspSources(env);
   const scriptSources = [
     "'self'",
     "'unsafe-eval'",
     "'wasm-unsafe-eval'",
-    "https://cdn.fishystuff.fish",
-    "https://cdn.beta.fishystuff.fish",
-    "http://127.0.0.1:*",
-    "http://localhost:*",
+    ...cspSources.scriptSources,
     ...scriptHashes.map((hash) => `'${hash}'`),
   ];
   const directives = [
@@ -431,15 +530,7 @@ export function buildCspPolicy({ scriptHashes = [] } = {}) {
     [
       "connect-src",
       "'self'",
-      "https://api.fishystuff.fish",
-      "https://api.beta.fishystuff.fish",
-      "https://cdn.fishystuff.fish",
-      "https://cdn.beta.fishystuff.fish",
-      "https://telemetry.fishystuff.fish",
-      "https://telemetry.beta.fishystuff.fish",
-      "http://127.0.0.1:*",
-      "http://localhost:*",
-      "http://telemetry.localhost:*",
+      ...cspSources.connectSources,
     ],
     ["frame-src", "https://www.youtube.com", "https://www.youtube-nocookie.com"],
     ["worker-src", "'self'", "blob:"],
@@ -458,9 +549,9 @@ function injectCspMeta(html, policy) {
   return withoutGeneratedCsp;
 }
 
-export function rewriteHtml(html, assetMap) {
+export function rewriteHtml(html, assetMap, { env = {} } = {}) {
   const withAssets = rewriteStylesheetTags(rewriteExternalScriptTags(html, assetMap), assetMap);
-  const policy = buildCspPolicy({ scriptHashes: inlineScriptHashes(withAssets) });
+  const policy = buildCspPolicy({ env, scriptHashes: inlineScriptHashes(withAssets) });
   return injectCspMeta(withAssets, policy);
 }
 
@@ -530,7 +621,7 @@ export async function finalizeAssets({ rootDir = DEFAULT_ROOT } = {}) {
   }
   const assetMap = await buildAssets(rootDir, references);
   for (const [htmlFile, html] of htmlByFile) {
-    await writeFile(htmlFile, rewriteHtml(html, assetMap), "utf8");
+    await writeFile(htmlFile, rewriteHtml(html, assetMap, { env: process.env }), "utf8");
   }
   await writeManifest(rootDir, assetMap);
   return {
