@@ -180,6 +180,10 @@ pub fn needs_fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path)
     if !request.cache_dir.join(".dolt").is_dir() {
         return true;
     }
+    match read_origin_remote(&request.cache_dir, dolt_bin) {
+        Ok(Some(origin)) if origin == request.remote_url => {}
+        _ => return true,
+    }
 
     match verify_ref(&request, dolt_bin) {
         Ok(verified_commit) => verified_commit != request.commit,

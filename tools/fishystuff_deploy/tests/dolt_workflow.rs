@@ -168,6 +168,50 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         origin_remote_url(&dolt_bin, &home, &cache)?,
         format!("file://{}", alternate_remote.display())
     );
+    run(
+        &dolt_bin,
+        &home,
+        Some(&cache),
+        ["remote", "remove", "origin"],
+    )?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&cache),
+        [
+            "remote",
+            "add",
+            "origin",
+            &format!("file://{}", remote.display()),
+        ],
+    )?;
+    assert_helper_needs(
+        &home,
+        [
+            "dolt",
+            "needs-fetch-pin",
+            "--request",
+            fetch_request
+                .to_str()
+                .context("fetch request path is not UTF-8")?,
+            "--status",
+            fetch_status
+                .to_str()
+                .context("fetch status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )?;
+    fetch_pin_from_remote(
+        &root,
+        &home,
+        &dolt_bin,
+        &cache,
+        &format!("file://{}", alternate_remote.display()),
+        release_ref,
+        &commit1,
+        &fetch_status,
+    )?;
     probe_sql_scalar(
         &root,
         &home,
