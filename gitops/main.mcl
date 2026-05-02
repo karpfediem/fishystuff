@@ -189,6 +189,13 @@ if $local_test_environment->enabled {
 		panic($retained_release->generation == 0, fmt.printf("retained release %s is missing from releases", $retained_release_id))
 		panic($retained_release->dolt_commit != $retained_dolt->commit, fmt.printf("retained release %s dolt_commit must match dolt.commit", $retained_release_id))
 
+		include fishy_admission.retained_cdn_root(struct {
+			requires_serving_artifacts => $local_test_environment->serve,
+			cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+			retained_release_id => $retained_release_id,
+			retained_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
+		})
+
 		include fishy_release.candidate(struct {
 			mode => $mode,
 			release_id => $retained_release_id,

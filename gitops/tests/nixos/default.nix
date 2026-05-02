@@ -65,4 +65,8 @@
   gitops-missing-cdn-retained-root-refusal = import ./missing-cdn-retained-root-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
+
+  gitops-wrong-cdn-retained-root-refusal = import ./wrong-cdn-retained-root-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
 }

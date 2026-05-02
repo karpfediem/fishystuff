@@ -8,11 +8,17 @@ let
     mkdir -p "$out"
     printf 'missing cdn runtime file refusal site\n' > "$out/index.html"
   '';
+  previousCdnRoot = pkgs.runCommand "fishystuff-gitops-missing-cdn-runtime-file-previous" { } ''
+    mkdir -p "$out/map"
+    printf '{"module":"fishystuff_ui_bevy.previous.js","wasm":"fishystuff_ui_bevy_bg.previous.wasm"}\n' > "$out/map/runtime-manifest.json"
+    printf 'previous module\n' > "$out/map/fishystuff_ui_bevy.previous.js"
+    printf 'previous wasm\n' > "$out/map/fishystuff_ui_bevy_bg.previous.wasm"
+  '';
   brokenCdnServingRoot = pkgs.runCommand "fishystuff-gitops-missing-cdn-runtime-file-root" { } ''
     mkdir -p "$out/map"
     printf '{"module":"fishystuff_ui_bevy.present.js","wasm":"fishystuff_ui_bevy_bg.missing.wasm"}\n' > "$out/map/runtime-manifest.json"
     printf 'present module\n' > "$out/map/fishystuff_ui_bevy.present.js"
-    printf '{"schema_version":1,"current_root":"%s","retained_root_count":0,"assets":[{"path":"/map/runtime-manifest.json","source":"current"},{"path":"/map/fishystuff_ui_bevy.present.js","source":"current"}]}\n' "$out" > "$out/cdn-serving-manifest.json"
+    printf '{"schema_version":1,"current_root":"%s","retained_roots":["%s"],"retained_root_count":1,"assets":[{"path":"/map/runtime-manifest.json","source":"current"},{"path":"/map/fishystuff_ui_bevy.present.js","source":"current"},{"path":"/map/fishystuff_ui_bevy_bg.missing.wasm","source":"current"}]}\n' "$out" "${previousCdnRoot}" > "$out/cdn-serving-manifest.json"
   '';
   desiredState = pkgs.writeText "vm-missing-cdn-runtime-file-refusal.desired.json" (builtins.toJSON {
     cluster = "local-test";
@@ -73,7 +79,7 @@ let
         };
         cdn_runtime = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousCdnRoot}";
           gcroot_path = "";
         };
         dolt_service = {
@@ -110,6 +116,7 @@ pkgs.testers.runNixOSTest {
       virtualisation.additionalPaths = [
         siteArtifact
         brokenCdnServingRoot
+        previousCdnRoot
         desiredState
       ];
       environment.systemPackages = [

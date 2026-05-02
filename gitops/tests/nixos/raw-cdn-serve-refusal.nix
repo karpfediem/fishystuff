@@ -14,6 +14,12 @@ let
     printf 'raw module\n' > "$out/map/fishystuff_ui_bevy.raw.js"
     printf 'raw wasm\n' > "$out/map/fishystuff_ui_bevy_bg.raw.wasm"
   '';
+  previousCdnRoot = pkgs.runCommand "fishystuff-gitops-raw-cdn-refusal-previous" { } ''
+    mkdir -p "$out/map"
+    printf '{"module":"fishystuff_ui_bevy.previous.js","wasm":"fishystuff_ui_bevy_bg.previous.wasm"}\n' > "$out/map/runtime-manifest.json"
+    printf 'previous module\n' > "$out/map/fishystuff_ui_bevy.previous.js"
+    printf 'previous wasm\n' > "$out/map/fishystuff_ui_bevy_bg.previous.wasm"
+  '';
   desiredState = pkgs.writeText "vm-raw-cdn-serve-refusal.desired.json" (builtins.toJSON {
     cluster = "local-test";
     generation = 9;
@@ -73,7 +79,7 @@ let
         };
         cdn_runtime = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousCdnRoot}";
           gcroot_path = "";
         };
         dolt_service = {
@@ -110,6 +116,7 @@ pkgs.testers.runNixOSTest {
       virtualisation.additionalPaths = [
         siteArtifact
         rawCdnRuntime
+        previousCdnRoot
         desiredState
       ];
       environment.systemPackages = [

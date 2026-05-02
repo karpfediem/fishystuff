@@ -120,3 +120,48 @@ class fixture($st) {
 		File["/run/fishystuff/gitops-test/admission/"] -> File["${path}"]
 	}
 }
+
+class retained_cdn_root($st) {
+	$requires_serving_artifacts bool = $st->requires_serving_artifacts || false
+	$cdn_runtime_content str = $st->cdn_runtime_content || ""
+	$retained_release_id str = $st->retained_release_id || ""
+	$retained_cdn_runtime_content str = $st->retained_cdn_runtime_content || ""
+	$cdn_serving_manifest_path = fmt.printf("%s/cdn-serving-manifest.json", $cdn_runtime_content)
+	$retained_serving_manifest_path = fmt.printf("%s/cdn-serving-manifest.json", $retained_cdn_runtime_content)
+	$empty_retained_serving_manifest struct{current_root str} = struct {
+		current_root => "",
+	}
+	$retained_serving_manifest_exists = if $requires_serving_artifacts and ($retained_cdn_runtime_content != "") {
+		os.file_exists($retained_serving_manifest_path)
+	} else {
+		false
+	}
+	$retained_serving_manifest struct{current_root str} = if $retained_serving_manifest_exists {
+		encoding.decode_json_flexible(
+			os.readfile($retained_serving_manifest_path),
+			"struct{current_root str}"
+		)
+	} else {
+		$empty_retained_serving_manifest
+	}
+	$expected_retained_cdn_root = if $retained_serving_manifest->current_root != "" {
+		$retained_serving_manifest->current_root
+	} else {
+		$retained_cdn_runtime_content
+	}
+	$cdn_serving_manifest_content = if $requires_serving_artifacts {
+		os.readfile($cdn_serving_manifest_path)
+	} else {
+		""
+	}
+	$cdn_serving_manifest_lists_retained_root = if $requires_serving_artifacts and ($expected_retained_cdn_root != "") {
+		len(core_strings.split($cdn_serving_manifest_content, fishy_json.quote($expected_retained_cdn_root))) > 1
+	} else {
+		false
+	}
+
+	panic($requires_serving_artifacts and ($retained_release_id == ""), "retained CDN admission requires retained release id")
+	panic($requires_serving_artifacts and ($cdn_runtime_content == ""), "retained CDN admission requires active CDN runtime content")
+	panic($requires_serving_artifacts and ($retained_cdn_runtime_content == ""), fmt.printf("serving retained release %s requires CDN runtime content", $retained_release_id))
+	panic($requires_serving_artifacts and (not $cdn_serving_manifest_lists_retained_root), fmt.printf("serving CDN root does not retain CDN root for release %s", $retained_release_id))
+}

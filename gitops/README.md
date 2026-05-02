@@ -32,6 +32,7 @@ just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
 just gitops-vm-test missing-cdn-retained-root-refusal
+just gitops-vm-test wrong-cdn-retained-root-refusal
 ```
 
 The flake checks added by this milestone are:
@@ -52,6 +53,7 @@ nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-retained-root-refusal
+nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 ```
 
 `.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It deliberately keeps `cdn_runtime` disabled so normal repo checks do not depend on private or ignored CDN staging state. Its release key is derived from the exact available tuple by default. It sets `serve: false`, `mode: validate`, and a placeholder Dolt commit; it is not a deploy/apply command.
@@ -77,6 +79,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-missing-cdn-serving-manifest-entry-refusal` is a negative VM check. It proves the finalized CDN serving manifest must account for the selected runtime JS/WASM asset, not merely exist beside it.
 
 `gitops-missing-cdn-retained-root-refusal` is a negative VM check. It proves a serving environment that retains rollback releases must use a CDN serving root whose manifest records retained CDN roots.
+
+`gitops-wrong-cdn-retained-root-refusal` is a negative VM check. It proves the retained CDN root must be the root required by the retained release, not merely any retained root.
 
 ## Desired State
 
@@ -165,7 +169,7 @@ A release candidate is the exact tuple of:
 - retained rollback release IDs for the selected environment
 - admission result for that exact tuple
 
-The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The `cdn-serving-root` derivation validates the current root's runtime manifest when present and refuses a root whose selected JS/WASM files are missing. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation. Serving admission requires this root to include `cdn-serving-manifest.json`, which records the current root and retained root count. When the desired environment retains rollback releases, serving admission also requires the CDN serving manifest to report at least one retained CDN root. Exact retained-release to retained-root accounting should be added after retained CDN closure paths are passed into admission.
+The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The `cdn-serving-root` derivation validates the current root's runtime manifest when present and refuses a root whose selected JS/WASM files are missing. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation. Serving admission requires this root to include `cdn-serving-manifest.json`, which records the current root and retained roots. When the desired environment retains rollback releases, serving admission checks that the active CDN serving manifest accounts for the CDN root required by each retained release. If a retained release's `cdn_runtime` is itself a serving root, admission checks its recorded `current_root`; otherwise it checks the retained `cdn_runtime` path directly.
 
 `retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Each retained ID must reference a release object in desired state, and serving requires at least one retained rollback release. Activation records this list in the local active/status documents so operators can tell which rollback set was selected with the active release.
 
