@@ -158,10 +158,14 @@
           retainedCdnRootStrings =
             pkgs.lib.filter (root: root != "") (pkgs.lib.splitString ":" retainedCdnRootEnv);
           retainedCdnRoots = map builtins.storePath retainedCdnRootStrings;
+          operatorRootConfigured = (builtins.getEnv "FISHYSTUFF_OPERATOR_ROOT") != "";
           cdnServingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
             currentRoot = cdnContent;
             previousRoots = retainedCdnRoots;
           };
+          gitopsDoltCommitEnv = builtins.getEnv "FISHYSTUFF_GITOPS_DOLT_COMMIT";
+          gitopsDoltCommit =
+            if gitopsDoltCommitEnv != "" then gitopsDoltCommitEnv else "validation-placeholder";
           siteContentFor =
             deploymentEnvironment: mapAssetCacheKey:
             pkgs.callPackage ./nix/packages/site-content.nix {
@@ -213,6 +217,23 @@
               runtimeEnvFile = "/run/fishystuff/api/env";
               environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
             };
+          };
+          gitopsDesiredStateBetaValidate = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "beta";
+            environment = "beta";
+            hostKey = "beta-single-host";
+            activeRelease = "example-release";
+            generation = 1;
+            releaseGeneration = 1;
+            gitRev = frontendSourceRevision;
+            doltCommit = gitopsDoltCommit;
+            doltBranchContext = "beta";
+            apiClosure = apiServiceBundle;
+            siteClosure = siteContentBeta;
+            cdnRuntimeClosure = if operatorRootConfigured then cdnServingRoot else null;
+            doltServiceClosure = doltServiceBundle;
+            mode = "validate";
+            serve = false;
           };
           edgeServiceBundleFor =
             deploymentEnvironment:
@@ -343,6 +364,15 @@
             python3 compute_required_cdn_filenames_test.py
             touch "$out"
           '';
+          gitopsDesiredStateBetaValidateCheck = pkgs.runCommand "gitops-desired-state-beta-validate-check" {
+            nativeBuildInputs = [ mgmt-fishystuff-beta.packages.${system}.minimal ];
+          } ''
+            set -euo pipefail
+
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateBetaValidate}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
 
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
@@ -374,6 +404,7 @@
             dolt-service-bundle = doltServiceBundle;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
+            gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             grafana-service-bundle = grafanaServiceBundle;
             jaeger-service-bundle = jaegerServiceBundle;
             loki-service-bundle = lokiServiceBundle;
@@ -396,6 +427,7 @@
             // {
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               cdn-required-files = cdnRequiredFilesCheck;
+              gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               modular-service-runtime = modularServiceRuntime;
               site-asset-finalizer = siteAssetFinalizerCheck;
             };
