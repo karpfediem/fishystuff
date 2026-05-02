@@ -152,6 +152,7 @@ if $local_test_environment->enabled {
 	panic($local_test_environment->active_release == "", "local-test environment requires active_release")
 	panic($active_release->generation == 0, "local-test environment references an unknown release")
 	panic($local_test_environment->serve and ($admission_state != "passed_fixture"), "serving requires passed admission")
+	panic($local_test_environment->serve and (len($retained_releases) == 0), "serving requires at least one retained rollback release")
 
 	for $index, $retained_release_id in $retained_releases {
 		$retained_release struct{

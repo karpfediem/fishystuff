@@ -12,6 +12,7 @@ nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
+nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
@@ -27,6 +28,7 @@ just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test missing-retained-release-refusal
+just gitops-vm-test no-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
@@ -48,6 +50,8 @@ just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with the generated `.#gitops-desired-state-vm-serve-fixture` JSON. It checks the generated release ID, exact API/Dolt/site/CDN fixture paths, the retained `previous-release` object, the CDN serving manifest with retained runtime assets, VM-local served state, and that `vm-test` mode does not create real gcroots or FishyStuff service state.
 
 `gitops-missing-retained-release-refusal` boots a local NixOS VM and checks that a retained rollback release ID must resolve to a release object before the graph can publish candidate, admission, status, or active state.
+
+`gitops-no-retained-release-refusal` boots a local NixOS VM and checks that `serve: true` must include at least one retained rollback release before the graph can publish candidate, admission, status, or active state.
 
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 
