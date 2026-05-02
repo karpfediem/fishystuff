@@ -18,6 +18,10 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function autoAdjustViewEnabled(signals) {
+  return signals?._map_ui?.windowUi?.settings?.autoAdjustView !== false;
+}
+
 export function buildFocusWorldPointSignalPatch(focusWorldPoint, signals = {}) {
   const worldX = Number(focusWorldPoint?.worldX);
   const worldZ = Number(focusWorldPoint?.worldZ);
@@ -25,12 +29,7 @@ export function buildFocusWorldPointSignalPatch(focusWorldPoint, signals = {}) {
     return null;
   }
   const currentToken = Number(signals?._map_actions?.focusWorldPointToken || 0);
-  const currentView = isPlainObject(signals?._map_session?.view)
-    ? signals._map_session.view
-    : {};
-  const currentCamera = isPlainObject(currentView.camera) ? currentView.camera : {};
-  const viewMode = trimString(currentView.viewMode) || DEFAULT_FOCUS_VIEW_MODE;
-  return {
+  const patch = {
     _map_actions: {
       focusWorldPoint: {
         elementKind: trimString(focusWorldPoint?.elementKind),
@@ -42,6 +41,18 @@ export function buildFocusWorldPointSignalPatch(focusWorldPoint, signals = {}) {
       },
       focusWorldPointToken: currentToken + 1,
     },
+  };
+  if (!autoAdjustViewEnabled(signals)) {
+    return patch;
+  }
+
+  const currentView = isPlainObject(signals?._map_session?.view)
+    ? signals._map_session.view
+    : {};
+  const currentCamera = isPlainObject(currentView.camera) ? currentView.camera : {};
+  const viewMode = trimString(currentView.viewMode) || DEFAULT_FOCUS_VIEW_MODE;
+  return {
+    ...patch,
     _map_session: {
       view: {
         viewMode,
