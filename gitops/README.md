@@ -24,6 +24,7 @@ just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test closure-roots
 just gitops-vm-test served-candidate
+just gitops-vm-test generated-served-candidate
 ```
 
 The flake checks added by this milestone are:
@@ -33,6 +34,7 @@ nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-served-candidate-vm
+nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 ```
@@ -40,6 +42,8 @@ nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 `.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It includes the CDN serving root when the operator-local CDN input root is configured; otherwise `cdn_runtime` is disabled so normal local validation does not require private CDN staging state. Its release key is derived from the exact Git/Dolt/closure tuple by default. It deliberately sets `serve: false` and `mode: validate`; it is not a deploy/apply command. Set `FISHYSTUFF_GITOPS_DOLT_COMMIT` while evaluating if you want the generated validation object to carry a specific Dolt commit instead of the placeholder.
 
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, and CDN runtime. The package generator refuses `serve: true` unless all four release artifacts are present.
+
+`gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
 
 ## Desired State
 

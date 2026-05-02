@@ -332,6 +332,13 @@
             inherit pkgs;
             gitopsSrc = ./gitops;
             mgmtPackage = mgmt-fishystuff-beta.packages.${system}.minimal;
+            generatedServeFixture = {
+              desiredState = gitopsDesiredStateVmServeFixture;
+              apiArtifact = gitopsDesiredStateServeFixtureApi;
+              siteArtifact = gitopsDesiredStateServeFixtureSite;
+              cdnRuntimeArtifact = gitopsDesiredStateServeFixtureCdn;
+              doltServiceArtifact = gitopsDesiredStateServeFixtureDoltService;
+            };
           };
           cdnServingRootRetentionCheck =
             let

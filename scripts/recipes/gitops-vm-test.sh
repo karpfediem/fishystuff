@@ -20,9 +20,12 @@ case "$test_name" in
   served-candidate)
     check_attr="gitops-served-candidate-vm"
     ;;
+  generated-served-candidate)
+    check_attr="gitops-generated-served-candidate-vm"
+    ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, closure-roots, served-candidate" >&2
+    echo "known tests: empty-unify, single-host-candidate, closure-roots, served-candidate, generated-served-candidate" >&2
     exit 2
     ;;
 esac
