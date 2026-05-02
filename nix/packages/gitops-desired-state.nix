@@ -135,6 +135,7 @@ assert lib.assertMsg (releaseGeneration > 0) "gitops desired state requires posi
 assert lib.assertMsg (gitRev != "") "gitops desired state requires gitRev";
 assert lib.assertMsg (doltCommit != "") "gitops desired state requires doltCommit";
 assert lib.assertMsg (doltBranchContext != "") "gitops desired state requires doltBranchContext";
+assert lib.assertMsg (doltMode == "read_only") "gitops desired state requires doltMode = read_only";
 assert lib.assertMsg (
   doltMaterialization == "metadata_only"
   || doltMaterialization == "fetch_pin"
@@ -174,6 +175,9 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   lib.all (release: release ? doltCommit && release.doltCommit != "") retainedReleaseObjects
 ) "gitops retained release objects require doltCommit";
+assert lib.assertMsg (
+  lib.all (release: (release.doltMode or doltMode) == "read_only") retainedReleaseObjects
+) "gitops retained release objects require doltMode = read_only";
 assert lib.assertMsg (
   retainedReleases == [ ] || retainedReleases == map (release: release.releaseId) retainedReleaseObjects
 ) "gitops retainedReleases must match retainedReleaseObjects when both are provided";

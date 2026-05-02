@@ -20,6 +20,7 @@ class release_metadata($st) {
 	panic($repository == "", fmt.printf("release %s dolt metadata requires repository", $release_id))
 	panic($branch_context == "", fmt.printf("release %s dolt metadata requires branch_context", $release_id))
 	panic($access_mode == "", fmt.printf("release %s dolt metadata requires access mode", $release_id))
+	panic($access_mode != "read_only", fmt.printf("release %s dolt metadata requires read_only mode", $release_id))
 	panic(($materialization != "metadata_only") and ($materialization != "fetch_pin") and ($materialization != "replica_pin") and ($materialization != "snapshot"), fmt.printf("release %s has unsupported dolt materialization %s", $release_id, $materialization))
 	panic(($materialization == "fetch_pin") and ($remote_url == ""), fmt.printf("release %s fetch_pin dolt materialization requires remote_url", $release_id))
 }

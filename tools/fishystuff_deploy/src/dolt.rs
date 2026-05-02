@@ -370,6 +370,12 @@ fn validate_request(request: &FetchPinRequest) -> Result<()> {
             request.materialization
         );
     }
+    if request.access_mode != "read_only" {
+        bail!(
+            "unsupported Dolt access mode {}; expected read_only",
+            request.access_mode
+        );
+    }
 
     if request.cache_dir.as_os_str().is_empty() {
         bail!("fetch-pin request field cache_dir must not be empty");

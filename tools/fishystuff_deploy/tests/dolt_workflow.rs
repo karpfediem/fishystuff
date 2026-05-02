@@ -162,6 +162,7 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         &format!("file://{}", alternate_remote.display()),
         release_ref,
         &commit1,
+        "read_only",
         &fetch_status,
     )?;
     assert_eq!(
@@ -210,6 +211,7 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         &format!("file://{}", alternate_remote.display()),
         release_ref,
         &commit1,
+        "read_only",
         &fetch_status,
     )?;
     probe_sql_scalar(
@@ -298,6 +300,19 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
             &root.path().join("status/admission-mutation-query.json"),
         ),
         "must start with SELECT or WITH",
+    );
+    assert_fetch_pin_failure_contains(
+        fetch_pin_with_access_mode(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit1,
+            "read_write",
+            &root.path().join("status/fetch-read-write.json"),
+        ),
+        "expected read_only",
     );
 
     let stale_commit_status = root.path().join("status/fetch-stale-commit.json");
@@ -447,6 +462,15 @@ fn assert_probe_failure_contains(result: Result<()>, expected: &str) {
     );
 }
 
+fn assert_fetch_pin_failure_contains(result: Result<()>, expected: &str) {
+    let error = result.expect_err("fetch-pin unexpectedly succeeded");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains(expected),
+        "expected error containing {expected:?}, got:\n{message}"
+    );
+}
+
 fn find_dolt() -> Result<Option<PathBuf>> {
     let output = Command::new("dolt").arg("version").output();
     match output {
@@ -466,6 +490,28 @@ fn fetch_pin(
     commit: &str,
     status: &Path,
 ) -> Result<()> {
+    fetch_pin_with_access_mode(
+        root,
+        home,
+        dolt_bin,
+        cache,
+        release_ref,
+        commit,
+        "read_only",
+        status,
+    )
+}
+
+fn fetch_pin_with_access_mode(
+    root: &TestRoot,
+    home: &Path,
+    dolt_bin: &Path,
+    cache: &Path,
+    release_ref: &str,
+    commit: &str,
+    access_mode: &str,
+    status: &Path,
+) -> Result<()> {
     fetch_pin_from_remote(
         root,
         home,
@@ -474,6 +520,7 @@ fn fetch_pin(
         &format!("file://{}", root.path().join("remote").display()),
         release_ref,
         commit,
+        access_mode,
         status,
     )
 }
@@ -486,6 +533,7 @@ fn fetch_pin_from_remote(
     remote_url: &str,
     release_ref: &str,
     commit: &str,
+    access_mode: &str,
     status: &Path,
 ) -> Result<()> {
     let request = root.path().join("requests/fetch.json");
@@ -500,7 +548,7 @@ fn fetch_pin_from_remote(
             "remote_url": remote_url,
             "branch_context": "main",
             "commit": commit,
-            "access_mode": "read_only",
+            "access_mode": access_mode,
             "materialization": "fetch_pin",
             "cache_dir": cache,
             "release_ref": release_ref,
