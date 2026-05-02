@@ -42,17 +42,17 @@ struct FetchPinStatus<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-struct ProbeSqlFixtureRequest {
+struct ProbeSqlScalarRequest {
     environment: String,
     host: String,
     release_id: String,
     release_identity: String,
-    dolt_commit: String,
-    dolt_materialization: String,
-    dolt_cache_dir: PathBuf,
-    dolt_release_ref: String,
-    dolt_status_path: PathBuf,
-    probe_sql: String,
+    expected_commit: String,
+    materialization: String,
+    cache_dir: PathBuf,
+    pinned_ref: String,
+    materialization_status_path: PathBuf,
+    query: String,
     expected_scalar: String,
 }
 
@@ -65,19 +65,19 @@ struct FetchPinMaterializationStatus {
 }
 
 #[derive(Debug, Serialize)]
-struct ProbeSqlFixtureStatus<'a> {
+struct ProbeSqlScalarStatus<'a> {
     environment: &'a str,
     host: &'a str,
     release_id: &'a str,
     release_identity: &'a str,
-    dolt_commit: &'a str,
-    dolt_materialization: &'a str,
-    dolt_cache_dir: &'a Path,
-    dolt_release_ref: &'a str,
-    dolt_status_path: &'a Path,
-    dolt_verified_commit: &'a str,
-    probe_sql: &'a str,
-    probe_value: &'a str,
+    expected_commit: &'a str,
+    materialization: &'a str,
+    cache_dir: &'a Path,
+    pinned_ref: &'a str,
+    materialization_status_path: &'a Path,
+    verified_commit: &'a str,
+    query: &'a str,
+    scalar: &'a str,
     expected_scalar: &'a str,
     admission_state: &'static str,
     probe: &'static str,
@@ -124,34 +124,34 @@ pub fn fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Re
     Ok(())
 }
 
-pub fn probe_sql_fixture(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Result<()> {
-    let request = read_probe_sql_fixture_request(request_path)?;
-    validate_probe_sql_fixture_request(&request)?;
+pub fn probe_sql_scalar(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Result<()> {
+    let request = read_probe_sql_scalar_request(request_path)?;
+    validate_probe_sql_scalar_request(&request)?;
     ensure_parent_dir(status_path)?;
 
-    let materialization_status = read_materialization_status(&request.dolt_status_path)?;
+    let materialization_status = read_materialization_status(&request.materialization_status_path)?;
     validate_materialization_status(&request, &materialization_status)?;
 
     let verified_commit = verify_probe_ref(&request, dolt_bin)?;
-    if verified_commit != request.dolt_commit {
+    if verified_commit != request.expected_commit {
         bail!(
             "expected Dolt commit {}, got {} for ref {}",
-            request.dolt_commit,
+            request.expected_commit,
             verified_commit,
-            request.dolt_release_ref
+            request.pinned_ref
         );
     }
 
-    let probe_value = run_probe_sql(&request, dolt_bin)?;
-    if probe_value != request.expected_scalar {
+    let scalar_value = run_probe_sql(&request, dolt_bin)?;
+    if scalar_value != request.expected_scalar {
         bail!(
-            "Dolt SQL fixture probe expected scalar {:?}, got {:?}",
+            "Dolt SQL scalar probe expected scalar {:?}, got {:?}",
             request.expected_scalar,
-            probe_value
+            scalar_value
         );
     }
 
-    write_probe_sql_fixture_status(status_path, &request, &verified_commit, &probe_value)
+    write_probe_sql_scalar_status(status_path, &request, &verified_commit, &scalar_value)
 }
 
 fn read_request(request_path: &Path) -> Result<FetchPinRequest> {
@@ -161,16 +161,16 @@ fn read_request(request_path: &Path) -> Result<FetchPinRequest> {
         .with_context(|| format!("decoding fetch-pin request {}", request_path.display()))
 }
 
-fn read_probe_sql_fixture_request(request_path: &Path) -> Result<ProbeSqlFixtureRequest> {
+fn read_probe_sql_scalar_request(request_path: &Path) -> Result<ProbeSqlScalarRequest> {
     let file = File::open(request_path).with_context(|| {
         format!(
-            "opening Dolt SQL fixture admission request {}",
+            "opening Dolt SQL scalar admission request {}",
             request_path.display()
         )
     })?;
     serde_json::from_reader(file).with_context(|| {
         format!(
-            "decoding Dolt SQL fixture admission request {}",
+            "decoding Dolt SQL scalar admission request {}",
             request_path.display()
         )
     })
@@ -218,34 +218,34 @@ fn validate_request(request: &FetchPinRequest) -> Result<()> {
     Ok(())
 }
 
-fn validate_probe_sql_fixture_request(request: &ProbeSqlFixtureRequest) -> Result<()> {
+fn validate_probe_sql_scalar_request(request: &ProbeSqlScalarRequest) -> Result<()> {
     require_non_empty("environment", &request.environment)?;
     require_non_empty("host", &request.host)?;
     require_non_empty("release_id", &request.release_id)?;
     require_non_empty("release_identity", &request.release_identity)?;
-    require_non_empty("dolt_commit", &request.dolt_commit)?;
-    require_non_empty("dolt_materialization", &request.dolt_materialization)?;
-    require_non_empty("dolt_release_ref", &request.dolt_release_ref)?;
-    require_non_empty("probe_sql", &request.probe_sql)?;
+    require_non_empty("expected_commit", &request.expected_commit)?;
+    require_non_empty("materialization", &request.materialization)?;
+    require_non_empty("pinned_ref", &request.pinned_ref)?;
+    require_non_empty("query", &request.query)?;
 
-    if request.dolt_materialization != "fetch_pin" {
+    if request.materialization != "fetch_pin" {
         bail!(
-            "Dolt SQL fixture admission requires fetch_pin materialization, got {}",
-            request.dolt_materialization
+            "Dolt SQL scalar admission requires fetch_pin materialization, got {}",
+            request.materialization
         );
     }
-    if request.dolt_cache_dir.as_os_str().is_empty() {
-        bail!("Dolt SQL fixture request field dolt_cache_dir must not be empty");
+    if request.cache_dir.as_os_str().is_empty() {
+        bail!("Dolt SQL scalar request field cache_dir must not be empty");
     }
-    if request.dolt_status_path.as_os_str().is_empty() {
-        bail!("Dolt SQL fixture request field dolt_status_path must not be empty");
+    if request.materialization_status_path.as_os_str().is_empty() {
+        bail!("Dolt SQL scalar request field materialization_status_path must not be empty");
     }
 
     Ok(())
 }
 
 fn validate_materialization_status(
-    request: &ProbeSqlFixtureRequest,
+    request: &ProbeSqlScalarRequest,
     status: &FetchPinMaterializationStatus,
 ) -> Result<()> {
     if status.state != "pinned" {
@@ -254,25 +254,25 @@ fn validate_materialization_status(
             status.state
         );
     }
-    if status.verified_commit != request.dolt_commit {
+    if status.verified_commit != request.expected_commit {
         bail!(
             "Dolt materialization status verified commit {} does not match requested {}",
             status.verified_commit,
-            request.dolt_commit
+            request.expected_commit
         );
     }
-    if status.cache_dir != request.dolt_cache_dir {
+    if status.cache_dir != request.cache_dir {
         bail!(
             "Dolt materialization cache {} does not match admission cache {}",
             status.cache_dir.display(),
-            request.dolt_cache_dir.display()
+            request.cache_dir.display()
         );
     }
-    if status.release_ref != request.dolt_release_ref {
+    if status.release_ref != request.pinned_ref {
         bail!(
             "Dolt materialization release ref {} does not match admission release ref {}",
             status.release_ref,
-            request.dolt_release_ref
+            request.pinned_ref
         );
     }
     Ok(())
@@ -293,24 +293,24 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
         .with_context(|| format!("creating parent directory {}", parent.display()))
 }
 
-fn verify_probe_ref(request: &ProbeSqlFixtureRequest, dolt_bin: &Path) -> Result<String> {
+fn verify_probe_ref(request: &ProbeSqlScalarRequest, dolt_bin: &Path) -> Result<String> {
     let sql = format!(
         "select dolt_hashof('{}') as hash",
-        sql_quote(&request.dolt_release_ref)
+        sql_quote(&request.pinned_ref)
     );
     let stdout = run_dolt(
         dolt_bin,
-        Some(&request.dolt_cache_dir),
+        Some(&request.cache_dir),
         ["sql", "-r", "csv", "-q", sql.as_str()],
     )?;
     parse_single_hash_csv(&stdout)
 }
 
-fn run_probe_sql(request: &ProbeSqlFixtureRequest, dolt_bin: &Path) -> Result<String> {
+fn run_probe_sql(request: &ProbeSqlScalarRequest, dolt_bin: &Path) -> Result<String> {
     let stdout = run_dolt(
         dolt_bin,
-        Some(&request.dolt_cache_dir),
-        ["sql", "-r", "csv", "-q", request.probe_sql.as_str()],
+        Some(&request.cache_dir),
+        ["sql", "-r", "csv", "-q", request.query.as_str()],
     )?;
     parse_single_scalar_csv(&stdout)
 }
@@ -358,28 +358,28 @@ fn clone_cache(request: &FetchPinRequest, dolt_bin: &Path) -> Result<()> {
     Ok(())
 }
 
-fn write_probe_sql_fixture_status(
+fn write_probe_sql_scalar_status(
     status_path: &Path,
-    request: &ProbeSqlFixtureRequest,
+    request: &ProbeSqlScalarRequest,
     verified_commit: &str,
-    probe_value: &str,
+    scalar_value: &str,
 ) -> Result<()> {
-    let status = ProbeSqlFixtureStatus {
+    let status = ProbeSqlScalarStatus {
         environment: &request.environment,
         host: &request.host,
         release_id: &request.release_id,
         release_identity: &request.release_identity,
-        dolt_commit: &request.dolt_commit,
-        dolt_materialization: &request.dolt_materialization,
-        dolt_cache_dir: &request.dolt_cache_dir,
-        dolt_release_ref: &request.dolt_release_ref,
-        dolt_status_path: &request.dolt_status_path,
-        dolt_verified_commit: verified_commit,
-        probe_sql: &request.probe_sql,
-        probe_value,
+        expected_commit: &request.expected_commit,
+        materialization: &request.materialization,
+        cache_dir: &request.cache_dir,
+        pinned_ref: &request.pinned_ref,
+        materialization_status_path: &request.materialization_status_path,
+        verified_commit,
+        query: &request.query,
+        scalar: scalar_value,
         expected_scalar: &request.expected_scalar,
         admission_state: "passed_fixture",
-        probe: "dolt-sql-fixture",
+        probe: "dolt-sql-scalar",
     };
 
     write_json_status(status_path, &status)
@@ -537,7 +537,7 @@ fn parse_single_scalar_csv(stdout: &str) -> Result<String> {
         .context("Dolt SQL CSV output had no header")?;
     if headers.len() != 1 {
         bail!(
-            "Dolt SQL fixture probe expected one result column, got {}",
+            "Dolt SQL scalar probe expected one result column, got {}",
             headers.len()
         );
     }
@@ -549,12 +549,12 @@ fn parse_single_scalar_csv(stdout: &str) -> Result<String> {
         .context("reading Dolt SQL CSV row")?;
     if record.len() != 1 {
         bail!(
-            "Dolt SQL fixture probe expected one scalar field, got {}",
+            "Dolt SQL scalar probe expected one scalar field, got {}",
             record.len()
         );
     }
     if records.next().is_some() {
-        bail!("Dolt SQL fixture probe returned more than one row");
+        bail!("Dolt SQL scalar probe returned more than one row");
     }
     Ok(record.get(0).unwrap_or_default().to_owned())
 }

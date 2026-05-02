@@ -96,7 +96,7 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
         &commit1,
         &fetch_status,
     )?;
-    probe_sql_fixture(
+    probe_sql_scalar(
         &root,
         &home,
         &dolt_bin,
@@ -111,11 +111,11 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
 
     let admission: Value = read_json(&admission_status)?;
     assert_eq!(admission["admission_state"], "passed_fixture");
-    assert_eq!(admission["dolt_verified_commit"], commit1);
-    assert_eq!(admission["probe_value"], "one");
+    assert_eq!(admission["verified_commit"], commit1);
+    assert_eq!(admission["scalar"], "one");
 
     assert_probe_failure_contains(
-        probe_sql_fixture(
+        probe_sql_scalar(
             &root,
             &home,
             &dolt_bin,
@@ -138,7 +138,7 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
         release_ref,
     )?;
     assert_probe_failure_contains(
-        probe_sql_fixture(
+        probe_sql_scalar(
             &root,
             &home,
             &dolt_bin,
@@ -161,7 +161,7 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
         release_ref,
     )?;
     assert_probe_failure_contains(
-        probe_sql_fixture(
+        probe_sql_scalar(
             &root,
             &home,
             &dolt_bin,
@@ -184,7 +184,7 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
         "fishystuff/gitops/other",
     )?;
     assert_probe_failure_contains(
-        probe_sql_fixture(
+        probe_sql_scalar(
             &root,
             &home,
             &dolt_bin,
@@ -219,7 +219,7 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
     let fake_commit2_status = root.path().join("status/fetch-fake-commit2.json");
     write_fetch_status(&fake_commit2_status, &commit2, &cache, release_ref)?;
     assert_probe_failure_contains(
-        probe_sql_fixture(
+        probe_sql_scalar(
             &root,
             &home,
             &dolt_bin,
@@ -243,7 +243,7 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
         &commit2,
         &fetch_status,
     )?;
-    probe_sql_fixture(
+    probe_sql_scalar(
         &root,
         &home,
         &dolt_bin,
@@ -261,8 +261,8 @@ fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> 
     assert_eq!(fetch["state"], "pinned");
     assert_eq!(fetch["verified_commit"], commit2);
     assert_eq!(admission["admission_state"], "passed_fixture");
-    assert_eq!(admission["dolt_verified_commit"], commit2);
-    assert_eq!(admission["probe_value"], "two");
+    assert_eq!(admission["verified_commit"], commit2);
+    assert_eq!(admission["scalar"], "two");
     assert!(cache.join("cache-survives-fetch").is_file());
 
     Ok(())
@@ -330,7 +330,7 @@ fn fetch_pin(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn probe_sql_fixture(
+fn probe_sql_scalar(
     root: &TestRoot,
     home: &Path,
     dolt_bin: &Path,
@@ -350,12 +350,12 @@ fn probe_sql_fixture(
             "host": "vm-single-host",
             "release_id": "example-release",
             "release_identity": format!("release=example-release;dolt_commit={commit}"),
-            "dolt_commit": commit,
-            "dolt_materialization": "fetch_pin",
-            "dolt_cache_dir": cache,
-            "dolt_release_ref": release_ref,
-            "dolt_status_path": dolt_status,
-            "probe_sql": probe_sql,
+            "expected_commit": commit,
+            "materialization": "fetch_pin",
+            "cache_dir": cache,
+            "pinned_ref": release_ref,
+            "materialization_status_path": dolt_status,
+            "query": probe_sql,
             "expected_scalar": expected_scalar,
         }),
     )?;
@@ -363,7 +363,7 @@ fn probe_sql_fixture(
         home,
         [
             "dolt",
-            "probe-sql-fixture",
+            "probe-sql-scalar",
             "--request",
             request.to_str().context("request path is not UTF-8")?,
             "--status",

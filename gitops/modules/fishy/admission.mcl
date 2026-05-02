@@ -144,8 +144,8 @@ class dolt_sql_fixture($st) {
 	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
 	$exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment, $release_id)
 	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
-	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_materialization\": %s,\n  \"dolt_cache_dir\": %s,\n  \"dolt_release_ref\": %s,\n  \"dolt_status_path\": %s,\n  \"probe_sql\": %s,\n  \"expected_scalar\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), fishy_json.quote($dolt_status_path), fishy_json.quote($probe_sql), fishy_json.quote($expected_scalar))
-	$ifcmd = fmt.printf("test ! -e '%s' || test \"$(/run/current-system/sw/bin/jq -r .dolt_commit '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .dolt_commit '%s')\" || test \"$(/run/current-system/sw/bin/jq -r .probe_sql '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .probe_sql '%s')\" || test \"$(/run/current-system/sw/bin/jq -r .expected_scalar '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .expected_scalar '%s')\"", $status_path, $status_path, $request_path, $status_path, $request_path, $status_path, $request_path)
+	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"expected_commit\": %s,\n  \"materialization\": %s,\n  \"cache_dir\": %s,\n  \"pinned_ref\": %s,\n  \"materialization_status_path\": %s,\n  \"query\": %s,\n  \"expected_scalar\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), fishy_json.quote($dolt_status_path), fishy_json.quote($probe_sql), fishy_json.quote($expected_scalar))
+	$ifcmd = fmt.printf("test ! -e '%s' || test \"$(/run/current-system/sw/bin/jq -r .expected_commit '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .expected_commit '%s')\" || test \"$(/run/current-system/sw/bin/jq -r .query '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .query '%s')\" || test \"$(/run/current-system/sw/bin/jq -r .expected_scalar '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .expected_scalar '%s')\"", $status_path, $status_path, $request_path, $status_path, $request_path, $status_path, $request_path)
 
 	panic($environment == "", "Dolt SQL admission fixture requires environment")
 	panic($host == "", "Dolt SQL admission fixture requires host")
@@ -182,7 +182,7 @@ class dolt_sql_fixture($st) {
 			cmd => $helper_bin,
 			args => [
 				"dolt",
-				"probe-sql-fixture",
+				"probe-sql-scalar",
 				"--request",
 				$request_path,
 				"--status",
