@@ -8,7 +8,7 @@ class model($st) {
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 		dolt struct{repository str; commit str; branch_context str; mode str}
 	}} = {}
-	$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}} = {}
+	$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = {}
 
 	$empty_host struct{enabled bool; role str; hostname str} = struct {
 		enabled => false,
@@ -45,7 +45,7 @@ class model($st) {
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 		dolt struct{repository str; commit str; branch_context str; mode str}
 	}} = $st->releases || $empty_releases
-	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}} = $st->environments || $empty_environments
+	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = $st->environments || $empty_environments
 
 	panic(($mode != "validate") and ($mode != "vm-test") and ($mode != "vm-test-closures") and ($mode != "local-apply"), "unsupported gitops desired-state mode")
 }

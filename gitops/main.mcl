@@ -1,16 +1,12 @@
 import "encoding"
 import "fmt"
+import "map"
 import "os"
 import "sys"
 
-import "modules/fishy/activation.mcl" as fishy_activation
-import "modules/fishy/admission.mcl" as fishy_admission
 import "modules/fishy/desired.mcl" as fishy_desired
-import "modules/fishy/instance.mcl" as fishy_instance
-import "modules/fishy/json.mcl" as fishy_json
+import "modules/fishy/environment.mcl" as fishy_environment
 import "modules/fishy/release.mcl" as fishy_release
-import "modules/fishy/route.mcl" as fishy_route
-import "modules/fishy/status.mcl" as fishy_status
 
 $state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "gitops/fixtures/empty.desired.json")
 
@@ -22,7 +18,6 @@ $raw_desired = encoding.decode_json_flexible(
 include fishy_desired.model($raw_desired) as desired
 
 $empty_hosts map{str: struct{enabled bool; role str; hostname str}} = {}
-$empty_list []str = []
 $empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
 $empty_dolt struct{repository str; commit str; branch_context str; mode str} = struct {
 	repository => "",
@@ -43,28 +38,6 @@ $empty_host struct{enabled bool; role str; hostname str} = struct {
 	role => "",
 	hostname => "",
 }
-$empty_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = struct {
-	enabled => false,
-	strategy => "",
-	host => "",
-	active_release => "",
-	retained_releases => $empty_list,
-	serve => false,
-	admission_fixture_state => "",
-}
-$empty_release struct{
-	generation int;
-	git_rev str;
-	dolt_commit str;
-	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-	dolt struct{repository str; commit str; branch_context str; mode str}
-} = struct {
-	generation => 0,
-	git_rev => "",
-	dolt_commit => "",
-	closures => $empty_closures,
-	dolt => $empty_dolt,
-}
 $empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
 	enabled => false,
 	store_path => "",
@@ -83,264 +56,65 @@ $releases map{str: struct{
 }} = $raw_desired->releases || $empty_releases
 $environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = $raw_desired->environments || $empty_environments
 
-$local_test_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $environments["local-test"] || $empty_environment
-$beta_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $environments["beta"] || $empty_environment
-$active_release_id str = if $local_test_environment->enabled {
-	$local_test_environment->active_release
-} else {
-	if $beta_environment->enabled {
-		$beta_environment->active_release
-	} else {
+for $index, $release_id in map.keys($releases) {
+	$release struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	} = $releases[$release_id]
+	$release_dolt struct{repository str; commit str; branch_context str; mode str} = $release->dolt || $empty_dolt
+	$release_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = $release->closures || $empty_closures
+	$release_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $release_closures["api"] || $empty_artifact
+	$release_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $release_closures["site"] || $empty_artifact
+	$release_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $release_closures["cdn_runtime"] || $empty_artifact
+	$release_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $release_closures["dolt_service"] || $empty_artifact
+	$release_identity str = if $release->generation == 0 {
 		""
+	} else {
+		fmt.printf(
+			"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
+			$release_id,
+			$release->generation,
+			$release->git_rev,
+			$release->dolt_commit,
+			$release_dolt->repository,
+			$release_dolt->branch_context,
+			$release_dolt->mode,
+			$release_api_artifact->store_path,
+			$release_site_artifact->store_path,
+			$release_cdn_runtime_artifact->store_path,
+			$release_dolt_service_artifact->store_path
+		)
 	}
-}
-panic($local_test_environment->enabled and $beta_environment->enabled, "gitops main currently supports one enabled environment at a time")
-$active_release struct{
-	generation int;
-	git_rev str;
-	dolt_commit str;
-	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-	dolt struct{repository str; commit str; branch_context str; mode str}
-} = if $active_release_id != "" { $releases[$active_release_id] || $empty_release } else { $empty_release }
-$vm_single_host struct{enabled bool; role str; hostname str} = $hosts["vm-single-host"] || $empty_host
-$beta_single_host struct{enabled bool; role str; hostname str} = $hosts["beta-single-host"] || $empty_host
-$active_dolt struct{repository str; commit str; branch_context str; mode str} = $active_release->dolt || $empty_dolt
-$active_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["api"] || $empty_artifact
-$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
-$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact
-$active_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["dolt_service"] || $empty_artifact
-$active_release_identity = if $active_release->generation == 0 {
-	""
-} else {
-	fmt.printf(
-		"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
-		$active_release_id,
-		$active_release->generation,
-		$active_release->git_rev,
-		$active_release->dolt_commit,
-		$active_dolt->repository,
-		$active_dolt->branch_context,
-		$active_dolt->mode,
-		$active_api_artifact->store_path,
-		$active_site_artifact->store_path,
-		$active_cdn_runtime_artifact->store_path,
-		$active_dolt_service_artifact->store_path
-	)
-}
 
-if $active_release->generation != 0 {
-	panic($active_release->dolt_commit != $active_dolt->commit, "release dolt_commit must match dolt.commit")
+	panic($release_id == "", "release map contains an empty release id")
+	panic($release->generation == 0, fmt.printf("release %s requires non-zero generation", $release_id))
+	panic($release->dolt_commit != $release_dolt->commit, fmt.printf("release %s dolt_commit must match dolt.commit", $release_id))
 
 	include fishy_release.candidate(struct {
 		mode => $mode,
-		release_id => $active_release_id,
-		release_identity => $active_release_identity,
-		generation => $active_release->generation,
-		git_rev => $active_release->git_rev,
-		dolt_commit => $active_release->dolt_commit,
-		closures => $active_release->closures,
+		release_id => $release_id,
+		release_identity => $release_identity,
+		generation => $release->generation,
+		git_rev => $release->git_rev,
+		dolt_commit => $release->dolt_commit,
+		closures => $release_closures,
 	})
 }
 
-if $local_test_environment->enabled {
-	$requested_admission_fixture_state str = $local_test_environment->admission_fixture_state || ""
-	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
-	$admission_state = if $requested_admission_fixture_state != "" { $requested_admission_fixture_state } else { $default_admission_state }
-	$admission_failed = $admission_state == "failed_fixture"
-	$served = $local_test_environment->serve and ($admission_state == "passed_fixture")
-	$instance_name = fmt.printf("%s-%s", "local-test", $local_test_environment->active_release)
-	$retained_releases []str = $local_test_environment->retained_releases || $empty_list
-	$retained_release_ids_json = fishy_json.string_list($retained_releases)
-
-	panic(($requested_admission_fixture_state != "") and (($mode != "vm-test") and ($mode != "vm-test-closures")), "admission_fixture_state is only supported in vm-test modes")
-	panic(($admission_state != "not_run") and ($admission_state != "passed_fixture") and ($admission_state != "failed_fixture"), "unsupported local-test admission fixture state")
-	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")
-	panic(not $vm_single_host->enabled, "local-test environment references a disabled host")
-	panic($local_test_environment->active_release == "", "local-test environment requires active_release")
-	panic($active_release->generation == 0, "local-test environment references an unknown release")
-	panic($local_test_environment->serve and ($admission_state != "passed_fixture"), "serving requires passed admission")
-	panic($local_test_environment->serve and (len($retained_releases) == 0), "serving requires at least one retained rollback release")
-
-	for $index, $retained_release_id in $retained_releases {
-		$retained_release struct{
-			generation int;
-			git_rev str;
-			dolt_commit str;
-			closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
-			dolt struct{repository str; commit str; branch_context str; mode str}
-		} = $releases[$retained_release_id] || $empty_release
-		$retained_dolt struct{repository str; commit str; branch_context str; mode str} = $retained_release->dolt || $empty_dolt
-		$retained_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["api"] || $empty_artifact
-		$retained_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["site"] || $empty_artifact
-		$retained_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["cdn_runtime"] || $empty_artifact
-		$retained_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["dolt_service"] || $empty_artifact
-		$retained_release_identity = if $retained_release->generation == 0 {
-			""
-		} else {
-			fmt.printf(
-				"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
-				$retained_release_id,
-				$retained_release->generation,
-				$retained_release->git_rev,
-				$retained_release->dolt_commit,
-				$retained_dolt->repository,
-				$retained_dolt->branch_context,
-				$retained_dolt->mode,
-				$retained_api_artifact->store_path,
-				$retained_site_artifact->store_path,
-				$retained_cdn_runtime_artifact->store_path,
-				$retained_dolt_service_artifact->store_path
-			)
-		}
-
-		panic($retained_release->generation == 0, fmt.printf("retained release %s is missing from releases", $retained_release_id))
-		panic($retained_release->dolt_commit != $retained_dolt->commit, fmt.printf("retained release %s dolt_commit must match dolt.commit", $retained_release_id))
-		panic($local_test_environment->serve and ($retained_api_artifact->store_path == ""), fmt.printf("serving retained release %s requires api store_path", $retained_release_id))
-		panic($local_test_environment->serve and ($retained_site_artifact->store_path == ""), fmt.printf("serving retained release %s requires site store_path", $retained_release_id))
-		panic($local_test_environment->serve and ($retained_cdn_runtime_artifact->store_path == ""), fmt.printf("serving retained release %s requires cdn_runtime store_path", $retained_release_id))
-		panic($local_test_environment->serve and ($retained_dolt_service_artifact->store_path == ""), fmt.printf("serving retained release %s requires dolt_service store_path", $retained_release_id))
-
-		include fishy_admission.retained_cdn_root(struct {
-			requires_serving_artifacts => $local_test_environment->serve,
-			cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
-			retained_release_id => $retained_release_id,
-			retained_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
-		})
-
-		include fishy_release.candidate(struct {
+for $index, $environment_name in map.keys($environments) {
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $environments[$environment_name]
+	if $environment->enabled {
+		include fishy_environment.single_host(struct {
 			mode => $mode,
-			release_id => $retained_release_id,
-			release_identity => $retained_release_identity,
-			generation => $retained_release->generation,
-			git_rev => $retained_release->git_rev,
-			dolt_commit => $retained_release->dolt_commit,
-			closures => $retained_release->closures,
+			cluster => $cluster,
+			desired_generation => $generation,
+			environment_name => $environment_name,
+			environment => $environment,
+			host => $hosts[$environment->host] || $empty_host,
+			releases => $releases,
 		})
 	}
-
-	panic($local_test_environment->serve and ($active_api_artifact->store_path == ""), "serving active release requires api store_path")
-	panic($local_test_environment->serve and ($active_site_artifact->store_path == ""), "serving active release requires site store_path")
-	panic($local_test_environment->serve and ($active_cdn_runtime_artifact->store_path == ""), "serving active release requires cdn_runtime store_path")
-	panic($local_test_environment->serve and ($active_dolt_service_artifact->store_path == ""), "serving active release requires dolt_service store_path")
-
-	include fishy_instance.candidate(struct {
-		mode => $mode,
-		cluster => $cluster,
-		desired_generation => $generation,
-		environment => "local-test",
-		host_name => $vm_single_host->hostname,
-		release_id => $local_test_environment->active_release,
-		release_identity => $active_release_identity,
-		release_generation => $active_release->generation,
-		closures => $active_release->closures,
-		dolt_repository => $active_dolt->repository,
-		dolt_commit => $active_dolt->commit,
-		dolt_branch_context => $active_dolt->branch_context,
-		dolt_mode => $active_dolt->mode,
-		retained_release_ids_json => $retained_release_ids_json,
-		serve => $local_test_environment->serve,
-	})
-
-	include fishy_admission.fixture(struct {
-		mode => $mode,
-		environment => "local-test",
-		host => $vm_single_host->hostname,
-		release_id => $local_test_environment->active_release,
-		release_identity => $active_release_identity,
-		site_content => $active_site_artifact->store_path,
-		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
-		requires_serving_artifacts => $local_test_environment->serve,
-		retained_release_count => len($retained_releases),
-		state => $admission_state,
-	})
-
-	include fishy_activation.active(struct {
-		mode => $mode,
-		desired_generation => $generation,
-		environment => "local-test",
-		host => $vm_single_host->hostname,
-		release_id => $local_test_environment->active_release,
-		release_identity => $active_release_identity,
-		instance_name => $instance_name,
-		site_content => $active_site_artifact->store_path,
-		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
-		retained_release_ids_json => $retained_release_ids_json,
-		admission_state => $admission_state,
-		served => $served,
-	})
-
-	include fishy_route.local(struct {
-		mode => $mode,
-		desired_generation => $generation,
-		environment => "local-test",
-		host => $vm_single_host->hostname,
-		release_id => $local_test_environment->active_release,
-		release_identity => $active_release_identity,
-		served => $served,
-	})
-
-	include fishy_status.publish(struct {
-		mode => $mode,
-		desired_generation => $generation,
-		environment => "local-test",
-		host => $vm_single_host->hostname,
-		release_id => $local_test_environment->active_release,
-		release_identity => $active_release_identity,
-		phase => if $served { "served" } else { "candidate" },
-		admission_state => $admission_state,
-		retained_release_ids_json => $retained_release_ids_json,
-		served => $served,
-		failure_reason => if $admission_failed { "admission_failed" } else { "" },
-	})
-}
-
-if $beta_environment->enabled {
-	$admission_state = "not_run"
-	$served = false
-
-	panic($mode != "validate", "beta fixture is validation-only in this milestone")
-	panic($beta_environment->host != "beta-single-host", "beta environment currently expects beta-single-host")
-	panic(not $beta_single_host->enabled, "beta environment references a disabled host")
-	panic($beta_environment->active_release == "", "beta environment requires active_release")
-	panic($active_release->generation == 0, "beta environment references an unknown release")
-	panic($beta_environment->serve, "beta fixture must not request serving")
-
-	include fishy_instance.candidate(struct {
-		mode => $mode,
-		cluster => $cluster,
-		desired_generation => $generation,
-		environment => "beta",
-		host_name => $beta_single_host->hostname,
-		release_id => $beta_environment->active_release,
-		release_identity => $active_release_identity,
-		release_generation => $active_release->generation,
-		closures => $active_release->closures,
-		dolt_repository => $active_dolt->repository,
-		dolt_commit => $active_dolt->commit,
-		dolt_branch_context => $active_dolt->branch_context,
-		dolt_mode => $active_dolt->mode,
-		serve => false,
-	})
-
-	include fishy_admission.fixture(struct {
-		mode => $mode,
-		environment => "beta",
-		host => $beta_single_host->hostname,
-		release_id => $beta_environment->active_release,
-		release_identity => $active_release_identity,
-		state => $admission_state,
-	})
-
-	include fishy_status.publish(struct {
-		mode => $mode,
-		desired_generation => $generation,
-		environment => "beta",
-		host => $beta_single_host->hostname,
-		release_id => $beta_environment->active_release,
-		release_identity => $active_release_identity,
-		phase => "candidate",
-		admission_state => $admission_state,
-		served => $served,
-		failure_reason => "",
-	})
 }

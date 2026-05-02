@@ -22,6 +22,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
+      virtualisation.memorySize = 2048;
       virtualisation.additionalPaths = [
         desiredState
         apiArtifact

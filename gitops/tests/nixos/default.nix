@@ -13,6 +13,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-multi-environment-candidates-vm = import ./multi-environment-candidates.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-closure-roots-vm = import ./closure-roots.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

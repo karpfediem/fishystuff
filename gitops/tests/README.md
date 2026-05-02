@@ -5,6 +5,7 @@ Local checks:
 ```bash
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
+nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
@@ -33,6 +34,7 @@ Recipe wrappers:
 ```bash
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
+just gitops-vm-test multi-environment-candidates
 just gitops-vm-test closure-roots
 just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
@@ -61,6 +63,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 - `/run/fishystuff/gitops-test`
 
 `gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
+
+`gitops-multi-environment-candidates-vm` boots a local NixOS VM with two enabled arbitrary single-host environments. It checks that each environment publishes its own candidate, admission, and status documents while no active route or served symlinks are created.
 
 `gitops-served-closure-roots-vm` boots a local NixOS VM with `serve: true` in `vm-test-closures` mode. It checks all active and retained rollback release artifacts are rooted under `/var/lib/fishystuff/gitops-test/gcroots`, then checks the selected active symlinks and route document.
 
@@ -103,3 +107,5 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-wrong-cdn-retained-root-refusal` boots a local NixOS VM and checks the exact-retention path: a serving desired state still fails before activation when the selected CDN serving manifest retains a different CDN root than the one required by the retained release.
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
+
+GitOps VM tests set `virtualisation.memorySize = 2048` because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph.

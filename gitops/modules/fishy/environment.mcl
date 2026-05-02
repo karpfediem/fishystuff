@@ -1,0 +1,205 @@
+import "fmt"
+
+import "activation.mcl" as fishy_activation
+import "admission.mcl" as fishy_admission
+import "instance.mcl" as fishy_instance
+import "json.mcl" as fishy_json
+import "route.mcl" as fishy_route
+import "status.mcl" as fishy_status
+
+class single_host($st) {
+	$mode str = $st->mode || "validate"
+	$cluster str = $st->cluster || "local-test"
+	$desired_generation int = $st->desired_generation || 0
+	$environment_name str = $st->environment_name
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $st->environment
+	$host struct{enabled bool; role str; hostname str} = $st->host
+	$releases map{str: struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	}} = $st->releases
+	$empty_list []str = []
+	$empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
+	$empty_dolt struct{repository str; commit str; branch_context str; mode str} = struct {
+		repository => "",
+		commit => "",
+		branch_context => "",
+		mode => "",
+	}
+	$empty_release struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	} = struct {
+		generation => 0,
+		git_rev => "",
+		dolt_commit => "",
+		closures => $empty_closures,
+		dolt => $empty_dolt,
+	}
+	$empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
+		enabled => false,
+		store_path => "",
+		gcroot_path => "",
+	}
+	$active_release_id str = $environment->active_release
+	$active_release struct{
+		generation int;
+		git_rev str;
+		dolt_commit str;
+		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+		dolt struct{repository str; commit str; branch_context str; mode str}
+	} = if $active_release_id != "" { $releases[$active_release_id] || $empty_release } else { $empty_release }
+	$active_dolt struct{repository str; commit str; branch_context str; mode str} = $active_release->dolt || $empty_dolt
+	$active_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["api"] || $empty_artifact
+	$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
+	$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact
+	$active_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["dolt_service"] || $empty_artifact
+	$active_release_identity str = if $active_release->generation == 0 {
+		""
+	} else {
+		fmt.printf(
+			"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
+			$active_release_id,
+			$active_release->generation,
+			$active_release->git_rev,
+			$active_release->dolt_commit,
+			$active_dolt->repository,
+			$active_dolt->branch_context,
+			$active_dolt->mode,
+			$active_api_artifact->store_path,
+			$active_site_artifact->store_path,
+			$active_cdn_runtime_artifact->store_path,
+			$active_dolt_service_artifact->store_path
+		)
+	}
+	$requested_admission_fixture_state str = $environment->admission_fixture_state || ""
+	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
+	$admission_state = if $requested_admission_fixture_state != "" { $requested_admission_fixture_state } else { $default_admission_state }
+	$admission_failed = $admission_state == "failed_fixture"
+	$served = $environment->serve and ($admission_state == "passed_fixture")
+	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
+	$retained_releases []str = $environment->retained_releases || $empty_list
+	$retained_release_ids_json = fishy_json.string_list($retained_releases)
+
+	panic($environment_name == "", "environment requires a name")
+	panic($desired_generation == 0, fmt.printf("environment %s requires desired_generation", $environment_name))
+	panic($environment->strategy != "single_active", fmt.printf("environment %s requires single_active strategy", $environment_name))
+	panic(($requested_admission_fixture_state != "") and (($mode != "vm-test") and ($mode != "vm-test-closures")), fmt.printf("environment %s admission_fixture_state is only supported in vm-test modes", $environment_name))
+	panic(($admission_state != "not_run") and ($admission_state != "passed_fixture") and ($admission_state != "failed_fixture"), fmt.printf("environment %s has unsupported admission state", $environment_name))
+	panic($environment->host == "", fmt.printf("environment %s requires host", $environment_name))
+	panic(not $host->enabled, fmt.printf("environment %s references a disabled or unknown host %s", $environment_name, $environment->host))
+	panic($host->hostname == "", fmt.printf("environment %s host %s requires hostname", $environment_name, $environment->host))
+	panic($active_release_id == "", fmt.printf("environment %s requires active_release", $environment_name))
+	panic($active_release->generation == 0, fmt.printf("environment %s references an unknown release %s", $environment_name, $active_release_id))
+	panic($environment->serve and ($admission_state != "passed_fixture"), fmt.printf("environment %s serving requires passed admission", $environment_name))
+	panic($environment->serve and (len($retained_releases) == 0), fmt.printf("environment %s serving requires at least one retained rollback release", $environment_name))
+	panic($environment->serve and ($active_api_artifact->store_path == ""), fmt.printf("environment %s serving active release requires api store_path", $environment_name))
+	panic($environment->serve and ($active_site_artifact->store_path == ""), fmt.printf("environment %s serving active release requires site store_path", $environment_name))
+	panic($environment->serve and ($active_cdn_runtime_artifact->store_path == ""), fmt.printf("environment %s serving active release requires cdn_runtime store_path", $environment_name))
+	panic($environment->serve and ($active_dolt_service_artifact->store_path == ""), fmt.printf("environment %s serving active release requires dolt_service store_path", $environment_name))
+
+	for $index, $retained_release_id in $retained_releases {
+		$retained_release struct{
+			generation int;
+			git_rev str;
+			dolt_commit str;
+			closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
+			dolt struct{repository str; commit str; branch_context str; mode str}
+		} = $releases[$retained_release_id] || $empty_release
+		$retained_dolt struct{repository str; commit str; branch_context str; mode str} = $retained_release->dolt || $empty_dolt
+		$retained_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["api"] || $empty_artifact
+		$retained_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["site"] || $empty_artifact
+		$retained_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["cdn_runtime"] || $empty_artifact
+		$retained_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["dolt_service"] || $empty_artifact
+
+		panic($retained_release->generation == 0, fmt.printf("environment %s retained release %s is missing from releases", $environment_name, $retained_release_id))
+		panic($retained_release->dolt_commit != $retained_dolt->commit, fmt.printf("environment %s retained release %s dolt_commit must match dolt.commit", $environment_name, $retained_release_id))
+		panic($environment->serve and ($retained_api_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires api store_path", $environment_name, $retained_release_id))
+		panic($environment->serve and ($retained_site_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires site store_path", $environment_name, $retained_release_id))
+		panic($environment->serve and ($retained_cdn_runtime_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires cdn_runtime store_path", $environment_name, $retained_release_id))
+		panic($environment->serve and ($retained_dolt_service_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires dolt_service store_path", $environment_name, $retained_release_id))
+
+		include fishy_admission.retained_cdn_root(struct {
+			requires_serving_artifacts => $environment->serve,
+			cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+			retained_release_id => $retained_release_id,
+			retained_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
+		})
+	}
+
+	include fishy_instance.candidate(struct {
+		mode => $mode,
+		cluster => $cluster,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host_name => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		release_generation => $active_release->generation,
+		closures => $active_release->closures,
+		dolt_repository => $active_dolt->repository,
+		dolt_commit => $active_dolt->commit,
+		dolt_branch_context => $active_dolt->branch_context,
+		dolt_mode => $active_dolt->mode,
+		retained_release_ids_json => $retained_release_ids_json,
+		serve => $environment->serve,
+	})
+
+	include fishy_admission.fixture(struct {
+		mode => $mode,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		site_content => $active_site_artifact->store_path,
+		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+		requires_serving_artifacts => $environment->serve,
+		retained_release_count => len($retained_releases),
+		state => $admission_state,
+	})
+
+	include fishy_activation.active(struct {
+		mode => $mode,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		instance_name => $instance_name,
+		site_content => $active_site_artifact->store_path,
+		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+		retained_release_ids_json => $retained_release_ids_json,
+		admission_state => $admission_state,
+		served => $served,
+	})
+
+	include fishy_route.local(struct {
+		mode => $mode,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		served => $served,
+	})
+
+	include fishy_status.publish(struct {
+		mode => $mode,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		phase => if $served { "served" } else { "candidate" },
+		admission_state => $admission_state,
+		retained_release_ids_json => $retained_release_ids_json,
+		served => $served,
+		failure_reason => if $admission_failed { "admission_failed" } else { "" },
+	})
+}

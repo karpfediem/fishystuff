@@ -22,6 +22,7 @@ just gitops-unify
 just gitops-unify auto gitops/fixtures/beta-single-host.example.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
+just gitops-vm-test multi-environment-candidates
 just gitops-vm-test closure-roots
 just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
@@ -47,6 +48,7 @@ The flake checks added by this milestone are:
 ```bash
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
+nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
@@ -167,7 +169,7 @@ Supported modes:
 
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
-The first milestone intentionally recognizes only one enabled environment at a time, currently the `local-test` or `beta` single-host environments used by the fixtures and generated validation state. The active release is selected by that environment's `active_release` key; the checked-in fixtures still use `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. General multi-environment traversal should be added with more mgmt language coverage and VM tests.
+`main.mcl` traverses the desired-state `environments` map generically. Every enabled environment must use the `single_active` strategy, name an enabled host, and select a release by key. The checked-in fixtures still use readable names such as `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. This milestone supports generic single-host environments; richer placement strategies should be new modules with their own VM tests.
 
 ## Graph Shape
 
@@ -212,9 +214,11 @@ This graph does not import Hetzner, Cloudflare, or SSH providers. It does not ca
 
 `gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `vm-test-closures` and future `local-apply` mode. In `validate` and plain `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
 
-The VM runtime test binds mgmt's embedded etcd to `127.0.0.1` inside the test VM. It does not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
+The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM and set `virtualisation.memorySize = 2048` for enough headroom with the pinned mgmt build. They do not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
 
 `gitops-closure-roots-vm` generates desired state from tiny real Nix store artifacts inside the test derivation. It proves closure verification and gcroot creation without using fake enabled store paths or serving anything.
+
+`gitops-multi-environment-candidates-vm` boots one local NixOS VM with two enabled preview-like single-host environments. It proves `main.mcl` traverses arbitrary enabled environment keys, publishes separate candidate/admission/status files for each, and does not create served state when both environments are non-serving candidates.
 
 `gitops-served-closure-roots-vm` combines the served candidate shape with `vm-test-closures`. It verifies and roots active and retained rollback API, Dolt service, site, and CDN artifacts under `/var/lib/fishystuff/gitops-test/gcroots`, then checks the VM-local active symlinks and route selection. It still does not write `/srv/fishystuff` or start real FishyStuff services.
 
