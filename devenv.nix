@@ -74,7 +74,6 @@ in {
       gawk
       hyperfine
       jq
-      lightningcss
       libX11
       libXcursor
       libXext

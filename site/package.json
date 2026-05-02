@@ -30,7 +30,7 @@
     "otel:build": "bun run ./scripts/build-otel.mjs",
     "assets:finalize": "bun run ./scripts/finalize-assets.mjs",
     "tailwind:scan": "bun run ./scripts/write-tailwind-scan.mjs",
-    "tailwind:build": "bun run icons:build && bun run tailwind:scan && bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css",
+    "tailwind:build": "bun run icons:build && bun run tailwind:scan && bun --bun ./node_modules/@tailwindcss/cli/dist/index.mjs -i tailwind.input.css -o assets/css/site.css",
     "pre-build": "bun run content-shells:build && bun run i18n:build && bun run datastar:build && bun run d3:build && bun run otel:build && bun run images:build && bun run tailwind:build && bun run embed:build",
     "build": "bash ./scripts/build-public-release.sh"
   }

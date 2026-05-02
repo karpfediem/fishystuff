@@ -463,7 +463,6 @@
             nativeBuildInputs = [
               pkgs.bun
               pkgs.esbuild
-              pkgs.lightningcss
               pkgs.nodejs
               pkgs.writableTmpDirAsHomeHook
             ];

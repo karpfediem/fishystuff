@@ -6,7 +6,6 @@
   chromium,
   esbuild,
   imagemagick,
-  lightningcss,
   nodejs,
   python3Packages,
   siteSrc,
@@ -85,7 +84,6 @@ stdenvNoCC.mkDerivation {
     chromium
     esbuild
     imagemagick
-    lightningcss
     nodejs
     python3Packages.fonttools
     writableTmpDirAsHomeHook

@@ -391,11 +391,11 @@ async function buildCssAsset(rootDir, _tempDir, relativePath) {
     relativePath,
   );
   await mkdir(path.dirname(path.join(rootDir, tempRelativePath)), { recursive: true });
-  await runCommand("lightningcss", [
+  await runCommand("esbuild", [
     relativePath,
     "--minify",
-    "--output-file",
-    tempRelativePath,
+    "--legal-comments=none",
+    `--outfile=${tempRelativePath}`,
   ], { cwd: rootDir });
   const minifiedBuffer = await readFile(path.join(rootDir, tempRelativePath));
   const tempMapRelativePath = path.posix.join(
@@ -404,12 +404,12 @@ async function buildCssAsset(rootDir, _tempDir, relativePath) {
     relativePath,
   );
   await mkdir(path.dirname(path.join(rootDir, tempMapRelativePath)), { recursive: true });
-  await runCommand("lightningcss", [
+  await runCommand("esbuild", [
     relativePath,
     "--minify",
-    "--sourcemap",
-    "--output-file",
-    tempMapRelativePath,
+    "--legal-comments=none",
+    "--sourcemap=external",
+    `--outfile=${tempMapRelativePath}`,
   ], { cwd: rootDir });
   const sourceMapBuffer = await readFile(path.join(rootDir, `${tempMapRelativePath}.map`));
   const sourceMapHash = contentHash(sourceMapBuffer);

@@ -151,7 +151,24 @@ test("finalizeAssets minifies, hashes, writes source maps, and rewrites HTML", a
     await writeFile(path.join(root, "runtime-config.js"), "window.__runtime = {};\n", "utf8");
     await mkdir(path.join(root, "css"), { recursive: true });
     await mkdir(path.join(root, "js"), { recursive: true });
-    await writeFile(path.join(root, "css", "app.css"), ".example { color: red; }\n", "utf8");
+    await writeFile(
+      path.join(root, "css", "app.css"),
+      `
+.example {
+  color: red;
+}
+.nested-component {
+  display: inline-flex;
+  @supports (color: color-mix(in lab, red, red)) {
+    color: color-mix(in srgb, red 50%, blue);
+  }
+  &:hover {
+    color: blue;
+  }
+}
+`,
+      "utf8",
+    );
     await writeFile(
       path.join(root, "js", "dep.js"),
       "export const message = 'hello from dependency';\n",
@@ -192,6 +209,9 @@ test("finalizeAssets minifies, hashes, writes source maps, and rewrites HTML", a
       new RegExp(`sourceMappingURL=${escapeRegExp(path.posix.basename(scriptAsset.sourceMapUrl))}`),
     );
     const css = await readFile(path.join(root, styleAsset.url.slice(1)), "utf8");
+    assert.match(css, /display:inline-flex;/);
+    assert.doesNotMatch(css, /display:inline-flex@supports/);
+    assert.doesNotMatch(css, /display:inline-flex&/);
     assert.match(
       css,
       new RegExp(`sourceMappingURL=${escapeRegExp(path.posix.basename(styleAsset.sourceMapUrl))}`),
