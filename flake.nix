@@ -102,11 +102,26 @@
             cargoExtraArgs = "-p fishystuff_server";
           };
           deploymentToolsCargoSrc = craneLib.cleanCargoSource ./.;
-          fishystuffDeploy = craneLib.buildPackage {
+          fishystuffDeployCargoArtifacts = craneLib.buildDepsOnly {
             pname = "fishystuff_deploy";
             version = "0.1.0";
             src = deploymentToolsCargoSrc;
             cargoExtraArgs = "-p fishystuff_deploy";
+          };
+          fishystuffDeploy = craneLib.buildPackage {
+            pname = "fishystuff_deploy";
+            version = "0.1.0";
+            src = deploymentToolsCargoSrc;
+            cargoArtifacts = fishystuffDeployCargoArtifacts;
+            cargoExtraArgs = "-p fishystuff_deploy";
+          };
+          fishystuffDeployTests = craneLib.cargoTest {
+            pname = "fishystuff_deploy-tests";
+            version = "0.1.0";
+            src = deploymentToolsCargoSrc;
+            cargoArtifacts = fishystuffDeployCargoArtifacts;
+            cargoExtraArgs = "-p fishystuff_deploy";
+            nativeBuildInputs = [ pkgs.dolt ];
           };
 
           apiConfig = pkgs.callPackage ./nix/packages/api-config.nix { };
@@ -568,6 +583,7 @@
             // {
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               cdn-required-files = cdnRequiredFilesCheck;
+              fishystuff-deploy-tests = fishystuffDeployTests;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               gitops-desired-state-serve-without-retained-refusal = gitopsDesiredStateServeWithoutRetainedCheck;
               gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;

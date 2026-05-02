@@ -1,8 +1,18 @@
 # GitOps Tests
 
-Local checks:
+Fast local checks:
 
 ```bash
+just gitops-helper-test
+cargo test -p fishystuff_deploy
+```
+
+These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM.
+
+Flake checks:
+
+```bash
+nix build .#checks.x86_64-linux.fishystuff-deploy-tests
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-dolt-fetch-pin-vm
@@ -38,6 +48,7 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 Recipe wrappers:
 
 ```bash
+just gitops-helper-test
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test dolt-fetch-pin

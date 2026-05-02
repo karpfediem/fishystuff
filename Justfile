@@ -73,6 +73,10 @@ mgmt-resident-bootstrap-unify mgmt_bin="../result/bin/mgmt":
 gitops-unify mgmt_bin="auto" state_file="gitops/fixtures/empty.desired.json":
   bash scripts/recipes/gitops-unify.sh "{{mgmt_bin}}" "{{state_file}}"
 
+# Run fast host-local GitOps deployment helper tests. No NixOS VM.
+gitops-helper-test:
+  cargo test -p fishystuff_deploy
+
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
   bash scripts/recipes/gitops-vm-test.sh "{{test_name}}"

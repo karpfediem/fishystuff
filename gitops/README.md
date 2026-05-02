@@ -51,6 +51,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 The flake checks added by this milestone are:
 
 ```bash
+nix build .#checks.x86_64-linux.fishystuff-deploy-tests
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-dolt-fetch-pin-vm
