@@ -42,6 +42,7 @@ class candidate($st) {
 	include catalog_entry($st)
 
 	include fishy_dolt.release_metadata(struct {
+		mode => $mode,
 		release_id => $release_id,
 		release_identity => $release_identity,
 		repository => $dolt->repository,

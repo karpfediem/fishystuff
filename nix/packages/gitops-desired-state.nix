@@ -146,6 +146,12 @@ assert lib.assertMsg (
   doltMaterialization != "fetch_pin" || doltRemoteUrl != ""
 ) "fetch_pin dolt materialization requires doltRemoteUrl";
 assert lib.assertMsg (
+  mode == "validate" || doltMaterialization != "replica_pin"
+) "replica_pin dolt materialization is validate-only until implemented";
+assert lib.assertMsg (
+  mode == "validate" || doltMaterialization != "snapshot"
+) "snapshot dolt materialization is validate-only until implemented";
+assert lib.assertMsg (
   admissionProbe == null || builtins.isAttrs admissionProbe
 ) "gitops admissionProbe must be an attribute set";
 assert lib.assertMsg (
@@ -178,6 +184,12 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   lib.all (release: (release.doltMode or doltMode) == "read_only") retainedReleaseObjects
 ) "gitops retained release objects require doltMode = read_only";
+assert lib.assertMsg (
+  lib.all (release: mode == "validate" || (release.doltMaterialization or doltMaterialization) != "replica_pin") retainedReleaseObjects
+) "gitops retained release objects cannot use replica_pin outside validate mode";
+assert lib.assertMsg (
+  lib.all (release: mode == "validate" || (release.doltMaterialization or doltMaterialization) != "snapshot") retainedReleaseObjects
+) "gitops retained release objects cannot use snapshot outside validate mode";
 assert lib.assertMsg (
   retainedReleases == [ ] || retainedReleases == map (release: release.releaseId) retainedReleaseObjects
 ) "gitops retainedReleases must match retainedReleaseObjects when both are provided";

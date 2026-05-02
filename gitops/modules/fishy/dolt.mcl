@@ -4,6 +4,7 @@ import "strings" as core_strings
 import "json.mcl" as fishy_json
 
 class release_metadata($st) {
+	$mode str = $st->mode || "validate"
 	$release_id str = $st->release_id
 	$release_identity str = $st->release_identity || ""
 	$repository str = $st->repository || ""
@@ -23,6 +24,8 @@ class release_metadata($st) {
 	panic($access_mode != "read_only", fmt.printf("release %s dolt metadata requires read_only mode", $release_id))
 	panic(($materialization != "metadata_only") and ($materialization != "fetch_pin") and ($materialization != "replica_pin") and ($materialization != "snapshot"), fmt.printf("release %s has unsupported dolt materialization %s", $release_id, $materialization))
 	panic(($materialization == "fetch_pin") and ($remote_url == ""), fmt.printf("release %s fetch_pin dolt materialization requires remote_url", $release_id))
+	panic(($materialization == "replica_pin") and ($mode != "validate"), fmt.printf("release %s replica_pin dolt materialization is validate-only until implemented", $release_id))
+	panic(($materialization == "snapshot") and ($mode != "validate"), fmt.printf("release %s snapshot dolt materialization is validate-only until implemented", $release_id))
 }
 
 class materialization($st) {
@@ -53,6 +56,7 @@ class materialization($st) {
 	$ifcmd = fmt.printf("%s dolt needs-fetch-pin --request '%s' --status '%s' --dolt-bin /run/current-system/sw/bin/dolt", $helper_bin, $request_path, $status_path)
 
 	include release_metadata(struct {
+		mode => $mode,
 		release_id => $release_id,
 		release_identity => $release_identity,
 		repository => $repository,
@@ -72,6 +76,8 @@ class materialization($st) {
 	panic(($materialization == "fetch_pin") and ($cache_dir == ""), fmt.printf("release %s fetch_pin dolt materialization requires cache_dir", $release_id))
 	panic(($materialization == "fetch_pin") and ($release_ref == ""), fmt.printf("release %s fetch_pin dolt materialization requires release_ref", $release_id))
 	panic(($materialization == "fetch_pin") and ($mode != "validate") and (not $write_vm_state), "fetch_pin dolt materialization is implemented only for validate and VM test modes")
+	panic(($materialization == "replica_pin") and ($mode != "validate"), fmt.printf("release %s replica_pin dolt materialization is validate-only until implemented", $release_id))
+	panic(($materialization == "snapshot") and ($mode != "validate"), fmt.printf("release %s snapshot dolt materialization is validate-only until implemented", $release_id))
 
 	if $write_vm_state and ($materialization == "fetch_pin") {
 		file "${request_dir}/" {
