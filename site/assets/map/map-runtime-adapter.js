@@ -18,6 +18,19 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function finiteActionCoordinate(value) {
+  if (value == null || (typeof value === "string" && !value.trim())) {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeActionHistoryBehavior(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "navigate" ? "navigate" : "append";
+}
+
 function normalizeStringList(values) {
   if (!Array.isArray(values)) {
     return [];
@@ -178,8 +191,8 @@ function normalizeBridgedUi(signals) {
 export function normalizeMapActionState(raw) {
   const source = isPlainObject(raw) ? raw : {};
   const focusWorldPoint = isPlainObject(source.focusWorldPoint) ? source.focusWorldPoint : null;
-  const focusWorldPointWorldX = Number(focusWorldPoint?.worldX);
-  const focusWorldPointWorldZ = Number(focusWorldPoint?.worldZ);
+  const focusWorldPointWorldX = finiteActionCoordinate(focusWorldPoint?.worldX);
+  const focusWorldPointWorldZ = finiteActionCoordinate(focusWorldPoint?.worldZ);
   return {
     resetViewToken: Number.isFinite(Number(source.resetViewToken))
       ? Number(source.resetViewToken)
@@ -198,17 +211,21 @@ export function normalizeMapActionState(raw) {
       : 0,
     focusWorldPoint:
       focusWorldPoint &&
-      Number.isFinite(focusWorldPointWorldX) &&
-      Number.isFinite(focusWorldPointWorldZ)
+      focusWorldPointWorldX != null &&
+      focusWorldPointWorldZ != null
         ? {
             worldX: focusWorldPointWorldX,
             worldZ: focusWorldPointWorldZ,
+            ...(typeof focusWorldPoint.elementKind === "string" && focusWorldPoint.elementKind.trim()
+              ? { elementKind: focusWorldPoint.elementKind.trim() }
+              : {}),
             ...(typeof focusWorldPoint.pointKind === "string" && focusWorldPoint.pointKind.trim()
               ? { pointKind: focusWorldPoint.pointKind.trim() }
               : {}),
             ...(typeof focusWorldPoint.pointLabel === "string" && focusWorldPoint.pointLabel.trim()
               ? { pointLabel: focusWorldPoint.pointLabel.trim() }
               : {}),
+            historyBehavior: normalizeActionHistoryBehavior(focusWorldPoint.historyBehavior),
           }
         : null,
   };

@@ -78,10 +78,12 @@ pub(in crate::bridge::host) fn apply_browser_commands(
                 &mut selection,
                 &mut pending,
                 &mut pending_selection_details,
+                world_point.element_kind.as_deref(),
                 world_point.world_x,
                 world_point.world_z,
                 world_point.point_kind,
                 world_point.point_label.as_deref(),
+                world_point.history_behavior,
             );
         }
     }

@@ -130,6 +130,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
             snapshot_changed |= replace_if_changed(
                 &mut snapshot.selection,
                 effective_selection_snapshot(
+                    context.selection.details_generation,
+                    context.selection.details_target.as_ref(),
                     context.selection.info.as_ref(),
                     context.selection.zone_stats.as_ref(),
                 ),

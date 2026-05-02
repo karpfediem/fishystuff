@@ -68,9 +68,32 @@ function pointKindStatusText(pointKind, pointLabel) {
   }
 }
 
+function selectionDetailsTarget(selection) {
+  return isPlainObject(selection?.detailsTarget) ? selection.detailsTarget : null;
+}
+
+function selectionTargetElementKind(selection) {
+  return trimString(selectionDetailsTarget(selection)?.elementKind).toLowerCase();
+}
+
+function selectionTargetPointLabel(selection) {
+  return trimString(selectionDetailsTarget(selection)?.pointLabel);
+}
+
 function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers) {
+  const elementKind = selectionTargetElementKind(selection);
+  const targetPointLabel = selectionTargetPointLabel(selection);
+  if (elementKind === "bookmark" || elementKind === "waypoint" || elementKind === "npc") {
+    if (targetPointLabel) {
+      return targetPointLabel;
+    }
+    return elementKind === "bookmark"
+      ? mapText("info.status.bookmark")
+      : mapText("info.status.waypoint");
+  }
   const pointLabel = trimString(selection?.pointLabel);
-  if (pointLabel) {
+  const pointKind = normalizePointKind(selection?.pointKind);
+  if ((pointKind === "bookmark" || pointKind === "waypoint") && pointLabel) {
     return pointLabel;
   }
   const preferred = preferredOverviewRow(layerSamples, {
@@ -79,6 +102,9 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
   });
   if (preferred?.value) {
     return preferred.value;
+  }
+  if (pointLabel) {
+    return pointLabel;
   }
   return mapText("info.window_title");
 }
@@ -609,6 +635,7 @@ export function buildInfoViewModel(
       ? requestedPaneId
       : panes[0]?.id || "";
   const pointKind = normalizePointKind(selection?.pointKind);
+  const targetPointLabel = selectionTargetPointLabel(selection);
   const overviewRows = buildOverviewRowsForLayerSamples(layerSamples, {
     zoneCatalog,
     runtimeLayers,
@@ -618,7 +645,7 @@ export function buildInfoViewModel(
       title: titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers),
       titleIcon: INFO_WINDOW_TITLE_ICON,
       statusIcon: INFO_WINDOW_STATUS_ICON,
-      statusText: pointKindStatusText(pointKind, selection?.pointLabel),
+      statusText: pointKindStatusText(pointKind, targetPointLabel || selection?.pointLabel),
       pointKind,
       overviewRows,
     },

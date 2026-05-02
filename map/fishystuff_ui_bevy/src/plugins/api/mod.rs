@@ -18,11 +18,11 @@ pub use requests::{
     pick_map_version, spawn_zone_stats_request,
 };
 pub use state::{
-    ApiBootstrapState, CommunityFishZoneSupportIndex, FishCatalog, FishEntry, FishFilterState,
-    HoverInfo, HoverState, LayerEffectiveFilterState, LayerFilterBindingOverrideState,
-    MapDisplayState, Patch, PatchFilterState, PendingRequests, PointSampleSummary,
-    SearchExpressionState, SelectedInfo, SelectionState, SemanticFieldFilterState,
-    ZoneMembershipFilter, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    ApiBootstrapState, CommunityFishZoneSupportIndex, DetailsSelectionTarget, FishCatalog,
+    FishEntry, FishFilterState, HoverInfo, HoverState, LayerEffectiveFilterState,
+    LayerFilterBindingOverrideState, MapDisplayState, Patch, PatchFilterState, PendingRequests,
+    PointSampleSummary, SearchExpressionState, SelectedInfo, SelectionState,
+    SemanticFieldFilterState, ZoneMembershipFilter, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 
 pub struct ApiPlugin;

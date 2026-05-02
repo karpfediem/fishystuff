@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { installMapTestI18n } from "./test-i18n.js";
 
 import {
+  buildFocusBookmarkPatch,
   buildBookmarkPlacementSelectionResult,
   readMapBookmarkPanelShellSignals,
   registerFishyMapBookmarkPanelElement,
@@ -50,6 +51,41 @@ test("registerFishyMapBookmarkPanelElement defines the custom element once", () 
   assert.equal(registerFishyMapBookmarkPanelElement(registry), true);
   assert.equal(registry.definitions.size, 1);
   assert.ok(registry.get("fishymap-bookmark-panel"));
+});
+
+test("buildFocusBookmarkPatch selects bookmarks through the generic selected-element path", () => {
+  assert.deepEqual(
+    buildFocusBookmarkPatch(
+      { id: "bookmark-a", label: "Saved Hotspot", worldX: "12.5", worldZ: "-7.25" },
+      {
+        _map_actions: { focusWorldPointToken: 4 },
+        _map_session: { view: { viewMode: "2d", camera: { zoom: 768 } } },
+      },
+    ),
+    {
+      _map_actions: {
+        focusWorldPointToken: 5,
+        focusWorldPoint: {
+          elementKind: "bookmark",
+          worldX: 12.5,
+          worldZ: -7.25,
+          pointKind: "bookmark",
+          pointLabel: "Saved Hotspot",
+          historyBehavior: "append",
+        },
+      },
+      _map_session: {
+        view: {
+          viewMode: "2d",
+          camera: {
+            zoom: 768,
+            centerWorldX: 12.5,
+            centerWorldZ: -7.25,
+          },
+        },
+      },
+    },
+  );
 });
 
 test("buildBookmarkPlacementSelectionResult allows explicit clicked-point placement even for the current selection key", () => {

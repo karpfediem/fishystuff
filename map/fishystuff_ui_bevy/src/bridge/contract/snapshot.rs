@@ -22,6 +22,16 @@ pub enum FishyMapSelectionPointKind {
     Bookmark,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum FishyMapSelectionHistoryBehavior {
+    #[default]
+    #[serde(rename = "append")]
+    Append,
+    #[serde(rename = "navigate")]
+    Navigate,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapCameraSnapshot {
@@ -45,7 +55,20 @@ pub struct FishyMapViewSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+pub struct FishyMapDetailsTargetSnapshot {
+    pub element_kind: String,
+    pub world_x: f64,
+    pub world_z: f64,
+    pub point_kind: Option<FishyMapSelectionPointKind>,
+    pub point_label: Option<String>,
+    pub history_behavior: FishyMapSelectionHistoryBehavior,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct FishyMapSelectionSnapshot {
+    pub details_generation: u64,
+    pub details_target: Option<FishyMapDetailsTargetSnapshot>,
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
     pub point_kind: Option<FishyMapSelectionPointKind>,

@@ -2,8 +2,8 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::{
-    FishyMapCameraSnapshot, FishyMapHoverLayerSampleSnapshot, FishyMapPointSampleSnapshot,
-    FishyMapSelectionPointKind, FishyMapViewMode,
+    FishyMapCameraSnapshot, FishyMapDetailsTargetSnapshot, FishyMapHoverLayerSampleSnapshot,
+    FishyMapPointSampleSnapshot, FishyMapSelectionPointKind, FishyMapViewMode,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -24,6 +24,8 @@ pub enum FishyMapOutputEvent {
     },
     SelectionChanged {
         version: u8,
+        details_generation: u64,
+        details_target: Option<FishyMapDetailsTargetSnapshot>,
         world_x: Option<f64>,
         world_z: Option<f64>,
         point_kind: Option<FishyMapSelectionPointKind>,

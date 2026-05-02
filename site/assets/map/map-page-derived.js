@@ -7,8 +7,8 @@ import {
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
+import { buildFocusWorldPointSignalPatch } from "./map-selection-actions.js";
 import {
-  buildFocusWorldPointSignalPatch,
   loadTradeNpcMapCatalog,
   tradeNpcFocusTargetForSelectors,
 } from "./map-trade-summary.js";

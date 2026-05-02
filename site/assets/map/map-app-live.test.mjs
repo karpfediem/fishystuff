@@ -163,6 +163,40 @@ test("resolveBridgeSnapshot falls back to the current full snapshot when event s
   assert.deepEqual(resolveBridgeSnapshot({}, () => currentSnapshot), currentSnapshot);
 });
 
+test("resolveBridgeSnapshot replaces selection as an atomic selected-element branch", () => {
+  const resolved = resolveBridgeSnapshot(
+    {
+      state: {
+        selection: {
+          detailsGeneration: 2,
+          pointKind: "waypoint",
+          pointLabel: "Chunsu",
+          worldX: 300,
+          worldZ: 400,
+        },
+      },
+    },
+    () => ({
+      selection: {
+        detailsGeneration: 1,
+        pointKind: "clicked",
+        pointLabel: "Serendia Terrain",
+        worldX: 100,
+        worldZ: 200,
+        layerSamples: [{ label: "Serendia Terrain" }],
+      },
+    }),
+  );
+
+  assert.deepEqual(resolved.selection, {
+    detailsGeneration: 2,
+    pointKind: "waypoint",
+    pointLabel: "Chunsu",
+    worldX: 300,
+    worldZ: 400,
+  });
+});
+
 test("restore view helpers normalize signal patches and detect matching bridge snapshots", () => {
   const restorePatch = restoreViewPatchFromSignalPatch({
     _map_session: {

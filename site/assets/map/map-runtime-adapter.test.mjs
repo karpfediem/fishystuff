@@ -465,6 +465,18 @@ test("normalizeMapActionState defaults missing tokens to zero", () => {
     focusWorldPointToken: 0,
     focusWorldPoint: null,
   });
+  assert.equal(
+    normalizeMapActionState({
+      focusWorldPoint: {
+        elementKind: "",
+        worldX: null,
+        worldZ: "",
+        pointKind: "",
+        pointLabel: "",
+      },
+    }).focusWorldPoint,
+    null,
+  );
 });
 
 test("buildBridgeCommandPatchFromSignals emits selectWorldPoint on focus token increase", () => {
@@ -476,6 +488,7 @@ test("buildBridgeCommandPatchFromSignals emits selectWorldPoint on focus token i
           resetUiToken: 0,
           focusWorldPointToken: 2,
           focusWorldPoint: {
+            elementKind: "bookmark",
             worldX: 12,
             worldZ: 34,
             pointKind: "bookmark",
@@ -494,10 +507,12 @@ test("buildBridgeCommandPatchFromSignals emits selectWorldPoint on focus token i
       version: 1,
       commands: {
         selectWorldPoint: {
+          elementKind: "bookmark",
           worldX: 12,
           worldZ: 34,
           pointKind: "bookmark",
           pointLabel: "Cron",
+          historyBehavior: "append",
         },
       },
     },

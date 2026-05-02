@@ -14,7 +14,7 @@ use super::search::{
     deserialize_search_expression_field, deserialize_search_expression_state,
     normalize_fish_filter_terms, FishyMapSearchExpressionNode, FishyMapSharedFishState,
 };
-use super::snapshot::FishyMapSelectionPointKind;
+use super::snapshot::{FishyMapSelectionHistoryBehavior, FishyMapSelectionPointKind};
 use super::{
     default_contract_version, FishyMapViewSnapshot, FISHYMAP_CONTRACT_VERSION,
     FISHYMAP_POINT_ICON_SCALE_DEFAULT, FISHYMAP_POINT_ICON_SCALE_MAX,
@@ -282,10 +282,12 @@ pub struct FishyMapUiPatch {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapWorldPointCommand {
+    pub element_kind: Option<String>,
     pub world_x: f64,
     pub world_z: f64,
     pub point_kind: Option<FishyMapSelectionPointKind>,
     pub point_label: Option<String>,
+    pub history_behavior: Option<FishyMapSelectionHistoryBehavior>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

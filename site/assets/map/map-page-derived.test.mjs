@@ -190,10 +190,12 @@ test("buildQueryNpcFocusSignalPatch resolves pending NPC selectors into focus pa
     _map_actions: {
       focusWorldPointToken: 5,
       focusWorldPoint: {
+        elementKind: "npc",
         worldX: 10,
         worldZ: 20,
         pointKind: "waypoint",
         pointLabel: "Chunsu",
+        historyBehavior: "append",
       },
     },
     _map_session: {

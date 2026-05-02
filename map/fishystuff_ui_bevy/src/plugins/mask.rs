@@ -3,7 +3,7 @@ use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
-use crate::bridge::contract::FishyMapSelectionPointKind;
+use crate::bridge::contract::{FishyMapSelectionHistoryBehavior, FishyMapSelectionPointKind};
 use crate::map::camera::map2d::map2d_cursor_to_world;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::events::EventsSnapshotState;
@@ -60,6 +60,7 @@ pub(crate) struct PendingSelectionDetails {
 
 #[derive(Debug, Clone)]
 struct PendingSelectionDetailsRequest {
+    details_generation: u64,
     click_world_point: WorldPoint,
     selected_world_point: WorldPoint,
     waypoint_sample: Option<WaypointLayerInteractionSample>,
@@ -223,6 +224,13 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     else {
         return;
     };
+    let details_generation = context.selection.begin_details_selection(
+        "point",
+        Some(world_point),
+        Some(FishyMapSelectionPointKind::Clicked),
+        None,
+        FishyMapSelectionHistoryBehavior::Append,
+    );
     let quick_selected_info = quick_selected_info(world_point, None, context.hover.info.as_ref());
     apply_selection_without_zone_stats_request(
         &mut context.selection,
@@ -230,6 +238,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         quick_selected_info,
     );
     context.pending_selection_details.request = Some(PendingSelectionDetailsRequest {
+        details_generation,
         click_world_point: world_point,
         selected_world_point: world_point,
         waypoint_sample: None,
@@ -243,11 +252,13 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn queue_selection_details(
     pending_selection_details: &mut PendingSelectionDetails,
+    details_generation: u64,
     world_point: WorldPoint,
     point_kind: FishyMapSelectionPointKind,
     point_label: Option<String>,
 ) {
     pending_selection_details.request = Some(PendingSelectionDetailsRequest {
+        details_generation,
         click_world_point: world_point,
         selected_world_point: world_point,
         waypoint_sample: None,
@@ -269,6 +280,9 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
     }
     if selection_details_should_yield(&context) {
         context.pending_selection_details.request = Some(request);
+        return;
+    }
+    if request.details_generation != context.selection.details_generation {
         return;
     }
 
@@ -611,6 +625,12 @@ fn quick_selected_info(
         hover.filter(|hover_info| hover_matches_world_point(hover_info, world_point))
     {
         if let Some(mut selected_info) = selected_info_from_hover(hover_info) {
+            let (map_px, map_py) = map_pixel_for_world_point(world_point);
+            selected_info.map_px = map_px;
+            selected_info.map_py = map_py;
+            selected_info.world_x = world_point.x;
+            selected_info.world_z = world_point.z;
+            selected_info.sampled_world_point = true;
             selected_info.point_kind = Some(FishyMapSelectionPointKind::Clicked);
             return selected_info;
         }
@@ -869,8 +889,8 @@ mod tests {
         let hover = HoverInfo {
             map_px,
             map_py,
-            world_x: world_point.x,
-            world_z: world_point.z,
+            world_x: world_point.x + 1.0,
+            world_z: world_point.z + 1.0,
             layer_samples: vec![zone_sample(0x123456)],
             point_samples: Vec::new(),
         };

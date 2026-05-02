@@ -58,6 +58,13 @@ function mergeSnapshotBranch(baseValue, patchValue) {
   return baseValue === undefined ? undefined : cloneJson(baseValue);
 }
 
+function replaceSnapshotBranch(baseValue, patchValue) {
+  if (patchValue !== undefined) {
+    return cloneJson(patchValue);
+  }
+  return baseValue === undefined ? undefined : cloneJson(baseValue);
+}
+
 export function resolveBridgeSnapshot(eventDetail, readCurrentState) {
   const currentSnapshot =
     typeof readCurrentState === "function" ? readCurrentState() : createEmptySnapshot();
@@ -72,7 +79,7 @@ export function resolveBridgeSnapshot(eventDetail, readCurrentState) {
     theme: mergeSnapshotBranch(baseSnapshot.theme, patchSnapshot.theme),
     ui: mergeSnapshotBranch(baseSnapshot.ui, patchSnapshot.ui),
     view: mergeSnapshotBranch(baseSnapshot.view, patchSnapshot.view),
-    selection: mergeSnapshotBranch(baseSnapshot.selection, patchSnapshot.selection),
+    selection: replaceSnapshotBranch(baseSnapshot.selection, patchSnapshot.selection),
     hover: mergeSnapshotBranch(baseSnapshot.hover, patchSnapshot.hover),
     catalog: mergeSnapshotBranch(baseSnapshot.catalog, patchSnapshot.catalog),
     statuses: mergeSnapshotBranch(baseSnapshot.statuses, patchSnapshot.statuses),

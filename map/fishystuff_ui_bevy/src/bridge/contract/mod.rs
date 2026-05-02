@@ -22,11 +22,12 @@ pub use search::{
     FishyMapSearchProjection, FishyMapSearchTerm, FishyMapSharedFishState,
 };
 pub use snapshot::{
-    FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapEffectiveFiltersSnapshot,
-    FishyMapEffectiveSemanticFieldFilterSnapshot, FishyMapEffectiveZoneMembershipFilterSnapshot,
-    FishyMapFishSummary, FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot,
-    FishyMapLayerFilterBindingSummary, FishyMapLayerSummary, FishyMapPatchSummary,
-    FishyMapPointSampleSnapshot, FishyMapSelectionPointKind, FishyMapSelectionSnapshot,
+    FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapDetailsTargetSnapshot,
+    FishyMapEffectiveFiltersSnapshot, FishyMapEffectiveSemanticFieldFilterSnapshot,
+    FishyMapEffectiveZoneMembershipFilterSnapshot, FishyMapFishSummary,
+    FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot, FishyMapLayerFilterBindingSummary,
+    FishyMapLayerSummary, FishyMapPatchSummary, FishyMapPointSampleSnapshot,
+    FishyMapSelectionHistoryBehavior, FishyMapSelectionPointKind, FishyMapSelectionSnapshot,
     FishyMapSemanticTermSummary, FishyMapStateSnapshot, FishyMapStatusSnapshot,
     FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot,
     FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
@@ -547,6 +548,15 @@ mod tests {
     fn output_event_serializes_browser_facing_kebab_case_tag() {
         let json = serde_json::to_string(&FishyMapOutputEvent::SelectionChanged {
             version: 1,
+            details_generation: 7,
+            details_target: Some(FishyMapDetailsTargetSnapshot {
+                element_kind: "waypoint".to_string(),
+                world_x: 10.0,
+                world_z: 20.0,
+                point_kind: Some(FishyMapSelectionPointKind::Waypoint),
+                point_label: Some("Olvia Academy".to_string()),
+                history_behavior: FishyMapSelectionHistoryBehavior::Append,
+            }),
             world_x: Some(10.0),
             world_z: Some(20.0),
             point_kind: Some(FishyMapSelectionPointKind::Waypoint),
@@ -557,6 +567,8 @@ mod tests {
         .expect("serialize");
 
         assert!(json.contains(r#""type":"selection-changed""#));
+        assert!(json.contains(r#""detailsGeneration":7"#));
+        assert!(json.contains(r#""detailsTarget":{"elementKind":"waypoint""#));
         assert!(json.contains(r#""worldX":10.0"#));
         assert!(json.contains(r#""worldZ":20.0"#));
         assert!(json.contains(r#""pointKind":"waypoint""#));

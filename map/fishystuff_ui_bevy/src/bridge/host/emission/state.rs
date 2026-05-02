@@ -1,6 +1,7 @@
 use super::super::snapshot::{hover_layer_samples_snapshot, point_sample_snapshots};
 use super::super::*;
-use crate::plugins::api::SelectedInfo;
+use crate::bridge::contract::FishyMapDetailsTargetSnapshot;
+use crate::plugins::api::{DetailsSelectionTarget, SelectedInfo};
 
 pub(in crate::bridge::host) fn emit_ready_event() {
     crate::perf_scope!("bridge.emit.ready");
@@ -33,6 +34,11 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
         .and_then(SelectedInfo::effective_world_point);
     let payload = FishyMapOutputEvent::SelectionChanged {
         version: 1,
+        details_generation: selection.details_generation,
+        details_target: selection
+            .details_target
+            .as_ref()
+            .map(details_target_snapshot),
         world_x: selected_world_point.map(|value| value.0),
         world_z: selected_world_point.map(|value| value.1),
         point_kind: selection.info.as_ref().and_then(|info| info.point_kind),
@@ -63,6 +69,17 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
         super::super::emit_event(&payload);
         *last_payload = Some(serialized);
     });
+}
+
+fn details_target_snapshot(target: &DetailsSelectionTarget) -> FishyMapDetailsTargetSnapshot {
+    FishyMapDetailsTargetSnapshot {
+        element_kind: target.element_kind.clone(),
+        world_x: target.world_x,
+        world_z: target.world_z,
+        point_kind: target.point_kind,
+        point_label: target.point_label.clone(),
+        history_behavior: target.history_behavior,
+    }
 }
 
 pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) {

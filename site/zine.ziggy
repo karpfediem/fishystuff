@@ -79,6 +79,7 @@ Multilingual {
     "map/map-query-state.js",
     "map/map-shell.html",
     "map/map-shell-signals.js",
+    "map/map-selection-actions.js",
     "map/map-signal-patch.js",
     "map/map-window-manager.js",
     "map/map-window-manager-element.js",

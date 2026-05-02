@@ -184,7 +184,14 @@ export const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
   saveMapPresetToken: 0,
   discardMapPresetToken: 0,
   focusWorldPointToken: 0,
-  focusWorldPoint: null,
+  focusWorldPoint: Object.freeze({
+    elementKind: "",
+    worldX: null,
+    worldZ: null,
+    pointKind: "",
+    pointLabel: "",
+    historyBehavior: "append",
+  }),
 });
 
 function cloneJsonValue(value) {

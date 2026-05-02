@@ -14,7 +14,7 @@ pub use self::filters::{
     POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 pub use self::interaction::{
-    HoverInfo, HoverState, PointSampleSummary, SelectedInfo, SelectionState,
+    DetailsSelectionTarget, HoverInfo, HoverState, PointSampleSummary, SelectedInfo, SelectionState,
 };
 pub use self::pending::PendingRequests;
 

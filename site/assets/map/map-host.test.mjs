@@ -2317,6 +2317,7 @@ test("state patch normalizes selectWorldPoint commands", () => {
   const patch = normalizeStatePatch({
     commands: {
       selectWorldPoint: {
+        elementKind: " npc ",
         worldX: "12.5",
         worldZ: "-7.25",
         pointKind: " waypoint ",
@@ -2326,6 +2327,7 @@ test("state patch normalizes selectWorldPoint commands", () => {
   });
 
   assert.deepEqual(patch.commands.selectWorldPoint, {
+    elementKind: "npc",
     worldX: 12.5,
     worldZ: -7.25,
     pointKind: "waypoint",

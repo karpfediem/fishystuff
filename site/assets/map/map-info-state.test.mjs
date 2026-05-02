@@ -572,6 +572,38 @@ test("buildInfoViewModel exposes selected waypoint detail sections as a landmark
   );
 });
 
+test("buildInfoViewModel titles selected bookmarks from the details target identity", () => {
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        detailsTarget: {
+          elementKind: "bookmark",
+          worldX: 1234,
+          worldZ: 5678,
+          pointKind: "bookmark",
+          pointLabel: "Saved Hotspot",
+        },
+        pointKind: "bookmark",
+        pointLabel: "Serendia - Terrain",
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rgbU32: 0x39e58d,
+            rgb: [57, 229, 141],
+            detailSections: [detailSectionFact("zone", "Zone", "Serendia - Terrain", "hover-zone")],
+          },
+        ],
+      },
+      catalog: {
+        layers: [{ layerId: "zone_mask", displayOrder: 20 }],
+      },
+    },
+  });
+
+  assert.equal(viewModel.descriptor.title, "Saved Hotspot");
+  assert.equal(viewModel.descriptor.statusText, "Saved Hotspot");
+});
+
 test("patchTouchesInfoSignals stays narrow to selection, pane tab, rate display, and runtime layer inputs", () => {
   assert.equal(
     patchTouchesInfoSignals({

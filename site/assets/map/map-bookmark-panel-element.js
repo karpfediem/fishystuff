@@ -30,6 +30,7 @@ import {
   selectionBookmarkKey,
 } from "./map-bookmark-state.js";
 import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
+import { buildFocusWorldPointSignalPatch } from "./map-selection-actions.js";
 
 export { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 
@@ -108,19 +109,22 @@ function dragHandleIcon() {
   return spriteIcon("drag-handle", "size-4");
 }
 
-function buildFocusBookmarkPatch(bookmark, currentActions) {
-  const currentToken = Number(currentActions?.focusWorldPointToken || 0);
-  return {
-    _map_actions: {
-      focusWorldPointToken: currentToken + 1,
-      focusWorldPoint: {
-        worldX: bookmark.worldX,
-        worldZ: bookmark.worldZ,
-        pointKind: "bookmark",
-        pointLabel: bookmarkDisplayLabel(bookmark),
-      },
+export function buildFocusBookmarkPatch(bookmark, signals = {}) {
+  const worldX = Number(bookmark?.worldX);
+  const worldZ = Number(bookmark?.worldZ);
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) {
+    return null;
+  }
+  return buildFocusWorldPointSignalPatch(
+    {
+      elementKind: "bookmark",
+      worldX,
+      worldZ,
+      pointKind: "bookmark",
+      pointLabel: bookmarkDisplayLabel(bookmark),
     },
-  };
+    signals,
+  );
 }
 
 function ensureBookmarkPanelMarkup(host) {
@@ -433,7 +437,7 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
         if (!bookmark) {
           return;
         }
-        dispatchShellSignalPatch(this._shell, buildFocusBookmarkPatch(bookmark, this.signals()?._map_actions));
+        dispatchShellSignalPatch(this._shell, buildFocusBookmarkPatch(bookmark, this.signals()));
         return;
       }
 

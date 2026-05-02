@@ -4,7 +4,6 @@ import { mapText } from "./map-i18n.js";
 const DEFAULT_TRADE_NPCS_MAP_PATH = "/api/v1/trade_npcs/map";
 const TRADE_DISTANCE_BONUS_SCALE = 68 / 1_000_000;
 const ORIGIN_TARGET_KEY = "origin_node";
-const DEFAULT_FOCUS_VIEW_MODE = "2d";
 
 let cachedTradeNpcMapCatalog = null;
 let cachedTradeNpcMapPromise = null;
@@ -264,6 +263,7 @@ function focusWorldPointForNpc(destination) {
     return null;
   }
   return {
+    elementKind: "npc",
     worldX: destination.spawn.worldX,
     worldZ: destination.spawn.worldZ,
     pointKind: "waypoint",
@@ -313,37 +313,6 @@ export function tradeNpcFocusTargetForSelectors(selectors, rawCatalog) {
     }
   }
   return null;
-}
-
-export function buildFocusWorldPointSignalPatch(focusWorldPoint, signals = {}) {
-  if (
-    !Number.isFinite(focusWorldPoint?.worldX) ||
-    !Number.isFinite(focusWorldPoint?.worldZ)
-  ) {
-    return null;
-  }
-  const currentToken = Number(signals?._map_actions?.focusWorldPointToken || 0);
-  const currentView = isPlainObject(signals?._map_session?.view)
-    ? signals._map_session.view
-    : {};
-  const currentCamera = isPlainObject(currentView.camera) ? currentView.camera : {};
-  const viewMode = trimString(currentView.viewMode) || DEFAULT_FOCUS_VIEW_MODE;
-  return {
-    _map_actions: {
-      focusWorldPointToken: currentToken + 1,
-      focusWorldPoint: cloneJson(focusWorldPoint),
-    },
-    _map_session: {
-      view: {
-        viewMode,
-        camera: {
-          ...cloneJson(currentCamera),
-          centerWorldX: focusWorldPoint.worldX,
-          centerWorldZ: focusWorldPoint.worldZ,
-        },
-      },
-    },
-  };
 }
 
 export function formatTradeDistanceBonus(value) {

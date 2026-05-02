@@ -180,6 +180,7 @@ test("trade manager rows render full-height detail focus buttons and dispatch fo
   element.render();
 
   assert.match(panelSlot.innerHTML, /data-fishy-focus-world-point="true"/);
+  assert.match(panelSlot.innerHTML, /data-focus-element-kind="npc"/);
   assert.match(panelSlot.innerHTML, /badge badge-info badge-soft badge-sm/);
   assert.match(panelSlot.innerHTML, /Chunsu/);
   assert.match(panelSlot.innerHTML, /Velia \(R5\)/);
@@ -196,6 +197,7 @@ test("trade manager rows render full-height detail focus buttons and dispatch fo
       return {
         "data-focus-world-x": "1100",
         "data-focus-world-z": "120",
+        "data-focus-element-kind": "npc",
         "data-focus-point-kind": "waypoint",
         "data-focus-point-label": "Chunsu",
       }[name] ?? null;
@@ -215,10 +217,12 @@ test("trade manager rows render full-height detail focus buttons and dispatch fo
       _map_actions: {
         focusWorldPointToken: 8,
         focusWorldPoint: {
+          elementKind: "npc",
           worldX: 1_100,
           worldZ: 120,
           pointKind: "waypoint",
           pointLabel: "Chunsu",
+          historyBehavior: "append",
         },
       },
       _map_session: {
@@ -384,15 +388,44 @@ test("selection history ignores empty snapshots and restores back and forward ta
   element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
   element.render();
 
-  assert.equal(element._state.backSelectionHistory.length, 0);
+  assert.equal(element._state.selectionHistoryEntries.length, 0);
+  assert.equal(element._state.selectionHistoryIndex, -1);
   assert.equal(historyBack.hidden, true);
   assert.equal(historyBack.disabled, true);
 
-  signals._map_runtime.selection = {
+  const veliaRegionSelection = {
+    detailsGeneration: 1,
+    detailsTarget: {
+      elementKind: "point",
+      worldX: 10.25,
+      worldZ: 20.25,
+      pointKind: "clicked",
+    },
     pointKind: "clicked",
-    pointLabel: "Velia Coast",
+    pointLabel: "Selected region",
     worldX: 10,
     worldZ: 20,
+    layerSamples: [
+      {
+        layerId: "regions",
+        rgbU32: 76,
+        rgb: [0, 0, 76],
+        detailSections: [detailSectionFact("region", "Region", "Balenos", "hover-origin")],
+      },
+    ],
+  };
+  const veliaSelection = {
+    detailsGeneration: 1,
+    detailsTarget: {
+      elementKind: "point",
+      worldX: 10.25,
+      worldZ: 20.25,
+      pointKind: "clicked",
+    },
+    pointKind: "clicked",
+    pointLabel: "Serendia Terrain",
+    worldX: 10.25,
+    worldZ: 20.25,
     layerSamples: [
       {
         layerId: "zone_mask",
@@ -402,19 +435,57 @@ test("selection history ignores empty snapshots and restores back and forward ta
       },
     ],
   };
+  signals._map_runtime.selection = veliaRegionSelection;
   element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
+  assert.equal(element._state.selectionHistoryEntries.length, 0);
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+  signals._map_runtime.selection = veliaSelection;
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => entry.label),
+    ["Velia Coast"],
+  );
+  assert.equal(element._state.selectionHistoryIndex, 0);
 
-  signals._map_runtime.selection = {
+  const chunsuSelection = {
+    detailsGeneration: 2,
+    detailsTarget: {
+      elementKind: "waypoint",
+      worldX: 1_100,
+      worldZ: 120,
+      pointKind: "waypoint",
+      pointLabel: "Chunsu",
+    },
     pointKind: "waypoint",
     pointLabel: "Chunsu",
     worldX: 1_100,
     worldZ: 120,
     layerSamples: [],
   };
-  element.handleSignalPatch({ _map_runtime: { selection: signals._map_runtime.selection } });
+  signals._map_runtime.selection = chunsuSelection;
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
   element.render();
 
-  assert.equal(element._state.backSelectionHistory.length, 1);
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => entry.label),
+    ["Velia Coast", "Chunsu"],
+  );
+  assert.equal(element._state.selectionHistoryIndex, 1);
   assert.equal(historyBack.hidden, false);
   assert.equal(historyBack.disabled, false);
   assert.equal(historyBack.attributes.title, "Previous selection: Velia Coast");
@@ -430,10 +501,12 @@ test("selection history ignores empty snapshots and restores back and forward ta
       _map_actions: {
         focusWorldPointToken: 3,
         focusWorldPoint: {
-          worldX: 10,
-          worldZ: 20,
+          elementKind: "point",
+          worldX: 10.25,
+          worldZ: 20.25,
           pointKind: "clicked",
           pointLabel: "Velia Coast",
+          historyBehavior: "navigate",
         },
       },
       _map_session: {
@@ -441,18 +514,261 @@ test("selection history ignores empty snapshots and restores back and forward ta
           viewMode: "2d",
           camera: {
             zoom: 512,
-            centerWorldX: 10,
-            centerWorldZ: 20,
+            centerWorldX: 10.25,
+            centerWorldZ: 20.25,
           },
         },
       },
     },
   ]);
-  assert.equal(element._state.backSelectionHistory.length, 0);
-  assert.equal(element._state.forwardSelectionHistory.length, 1);
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => entry.label),
+    ["Velia Coast", "Chunsu"],
+  );
+  assert.equal(element._state.selectionHistoryIndex, 0);
+
+  signals._map_runtime.selection = {
+    ...veliaSelection,
+    detailsGeneration: 3,
+    detailsTarget: {
+      ...veliaSelection.detailsTarget,
+      historyBehavior: "navigate",
+    },
+    pointLabel: "Serendia Terrain",
+    layerSamples: [
+      {
+        layerId: "zone_mask",
+        rgbU32: 0xff78ff,
+        rgb: [255, 120, 255],
+        detailSections: [detailSectionFact("zone", "Zone", "Serendia Terrain", "hover-zone")],
+      },
+    ],
+  };
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+  signals._map_runtime.selection = {
+    ...signals._map_runtime.selection,
+    pointLabel: "Valencia Farmland",
+    layerSamples: [
+      {
+        layerId: "zone_mask",
+        rgbU32: 0x654321,
+        rgb: [101, 67, 33],
+        detailSections: [detailSectionFact("zone", "Zone", "Valencia Farmland", "hover-zone")],
+      },
+    ],
+  };
+  element.handleSignalPatch({ _map_runtime: { selection: { pointLabel: "Valencia Farmland" } } });
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => entry.label),
+    ["Velia Coast", "Chunsu"],
+  );
+  assert.equal(element._state.selectionHistoryIndex, 0);
+
   element.render();
   assert.equal(historyForward.hidden, false);
   assert.equal(historyForward.attributes.title, "Next selection: Chunsu");
+
+  signals._map_runtime.selection = {
+    detailsGeneration: 4,
+    detailsTarget: {
+      elementKind: "point",
+      worldX: 300,
+      worldZ: 400,
+      pointKind: "clicked",
+    },
+    pointKind: "clicked",
+    pointLabel: "Heidel",
+    worldX: 300,
+    worldZ: 400,
+    layerSamples: [],
+  };
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+  element.render();
+
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => entry.label),
+    ["Velia Coast", "Heidel"],
+  );
+  assert.equal(element._state.selectionHistoryIndex, 1);
+  assert.equal(historyBack.attributes.title, "Previous selection: Velia Coast");
+  assert.equal(historyForward.hidden, true);
+
+  signals._map_runtime.selection = {
+    detailsGeneration: 5,
+    detailsTarget: {
+      elementKind: "point",
+      worldX: 300,
+      worldZ: 400,
+      pointKind: "clicked",
+    },
+    pointKind: "clicked",
+    pointLabel: "Heidel",
+    worldX: 300,
+    worldZ: 400,
+    layerSamples: [],
+  };
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => entry.label),
+    ["Velia Coast", "Heidel"],
+  );
+  assert.equal(element._state.selectionHistoryIndex, 1);
+});
+
+test("selection history keeps bookmark targets distinct from clicked points at the same coordinate", () => {
+  const element = new FishyMapInfoPanelElement();
+  const dispatched = [];
+  const signals = {
+    _map_runtime: {
+      selection: null,
+      catalog: {
+        layers: [{ layerId: "zone_mask", displayOrder: 20 }],
+      },
+    },
+    _map_actions: {
+      focusWorldPointToken: 5,
+    },
+    _map_session: {
+      view: {
+        viewMode: "2d",
+        camera: { zoom: 512 },
+      },
+    },
+  };
+  element._shell = {
+    __fishymapLiveSignals: signals,
+    dispatchEvent(event) {
+      dispatched.push(event.detail);
+      return true;
+    },
+  };
+  element._state.zoneCatalog = [];
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    historyBack: renderSlot(),
+    historyForward: renderSlot(),
+    tabs: renderSlot(),
+    panel: renderSlot(),
+  };
+
+  signals._map_runtime.selection = {
+    detailsGeneration: 1,
+    detailsTarget: {
+      elementKind: "point",
+      worldX: 10.25,
+      worldZ: 20.25,
+      pointKind: "clicked",
+    },
+    pointKind: "clicked",
+    pointLabel: "Serendia Terrain",
+    worldX: 10.25,
+    worldZ: 20.25,
+    layerSamples: [
+      {
+        layerId: "zone_mask",
+        rgbU32: 0x39e58d,
+        rgb: [57, 229, 141],
+        detailSections: [detailSectionFact("zone", "Zone", "Velia Coast", "hover-zone")],
+      },
+    ],
+  };
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+
+  signals._map_runtime.selection = {
+    detailsGeneration: 2,
+    detailsTarget: {
+      elementKind: "bookmark",
+      worldX: 10.25,
+      worldZ: 20.25,
+      pointKind: "bookmark",
+      pointLabel: "Saved Hotspot",
+    },
+    pointKind: "bookmark",
+    pointLabel: "Saved Hotspot",
+    worldX: 10.25,
+    worldZ: 20.25,
+    layerSamples: [],
+  };
+  element.handleSelectionChanged({
+    state: {
+      selection: signals._map_runtime.selection,
+      catalog: signals._map_runtime.catalog,
+    },
+  });
+  element.render();
+
+  assert.deepEqual(
+    element._state.selectionHistoryEntries.map((entry) => [
+      entry.target.elementKind,
+      entry.label,
+    ]),
+    [
+      ["point", "Velia Coast"],
+      ["bookmark", "Saved Hotspot"],
+    ],
+  );
+  assert.equal(element._elements.historyBack.attributes.title, "Previous selection: Velia Coast");
+
+  element._handleHistoryBackClick({
+    preventDefault() {},
+    stopPropagation() {},
+  });
+
+  assert.deepEqual(dispatched, [
+    {
+      _map_actions: {
+        focusWorldPointToken: 6,
+        focusWorldPoint: {
+          elementKind: "point",
+          worldX: 10.25,
+          worldZ: 20.25,
+          pointKind: "clicked",
+          pointLabel: "Velia Coast",
+          historyBehavior: "navigate",
+        },
+      },
+      _map_session: {
+        view: {
+          viewMode: "2d",
+          camera: {
+            zoom: 512,
+            centerWorldX: 10.25,
+            centerWorldZ: 20.25,
+          },
+        },
+      },
+    },
+  ]);
 });
 
 test("render switches loaded zone loot rates from the Datastar normalize rates prop", async () => {

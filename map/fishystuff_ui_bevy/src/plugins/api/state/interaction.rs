@@ -1,7 +1,8 @@
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
 
-use crate::bridge::contract::FishyMapSelectionPointKind;
+use crate::bridge::contract::{FishyMapSelectionHistoryBehavior, FishyMapSelectionPointKind};
 use crate::map::layer_query::LayerQuerySample;
+use crate::map::spaces::WorldPoint;
 use crate::prelude::*;
 
 fn zone_layer_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQuerySample> {
@@ -17,19 +18,56 @@ pub struct HoverState {
 
 #[derive(Resource)]
 pub struct SelectionState {
+    pub details_generation: u64,
+    pub details_target: Option<DetailsSelectionTarget>,
     pub info: Option<SelectedInfo>,
     pub zone_stats: Option<ZoneStatsResponse>,
     pub zone_stats_status: String,
 }
 
+impl SelectionState {
+    pub fn begin_details_selection(
+        &mut self,
+        element_kind: impl Into<String>,
+        world_point: Option<WorldPoint>,
+        point_kind: Option<FishyMapSelectionPointKind>,
+        point_label: Option<String>,
+        history_behavior: FishyMapSelectionHistoryBehavior,
+    ) -> u64 {
+        self.details_generation = self.details_generation.saturating_add(1);
+        let element_kind = element_kind.into();
+        self.details_target = world_point.map(|world_point| DetailsSelectionTarget {
+            element_kind,
+            world_x: world_point.x,
+            world_z: world_point.z,
+            point_kind,
+            point_label,
+            history_behavior,
+        });
+        self.details_generation
+    }
+}
+
 impl Default for SelectionState {
     fn default() -> Self {
         Self {
+            details_generation: 0,
+            details_target: None,
             info: None,
             zone_stats: None,
             zone_stats_status: "zone stats: idle".to_string(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DetailsSelectionTarget {
+    pub element_kind: String,
+    pub world_x: f64,
+    pub world_z: f64,
+    pub point_kind: Option<FishyMapSelectionPointKind>,
+    pub point_label: Option<String>,
+    pub history_behavior: FishyMapSelectionHistoryBehavior,
 }
 
 #[derive(Debug, Clone, PartialEq)]

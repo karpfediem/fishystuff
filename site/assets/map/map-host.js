@@ -110,10 +110,12 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *       targetKey?: string | null
  *     },
  *     selectWorldPoint?: {
+ *       elementKind?: string | null,
  *       worldX?: number,
  *       worldZ?: number,
  *       pointKind?: "clicked" | "waypoint" | "bookmark",
- *       pointLabel?: string | null
+ *       pointLabel?: string | null,
+ *       historyBehavior?: "append" | "navigate"
  *     },
  *     restoreView?: {
  *       viewMode: "2d" | "3d",
@@ -278,6 +280,31 @@ function normalizeWorldCoordinate(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeSelectionDetailsGeneration(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function normalizeSelectionDetailsTarget(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+  const worldX = normalizeWorldCoordinate(value.worldX);
+  const worldZ = normalizeWorldCoordinate(value.worldZ);
+  if (worldX == null || worldZ == null) {
+    return null;
+  }
+  const elementKind = normalizeNullableString(value.elementKind) || "point";
+  return {
+    elementKind,
+    worldX,
+    worldZ,
+    pointKind: normalizeSelectionPointKind(value.pointKind),
+    pointLabel: normalizeNullableString(value.pointLabel),
+    historyBehavior: normalizeSelectionHistoryBehavior(value.historyBehavior) || "append",
+  };
+}
+
 function normalizeHoverSnapshotValue(value) {
   const layerSamples = Array.isArray(value?.layerSamples) ? cloneJson(value.layerSamples) : [];
   const pointSamples = normalizePointSamples(value?.pointSamples);
@@ -294,8 +321,14 @@ function normalizeSelectionSnapshotValue(value) {
   const pointSamples = normalizePointSamples(value?.pointSamples);
   const normalized = isPlainObject(value) ? cloneJson(value) : {};
   delete normalized.pointSamples;
+  delete normalized.detailsGeneration;
+  delete normalized.detailsTarget;
+  const detailsGeneration = normalizeSelectionDetailsGeneration(value?.detailsGeneration);
+  const detailsTarget = normalizeSelectionDetailsTarget(value?.detailsTarget);
   return {
     ...normalized,
+    ...(detailsGeneration ? { detailsGeneration } : {}),
+    ...(detailsTarget ? { detailsTarget } : {}),
     worldX: normalizeWorldCoordinate(value?.worldX),
     worldZ: normalizeWorldCoordinate(value?.worldZ),
     pointKind: normalizeSelectionPointKind(value?.pointKind),
@@ -1345,6 +1378,14 @@ function normalizeSelectionPointKind(value) {
   return null;
 }
 
+function normalizeSelectionHistoryBehavior(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "append" || normalized === "navigate") {
+    return normalized;
+  }
+  return null;
+}
+
 function normalizeCssColor(value, doc = globalThis.document) {
   if (typeof value !== "string") {
     return "";
@@ -1501,11 +1542,15 @@ function normalizeWorldPointCommand(value) {
   }
   const pointKind = normalizeSelectionPointKind(value.pointKind);
   const pointLabel = normalizeNullableString(value.pointLabel);
+  const elementKind = normalizeNullableString(value.elementKind);
+  const historyBehavior = normalizeSelectionHistoryBehavior(value.historyBehavior);
   return {
+    ...(elementKind != null ? { elementKind } : {}),
     worldX,
     worldZ,
     ...(pointKind != null ? { pointKind } : {}),
     ...(pointLabel != null ? { pointLabel } : {}),
+    ...(historyBehavior != null ? { historyBehavior } : {}),
   };
 }
 
@@ -3384,7 +3429,8 @@ class FishyMapBridgeImpl {
         this.currentState = {
           ...this.currentState,
           selection: normalizeSelectionSnapshotValue({
-            ...this.currentState.selection,
+            detailsGeneration: payload.detailsGeneration,
+            detailsTarget: payload.detailsTarget,
             worldX: payload.worldX,
             worldZ: payload.worldZ,
             pointKind: payload.pointKind,

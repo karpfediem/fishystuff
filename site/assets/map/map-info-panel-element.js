@@ -6,10 +6,10 @@ import { preferredPointLabelForLayerSamples } from "./map-overview-facts.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 import {
-  buildFocusWorldPointSignalPatch,
   loadTradeNpcMapCatalog,
   selectedTradeOriginFromLayerSamples,
 } from "./map-trade-summary.js";
+import { buildFocusWorldPointSignalPatch } from "./map-selection-actions.js";
 import {
   attachProvenanceTooltip,
   buildProvenanceSegments,
@@ -17,6 +17,7 @@ import {
 } from "../js/components/provenance-indicator.js";
 
 const INFO_PANEL_TAG_NAME = "fishymap-info-panel";
+const FISHYMAP_SELECTION_CHANGED_EVENT = "fishymap:selection-changed";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const POINT_SAMPLE_PAGE_SIZE = 50;
 const SELECTION_HISTORY_LIMIT = 8;
@@ -123,6 +124,9 @@ function factFocusAction(fact) {
   return {
     worldX,
     worldZ,
+    elementKind:
+      trimString(focusWorldPoint?.elementKind || fact?.elementKind || fact?.targetKind) ||
+      (fact?.variant === "trade-manager" ? "npc" : ""),
     pointKind: trimString(focusWorldPoint?.pointKind),
     pointLabel: trimString(focusWorldPoint?.pointLabel),
   };
@@ -157,6 +161,7 @@ function focusWorldPointButtonMarkup(focusAction, label) {
     type="button"
     class="btn btn-ghost btn-sm h-auto min-h-0 self-stretch rounded-none rounded-r-box border-0 px-2 text-base-content/55 hover:bg-base-200 hover:text-base-content"
     data-fishy-focus-world-point="true"
+    data-focus-element-kind="${escapeHtml(focusAction.elementKind)}"
     data-focus-world-x="${escapeHtml(focusAction.worldX)}"
     data-focus-world-z="${escapeHtml(focusAction.worldZ)}"
     data-focus-point-kind="${escapeHtml(focusAction.pointKind)}"
@@ -207,6 +212,7 @@ function factMarkup(fact) {
         type="button"
         class="link link-primary text-left font-semibold"
         data-fishy-focus-world-point="true"
+        data-focus-element-kind="${escapeHtml(focusAction.elementKind)}"
         data-focus-world-x="${escapeHtml(focusAction.worldX)}"
         data-focus-world-z="${escapeHtml(focusAction.worldZ)}"
         data-focus-point-kind="${escapeHtml(focusAction.pointKind)}"
@@ -234,6 +240,9 @@ function focusWorldPointFromButton(button) {
   return {
     worldX,
     worldZ,
+    ...(trimString(button.getAttribute("data-focus-element-kind"))
+      ? { elementKind: trimString(button.getAttribute("data-focus-element-kind")) }
+      : {}),
     ...(trimString(button.getAttribute("data-focus-point-kind"))
       ? { pointKind: trimString(button.getAttribute("data-focus-point-kind")) }
       : {}),
@@ -254,6 +263,10 @@ function finiteCoordinate(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function normalizedSelectionPointKind(value) {
   const pointKind = trimString(value).toLowerCase();
   if (pointKind === "bookmark" || pointKind === "waypoint" || pointKind === "clicked") {
@@ -262,23 +275,78 @@ function normalizedSelectionPointKind(value) {
   return "";
 }
 
+function selectionDetailsGeneration(value) {
+  const generation = Number.parseInt(value, 10);
+  return Number.isInteger(generation) && generation > 0 ? generation : 0;
+}
+
+function elementKindForSelectionTarget(target, fallbackPointKind = "") {
+  const elementKind = trimString(target?.elementKind).toLowerCase();
+  if (elementKind) {
+    return elementKind;
+  }
+  switch (normalizedSelectionPointKind(fallbackPointKind || target?.pointKind)) {
+    case "bookmark":
+      return "bookmark";
+    case "waypoint":
+      return "waypoint";
+    case "clicked":
+      return "point";
+    default:
+      return "element";
+  }
+}
+
+function detailsTargetFromSelection(selection) {
+  const hasExplicitTarget = isPlainObject(selection?.detailsTarget);
+  const source = hasExplicitTarget ? selection.detailsTarget : selection;
+  const worldX = finiteCoordinate(source?.worldX);
+  const worldZ = finiteCoordinate(source?.worldZ);
+  if (worldX == null || worldZ == null) {
+    return null;
+  }
+  const pointKind = normalizedSelectionPointKind(source?.pointKind || selection?.pointKind);
+  return {
+    elementKind: elementKindForSelectionTarget(source, pointKind),
+    worldX,
+    worldZ,
+    pointKind,
+    pointLabel: trimString(source?.pointLabel || (hasExplicitTarget ? "" : selection?.pointLabel)),
+    historyBehavior: selectionHistoryBehavior(source?.historyBehavior),
+  };
+}
+
+function selectionHistoryBehavior(value) {
+  return trimString(value).toLowerCase() === "navigate" ? "navigate" : "append";
+}
+
 function coordinateSelectionKeyPart(value) {
   return Number(value).toFixed(3);
 }
 
-function selectionHistoryKey(selection) {
-  const worldX = finiteCoordinate(selection?.worldX);
-  const worldZ = finiteCoordinate(selection?.worldZ);
-  if (worldX != null && worldZ != null) {
-    return `point:${coordinateSelectionKeyPart(worldX)}:${coordinateSelectionKeyPart(worldZ)}`;
+function selectionTargetKey(target) {
+  if (!target) {
+    return "";
   }
-  return "";
+  return [
+    target.elementKind || "element",
+    coordinateSelectionKeyPart(target.worldX),
+    coordinateSelectionKeyPart(target.worldZ),
+  ].join(":");
 }
 
 function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = [] } = {}) {
-  const pointLabel = trimString(selection?.pointLabel);
-  if (pointLabel) {
-    return pointLabel;
+  const target = detailsTargetFromSelection(selection);
+  const targetPointLabel = trimString(target?.pointLabel);
+  const pointLabel = trimString(targetPointLabel || selection?.pointLabel);
+  const elementKind = trimString(target?.elementKind);
+  if (elementKind === "bookmark" || elementKind === "waypoint" || elementKind === "npc") {
+    if (targetPointLabel) {
+      return targetPointLabel;
+    }
+    return elementKind === "bookmark"
+      ? mapText("info.status.bookmark")
+      : mapText("info.status.waypoint");
   }
   const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
   const layerLabel = preferredPointLabelForLayerSamples(layerSamples, {
@@ -288,7 +356,10 @@ function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = []
   if (layerLabel) {
     return layerLabel;
   }
-  const pointKind = normalizedSelectionPointKind(selection?.pointKind);
+  if (pointLabel) {
+    return pointLabel;
+  }
+  const pointKind = normalizedSelectionPointKind(target?.pointKind || selection?.pointKind);
   switch (pointKind) {
     case "bookmark":
       return mapText("info.status.bookmark");
@@ -301,47 +372,92 @@ function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = []
   }
 }
 
-function selectionHistoryEntryFromSignals(signals, { zoneCatalog = [] } = {}) {
-  const selection = signals?._map_runtime?.selection || null;
+function selectionHistoryEntryFromSelection(
+  selection,
+  { zoneCatalog = [], runtimeLayers = [] } = {},
+) {
   if (!selection || typeof selection !== "object") {
     return null;
   }
-  const key = selectionHistoryKey(selection);
-  const worldX = finiteCoordinate(selection.worldX);
-  const worldZ = finiteCoordinate(selection.worldZ);
-  if (!key || worldX == null || worldZ == null) {
+  const detailsGeneration = selectionDetailsGeneration(selection.detailsGeneration);
+  const target = detailsTargetFromSelection(selection);
+  const key = selectionTargetKey(target);
+  if (!detailsGeneration || !key) {
     return null;
   }
-  const runtimeLayers = Array.isArray(signals?._map_runtime?.catalog?.layers)
-    ? signals._map_runtime.catalog.layers
-    : [];
   const label = selectionHistoryLabel(selection, { zoneCatalog, runtimeLayers });
   const pointKind = normalizedSelectionPointKind(selection.pointKind) || "clicked";
   return {
     key,
+    detailsGeneration,
+    historyBehavior: target.historyBehavior,
     label,
-    worldX,
-    worldZ,
-    pointKind,
-    pointLabel: trimString(selection.pointLabel) || label,
+    target,
+    worldX: target.worldX,
+    worldZ: target.worldZ,
+    pointKind: target.pointKind || pointKind,
+    pointLabel: target.pointLabel || label,
   };
 }
 
-function pushSelectionHistoryEntry(history, entry) {
+function runtimeLayersFromSignals(signals) {
+  return Array.isArray(signals?._map_runtime?.catalog?.layers)
+    ? signals._map_runtime.catalog.layers
+    : [];
+}
+
+function runtimeLayersFromSelectionEventDetail(detail, signals) {
+  return Array.isArray(detail?.state?.catalog?.layers)
+    ? detail.state.catalog.layers
+    : runtimeLayersFromSignals(signals);
+}
+
+function normalizeSelectionHistoryEntries(entries) {
+  return (Array.isArray(entries) ? entries : []).filter((entry) => entry?.key);
+}
+
+function normalizeSelectionHistoryIndex(entries, index) {
+  if (!entries.length) {
+    return -1;
+  }
+  const normalized = Number.parseInt(index, 10);
+  if (!Number.isInteger(normalized) || normalized < 0) {
+    return entries.length - 1;
+  }
+  return Math.min(entries.length - 1, normalized);
+}
+
+function appendSelectionHistoryEntry(entries, index, entry) {
+  const history = normalizeSelectionHistoryEntries(entries);
   if (!entry?.key) {
-    return Array.isArray(history) ? history.slice(0, SELECTION_HISTORY_LIMIT) : [];
+    return {
+      entries: history.slice(-SELECTION_HISTORY_LIMIT),
+      index: normalizeSelectionHistoryIndex(history, index),
+    };
   }
-  const next = [entry];
-  for (const existing of Array.isArray(history) ? history : []) {
-    if (!existing?.key || existing.key === entry.key) {
-      continue;
-    }
-    next.push(existing);
-    if (next.length >= SELECTION_HISTORY_LIMIT) {
-      break;
-    }
+
+  const currentIndex = normalizeSelectionHistoryIndex(history, index);
+  if (currentIndex >= 0 && history[currentIndex]?.key === entry.key) {
+    const updated = history.slice();
+    updated[currentIndex] = entry;
+    return { entries: updated, index: currentIndex };
   }
-  return next;
+
+  const retained = currentIndex >= 0 ? history.slice(0, currentIndex + 1) : [];
+  const next = [...retained, entry];
+  const overflow = Math.max(0, next.length - SELECTION_HISTORY_LIMIT);
+  const bounded = overflow ? next.slice(overflow) : next;
+  return { entries: bounded, index: bounded.length - 1 };
+}
+
+function selectionHistoryTargetEntry(entries, index, direction) {
+  const history = normalizeSelectionHistoryEntries(entries);
+  const currentIndex = normalizeSelectionHistoryIndex(history, index);
+  const targetIndex = currentIndex + (direction === "forward" ? 1 : -1);
+  if (targetIndex < 0 || targetIndex >= history.length) {
+    return null;
+  }
+  return history[targetIndex];
 }
 
 function selectionHistoryButtonLabel(entry) {
@@ -958,14 +1074,15 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       tradeNpcMapRequestToken: 0,
       selectionDataRefreshKey: null,
       selectionRenderKey: null,
-      currentSelectionKey: "",
-      currentSelectionEntry: null,
-      backSelectionHistory: [],
-      forwardSelectionHistory: [],
-      suppressHistoryForSelectionKey: "",
+      selectionHistoryEntries: [],
+      selectionHistoryIndex: -1,
+      pendingHistoryRestore: null,
     };
     this._handleSignalPatched = (event) => {
       this.handleSignalPatch(event?.detail || null);
+    };
+    this._handleSelectionChanged = (event) => {
+      this.handleSelectionChanged(event?.detail || null);
     };
     this._handleZoneCatalogReady = (event) => {
       this._state.zoneCatalog = Array.isArray(event?.detail?.zoneCatalog)
@@ -1086,6 +1203,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     };
     this.addEventListener("click", this._handleClick);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
+    this._shell?.addEventListener?.(FISHYMAP_SELECTION_CHANGED_EVENT, this._handleSelectionChanged);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
     this._elements.historyBack?.addEventListener?.("click", this._handleHistoryBackClick);
@@ -1108,6 +1226,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     this._elements?.historyBack?.removeEventListener?.("click", this._handleHistoryBackClick);
     this._elements?.historyForward?.removeEventListener?.("click", this._handleHistoryForwardClick);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
+    this._shell?.removeEventListener?.(FISHYMAP_SELECTION_CHANGED_EVENT, this._handleSelectionChanged);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
     globalThis.window?.removeEventListener?.(
@@ -1137,78 +1256,77 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     return attrValue !== "false" && attrValue !== "0";
   }
 
-  recordCurrentSelectionForHistory() {
-    const entry = selectionHistoryEntryFromSignals(this.signals(), {
+  recordSelectionForHistory(selection, { runtimeLayers = null } = {}) {
+    const entry = selectionHistoryEntryFromSelection(selection, {
       zoneCatalog: this._state.zoneCatalog,
+      runtimeLayers: Array.isArray(runtimeLayers)
+        ? runtimeLayers
+        : runtimeLayersFromSignals(this.signals()),
     });
     if (!entry) {
-      this._state.currentSelectionKey = "";
-      this._state.currentSelectionEntry = null;
       return;
     }
-    if (this._state.suppressHistoryForSelectionKey === entry.key) {
-      this._state.suppressHistoryForSelectionKey = "";
-      this._state.currentSelectionKey = entry.key;
-      this._state.currentSelectionEntry = entry;
+    if (entry.historyBehavior === "navigate") {
+      const restoreIndex = Number.parseInt(this._state.pendingHistoryRestore?.index, 10);
+      if (Number.isInteger(restoreIndex) && restoreIndex >= 0) {
+        this._state.selectionHistoryIndex = restoreIndex;
+      }
       return;
     }
-    if (
-      this._state.currentSelectionKey &&
-      this._state.currentSelectionKey !== entry.key &&
-      this._state.currentSelectionEntry
-    ) {
-      this._state.backSelectionHistory = pushSelectionHistoryEntry(
-        this._state.backSelectionHistory,
-        this._state.currentSelectionEntry,
-      );
-      this._state.forwardSelectionHistory = [];
+    this._state.pendingHistoryRestore = null;
+    const history = appendSelectionHistoryEntry(
+      this._state.selectionHistoryEntries,
+      this._state.selectionHistoryIndex,
+      entry,
+    );
+    this._state.selectionHistoryEntries = history.entries;
+    this._state.selectionHistoryIndex = history.index;
+  }
+
+  handleSelectionChanged(detail) {
+    const selection = detail?.state?.selection;
+    if (!selection || typeof selection !== "object") {
+      return;
     }
-    this._state.currentSelectionKey = entry.key;
-    this._state.currentSelectionEntry = entry;
+    this.recordSelectionForHistory(selection, {
+      runtimeLayers: runtimeLayersFromSelectionEventDetail(detail, this.signals()),
+    });
+    this.scheduleRender();
   }
 
   restoreSelectionHistoryEntry(direction) {
-    const isForward = direction === "forward";
-    const sourceStack = isForward
-      ? this._state.forwardSelectionHistory
-      : this._state.backSelectionHistory;
-    const entry = Array.isArray(sourceStack) ? sourceStack[0] : null;
+    const history = normalizeSelectionHistoryEntries(this._state.selectionHistoryEntries);
+    const currentIndex = normalizeSelectionHistoryIndex(
+      history,
+      this._state.selectionHistoryIndex,
+    );
+    const targetIndex = currentIndex + (direction === "forward" ? 1 : -1);
+    const entry = history[targetIndex] || null;
     if (!entry?.key) {
       return;
     }
     const patch = buildFocusWorldPointSignalPatch(
       {
+        elementKind: entry.target?.elementKind,
         worldX: entry.worldX,
         worldZ: entry.worldZ,
         pointKind: entry.pointKind,
         pointLabel: entry.pointLabel || entry.label,
+        historyBehavior: "navigate",
       },
       this.signals(),
     );
     if (!patch || !dispatchShellSignalPatch(this._shell, patch)) {
       return;
     }
-    const current = this._state.currentSelectionEntry;
-    if (isForward) {
-      this._state.forwardSelectionHistory = (this._state.forwardSelectionHistory || []).slice(1);
-      if (current?.key && current.key !== entry.key) {
-        this._state.backSelectionHistory = pushSelectionHistoryEntry(
-          this._state.backSelectionHistory,
-          current,
-        );
-      }
-    } else {
-      this._state.backSelectionHistory = (this._state.backSelectionHistory || []).slice(1);
-      if (current?.key && current.key !== entry.key) {
-        this._state.forwardSelectionHistory = pushSelectionHistoryEntry(
-          this._state.forwardSelectionHistory,
-          current,
-        );
-      }
-    }
-    this._state.currentSelectionKey = entry.key;
-    this._state.currentSelectionEntry = entry;
-    this._state.suppressHistoryForSelectionKey = entry.key;
+    this._state.selectionHistoryEntries = history;
+    this._state.selectionHistoryIndex = targetIndex;
+    this._state.pendingHistoryRestore = {
+      index: targetIndex,
+      key: entry.key,
+      worldX: entry.worldX,
+      worldZ: entry.worldZ,
+    };
     this.scheduleRender();
   }
 
@@ -1251,12 +1369,20 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     );
     updateHistoryNavButton(
       this._elements?.historyBack,
-      this._state.backSelectionHistory?.[0],
+      selectionHistoryTargetEntry(
+        this._state.selectionHistoryEntries,
+        this._state.selectionHistoryIndex,
+        "back",
+      ),
       "info.history.previous",
     );
     updateHistoryNavButton(
       this._elements?.historyForward,
-      this._state.forwardSelectionHistory?.[0],
+      selectionHistoryTargetEntry(
+        this._state.selectionHistoryEntries,
+        this._state.selectionHistoryIndex,
+        "forward",
+      ),
       "info.history.next",
     );
     setBooleanProperty(this._elements?.tabs, "hidden", viewModel.panes.length === 0);
@@ -1308,7 +1434,6 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     }
     let shouldRender = true;
     if (patch?._map_runtime?.selection != null) {
-      this.recordCurrentSelectionForHistory();
       this.scheduleSelectionDataRefresh();
       const renderKey = selectionRenderKey(this.signals());
       shouldRender = this._state.selectionRenderKey !== renderKey;

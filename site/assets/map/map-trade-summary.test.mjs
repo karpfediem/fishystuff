@@ -2,8 +2,8 @@ import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { installMapTestI18n } from "./test-i18n.js";
 
+import { buildFocusWorldPointSignalPatch } from "./map-selection-actions.js";
 import {
-  buildFocusWorldPointSignalPatch,
   formatTradeDistanceBonus,
   loadTradeNpcMapCatalog,
   selectedTradeOriginFromLayerSamples,
@@ -127,6 +127,7 @@ test("tradeManagerFactsForOrigin includes a manager count and sorted distance ro
     ],
   );
   assert.deepEqual(facts[1].action.focusWorldPoint, {
+    elementKind: "npc",
     worldX: 20_100,
     worldZ: 220,
     pointKind: "waypoint",
@@ -136,24 +137,28 @@ test("tradeManagerFactsForOrigin includes a manager count and sorted distance ro
 
 test("tradeNpcFocusTargetForSelectors resolves exact, slug, numeric, and unique partial NPC selectors", () => {
   assert.deepEqual(tradeNpcFocusTargetForSelectors(["chunsu"], tradeNpcCatalog()), {
+    elementKind: "npc",
     worldX: 1_100,
     worldZ: 120,
     pointKind: "waypoint",
     pointLabel: "Chunsu",
   });
   assert.deepEqual(tradeNpcFocusTargetForSelectors(["far-trader"], tradeNpcCatalog()), {
+    elementKind: "npc",
     worldX: 20_100,
     worldZ: 220,
     pointKind: "waypoint",
     pointLabel: "Far Trader",
   });
   assert.deepEqual(tradeNpcFocusTargetForSelectors(["1"], tradeNpcCatalog()), {
+    elementKind: "npc",
     worldX: 1_100,
     worldZ: 120,
     pointKind: "waypoint",
     pointLabel: "Chunsu",
   });
   assert.deepEqual(tradeNpcFocusTargetForSelectors(["far"], tradeNpcCatalog()), {
+    elementKind: "npc",
     worldX: 20_100,
     worldZ: 220,
     pointKind: "waypoint",
@@ -175,10 +180,12 @@ test("buildFocusWorldPointSignalPatch selects and centers the current map view o
       _map_actions: {
         focusWorldPointToken: 3,
         focusWorldPoint: {
+          elementKind: "",
           worldX: 1_100,
           worldZ: 120,
           pointKind: "waypoint",
           pointLabel: "Chunsu",
+          historyBehavior: "append",
         },
       },
       _map_session: {

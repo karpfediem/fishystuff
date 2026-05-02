@@ -1,12 +1,17 @@
 use super::super::super::*;
+use crate::bridge::contract::FishyMapDetailsTargetSnapshot;
 
 pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
+    details_generation: u64,
+    details_target: Option<&crate::plugins::api::DetailsSelectionTarget>,
     info: Option<&crate::plugins::api::SelectedInfo>,
     zone_stats: Option<&fishystuff_api::models::zone_stats::ZoneStatsResponse>,
 ) -> FishyMapSelectionSnapshot {
     let selected_world_point =
         info.and_then(crate::plugins::api::SelectedInfo::effective_world_point);
     FishyMapSelectionSnapshot {
+        details_generation,
+        details_target: details_target.map(details_target_snapshot),
         world_x: selected_world_point.map(|value| value.0),
         world_z: selected_world_point.map(|value| value.1),
         point_kind: info.and_then(|value| value.point_kind),
@@ -18,6 +23,19 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
             .map(|value| point_sample_snapshots(&value.point_samples))
             .unwrap_or_default(),
         zone_stats: zone_stats.map(zone_stats_snapshot),
+    }
+}
+
+fn details_target_snapshot(
+    target: &crate::plugins::api::DetailsSelectionTarget,
+) -> FishyMapDetailsTargetSnapshot {
+    FishyMapDetailsTargetSnapshot {
+        element_kind: target.element_kind.clone(),
+        world_x: target.world_x,
+        world_z: target.world_z,
+        point_kind: target.point_kind,
+        point_label: target.point_label.clone(),
+        history_behavior: target.history_behavior,
     }
 }
 
@@ -186,7 +204,23 @@ mod tests {
         };
 
         assert_eq!(info.effective_world_point(), Some((123.0, 456.0)));
-        let snapshot = super::effective_selection_snapshot(Some(&info), None);
+        let target = crate::plugins::api::DetailsSelectionTarget {
+            element_kind: "point".to_string(),
+            world_x: 123.0,
+            world_z: 456.0,
+            point_kind: Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked),
+            point_label: None,
+            history_behavior: crate::bridge::contract::FishyMapSelectionHistoryBehavior::Append,
+        };
+        let snapshot = super::effective_selection_snapshot(7, Some(&target), Some(&info), None);
+        assert_eq!(snapshot.details_generation, 7);
+        assert_eq!(
+            snapshot
+                .details_target
+                .as_ref()
+                .map(|target| target.element_kind.as_str()),
+            Some("point")
+        );
         assert_eq!(
             snapshot.point_kind,
             Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked)

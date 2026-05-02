@@ -1,4 +1,4 @@
-use crate::bridge::contract::FishyMapSelectionPointKind;
+use crate::bridge::contract::{FishyMapSelectionHistoryBehavior, FishyMapSelectionPointKind};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::WorldPointQueryContext;
@@ -34,6 +34,13 @@ pub(super) fn apply_zone_selection_command(
         field_metadata,
         zone_rgb,
         Some(&bootstrap.zones),
+    );
+    selection.begin_details_selection(
+        "field",
+        None,
+        None,
+        None,
+        FishyMapSelectionHistoryBehavior::Append,
     );
     apply_selected_info(
         bootstrap,
@@ -71,6 +78,7 @@ pub(super) fn apply_semantic_field_selection_command(
     let preferred_target = selected_info
         .as_ref()
         .and_then(|info| preferred_selection_target(info, target_key));
+    let target_label = preferred_target.map(|target| target.label.clone());
     let target_world_point =
         preferred_target.map(|target| WorldPoint::new(target.world_x, target.world_z));
     let selected_info = target_world_point
@@ -93,6 +101,13 @@ pub(super) fn apply_semantic_field_selection_command(
             )
         })
         .or(selected_info);
+    selection.begin_details_selection(
+        "waypoint",
+        target_world_point,
+        Some(FishyMapSelectionPointKind::Waypoint),
+        target_label,
+        FishyMapSelectionHistoryBehavior::Append,
+    );
     apply_selected_info(bootstrap, patch_filter, selection, pending, selected_info);
 }
 
@@ -101,26 +116,46 @@ pub(super) fn apply_world_point_selection_command(
     selection: &mut SelectionState,
     pending: &mut PendingRequests,
     pending_selection_details: &mut PendingSelectionDetails,
+    element_kind: Option<&str>,
     world_x: f64,
     world_z: f64,
     point_kind: Option<FishyMapSelectionPointKind>,
     point_label: Option<&str>,
+    history_behavior: Option<FishyMapSelectionHistoryBehavior>,
 ) {
     let world_point = WorldPoint::new(world_x, world_z);
     let point_kind = point_kind.unwrap_or(FishyMapSelectionPointKind::Clicked);
+    let point_label = point_label.map(ToOwned::to_owned);
+    let inferred_element_kind = match point_kind {
+        FishyMapSelectionPointKind::Bookmark => "bookmark",
+        FishyMapSelectionPointKind::Waypoint => "waypoint",
+        FishyMapSelectionPointKind::Clicked => "point",
+    };
+    let element_kind = element_kind
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(inferred_element_kind);
+    let details_generation = selection.begin_details_selection(
+        element_kind,
+        Some(world_point),
+        Some(point_kind),
+        point_label.clone(),
+        history_behavior.unwrap_or(FishyMapSelectionHistoryBehavior::Append),
+    );
     selection.info = Some(quick_world_point_selection_info(
         world_point,
         point_kind,
-        point_label,
+        point_label.as_deref(),
     ));
     selection.zone_stats = None;
     selection.zone_stats_status = "zone stats: pending details".to_string();
     pending.zone_stats = None;
     queue_selection_details(
         pending_selection_details,
+        details_generation,
         world_point,
         point_kind,
-        point_label.map(ToOwned::to_owned),
+        point_label,
     );
 }
 
