@@ -2,6 +2,7 @@
   lib,
   writeText,
   activeRelease ? null,
+  admissionProbe ? null,
   apiClosure ? null,
   cdnRuntimeClosure ? null,
   cluster,
@@ -105,6 +106,16 @@ let
       generation = releaseGeneration;
     };
   };
+  environmentPayload = {
+    enabled = true;
+    strategy = "single_active";
+    host = hostKey;
+    active_release = releaseId;
+    retained_releases = retainedReleaseIds;
+    inherit serve;
+  } // lib.optionalAttrs (admissionProbe != null) {
+    admission_probe = admissionProbe;
+  };
   payload = {
     inherit cluster generation mode;
     hosts.${hostKey} = {
@@ -113,14 +124,7 @@ let
       hostname = hostName;
     };
     releases = builtins.listToAttrs ([ activeReleaseAttr ] ++ retainedReleaseAttrs);
-    environments.${environment} = {
-      enabled = true;
-      strategy = "single_active";
-      host = hostKey;
-      active_release = releaseId;
-      retained_releases = retainedReleaseIds;
-      inherit serve;
-    };
+    environments.${environment} = environmentPayload;
   };
 in
 assert lib.assertMsg (cluster != "") "gitops desired state requires cluster";
@@ -140,6 +144,24 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   doltMaterialization != "fetch_pin" || doltRemoteUrl != ""
 ) "fetch_pin dolt materialization requires doltRemoteUrl";
+assert lib.assertMsg (
+  admissionProbe == null || builtins.isAttrs admissionProbe
+) "gitops admissionProbe must be an attribute set";
+assert lib.assertMsg (
+  admissionProbe == null || mode == "vm-test" || mode == "vm-test-closures"
+) "gitops admissionProbe is currently supported only in VM test modes";
+assert lib.assertMsg (
+  admissionProbe == null || doltMaterialization == "fetch_pin"
+) "gitops admissionProbe requires fetch_pin Dolt materialization";
+assert lib.assertMsg (
+  admissionProbe == null || (admissionProbe.kind or "") == "dolt_sql_scalar"
+) "gitops admissionProbe supports only kind = dolt_sql_scalar";
+assert lib.assertMsg (
+  admissionProbe == null || (admissionProbe.query or "") != ""
+) "gitops admissionProbe requires query";
+assert lib.assertMsg (
+  admissionProbe == null || admissionProbe ? expected_scalar
+) "gitops admissionProbe requires expected_scalar";
 assert lib.assertMsg (
   lib.all (release: release ? releaseId && release.releaseId != "") retainedReleaseObjects
 ) "gitops retained release objects require releaseId";

@@ -72,6 +72,7 @@ nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
+nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
@@ -89,6 +90,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 Real deployment desired state should import `nix/packages/gitops-desired-state.nix` from an operator/deployment flake and pass exact `doltCommit`, service bundles, site content, and finalized CDN serving roots as Nix values. The generated GitOps validation package intentionally does not use ambient environment variables for those deployment-critical inputs.
 
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, a finalized CDN serving root, and one retained previous release object. The package generator refuses `serve: true` unless all four active release artifacts are present.
+
+`gitops-desired-state-admission-probe` proves the generated desired-state helper can emit `admission_probe.kind = "dolt_sql_scalar"` for a VM-only `fetch_pin` candidate and still unify through `gitops/main.mcl`. It does not run the probe or contact a remote.
 
 `gitops-desired-state-serve-without-retained-refusal` proves the generated desired-state helper refuses `serve: true` without at least one retained rollback release.
 

@@ -33,6 +33,7 @@ nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
+nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal

@@ -313,6 +313,25 @@
             mode = "vm-test";
             serve = true;
           };
+          gitopsDesiredStateAdmissionProbeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "local-test";
+            environment = "local-test";
+            hostKey = "vm-single-host";
+            generation = 9;
+            releaseGeneration = 9;
+            gitRev = "admission-probe-fixture";
+            doltCommit = "admission-probe-fixture";
+            doltBranchContext = "main";
+            doltMaterialization = "fetch_pin";
+            doltRemoteUrl = "file:///tmp/fishystuff-gitops-admission-probe-remote";
+            admissionProbe = {
+              kind = "dolt_sql_scalar";
+              query = "select 'ok'";
+              expected_scalar = "ok";
+            };
+            mode = "vm-test";
+            serve = false;
+          };
           edgeServiceBundleFor =
             deploymentEnvironment:
             mkServiceBundle {
@@ -503,6 +522,31 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateAdmissionProbeCheck = pkgs.runCommand "gitops-desired-state-admission-probe-check" {
+            nativeBuildInputs = [
+              mgmt-fishystuff-beta.packages.${system}.minimal
+              pkgs.jq
+            ];
+          } ''
+            set -euo pipefail
+
+            release_id="$(jq -r '.environments."local-test".active_release' ${gitopsDesiredStateAdmissionProbeFixture})"
+            jq -e --arg release_id "$release_id" --arg expected_query "select 'ok'" '
+              .mode == "vm-test"
+              and .environments."local-test".serve == false
+              and .environments."local-test".admission_probe.kind == "dolt_sql_scalar"
+              and .environments."local-test".admission_probe.query == $expected_query
+              and .environments."local-test".admission_probe.expected_scalar == "ok"
+              and .releases[$release_id].dolt.materialization == "fetch_pin"
+              and .releases[$release_id].dolt.remote_url == "file:///tmp/fishystuff-gitops-admission-probe-remote"
+              and .releases[$release_id].dolt.cache_dir == ""
+              and .releases[$release_id].dolt.release_ref == ""
+            ' ${gitopsDesiredStateAdmissionProbeFixture}
+
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateAdmissionProbeFixture}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
           gitopsDesiredStateServeWithoutRetainedCheck =
             let
               attempted = builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
@@ -584,6 +628,7 @@
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               cdn-required-files = cdnRequiredFilesCheck;
               fishystuff-deploy-tests = fishystuffDeployTests;
+              gitops-desired-state-admission-probe = gitopsDesiredStateAdmissionProbeCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               gitops-desired-state-serve-without-retained-refusal = gitopsDesiredStateServeWithoutRetainedCheck;
               gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;
