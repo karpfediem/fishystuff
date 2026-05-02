@@ -473,6 +473,7 @@ test("zone changes request zone-dependent fish and trade controls", () => {
   assert.match(url, /[?&]target_fish_select=true\b/);
   assert.match(url, /[?&]trade_origin_select=true\b/);
   assert.match(url, /[?&]trade_destination_select=true\b/);
+  assert.match(url, /[?&]trade_zone_reselect=true\b/);
 });
 
 test("trade origin changes request only the trade destination control", () => {
@@ -502,11 +503,13 @@ test("calculator eval URL classifies direct Datastar patch payloads", () => {
   assert.match(zoneUrl, /[?&]target_fish_select=true\b/);
   assert.match(zoneUrl, /[?&]trade_origin_select=true\b/);
   assert.match(zoneUrl, /[?&]trade_destination_select=true\b/);
+  assert.match(zoneUrl, /[?&]trade_zone_reselect=true\b/);
 
   const tradeOriginUrl = env.window.__fishystuffCalculator.evalUrl({ tradeOriginRegion: "740" });
   assert.match(tradeOriginUrl, /[?&]pet_cards=false\b/);
   assert.doesNotMatch(tradeOriginUrl, /[?&]trade_origin_select=true\b/);
   assert.match(tradeOriginUrl, /[?&]trade_destination_select=true\b/);
+  assert.doesNotMatch(tradeOriginUrl, /[?&]trade_zone_reselect=true\b/);
   assert.match(tradeOriginUrl, /[?&]trade_origin_region=740\b/);
 
   const tradeDestinationUrl = env.window.__fishystuffCalculator.evalUrl({ tradeDestinationNpc: "200" });

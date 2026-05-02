@@ -52,6 +52,7 @@ pub struct CalculatorQuery {
     pub target_fish_select: Option<bool>,
     pub trade_origin_select: Option<bool>,
     pub trade_destination_select: Option<bool>,
+    pub trade_zone_reselect: Option<bool>,
     pub trade_origin_region: Option<String>,
     pub trade_destination_npc: Option<String>,
 }
@@ -1039,6 +1040,12 @@ pub async fn post_calculator_datastar_eval(
 }
 
 fn apply_trade_eval_query_overrides(signals: &mut CalculatorSignals, query: &CalculatorQuery) {
+    if query.trade_zone_reselect.unwrap_or(false) && query.trade_origin_region.is_none() {
+        signals.trade_origin_region.clear();
+        if query.trade_destination_npc.is_none() {
+            signals.trade_destination_npc.clear();
+        }
+    }
     if let Some(origin) = query.trade_origin_region.as_deref() {
         signals.trade_origin_region = origin.trim().to_string();
     }
@@ -16703,12 +16710,13 @@ mod tests {
     };
 
     use super::{
-        apply_calculator_condition_context_to_loot_entries, auto_target_fish_pmf_tail_count,
-        base_price_for_species, buff_category_label, build_pet_value_aliases,
-        build_zone_loot_summary_condition_options, calculator_section_icon_alias,
-        calculator_workspace_icon_alias, custom_trade_destination_select_option,
-        default_reset_signals_patch_map, derive_fish_group_chart, derive_loot_chart,
-        derive_target_fish_summary, derive_zone_loot_summary_response,
+        apply_calculator_condition_context_to_loot_entries, apply_trade_eval_query_overrides,
+        auto_target_fish_pmf_tail_count, base_price_for_species, buff_category_label,
+        build_pet_value_aliases, build_zone_loot_summary_condition_options,
+        calculator_section_icon_alias, calculator_workspace_icon_alias,
+        custom_trade_destination_select_option, default_reset_signals_patch_map,
+        derive_fish_group_chart, derive_loot_chart, derive_target_fish_summary,
+        derive_zone_loot_summary_response,
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
         filtered_loot_flow_rows, find_trade_origin, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
@@ -17507,6 +17515,7 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -17555,6 +17564,7 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -17591,6 +17601,7 @@ mod tests {
                 target_fish_select: Some(true),
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -17624,6 +17635,7 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: Some(true),
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -17658,6 +17670,7 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: Some(true),
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -17693,6 +17706,7 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: Some(true),
                 trade_destination_select: Some(true),
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -18268,6 +18282,7 @@ mod tests {
                 target_fish_select: None,
                 trade_origin_select: None,
                 trade_destination_select: None,
+                trade_zone_reselect: None,
                 trade_origin_region: None,
                 trade_destination_npc: None,
             })),
@@ -20066,6 +20081,37 @@ mod tests {
             ..CalculatorSignals::default()
         };
 
+        normalize_trade_selection(&mut signals, &catalog, Some("240,74,74"));
+
+        assert_eq!(signals.trade_origin_region, "2");
+        assert_eq!(signals.trade_destination_npc, "100");
+        assert!((signals.trade_distance_bonus - 61.2).abs() < 0.0001);
+    }
+
+    #[test]
+    fn zone_trade_reselect_replaces_stale_origin_and_selects_farthest_destination() {
+        let catalog = test_trade_catalog();
+        let mut signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            trade_origin_region: "1".to_string(),
+            trade_destination_npc: "200".to_string(),
+            trade_distance_bonus: 34.0,
+            ..CalculatorSignals::default()
+        };
+        let query = CalculatorQuery {
+            lang: None,
+            locale: None,
+            r#ref: None,
+            pet_cards: Some(false),
+            target_fish_select: Some(true),
+            trade_origin_select: Some(true),
+            trade_destination_select: Some(true),
+            trade_zone_reselect: Some(true),
+            trade_origin_region: None,
+            trade_destination_npc: None,
+        };
+
+        apply_trade_eval_query_overrides(&mut signals, &query);
         normalize_trade_selection(&mut signals, &catalog, Some("240,74,74"));
 
         assert_eq!(signals.trade_origin_region, "2");

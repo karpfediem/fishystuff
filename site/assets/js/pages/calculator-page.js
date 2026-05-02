@@ -355,14 +355,17 @@
     const paths = calculatorEvalPatchPaths(patch);
     const touchesPetCards = paths.some((path) => CALCULATOR_PET_CARD_SIGNAL_PATTERN.test(path))
       && !paths.every((path) => CALCULATOR_PACK_LEADER_SIGNAL_PATTERN.test(path));
+    const touchesTradeOriginSelection = paths.some((path) => (
+      CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)
+    ));
+    const touchesTradeDestinationSelection = touchesTradeOriginSelection
+      || paths.some((path) => CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN.test(path));
     return {
       includePetCards: touchesPetCards,
       includeTargetFishSelect: paths.some((path) => CALCULATOR_TARGET_FISH_SELECT_SIGNAL_PATTERN.test(path)),
-      includeTradeOriginSelect: paths.some((path) => CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)),
-      includeTradeDestinationSelect: paths.some((path) => (
-        CALCULATOR_TRADE_DESTINATION_SELECT_SIGNAL_PATTERN.test(path)
-        || CALCULATOR_TRADE_ORIGIN_SELECT_SIGNAL_PATTERN.test(path)
-      )),
+      includeTradeOriginSelect: touchesTradeOriginSelection,
+      includeTradeDestinationSelect: touchesTradeDestinationSelection,
+      reselectTradeForZone: touchesTradeOriginSelection,
     };
   }
 
@@ -1855,6 +1858,9 @@
     const includeTradeDestinationSelect = patchOptions
       ? patchOptions.includeTradeDestinationSelect
       : false;
+    const reselectTradeForZone = patchOptions
+      ? patchOptions.reselectTradeForZone
+      : false;
     const params = new URLSearchParams();
     params.set("lang", language.apiLang);
     params.set("locale", language.locale);
@@ -1869,6 +1875,9 @@
     }
     if (includeTradeDestinationSelect) {
       params.set("trade_destination_select", "true");
+    }
+    if (reselectTradeForZone) {
+      params.set("trade_zone_reselect", "true");
     }
     appendCalculatorEvalSignalParam(params, patch, "tradeOriginRegion", "trade_origin_region");
     appendCalculatorEvalSignalParam(params, patch, "tradeDestinationNpc", "trade_destination_npc");
