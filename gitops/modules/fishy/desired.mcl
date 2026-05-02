@@ -1,3 +1,5 @@
+import "sys"
+
 class model($st) {
 	$empty_hosts map{str: struct{enabled bool; role str; hostname str}} = {}
 	$empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
@@ -37,6 +39,7 @@ class model($st) {
 	$cluster str = $st->cluster || "local-test"
 	$generation int = $st->generation || 0
 	$mode str = $st->mode || "validate"
+	$local_apply_enabled = sys.defaultenv("FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY", "") == "1"
 	$hosts map{str: struct{enabled bool; role str; hostname str}} = $st->hosts || $empty_hosts
 	$releases map{str: struct{
 		generation int;
@@ -48,4 +51,5 @@ class model($st) {
 	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = $st->environments || $empty_environments
 
 	panic(($mode != "validate") and ($mode != "vm-test") and ($mode != "vm-test-closures") and ($mode != "local-apply"), "unsupported gitops desired-state mode")
+	panic(($mode == "local-apply") and (not $local_apply_enabled), "local-apply requires FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1")
 }
