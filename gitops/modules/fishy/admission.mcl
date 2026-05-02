@@ -13,6 +13,7 @@ class fixture($st) {
 	$site_content str = $st->site_content || ""
 	$cdn_runtime_content str = $st->cdn_runtime_content || ""
 	$requires_serving_artifacts bool = $st->requires_serving_artifacts || false
+	$retained_release_count int = $st->retained_release_count || 0
 	$state str = $st->state || "not_run"
 	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
 	$path = fmt.printf("/run/fishystuff/gitops-test/admission/%s.json", $environment)
@@ -82,7 +83,7 @@ class fixture($st) {
 	} else {
 		""
 	}
-	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"cdn_runtime_module\": %s,\n  \"cdn_runtime_wasm\": %s,\n  \"cdn_serving_current_root\": %s,\n  \"cdn_serving_retained_root_count\": %d,\n  \"cdn_serving_manifest_lists_runtime_manifest\": %t,\n  \"cdn_serving_manifest_lists_module\": %t,\n  \"cdn_serving_manifest_lists_wasm\": %t,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": %s,\n  \"probe\": \"local-fixture\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($cdn_runtime_manifest->module), fishy_json.quote($cdn_runtime_manifest->wasm), fishy_json.quote($cdn_serving_manifest->current_root), $cdn_serving_manifest->retained_root_count, $cdn_serving_manifest_lists_runtime_manifest, $cdn_serving_manifest_lists_module, $cdn_serving_manifest_lists_wasm, $requires_serving_artifacts, fishy_json.quote($state))
+	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"cdn_runtime_module\": %s,\n  \"cdn_runtime_wasm\": %s,\n  \"cdn_serving_current_root\": %s,\n  \"cdn_serving_retained_root_count\": %d,\n  \"retained_release_count\": %d,\n  \"cdn_serving_manifest_lists_runtime_manifest\": %t,\n  \"cdn_serving_manifest_lists_module\": %t,\n  \"cdn_serving_manifest_lists_wasm\": %t,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": %s,\n  \"probe\": \"local-fixture\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($cdn_runtime_manifest->module), fishy_json.quote($cdn_runtime_manifest->wasm), fishy_json.quote($cdn_serving_manifest->current_root), $cdn_serving_manifest->retained_root_count, $retained_release_count, $cdn_serving_manifest_lists_runtime_manifest, $cdn_serving_manifest_lists_module, $cdn_serving_manifest_lists_wasm, $requires_serving_artifacts, fishy_json.quote($state))
 
 	panic($environment == "", "admission fixture requires environment")
 	panic($host == "", "admission fixture requires host")
@@ -99,6 +100,7 @@ class fixture($st) {
 	panic($requires_serving_artifacts and ($cdn_runtime_wasm_content == ""), "serving artifact admission requires a readable CDN runtime wasm")
 	panic($requires_serving_artifacts and ($cdn_serving_manifest->schema_version == 0), "serving artifact admission requires a CDN serving manifest")
 	panic($requires_serving_artifacts and ($cdn_serving_manifest->current_root == ""), "serving artifact admission requires a CDN serving current root")
+	panic($requires_serving_artifacts and ($retained_release_count > 0) and ($cdn_serving_manifest->retained_root_count == 0), "serving artifact admission requires retained CDN roots for retained releases")
 	panic($requires_serving_artifacts and (not $cdn_serving_manifest_lists_runtime_manifest), "serving artifact admission requires CDN serving manifest to list runtime-manifest.json")
 	panic($requires_serving_artifacts and ((not $cdn_serving_manifest_lists_module) or (not $cdn_serving_manifest_lists_wasm)), "serving artifact admission requires CDN serving manifest to list selected runtime module and wasm")
 

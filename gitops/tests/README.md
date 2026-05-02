@@ -16,6 +16,7 @@ nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
+nix build .#checks.x86_64-linux.gitops-missing-cdn-retained-root-refusal
 ```
 
 Recipe wrappers:
@@ -32,6 +33,7 @@ just gitops-vm-test no-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
+just gitops-vm-test missing-cdn-retained-root-refusal
 ```
 
 `gitops-empty-unify` type-checks `gitops/main.mcl` with `fixtures/empty.desired.json` and asserts that no local test state paths are created.
@@ -62,5 +64,7 @@ just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
 `gitops-missing-cdn-runtime-file-refusal` boots a local NixOS VM and checks a later negative path: a serving desired state with `runtime-manifest.json` and `cdn-serving-manifest.json` still fails before activation if the runtime manifest names a JS/WASM file that is not present in the finalized CDN root.
 
 `gitops-missing-cdn-serving-manifest-entry-refusal` boots a local NixOS VM and checks the manifest-accounting path: a serving desired state with runtime files present still fails before activation if `cdn-serving-manifest.json` does not list the selected runtime JS/WASM asset.
+
+`gitops-missing-cdn-retained-root-refusal` boots a local NixOS VM and checks the rollback-retention path: a serving desired state with retained rollback releases still fails before activation if the selected CDN serving manifest records no retained CDN roots.
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.

@@ -227,6 +227,7 @@ if $local_test_environment->enabled {
 		site_content => $active_site_artifact->store_path,
 		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
 		requires_serving_artifacts => $local_test_environment->serve,
+		retained_release_count => len($retained_releases),
 		state => $admission_state,
 	})
 

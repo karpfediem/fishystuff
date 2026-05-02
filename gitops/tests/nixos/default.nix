@@ -61,4 +61,8 @@
   gitops-missing-cdn-serving-manifest-entry-refusal = import ./missing-cdn-serving-manifest-entry-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
+
+  gitops-missing-cdn-retained-root-refusal = import ./missing-cdn-retained-root-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
 }
