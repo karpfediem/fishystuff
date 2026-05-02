@@ -1,7 +1,7 @@
 import "encoding"
 import "datetime"
 import "fmt"
-import "git:///lib/fishystuff-beta-access/" as fishystuff_beta_access
+import "../fishystuff-beta-access/" as fishystuff_beta_access
 import "../../providers/cloudflare-dnsmanager/" as cloudflare_dnsmanager
 import "../../providers/hetzner-firewall/" as hetzner_firewall
 import "os"
