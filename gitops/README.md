@@ -36,7 +36,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 ```
 
-`.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It includes the CDN serving root when the operator-local CDN input root is configured; otherwise `cdn_runtime` is disabled so normal local validation does not require private CDN staging state. It deliberately sets `serve: false` and `mode: validate`; it is not a deploy/apply command. Set `FISHYSTUFF_GITOPS_DOLT_COMMIT` while evaluating if you want the generated validation object to carry a specific Dolt commit instead of the placeholder.
+`.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It includes the CDN serving root when the operator-local CDN input root is configured; otherwise `cdn_runtime` is disabled so normal local validation does not require private CDN staging state. Its release key is derived from the exact Git/Dolt/closure tuple by default. It deliberately sets `serve: false` and `mode: validate`; it is not a deploy/apply command. Set `FISHYSTUFF_GITOPS_DOLT_COMMIT` while evaluating if you want the generated validation object to carry a specific Dolt commit instead of the placeholder.
 
 ## Desired State
 
@@ -94,7 +94,7 @@ Supported modes:
 - `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 - `local-apply`: reserved for future host-local activation. The first milestone does not include fixtures that use it.
 
-The first milestone intentionally recognizes only one enabled environment at a time, currently the `local-test` or `beta` single-host environments used by the fixtures and generated validation state. The active release is selected by that environment's `active_release` key; the checked-in fixtures still use `example-release`, while the generated beta validation package uses a different release key to prove the graph is not hardcoded to the fixture name. General multi-environment traversal should be added with more mgmt language coverage and VM tests.
+The first milestone intentionally recognizes only one enabled environment at a time, currently the `local-test` or `beta` single-host environments used by the fixtures and generated validation state. The active release is selected by that environment's `active_release` key; the checked-in fixtures still use `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. General multi-environment traversal should be added with more mgmt language coverage and VM tests.
 
 ## Graph Shape
 
@@ -110,7 +110,7 @@ desired state object
   -> status/health publication
 ```
 
-The current `release_id` is the desired-state release key. The graph also emits `release_identity`, a deterministic string derived from the release key, generation, Git revision, Dolt identity, and closure paths. Future production release IDs can become content hashes of that exact tuple; for now the tuple is recorded directly in candidate, admission, active, and status documents so mismatched activation inputs are visible.
+The current `release_id` is the desired-state release key. Generated desired state derives that key from a content hash of the exact release tuple; fixture desired state may still use readable names such as `example-release`. The graph also emits `release_identity`, a deterministic string derived from the release key, generation, Git revision, Dolt identity, and closure paths. The tuple is recorded directly in candidate, admission, active, and status documents so mismatched activation inputs are visible.
 
 ## Release Artifact Contract
 

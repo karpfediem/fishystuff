@@ -222,7 +222,6 @@
             cluster = "beta";
             environment = "beta";
             hostKey = "beta-single-host";
-            activeRelease = "beta-validation-release";
             generation = 1;
             releaseGeneration = 1;
             gitRev = frontendSourceRevision;
@@ -365,9 +364,17 @@
             touch "$out"
           '';
           gitopsDesiredStateBetaValidateCheck = pkgs.runCommand "gitops-desired-state-beta-validate-check" {
-            nativeBuildInputs = [ mgmt-fishystuff-beta.packages.${system}.minimal ];
+            nativeBuildInputs = [
+              mgmt-fishystuff-beta.packages.${system}.minimal
+              pkgs.jq
+            ];
           } ''
             set -euo pipefail
+
+            release_id="$(jq -r '.environments.beta.active_release' ${gitopsDesiredStateBetaValidate})"
+            test "$release_id" != example-release
+            test "$release_id" != beta-validation-release
+            jq -e --arg release_id "$release_id" '.releases[$release_id].generation == 1' ${gitopsDesiredStateBetaValidate}
 
             export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateBetaValidate}
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
