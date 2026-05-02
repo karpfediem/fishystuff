@@ -168,9 +168,15 @@ def add_runtime_assets(report: Report, cdn_root: Path, cache_key: str) -> None:
     module = str(manifest.get("module") or "").strip()
     wasm = str(manifest.get("wasm") or "").strip()
     if module:
-        report.add("map_runtime", f"map/{module}")
+        module_path = f"map/{module}"
+        report.add("map_runtime", module_path)
+        if (cdn_root / f"{module_path}.map").is_file():
+            report.add("map_runtime_source_maps", f"{module_path}.map")
     if wasm:
-        report.add("map_runtime", f"map/{wasm}")
+        wasm_path = f"map/{wasm}"
+        report.add("map_runtime", wasm_path)
+        if (cdn_root / f"{wasm_path}.map").is_file():
+            report.add("map_runtime_source_maps", f"{wasm_path}.map")
 
 
 def add_manifest_tree(report: Report, group: str, cdn_root: Path, rel_manifest_path: str) -> None:

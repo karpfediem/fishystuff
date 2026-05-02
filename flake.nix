@@ -334,6 +334,15 @@
             bun test scripts/write-runtime-config.test.mjs scripts/finalize-assets.test.mjs
             touch "$out"
           '';
+          cdnRequiredFilesCheck = pkgs.runCommand "cdn-required-files-check" {
+            nativeBuildInputs = [ pkgs.python3 ];
+          } ''
+            set -euo pipefail
+
+            cp -R ${./tools/scripts}/. .
+            python3 compute_required_cdn_filenames_test.py
+            touch "$out"
+          '';
 
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
@@ -386,6 +395,7 @@
             // gitopsTests
             // {
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
+              cdn-required-files = cdnRequiredFilesCheck;
               modular-service-runtime = modularServiceRuntime;
               site-asset-finalizer = siteAssetFinalizerCheck;
             };
