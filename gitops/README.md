@@ -213,6 +213,12 @@ The Dolt desired-state fields separate data identity from transport. `dolt.commi
 
 The Rust deployment helper is packaged as `.#fishystuff-deploy`. It is intentionally a narrow host-local helper, not a plan/apply deployment command: mgmt still owns desired-state reconciliation, while the helper only executes Dolt clone/fetch/ref-pin/status-file operations requested by the graph. The same helper owns the `needs-*` freshness checks used by mgmt `exec.ifcmd`, so rerun decisions compare the structured request/status tuple instead of partial shell/JQ snippets.
 
+Backup/restore and replication are separate transport classes:
+
+- Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.
+- Dolt SQL-server replication should be modeled as a future `replica_pin` materialization. It must still publish the exact commit/ref that admission will query, and it needs its own local test before any real host uses it.
+- The old service-style `DOLT_FETCH()` plus branch-tip `DOLT_RESET()` refresh shape is not precise enough for serving by itself. GitOps serving needs an exact commit verification gate before admission can pass.
+
 ## Graph Shape
 
 The graph is structured around this desired-state flow:

@@ -193,9 +193,12 @@ Dolt's own CLI and SQL server procedures are sufficient for the first bandwidth-
 
 - `dolt clone --branch <branch> --single-branch <remote-url> <dir>` bootstraps a persistent local cache.
 - `dolt fetch <remote> <refspec>` incrementally fetches changed objects into that cache.
+- `dolt remote -v`, `dolt remote remove <name>`, and `dolt remote add <name> <url>` are enough to reconcile the cache's `origin` URL when desired state switches to another mirror.
 - `dolt branch -f <release-ref> <commit>` pins an exact desired commit under a local ref so rollback commits remain reachable.
 - `dolt sql -r csv -q "select dolt_hashof('<ref>') as hash"` or `dolt log -n 1 <ref> --oneline` can verify the pinned ref resolves to the exact desired commit.
 - SQL procedures `DOLT_FETCH()` and `DOLT_RESET()` mirror the CLI shape for a running SQL server, but the old branch-tip reset pattern is not exact enough for GitOps serving without a commit-hash verification gate.
+- `dolt backup sync-url <url>` and `dolt backup restore <url> <name>` can move point-in-time database contents through `file`, `http(s)`, `aws`, or `gs` backup URLs. This is useful for bootstrap/disaster recovery, but it is not the normal deploy path because restoring a backup is a larger state replacement than pinning an already-warm cache.
+- `dolt sql-server` supports `remotesapi.port`, `remotesapi.read_only`, and a documented `cluster` configuration section for replication. This should become a separate `replica_pin` path only after a local test proves exact commit pinning and read-only serving semantics against a running replica.
 
 `gitops/modules/fishy/dolt.mcl` uses `exec` only in VM test mode to invoke the narrow `fishystuff_deploy dolt fetch-pin` Rust helper against a file-backed Dolt remote. The helper is a host-local bridge over Dolt's CLI, not a deployment controller. A future upstreamable primitive may still replace the bridge if the shape proves generally useful.
 
