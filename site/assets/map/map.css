@@ -813,12 +813,12 @@ fishymap-search-panel {
   display: none !important;
 }
 
-#fishymap-hover-samples[hidden],
+#fishymap-hover-info[hidden],
 #fishymap-hover-layers[hidden] {
   display: none !important;
 }
 
-#fishymap-hover-samples,
+#fishymap-hover-info,
 #fishymap-hover-layers {
   position: fixed;
   top: 0;
@@ -841,8 +841,15 @@ fishymap-search-panel {
   max-width: min(22rem, calc(100vw - 2rem));
 }
 
-#fishymap-hover-samples {
+#fishymap-hover-info {
   max-width: min(19rem, calc(100vw - 2rem));
+}
+
+.fishymap-landmark-hover-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
 .fishymap-point-sample-list {

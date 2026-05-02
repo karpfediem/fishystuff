@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { installMapTestI18n } from "./test-i18n.js";
 
 import {
-  buildHoverTooltipRows,
+  buildLayerHoverFactRows,
   buildLayerHoverSettingsRows,
   buildLayerPanelHoverFactPreview,
-  patchTouchesHoverTooltipSignals,
+  patchTouchesLayerHoverFactSignals,
 } from "./map-hover-facts.js";
 
 function detailSectionFact(key, label, value, icon) {
@@ -26,8 +26,8 @@ function detailSectionFact(key, label, value, icon) {
   };
 }
 
-test("buildHoverTooltipRows follows layer order from lowest layer first", () => {
-  const rows = buildHoverTooltipRows({
+test("buildLayerHoverFactRows follows layer order from lowest layer first", () => {
+  const rows = buildLayerHoverFactRows({
     hover: {
       layerSamples: [
         {
@@ -78,107 +78,6 @@ test("buildHoverTooltipRows follows layer order from lowest layer first", () => 
       ["regions", "origin_region", "(R430|Hakoven Islands)"],
     ],
   );
-});
-
-test("buildHoverTooltipRows prepends ranking sample summaries sorted by occurrence", () => {
-  globalThis.window = globalThis.window || {};
-  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
-  const rows = buildHoverTooltipRows({
-    hover: {
-      pointSamples: [
-        {
-          fishId: 20,
-          sampleCount: 2,
-          lastTsUtc: 1_700_100_000,
-          zoneRgbs: [0x39e58d, 0x654321],
-          fullZoneRgbs: [],
-        },
-        {
-          fishId: 10,
-          sampleCount: 3,
-          lastTsUtc: 1_700_000_000,
-          zoneRgbs: [0x39e58d],
-          fullZoneRgbs: [0x39e58d],
-        },
-        {
-          fishId: 10,
-          sampleCount: 1,
-          sampleId: 4242,
-          lastTsUtc: 1_700_086_400,
-          zoneRgbs: [0x39e58d, 0x123456],
-          fullZoneRgbs: [],
-        },
-      ],
-      layerSamples: [
-        {
-          layerId: "zone_mask",
-          rgb: [57, 229, 141],
-          rgbU32: 0x39e58d,
-          detailSections: [],
-        },
-      ],
-    },
-    stateBundle: {
-      state: {
-        catalog: {
-          fish: [
-            { fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" },
-            { fishId: 20, itemId: 900020, name: "Mako Shark", grade: "rare" },
-          ],
-          layers: [{ layerId: "zone_mask", displayOrder: 20 }],
-        },
-      },
-      inputState: { filters: {} },
-    },
-    zoneCatalog: [
-      { zoneRgb: 0x39e58d, name: "Velia Coast" },
-      { zoneRgb: 0x123456, name: "Demi River" },
-      { zoneRgb: 0x654321, name: "Balenos River" },
-    ],
-  });
-
-  assert.deepEqual(
-    rows.slice(0, 4).map((row) => [row.kind || "fact", row.fishName || row.value, row.sampleCount || 0]),
-    [
-      ["point-sample", "Sea Eel", 3],
-      ["point-sample", "Sea Eel", 1],
-      ["point-sample", "Mako Shark", 2],
-      ["fact", "Velia Coast", 0],
-    ],
-  );
-  assert.equal(
-    rows.filter((row) => row.kind === "point-sample" && row.fishName === "Sea Eel").length,
-    2,
-  );
-  assert.equal(rows[0].dateText, "2023-11-14");
-  assert.equal(rows[0].zoneKind, "full");
-  assert.deepEqual(rows[0].zones.map((zone) => zone.name), []);
-  assert.equal(rows[0].iconUrl, "/items/900010.webp");
-  assert.equal(rows[1].sampleId, 4242);
-  assert.equal(rows[1].zoneKind, "partial");
-  assert.deepEqual(rows[1].zones.map((zone) => zone.name), ["Velia Coast", "Demi River"]);
-  assert.equal(rows[2].zoneKind, "partial");
-  assert.deepEqual(rows[2].zones.map((zone) => zone.name), ["Velia Coast", "Balenos River"]);
-});
-
-test("buildHoverTooltipRows can suppress ranking sample summaries", () => {
-  const rows = buildHoverTooltipRows({
-    hover: {
-      pointSamples: [
-        {
-          fishId: 10,
-          sampleCount: 3,
-          lastTsUtc: 1_700_000_000,
-          zoneRgbs: [0x39e58d],
-          fullZoneRgbs: [0x39e58d],
-        },
-      ],
-      layerSamples: [],
-    },
-    pointSamplesEnabled: false,
-  });
-
-  assert.deepEqual(rows, []);
 });
 
 test("buildLayerHoverSettingsRows keeps page-owned defaults and preview values", () => {
@@ -244,9 +143,9 @@ test("buildLayerPanelHoverFactPreview prefers live hover samples over selection 
   ]);
 });
 
-test("patchTouchesHoverTooltipSignals stays narrow", () => {
+test("patchTouchesLayerHoverFactSignals stays scoped to world-point fact controls", () => {
   assert.equal(
-    patchTouchesHoverTooltipSignals({
+    patchTouchesLayerHoverFactSignals({
       _map_ui: {
         layers: {
           hoverFactsVisibleByLayer: {
@@ -258,7 +157,7 @@ test("patchTouchesHoverTooltipSignals stays narrow", () => {
     true,
   );
   assert.equal(
-    patchTouchesHoverTooltipSignals({
+    patchTouchesLayerHoverFactSignals({
       _map_bridged: {
         filters: {
           layerIdsOrdered: ["zone_mask"],
@@ -268,7 +167,7 @@ test("patchTouchesHoverTooltipSignals stays narrow", () => {
     true,
   );
   assert.equal(
-    patchTouchesHoverTooltipSignals({
+    patchTouchesLayerHoverFactSignals({
       _map_runtime: {
         catalog: {
           layers: [],
@@ -278,17 +177,17 @@ test("patchTouchesHoverTooltipSignals stays narrow", () => {
     true,
   );
   assert.equal(
-    patchTouchesHoverTooltipSignals({
+    patchTouchesLayerHoverFactSignals({
       _map_runtime: {
         catalog: {
           fish: [],
         },
       },
     }),
-    true,
+    false,
   );
   assert.equal(
-    patchTouchesHoverTooltipSignals({
+    patchTouchesLayerHoverFactSignals({
       _map_runtime: {
         selection: {},
       },
@@ -296,4 +195,5 @@ test("patchTouchesHoverTooltipSignals stays narrow", () => {
     false,
   );
 });
+
 installMapTestI18n();

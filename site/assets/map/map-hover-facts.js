@@ -461,32 +461,26 @@ function orderedHoverLayerIds(hover, stateBundle) {
     : layerSamples.map((sample) => trimString(sample?.layerId)).filter(Boolean);
 }
 
-export function patchTouchesHoverTooltipSignals(patch) {
+export function patchTouchesLayerHoverFactSignals(patch) {
   if (!isPlainObject(patch)) {
     return false;
   }
   return Boolean(
     patch._map_runtime?.catalog?.layers != null ||
-      patch._map_runtime?.catalog?.fish != null ||
       patch._map_ui?.layers?.hoverFactsVisibleByLayer != null ||
-      patch._map_ui?.layers?.sampleHoverVisibleByLayer != null ||
       patch._map_bridged?.filters?.layerIdsOrdered != null,
   );
 }
 
-export function buildHoverTooltipRows({
+export function buildLayerHoverFactRows({
   hover = null,
   stateBundle = null,
   visibilityByLayer = {},
-  pointSamplesEnabled = true,
   zoneCatalog = [],
 } = {}) {
   const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
-  const pointRows = pointSamplesEnabled
-    ? buildPointSampleRows({ source: hover, stateBundle, zoneCatalog })
-    : [];
   if (!layerSamples.length) {
-    return pointRows;
+    return [];
   }
   const sampleByLayerId = new Map(
     layerSamples
@@ -509,7 +503,7 @@ export function buildHoverTooltipRows({
       ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
     }));
   });
-  return [...pointRows, ...layerRows];
+  return layerRows;
 }
 
 function previewSampleForLayer(layerId, sources = []) {

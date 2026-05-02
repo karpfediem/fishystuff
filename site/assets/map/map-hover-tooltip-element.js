@@ -1,7 +1,11 @@
 import {
-  buildHoverTooltipRows,
-  patchTouchesHoverTooltipSignals,
+  buildLayerHoverFactRows,
+  patchTouchesLayerHoverFactSignals,
 } from "./map-hover-facts.js";
+import {
+  buildLandmarkHoverRows,
+  patchTouchesLandmarkHoverSignals,
+} from "./map-hover-landmarks.js";
 import { readMapShellSignals } from "./map-shell-signals.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
@@ -80,8 +84,11 @@ function overviewRowMarkup(row) {
   const swatchRgb = trimString(row?.swatchRgb);
   const statusIcon = trimString(row?.statusIcon);
   const statusIconTone = trimString(row?.statusIconTone);
+  const rowKind = trimString(row?.kind);
+  const kindClass = rowKind === "landmark-hover" ? " fishymap-landmark-hover-row" : "";
+  const dataKind = rowKind ? ` data-hover-row-kind="${escapeHtml(rowKind)}"` : "";
   return `
-    <div class="fishymap-overview-row">
+    <div class="fishymap-overview-row${kindClass}"${dataKind}>
       <span class="fishymap-overview-row-icon" aria-hidden="true">
         ${
           swatchRgb
@@ -102,16 +109,6 @@ function overviewRowMarkup(row) {
       </span>
     </div>
   `;
-}
-
-function itemIconMarkup(row, size = "is-xs") {
-  const name = trimString(row?.fishName) || "Unknown fish";
-  const gradeTone = itemGradeTone(row?.grade, row?.isPrize === true);
-  const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
-  const iconUrl = trimString(row?.iconUrl);
-  return iconUrl
-    ? `<span class="fishy-item-icon-frame ${escapeHtml(size)} ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
-    : `<span class="fishy-item-icon-frame ${escapeHtml(size)} ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
 }
 
 function itemGradeTone(grade, isPrize) {
@@ -141,6 +138,16 @@ function itemGradeTone(grade, isPrize) {
     default:
       return "unknown";
   }
+}
+
+function itemIconMarkup(row, size = "is-xs") {
+  const name = trimString(row?.fishName) || "Unknown fish";
+  const gradeTone = itemGradeTone(row?.grade, row?.isPrize === true);
+  const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
+  const iconUrl = trimString(row?.iconUrl);
+  return iconUrl
+    ? `<span class="fishy-item-icon-frame ${escapeHtml(size)} ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishy-item-icon-frame ${escapeHtml(size)} ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
 }
 
 function pointSampleZoneMarkup(row) {
@@ -267,6 +274,17 @@ function pointSampleGroupMarkup(pointRows) {
   `;
 }
 
+function landmarkHoverInfoMarkup(landmarkRows) {
+  const pointRows = landmarkRows.filter((row) => row?.kind === "point-sample");
+  const targetRows = landmarkRows.filter((row) => row?.kind !== "point-sample");
+  return [
+    pointSampleGroupMarkup(pointRows),
+    targetRows.length
+      ? `<div class="fishymap-landmark-hover-list">${targetRows.map((row) => overviewRowMarkup(row)).join("")}</div>`
+      : "",
+  ].join("");
+}
+
 function buildStateBundle(signals) {
   return {
     state: {
@@ -300,30 +318,30 @@ export function readMapHoverTooltipShellSignals(shell) {
 
 function ensureHoverTooltipMarkup(host, documentRef = globalThis.document) {
   const existingLayers = host.querySelector?.("#fishymap-hover-layers");
-  const existingSamples = host.querySelector?.("#fishymap-hover-samples");
-  if (existingLayers && existingSamples) {
+  const existingInfo = host.querySelector?.("#fishymap-hover-info");
+  if (existingLayers && existingInfo) {
     return {
       hoverLayers: existingLayers,
-      hoverSamples: existingSamples,
+      hoverInfo: existingInfo,
     };
   }
   if (documentRef && typeof documentRef.createElement === "function") {
     const layers = documentRef.createElement("div");
     layers.id = "fishymap-hover-layers";
     layers.hidden = true;
-    const samples = documentRef.createElement("div");
-    samples.id = "fishymap-hover-samples";
-    samples.hidden = true;
-    host.replaceChildren?.(layers, samples);
+    const info = documentRef.createElement("div");
+    info.id = "fishymap-hover-info";
+    info.hidden = true;
+    host.replaceChildren?.(layers, info);
     return {
       hoverLayers: layers,
-      hoverSamples: samples,
+      hoverInfo: info,
     };
   }
-  host.innerHTML = '<div id="fishymap-hover-layers" hidden></div><div id="fishymap-hover-samples" hidden></div>';
+  host.innerHTML = '<div id="fishymap-hover-layers" hidden></div><div id="fishymap-hover-info" hidden></div>';
   return {
     hoverLayers: host.querySelector?.("#fishymap-hover-layers") || null,
-    hoverSamples: host.querySelector?.("#fishymap-hover-samples") || null,
+    hoverInfo: host.querySelector?.("#fishymap-hover-info") || null,
   };
 }
 
@@ -360,7 +378,7 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
       }
       this._pointerRafId = 0;
       setBooleanProperty(this._elements?.hoverLayers, "hidden", true);
-      setBooleanProperty(this._elements?.hoverSamples, "hidden", true);
+      setBooleanProperty(this._elements?.hoverInfo, "hidden", true);
       setBooleanProperty(this, "hidden", true);
     };
     this._handleHoverChanged = (event) => {
@@ -368,7 +386,10 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
       this.scheduleRender();
     };
     this._handleSignalPatched = (event) => {
-      if (patchTouchesHoverTooltipSignals(event?.detail)) {
+      if (
+        patchTouchesLayerHoverFactSignals(event?.detail) ||
+        patchTouchesLandmarkHoverSignals(event?.detail)
+      ) {
         this.scheduleRender();
       }
     };
@@ -436,8 +457,8 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     if (this._elements?.hoverLayers?.style) {
       this._elements.hoverLayers.style.transform = `translate3d(${x + 18}px, ${y + 22}px, 0)`;
     }
-    if (this._elements?.hoverSamples?.style) {
-      this._elements.hoverSamples.style.transform = `translate3d(calc(${x}px - 50%), calc(${y}px - 100% - 18px), 0)`;
+    if (this._elements?.hoverInfo?.style) {
+      this._elements.hoverInfo.style.transform = `translate3d(calc(${x}px - 50%), calc(${y}px - 100% - 18px), 0)`;
     }
   }
 
@@ -463,25 +484,37 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
 
   render() {
     this._rafId = 0;
-    const rows = buildHoverTooltipRows({
+    const signals = this.signals();
+    const stateBundle = buildStateBundle(signals);
+    const landmarkRows = buildLandmarkHoverRows({
       hover: this._state.hover,
-      stateBundle: buildStateBundle(this.signals()),
-      visibilityByLayer: this.signals()?._map_ui?.layers?.hoverFactsVisibleByLayer || {},
+      stateBundle,
       pointSamplesEnabled:
-        this.signals()?._map_ui?.layers?.sampleHoverVisibleByLayer?.fish_evidence !== false,
+        signals?._map_ui?.layers?.sampleHoverVisibleByLayer?.fish_evidence !== false,
       zoneCatalog: this._zoneCatalog,
     });
-    if (!this._state.pointerActive || rows.length === 0) {
+    const factRows = buildLayerHoverFactRows({
+      hover: this._state.hover,
+      stateBundle,
+      visibilityByLayer: signals?._map_ui?.layers?.hoverFactsVisibleByLayer || {},
+      zoneCatalog: this._zoneCatalog,
+    });
+    if (!this._state.pointerActive || (landmarkRows.length === 0 && factRows.length === 0)) {
       setMarkup(this._elements?.hoverLayers, "[]", "");
-      setMarkup(this._elements?.hoverSamples, "[]", "");
+      setMarkup(this._elements?.hoverInfo, "[]", "");
       setBooleanProperty(this._elements?.hoverLayers, "hidden", true);
-      setBooleanProperty(this._elements?.hoverSamples, "hidden", true);
+      setBooleanProperty(this._elements?.hoverInfo, "hidden", true);
       setBooleanProperty(this, "hidden", true);
+      delete this.dataset.landmarkHover;
       delete this.dataset.pointSamples;
       return;
     }
-    const pointRows = rows.filter((row) => row?.kind === "point-sample");
-    const factRows = rows.filter((row) => row?.kind !== "point-sample");
+    const pointRows = landmarkRows.filter((row) => row?.kind === "point-sample");
+    if (landmarkRows.length) {
+      this.dataset.landmarkHover = "true";
+    } else {
+      delete this.dataset.landmarkHover;
+    }
     if (pointRows.length) {
       this.dataset.pointSamples = "true";
     } else {
@@ -494,12 +527,12 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
       factRows.map((row) => overviewRowMarkup(row)).join(""),
     );
     setMarkup(
-      this._elements?.hoverSamples,
-      JSON.stringify(pointRows.map((row) => [row.key, row.sampleCount, row.dateText])),
-      pointSampleGroupMarkup(pointRows),
+      this._elements?.hoverInfo,
+      JSON.stringify(landmarkRows.map((row) => [row.kind, row.key, row.value || row.fishName || ""])),
+      landmarkHoverInfoMarkup(landmarkRows),
     );
     setBooleanProperty(this._elements?.hoverLayers, "hidden", factRows.length === 0);
-    setBooleanProperty(this._elements?.hoverSamples, "hidden", pointRows.length === 0);
+    setBooleanProperty(this._elements?.hoverInfo, "hidden", landmarkRows.length === 0);
     setBooleanProperty(this, "hidden", false);
   }
 
