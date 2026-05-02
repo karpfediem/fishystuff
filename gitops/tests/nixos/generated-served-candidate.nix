@@ -55,16 +55,19 @@ pkgs.testers.runNixOSTest {
 
     status = "/var/lib/fishystuff/gitops-test/status/local-test.json"
     active = "/var/lib/fishystuff/gitops-test/active/local-test.json"
+    route = "/run/fishystuff/gitops-test/routes/local-test.json"
     instance = f"/var/lib/fishystuff/gitops-test/instances/local-test-{release_id}.json"
     admission = "/run/fishystuff/gitops-test/admission/local-test.json"
 
     machine.wait_for_file(status)
     machine.wait_for_file(active)
+    machine.wait_for_file(route)
     machine.wait_for_file(instance)
     machine.wait_for_file(admission)
 
     machine.succeed(f"jq -e '.desired_generation == 7 and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
     machine.succeed(f"jq -e '.desired_generation == 7 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .instance_name == \"local-test-{release_id}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.succeed(f"jq -e '.desired_generation == 7 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .site_root == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_root == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .served == true and .state == \"selected_local_route\"' {route}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/site)\" = \"${siteArtifact}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/cdn)\" = \"${cdnRuntimeArtifact}\"")
     machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"{release_id}\" and .release_identity == \"{expected_release_identity}\" and .api_bundle == \"${apiArtifact}\" and .dolt_service_bundle == \"${doltServiceArtifact}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .retained_release_ids == [\"previous-release\"]' {instance}")

@@ -95,6 +95,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/served/site")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/served/cdn")
+    machine.succeed("test ! -e /run/fishystuff/gitops-test/routes/local-test.json")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-failed-candidate.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")

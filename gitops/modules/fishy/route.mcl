@@ -1,0 +1,50 @@
+import "fmt"
+import "json.mcl" as fishy_json
+
+class local($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$served bool = $st->served || false
+	$api_upstream str = $st->api_upstream || ""
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
+	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
+	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$run_dir = if $write_vm_state { "/run/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test/run" }
+	$site_root = $st->site_root || fmt.printf("%s/served/site", $state_dir)
+	$cdn_root = $st->cdn_root || fmt.printf("%s/served/cdn", $state_dir)
+	$route_dir = fmt.printf("%s/routes", $run_dir)
+	$route_path = fmt.printf("%s/%s.json", $route_dir, $environment)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"site_root\": %s,\n  \"cdn_root\": %s,\n  \"api_upstream\": %s,\n  \"served\": %t,\n  \"state\": \"selected_local_route\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($site_root), fishy_json.quote($cdn_root), fishy_json.quote($api_upstream), $served)
+
+	panic($environment == "", "route selection requires environment")
+	panic($desired_generation == 0, "route selection requires desired_generation")
+	panic($host == "", "route selection requires host")
+	panic($release_id == "", "route selection requires release_id")
+	panic($release_identity == "", "route selection requires release_identity")
+
+	if $write_local_state {
+		if $served {
+			file "${route_dir}/" {
+				state => "exists",
+				recurse => true,
+				mode => "0755",
+			}
+
+			file "${route_path}" {
+				state => "exists",
+				content => $content,
+				mode => "0644",
+			}
+
+			File["${route_dir}/"] -> File["${route_path}"]
+		} else {
+			file "${route_path}" {
+				state => "absent",
+			}
+		}
+	}
+}

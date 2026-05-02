@@ -74,11 +74,11 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 
 `gitops-json-status-escaping-vm` proves the VM-local JSON outputs preserve quote/backslash characters from the exact release identity tuple instead of emitting malformed JSON.
 
-`gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, verifies the generated retained `previous-release` object, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
+`gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, verifies the generated retained `previous-release` object, writes the VM-local route selection document, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
 
-`gitops-served-symlink-transition-vm` boots one local NixOS VM, serves one desired state, then serves a second desired state. It proves the VM-local active symlinks move by reconciliation through desired state, not by an imperative deployment command.
+`gitops-served-symlink-transition-vm` boots one local NixOS VM, serves one desired state, then serves a second desired state. It proves the VM-local active symlinks and route selection document move by reconciliation through desired state, not by an imperative deployment command.
 
-`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients.
+`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the route selection document.
 
 `gitops-failed-candidate-vm` boots a local NixOS VM with a failed admission fixture and `serve: false`. It proves candidate failure is status, not activation: instance/admission/status are published, but no active selection or served symlinks are created.
 
@@ -206,7 +206,7 @@ The VM runtime test binds mgmt's embedded etcd to `127.0.0.1` inside the test VM
 
 The closure and gcroot resources are both declared for each enabled artifact. A strict `nix:closure -> nix:gcroot` resource edge is intentionally deferred: the pinned mgmt build verified closures but did not progress the dependent gcroot behind that edge in the VM test. Reintroduce that edge only with a VM regression test proving the ordered behavior.
 
-`gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json` and VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/{site,cdn}`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
+`gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`, VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/{site,cdn}`, and a route selection document under `/run/fishystuff/gitops-test/routes/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
 
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 
@@ -249,9 +249,12 @@ Local active selection is written only when a VM/local desired state is explicit
 /var/lib/fishystuff/gitops-test/active/<environment>.json
 /var/lib/fishystuff/gitops-test/served/site
 /var/lib/fishystuff/gitops-test/served/cdn
+/run/fishystuff/gitops-test/routes/<environment>.json
 ```
 
 The active selection document includes the desired generation that selected the served symlinks so route state can be correlated with the desired-state object that produced it.
+
+The route selection document is the local-only handoff shape for future Caddy integration. It records the selected release and the stable site/CDN symlink roots that Caddy would serve, without starting or reloading Caddy in VM tests.
 
 KV publication can be added later when the status consumer is clear.
 

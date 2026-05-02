@@ -9,6 +9,7 @@ import "modules/fishy/desired.mcl" as fishy_desired
 import "modules/fishy/instance.mcl" as fishy_instance
 import "modules/fishy/json.mcl" as fishy_json
 import "modules/fishy/release.mcl" as fishy_release
+import "modules/fishy/route.mcl" as fishy_route
 import "modules/fishy/status.mcl" as fishy_status
 
 $state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "gitops/fixtures/empty.desired.json")
@@ -256,6 +257,16 @@ if $local_test_environment->enabled {
 		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
 		retained_release_ids_json => $retained_release_ids_json,
 		admission_state => $admission_state,
+		served => $served,
+	})
+
+	include fishy_route.local(struct {
+		mode => $mode,
+		desired_generation => $generation,
+		environment => "local-test",
+		host => $vm_single_host->hostname,
+		release_id => $local_test_environment->active_release,
+		release_identity => $active_release_identity,
 		served => $served,
 	})
 
