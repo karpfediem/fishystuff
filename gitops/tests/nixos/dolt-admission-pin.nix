@@ -99,8 +99,8 @@ pkgs.testers.runNixOSTest {
               "retained_releases": [],
               "serve": false,
               "admission_probe": {{
-                "kind": "dolt_sql_fixture",
-                "sql": "select v from t as of '{release_ref}' where pk = {pk}",
+                "kind": "dolt_sql_scalar",
+                "query": "select v from t as of '{release_ref}' where pk = {pk}",
                 "expected_scalar": "{expected_value}"
               }}
             }}

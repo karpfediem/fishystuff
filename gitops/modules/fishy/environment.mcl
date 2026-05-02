@@ -13,7 +13,7 @@ class single_host($st) {
 	$cluster str = $st->cluster || "local-test"
 	$desired_generation int = $st->desired_generation || 0
 	$environment_name str = $st->environment_name
-	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; sql str; expected_scalar str}} = $st->environment
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; query str; expected_scalar str}} = $st->environment
 	$host struct{enabled bool; role str; hostname str} = $st->host
 	$releases map{str: struct{
 		generation int;
@@ -52,9 +52,9 @@ class single_host($st) {
 		store_path => "",
 		gcroot_path => "",
 	}
-	$empty_admission_probe struct{kind str; sql str; expected_scalar str} = struct {
+	$empty_admission_probe struct{kind str; query str; expected_scalar str} = struct {
 		kind => "",
-		sql => "",
+		query => "",
 		expected_scalar => "",
 	}
 	$active_release_id str = $environment->active_release
@@ -96,9 +96,9 @@ class single_host($st) {
 	$requested_admission_fixture_state str = $environment->admission_fixture_state || ""
 	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
 	$admission_state = if $requested_admission_fixture_state != "" { $requested_admission_fixture_state } else { $default_admission_state }
-	$admission_probe struct{kind str; sql str; expected_scalar str} = $environment->admission_probe || $empty_admission_probe
+	$admission_probe struct{kind str; query str; expected_scalar str} = $environment->admission_probe || $empty_admission_probe
 	$admission_probe_kind str = $admission_probe->kind || ""
-	$use_dolt_sql_admission_probe = $admission_probe_kind == "dolt_sql_fixture"
+	$use_dolt_sql_admission_probe = $admission_probe_kind == "dolt_sql_scalar"
 	$admission_failed = $admission_state == "failed_fixture"
 	$served = $environment->serve and ($admission_state == "passed_fixture")
 	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
@@ -121,7 +121,7 @@ class single_host($st) {
 	panic(($admission_probe_kind != "") and (not $use_dolt_sql_admission_probe), fmt.printf("environment %s has unsupported admission_probe kind %s", $environment_name, $admission_probe_kind))
 	panic($use_dolt_sql_admission_probe and ($active_dolt_materialization != "fetch_pin"), fmt.printf("environment %s Dolt SQL admission probe requires fetch_pin materialization", $environment_name))
 	panic($use_dolt_sql_admission_probe and ($admission_state != "passed_fixture"), fmt.printf("environment %s Dolt SQL admission probe can only publish passed_fixture admission", $environment_name))
-	panic($use_dolt_sql_admission_probe and ($admission_probe->sql == ""), fmt.printf("environment %s Dolt SQL admission probe requires sql", $environment_name))
+	panic($use_dolt_sql_admission_probe and ($admission_probe->query == ""), fmt.printf("environment %s Dolt SQL admission probe requires query", $environment_name))
 	panic($environment->host == "", fmt.printf("environment %s requires host", $environment_name))
 	panic(not $host->enabled, fmt.printf("environment %s references a disabled or unknown host %s", $environment_name, $environment->host))
 	panic($host->hostname == "", fmt.printf("environment %s host %s requires hostname", $environment_name, $environment->host))
@@ -202,7 +202,7 @@ class single_host($st) {
 	})
 
 	if $use_dolt_sql_admission_probe {
-		include fishy_admission.dolt_sql_fixture(struct {
+		include fishy_admission.dolt_sql_scalar(struct {
 			mode => $mode,
 			environment => $environment_name,
 			host => $host->hostname,
@@ -213,7 +213,7 @@ class single_host($st) {
 			dolt_cache_dir => $active_dolt->cache_dir,
 			dolt_release_ref => $active_dolt->release_ref,
 			dolt_status_path => $dolt_status_path,
-			probe_sql => $admission_probe->sql,
+			query => $admission_probe->query,
 			expected_scalar => $admission_probe->expected_scalar,
 		})
 	} else {

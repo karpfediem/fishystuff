@@ -124,7 +124,7 @@ class fixture($st) {
 	}
 }
 
-class dolt_sql_fixture($st) {
+class dolt_sql_scalar($st) {
 	$mode str = $st->mode || "validate"
 	$environment str = $st->environment
 	$host str = $st->host
@@ -135,7 +135,7 @@ class dolt_sql_fixture($st) {
 	$dolt_cache_dir str = $st->dolt_cache_dir || ""
 	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$dolt_status_path str = $st->dolt_status_path || ""
-	$probe_sql str = $st->probe_sql || ""
+	$query str = $st->query || ""
 	$expected_scalar str = $st->expected_scalar || ""
 	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
 	$request_dir = "/var/lib/fishystuff/gitops-test/admission/requests"
@@ -144,20 +144,20 @@ class dolt_sql_fixture($st) {
 	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
 	$exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment, $release_id)
 	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
-	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"expected_commit\": %s,\n  \"materialization\": %s,\n  \"cache_dir\": %s,\n  \"pinned_ref\": %s,\n  \"materialization_status_path\": %s,\n  \"query\": %s,\n  \"expected_scalar\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), fishy_json.quote($dolt_status_path), fishy_json.quote($probe_sql), fishy_json.quote($expected_scalar))
+	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"expected_commit\": %s,\n  \"materialization\": %s,\n  \"cache_dir\": %s,\n  \"pinned_ref\": %s,\n  \"materialization_status_path\": %s,\n  \"query\": %s,\n  \"expected_scalar\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), fishy_json.quote($dolt_status_path), fishy_json.quote($query), fishy_json.quote($expected_scalar))
 	$ifcmd = fmt.printf("test ! -e '%s' || test \"$(/run/current-system/sw/bin/jq -r .expected_commit '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .expected_commit '%s')\" || test \"$(/run/current-system/sw/bin/jq -r .query '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .query '%s')\" || test \"$(/run/current-system/sw/bin/jq -r .expected_scalar '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .expected_scalar '%s')\"", $status_path, $status_path, $request_path, $status_path, $request_path, $status_path, $request_path)
 
-	panic($environment == "", "Dolt SQL admission fixture requires environment")
-	panic($host == "", "Dolt SQL admission fixture requires host")
-	panic($release_id == "", "Dolt SQL admission fixture requires release_id")
-	panic($release_identity == "", "Dolt SQL admission fixture requires release_identity")
-	panic($dolt_commit == "", "Dolt SQL admission fixture requires dolt_commit")
-	panic($dolt_materialization != "fetch_pin", "Dolt SQL admission fixture requires fetch_pin materialization")
-	panic($dolt_cache_dir == "", "Dolt SQL admission fixture requires dolt_cache_dir")
-	panic($dolt_release_ref == "", "Dolt SQL admission fixture requires dolt_release_ref")
-	panic($dolt_status_path == "", "Dolt SQL admission fixture requires dolt_status_path")
-	panic($probe_sql == "", "Dolt SQL admission fixture requires probe_sql")
-	panic(not $write_vm_state, "Dolt SQL admission fixture is only supported in VM test modes")
+	panic($environment == "", "Dolt SQL scalar admission requires environment")
+	panic($host == "", "Dolt SQL scalar admission requires host")
+	panic($release_id == "", "Dolt SQL scalar admission requires release_id")
+	panic($release_identity == "", "Dolt SQL scalar admission requires release_identity")
+	panic($dolt_commit == "", "Dolt SQL scalar admission requires dolt_commit")
+	panic($dolt_materialization != "fetch_pin", "Dolt SQL scalar admission requires fetch_pin materialization")
+	panic($dolt_cache_dir == "", "Dolt SQL scalar admission requires dolt_cache_dir")
+	panic($dolt_release_ref == "", "Dolt SQL scalar admission requires dolt_release_ref")
+	panic($dolt_status_path == "", "Dolt SQL scalar admission requires dolt_status_path")
+	panic($query == "", "Dolt SQL scalar admission requires query")
+	panic(not $write_vm_state, "Dolt SQL scalar admission is only supported in VM test modes")
 
 	if $write_vm_state {
 		file "${request_dir}/" {

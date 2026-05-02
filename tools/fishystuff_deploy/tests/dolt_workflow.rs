@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
 #[test]
-fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> {
+fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> {
     let Some(dolt_bin) = find_dolt()? else {
         eprintln!("skipping Dolt workflow test because dolt is not available in PATH");
         return Ok(());
@@ -338,7 +338,7 @@ fn probe_sql_scalar(
     release_ref: &str,
     commit: &str,
     dolt_status: &Path,
-    probe_sql: &str,
+    query: &str,
     expected_scalar: &str,
     status: &Path,
 ) -> Result<()> {
@@ -355,7 +355,7 @@ fn probe_sql_scalar(
             "cache_dir": cache,
             "pinned_ref": release_ref,
             "materialization_status_path": dolt_status,
-            "query": probe_sql,
+            "query": query,
             "expected_scalar": expected_scalar,
         }),
     )?;
