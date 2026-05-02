@@ -185,6 +185,17 @@ Available HTTP server resources:
 
 No dedicated HTTP client probe/status resource was found. Existing FishyStuff health checks use `exec` with `curl` in the old resident graph. The new graph does not run real admission in `validate` mode and uses a deterministic VM fixture in `vm-test`.
 
+The local `fishystuff_deploy` helper now includes a narrow HTTP probe bridge:
+
+```text
+fishystuff_deploy http probe-status --request <json> --status <json>
+fishystuff_deploy http needs-probe-status --request <json> --status <json>
+fishystuff_deploy http probe-json-scalar --request <json> --status <json>
+fishystuff_deploy http needs-probe-json-scalar --request <json> --status <json>
+```
+
+The request tuple includes environment, host, release ID, release identity, probe name, URL, expected status, and optional timeout. JSON scalar probes add `json_pointer` and `expected_scalar`. The helper only probes loopback HTTP targets and rejects credential-bearing URLs. This keeps the bridge host-local and reusable for API readiness/meta checks without becoming a deployment controller.
+
 ## Git/Dolt Signals
 
 No `git/ref` mgmt resource or function was found in the inspected checkouts. Future Git/Dolt watching should either compose existing primitives or introduce a small Unix-like primitive if needed.

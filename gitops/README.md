@@ -296,6 +296,15 @@ Fallbacks introduced: none to the old beta deployment graph. The validation no-o
 
 Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture written under `/run/fishystuff/gitops-test/admission/`; by default it is `passed_fixture`, and tests may explicitly request `failed_fixture` through `admission_fixture_state`. A VM test environment may also request `admission_probe.kind = "dolt_sql_scalar"` to run a configured single-scalar SQL probe against the exact pinned Dolt cache/ref before admission is published. For serving fixtures, this local probe must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
 
+The Rust deployment helper also provides local HTTP admission probe building blocks:
+
+- `fishystuff_deploy http probe-status`
+- `fishystuff_deploy http needs-probe-status`
+- `fishystuff_deploy http probe-json-scalar`
+- `fishystuff_deploy http needs-probe-json-scalar`
+
+These helpers intentionally support only HTTP GET against loopback targets (`localhost`, `127.0.0.1`, or `::1`). They reject credential-bearing URLs, cap response bodies, and write structured status documents with the exact request tuple. This is the intended bridge for future host-local API admission probes until mgmt has a dedicated HTTP client probe primitive.
+
 Future real admission should probe the exact candidate tuple:
 
 - API `readyz`

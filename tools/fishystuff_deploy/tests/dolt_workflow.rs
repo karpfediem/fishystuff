@@ -486,7 +486,18 @@ fn assert_fetch_pin_failure_contains(result: Result<()>, expected: &str) {
 }
 
 fn find_dolt() -> Result<Option<PathBuf>> {
-    let output = Command::new("dolt").arg("version").output();
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system clock is before UNIX_EPOCH")?
+        .as_nanos();
+    let home = std::env::temp_dir().join(format!("fishystuff-deploy-dolt-home-{nonce}"));
+    fs::create_dir_all(&home).with_context(|| format!("creating {}", home.display()))?;
+
+    let output = Command::new("dolt")
+        .arg("version")
+        .env("HOME", &home)
+        .output();
+    let _ = fs::remove_dir_all(&home);
     match output {
         Ok(output) if output.status.success() => Ok(Some(PathBuf::from("dolt"))),
         Ok(output) => bail_command("dolt version", output),
@@ -516,6 +527,7 @@ fn fetch_pin(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fetch_pin_with_access_mode(
     root: &TestRoot,
     home: &Path,
@@ -539,6 +551,7 @@ fn fetch_pin_with_access_mode(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fetch_pin_from_remote(
     root: &TestRoot,
     home: &Path,
