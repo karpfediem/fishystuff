@@ -31,6 +31,7 @@ let
     dolt_commit = doltCommit;
     dolt_repository = doltRepository;
     dolt_branch_context = doltBranchContext;
+    dolt_mode = doltMode;
     api = optionalStorePath apiClosure;
     site = optionalStorePath siteClosure;
     cdn_runtime = optionalStorePath cdnRuntimeClosure;

@@ -28,7 +28,7 @@ let
     currentRoot = currentCdnRoot;
     previousRoots = [ previousCdnRoot ];
   };
-  expectedReleaseIdentity = "release=example-release;generation=3;git_rev=served-test;dolt_commit=served-test;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;api=;site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=";
+  expectedReleaseIdentity = "release=example-release;generation=3;git_rev=served-test;dolt_commit=served-test;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=;site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=";
   desiredState = pkgs.writeText "vm-served-candidate.example.desired.json" (builtins.toJSON {
     cluster = "local-test";
     generation = 3;

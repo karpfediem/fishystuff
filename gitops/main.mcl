@@ -111,13 +111,14 @@ $active_release_identity = if $active_release->generation == 0 {
 	""
 } else {
 	fmt.printf(
-		"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
+		"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
 		$active_release_id,
 		$active_release->generation,
 		$active_release->git_rev,
 		$active_release->dolt_commit,
 		$active_dolt->repository,
 		$active_dolt->branch_context,
+		$active_dolt->mode,
 		$active_api_artifact->store_path,
 		$active_site_artifact->store_path,
 		$active_cdn_runtime_artifact->store_path,
