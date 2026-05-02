@@ -3,6 +3,7 @@
   lib ? pkgs.lib,
   apiServiceBundle,
   doltServiceBundle,
+  edgeServiceBundle,
 }:
 let
   mkBundleCheck =
@@ -17,9 +18,11 @@ let
       workingDirectory ? null,
       minArgvLength ? 1,
       requiredEnvironment ? { },
+      requiredConfigLines ? [ ],
       requiredUnitLines ? [ ],
       forbiddenUnitLines ? [ ],
       expectedReloadMode ? "restart",
+      expectedRuntimeOverlayCount ? 0,
       requiredMaterializationAcquisition ? null,
       requiredMaterializationHandle ? null,
     }:
@@ -102,6 +105,7 @@ let
         grep -F "ExecStart=" "$unit_path" >/dev/null
         grep -F "Restart=on-failure" "$unit_path" >/dev/null
         grep -F "WantedBy=multi-user.target" "$unit_path" >/dev/null
+        ${lib.concatStringsSep "\n" (map (line: "grep -F ${lib.escapeShellArg line} \"$config_path\" >/dev/null") requiredConfigLines)}
         ${lib.concatStringsSep "\n" (map (line: "grep -Fx ${lib.escapeShellArg line} \"$unit_path\" >/dev/null") requiredUnitLines)}
         ${lib.concatStringsSep "\n" (
           map (
@@ -143,7 +147,7 @@ let
 
         ${if runtimeEnvTarget == null then
           ''
-            jq -e '.runtimeOverlays | length == 0' "$bundle_json" >/dev/null
+            jq -e '.runtimeOverlays | length == ${toString expectedRuntimeOverlayCount}' "$bundle_json" >/dev/null
 
             if grep -F "EnvironmentFile=" "$unit_path" >/dev/null; then
               echo "unexpected environment file in unit" >&2
@@ -219,5 +223,36 @@ in
       "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
     ];
     expectedReloadMode = "command";
+  };
+
+  edge-service-bundle = mkBundleCheck {
+    name = "edge-service-bundle-check";
+    bundle = edgeServiceBundle;
+    serviceId = "fishystuff-edge";
+    configDestination = "Caddyfile";
+    unitName = "fishystuff-edge.service";
+    minArgvLength = 5;
+    expectedReloadMode = "command";
+    expectedRuntimeOverlayCount = 2;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
+    requiredConfigLines = [
+      "@runtime_manifest path /map/runtime-manifest.json"
+      "/map/fishystuff_ui_bevy.*.js"
+      "/map/fishystuff_ui_bevy.*.js.map"
+      "/map/fishystuff_ui_bevy_bg.*.wasm"
+      "/map/fishystuff_ui_bevy_bg.*.wasm.map"
+      "header Cache-Control \"no-store\""
+      "header Cache-Control \"public, max-age=31536000, immutable\""
+    ];
+    requiredUnitLines = [
+      "LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem"
+      "LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem"
+      "AmbientCapabilities=CAP_NET_BIND_SERVICE"
+      "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
   };
 }

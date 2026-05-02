@@ -292,6 +292,7 @@
             inherit
               apiServiceBundle
               doltServiceBundle
+              edgeServiceBundle
               pkgs
               ;
           };
