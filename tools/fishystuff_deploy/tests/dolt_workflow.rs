@@ -284,6 +284,21 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         ),
         "expected scalar",
     );
+    assert_probe_failure_contains(
+        probe_sql_scalar(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            release_ref,
+            &commit1,
+            &fetch_status,
+            "insert into t values (99, 'mutation')",
+            "mutation",
+            &root.path().join("status/admission-mutation-query.json"),
+        ),
+        "must start with SELECT or WITH",
+    );
 
     let stale_commit_status = root.path().join("status/fetch-stale-commit.json");
     write_fetch_status(

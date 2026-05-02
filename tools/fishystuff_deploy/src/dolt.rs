@@ -400,6 +400,9 @@ fn validate_probe_sql_scalar_request(request: &ProbeSqlScalarRequest) -> Result<
     if request.materialization_status_path.as_os_str().is_empty() {
         bail!("Dolt SQL scalar request field materialization_status_path must not be empty");
     }
+    if !is_read_query(&request.query) {
+        bail!("Dolt SQL scalar probe query must start with SELECT or WITH");
+    }
 
     Ok(())
 }
@@ -703,6 +706,14 @@ fn sql_quote(value: &str) -> String {
     value.replace('\'', "''")
 }
 
+fn is_read_query(query: &str) -> bool {
+    let trimmed = query.trim_start();
+    let Some(first_token) = trimmed.split_whitespace().next() else {
+        return false;
+    };
+    first_token.eq_ignore_ascii_case("select") || first_token.eq_ignore_ascii_case("with")
+}
+
 fn parse_single_hash_csv(stdout: &str) -> Result<String> {
     let mut lines = stdout
         .lines()
@@ -753,7 +764,7 @@ fn parse_single_scalar_csv(stdout: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_single_hash_csv, parse_single_scalar_csv, sql_quote};
+    use super::{is_read_query, parse_single_hash_csv, parse_single_scalar_csv, sql_quote};
 
     #[test]
     fn parses_dolt_hash_csv() {
@@ -788,5 +799,15 @@ mod tests {
         assert!(parse_single_scalar_csv("a,b\none,two\n").is_err());
         assert!(parse_single_scalar_csv("value\none\ntwo\n").is_err());
         assert!(parse_single_scalar_csv("value\n").is_err());
+    }
+
+    #[test]
+    fn classifies_probe_read_queries() {
+        assert!(is_read_query("select 1"));
+        assert!(is_read_query("  WITH cte as (select 1) select * from cte"));
+        assert!(is_read_query("\nSeLeCt 1"));
+        assert!(!is_read_query(""));
+        assert!(!is_read_query("insert into t values (1)"));
+        assert!(!is_read_query("call dolt_fetch('origin')"));
     }
 }
