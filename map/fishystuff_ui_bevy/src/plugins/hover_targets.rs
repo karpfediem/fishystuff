@@ -41,6 +41,9 @@ const HOVER_ICON_GAP_SCREEN_PX: f32 = 8.0;
 const HOVER_ICON_INSET_LEFT_SCREEN_PX: f32 = HOVER_CALLOUT_PADDING_X_SCREEN_PX;
 const HOVER_ICON_TOP_SCREEN_PX: f32 =
     (HOVER_CALLOUT_HEIGHT_SCREEN_PX - HOVER_ICON_SIZE_SCREEN_PX) * 0.5 - 2.5;
+const HOVER_PLAIN_TEXT_BOX_HEIGHT_SCREEN_PX: f32 = HOVER_LABEL_SIZE_PX + 4.0;
+const HOVER_PLAIN_TEXT_TOP_SCREEN_PX: f32 =
+    (HOVER_CALLOUT_HEIGHT_SCREEN_PX - HOVER_PLAIN_TEXT_BOX_HEIGHT_SCREEN_PX) * 0.5;
 const HOVER_PLAIN_TEXT_WIDTH_FACTOR: f32 = 0.62;
 const HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 4.0;
 const HOVER_PREFIX_TEXT_WIDTH_FACTOR: f32 = 0.54;
@@ -250,7 +253,6 @@ struct HoverTargetSyncQueries<'w, 's> {
             &'static mut Visibility,
             &'static mut BackgroundColor,
             &'static mut BorderColor,
-            &'static ComputedNode,
         ),
         (
             With<HoverTargetLabelRoot>,
@@ -277,6 +279,7 @@ struct HoverTargetSyncQueries<'w, 's> {
                     &'static mut Text,
                     &'static mut TextFont,
                     &'static mut TextColor,
+                    &'static mut Node,
                 ),
                 (
                     With<HoverTargetLabelText>,
@@ -473,6 +476,7 @@ fn sync_hover_targets(
                 position_type: PositionType::Absolute,
                 left: Val::Px(0.0),
                 top: Val::Px(0.0),
+                width: Val::Px(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX),
                 height: Val::Px(HOVER_CALLOUT_HEIGHT_SCREEN_PX),
                 padding: UiRect {
                     left: Val::Px(HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX),
@@ -514,6 +518,14 @@ fn sync_hover_targets(
                     .spawn((
                         HoverTargetLabelText,
                         Text::new(""),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX),
+                            top: Val::Px(HOVER_PLAIN_TEXT_TOP_SCREEN_PX),
+                            width: Val::Px(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX),
+                            height: Val::Px(HOVER_PLAIN_TEXT_BOX_HEIGHT_SCREEN_PX),
+                            ..default()
+                        },
                         TextFont {
                             font: ui_assets.1.regular.clone(),
                             font_size: HOVER_LABEL_SIZE_PX,
@@ -696,16 +708,7 @@ fn sync_hover_targets(
             hide_hover_target_label(pair, &mut sync);
             continue;
         };
-        let panel_size_px = sync
-            .label_roots
-            .get(pair.label_root)
-            .ok()
-            .map(|(_, _, _, _, computed)| {
-                let inv = computed.inverse_scale_factor();
-                computed.size() * inv
-            })
-            .filter(|size| size.x > 1.0 && size.y > 1.0)
-            .unwrap_or_else(|| hover_callout_size_px(&target.label));
+        let panel_size_px = hover_callout_size_px(&target.label);
         let (left_px, top_px) = if let Ok(window) = sync.windows.single() {
             let max_left = (window.width() - panel_size_px.x).max(0.0);
             let max_top = (window.height() - panel_size_px.y).max(0.0);
@@ -729,12 +732,13 @@ fn sync_hover_targets(
                 *visibility = Visibility::Visible;
             }
         }
-        if let Ok((mut node, mut visibility, mut background, mut border, _)) =
+        if let Ok((mut node, mut visibility, mut background, mut border)) =
             sync.label_roots.get_mut(pair.label_root)
         {
             node.display = Display::Flex;
             node.left = Val::Px(left_px);
             node.top = Val::Px(top_px);
+            node.width = Val::Px(panel_size_px.x);
             node.height = Val::Px(panel_size_px.y);
             node.border = UiRect::all(Val::Px(HOVER_CALLOUT_BORDER_SCREEN_PX));
             node.border_radius = BorderRadius::all(Val::Px(HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX));
@@ -743,13 +747,18 @@ fn sync_hover_targets(
             *visibility = Visibility::Visible;
         }
         let semantic_identity = parse_semantic_identity_label(&target.label);
-        if let Ok((mut text, mut text_font, mut text_color)) =
+        if let Ok((mut text, mut text_font, mut text_color, mut text_node)) =
             sync.label_parts.p0().get_mut(pair.plain_text)
         {
             text.0 = target.label.clone();
             text_font.font = ui_assets.1.regular.clone();
             text_font.font_size = HOVER_LABEL_SIZE_PX;
             text_color.0 = label_color;
+            text_node.position_type = PositionType::Absolute;
+            text_node.left = Val::Px(HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX);
+            text_node.top = Val::Px(HOVER_PLAIN_TEXT_TOP_SCREEN_PX);
+            text_node.width = Val::Px(hover_callout_text_width_px(panel_size_px.x));
+            text_node.height = Val::Px(HOVER_PLAIN_TEXT_BOX_HEIGHT_SCREEN_PX);
         }
         if let Some(identity) = semantic_identity.as_ref() {
             if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.plain_text) {
@@ -826,7 +835,7 @@ fn sync_hover_targets(
                     Visibility::Visible
                 };
             }
-            if let Ok((mut text, _, mut text_color)) =
+            if let Ok((mut text, _, mut text_color, _)) =
                 sync.label_parts.p0().get_mut(pair.plain_text)
             {
                 text.0.clear();
@@ -836,13 +845,18 @@ fn sync_hover_targets(
             if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_inline) {
                 *visibility = Visibility::Hidden;
             }
-            if let Ok((mut text, mut text_font, mut text_color)) =
+            if let Ok((mut text, mut text_font, mut text_color, mut text_node)) =
                 sync.label_parts.p0().get_mut(pair.plain_text)
             {
                 text.0 = target.label.clone();
                 text_font.font = ui_assets.1.regular.clone();
                 text_font.font_size = HOVER_LABEL_SIZE_PX;
                 text_color.0 = label_color;
+                text_node.position_type = PositionType::Absolute;
+                text_node.left = Val::Px(HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX);
+                text_node.top = Val::Px(HOVER_PLAIN_TEXT_TOP_SCREEN_PX);
+                text_node.width = Val::Px(hover_callout_text_width_px(panel_size_px.x));
+                text_node.height = Val::Px(HOVER_PLAIN_TEXT_BOX_HEIGHT_SCREEN_PX);
             }
             if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.plain_text) {
                 *visibility = Visibility::Visible;
@@ -888,7 +902,7 @@ fn hide_hover_targets(marker_pool: &HoverTargetMarkerPool, sync: &mut HoverTarge
 }
 
 fn hide_hover_target_label(pair: HoverTargetVisualPair, sync: &mut HoverTargetSyncQueries) {
-    if let Ok((mut node, mut visibility, _, _, _)) = sync.label_roots.get_mut(pair.label_root) {
+    if let Ok((mut node, mut visibility, _, _)) = sync.label_roots.get_mut(pair.label_root) {
         node.display = Display::None;
         *visibility = Visibility::Hidden;
     }
@@ -973,20 +987,30 @@ fn effective_targets(
 
     let include_bookmark_selection =
         layer_visible_by_key(BOOKMARK_LAYER_KEY, layer_registry, layer_runtime);
+    let selected_targets =
+        selected_landmark_targets(selection, bookmarks, include_bookmark_selection);
     let mut targets = match active_detail_pane_id {
         Some(TERRITORY_DETAIL_PANE_ID) => {
             selection_targets_from_info(selection.info.as_ref(), layer_registry, layer_runtime)
         }
-        Some(_) => selected_landmark_targets(selection, bookmarks, include_bookmark_selection),
-        None => hover_targets_from_info(hover_info, layer_registry, layer_runtime),
+        Some(_) => selected_targets.clone(),
+        None => {
+            let mut targets = selected_targets.clone();
+            for target in hover_targets_from_info(hover_info, layer_registry, layer_runtime) {
+                push_unique_hover_target(&mut targets, target);
+            }
+            targets
+        }
     };
+    if active_detail_pane_id == Some(TERRITORY_DETAIL_PANE_ID) {
+        for target in selected_targets {
+            push_unique_hover_target(&mut targets, target);
+        }
+    }
     if active_detail_pane_id.is_some() {
         for target in hover_landmark_targets(hover_info) {
             push_unique_hover_target(&mut targets, target);
         }
-    }
-    for target in selected_landmark_targets(selection, bookmarks, include_bookmark_selection) {
-        push_unique_hover_target(&mut targets, target);
     }
     targets
 }
@@ -1369,6 +1393,14 @@ fn hover_callout_size_px(display_text: &str) -> Vec2 {
     Vec2::new(width_px, HOVER_CALLOUT_HEIGHT_SCREEN_PX)
 }
 
+fn hover_callout_text_width_px(panel_width_px: f32) -> f32 {
+    (panel_width_px
+        - HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX
+        - HOVER_CALLOUT_PADDING_RIGHT_SCREEN_PX
+        - HOVER_CALLOUT_BORDER_SCREEN_PX * 2.0)
+        .max(0.0)
+}
+
 fn plain_label_width_px(text: &str) -> f32 {
     text.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_PLAIN_TEXT_WIDTH_FACTOR
         + HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX
@@ -1544,14 +1576,17 @@ fn circle_alpha(distance: f32, radius: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        clamp_hover_target_to_viewport, effective_targets, hover_targets_from_info,
-        parse_semantic_identity_label, selection_targets_from_info, HoverTargetVisual,
-        Map2dViewportBounds, SemanticIdentityKind, BOOKMARK_MARKER_COLOR,
-        ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX, ORIGIN_NODE_MARKER_COLOR,
-        ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, REGION_NODE_LABEL_OFFSET_SCREEN_PX,
-        REGION_NODE_MARKER_COLOR, REGION_NODE_MARKER_SIZE_SCREEN_PX,
-        RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX, RESOURCE_BAR_MARKER_COLOR,
-        RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
+        clamp_hover_target_to_viewport, effective_targets, hover_callout_size_px,
+        hover_targets_from_info, parse_semantic_identity_label, selection_targets_from_info,
+        HoverTargetVisual, Map2dViewportBounds, SemanticIdentityKind, BOOKMARK_MARKER_COLOR,
+        HOVER_CALLOUT_BORDER_SCREEN_PX, HOVER_CALLOUT_HEIGHT_SCREEN_PX,
+        HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX, HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX,
+        HOVER_CALLOUT_PADDING_RIGHT_SCREEN_PX, HOVER_LABEL_SIZE_PX, HOVER_PLAIN_TEXT_WIDTH_FACTOR,
+        HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+        ORIGIN_NODE_MARKER_COLOR, ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+        REGION_NODE_LABEL_OFFSET_SCREEN_PX, REGION_NODE_MARKER_COLOR,
+        REGION_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
     };
     use crate::bridge::contract::FishyMapSelectionPointKind;
     use crate::map::camera::mode::ViewMode;
@@ -1560,6 +1595,7 @@ mod tests {
     use crate::plugins::api::{DetailsSelectionTarget, HoverInfo, SelectedInfo, SelectionState};
     use crate::plugins::bookmarks::BookmarkState;
     use crate::plugins::svg_icons::UiSvgIconKind;
+    use bevy::prelude::Vec2;
     use fishystuff_api::models::layers::{
         GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
         LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
@@ -1945,6 +1981,77 @@ mod tests {
             .len(),
             1
         );
+    }
+
+    #[test]
+    fn selected_landmark_targets_stay_before_transient_hover_targets() {
+        let mut hover_bookmark = sample("bookmarks");
+        hover_bookmark.targets.push(FieldHoverTarget {
+            key: "bookmark".to_string(),
+            label: "Hovered bookmark".to_string(),
+            world_x: 100.0,
+            world_z: 200.0,
+        });
+        let hover_info = HoverInfo {
+            map_px: 0,
+            map_py: 0,
+            world_x: 100.0,
+            world_z: 200.0,
+            layer_samples: vec![hover_bookmark],
+            point_samples: Vec::new(),
+        };
+        let selection = SelectionState {
+            details_generation: 1,
+            details_target: Some(DetailsSelectionTarget {
+                element_kind: "npc".to_string(),
+                world_x: 10.0,
+                world_z: 20.0,
+                point_kind: None,
+                point_label: Some("Bahar".to_string()),
+                history_behavior: Default::default(),
+            }),
+            info: None,
+            zone_stats: None,
+            zone_stats_status: String::new(),
+        };
+
+        let targets = effective_targets(
+            ViewMode::Map2D,
+            None,
+            Some(&hover_info),
+            &selection,
+            &BookmarkState::default(),
+            &LayerRegistry::default(),
+            &LayerRuntime::default(),
+        );
+
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].label, "Bahar");
+        assert_eq!(targets[0].world_x, 10.0);
+        assert_eq!(targets[1].label, "Hovered bookmark");
+        assert_eq!(targets[1].world_x, 100.0);
+    }
+
+    #[test]
+    fn hover_callout_size_tracks_current_label_content() {
+        let npc_size = hover_callout_size_px("Bahar");
+        let long_size = hover_callout_size_px("Western Guard Camp");
+        let semantic_size = hover_callout_size_px("Origin: Margoria (R829)");
+        let expected_npc_width = (5.0 * HOVER_LABEL_SIZE_PX * HOVER_PLAIN_TEXT_WIDTH_FACTOR
+            + HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX
+            + HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX
+            + HOVER_CALLOUT_PADDING_RIGHT_SCREEN_PX
+            + HOVER_CALLOUT_BORDER_SCREEN_PX * 2.0)
+            .max(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX);
+
+        assert_eq!(
+            npc_size,
+            Vec2::new(expected_npc_width, HOVER_CALLOUT_HEIGHT_SCREEN_PX)
+        );
+        assert!(npc_size.x < long_size.x);
+        assert!(npc_size.x < semantic_size.x);
+        assert_eq!(long_size.y, HOVER_CALLOUT_HEIGHT_SCREEN_PX);
+        assert_eq!(semantic_size.y, HOVER_CALLOUT_HEIGHT_SCREEN_PX);
     }
 
     #[test]
