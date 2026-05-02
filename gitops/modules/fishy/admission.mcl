@@ -47,6 +47,16 @@ class fixture($st) {
 	} else {
 		$empty_serving_manifest
 	}
+	$cdn_runtime_module_content = if $requires_serving_artifacts and ($cdn_runtime_manifest->module != "") {
+		os.readfile(fmt.printf("%s/map/%s", $cdn_runtime_content, $cdn_runtime_manifest->module))
+	} else {
+		""
+	}
+	$cdn_runtime_wasm_content = if $requires_serving_artifacts and ($cdn_runtime_manifest->wasm != "") {
+		os.readfile(fmt.printf("%s/map/%s", $cdn_runtime_content, $cdn_runtime_manifest->wasm))
+	} else {
+		""
+	}
 	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"release_identity\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"cdn_runtime_module\": \"%s\",\n  \"cdn_runtime_wasm\": \"%s\",\n  \"cdn_serving_current_root\": \"%s\",\n  \"cdn_serving_retained_root_count\": %d,\n  \"serving_artifacts_checked\": %t,\n  \"admission_state\": \"%s\",\n  \"probe\": \"local-fixture\"\n}\n", $environment, $host, $release_id, $release_identity, $site_content, $cdn_runtime_content, $cdn_runtime_manifest->module, $cdn_runtime_manifest->wasm, $cdn_serving_manifest->current_root, $cdn_serving_manifest->retained_root_count, $requires_serving_artifacts, $state)
 
 	panic($environment == "", "admission fixture requires environment")
@@ -60,6 +70,8 @@ class fixture($st) {
 	panic($requires_serving_artifacts and ($site_index_content == ""), "serving artifact admission requires a readable site index")
 	panic($requires_serving_artifacts and ($cdn_runtime_manifest->module == ""), "serving artifact admission requires a CDN runtime module")
 	panic($requires_serving_artifacts and ($cdn_runtime_manifest->wasm == ""), "serving artifact admission requires a CDN runtime wasm")
+	panic($requires_serving_artifacts and ($cdn_runtime_module_content == ""), "serving artifact admission requires a readable CDN runtime module")
+	panic($requires_serving_artifacts and ($cdn_runtime_wasm_content == ""), "serving artifact admission requires a readable CDN runtime wasm")
 	panic($requires_serving_artifacts and ($cdn_serving_manifest->schema_version == 0), "serving artifact admission requires a CDN serving manifest")
 	panic($requires_serving_artifacts and ($cdn_serving_manifest->current_root == ""), "serving artifact admission requires a CDN serving current root")
 
