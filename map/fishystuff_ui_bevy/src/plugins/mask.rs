@@ -10,6 +10,7 @@ use crate::map::events::EventsSnapshotState;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
+use crate::map::layer_query::LayerQuerySample;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::RasterTileCache;
 use crate::map::selection_query::{selected_info_at_world_point, selected_info_from_hover};
@@ -20,6 +21,7 @@ use crate::plugins::api::{
     LayerEffectiveFilterState, MapDisplayState, PatchFilterState, PendingRequests,
     PointSampleSummary, SelectedInfo, SelectionState,
 };
+use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
 use crate::plugins::points::{
@@ -33,6 +35,14 @@ use crate::plugins::waypoint_layers::{
     WaypointLayerRuntime, WaypointSampleOptions,
 };
 use crate::prelude::*;
+use fishystuff_api::Rgb;
+use fishystuff_core::field_metadata::{FieldHoverTarget, FIELD_HOVER_TARGET_KEY_TRADE_NPC};
+
+const BOOKMARK_HOVER_RADIUS_SCREEN_PX: f64 = 14.0;
+const BOOKMARK_LAYER_KEY: &str = "bookmarks";
+const BOOKMARK_TARGET_KEY: &str = "bookmark";
+const WAYPOINT_TARGET_KEY: &str = "waypoint";
+const BOOKMARK_MARKER_COLOR: [u8; 3] = [239, 92, 31];
 
 pub struct MaskPlugin;
 
@@ -61,6 +71,7 @@ pub(crate) struct PendingSelectionDetails {
 #[derive(Debug, Clone)]
 struct PendingSelectionDetailsRequest {
     details_generation: u64,
+    element_kind: String,
     click_world_point: WorldPoint,
     selected_world_point: WorldPoint,
     waypoint_sample: Option<WaypointLayerInteractionSample>,
@@ -68,6 +79,16 @@ struct PendingSelectionDetailsRequest {
     point_label: Option<String>,
     stage: PendingSelectionDetailsStage,
     defer_frames: u8,
+}
+
+#[derive(Debug, Clone)]
+struct SelectionCandidate {
+    element_kind: &'static str,
+    world_point: WorldPoint,
+    point_kind: FishyMapSelectionPointKind,
+    point_label: Option<String>,
+    display_order: i32,
+    layer_sample: LayerQuerySample,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,33 +181,23 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         &context.points,
         &context.snapshot,
         &context.display_state,
-        &context.point_camera_q,
+        &context.candidates.point_camera_q,
     );
-    let waypoint_sample = waypoint_sample_at_world_point(
-        world_point,
-        &context.waypoint_runtime,
-        &context.layer_registry,
-        &context.layer_runtime,
-        &context.exact_lookups,
-        &context.tile_cache,
-        &context.vector_runtime,
-        &context.layer_filters,
-        &context.point_camera_q,
-    );
-    let Some(mut next_hover) = waypoint_sample
+    let selection_candidate = selection_candidate_at_world_point(&context.candidates, world_point);
+    let Some(mut next_hover) = selection_candidate
         .as_ref()
-        .map(|sample| waypoint_hover_info(world_point, sample))
+        .map(|candidate| selection_candidate_hover_info(world_point, candidate))
         .or_else(|| {
             hover_info_at_world_point(
                 world_point,
                 &WorldPointQueryContext {
-                    layer_registry: &context.layer_registry,
-                    layer_runtime: &context.layer_runtime,
-                    exact_lookups: &context.exact_lookups,
+                    layer_registry: &context.candidates.layer_registry,
+                    layer_runtime: &context.candidates.layer_runtime,
+                    exact_lookups: &context.candidates.exact_lookups,
                     field_metadata: &context.field_metadata,
-                    tile_cache: &context.tile_cache,
-                    vector_runtime: &context.vector_runtime,
-                    layer_filters: &context.layer_filters,
+                    tile_cache: &context.candidates.tile_cache,
+                    vector_runtime: &context.candidates.vector_runtime,
+                    layer_filters: &context.candidates.layer_filters,
                     map_to_world: MapToWorld::default(),
                 },
             )
@@ -224,14 +235,34 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     else {
         return;
     };
+    let candidate = selection_candidate_at_world_point(&context.candidates, world_point);
+    let (element_kind, selected_world_point, point_kind, point_label) = candidate
+        .as_ref()
+        .map(|candidate| {
+            (
+                candidate.element_kind,
+                candidate.world_point,
+                candidate.point_kind,
+                candidate.point_label.clone(),
+            )
+        })
+        .unwrap_or((
+            "point",
+            world_point,
+            FishyMapSelectionPointKind::Clicked,
+            None,
+        ));
     let details_generation = context.selection.begin_details_selection(
-        "point",
-        Some(world_point),
-        Some(FishyMapSelectionPointKind::Clicked),
-        None,
+        element_kind,
+        Some(selected_world_point),
+        Some(point_kind),
+        point_label.clone(),
         FishyMapSelectionHistoryBehavior::Append,
     );
-    let quick_selected_info = quick_selected_info(world_point, None, context.hover.info.as_ref());
+    let quick_selected_info = candidate
+        .as_ref()
+        .map(quick_selected_info_for_candidate)
+        .unwrap_or_else(|| quick_selected_info(world_point, None, context.hover.info.as_ref()));
     apply_selection_without_zone_stats_request(
         &mut context.selection,
         &mut context.pending,
@@ -239,11 +270,12 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     );
     context.pending_selection_details.request = Some(PendingSelectionDetailsRequest {
         details_generation,
-        click_world_point: world_point,
-        selected_world_point: world_point,
+        element_kind: element_kind.to_string(),
+        click_world_point: selected_world_point,
+        selected_world_point,
         waypoint_sample: None,
-        point_kind: FishyMapSelectionPointKind::Clicked,
-        point_label: None,
+        point_kind,
+        point_label,
         stage: PendingSelectionDetailsStage::ProbeWaypoint,
         defer_frames: 1,
     });
@@ -253,12 +285,18 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
 pub(crate) fn queue_selection_details(
     pending_selection_details: &mut PendingSelectionDetails,
     details_generation: u64,
+    element_kind: Option<&str>,
     world_point: WorldPoint,
     point_kind: FishyMapSelectionPointKind,
     point_label: Option<String>,
 ) {
     pending_selection_details.request = Some(PendingSelectionDetailsRequest {
         details_generation,
+        element_kind: element_kind
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("")
+            .to_string(),
         click_world_point: world_point,
         selected_world_point: world_point,
         waypoint_sample: None,
@@ -288,12 +326,18 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
 
     match request.stage {
         PendingSelectionDetailsStage::ProbeWaypoint => {
+            if !selection_details_should_probe_waypoint(request.point_kind) {
+                request.stage = PendingSelectionDetailsStage::BuildLayerSelection;
+                context.pending_selection_details.request = Some(request);
+                return;
+            }
             crate::perf_scope!("selection.click.details.waypoint");
             let waypoint_options = WaypointSampleOptions {
                 include_hidden_layers: matches!(
                     request.point_kind,
                     FishyMapSelectionPointKind::Waypoint
                 ),
+                target_key: waypoint_probe_target_key(&request),
             };
             let waypoint_sample = waypoint_sample_at_world_point_with_options(
                 request.click_world_point,
@@ -306,7 +350,10 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
                 &context.layer_filters,
                 &context.point_camera_q,
                 waypoint_options,
-            );
+            )
+            .filter(|sample| {
+                waypoint_sample_matches_requested_label(sample, request.point_label.as_deref())
+            });
             if waypoint_sample.is_none()
                 && waypoint_options.include_hidden_layers
                 && waypoint_layers_pending(
@@ -338,6 +385,33 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
             apply_pending_selection_point_samples(&mut context, &request);
         }
     }
+}
+
+fn selection_details_should_probe_waypoint(point_kind: FishyMapSelectionPointKind) -> bool {
+    !matches!(point_kind, FishyMapSelectionPointKind::Bookmark)
+}
+
+fn waypoint_probe_target_key(request: &PendingSelectionDetailsRequest) -> Option<&'static str> {
+    match request.element_kind.trim() {
+        "npc" => Some(FIELD_HOVER_TARGET_KEY_TRADE_NPC),
+        "waypoint" => Some(WAYPOINT_TARGET_KEY),
+        _ => None,
+    }
+}
+
+fn waypoint_sample_matches_requested_label(
+    sample: &WaypointLayerInteractionSample,
+    requested_label: Option<&str>,
+) -> bool {
+    let Some(requested_label) = normalized_point_label(requested_label) else {
+        return true;
+    };
+    normalized_point_label(sample.point_label.as_deref()).as_deref()
+        == Some(requested_label.as_str())
+        || sample.layer_sample.targets.iter().any(|target| {
+            normalized_point_label(Some(target.label.as_str())).as_deref()
+                == Some(requested_label.as_str())
+        })
 }
 
 fn apply_pending_selection_layer_details(
@@ -487,17 +561,195 @@ fn point_hover_info(
     })
 }
 
-fn waypoint_hover_info(
-    cursor_world_point: WorldPoint,
+fn selection_candidate_at_world_point(
+    context: &SelectionCandidateContext<'_, '_>,
+    world_point: WorldPoint,
+) -> Option<SelectionCandidate> {
+    let bookmark_candidate = bookmark_selection_candidate_at_world_point(
+        world_point,
+        &context.bookmarks,
+        &context.layer_registry,
+        &context.layer_runtime,
+        &context.point_camera_q,
+    );
+    let waypoint_candidate = waypoint_sample_at_world_point(
+        world_point,
+        &context.waypoint_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        &context.exact_lookups,
+        &context.tile_cache,
+        &context.vector_runtime,
+        &context.layer_filters,
+        &context.point_camera_q,
+    )
+    .and_then(|sample| {
+        waypoint_selection_candidate(&sample, &context.layer_registry, &context.layer_runtime)
+    });
+    preferred_selection_candidate(bookmark_candidate, waypoint_candidate)
+}
+
+fn preferred_selection_candidate(
+    left: Option<SelectionCandidate>,
+    right: Option<SelectionCandidate>,
+) -> Option<SelectionCandidate> {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            if right.display_order > left.display_order {
+                Some(right)
+            } else {
+                Some(left)
+            }
+        }
+        (Some(candidate), None) | (None, Some(candidate)) => Some(candidate),
+        (None, None) => None,
+    }
+}
+
+fn bookmark_selection_candidate_at_world_point(
+    world_point: WorldPoint,
+    bookmarks: &BookmarkState,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+) -> Option<SelectionCandidate> {
+    let layer = layer_registry.get_by_key(BOOKMARK_LAYER_KEY)?;
+    if !layer_runtime.visible(layer.id) {
+        return None;
+    }
+    let scale = camera_scale(camera_q) as f64;
+    let max_distance_sq = (BOOKMARK_HOVER_RADIUS_SCREEN_PX * scale).powi(2);
+    let display_order = layer_runtime
+        .get(layer.id)
+        .map(|state| state.display_order)
+        .unwrap_or(layer.display_order);
+    bookmarks
+        .entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, bookmark)| {
+            let dx = bookmark.world_x - world_point.x;
+            let dz = bookmark.world_z - world_point.z;
+            let distance_sq = dx * dx + dz * dz;
+            (distance_sq <= max_distance_sq).then(|| (index, bookmark, distance_sq))
+        })
+        .min_by(|left, right| left.2.total_cmp(&right.2))
+        .and_then(|(index, bookmark, _)| {
+            let label = bookmark_display_label(index, bookmark);
+            let layer_sample = bookmark_layer_sample(bookmark.world_x, bookmark.world_z, &label);
+            selection_candidate_from_layer_sample(&layer_sample, display_order)
+        })
+}
+
+fn bookmark_display_label(
+    index: usize,
+    bookmark: &crate::bridge::contract::FishyMapBookmarkEntry,
+) -> String {
+    bookmark
+        .label
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            bookmark
+                .point_label
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| format!("Bookmark {}", index + 1))
+}
+
+fn bookmark_layer_sample(world_x: f64, world_z: f64, label: &str) -> LayerQuerySample {
+    let rgb = Rgb::new(
+        BOOKMARK_MARKER_COLOR[0],
+        BOOKMARK_MARKER_COLOR[1],
+        BOOKMARK_MARKER_COLOR[2],
+    );
+    LayerQuerySample {
+        layer_id: BOOKMARK_LAYER_KEY.to_string(),
+        layer_name: "Bookmarks".to_string(),
+        kind: "bookmark".to_string(),
+        rgb,
+        rgb_u32: rgb.to_u32(),
+        field_id: None,
+        targets: vec![FieldHoverTarget {
+            key: BOOKMARK_TARGET_KEY.to_string(),
+            label: label.to_string(),
+            world_x,
+            world_z,
+        }],
+        detail_pane: None,
+        detail_sections: Vec::new(),
+    }
+}
+
+fn waypoint_selection_candidate(
     sample: &WaypointLayerInteractionSample,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Option<SelectionCandidate> {
+    selection_candidate_from_layer_sample(
+        &sample.layer_sample,
+        layer_display_order(
+            sample.layer_sample.layer_id.as_str(),
+            layer_registry,
+            layer_runtime,
+        ),
+    )
+}
+
+fn selection_candidate_from_layer_sample(
+    layer_sample: &LayerQuerySample,
+    display_order: i32,
+) -> Option<SelectionCandidate> {
+    layer_sample.targets.iter().find_map(|target| {
+        let key = target.key.as_str();
+        let (element_kind, point_kind) = match key {
+            BOOKMARK_TARGET_KEY => ("bookmark", FishyMapSelectionPointKind::Bookmark),
+            WAYPOINT_TARGET_KEY => ("waypoint", FishyMapSelectionPointKind::Waypoint),
+            FIELD_HOVER_TARGET_KEY_TRADE_NPC => ("npc", FishyMapSelectionPointKind::Waypoint),
+            _ => return None,
+        };
+        Some(SelectionCandidate {
+            element_kind,
+            world_point: WorldPoint::new(target.world_x, target.world_z),
+            point_kind,
+            point_label: normalized_point_label(Some(target.label.as_str())),
+            display_order,
+            layer_sample: layer_sample.clone(),
+        })
+    })
+}
+
+fn layer_display_order(
+    layer_key: &str,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> i32 {
+    layer_registry
+        .get_by_key(layer_key)
+        .map(|layer| {
+            layer_runtime
+                .get(layer.id)
+                .map(|state| state.display_order)
+                .unwrap_or(layer.display_order)
+        })
+        .unwrap_or_default()
+}
+
+fn selection_candidate_hover_info(
+    cursor_world_point: WorldPoint,
+    candidate: &SelectionCandidate,
 ) -> HoverInfo {
     let (map_px, map_py) = map_pixel_for_world_point(cursor_world_point);
     HoverInfo {
         map_px,
         map_py,
-        world_x: sample.world_x,
-        world_z: sample.world_z,
-        layer_samples: vec![sample.layer_sample.clone()],
+        world_x: candidate.world_point.x,
+        world_z: candidate.world_point.z,
+        layer_samples: vec![candidate.layer_sample.clone()],
         point_samples: Vec::new(),
     }
 }
@@ -613,6 +865,13 @@ fn hover_matches_world_point(hover: &HoverInfo, world_point: WorldPoint) -> bool
     hover.map_px == map_px && hover.map_py == map_py
 }
 
+fn normalized_point_label(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 fn quick_selected_info(
     world_point: WorldPoint,
     waypoint_sample: Option<&WaypointLayerInteractionSample>,
@@ -649,6 +908,21 @@ fn quick_selected_info(
     }
 }
 
+fn quick_selected_info_for_candidate(candidate: &SelectionCandidate) -> SelectedInfo {
+    let (map_px, map_py) = map_pixel_for_world_point(candidate.world_point);
+    SelectedInfo {
+        map_px,
+        map_py,
+        world_x: candidate.world_point.x,
+        world_z: candidate.world_point.z,
+        sampled_world_point: true,
+        point_kind: Some(candidate.point_kind),
+        point_label: candidate.point_label.clone(),
+        layer_samples: vec![candidate.layer_sample.clone()],
+        point_samples: Vec::new(),
+    }
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn quick_world_point_selection_info(
     world_point: WorldPoint,
@@ -669,27 +943,44 @@ pub(crate) fn quick_world_point_selection_info(
     }
 }
 
+fn camera_scale(camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>) -> f32 {
+    camera_q
+        .single()
+        .ok()
+        .map(|projection| match projection {
+            Projection::Orthographic(ortho) => ortho.scale.max(f32::EPSILON),
+            _ => 1.0,
+        })
+        .unwrap_or(1.0)
+}
+
+#[derive(SystemParam)]
+struct SelectionCandidateContext<'w, 's> {
+    exact_lookups: Res<'w, ExactLookupCache>,
+    tile_cache: Res<'w, RasterTileCache>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
+    vector_runtime: Res<'w, VectorLayerRuntime>,
+    waypoint_runtime: Res<'w, WaypointLayerRuntime>,
+    bookmarks: Res<'w, BookmarkState>,
+    layer_filters: Res<'w, LayerEffectiveFilterState>,
+    point_camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
+}
+
 #[derive(SystemParam)]
 struct HoverUpdateContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Projection, &'static Transform), With<Map2dCamera>>,
-    exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
-    tile_cache: Res<'w, RasterTileCache>,
     display_state: ResMut<'w, MapDisplayState>,
     ui_capture: Res<'w, UiPointerCapture>,
     hover: ResMut<'w, HoverState>,
     pan: Res<'w, PanState>,
     points: Res<'w, PointsState>,
     snapshot: Res<'w, EventsSnapshotState>,
-    layer_registry: Res<'w, LayerRegistry>,
-    layer_runtime: Res<'w, LayerRuntime>,
-    vector_runtime: Res<'w, VectorLayerRuntime>,
-    waypoint_runtime: Res<'w, WaypointLayerRuntime>,
-    layer_filters: Res<'w, LayerEffectiveFilterState>,
-    point_camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
+    candidates: SelectionCandidateContext<'w, 's>,
 }
 
 #[derive(SystemParam)]
@@ -704,6 +995,7 @@ struct MaskClickContext<'w, 's> {
     hover: Res<'w, HoverState>,
     pan: Res<'w, PanState>,
     ui_capture: Res<'w, UiPointerCapture>,
+    candidates: SelectionCandidateContext<'w, 's>,
     _marker: std::marker::PhantomData<&'s ()>,
 }
 
@@ -746,13 +1038,19 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
 #[cfg(test)]
 mod tests {
     use super::{
-        hover_content_matches, hover_storage_update, hovered_zone_rgb, quick_selected_info,
-        HoverStorageUpdate,
+        bookmark_layer_sample, hover_content_matches, hover_storage_update, hovered_zone_rgb,
+        quick_selected_info, quick_selected_info_for_candidate,
+        selection_candidate_from_layer_sample, selection_details_should_probe_waypoint,
+        waypoint_probe_target_key, waypoint_sample_matches_requested_label, HoverStorageUpdate,
+        PendingSelectionDetailsRequest, PendingSelectionDetailsStage,
     };
     use crate::bridge::contract::FishyMapSelectionPointKind;
+    use crate::map::layer_query::LayerQuerySample;
     use crate::map::spaces::WorldPoint;
     use crate::plugins::api::{HoverInfo, PointSampleSummary};
     use crate::plugins::waypoint_layers::WaypointLayerInteractionSample;
+    use fishystuff_api::Rgb;
+    use fishystuff_core::field_metadata::{FieldHoverTarget, FIELD_HOVER_TARGET_KEY_TRADE_NPC};
 
     fn hover_info(map_px: i32, world_x: f64, zone_rgb: u32) -> HoverInfo {
         HoverInfo {
@@ -920,5 +1218,101 @@ mod tests {
         assert_eq!(selected.world_x, world_point.x);
         assert_eq!(selected.world_z, world_point.z);
         assert!(selected.layer_samples.is_empty());
+    }
+
+    #[test]
+    fn bookmark_selection_candidate_uses_same_payload_for_hover_and_click() {
+        let layer_sample = bookmark_layer_sample(100.0, 200.0, "Saved Hotspot");
+        let candidate =
+            selection_candidate_from_layer_sample(&layer_sample, 40).expect("bookmark candidate");
+
+        assert_eq!(candidate.element_kind, "bookmark");
+        assert_eq!(candidate.point_kind, FishyMapSelectionPointKind::Bookmark);
+        assert_eq!(candidate.point_label.as_deref(), Some("Saved Hotspot"));
+        assert_eq!(candidate.world_point, WorldPoint::new(100.0, 200.0));
+
+        let selected = quick_selected_info_for_candidate(&candidate);
+        assert_eq!(
+            selected.point_kind,
+            Some(FishyMapSelectionPointKind::Bookmark)
+        );
+        assert_eq!(selected.point_label.as_deref(), Some("Saved Hotspot"));
+        assert_eq!(selected.layer_samples, vec![layer_sample]);
+    }
+
+    #[test]
+    fn bookmark_details_do_not_probe_waypoint_layers() {
+        assert!(!selection_details_should_probe_waypoint(
+            FishyMapSelectionPointKind::Bookmark
+        ));
+        assert!(selection_details_should_probe_waypoint(
+            FishyMapSelectionPointKind::Clicked
+        ));
+        assert!(selection_details_should_probe_waypoint(
+            FishyMapSelectionPointKind::Waypoint
+        ));
+    }
+
+    #[test]
+    fn waypoint_probe_target_key_tracks_selected_element_kind() {
+        let base = PendingSelectionDetailsRequest {
+            details_generation: 1,
+            element_kind: "waypoint".to_string(),
+            click_world_point: WorldPoint::new(1.0, 2.0),
+            selected_world_point: WorldPoint::new(1.0, 2.0),
+            waypoint_sample: None,
+            point_kind: FishyMapSelectionPointKind::Waypoint,
+            point_label: Some("Node".to_string()),
+            stage: PendingSelectionDetailsStage::ProbeWaypoint,
+            defer_frames: 0,
+        };
+
+        assert_eq!(waypoint_probe_target_key(&base), Some("waypoint"));
+
+        let mut npc = base.clone();
+        npc.element_kind = "npc".to_string();
+        assert_eq!(
+            waypoint_probe_target_key(&npc),
+            Some(FIELD_HOVER_TARGET_KEY_TRADE_NPC)
+        );
+
+        let mut generic = base;
+        generic.element_kind = "point".to_string();
+        assert_eq!(waypoint_probe_target_key(&generic), None);
+    }
+
+    #[test]
+    fn waypoint_probe_ignores_neighbor_with_different_requested_label() {
+        let sample = WaypointLayerInteractionSample {
+            world_x: 10.0,
+            world_z: 20.0,
+            point_label: Some("Neighbor Node".to_string()),
+            layer_sample: LayerQuerySample {
+                layer_id: "region_nodes".to_string(),
+                layer_name: "Node Waypoints".to_string(),
+                kind: "waypoint".to_string(),
+                rgb: Rgb::from_u32(0x123456),
+                rgb_u32: 0x123456,
+                field_id: None,
+                targets: vec![FieldHoverTarget {
+                    key: "waypoint".to_string(),
+                    label: "Neighbor Node".to_string(),
+                    world_x: 10.0,
+                    world_z: 20.0,
+                }],
+                detail_pane: None,
+                detail_sections: Vec::new(),
+            },
+        };
+
+        assert!(waypoint_sample_matches_requested_label(
+            &sample,
+            Some("Neighbor Node")
+        ));
+        assert!(!waypoint_sample_matches_requested_label(
+            &sample,
+            Some("Requested Node")
+        ));
+        assert!(waypoint_sample_matches_requested_label(&sample, None));
     }
 }

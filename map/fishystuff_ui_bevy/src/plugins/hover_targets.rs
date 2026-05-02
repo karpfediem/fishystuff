@@ -9,11 +9,14 @@ use bevy::window::PrimaryWindow;
 use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 use fishystuff_core::field_metadata::FIELD_HOVER_TARGET_KEY_TRADE_NPC;
 
-use crate::bridge::contract::FishyMapThemeColors;
+use crate::bridge::contract::{FishyMapSelectionPointKind, FishyMapThemeColors};
 use crate::bridge::theme::parse_css_color;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::plugins::api::{HoverInfo, HoverState, SelectedInfo, SelectionState};
+use crate::plugins::api::{
+    DetailsSelectionTarget, HoverInfo, HoverState, SelectedInfo, SelectionState,
+};
+use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
@@ -77,7 +80,11 @@ const RESOURCE_BAR_MARKER_COLOR: [u8; 3] = [77, 211, 255];
 const ORIGIN_NODE_MARKER_COLOR: [u8; 3] = [255, 196, 66];
 const REGION_NODE_MARKER_COLOR: [u8; 3] = [244, 240, 232];
 const TRADE_NPC_MARKER_COLOR: [u8; 3] = [255, 196, 66];
+const BOOKMARK_MARKER_COLOR: [u8; 3] = [239, 92, 31];
 const TERRITORY_DETAIL_PANE_ID: &str = "territory";
+const BOOKMARK_LAYER_KEY: &str = "bookmarks";
+const BOOKMARK_TARGET_KEY: &str = "bookmark";
+const WAYPOINT_TARGET_KEY: &str = "waypoint";
 
 pub struct HoverTargetsPlugin;
 
@@ -373,6 +380,7 @@ fn sync_hover_targets(
     mut commands: Commands,
     hover: Res<HoverState>,
     selection: Res<SelectionState>,
+    bookmarks: Res<BookmarkState>,
     view_mode: Res<ViewModeState>,
     #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
     ui_assets: (Res<AssetServer>, Res<UiFonts>),
@@ -393,11 +401,16 @@ fn sync_hover_targets(
     #[cfg(not(target_arch = "wasm32"))]
     let active_detail_pane_id: Option<&str> = None;
 
+    let viewport_bounds = map_2d_viewport_bounds(&sync.windows, &sync.camera_q);
+    let scale = viewport_bounds
+        .map(|bounds| bounds.scale)
+        .unwrap_or_else(|| camera_scale(&sync.camera_q));
     let targets = effective_targets(
         view_mode.mode,
         active_detail_pane_id,
         hover.info.as_ref(),
-        selection.info.as_ref(),
+        &selection,
+        &bookmarks,
         &layer_state.0,
         &layer_state.1,
     );
@@ -654,10 +667,6 @@ fn sync_hover_targets(
         });
     }
 
-    let viewport_bounds = map_2d_viewport_bounds(&sync.windows, &sync.camera_q);
-    let scale = viewport_bounds
-        .map(|bounds| bounds.scale)
-        .unwrap_or_else(|| camera_scale(&sync.camera_q));
     for (index, target) in targets.iter().enumerate() {
         let target = viewport_bounds
             .map(|bounds| clamp_hover_target_to_viewport(target, bounds))
@@ -953,7 +962,8 @@ fn effective_targets(
     view_mode: ViewMode,
     active_detail_pane_id: Option<&str>,
     hover_info: Option<&HoverInfo>,
-    selection_info: Option<&SelectedInfo>,
+    selection: &SelectionState,
+    bookmarks: &BookmarkState,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
 ) -> Vec<HoverTargetVisual> {
@@ -961,13 +971,24 @@ fn effective_targets(
         return Vec::new();
     }
 
-    match active_detail_pane_id {
+    let include_bookmark_selection =
+        layer_visible_by_key(BOOKMARK_LAYER_KEY, layer_registry, layer_runtime);
+    let mut targets = match active_detail_pane_id {
         Some(TERRITORY_DETAIL_PANE_ID) => {
-            selection_targets_from_info(selection_info, layer_registry, layer_runtime)
+            selection_targets_from_info(selection.info.as_ref(), layer_registry, layer_runtime)
         }
-        Some(_) => Vec::new(),
+        Some(_) => selected_landmark_targets(selection, bookmarks, include_bookmark_selection),
         None => hover_targets_from_info(hover_info, layer_registry, layer_runtime),
+    };
+    if active_detail_pane_id.is_some() {
+        for target in hover_landmark_targets(hover_info) {
+            push_unique_hover_target(&mut targets, target);
+        }
     }
+    for target in selected_landmark_targets(selection, bookmarks, include_bookmark_selection) {
+        push_unique_hover_target(&mut targets, target);
+    }
+    targets
 }
 
 fn selection_targets_from_info(
@@ -982,6 +1003,51 @@ fn selection_targets_from_info(
     info.layer_samples
         .iter()
         .flat_map(hover_targets_from_sample)
+        .collect()
+}
+
+fn selected_landmark_targets(
+    selection: &SelectionState,
+    bookmarks: &BookmarkState,
+    include_selected_bookmarks: bool,
+) -> Vec<HoverTargetVisual> {
+    let mut targets = selection
+        .info
+        .as_ref()
+        .map(|info| landmark_targets_from_info(info))
+        .unwrap_or_default();
+    if let Some(target) = selection
+        .details_target
+        .as_ref()
+        .and_then(details_selection_target_visual)
+    {
+        push_unique_hover_target(&mut targets, target);
+    }
+    if include_selected_bookmarks {
+        for target in selected_bookmark_targets(bookmarks) {
+            push_unique_hover_target(&mut targets, target);
+        }
+    }
+    targets
+}
+
+fn landmark_targets_from_info(info: &SelectedInfo) -> Vec<HoverTargetVisual> {
+    landmark_targets_from_samples(&info.layer_samples)
+}
+
+fn hover_landmark_targets(info: Option<&HoverInfo>) -> Vec<HoverTargetVisual> {
+    info.map(|info| landmark_targets_from_samples(&info.layer_samples))
+        .unwrap_or_default()
+}
+
+fn landmark_targets_from_samples(
+    samples: &[crate::map::layer_query::LayerQuerySample],
+) -> Vec<HoverTargetVisual> {
+    samples
+        .iter()
+        .flat_map(|sample| sample.targets.iter())
+        .filter(|target| is_landmark_target_key(target.key.as_str()))
+        .filter_map(hover_target_visual)
         .collect()
 }
 
@@ -1018,6 +1084,142 @@ fn hover_targets_from_sample(
         .collect()
 }
 
+fn is_landmark_target_key(key: &str) -> bool {
+    matches!(
+        key,
+        WAYPOINT_TARGET_KEY | BOOKMARK_TARGET_KEY | FIELD_HOVER_TARGET_KEY_TRADE_NPC
+    )
+}
+
+fn push_unique_hover_target(targets: &mut Vec<HoverTargetVisual>, target: HoverTargetVisual) {
+    if targets
+        .iter()
+        .any(|existing| same_hover_target(existing, &target))
+    {
+        return;
+    }
+    targets.push(target);
+}
+
+fn same_hover_target(left: &HoverTargetVisual, right: &HoverTargetVisual) -> bool {
+    left.icon_kind == right.icon_kind
+        && (left.world_x - right.world_x).abs() <= f32::EPSILON
+        && (left.world_z - right.world_z).abs() <= f32::EPSILON
+}
+
+fn selected_bookmark_targets(bookmarks: &BookmarkState) -> Vec<HoverTargetVisual> {
+    if bookmarks.selected_ids.is_empty() {
+        return Vec::new();
+    }
+    let selected_ids = bookmarks
+        .selected_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::HashSet<_>>();
+    bookmarks
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_index, bookmark)| selected_ids.contains(bookmark.id.as_str()))
+        .map(|(index, bookmark)| bookmark_target_visual(index, bookmark))
+        .collect()
+}
+
+fn bookmark_target_visual(
+    index: usize,
+    bookmark: &crate::bridge::contract::FishyMapBookmarkEntry,
+) -> HoverTargetVisual {
+    HoverTargetVisual {
+        world_x: bookmark.world_x as f32,
+        world_z: bookmark.world_z as f32,
+        label: bookmark_target_label(index, bookmark),
+        offscreen: false,
+        marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+        label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+        color_rgb: BOOKMARK_MARKER_COLOR,
+        icon_kind: UiSvgIconKind::Bookmark,
+    }
+}
+
+fn bookmark_target_label(
+    index: usize,
+    bookmark: &crate::bridge::contract::FishyMapBookmarkEntry,
+) -> String {
+    bookmark
+        .label
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            bookmark
+                .point_label
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+        .map(|label| format!("{}: {}", index + 1, label))
+        .unwrap_or_else(|| format!("Bookmark {}", index + 1))
+}
+
+fn details_selection_target_visual(target: &DetailsSelectionTarget) -> Option<HoverTargetVisual> {
+    let element_kind = target.element_kind.trim();
+    match (element_kind, target.point_kind) {
+        ("bookmark", _) | (_, Some(FishyMapSelectionPointKind::Bookmark)) => {
+            Some(HoverTargetVisual {
+                world_x: target.world_x as f32,
+                world_z: target.world_z as f32,
+                label: target
+                    .point_label
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("Bookmark")
+                    .to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: BOOKMARK_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::Bookmark,
+            })
+        }
+        ("npc", _) => Some(HoverTargetVisual {
+            world_x: target.world_x as f32,
+            world_z: target.world_z as f32,
+            label: target
+                .point_label
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("NPC")
+                .to_string(),
+            offscreen: false,
+            marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+            label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+            color_rgb: TRADE_NPC_MARKER_COLOR,
+            icon_kind: UiSvgIconKind::TradeOrigin,
+        }),
+        ("waypoint", _) | (_, Some(FishyMapSelectionPointKind::Waypoint)) => {
+            Some(HoverTargetVisual {
+                world_x: target.world_x as f32,
+                world_z: target.world_z as f32,
+                label: target
+                    .point_label
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("Waypoint")
+                    .to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: REGION_NODE_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::MapPin,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn hover_target_visual(
     target: &fishystuff_core::field_metadata::FieldHoverTarget,
 ) -> Option<HoverTargetVisual> {
@@ -1046,6 +1248,18 @@ fn hover_target_visual(
                 REGION_NODE_LABEL_OFFSET_SCREEN_PX,
                 TRADE_NPC_MARKER_COLOR,
                 UiSvgIconKind::TradeOrigin,
+            ),
+            WAYPOINT_TARGET_KEY => (
+                REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                REGION_NODE_MARKER_COLOR,
+                UiSvgIconKind::MapPin,
+            ),
+            BOOKMARK_TARGET_KEY => (
+                REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                BOOKMARK_MARKER_COLOR,
+                UiSvgIconKind::Bookmark,
             ),
             _ => return None,
         };
@@ -1332,16 +1546,19 @@ mod tests {
     use super::{
         clamp_hover_target_to_viewport, effective_targets, hover_targets_from_info,
         parse_semantic_identity_label, selection_targets_from_info, HoverTargetVisual,
-        Map2dViewportBounds, SemanticIdentityKind, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
-        ORIGIN_NODE_MARKER_COLOR, ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
-        REGION_NODE_LABEL_OFFSET_SCREEN_PX, REGION_NODE_MARKER_COLOR,
-        REGION_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
-        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
+        Map2dViewportBounds, SemanticIdentityKind, BOOKMARK_MARKER_COLOR,
+        ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX, ORIGIN_NODE_MARKER_COLOR,
+        ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+        REGION_NODE_MARKER_COLOR, REGION_NODE_MARKER_SIZE_SCREEN_PX,
+        RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX, RESOURCE_BAR_MARKER_COLOR,
+        RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
     };
+    use crate::bridge::contract::FishyMapSelectionPointKind;
     use crate::map::camera::mode::ViewMode;
     use crate::map::layer_query::LayerQuerySample;
     use crate::map::layers::{LayerRegistry, LayerRuntime};
-    use crate::plugins::api::{HoverInfo, SelectedInfo};
+    use crate::plugins::api::{DetailsSelectionTarget, HoverInfo, SelectedInfo, SelectionState};
+    use crate::plugins::bookmarks::BookmarkState;
     use crate::plugins::svg_icons::UiSvgIconKind;
     use fishystuff_api::models::layers::{
         GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
@@ -1693,6 +1910,14 @@ mod tests {
             layer_samples: vec![region_group],
             point_samples: Vec::new(),
         };
+        let selection = SelectionState {
+            details_generation: 1,
+            details_target: None,
+            info: Some(selection_info),
+            zone_stats: None,
+            zone_stats_status: String::new(),
+        };
+        let bookmarks = BookmarkState::default();
 
         let (layer_registry, layer_runtime) = hover_layer_state();
 
@@ -1700,7 +1925,8 @@ mod tests {
             ViewMode::Map2D,
             Some("zone_mask"),
             Some(&hover_info),
-            Some(&selection_info),
+            &selection,
+            &bookmarks,
             &layer_registry,
             &layer_runtime,
         )
@@ -1711,7 +1937,8 @@ mod tests {
                 ViewMode::Map2D,
                 Some(TERRITORY_DETAIL_PANE_ID),
                 Some(&hover_info),
-                Some(&selection_info),
+                &selection,
+                &bookmarks,
                 &layer_registry,
                 &layer_runtime,
             )
@@ -1828,6 +2055,123 @@ mod tests {
                 label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
                 color_rgb: super::TRADE_NPC_MARKER_COLOR,
                 icon_kind: UiSvgIconKind::TradeOrigin,
+            }]
+        );
+    }
+
+    #[test]
+    fn hover_targets_use_shared_outline_for_generic_waypoint_targets() {
+        let sample = crate::map::layer_query::LayerQuerySample {
+            layer_id: "region_nodes".to_string(),
+            layer_name: "Node Waypoints".to_string(),
+            kind: "waypoint".to_string(),
+            rgb: fishystuff_api::Rgb { r: 0, g: 0, b: 0 },
+            rgb_u32: 0,
+            field_id: None,
+            detail_pane: None,
+            detail_sections: Vec::new(),
+            targets: vec![FieldHoverTarget {
+                key: "waypoint".to_string(),
+                label: "Western Guard Camp".to_string(),
+                world_x: 11.0,
+                world_z: 22.0,
+            }],
+        };
+
+        assert_eq!(
+            super::hover_targets_from_sample(&sample),
+            vec![HoverTargetVisual {
+                world_x: 11.0,
+                world_z: 22.0,
+                label: "Western Guard Camp".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: REGION_NODE_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::MapPin,
+            }]
+        );
+    }
+
+    #[test]
+    fn selected_bookmark_details_target_uses_shared_landmark_outline() {
+        let selection = SelectionState {
+            details_generation: 1,
+            details_target: Some(DetailsSelectionTarget {
+                element_kind: "bookmark".to_string(),
+                world_x: 10.0,
+                world_z: 20.0,
+                point_kind: Some(FishyMapSelectionPointKind::Bookmark),
+                point_label: Some("Saved Hotspot".to_string()),
+                history_behavior: Default::default(),
+            }),
+            info: None,
+            zone_stats: None,
+            zone_stats_status: String::new(),
+        };
+        let targets = effective_targets(
+            ViewMode::Map2D,
+            Some("landmark"),
+            None,
+            &selection,
+            &BookmarkState::default(),
+            &LayerRegistry::default(),
+            &LayerRuntime::default(),
+        );
+
+        assert_eq!(
+            targets,
+            vec![HoverTargetVisual {
+                world_x: 10.0,
+                world_z: 20.0,
+                label: "Saved Hotspot".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: BOOKMARK_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::Bookmark,
+            }]
+        );
+    }
+
+    #[test]
+    fn hovered_bookmark_uses_shared_landmark_outline() {
+        let mut bookmark_sample = sample("bookmarks");
+        bookmark_sample.targets.push(FieldHoverTarget {
+            key: "bookmark".to_string(),
+            label: "Saved Hotspot".to_string(),
+            world_x: 100.0,
+            world_z: 200.0,
+        });
+        let hover = HoverInfo {
+            map_px: 0,
+            map_py: 0,
+            world_x: 100.0,
+            world_z: 200.0,
+            layer_samples: vec![bookmark_sample],
+            point_samples: Vec::new(),
+        };
+        let targets = effective_targets(
+            ViewMode::Map2D,
+            None,
+            Some(&hover),
+            &SelectionState::default(),
+            &BookmarkState::default(),
+            &LayerRegistry::default(),
+            &LayerRuntime::default(),
+        );
+
+        assert_eq!(
+            targets,
+            vec![HoverTargetVisual {
+                world_x: 100.0,
+                world_z: 200.0,
+                label: "Saved Hotspot".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: BOOKMARK_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::Bookmark,
             }]
         );
     }

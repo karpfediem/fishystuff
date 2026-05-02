@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::color::Alpha;
@@ -7,13 +7,8 @@ use bevy::image::Image;
 use bevy::input::touch::Touches;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::text::{Justify, TextLayout};
-use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 
-use crate::bridge::contract::{
-    FishyMapBookmarkEntry, FishyMapHoverLayerSampleSnapshot, FishyMapThemeColors,
-};
-use crate::bridge::theme::parse_css_color;
+use crate::bridge::contract::{FishyMapBookmarkEntry, FishyMapHoverLayerSampleSnapshot};
 use crate::config::DRAG_THRESHOLD;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
@@ -25,38 +20,16 @@ use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{
-    ApiBootstrapState, HoverInfo, HoverState, LayerEffectiveFilterState, ZoneMembershipFilter,
+    ApiBootstrapState, HoverState, LayerEffectiveFilterState, ZoneMembershipFilter,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
-use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
-use crate::plugins::ui::{UiFonts, UiRoot};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use fishystuff_core::field_metadata::{preferred_detail_fact_value, FieldDetailSection};
 
-#[cfg(target_arch = "wasm32")]
-use crate::bridge::host::BrowserBridgeState;
-
 const BOOKMARK_MARKER_SIZE_SCREEN_PX: f32 = 22.0;
-const BOOKMARK_HOVER_RADIUS_SCREEN_PX: f32 = 14.0;
 const BOOKMARK_MARKER_Z: f32 = 40.4;
-const BOOKMARK_CALLOUT_LABEL_SIZE_PX: f32 = 12.0;
-const BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX: f32 = 76.0;
-const BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX: f32 = 28.0;
-const BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX: f32 = 12.0;
-const BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX: f32 =
-    BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX + BOOKMARK_ICON_SIZE_SCREEN_PX + 8.0;
-const BOOKMARK_CALLOUT_PADDING_RIGHT_SCREEN_PX: f32 = BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX;
-const BOOKMARK_CALLOUT_GAP_SCREEN_PX: f32 = 10.0;
-const BOOKMARK_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
-const BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
-const BOOKMARK_ICON_SIZE_SCREEN_PX: f32 = 14.0;
-const BOOKMARK_ICON_INSET_LEFT_SCREEN_PX: f32 = BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX;
-const BOOKMARK_ICON_TOP_SCREEN_PX: f32 =
-    (BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX - BOOKMARK_ICON_SIZE_SCREEN_PX) * 0.5 - 2.5;
-const BOOKMARK_TEXT_WIDTH_FACTOR: f32 = 0.72;
-const BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 2.0;
 const BOOKMARK_TEXTURE_WIDTH_PX: usize = 32;
 const BOOKMARK_TEXTURE_HEIGHT_PX: usize = 32;
 const BOOKMARK_RING_RADIUS_PX: f32 = 12.0;
@@ -64,9 +37,6 @@ const BOOKMARK_RING_THICKNESS_PX: f32 = 4.0;
 const BOOKMARK_CORE_RADIUS_PX: f32 = 5.0;
 const BOOKMARK_COLOR: [u8; 3] = [239, 92, 31];
 const BOOKMARK_CORE_COLOR: [u8; 3] = [255, 242, 214];
-const BOOKMARK_CALLOUT_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
-const BOOKMARK_CALLOUT_BORDER_COLOR: Color = Color::srgb(0.14, 0.15, 0.19);
-const BOOKMARK_CALLOUT_PANEL_COLOR: Color = Color::srgb(0.17, 0.18, 0.22);
 const EDGE_FEATHER_PX: f32 = 1.2;
 
 pub struct BookmarksPlugin;
@@ -98,21 +68,9 @@ pub struct BookmarkState {
 #[derive(Component)]
 struct BookmarkMarker;
 
-#[derive(Component)]
-struct BookmarkCalloutRoot;
-
-#[derive(Component)]
-struct BookmarkCalloutText;
-
-#[derive(Component)]
-struct BookmarkCalloutIcon;
-
 #[derive(Clone, Copy, Debug)]
 struct BookmarkVisualSet {
     marker: Entity,
-    callout_icon: Entity,
-    callout_root: Entity,
-    callout_text: Entity,
 }
 
 #[derive(Resource, Default)]
@@ -138,12 +96,7 @@ struct BookmarkRenderContext<'w, 's> {
     tile_cache: Res<'w, RasterTileCache>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
-    asset_server: Res<'w, AssetServer>,
-    fonts: Res<'w, UiFonts>,
     render_assets: Res<'w, BookmarkRenderAssets>,
-    svg_icon_assets: Res<'w, UiSvgIconAssets>,
-    #[cfg(target_arch = "wasm32")]
-    bridge: Res<'w, BrowserBridgeState>,
     _marker: std::marker::PhantomData<&'s ()>,
 }
 
@@ -332,47 +285,11 @@ fn preferred_bookmark_point_label(
 fn sync_bookmark_markers(
     mut commands: Commands,
     bookmarks: Res<BookmarkState>,
-    hover: Res<HoverState>,
     view_mode: Res<ViewModeState>,
     render_context: BookmarkRenderContext<'_, '_>,
     mut marker_pool: ResMut<BookmarkMarkerPool>,
-    ui_root_q: Query<Entity, With<UiRoot>>,
-    camera_q: Query<(&Camera, &GlobalTransform, &Projection), With<Map2dCamera>>,
-    mut markers: Query<
-        (&mut Transform, &mut Visibility, &mut Sprite),
-        (With<BookmarkMarker>, Without<BookmarkCalloutRoot>),
-    >,
-    mut callout_icons: Query<
-        &mut ImageNode,
-        (
-            With<BookmarkCalloutIcon>,
-            Without<BookmarkMarker>,
-            Without<BookmarkCalloutRoot>,
-            Without<BookmarkCalloutText>,
-        ),
-    >,
-    mut callout_roots: Query<
-        (
-            &mut Node,
-            &mut Visibility,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &ComputedNode,
-        ),
-        (
-            With<BookmarkCalloutRoot>,
-            Without<BookmarkMarker>,
-            Without<BookmarkCalloutText>,
-        ),
-    >,
-    mut callout_texts: Query<
-        (&mut Text, &mut TextFont, &mut TextColor),
-        (
-            With<BookmarkCalloutText>,
-            Without<BookmarkMarker>,
-            Without<BookmarkCalloutRoot>,
-        ),
-    >,
+    camera_q: Query<&Projection, With<Map2dCamera>>,
+    mut markers: Query<(&mut Transform, &mut Visibility, &mut Sprite), With<BookmarkMarker>>,
 ) {
     let bookmark_layer = render_context.layer_registry.get_by_key("bookmarks");
     let bookmark_layer_id = bookmark_layer.map(|layer| layer.id);
@@ -390,25 +307,15 @@ fn sync_bookmark_markers(
 
     if view_mode.mode != ViewMode::Map2D || bookmarks.entries.is_empty() || !bookmark_layer_visible
     {
-        hide_bookmark_visuals(&marker_pool, &mut markers, &mut callout_roots);
+        hide_bookmark_visuals(&marker_pool, &mut markers);
         return;
     }
 
     let Some(marker_texture) = render_context.render_assets.marker_texture.as_ref() else {
         return;
     };
-    let Some(bookmark_icon_handle) = render_context
-        .svg_icon_assets
-        .handle(UiSvgIconKind::Bookmark)
-    else {
-        return;
-    };
-    let Ok(ui_root) = ui_root_q.single() else {
-        hide_bookmark_visuals(&marker_pool, &mut markers, &mut callout_roots);
-        return;
-    };
-    let Ok((camera, camera_transform, projection)) = camera_q.single() else {
-        hide_bookmark_visuals(&marker_pool, &mut markers, &mut callout_roots);
+    let Ok(projection) = camera_q.single() else {
+        hide_bookmark_visuals(&marker_pool, &mut markers);
         return;
     };
     let current_scale = match projection {
@@ -418,32 +325,6 @@ fn sync_bookmark_markers(
     .max(f32::EPSILON);
 
     let marker_size_world = BOOKMARK_MARKER_SIZE_SCREEN_PX * current_scale;
-    let hovered_index =
-        hovered_bookmark_index(&bookmarks.entries, hover.info.as_ref(), current_scale);
-    let selected_ids = bookmarks
-        .selected_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
-    #[cfg(target_arch = "wasm32")]
-    let theme_colors = Some(&render_context.bridge.input.theme.colors);
-    #[cfg(not(target_arch = "wasm32"))]
-    let theme_colors: Option<&FishyMapThemeColors> = None;
-    let callout_label_color = theme_colors
-        .and_then(bookmark_callout_label_color)
-        .unwrap_or(BOOKMARK_CALLOUT_LABEL_COLOR);
-    let callout_border_color = theme_colors
-        .and_then(bookmark_callout_border_color)
-        .unwrap_or(BOOKMARK_CALLOUT_BORDER_COLOR);
-    let callout_panel_color = theme_colors
-        .and_then(bookmark_callout_panel_color)
-        .unwrap_or(BOOKMARK_CALLOUT_PANEL_COLOR);
-    let callout_label_color =
-        callout_label_color.with_alpha(callout_label_color.alpha() * bookmark_layer_opacity);
-    let callout_border_color =
-        callout_border_color.with_alpha(callout_border_color.alpha() * bookmark_layer_opacity);
-    let callout_panel_color =
-        callout_panel_color.with_alpha(callout_panel_color.alpha() * bookmark_layer_opacity);
 
     while marker_pool.markers.len() < bookmarks.entries.len() {
         let marker = commands
@@ -460,76 +341,7 @@ fn sync_bookmark_markers(
                 Visibility::Hidden,
             ))
             .id();
-
-        let mut callout_icon = Entity::PLACEHOLDER;
-        let mut callout_text = Entity::PLACEHOLDER;
-        let mut callout_root_entity = commands.spawn((
-            BookmarkCalloutRoot,
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                top: Val::Px(0.0),
-                min_width: Val::Px(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX),
-                height: Val::Px(BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX),
-                padding: UiRect {
-                    left: Val::Px(BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX),
-                    right: Val::Px(BOOKMARK_CALLOUT_PADDING_RIGHT_SCREEN_PX),
-                    top: Val::Px(0.0),
-                    bottom: Val::Px(0.0),
-                },
-                border: UiRect::all(Val::Px(BOOKMARK_CALLOUT_BORDER_SCREEN_PX)),
-                border_radius: BorderRadius::all(Val::Px(BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX)),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            BackgroundColor(callout_panel_color),
-            BorderColor::all(callout_border_color),
-            GlobalZIndex(1400),
-            Visibility::Hidden,
-            NodeStyleSheet::new(render_context.asset_server.load("/map/ui/fishystuff.css")),
-            ClassList::new("marker-callout"),
-        ));
-        let callout_root = callout_root_entity
-            .with_children(|parent| {
-                callout_icon = parent
-                    .spawn((
-                        BookmarkCalloutIcon,
-                        ImageNode::new(bookmark_icon_handle.clone()),
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: Val::Px(BOOKMARK_ICON_INSET_LEFT_SCREEN_PX),
-                            top: Val::Px(BOOKMARK_ICON_TOP_SCREEN_PX),
-                            width: Val::Px(BOOKMARK_ICON_SIZE_SCREEN_PX),
-                            height: Val::Px(BOOKMARK_ICON_SIZE_SCREEN_PX),
-                            ..default()
-                        },
-                    ))
-                    .id();
-                callout_text = parent
-                    .spawn((
-                        BookmarkCalloutText,
-                        Text::new(""),
-                        TextFont {
-                            font: render_context.fonts.regular.clone(),
-                            font_size: BOOKMARK_CALLOUT_LABEL_SIZE_PX,
-                            ..default()
-                        },
-                        TextLayout::new_with_no_wrap().with_justify(Justify::Center),
-                        TextColor(callout_label_color),
-                        ClassList::new("marker-callout-text"),
-                    ))
-                    .id();
-            })
-            .id();
-        commands.entity(ui_root).add_child(callout_root);
-
-        marker_pool.markers.push(BookmarkVisualSet {
-            marker,
-            callout_icon,
-            callout_root,
-            callout_text,
-        });
+        marker_pool.markers.push(BookmarkVisualSet { marker });
     }
 
     for (index, bookmark) in bookmarks.entries.iter().enumerate() {
@@ -552,120 +364,23 @@ fn sync_bookmark_markers(
                 Visibility::Hidden
             };
         }
-
-        let callout_visible =
-            selected_ids.contains(bookmark.id.as_str()) || hovered_index == Some(index);
-        if !callout_visible || !bookmark_visible_here {
-            hide_bookmark_callout(visual, &mut callout_roots);
-            continue;
-        }
-
-        let Some(viewport_position) =
-            world_to_viewport(camera, camera_transform, Vec3::new(world_x, world_z, 0.0))
-        else {
-            hide_bookmark_callout(visual, &mut callout_roots);
-            continue;
-        };
-
-        let display_text = format!("{}: {}", index + 1, bookmark_display_label(bookmark, index));
-        let panel_size_px = callout_roots
-            .get(visual.callout_root)
-            .ok()
-            .map(|(_, _, _, _, computed)| {
-                let inv = computed.inverse_scale_factor();
-                computed.size() * inv
-            })
-            .filter(|size| size.x > 1.0 && size.y > 1.0)
-            .unwrap_or_else(|| bookmark_callout_size_px(&display_text));
-        let top_px = viewport_position.y
-            - BOOKMARK_MARKER_SIZE_SCREEN_PX * 0.5
-            - BOOKMARK_CALLOUT_GAP_SCREEN_PX
-            - panel_size_px.y;
-        let left_px = viewport_position.x - panel_size_px.x * 0.5;
-        if let Ok(mut image_node) = callout_icons.get_mut(visual.callout_icon) {
-            image_node.image = bookmark_icon_handle.clone();
-            image_node.color = callout_label_color;
-        }
-
-        if let Ok((mut node, mut visibility, mut background, mut border, _)) =
-            callout_roots.get_mut(visual.callout_root)
-        {
-            node.left = Val::Px(left_px);
-            node.top = Val::Px(top_px);
-            node.height = Val::Px(panel_size_px.y);
-            node.border = UiRect::all(Val::Px(BOOKMARK_CALLOUT_BORDER_SCREEN_PX));
-            node.border_radius =
-                BorderRadius::all(Val::Px(BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX));
-            *background = BackgroundColor(callout_panel_color);
-            *border = BorderColor::all(callout_border_color);
-            *visibility = Visibility::Visible;
-        }
-        if let Ok((mut text, mut text_font, mut text_color)) =
-            callout_texts.get_mut(visual.callout_text)
-        {
-            text.0 = display_text;
-            text_font.font = render_context.fonts.regular.clone();
-            text_font.font_size = BOOKMARK_CALLOUT_LABEL_SIZE_PX;
-            text_color.0 = callout_label_color;
-        }
     }
 
     for visual in marker_pool.markers.iter().skip(bookmarks.entries.len()) {
         if let Ok((_, mut visibility, _)) = markers.get_mut(visual.marker) {
             *visibility = Visibility::Hidden;
         }
-        hide_bookmark_callout(*visual, &mut callout_roots);
     }
 }
 
 fn hide_bookmark_visuals(
     marker_pool: &BookmarkMarkerPool,
-    markers: &mut Query<
-        (&mut Transform, &mut Visibility, &mut Sprite),
-        (With<BookmarkMarker>, Without<BookmarkCalloutRoot>),
-    >,
-    callout_roots: &mut Query<
-        (
-            &mut Node,
-            &mut Visibility,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &ComputedNode,
-        ),
-        (
-            With<BookmarkCalloutRoot>,
-            Without<BookmarkMarker>,
-            Without<BookmarkCalloutText>,
-        ),
-    >,
+    markers: &mut Query<(&mut Transform, &mut Visibility, &mut Sprite), With<BookmarkMarker>>,
 ) {
     for visual in &marker_pool.markers {
         if let Ok((_, mut visibility, _)) = markers.get_mut(visual.marker) {
             *visibility = Visibility::Hidden;
         }
-        hide_bookmark_callout(*visual, callout_roots);
-    }
-}
-
-fn hide_bookmark_callout(
-    visual: BookmarkVisualSet,
-    callout_roots: &mut Query<
-        (
-            &mut Node,
-            &mut Visibility,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &ComputedNode,
-        ),
-        (
-            With<BookmarkCalloutRoot>,
-            Without<BookmarkMarker>,
-            Without<BookmarkCalloutText>,
-        ),
-    >,
-) {
-    if let Ok((_, mut visibility, _, _, _)) = callout_roots.get_mut(visual.callout_root) {
-        *visibility = Visibility::Hidden;
     }
 }
 
@@ -700,80 +415,6 @@ fn bookmark_visible_in_layer_clip(
     )
 }
 
-fn world_to_viewport(
-    camera: &Camera,
-    camera_transform: &GlobalTransform,
-    world_position: Vec3,
-) -> Option<Vec2> {
-    camera
-        .world_to_viewport(camera_transform, world_position)
-        .ok()
-}
-
-fn bookmark_callout_label_color(colors: &FishyMapThemeColors) -> Option<Color> {
-    colors
-        .base_content
-        .as_deref()
-        .or(colors.primary_content.as_deref())
-        .and_then(parse_css_color)
-        .map(|color| color.with_alpha(0.98))
-}
-
-fn bookmark_callout_border_color(colors: &FishyMapThemeColors) -> Option<Color> {
-    colors
-        .base200
-        .as_deref()
-        .or(colors.base300.as_deref())
-        .and_then(parse_css_color)
-}
-
-fn bookmark_callout_panel_color(colors: &FishyMapThemeColors) -> Option<Color> {
-    colors
-        .base100
-        .as_deref()
-        .or(colors.base200.as_deref())
-        .and_then(parse_css_color)
-}
-
-fn hovered_bookmark_index(
-    entries: &[FishyMapBookmarkEntry],
-    hover: Option<&HoverInfo>,
-    current_scale: f32,
-) -> Option<usize> {
-    let Some(hover) = hover else {
-        return None;
-    };
-    let max_distance_sq = (BOOKMARK_HOVER_RADIUS_SCREEN_PX * current_scale).powi(2);
-    entries
-        .iter()
-        .enumerate()
-        .filter_map(|(index, bookmark)| {
-            let dx = bookmark.world_x as f32 - hover.world_x as f32;
-            let dz = bookmark.world_z as f32 - hover.world_z as f32;
-            let distance_sq = dx * dx + dz * dz;
-            (distance_sq <= max_distance_sq).then_some((index, distance_sq))
-        })
-        .min_by(|lhs, rhs| lhs.1.total_cmp(&rhs.1))
-        .map(|(index, _)| index)
-}
-
-fn bookmark_display_label(bookmark: &FishyMapBookmarkEntry, index: usize) -> String {
-    bookmark
-        .label
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .or_else(|| bookmark_primary_fact_value(&bookmark.layer_samples))
-        .unwrap_or_else(|| format!("Bookmark {}", index + 1))
-}
-
-fn bookmark_primary_fact_value(
-    samples: &[crate::bridge::contract::FishyMapHoverLayerSampleSnapshot],
-) -> Option<String> {
-    preferred_detail_fact_value(samples.iter().flat_map(detail_sections)).map(ToOwned::to_owned)
-}
-
 fn detail_sections(
     sample: &crate::bridge::contract::FishyMapHoverLayerSampleSnapshot,
 ) -> impl Iterator<Item = &fishystuff_core::field_metadata::FieldDetailFact> {
@@ -781,18 +422,6 @@ fn detail_sections(
         .detail_sections
         .iter()
         .flat_map(|section: &FieldDetailSection| section.facts.iter())
-}
-
-fn bookmark_callout_size_px(display_text: &str) -> Vec2 {
-    let text_width_px = display_text.chars().count() as f32
-        * BOOKMARK_CALLOUT_LABEL_SIZE_PX
-        * BOOKMARK_TEXT_WIDTH_FACTOR
-        + BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX;
-    let width_px = (text_width_px
-        + BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX
-        + BOOKMARK_CALLOUT_PADDING_RIGHT_SCREEN_PX)
-        .max(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX);
-    Vec2::new(width_px, BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX)
 }
 
 fn build_bookmark_marker_texture() -> Image {
@@ -873,43 +502,5 @@ mod tests {
         let mut world = World::new();
         let mut system = IntoSystem::into_system(sync_bookmark_markers);
         system.initialize(&mut world);
-    }
-
-    #[test]
-    fn hovered_bookmark_index_prefers_the_closest_bookmark_in_radius() {
-        let entries = vec![
-            FishyMapBookmarkEntry {
-                id: "bookmark-a".to_string(),
-                label: Some("A".to_string()),
-                point_label: None,
-                world_x: 100.0,
-                world_z: 100.0,
-                layer_samples: Vec::new(),
-                zone_rgb: None,
-                created_at: None,
-            },
-            FishyMapBookmarkEntry {
-                id: "bookmark-b".to_string(),
-                label: Some("B".to_string()),
-                point_label: None,
-                world_x: 108.0,
-                world_z: 108.0,
-                layer_samples: Vec::new(),
-                zone_rgb: None,
-                created_at: None,
-            },
-        ];
-
-        let hover = HoverInfo {
-            map_px: 0,
-            map_py: 0,
-            world_x: 101.0,
-            world_z: 101.0,
-            layer_samples: Vec::new(),
-            point_samples: Vec::new(),
-        };
-
-        assert_eq!(hovered_bookmark_index(&entries, Some(&hover), 1.0), Some(0));
-        assert_eq!(hovered_bookmark_index(&entries, Some(&hover), 0.05), None);
     }
 }

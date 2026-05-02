@@ -153,6 +153,7 @@ pub(super) fn apply_world_point_selection_command(
     queue_selection_details(
         pending_selection_details,
         details_generation,
+        Some(element_kind),
         world_point,
         point_kind,
         point_label,

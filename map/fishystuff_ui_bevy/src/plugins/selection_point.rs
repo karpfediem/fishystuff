@@ -1,7 +1,4 @@
-use bevy::asset::RenderAssetUsages;
-use bevy::image::Image;
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 use crate::bridge::contract::FishyMapSelectionPointKind;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
@@ -12,15 +9,8 @@ use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 
 const SELECTION_POINT_Z: f32 = 40.5;
 const CLICKED_MARKER_SIZE_SCREEN_PX: f32 = 24.0;
-const WAYPOINT_MARKER_SIZE_SCREEN_PX: f32 = 28.0;
-
-const MARKER_TEXTURE_WIDTH_PX: usize = 48;
-const MARKER_TEXTURE_HEIGHT_PX: usize = 48;
-const EDGE_FEATHER_PX: f32 = 1.4;
 
 const CLICKED_ACCENT_COLOR: [u8; 3] = [239, 92, 31];
-const WAYPOINT_MARKER_COLOR: [u8; 3] = [255, 196, 66];
-const WAYPOINT_CORE_COLOR: [u8; 3] = [255, 244, 214];
 
 pub struct SelectionPointPlugin;
 
@@ -35,7 +25,6 @@ impl Plugin for SelectionPointPlugin {
 
 #[derive(Resource, Default)]
 struct SelectionPointAssets {
-    waypoint_texture: Option<Handle<Image>>,
     marker_entity: Option<Entity>,
 }
 
@@ -45,13 +34,10 @@ struct SelectionPointMarker;
 fn ensure_selection_point_assets(
     mut commands: Commands,
     mut assets: ResMut<SelectionPointAssets>,
-    mut images: ResMut<Assets<Image>>,
+    svg_icon_assets: Res<UiSvgIconAssets>,
 ) {
-    if assets.waypoint_texture.is_none() {
-        assets.waypoint_texture = Some(images.add(build_waypoint_marker_texture()));
-    }
     if assets.marker_entity.is_none() {
-        let Some(default_texture) = assets.waypoint_texture.clone() else {
+        let Some(default_texture) = svg_icon_assets.handle(UiSvgIconKind::Crosshair) else {
             return;
         };
         let entity = commands
@@ -105,10 +91,10 @@ fn sync_selection_point_marker(
         .point_kind
         .unwrap_or(FishyMapSelectionPointKind::Clicked)
     {
-        FishyMapSelectionPointKind::Bookmark => {
+        FishyMapSelectionPointKind::Bookmark | FishyMapSelectionPointKind::Waypoint => {
             *visibility = Visibility::Hidden;
         }
-        FishyMapSelectionPointKind::Clicked | FishyMapSelectionPointKind::Waypoint => {
+        FishyMapSelectionPointKind::Clicked => {
             let scale = camera_q
                 .single()
                 .ok()
@@ -117,122 +103,19 @@ fn sync_selection_point_marker(
                     _ => 1.0,
                 })
                 .unwrap_or(1.0);
-            let (texture, size_px) = marker_visual(
-                info.point_kind
-                    .unwrap_or(FishyMapSelectionPointKind::Clicked),
-                &assets,
-                &svg_icon_assets,
-            );
-            let Some(texture) = texture else {
+            let Some(texture) = svg_icon_assets.handle(UiSvgIconKind::Crosshair) else {
                 *visibility = Visibility::Hidden;
                 return;
             };
             transform.translation = Vec3::new(world_x as f32, world_z as f32, SELECTION_POINT_Z);
             sprite.image = texture;
-            sprite.color = marker_color(
-                info.point_kind
-                    .unwrap_or(FishyMapSelectionPointKind::Clicked),
-            );
-            sprite.custom_size = Some(Vec2::splat(size_px * scale));
+            sprite.color = color_from_rgb(CLICKED_ACCENT_COLOR);
+            sprite.custom_size = Some(Vec2::splat(CLICKED_MARKER_SIZE_SCREEN_PX * scale));
             *visibility = Visibility::Visible;
         }
     }
 }
 
-fn marker_visual(
-    point_kind: FishyMapSelectionPointKind,
-    assets: &SelectionPointAssets,
-    svg_icon_assets: &UiSvgIconAssets,
-) -> (Option<Handle<Image>>, f32) {
-    match point_kind {
-        FishyMapSelectionPointKind::Waypoint => (
-            assets
-                .waypoint_texture
-                .clone()
-                .or_else(|| svg_icon_assets.handle(UiSvgIconKind::Crosshair)),
-            WAYPOINT_MARKER_SIZE_SCREEN_PX,
-        ),
-        _ => (
-            svg_icon_assets.handle(UiSvgIconKind::Crosshair),
-            CLICKED_MARKER_SIZE_SCREEN_PX,
-        ),
-    }
-}
-
-fn marker_color(point_kind: FishyMapSelectionPointKind) -> Color {
-    match point_kind {
-        FishyMapSelectionPointKind::Waypoint => Color::WHITE,
-        _ => color_from_rgb(CLICKED_ACCENT_COLOR),
-    }
-}
-
 fn color_from_rgb(rgb: [u8; 3]) -> Color {
     Color::srgb_u8(rgb[0], rgb[1], rgb[2])
-}
-
-fn build_waypoint_marker_texture() -> Image {
-    let width = MARKER_TEXTURE_WIDTH_PX;
-    let height = MARKER_TEXTURE_HEIGHT_PX;
-    let center_x = (width as f32 - 1.0) * 0.5;
-    let center_y = (height as f32 - 1.0) * 0.5;
-    let outer_radius = 13.5;
-    let ring_thickness = 4.2;
-    let inner_radius = 4.2;
-    let mut data = vec![0u8; width * height * 4];
-
-    for y in 0..height {
-        for x in 0..width {
-            let dx = x as f32 - center_x;
-            let dy = y as f32 - center_y;
-            let distance = dx.hypot(dy);
-            let ring_distance = (distance - outer_radius).abs();
-            let ring_alpha = smooth_alpha(ring_distance, ring_thickness * 0.5, EDGE_FEATHER_PX);
-            let core_alpha = smooth_alpha(distance, inner_radius, EDGE_FEATHER_PX);
-            let alpha = ring_alpha.max(core_alpha);
-            if alpha <= 0.0 {
-                continue;
-            }
-            let color = if core_alpha > ring_alpha {
-                WAYPOINT_CORE_COLOR
-            } else {
-                WAYPOINT_MARKER_COLOR
-            };
-            write_pixel(&mut data, width, x, y, color, alpha);
-        }
-    }
-
-    build_image(width as u32, height as u32, data)
-}
-
-fn smooth_alpha(distance: f32, threshold: f32, feather: f32) -> f32 {
-    let fade_start = (threshold - feather).max(0.0);
-    if distance <= fade_start {
-        return 1.0;
-    }
-    if distance >= threshold + feather {
-        return 0.0;
-    }
-    1.0 - ((distance - fade_start) / ((threshold + feather) - fade_start)).clamp(0.0, 1.0)
-}
-
-fn write_pixel(data: &mut [u8], width: usize, x: usize, y: usize, color: [u8; 3], alpha: f32) {
-    let idx = (y * width + x) * 4;
-    data[idx] = color[0];
-    data[idx + 1] = color[1];
-    data[idx + 2] = color[2];
-    data[idx + 3] = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
-}
-
-fn build_image(width: u32, height: u32, data: Vec<u8>) -> Image {
-    Image::new(
-        Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    )
 }

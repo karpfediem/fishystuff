@@ -44,6 +44,7 @@ const WAYPOINT_CONNECTION_Z_OFFSET: f32 = 0.02;
 const WAYPOINT_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
 const WAYPOINT_LABEL_SHADOW_COLOR: Color = Color::srgba(0.08, 0.09, 0.11, 0.95);
 const WAYPOINT_CONNECTION_COLOR: Color = Color::srgb(0.92, 0.88, 0.70);
+const WAYPOINT_HOVER_TARGET_KEY: &str = "waypoint";
 
 pub struct WaypointLayersPlugin;
 
@@ -905,6 +906,7 @@ pub(crate) fn waypoint_sample_at_world_point(
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct WaypointSampleOptions {
     pub include_hidden_layers: bool,
+    pub target_key: Option<&'static str>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -927,6 +929,11 @@ pub(crate) fn waypoint_sample_at_world_point_with_options(
 
     for layer in layer_registry.ordered() {
         if !layer.is_waypoints() {
+            continue;
+        }
+        if options.target_key.is_some_and(|target_key| {
+            waypoint_target_key_for_layer(layer.key.as_str()) != target_key
+        }) {
             continue;
         }
         if !options.include_hidden_layers && !layer_runtime.visible(layer.id) {
@@ -965,13 +972,14 @@ pub(crate) fn waypoint_sample_at_world_point_with_options(
             if distance_sq > hit_radius_sq {
                 continue;
             }
+            let sample = waypoint_interaction_sample(layer, point);
             hits.push(WaypointHit {
                 distance_sq,
                 display_order: layer_runtime
                     .get(layer.id)
                     .map(|state| state.display_order)
                     .unwrap_or(layer.display_order),
-                sample: waypoint_interaction_sample(layer, point),
+                sample,
             });
         }
     }
@@ -1000,6 +1008,9 @@ pub(crate) fn waypoint_layers_pending(
 ) -> bool {
     layer_registry.ordered().iter().any(|layer| {
         layer.is_waypoints()
+            && options.target_key.is_none_or(|target_key| {
+                waypoint_target_key_for_layer(layer.key.as_str()) == target_key
+            })
             && (options.include_hidden_layers || layer_runtime.visible(layer.id))
             && waypoint_runtime
                 .states
@@ -1031,6 +1042,14 @@ fn waypoint_hit_radius_world(
     )
 }
 
+fn waypoint_target_key_for_layer(layer_key: &str) -> &'static str {
+    if layer_key == TRADE_NPC_MAP_LAYER_ID {
+        FIELD_HOVER_TARGET_KEY_TRADE_NPC
+    } else {
+        WAYPOINT_HOVER_TARGET_KEY
+    }
+}
+
 fn waypoint_interaction_sample(
     layer: &crate::map::layers::LayerSpec,
     point: &WaypointPointRecord,
@@ -1041,11 +1060,7 @@ fn waypoint_interaction_sample(
         .or_else(|| point.map_label.clone())
         .or_else(|| point.feature_id.clone());
     let target_label = point_label.clone().unwrap_or_else(|| layer.name.clone());
-    let target_key = if layer.key == TRADE_NPC_MAP_LAYER_ID {
-        FIELD_HOVER_TARGET_KEY_TRADE_NPC
-    } else {
-        "waypoint"
-    };
+    let target_key = waypoint_target_key_for_layer(layer.key.as_str());
     WaypointLayerInteractionSample {
         world_x: point.world_x as f64,
         world_z: point.world_z as f64,
