@@ -13,7 +13,7 @@ class single_host($st) {
 	$cluster str = $st->cluster || "local-test"
 	$desired_generation int = $st->desired_generation || 0
 	$environment_name str = $st->environment_name
-	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $st->environment
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; sql str; expected_scalar str}} = $st->environment
 	$host struct{enabled bool; role str; hostname str} = $st->host
 	$releases map{str: struct{
 		generation int;
@@ -51,6 +51,11 @@ class single_host($st) {
 		enabled => false,
 		store_path => "",
 		gcroot_path => "",
+	}
+	$empty_admission_probe struct{kind str; sql str; expected_scalar str} = struct {
+		kind => "",
+		sql => "",
+		expected_scalar => "",
 	}
 	$active_release_id str = $environment->active_release
 	$active_release struct{
@@ -91,13 +96,18 @@ class single_host($st) {
 	$requested_admission_fixture_state str = $environment->admission_fixture_state || ""
 	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
 	$admission_state = if $requested_admission_fixture_state != "" { $requested_admission_fixture_state } else { $default_admission_state }
+	$admission_probe struct{kind str; sql str; expected_scalar str} = $environment->admission_probe || $empty_admission_probe
+	$admission_probe_kind str = $admission_probe->kind || ""
+	$use_dolt_sql_admission_probe = $admission_probe_kind == "dolt_sql_fixture"
 	$admission_failed = $admission_state == "failed_fixture"
 	$served = $environment->serve and ($admission_state == "passed_fixture")
 	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
 	$retained_releases []str = $environment->retained_releases || $empty_list
 	$retained_release_ids_json = fishy_json.string_list($retained_releases)
 	$dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $active_release_id)
+	$dolt_admission_exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment_name, $active_release_id)
 	$admission_path = fmt.printf("%s/admission/%s.json", $vm_run_dir, $environment_name)
+	$dolt_status_path = fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $active_release_id)
 	$status_path = fmt.printf("%s/status/%s.json", $vm_state_dir, $environment_name)
 	$active_path = fmt.printf("%s/active/%s.json", $vm_state_dir, $environment_name)
 	$route_path = fmt.printf("%s/routes/%s.json", $vm_run_dir, $environment_name)
@@ -107,6 +117,11 @@ class single_host($st) {
 	panic($environment->strategy != "single_active", fmt.printf("environment %s requires single_active strategy", $environment_name))
 	panic(($requested_admission_fixture_state != "") and (($mode != "vm-test") and ($mode != "vm-test-closures")), fmt.printf("environment %s admission_fixture_state is only supported in vm-test modes", $environment_name))
 	panic(($admission_state != "not_run") and ($admission_state != "passed_fixture") and ($admission_state != "failed_fixture"), fmt.printf("environment %s has unsupported admission state", $environment_name))
+	panic(($admission_probe_kind != "") and (not $write_vm_state), fmt.printf("environment %s admission_probe is only supported in VM test modes", $environment_name))
+	panic(($admission_probe_kind != "") and (not $use_dolt_sql_admission_probe), fmt.printf("environment %s has unsupported admission_probe kind %s", $environment_name, $admission_probe_kind))
+	panic($use_dolt_sql_admission_probe and ($active_dolt_materialization != "fetch_pin"), fmt.printf("environment %s Dolt SQL admission probe requires fetch_pin materialization", $environment_name))
+	panic($use_dolt_sql_admission_probe and ($admission_state != "passed_fixture"), fmt.printf("environment %s Dolt SQL admission probe can only publish passed_fixture admission", $environment_name))
+	panic($use_dolt_sql_admission_probe and ($admission_probe->sql == ""), fmt.printf("environment %s Dolt SQL admission probe requires sql", $environment_name))
 	panic($environment->host == "", fmt.printf("environment %s requires host", $environment_name))
 	panic(not $host->enabled, fmt.printf("environment %s references a disabled or unknown host %s", $environment_name, $environment->host))
 	panic($host->hostname == "", fmt.printf("environment %s host %s requires hostname", $environment_name, $environment->host))
@@ -186,21 +201,38 @@ class single_host($st) {
 		serve => $environment->serve,
 	})
 
-	include fishy_admission.fixture(struct {
-		mode => $mode,
-		environment => $environment_name,
-		host => $host->hostname,
-		release_id => $active_release_id,
-		release_identity => $active_release_identity,
-		site_content => $active_site_artifact->store_path,
-		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
-		dolt_commit => $active_dolt->commit,
-		dolt_materialization => $active_dolt_materialization,
-		dolt_release_ref => $active_dolt->release_ref,
-		requires_serving_artifacts => $environment->serve,
-		retained_release_count => len($retained_releases),
-		state => $admission_state,
-	})
+	if $use_dolt_sql_admission_probe {
+		include fishy_admission.dolt_sql_fixture(struct {
+			mode => $mode,
+			environment => $environment_name,
+			host => $host->hostname,
+			release_id => $active_release_id,
+			release_identity => $active_release_identity,
+			dolt_commit => $active_dolt->commit,
+			dolt_materialization => $active_dolt_materialization,
+			dolt_cache_dir => $active_dolt->cache_dir,
+			dolt_release_ref => $active_dolt->release_ref,
+			dolt_status_path => $dolt_status_path,
+			probe_sql => $admission_probe->sql,
+			expected_scalar => $admission_probe->expected_scalar,
+		})
+	} else {
+		include fishy_admission.fixture(struct {
+			mode => $mode,
+			environment => $environment_name,
+			host => $host->hostname,
+			release_id => $active_release_id,
+			release_identity => $active_release_identity,
+			site_content => $active_site_artifact->store_path,
+			cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+			dolt_commit => $active_dolt->commit,
+			dolt_materialization => $active_dolt_materialization,
+			dolt_release_ref => $active_dolt->release_ref,
+			requires_serving_artifacts => $environment->serve,
+			retained_release_count => len($retained_releases),
+			state => $admission_state,
+		})
+	}
 
 	include fishy_activation.active(struct {
 		mode => $mode,
@@ -246,9 +278,16 @@ class single_host($st) {
 	})
 
 	if $write_vm_state and ($active_dolt_materialization == "fetch_pin") {
-		Exec["${dolt_exec_name}"] -> File["${admission_path}"]
-		Exec["${dolt_exec_name}"] -> File["${status_path}"]
-		Exec["${dolt_exec_name}"] -> File["${active_path}"]
-		Exec["${dolt_exec_name}"] -> File["${route_path}"]
+		if $use_dolt_sql_admission_probe {
+			Exec["${dolt_exec_name}"] -> Exec["${dolt_admission_exec_name}"]
+			Exec["${dolt_admission_exec_name}"] -> File["${status_path}"]
+			Exec["${dolt_admission_exec_name}"] -> File["${active_path}"]
+			Exec["${dolt_admission_exec_name}"] -> File["${route_path}"]
+		} else {
+			Exec["${dolt_exec_name}"] -> File["${admission_path}"]
+			Exec["${dolt_exec_name}"] -> File["${status_path}"]
+			Exec["${dolt_exec_name}"] -> File["${active_path}"]
+			Exec["${dolt_exec_name}"] -> File["${route_path}"]
+		}
 	}
 }

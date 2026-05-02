@@ -31,6 +31,14 @@ enum DoltCommands {
         #[arg(long, default_value = "dolt")]
         dolt_bin: PathBuf,
     },
+    ProbeSqlFixture {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+        #[arg(long, default_value = "dolt")]
+        dolt_bin: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -43,6 +51,11 @@ fn main() -> Result<()> {
                 status,
                 dolt_bin,
             } => dolt::fetch_pin(&request, &status, &dolt_bin),
+            DoltCommands::ProbeSqlFixture {
+                request,
+                status,
+                dolt_bin,
+            } => dolt::probe_sql_fixture(&request, &status, &dolt_bin),
         },
     }
 }

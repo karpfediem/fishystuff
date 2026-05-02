@@ -18,6 +18,10 @@
     inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-dolt-admission-pin-vm = import ./dolt-admission-pin.nix {
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-multi-environment-candidates-vm = import ./multi-environment-candidates.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

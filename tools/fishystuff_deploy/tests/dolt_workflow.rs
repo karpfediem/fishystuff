@@ -1,0 +1,361 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::{bail, Context, Result};
+use serde_json::{json, Value};
+
+#[test]
+fn dolt_fetch_pin_and_sql_fixture_admission_follow_exact_commit() -> Result<()> {
+    let Some(dolt_bin) = find_dolt()? else {
+        eprintln!("skipping Dolt workflow test because dolt is not available in PATH");
+        return Ok(());
+    };
+
+    let root = TestRoot::new("fishystuff-deploy-dolt-workflow")?;
+    let source = root.path().join("source");
+    let remote = root.path().join("remote");
+    let home = root.path().join("home");
+    let cache = root.path().join("cache/fishystuff");
+    let release_ref = "fishystuff/gitops/example-release";
+
+    fs::create_dir_all(&source)?;
+    fs::create_dir_all(&remote)?;
+    fs::create_dir_all(&home)?;
+
+    run(
+        &dolt_bin,
+        &home,
+        None,
+        [
+            "config",
+            "--global",
+            "--add",
+            "versioncheck.disabled",
+            "true",
+        ],
+    )?;
+    run(
+        &dolt_bin,
+        &home,
+        None,
+        ["config", "--global", "--add", "metrics.disabled", "true"],
+    )?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        [
+            "init",
+            "--name",
+            "FishyStuff GitOps Test",
+            "--email",
+            "fishystuff-gitops@example.invalid",
+        ],
+    )?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        [
+            "sql",
+            "-q",
+            "create table t (pk int primary key, v varchar(20)); insert into t values (1, 'one');",
+        ],
+    )?;
+    run(&dolt_bin, &home, Some(&source), ["add", "t"])?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        ["commit", "-m", "commit-one"],
+    )?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        [
+            "remote",
+            "add",
+            "origin",
+            &format!("file://{}", remote.display()),
+        ],
+    )?;
+    run(&dolt_bin, &home, Some(&source), ["push", "origin", "main"])?;
+    let commit1 = dolt_hash_of(&dolt_bin, &home, &source, "main")?;
+
+    let fetch_status = root.path().join("status/fetch.json");
+    let admission_status = root.path().join("status/admission.json");
+    fetch_pin(
+        &root,
+        &home,
+        &dolt_bin,
+        &cache,
+        release_ref,
+        &commit1,
+        &fetch_status,
+    )?;
+    probe_sql_fixture(
+        &root,
+        &home,
+        &dolt_bin,
+        &cache,
+        release_ref,
+        &commit1,
+        &fetch_status,
+        "select v from t as of 'fishystuff/gitops/example-release' where pk = 1",
+        "one",
+        &admission_status,
+    )?;
+
+    let admission: Value = read_json(&admission_status)?;
+    assert_eq!(admission["admission_state"], "passed_fixture");
+    assert_eq!(admission["dolt_verified_commit"], commit1);
+    assert_eq!(admission["probe_value"], "one");
+
+    fs::write(cache.join("cache-survives-fetch"), "yes")?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        ["sql", "-q", "insert into t values (2, 'two');"],
+    )?;
+    run(&dolt_bin, &home, Some(&source), ["add", "t"])?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        ["commit", "-m", "commit-two"],
+    )?;
+    run(&dolt_bin, &home, Some(&source), ["push", "origin", "main"])?;
+    let commit2 = dolt_hash_of(&dolt_bin, &home, &source, "main")?;
+
+    fetch_pin(
+        &root,
+        &home,
+        &dolt_bin,
+        &cache,
+        release_ref,
+        &commit2,
+        &fetch_status,
+    )?;
+    probe_sql_fixture(
+        &root,
+        &home,
+        &dolt_bin,
+        &cache,
+        release_ref,
+        &commit2,
+        &fetch_status,
+        "select v from t as of 'fishystuff/gitops/example-release' where pk = 2",
+        "two",
+        &admission_status,
+    )?;
+
+    let fetch: Value = read_json(&fetch_status)?;
+    let admission: Value = read_json(&admission_status)?;
+    assert_eq!(fetch["state"], "pinned");
+    assert_eq!(fetch["verified_commit"], commit2);
+    assert_eq!(admission["admission_state"], "passed_fixture");
+    assert_eq!(admission["dolt_verified_commit"], commit2);
+    assert_eq!(admission["probe_value"], "two");
+    assert!(cache.join("cache-survives-fetch").is_file());
+
+    Ok(())
+}
+
+fn find_dolt() -> Result<Option<PathBuf>> {
+    let output = Command::new("dolt").arg("version").output();
+    match output {
+        Ok(output) if output.status.success() => Ok(Some(PathBuf::from("dolt"))),
+        Ok(output) => bail_command("dolt version", output),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).context("running dolt version"),
+    }
+}
+
+fn fetch_pin(
+    root: &TestRoot,
+    home: &Path,
+    dolt_bin: &Path,
+    cache: &Path,
+    release_ref: &str,
+    commit: &str,
+    status: &Path,
+) -> Result<()> {
+    let request = root.path().join("requests/fetch.json");
+    write_json(
+        &request,
+        json!({
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": "example-release",
+            "release_identity": format!("release=example-release;dolt_commit={commit}"),
+            "repository": "fishystuff/fishystuff",
+            "remote_url": format!("file://{}", root.path().join("remote").display()),
+            "branch_context": "main",
+            "commit": commit,
+            "access_mode": "read_only",
+            "materialization": "fetch_pin",
+            "cache_dir": cache,
+            "release_ref": release_ref,
+        }),
+    )?;
+    run_helper(
+        home,
+        [
+            "dolt",
+            "fetch-pin",
+            "--request",
+            request.to_str().context("request path is not UTF-8")?,
+            "--status",
+            status.to_str().context("status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn probe_sql_fixture(
+    root: &TestRoot,
+    home: &Path,
+    dolt_bin: &Path,
+    cache: &Path,
+    release_ref: &str,
+    commit: &str,
+    dolt_status: &Path,
+    probe_sql: &str,
+    expected_scalar: &str,
+    status: &Path,
+) -> Result<()> {
+    let request = root.path().join("requests/admission.json");
+    write_json(
+        &request,
+        json!({
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": "example-release",
+            "release_identity": format!("release=example-release;dolt_commit={commit}"),
+            "dolt_commit": commit,
+            "dolt_materialization": "fetch_pin",
+            "dolt_cache_dir": cache,
+            "dolt_release_ref": release_ref,
+            "dolt_status_path": dolt_status,
+            "probe_sql": probe_sql,
+            "expected_scalar": expected_scalar,
+        }),
+    )?;
+    run_helper(
+        home,
+        [
+            "dolt",
+            "probe-sql-fixture",
+            "--request",
+            request.to_str().context("request path is not UTF-8")?,
+            "--status",
+            status.to_str().context("status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )
+}
+
+fn dolt_hash_of(dolt_bin: &Path, home: &Path, cwd: &Path, revision: &str) -> Result<String> {
+    let output = run(
+        dolt_bin,
+        home,
+        Some(cwd),
+        [
+            "sql",
+            "-r",
+            "csv",
+            "-q",
+            &format!("select dolt_hashof('{revision}') as hash"),
+        ],
+    )?;
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .nth(1)
+        .map(str::to_owned)
+        .context("Dolt hash query returned no hash row")
+}
+
+fn run_helper<'a, I>(home: &Path, args: I) -> Result<()>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let helper = env!("CARGO_BIN_EXE_fishystuff_deploy");
+    run(Path::new(helper), home, None, args).map(|_| ())
+}
+
+fn run<'a, I>(program: &Path, home: &Path, cwd: Option<&Path>, args: I) -> Result<String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let args: Vec<&str> = args.into_iter().collect();
+    let mut command = Command::new(program);
+    command.args(&args).env("HOME", home).env("NO_COLOR", "1");
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+
+    let output = command
+        .output()
+        .with_context(|| format!("running {} {}", program.display(), args.join(" ")))?;
+    if !output.status.success() {
+        return bail_command(&format!("{} {}", program.display(), args.join(" ")), output);
+    }
+    String::from_utf8(output.stdout).context("command wrote non-UTF-8 stdout")
+}
+
+fn bail_command<T>(command: &str, output: Output) -> Result<T> {
+    bail!(
+        "command failed: {command}\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+fn write_json(path: &Path, value: Value) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, serde_json::to_vec_pretty(&value)?)?;
+    Ok(())
+}
+
+fn read_json(path: &Path) -> Result<Value> {
+    let bytes = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    serde_json::from_slice(&bytes).with_context(|| format!("decoding {}", path.display()))
+}
+
+struct TestRoot {
+    path: PathBuf,
+}
+
+impl TestRoot {
+    fn new(prefix: &str) -> Result<Self> {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .context("system time is before UNIX_EPOCH")?
+            .as_millis();
+        let path = std::env::temp_dir().join(format!("{prefix}-{}-{millis}", std::process::id()));
+        fs::create_dir_all(&path)?;
+        Ok(Self { path })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TestRoot {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
