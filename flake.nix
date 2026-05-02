@@ -340,9 +340,10 @@
             let
               currentFixture = pkgs.runCommand "cdn-serving-current-fixture" { } ''
                 mkdir -p "$out/map"
-                printf 'current-manifest' > "$out/map/runtime-manifest.json"
+                printf '{"module":"fishystuff_ui_bevy.new.js","wasm":"fishystuff_ui_bevy_bg.new.wasm"}\n' > "$out/map/runtime-manifest.json"
                 printf 'current-metadata' > "$out/.cdn-metadata.json"
                 printf 'new-runtime' > "$out/map/fishystuff_ui_bevy.new.js"
+                printf 'new-wasm' > "$out/map/fishystuff_ui_bevy_bg.new.wasm"
                 printf 'new-source-map' > "$out/map/fishystuff_ui_bevy.new.js.map"
                 printf 'shared-runtime' > "$out/map/fishystuff_ui_bevy.shared.js"
               '';
@@ -362,9 +363,11 @@
             pkgs.runCommand "cdn-serving-root-retention-check" { nativeBuildInputs = [ pkgs.jq ]; } ''
               set -euo pipefail
 
-              test "$(cat ${servingRoot}/map/runtime-manifest.json)" = "current-manifest"
+              test "$(jq -r '.module' ${servingRoot}/map/runtime-manifest.json)" = "fishystuff_ui_bevy.new.js"
+              test "$(jq -r '.wasm' ${servingRoot}/map/runtime-manifest.json)" = "fishystuff_ui_bevy_bg.new.wasm"
               test "$(cat ${servingRoot}/.cdn-metadata.json)" = "current-metadata"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js)" = "new-runtime"
+              test "$(cat ${servingRoot}/map/fishystuff_ui_bevy_bg.new.wasm)" = "new-wasm"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js.map)" = "new-source-map"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.shared.js)" = "shared-runtime"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.old.js)" = "old-runtime"

@@ -1,4 +1,5 @@
 {
+  jq,
   lib,
   runCommand,
   currentRoot,
@@ -7,7 +8,7 @@
 let
   previousRootArgs = lib.concatMapStringsSep " " (root: lib.escapeShellArg "${root}") previousRoots;
 in
-runCommand "cdn-serving-root" { } ''
+runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
   set -euo pipefail
 
   current_root=${lib.escapeShellArg "${currentRoot}"}
@@ -16,6 +17,30 @@ runCommand "cdn-serving-root" { } ''
   if [[ ! -d "$current_root" ]]; then
     echo "current CDN root does not exist: $current_root" >&2
     exit 1
+  fi
+
+  runtime_manifest="$current_root/map/runtime-manifest.json"
+  if [[ -f "$runtime_manifest" ]]; then
+    runtime_module="$(jq -er '.module // empty' "$runtime_manifest")"
+    runtime_wasm="$(jq -er '.wasm // empty' "$runtime_manifest")"
+
+    if [[ -z "$runtime_module" || -z "$runtime_wasm" ]]; then
+      echo "CDN runtime manifest must name module and wasm: $runtime_manifest" >&2
+      exit 1
+    fi
+
+    for runtime_rel in "map/$runtime_module" "map/$runtime_wasm"; do
+      case "$runtime_rel" in
+        /*|*..*)
+          echo "unsafe CDN runtime manifest path: $runtime_rel" >&2
+          exit 1
+          ;;
+      esac
+      if [[ ! -f "$current_root/$runtime_rel" ]]; then
+        echo "CDN runtime manifest references missing current-root file: $runtime_rel" >&2
+        exit 1
+      fi
+    done
   fi
 
   mkdir -p "$out"
