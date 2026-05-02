@@ -193,16 +193,16 @@ pkgs.testers.runNixOSTest {
     machine.succeed(run_mgmt.format(state="${previousServedState}", log="/tmp/fishystuff-gitops-transition-previous.log", pid="/tmp/fishystuff-gitops-transition-previous.pid"))
     active = "/var/lib/fishystuff/gitops-test/active/local-test.json"
     machine.wait_for_file(active)
-    machine.wait_until_succeeds(f"jq -e '.release_id == \"previous-release\" and .site_content == \"${previousSite}\" and .cdn_runtime_content == \"${previousCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 20 and .release_id == \"previous-release\" and .site_content == \"${previousSite}\" and .cdn_runtime_content == \"${previousCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/site)\" = \"${previousSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/cdn)\" = \"${previousCdnServingRoot}\"")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-transition-previous.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-transition-previous.pid) || true")
 
     machine.succeed(run_mgmt.format(state="${candidateServedState}", log="/tmp/fishystuff-gitops-transition-candidate.log", pid="/tmp/fishystuff-gitops-transition-candidate.pid"))
-    machine.wait_until_succeeds(f"jq -e '.release_id == \"candidate-release\" and .site_content == \"${candidateSite}\" and .cdn_runtime_content == \"${candidateCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 21 and .release_id == \"candidate-release\" and .site_content == \"${candidateSite}\" and .cdn_runtime_content == \"${candidateCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/site)\" = \"${candidateSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/cdn)\" = \"${candidateCdnServingRoot}\"")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-transition-candidate.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-transition-candidate.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")

@@ -3,6 +3,7 @@ import "json.mcl" as fishy_json
 
 class active($st) {
 	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
 	$environment str = $st->environment
 	$host str = $st->host
 	$release_id str = $st->release_id
@@ -21,9 +22,10 @@ class active($st) {
 	$served_dir = fmt.printf("%s/served", $state_dir)
 	$served_site_link = fmt.printf("%s/site", $served_dir)
 	$served_cdn_link = fmt.printf("%s/cdn", $served_dir)
-	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"site_link\": %s,\n  \"cdn_link\": %s,\n  \"retained_release_ids\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_symlinks\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($served_site_link), fishy_json.quote($served_cdn_link), $retained_release_ids_json, fishy_json.quote($admission_state), $served)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"site_link\": %s,\n  \"cdn_link\": %s,\n  \"retained_release_ids\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_symlinks\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($served_site_link), fishy_json.quote($served_cdn_link), $retained_release_ids_json, fishy_json.quote($admission_state), $served)
 
 	panic($environment == "", "activation requires environment")
+	panic($desired_generation == 0, "activation requires desired_generation")
 	panic($host == "", "activation requires host")
 	panic($release_id == "", "activation requires release_id")
 	panic($release_identity == "", "activation requires release_identity")

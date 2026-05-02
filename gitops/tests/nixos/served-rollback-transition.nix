@@ -181,16 +181,16 @@ pkgs.testers.runNixOSTest {
     machine.succeed(run_mgmt.format(state="${candidateServedState}", log="/tmp/fishystuff-gitops-rollback-candidate.log", pid="/tmp/fishystuff-gitops-rollback-candidate.pid"))
     active = "/var/lib/fishystuff/gitops-test/active/local-test.json"
     machine.wait_for_file(active)
-    machine.wait_until_succeeds(f"jq -e '.release_id == \"candidate-release\" and .site_content == \"${candidateSite}\" and .cdn_runtime_content == \"${candidateCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"previous-release\"] and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 30 and .release_id == \"candidate-release\" and .site_content == \"${candidateSite}\" and .cdn_runtime_content == \"${candidateCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"previous-release\"] and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/site)\" = \"${candidateSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/cdn)\" = \"${candidateCdnServingRoot}\"")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-rollback-candidate.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-rollback-candidate.pid) || true")
 
     machine.succeed(run_mgmt.format(state="${rollbackServedState}", log="/tmp/fishystuff-gitops-rollback-previous.log", pid="/tmp/fishystuff-gitops-rollback-previous.pid"))
-    machine.wait_until_succeeds(f"jq -e '.release_id == \"previous-release\" and .site_content == \"${previousSite}\" and .cdn_runtime_content == \"${rollbackCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"candidate-release\"] and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 31 and .release_id == \"previous-release\" and .site_content == \"${previousSite}\" and .cdn_runtime_content == \"${rollbackCdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"candidate-release\"] and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/site)\" = \"${previousSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/cdn)\" = \"${rollbackCdnServingRoot}\"")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-rollback-previous.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-rollback-previous.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")

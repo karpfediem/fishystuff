@@ -240,6 +240,7 @@ if $local_test_environment->enabled {
 
 	include fishy_activation.active(struct {
 		mode => $mode,
+		desired_generation => $generation,
 		environment => "local-test",
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,

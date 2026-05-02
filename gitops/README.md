@@ -240,6 +240,8 @@ Local active selection is written only when a VM/local desired state is explicit
 /var/lib/fishystuff/gitops-test/served/cdn
 ```
 
+The active selection document includes the desired generation that selected the served symlinks so route state can be correlated with the desired-state object that produced it.
+
 KV publication can be added later when the status consumer is clear.
 
 ## Fast Deployment Invariant

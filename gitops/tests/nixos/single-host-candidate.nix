@@ -36,7 +36,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"jq -e '.instance_name == \"local-test-example-release\" and .release_id == \"example-release\" and .release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=;site=;cdn_runtime=;dolt_service=\" and .environment == \"local-test\" and .host == \"vm-single-host\"' {instance}")
     machine.succeed(f"jq -e '.release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=;site=;cdn_runtime=;dolt_service=\" and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")

@@ -116,7 +116,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"jq -e '.desired_generation == 2 and .release_id == \"example-release\" and .environment == \"local-test\" and .admission_state == \"passed_fixture\" and .served == false' {status}")
     machine.succeed(f"jq -e '.api_bundle == \"${apiArtifact}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .dolt_service_bundle == \"${doltServiceArtifact}\"' {instance}")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")

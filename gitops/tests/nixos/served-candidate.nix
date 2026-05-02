@@ -151,7 +151,7 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file(admission)
 
     machine.succeed(f"jq -e '.desired_generation == 3 and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .instance_name == \"local-test-example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.succeed(f"jq -e '.desired_generation == 3 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .instance_name == \"local-test-example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .site_link == \"/var/lib/fishystuff/gitops-test/served/site\" and .cdn_link == \"/var/lib/fishystuff/gitops-test/served/cdn\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/site)\" = \"${siteArtifact}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/cdn)\" = \"${cdnServingRoot}\"")
     machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"]' {instance}")
@@ -166,7 +166,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy_bg.previous.wasm)\" = \"previous wasm\"")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy_bg.previous.wasm.map)\" = \"previous wasm source map\"")
 
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")

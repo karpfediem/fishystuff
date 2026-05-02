@@ -100,6 +100,6 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"expected=$(cat ${expectedReleaseIdentityFile}); commit=$(cat ${expectedDoltCommitFile}); jq -e --arg expected \"$expected\" --arg commit \"$commit\" '.release_id == \"escaped-json-release\" and .release_identity == $expected and .dolt_commit == $commit and .serve_requested == false' {instance}")
     machine.succeed(f"expected=$(cat ${expectedReleaseIdentityFile}); jq -e --arg expected \"$expected\" '.release_id == \"escaped-json-release\" and .release_identity == $expected and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-json-status-escaping.pid)")
+    machine.succeed("kill $(cat /tmp/fishystuff-gitops-json-status-escaping.pid) || true")
   '';
 }
