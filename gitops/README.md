@@ -211,6 +211,7 @@ The Dolt desired-state fields separate data identity from transport. `dolt.commi
 
 The current GitOps graph requires `dolt.mode = "read_only"` for every release. Mutable Dolt workflows should stay in ingestion/admin tooling, not in the serving deployment substrate.
 `replica_pin` and `snapshot` are accepted only in `validate` mode until their materialization behavior is implemented with local tests.
+Dolt remote URLs must not embed credentials because desired state and status documents are not secret stores.
 
 `fetch_pin` is the intended normal deployment path. It avoids full clones on every deploy: expensive Dolt transfer happens as incremental fetch into a cache under `cache_dir`, while activation can only proceed after `release_ref` verifies to the exact desired commit. The helper reconciles the persistent cache's `origin` remote to the desired `remote_url` before fetching, so switching from DoltHub to a faster FishyStuff-controlled mirror is an explicit desired-state change instead of stale local cache configuration. DoltHub may remain a source/public mirror, but production deployment should fetch from a faster FishyStuff-controlled remote or mirror.
 

@@ -376,6 +376,9 @@ fn validate_request(request: &FetchPinRequest) -> Result<()> {
             request.access_mode
         );
     }
+    if remote_url_contains_userinfo(&request.remote_url) {
+        bail!("fetch-pin remote_url must not contain embedded credentials");
+    }
 
     if request.cache_dir.as_os_str().is_empty() {
         bail!("fetch-pin request field cache_dir must not be empty");
@@ -720,6 +723,18 @@ fn is_read_query(query: &str) -> bool {
     first_token.eq_ignore_ascii_case("select") || first_token.eq_ignore_ascii_case("with")
 }
 
+fn remote_url_contains_userinfo(remote_url: &str) -> bool {
+    let Some((scheme, remainder)) = remote_url.split_once("://") else {
+        return false;
+    };
+    if scheme.eq_ignore_ascii_case("file") {
+        return false;
+    }
+
+    let authority = remainder.split(['/', '?', '#']).next().unwrap_or_default();
+    authority.contains('@')
+}
+
 fn parse_single_hash_csv(stdout: &str) -> Result<String> {
     let mut lines = stdout
         .lines()
@@ -770,7 +785,10 @@ fn parse_single_scalar_csv(stdout: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_read_query, parse_single_hash_csv, parse_single_scalar_csv, sql_quote};
+    use super::{
+        is_read_query, parse_single_hash_csv, parse_single_scalar_csv,
+        remote_url_contains_userinfo, sql_quote,
+    };
 
     #[test]
     fn parses_dolt_hash_csv() {
@@ -815,5 +833,21 @@ mod tests {
         assert!(!is_read_query(""));
         assert!(!is_read_query("insert into t values (1)"));
         assert!(!is_read_query("call dolt_fetch('origin')"));
+    }
+
+    #[test]
+    fn detects_remote_url_userinfo() {
+        assert!(remote_url_contains_userinfo(
+            "https://token@example.invalid/fishystuff"
+        ));
+        assert!(remote_url_contains_userinfo(
+            "http://user:password@example.invalid/fishystuff"
+        ));
+        assert!(!remote_url_contains_userinfo(
+            "https://example.invalid/fishystuff"
+        ));
+        assert!(!remote_url_contains_userinfo(
+            "file:///tmp/fishy@example.invalid/fishystuff"
+        ));
     }
 }

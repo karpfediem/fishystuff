@@ -31,6 +31,9 @@
 let
   storePathString = value: builtins.unsafeDiscardStringContext "${value}";
   optionalStorePath = value: if value == null then "" else storePathString value;
+  remoteUrlContainsUserinfo =
+    url:
+    !lib.hasPrefix "file://" url && builtins.match "[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@.*" url != null;
   releaseMaterial = {
     generation = releaseGeneration;
     git_rev = gitRev;
@@ -146,6 +149,9 @@ assert lib.assertMsg (
   doltMaterialization != "fetch_pin" || doltRemoteUrl != ""
 ) "fetch_pin dolt materialization requires doltRemoteUrl";
 assert lib.assertMsg (
+  !remoteUrlContainsUserinfo doltRemoteUrl
+) "gitops desired state doltRemoteUrl must not contain embedded credentials";
+assert lib.assertMsg (
   mode == "validate" || doltMaterialization != "replica_pin"
 ) "replica_pin dolt materialization is validate-only until implemented";
 assert lib.assertMsg (
@@ -190,6 +196,9 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   lib.all (release: mode == "validate" || (release.doltMaterialization or doltMaterialization) != "snapshot") retainedReleaseObjects
 ) "gitops retained release objects cannot use snapshot outside validate mode";
+assert lib.assertMsg (
+  lib.all (release: !remoteUrlContainsUserinfo (release.doltRemoteUrl or doltRemoteUrl)) retainedReleaseObjects
+) "gitops retained release objects must not use credential-bearing Dolt remote URLs";
 assert lib.assertMsg (
   retainedReleases == [ ] || retainedReleases == map (release: release.releaseId) retainedReleaseObjects
 ) "gitops retainedReleases must match retainedReleaseObjects when both are provided";

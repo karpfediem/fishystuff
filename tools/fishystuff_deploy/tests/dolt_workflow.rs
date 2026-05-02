@@ -314,6 +314,20 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         ),
         "expected read_only",
     );
+    assert_fetch_pin_failure_contains(
+        fetch_pin_from_remote(
+            &root,
+            &home,
+            &dolt_bin,
+            &cache,
+            "https://token@example.invalid/fishystuff/fishystuff",
+            release_ref,
+            &commit1,
+            "read_only",
+            &root.path().join("status/fetch-credential-url.json"),
+        ),
+        "must not contain embedded credentials",
+    );
 
     let stale_commit_status = root.path().join("status/fetch-stale-commit.json");
     write_fetch_status(
