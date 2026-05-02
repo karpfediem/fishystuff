@@ -96,6 +96,45 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         &commit1,
         &fetch_status,
     )?;
+    let fetch_request = root.path().join("requests/fetch.json");
+    assert_helper_current(
+        &home,
+        [
+            "dolt",
+            "needs-fetch-pin",
+            "--request",
+            fetch_request
+                .to_str()
+                .context("fetch request path is not UTF-8")?,
+            "--status",
+            fetch_status
+                .to_str()
+                .context("fetch status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )?;
+    let stale_fetch_status = root.path().join("status/fetch-stale-identity.json");
+    let mut stale_fetch = read_json(&fetch_status)?;
+    stale_fetch["release_identity"] = Value::String("wrong-release-identity".to_owned());
+    write_json(&stale_fetch_status, stale_fetch)?;
+    assert_helper_needs(
+        &home,
+        [
+            "dolt",
+            "needs-fetch-pin",
+            "--request",
+            fetch_request
+                .to_str()
+                .context("fetch request path is not UTF-8")?,
+            "--status",
+            stale_fetch_status
+                .to_str()
+                .context("stale fetch status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )?;
     probe_sql_scalar(
         &root,
         &home,
@@ -113,6 +152,45 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
     assert_eq!(admission["admission_state"], "passed_fixture");
     assert_eq!(admission["verified_commit"], commit1);
     assert_eq!(admission["scalar"], "one");
+    let admission_request = root.path().join("requests/admission.json");
+    assert_helper_current(
+        &home,
+        [
+            "dolt",
+            "needs-probe-sql-scalar",
+            "--request",
+            admission_request
+                .to_str()
+                .context("admission request path is not UTF-8")?,
+            "--status",
+            admission_status
+                .to_str()
+                .context("admission status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )?;
+    let stale_admission_status = root.path().join("status/admission-stale-query.json");
+    let mut stale_admission = admission.clone();
+    stale_admission["query"] = Value::String("select 'wrong'".to_owned());
+    write_json(&stale_admission_status, stale_admission)?;
+    assert_helper_needs(
+        &home,
+        [
+            "dolt",
+            "needs-probe-sql-scalar",
+            "--request",
+            admission_request
+                .to_str()
+                .context("admission request path is not UTF-8")?,
+            "--status",
+            stale_admission_status
+                .to_str()
+                .context("stale admission status path is not UTF-8")?,
+            "--dolt-bin",
+            dolt_bin.to_str().context("dolt path is not UTF-8")?,
+        ],
+    )?;
 
     assert_probe_failure_contains(
         probe_sql_scalar(
@@ -419,6 +497,42 @@ where
 {
     let helper = env!("CARGO_BIN_EXE_fishystuff_deploy");
     run(Path::new(helper), home, None, args).map(|_| ())
+}
+
+fn assert_helper_needs<'a, I>(home: &Path, args: I) -> Result<()>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let output = run_helper_raw(home, args)?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy needs helper", output);
+    }
+    Ok(())
+}
+
+fn assert_helper_current<'a, I>(home: &Path, args: I) -> Result<()>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let output = run_helper_raw(home, args)?;
+    if output.status.code() != Some(1) {
+        return bail_command("fishystuff_deploy needs helper", output);
+    }
+    Ok(())
+}
+
+fn run_helper_raw<'a, I>(home: &Path, args: I) -> Result<Output>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let helper = env!("CARGO_BIN_EXE_fishystuff_deploy");
+    let args: Vec<&str> = args.into_iter().collect();
+    Command::new(helper)
+        .args(&args)
+        .env("HOME", home)
+        .env("NO_COLOR", "1")
+        .output()
+        .with_context(|| format!("running {} {}", helper, args.join(" ")))
 }
 
 fn run<'a, I>(program: &Path, home: &Path, cwd: Option<&Path>, args: I) -> Result<String>

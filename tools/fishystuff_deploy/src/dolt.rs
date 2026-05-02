@@ -23,6 +23,24 @@ struct FetchPinRequest {
     release_ref: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct FetchPinStatusDocument {
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    repository: String,
+    remote_url: String,
+    branch_context: String,
+    requested_commit: String,
+    verified_commit: String,
+    access_mode: String,
+    materialization: String,
+    cache_dir: PathBuf,
+    release_ref: String,
+    state: String,
+}
+
 #[derive(Debug, Serialize)]
 struct FetchPinStatus<'a> {
     environment: &'a str,
@@ -62,6 +80,25 @@ struct FetchPinMaterializationStatus {
     cache_dir: PathBuf,
     release_ref: String,
     state: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProbeSqlScalarStatusDocument {
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    expected_commit: String,
+    materialization: String,
+    cache_dir: PathBuf,
+    pinned_ref: String,
+    materialization_status_path: PathBuf,
+    verified_commit: String,
+    query: String,
+    scalar: String,
+    expected_scalar: String,
+    admission_state: String,
+    probe: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -124,6 +161,30 @@ pub fn fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Re
     Ok(())
 }
 
+pub fn needs_fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> bool {
+    let Ok(request) = read_request(request_path).and_then(|request| {
+        validate_request(&request)?;
+        Ok(request)
+    }) else {
+        return true;
+    };
+    let Ok(status) = read_fetch_pin_status(status_path) else {
+        return true;
+    };
+
+    if !fetch_pin_status_matches_request(&request, &status) {
+        return true;
+    }
+    if !request.cache_dir.join(".dolt").is_dir() {
+        return true;
+    }
+
+    match verify_ref(&request, dolt_bin) {
+        Ok(verified_commit) => verified_commit != request.commit,
+        Err(_) => true,
+    }
+}
+
 pub fn probe_sql_scalar(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Result<()> {
     let request = read_probe_sql_scalar_request(request_path)?;
     validate_probe_sql_scalar_request(&request)?;
@@ -154,6 +215,36 @@ pub fn probe_sql_scalar(request_path: &Path, status_path: &Path, dolt_bin: &Path
     write_probe_sql_scalar_status(status_path, &request, &verified_commit, &scalar_value)
 }
 
+pub fn needs_probe_sql_scalar(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> bool {
+    let Ok(request) = read_probe_sql_scalar_request(request_path).and_then(|request| {
+        validate_probe_sql_scalar_request(&request)?;
+        Ok(request)
+    }) else {
+        return true;
+    };
+    let Ok(status) = read_probe_sql_scalar_status(status_path) else {
+        return true;
+    };
+
+    if !probe_sql_scalar_status_matches_request(&request, &status) {
+        return true;
+    }
+
+    let Ok(materialization_status) =
+        read_materialization_status(&request.materialization_status_path)
+    else {
+        return true;
+    };
+    if validate_materialization_status(&request, &materialization_status).is_err() {
+        return true;
+    }
+
+    match verify_probe_ref(&request, dolt_bin) {
+        Ok(verified_commit) => verified_commit != request.expected_commit,
+        Err(_) => true,
+    }
+}
+
 fn read_request(request_path: &Path) -> Result<FetchPinRequest> {
     let file = File::open(request_path)
         .with_context(|| format!("opening fetch-pin request {}", request_path.display()))?;
@@ -176,6 +267,28 @@ fn read_probe_sql_scalar_request(request_path: &Path) -> Result<ProbeSqlScalarRe
     })
 }
 
+fn read_fetch_pin_status(status_path: &Path) -> Result<FetchPinStatusDocument> {
+    let file = File::open(status_path)
+        .with_context(|| format!("opening fetch-pin status {}", status_path.display()))?;
+    serde_json::from_reader(file)
+        .with_context(|| format!("decoding fetch-pin status {}", status_path.display()))
+}
+
+fn read_probe_sql_scalar_status(status_path: &Path) -> Result<ProbeSqlScalarStatusDocument> {
+    let file = File::open(status_path).with_context(|| {
+        format!(
+            "opening Dolt SQL scalar admission status {}",
+            status_path.display()
+        )
+    })?;
+    serde_json::from_reader(file).with_context(|| {
+        format!(
+            "decoding Dolt SQL scalar admission status {}",
+            status_path.display()
+        )
+    })
+}
+
 fn read_materialization_status(status_path: &Path) -> Result<FetchPinMaterializationStatus> {
     let file = File::open(status_path).with_context(|| {
         format!(
@@ -189,6 +302,47 @@ fn read_materialization_status(status_path: &Path) -> Result<FetchPinMaterializa
             status_path.display()
         )
     })
+}
+
+fn fetch_pin_status_matches_request(
+    request: &FetchPinRequest,
+    status: &FetchPinStatusDocument,
+) -> bool {
+    status.environment == request.environment
+        && status.host == request.host
+        && status.release_id == request.release_id
+        && status.release_identity == request.release_identity
+        && status.repository == request.repository
+        && status.remote_url == request.remote_url
+        && status.branch_context == request.branch_context
+        && status.requested_commit == request.commit
+        && status.verified_commit == request.commit
+        && status.access_mode == request.access_mode
+        && status.materialization == request.materialization
+        && status.cache_dir == request.cache_dir
+        && status.release_ref == request.release_ref
+        && status.state == "pinned"
+}
+
+fn probe_sql_scalar_status_matches_request(
+    request: &ProbeSqlScalarRequest,
+    status: &ProbeSqlScalarStatusDocument,
+) -> bool {
+    status.environment == request.environment
+        && status.host == request.host
+        && status.release_id == request.release_id
+        && status.release_identity == request.release_identity
+        && status.expected_commit == request.expected_commit
+        && status.materialization == request.materialization
+        && status.cache_dir == request.cache_dir
+        && status.pinned_ref == request.pinned_ref
+        && status.materialization_status_path == request.materialization_status_path
+        && status.verified_commit == request.expected_commit
+        && status.query == request.query
+        && status.scalar == request.expected_scalar
+        && status.expected_scalar == request.expected_scalar
+        && status.admission_state == "passed_fixture"
+        && status.probe == "dolt-sql-scalar"
 }
 
 fn validate_request(request: &FetchPinRequest) -> Result<()> {

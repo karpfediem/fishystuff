@@ -49,7 +49,7 @@ class materialization($st) {
 	$exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment, $release_id)
 	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"repository\": %s,\n  \"remote_url\": %s,\n  \"branch_context\": %s,\n  \"commit\": %s,\n  \"access_mode\": %s,\n  \"materialization\": %s,\n  \"cache_dir\": %s,\n  \"release_ref\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($repository), fishy_json.quote($remote_url), fishy_json.quote($branch_context), fishy_json.quote($commit), fishy_json.quote($access_mode), fishy_json.quote($materialization), fishy_json.quote($cache_dir), fishy_json.quote($release_ref))
 	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
-	$ifcmd = fmt.printf("test ! -e '%s' || test \"$(/run/current-system/sw/bin/jq -r .verified_commit '%s' 2>/dev/null || true)\" != \"$(/run/current-system/sw/bin/jq -r .commit '%s')\"", $status_path, $status_path, $request_path)
+	$ifcmd = fmt.printf("%s dolt needs-fetch-pin --request '%s' --status '%s' --dolt-bin /run/current-system/sw/bin/dolt", $helper_bin, $request_path, $status_path)
 
 	include release_metadata(struct {
 		release_id => $release_id,

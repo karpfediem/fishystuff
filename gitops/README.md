@@ -208,7 +208,7 @@ The Dolt desired-state fields separate data identity from transport. `dolt.commi
 
 `fetch_pin` is the intended normal deployment path. It avoids full clones on every deploy: expensive Dolt transfer happens as incremental fetch into a cache under `cache_dir`, while activation can only proceed after `release_ref` verifies to the exact desired commit. DoltHub may remain a source/public mirror, but production deployment should fetch from a faster FishyStuff-controlled remote or mirror.
 
-The Rust deployment helper is packaged as `.#fishystuff-deploy`. It is intentionally a narrow host-local helper, not a plan/apply deployment command: mgmt still owns desired-state reconciliation, while the helper only executes Dolt clone/fetch/ref-pin/status-file operations requested by the graph.
+The Rust deployment helper is packaged as `.#fishystuff-deploy`. It is intentionally a narrow host-local helper, not a plan/apply deployment command: mgmt still owns desired-state reconciliation, while the helper only executes Dolt clone/fetch/ref-pin/status-file operations requested by the graph. The same helper owns the `needs-*` freshness checks used by mgmt `exec.ifcmd`, so rerun decisions compare the structured request/status tuple instead of partial shell/JQ snippets.
 
 ## Graph Shape
 

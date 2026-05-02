@@ -1,6 +1,7 @@
 mod dolt;
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -31,7 +32,23 @@ enum DoltCommands {
         #[arg(long, default_value = "dolt")]
         dolt_bin: PathBuf,
     },
+    NeedsFetchPin {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+        #[arg(long, default_value = "dolt")]
+        dolt_bin: PathBuf,
+    },
     ProbeSqlScalar {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+        #[arg(long, default_value = "dolt")]
+        dolt_bin: PathBuf,
+    },
+    NeedsProbeSqlScalar {
         #[arg(long)]
         request: PathBuf,
         #[arg(long)]
@@ -41,7 +58,7 @@ enum DoltCommands {
     },
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -50,12 +67,40 @@ fn main() -> Result<()> {
                 request,
                 status,
                 dolt_bin,
-            } => dolt::fetch_pin(&request, &status, &dolt_bin),
+            } => {
+                dolt::fetch_pin(&request, &status, &dolt_bin)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            DoltCommands::NeedsFetchPin {
+                request,
+                status,
+                dolt_bin,
+            } => Ok(needs_exit_code(dolt::needs_fetch_pin(
+                &request, &status, &dolt_bin,
+            ))),
             DoltCommands::ProbeSqlScalar {
                 request,
                 status,
                 dolt_bin,
-            } => dolt::probe_sql_scalar(&request, &status, &dolt_bin),
+            } => {
+                dolt::probe_sql_scalar(&request, &status, &dolt_bin)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            DoltCommands::NeedsProbeSqlScalar {
+                request,
+                status,
+                dolt_bin,
+            } => Ok(needs_exit_code(dolt::needs_probe_sql_scalar(
+                &request, &status, &dolt_bin,
+            ))),
         },
+    }
+}
+
+fn needs_exit_code(needs_run: bool) -> ExitCode {
+    if needs_run {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
     }
 }
