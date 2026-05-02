@@ -32,9 +32,9 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file(instance)
     machine.wait_for_file(admission)
     machine.wait_for_file(marker)
-    machine.succeed(f"jq -e '.desired_generation == 1 and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\" and (.admission_state == \"passed_fixture\" or .admission_state == \"not_run\")' {status}")
-    machine.succeed(f"jq -e '.instance_name == \"local-test-example-release\" and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\"' {instance}")
-    machine.succeed(f"jq -e '.admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed(f"jq -e '.desired_generation == 1 and .release_id == \"example-release\" and .release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;api=;site=;cdn_runtime=;dolt_service=\" and .environment == \"local-test\" and .host == \"vm-single-host\" and (.admission_state == \"passed_fixture\" or .admission_state == \"not_run\")' {status}")
+    machine.succeed(f"jq -e '.instance_name == \"local-test-example-release\" and .release_id == \"example-release\" and .release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;api=;site=;cdn_runtime=;dolt_service=\" and .environment == \"local-test\" and .host == \"vm-single-host\"' {instance}")
+    machine.succeed(f"jq -e '.release_identity == \"release=example-release;generation=1;git_rev=example;dolt_commit=example;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;api=;site=;cdn_runtime=;dolt_service=\" and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
 

@@ -24,6 +24,7 @@ let
     currentRoot = currentCdnRoot;
     previousRoots = [ previousCdnRoot ];
   };
+  expectedReleaseIdentity = "release=example-release;generation=3;git_rev=served-test;dolt_commit=served-test;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;api=;site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=";
   desiredState = pkgs.writeText "vm-served-candidate.example.desired.json" (builtins.toJSON {
     cluster = "local-test";
     generation = 3;
@@ -145,10 +146,10 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file(instance)
     machine.wait_for_file(admission)
 
-    machine.succeed(f"jq -e '.desired_generation == 3 and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .instance_name == \"local-test-example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
-    machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"]' {instance}")
-    machine.succeed(f"jq -e '.admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed(f"jq -e '.desired_generation == 3 and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .instance_name == \"local-test-example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
+    machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"example-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"]' {instance}")
+    machine.succeed(f"jq -e '.release_identity == \"${expectedReleaseIdentity}\" and .admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/runtime-manifest.json)\" = \"current manifest\"")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.current.js)\" = \"current runtime\"")
     machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.current.js.map)\" = \"current source map\"")

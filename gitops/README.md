@@ -107,7 +107,7 @@ desired state object
   -> status/health publication
 ```
 
-The current release ID is the desired-state release key. That is acceptable for the first milestone because the fixtures are synthetic. Future release IDs should be derived from the exact git revision, Dolt commit, and closure paths.
+The current `release_id` is the desired-state release key. The graph also emits `release_identity`, a deterministic string derived from the release key, generation, Git revision, Dolt identity, and closure paths. Future production release IDs can become content hashes of that exact tuple; for now the tuple is recorded directly in candidate, admission, active, and status documents so mismatched activation inputs are visible.
 
 ## Release Artifact Contract
 

@@ -63,6 +63,11 @@ $empty_release struct{
 	closures => $empty_closures,
 	dolt => $empty_dolt,
 }
+$empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
+	enabled => false,
+	store_path => "",
+	gcroot_path => "",
+}
 $cluster str = $raw_desired->cluster || "local-test"
 $generation int = $raw_desired->generation || 0
 $mode str = $raw_desired->mode || "validate"
@@ -88,11 +93,35 @@ $beta_environment struct{enabled bool; strategy str; host str; active_release st
 $vm_single_host struct{enabled bool; role str; hostname str} = $hosts["vm-single-host"] || $empty_host
 $beta_single_host struct{enabled bool; role str; hostname str} = $hosts["beta-single-host"] || $empty_host
 $example_dolt struct{repository str; commit str; branch_context str; mode str} = $example_release->dolt || $empty_dolt
+$example_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["api"] || $empty_artifact
+$example_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["site"] || $empty_artifact
+$example_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["cdn_runtime"] || $empty_artifact
+$example_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["dolt_service"] || $empty_artifact
+$example_release_identity = if $example_release->generation == 0 {
+	""
+} else {
+	fmt.printf(
+		"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
+		"example-release",
+		$example_release->generation,
+		$example_release->git_rev,
+		$example_release->dolt_commit,
+		$example_dolt->repository,
+		$example_dolt->branch_context,
+		$example_api_artifact->store_path,
+		$example_site_artifact->store_path,
+		$example_cdn_runtime_artifact->store_path,
+		$example_dolt_service_artifact->store_path
+	)
+}
 
 if $example_release->generation != 0 {
+	panic($example_release->dolt_commit != $example_dolt->commit, "release dolt_commit must match dolt.commit")
+
 	include fishy_release.candidate(struct {
 		mode => $mode,
 		release_id => "example-release",
+		release_identity => $example_release_identity,
 		generation => $example_release->generation,
 		git_rev => $example_release->git_rev,
 		dolt_commit => $example_release->dolt_commit,
@@ -110,13 +139,6 @@ if $local_test_environment->enabled {
 	} else {
 		fmt.printf("[\"%s\"]", golang_strings.join($retained_releases, "\", \""))
 	}
-	$empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
-		enabled => false,
-		store_path => "",
-		gcroot_path => "",
-	}
-	$site_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["site"] || $empty_artifact
-	$cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["cdn_runtime"] || $empty_artifact
 
 	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")
 	panic(not $vm_single_host->enabled, "local-test environment references a disabled host")
@@ -131,6 +153,7 @@ if $local_test_environment->enabled {
 		environment => "local-test",
 		host_name => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
+		release_identity => $example_release_identity,
 		release_generation => $example_release->generation,
 		closures => $example_release->closures,
 		dolt_repository => $example_dolt->repository,
@@ -146,6 +169,7 @@ if $local_test_environment->enabled {
 		environment => "local-test",
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
+		release_identity => $example_release_identity,
 		state => $admission_state,
 	})
 
@@ -154,9 +178,10 @@ if $local_test_environment->enabled {
 		environment => "local-test",
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
+		release_identity => $example_release_identity,
 		instance_name => $instance_name,
-		site_content => $site_artifact->store_path,
-		cdn_runtime_content => $cdn_runtime_artifact->store_path,
+		site_content => $example_site_artifact->store_path,
+		cdn_runtime_content => $example_cdn_runtime_artifact->store_path,
 		retained_release_ids_json => $retained_release_ids_json,
 		admission_state => $admission_state,
 		served => $served,
@@ -168,6 +193,7 @@ if $local_test_environment->enabled {
 		environment => "local-test",
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
+		release_identity => $example_release_identity,
 		phase => if $served { "served" } else { "candidate" },
 		admission_state => $admission_state,
 		retained_release_ids_json => $retained_release_ids_json,
@@ -194,6 +220,7 @@ if $beta_environment->enabled {
 		environment => "beta",
 		host_name => $beta_single_host->hostname,
 		release_id => $beta_environment->active_release,
+		release_identity => $example_release_identity,
 		release_generation => $example_release->generation,
 		closures => $example_release->closures,
 		dolt_repository => $example_dolt->repository,
@@ -208,6 +235,7 @@ if $beta_environment->enabled {
 		environment => "beta",
 		host => $beta_single_host->hostname,
 		release_id => $beta_environment->active_release,
+		release_identity => $example_release_identity,
 		state => $admission_state,
 	})
 
@@ -217,6 +245,7 @@ if $beta_environment->enabled {
 		environment => "beta",
 		host => $beta_single_host->hostname,
 		release_id => $beta_environment->active_release,
+		release_identity => $example_release_identity,
 		phase => "candidate",
 		admission_state => $admission_state,
 		served => $served,
