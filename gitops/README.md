@@ -286,7 +286,7 @@ Local active selection is written only when a VM/local desired state is explicit
 
 The active selection document includes the desired generation that selected the served symlinks so route state can be correlated with the desired-state object that produced it.
 
-The route selection document is the local-only handoff shape for future Caddy integration. It records the selected release and the stable site/CDN symlink roots that Caddy would serve, without starting or reloading Caddy in VM tests.
+The route selection document is the local-only handoff shape for future Caddy integration. It records the selected release, the active selection document path, and the stable site/CDN symlink roots that Caddy would serve, without starting or reloading Caddy in VM tests. The route document is declared after the active selection so a future file-watching edge does not observe a selected route before the active symlinks and active JSON exist.
 
 KV publication can be added later when the status consumer is clear.
 
