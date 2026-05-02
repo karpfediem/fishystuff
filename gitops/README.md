@@ -23,6 +23,7 @@ just gitops-unify auto gitops/fixtures/beta-single-host.example.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test multi-environment-candidates
+just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
 just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
@@ -49,6 +50,7 @@ The flake checks added by this milestone are:
 nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
+nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
@@ -220,11 +222,13 @@ The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM
 
 `gitops-multi-environment-candidates-vm` boots one local NixOS VM with two enabled preview-like single-host environments. It proves `main.mcl` traverses arbitrary enabled environment keys, publishes separate candidate/admission/status files for each, and does not create served state when both environments are non-serving candidates.
 
+`gitops-multi-environment-served-vm` boots one local NixOS VM with two served preview-like environments on the same host. It proves active symlinks are environment-scoped under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}` so one served preview cannot overwrite another preview's selected site/CDN tuple.
+
 `gitops-served-closure-roots-vm` combines the served candidate shape with `vm-test-closures`. It verifies and roots active and retained rollback API, Dolt service, site, and CDN artifacts under `/var/lib/fishystuff/gitops-test/gcroots`, then checks the VM-local active symlinks and route selection. It still does not write `/srv/fishystuff` or start real FishyStuff services.
 
 The closure and gcroot resources are both declared for each enabled artifact. A strict `nix:closure -> nix:gcroot` resource edge is intentionally deferred: the pinned mgmt build verified closures but did not progress the dependent gcroot behind that edge in the VM test. Reintroduce that edge only with a VM regression test proving the ordered behavior.
 
-`gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`, VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/{site,cdn}`, and a route selection document under `/run/fishystuff/gitops-test/routes/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
+`gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`, VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}`, and a route selection document under `/run/fishystuff/gitops-test/routes/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
 
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 
@@ -265,8 +269,8 @@ Local active selection is written only when a VM/local desired state is explicit
 
 ```text
 /var/lib/fishystuff/gitops-test/active/<environment>.json
-/var/lib/fishystuff/gitops-test/served/site
-/var/lib/fishystuff/gitops-test/served/cdn
+/var/lib/fishystuff/gitops-test/served/<environment>/site
+/var/lib/fishystuff/gitops-test/served/<environment>/cdn
 /run/fishystuff/gitops-test/routes/<environment>.json
 ```
 

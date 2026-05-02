@@ -94,8 +94,8 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"jq -e '.desired_generation == 15 and .release_id == \"failed-candidate-release\" and .serve_requested == false' {instance}")
     machine.succeed(f"jq -e '.release_id == \"failed-candidate-release\" and .admission_state == \"failed_fixture\" and .serving_artifacts_checked == false and .probe == \"local-fixture\"' {admission}")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
-    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/served/site")
-    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/served/cdn")
+    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/served/local-test/site")
+    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/served/local-test/cdn")
     machine.succeed("test ! -e /run/fishystuff/gitops-test/routes/local-test.json")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-failed-candidate.pid) || true")
 

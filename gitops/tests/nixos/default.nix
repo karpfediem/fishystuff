@@ -17,6 +17,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-multi-environment-served-vm = import ./multi-environment-served.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-closure-roots-vm = import ./closure-roots.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
