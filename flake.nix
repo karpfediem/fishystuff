@@ -318,6 +318,22 @@
               test "$(jq -r '[.assets[] | select(.source == "retained")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "2"
               touch "$out"
             '';
+          siteAssetFinalizerCheck = pkgs.runCommand "site-asset-finalizer-check" {
+            nativeBuildInputs = [
+              pkgs.bun
+              pkgs.esbuild
+              pkgs.lightningcss
+              pkgs.nodejs
+              pkgs.writableTmpDirAsHomeHook
+            ];
+          } ''
+            set -euo pipefail
+
+            cp -R ${siteSrc}/. .
+            chmod -R u+w .
+            bun test scripts/write-runtime-config.test.mjs scripts/finalize-assets.test.mjs
+            touch "$out"
+          '';
 
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
@@ -371,6 +387,7 @@
             // {
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               modular-service-runtime = modularServiceRuntime;
+              site-asset-finalizer = siteAssetFinalizerCheck;
             };
         };
       flake = {
