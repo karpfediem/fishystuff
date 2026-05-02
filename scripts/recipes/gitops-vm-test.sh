@@ -32,6 +32,12 @@ case "$test_name" in
   served-rollback-transition)
     check_attr="gitops-served-rollback-transition-vm"
     ;;
+  failed-candidate)
+    check_attr="gitops-failed-candidate-vm"
+    ;;
+  failed-served-candidate-refusal)
+    check_attr="gitops-failed-served-candidate-refusal"
+    ;;
   missing-retained-release-refusal)
     check_attr="gitops-missing-retained-release-refusal"
     ;;
@@ -55,7 +61,7 @@ case "$test_name" in
     ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, closure-roots, json-status-escaping, served-candidate, generated-served-candidate, served-symlink-transition, served-rollback-transition, missing-retained-release-refusal, no-retained-release-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, closure-roots, json-status-escaping, served-candidate, generated-served-candidate, served-symlink-transition, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, missing-retained-release-refusal, no-retained-release-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
     exit 2
     ;;
 esac

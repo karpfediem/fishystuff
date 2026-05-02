@@ -28,6 +28,8 @@ just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-rollback-transition
+just gitops-vm-test failed-candidate
+just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test no-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
@@ -48,6 +50,8 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-rollback-transition-vm
+nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
+nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
@@ -75,6 +79,10 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-served-symlink-transition-vm` boots one local NixOS VM, serves one desired state, then serves a second desired state. It proves the VM-local active symlinks move by reconciliation through desired state, not by an imperative deployment command.
 
 `gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients.
+
+`gitops-failed-candidate-vm` boots a local NixOS VM with a failed admission fixture and `serve: false`. It proves candidate failure is status, not activation: instance/admission/status are published, but no active selection or served symlinks are created.
+
+`gitops-failed-served-candidate-refusal` proves a desired state cannot request serving for a candidate whose admission fixture failed.
 
 `gitops-missing-retained-release-refusal` proves retained rollback release IDs are not informational labels: each retained ID must reference a release object before candidate/admission/status/active state can be published.
 
@@ -133,7 +141,8 @@ The minimal JSON shape is:
       "host": "vm-single-host",
       "active_release": "example-release",
       "retained_releases": [],
-      "serve": false
+      "serve": false,
+      "admission_fixture_state": ""
     }
   }
 }
@@ -145,6 +154,8 @@ Supported modes:
 - `vm-test`: create only VM-local files under `/var/lib/fishystuff/gitops-test` and `/run/fishystuff/gitops-test`.
 - `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 - `local-apply`: reserved for future host-local activation. The first milestone does not include fixtures that use it.
+
+`admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
 The first milestone intentionally recognizes only one enabled environment at a time, currently the `local-test` or `beta` single-host environments used by the fixtures and generated validation state. The active release is selected by that environment's `active_release` key; the checked-in fixtures still use `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. General multi-environment traversal should be added with more mgmt language coverage and VM tests.
 
@@ -201,7 +212,7 @@ Fallbacks introduced: none to the old beta deployment graph. The validation no-o
 
 ## Admission
 
-Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture (`passed_fixture`) written under `/run/fishystuff/gitops-test/admission/`. For serving fixtures, this local probe must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
+Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture written under `/run/fishystuff/gitops-test/admission/`; by default it is `passed_fixture`, and tests may explicitly request `failed_fixture` through `admission_fixture_state`. For serving fixtures, this local probe must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
 
 Future real admission should probe the exact candidate tuple:
 

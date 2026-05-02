@@ -15,7 +15,7 @@ $state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "gitops/fixtures/em
 
 $raw_desired = encoding.decode_json_flexible(
 	os.readfile($state_file),
-	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}}}"
+	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}}}"
 )
 
 include fishy_desired.model($raw_desired) as desired
@@ -36,19 +36,20 @@ $empty_releases map{str: struct{
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 	dolt struct{repository str; commit str; branch_context str; mode str}
 }} = {}
-$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}} = {}
+$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = {}
 $empty_host struct{enabled bool; role str; hostname str} = struct {
 	enabled => false,
 	role => "",
 	hostname => "",
 }
-$empty_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool} = struct {
+$empty_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = struct {
 	enabled => false,
 	strategy => "",
 	host => "",
 	active_release => "",
 	retained_releases => $empty_list,
 	serve => false,
+	admission_fixture_state => "",
 }
 $empty_release struct{
 	generation int;
@@ -79,10 +80,10 @@ $releases map{str: struct{
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 	dolt struct{repository str; commit str; branch_context str; mode str}
 }} = $raw_desired->releases || $empty_releases
-$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}} = $raw_desired->environments || $empty_environments
+$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str}} = $raw_desired->environments || $empty_environments
 
-$local_test_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool} = $environments["local-test"] || $empty_environment
-$beta_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool} = $environments["beta"] || $empty_environment
+$local_test_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $environments["local-test"] || $empty_environment
+$beta_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str} = $environments["beta"] || $empty_environment
 $active_release_id str = if $local_test_environment->enabled {
 	$local_test_environment->active_release
 } else {
@@ -141,12 +142,17 @@ if $active_release->generation != 0 {
 }
 
 if $local_test_environment->enabled {
-	$admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
+	$requested_admission_fixture_state str = $local_test_environment->admission_fixture_state || ""
+	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
+	$admission_state = if $requested_admission_fixture_state != "" { $requested_admission_fixture_state } else { $default_admission_state }
+	$admission_failed = $admission_state == "failed_fixture"
 	$served = $local_test_environment->serve and ($admission_state == "passed_fixture")
 	$instance_name = fmt.printf("%s-%s", "local-test", $local_test_environment->active_release)
 	$retained_releases []str = $local_test_environment->retained_releases || $empty_list
 	$retained_release_ids_json = fishy_json.string_list($retained_releases)
 
+	panic(($requested_admission_fixture_state != "") and (($mode != "vm-test") and ($mode != "vm-test-closures")), "admission_fixture_state is only supported in vm-test modes")
+	panic(($admission_state != "not_run") and ($admission_state != "passed_fixture") and ($admission_state != "failed_fixture"), "unsupported local-test admission fixture state")
 	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")
 	panic(not $vm_single_host->enabled, "local-test environment references a disabled host")
 	panic($local_test_environment->active_release == "", "local-test environment requires active_release")
@@ -264,7 +270,7 @@ if $local_test_environment->enabled {
 		admission_state => $admission_state,
 		retained_release_ids_json => $retained_release_ids_json,
 		served => $served,
-		failure_reason => "",
+		failure_reason => if $admission_failed { "admission_failed" } else { "" },
 	})
 }
 

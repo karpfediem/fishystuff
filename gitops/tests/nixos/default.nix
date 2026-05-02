@@ -50,6 +50,14 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-failed-candidate-vm = import ./failed-candidate.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
+  gitops-failed-served-candidate-refusal = import ./failed-served-candidate-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-missing-retained-release-refusal = import ./missing-retained-release-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

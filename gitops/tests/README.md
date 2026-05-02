@@ -11,6 +11,8 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-rollback-transition-vm
+nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
+nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
@@ -34,6 +36,8 @@ just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-rollback-transition
+just gitops-vm-test failed-candidate
+just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test no-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
@@ -61,6 +65,10 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-served-symlink-transition-vm` boots a local NixOS VM and runs two served desired states in sequence. It checks that `/var/lib/fishystuff/gitops-test/served/{site,cdn}` moves from the previous release to the candidate release through mgmt reconciliation only.
 
 `gitops-served-rollback-transition-vm` boots a local NixOS VM and runs a served candidate desired state followed by a rollback desired state. It checks that `/var/lib/fishystuff/gitops-test/served/{site,cdn}` moves back to the previous release and that the rollback CDN serving root retains the candidate CDN root for stale clients.
+
+`gitops-failed-candidate-vm` boots a local NixOS VM with a deterministic failed admission fixture. It checks that a failed non-serving candidate still publishes candidate, admission, and status facts, records `failure_reason: admission_failed`, and does not create an active selection or served symlinks.
+
+`gitops-failed-served-candidate-refusal` boots a local NixOS VM and checks that a failed admission fixture cannot be served even when desired state asks for `serve: true`.
 
 `gitops-missing-retained-release-refusal` boots a local NixOS VM and checks that a retained rollback release ID must resolve to a release object before the graph can publish candidate, admission, status, or active state.
 
