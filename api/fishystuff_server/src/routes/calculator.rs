@@ -42,6 +42,7 @@ use crate::store::{
 
 const TRADE_DISTANCE_BONUS_SCALE: f64 = 68.0 / 1_000_000.0;
 const TRADE_CUSTOM_DESTINATION_PREFIX: &str = "custom:";
+const TRADE_ZONE_ORIGIN_MIN_DEFAULT_PIXELS: u32 = 25;
 
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
@@ -1814,6 +1815,7 @@ fn normalize_trade_selection(
     }
 
     let zone_origin_counts = trade_zone_origin_region_counts(catalog, zone_key);
+    let default_zone_origin_counts = default_trade_zone_origin_counts(&zone_origin_counts);
     let custom_destination_bonus = custom_trade_destination_bonus(&signals.trade_destination_npc);
     let mut origin = find_trade_origin(catalog, &signals.trade_origin_region);
     let mut destination = custom_destination_bonus
@@ -1827,7 +1829,7 @@ fn normalize_trade_selection(
                 catalog,
                 selected_destination,
                 signals.trade_distance_bonus,
-                &zone_origin_counts,
+                &default_zone_origin_counts,
             )
             .or_else(|| {
                 closest_trade_origin_for_destination(
@@ -1838,7 +1840,17 @@ fn normalize_trade_selection(
             });
         }
         if origin.is_none() {
-            origin = preferred_trade_origin_for_zone(catalog, &zone_origin_counts);
+            if custom_destination_bonus.is_none() && destination.is_none() {
+                if let Some((best_origin, best_destination, _)) =
+                    farthest_trade_pair_for_origin_counts(catalog, &default_zone_origin_counts)
+                {
+                    origin = Some(best_origin);
+                    destination = Some(best_destination);
+                }
+            }
+        }
+        if origin.is_none() {
+            origin = preferred_trade_origin_for_zone(catalog, &default_zone_origin_counts);
         }
         if origin.is_none() {
             if let Some((best_origin, best_destination, _)) =
@@ -1917,6 +1929,19 @@ fn trade_zone_origin_region_counts(
                 .collect::<HashMap<_, _>>()
         })
         .unwrap_or_default()
+}
+
+fn default_trade_zone_origin_counts(zone_origin_counts: &HashMap<u32, u32>) -> HashMap<u32, u32> {
+    let filtered = zone_origin_counts
+        .iter()
+        .filter(|(_, pixel_count)| **pixel_count >= TRADE_ZONE_ORIGIN_MIN_DEFAULT_PIXELS)
+        .map(|(region_id, pixel_count)| (*region_id, *pixel_count))
+        .collect::<HashMap<_, _>>();
+    if filtered.is_empty() {
+        zone_origin_counts.clone()
+    } else {
+        filtered
+    }
 }
 
 fn preferred_trade_origin_for_zone<'a>(
@@ -2014,6 +2039,38 @@ fn closest_trade_pair<'a>(
                 .then_with(|| trade_origin_label(left.0).cmp(&trade_origin_label(right.0)))
                 .then_with(|| left.1.npc_name.cmp(&right.1.npc_name))
         })
+}
+
+fn farthest_trade_pair_for_origin_counts<'a>(
+    catalog: &'a TradeNpcCatalogResponse,
+    zone_origin_counts: &HashMap<u32, u32>,
+) -> Option<(&'a TradeOriginRegion, &'a TradeNpcDestination, f64)> {
+    if zone_origin_counts.is_empty() {
+        return None;
+    }
+    catalog
+        .origin_regions
+        .iter()
+        .filter_map(|origin| {
+            zone_origin_counts
+                .get(&origin.region_id)
+                .map(|pixel_count| (origin, *pixel_count))
+        })
+        .flat_map(|(origin, pixel_count)| {
+            catalog.destinations.iter().filter_map(move |destination| {
+                trade_distance_bonus_percent(origin, destination)
+                    .map(|distance_bonus| (origin, destination, distance_bonus, pixel_count))
+            })
+        })
+        .max_by(|left, right| {
+            left.2
+                .partial_cmp(&right.2)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| left.3.cmp(&right.3))
+                .then_with(|| trade_origin_label(right.0).cmp(&trade_origin_label(left.0)))
+                .then_with(|| right.1.npc_name.cmp(&left.1.npc_name))
+        })
+        .map(|(origin, destination, distance_bonus, _)| (origin, destination, distance_bonus))
 }
 
 fn closest_trade_origin_for_destination<'a>(
@@ -16740,7 +16797,7 @@ mod tests {
         CalculatorDatastarQuery, CalculatorLocale, CalculatorQuery,
         CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery, FishGroupChart,
         FishGroupChartRow, LootChartRow, LootSpeciesRow, SelectOption, SelectOptionPresentation,
-        TargetFishSummary,
+        TargetFishSummary, TRADE_ZONE_ORIGIN_MIN_DEFAULT_PIXELS,
     };
 
     struct MockStore;
@@ -20089,8 +20146,70 @@ mod tests {
     }
 
     #[test]
-    fn zone_trade_reselect_replaces_stale_origin_and_selects_farthest_destination() {
-        let catalog = test_trade_catalog();
+    fn normalize_trade_selection_selects_highest_distance_zone_origin_pair() {
+        let mut catalog = test_trade_catalog();
+        catalog.zone_origin_regions[0].origins = vec![
+            TradeZoneOriginRegion {
+                region_id: 1,
+                pixel_count: 100,
+            },
+            TradeZoneOriginRegion {
+                region_id: 2,
+                pixel_count: 42,
+            },
+        ];
+        let mut signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            trade_distance_bonus: 0.0,
+            ..CalculatorSignals::default()
+        };
+
+        normalize_trade_selection(&mut signals, &catalog, Some("240,74,74"));
+
+        assert_eq!(signals.trade_origin_region, "2");
+        assert_eq!(signals.trade_destination_npc, "100");
+        assert!((signals.trade_distance_bonus - 61.2).abs() < 0.0001);
+    }
+
+    #[test]
+    fn normalize_trade_selection_ignores_tiny_zone_origin_overlap_when_defaulting() {
+        let mut catalog = test_trade_catalog();
+        catalog.zone_origin_regions[0].origins = vec![
+            TradeZoneOriginRegion {
+                region_id: 1,
+                pixel_count: TRADE_ZONE_ORIGIN_MIN_DEFAULT_PIXELS,
+            },
+            TradeZoneOriginRegion {
+                region_id: 2,
+                pixel_count: 1,
+            },
+        ];
+        let mut signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            trade_distance_bonus: 0.0,
+            ..CalculatorSignals::default()
+        };
+
+        normalize_trade_selection(&mut signals, &catalog, Some("240,74,74"));
+
+        assert_eq!(signals.trade_origin_region, "1");
+        assert_eq!(signals.trade_destination_npc, "200");
+        assert!((signals.trade_distance_bonus - 34.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn zone_trade_reselect_replaces_stale_origin_and_selects_best_default_pair() {
+        let mut catalog = test_trade_catalog();
+        catalog.zone_origin_regions[0].origins = vec![
+            TradeZoneOriginRegion {
+                region_id: 1,
+                pixel_count: 100,
+            },
+            TradeZoneOriginRegion {
+                region_id: 2,
+                pixel_count: 42,
+            },
+        ];
         let mut signals = CalculatorSignals {
             zone: "240,74,74".to_string(),
             trade_origin_region: "1".to_string(),
