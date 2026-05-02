@@ -41,7 +41,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 
 `.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It includes the CDN serving root when the operator-local CDN input root is configured; otherwise `cdn_runtime` is disabled so normal local validation does not require private CDN staging state. Its release key is derived from the exact Git/Dolt/closure tuple by default. It deliberately sets `serve: false` and `mode: validate`; it is not a deploy/apply command. Set `FISHYSTUFF_GITOPS_DOLT_COMMIT` while evaluating if you want the generated validation object to carry a specific Dolt commit instead of the placeholder.
 
-`.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, and CDN runtime. The package generator refuses `serve: true` unless all four release artifacts are present.
+`.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, and a finalized CDN serving root. The package generator refuses `serve: true` unless all four release artifacts are present.
 
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
 
@@ -132,7 +132,7 @@ A release candidate is the exact tuple of:
 - retained rollback release IDs for the selected environment
 - admission result for that exact tuple
 
-The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation.
+The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation. Serving admission requires this root to include `cdn-serving-manifest.json`, which records the current root and retained root count.
 
 `retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Activation records this list in the local active/status documents so operators can tell which rollback set was selected with the active release.
 

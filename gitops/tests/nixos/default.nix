@@ -25,6 +25,7 @@
     inherit gitopsSrc mgmtPackage pkgs;
     inherit (generatedServeFixture)
       apiArtifact
+      cdnRuntimeCurrentArtifact
       cdnRuntimeArtifact
       desiredState
       doltServiceArtifact

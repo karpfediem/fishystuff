@@ -241,12 +241,16 @@
             mkdir -p "$out"
             printf 'served fixture site\n' > "$out/index.html"
           '';
-          gitopsDesiredStateServeFixtureCdn = pkgs.runCommand "gitops-desired-state-serve-cdn-fixture" { } ''
-            mkdir -p "$out/map"
-            printf '{"module":"fishystuff_ui_bevy.fixture.js","wasm":"fishystuff_ui_bevy_bg.fixture.wasm"}\n' > "$out/map/runtime-manifest.json"
-            printf 'fixture module\n' > "$out/map/fishystuff_ui_bevy.fixture.js"
-            printf 'fixture wasm\n' > "$out/map/fishystuff_ui_bevy_bg.fixture.wasm"
-          '';
+          gitopsDesiredStateServeFixtureCdnCurrent =
+            pkgs.runCommand "gitops-desired-state-serve-cdn-current-fixture" { } ''
+              mkdir -p "$out/map"
+              printf '{"module":"fishystuff_ui_bevy.fixture.js","wasm":"fishystuff_ui_bevy_bg.fixture.wasm"}\n' > "$out/map/runtime-manifest.json"
+              printf 'fixture module\n' > "$out/map/fishystuff_ui_bevy.fixture.js"
+              printf 'fixture wasm\n' > "$out/map/fishystuff_ui_bevy_bg.fixture.wasm"
+            '';
+          gitopsDesiredStateServeFixtureCdn = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
+            currentRoot = gitopsDesiredStateServeFixtureCdnCurrent;
+          };
           gitopsDesiredStateVmServeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "local-test";
             environment = "local-test";
@@ -337,6 +341,7 @@
               apiArtifact = gitopsDesiredStateServeFixtureApi;
               siteArtifact = gitopsDesiredStateServeFixtureSite;
               cdnRuntimeArtifact = gitopsDesiredStateServeFixtureCdn;
+              cdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixtureCdnCurrent;
               doltServiceArtifact = gitopsDesiredStateServeFixtureDoltService;
             };
           };
