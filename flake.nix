@@ -154,18 +154,9 @@
           cdnContent = pkgs.callPackage ./nix/packages/cdn-content.nix {
             inherit cdnBaseContent cdnMinimapVisual;
           };
-          retainedCdnRootEnv = builtins.getEnv "FISHYSTUFF_RETAINED_CDN_ROOTS";
-          retainedCdnRootStrings =
-            pkgs.lib.filter (root: root != "") (pkgs.lib.splitString ":" retainedCdnRootEnv);
-          retainedCdnRoots = map builtins.storePath retainedCdnRootStrings;
-          operatorRootConfigured = (builtins.getEnv "FISHYSTUFF_OPERATOR_ROOT") != "";
           cdnServingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
             currentRoot = cdnContent;
-            previousRoots = retainedCdnRoots;
           };
-          gitopsDoltCommitEnv = builtins.getEnv "FISHYSTUFF_GITOPS_DOLT_COMMIT";
-          gitopsDoltCommit =
-            if gitopsDoltCommitEnv != "" then gitopsDoltCommitEnv else "validation-placeholder";
           siteContentFor =
             deploymentEnvironment: mapAssetCacheKey:
             pkgs.callPackage ./nix/packages/site-content.nix {
@@ -225,11 +216,11 @@
             generation = 1;
             releaseGeneration = 1;
             gitRev = frontendSourceRevision;
-            doltCommit = gitopsDoltCommit;
+            doltCommit = "validation-placeholder";
             doltBranchContext = "beta";
             apiClosure = apiServiceBundle;
             siteClosure = siteContentBeta;
-            cdnRuntimeClosure = if operatorRootConfigured then cdnServingRoot else null;
+            cdnRuntimeClosure = null;
             doltServiceClosure = doltServiceBundle;
             mode = "validate";
             serve = false;

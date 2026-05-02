@@ -39,7 +39,9 @@ nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 ```
 
-`.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It includes the CDN serving root when the operator-local CDN input root is configured; otherwise `cdn_runtime` is disabled so normal local validation does not require private CDN staging state. Its release key is derived from the exact Git/Dolt/closure tuple by default. It deliberately sets `serve: false` and `mode: validate`; it is not a deploy/apply command. Set `FISHYSTUFF_GITOPS_DOLT_COMMIT` while evaluating if you want the generated validation object to carry a specific Dolt commit instead of the placeholder.
+`.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It deliberately keeps `cdn_runtime` disabled so normal repo checks do not depend on private or ignored CDN staging state. Its release key is derived from the exact available tuple by default. It sets `serve: false`, `mode: validate`, and a placeholder Dolt commit; it is not a deploy/apply command.
+
+Real deployment desired state should import `nix/packages/gitops-desired-state.nix` from an operator/deployment flake and pass exact `doltCommit`, service bundles, site content, and finalized CDN serving roots as Nix values. The generated GitOps validation package intentionally does not use ambient environment variables for those deployment-critical inputs.
 
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, and a finalized CDN serving root. The package generator refuses `serve: true` unless all four release artifacts are present.
 
