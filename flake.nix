@@ -353,6 +353,7 @@
                 printf 'current-metadata' > "$out/.cdn-metadata.json"
                 printf 'new-runtime' > "$out/map/fishystuff_ui_bevy.new.js"
                 printf 'new-source-map' > "$out/map/fishystuff_ui_bevy.new.js.map"
+                printf 'shared-runtime' > "$out/map/fishystuff_ui_bevy.shared.js"
               '';
               previousFixture = pkgs.runCommand "cdn-serving-previous-fixture" { } ''
                 mkdir -p "$out/map"
@@ -360,6 +361,7 @@
                 printf 'previous-metadata' > "$out/.cdn-metadata.json"
                 printf 'old-runtime' > "$out/map/fishystuff_ui_bevy.old.js"
                 printf 'old-source-map' > "$out/map/fishystuff_ui_bevy.old.js.map"
+                printf 'shared-runtime' > "$out/map/fishystuff_ui_bevy.shared.js"
               '';
               servingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
                 currentRoot = currentFixture;
@@ -373,11 +375,14 @@
               test "$(cat ${servingRoot}/.cdn-metadata.json)" = "current-metadata"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js)" = "new-runtime"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js.map)" = "new-source-map"
+              test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.shared.js)" = "shared-runtime"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.old.js)" = "old-runtime"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.old.js.map)" = "old-source-map"
 
               test "$(jq -r '.retained_root_count' ${servingRoot}/cdn-serving-manifest.json)" = "1"
               test "$(jq -r '[.assets[] | select(.source == "retained")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "2"
+              test "$(jq -r '[.assets[] | select(.path == "/map/fishystuff_ui_bevy.shared.js")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "1"
+              test "$(jq -r '.assets[] | select(.path == "/map/fishystuff_ui_bevy.shared.js") | .source' ${servingRoot}/cdn-serving-manifest.json)" = "current"
               touch "$out"
             '';
           siteAssetFinalizerCheck = pkgs.runCommand "site-asset-finalizer-check" {
