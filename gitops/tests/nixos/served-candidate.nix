@@ -4,6 +4,26 @@
   gitopsSrc,
 }:
 let
+  siteArtifact = pkgs.runCommand "fishystuff-gitops-served-site-content" { } ''
+    mkdir -p "$out"
+    printf 'served site\n' > "$out/index.html"
+  '';
+  currentCdnRoot = pkgs.runCommand "fishystuff-gitops-served-current-cdn-root" { } ''
+    mkdir -p "$out/map"
+    printf 'current manifest\n' > "$out/map/runtime-manifest.json"
+    printf 'current runtime\n' > "$out/map/fishystuff_ui_bevy.current.js"
+    printf 'current source map\n' > "$out/map/fishystuff_ui_bevy.current.js.map"
+  '';
+  previousCdnRoot = pkgs.runCommand "fishystuff-gitops-served-previous-cdn-root" { } ''
+    mkdir -p "$out/map"
+    printf 'previous manifest\n' > "$out/map/runtime-manifest.json"
+    printf 'previous runtime\n' > "$out/map/fishystuff_ui_bevy.previous.js"
+    printf 'previous source map\n' > "$out/map/fishystuff_ui_bevy.previous.js.map"
+  '';
+  cdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
+    currentRoot = currentCdnRoot;
+    previousRoots = [ previousCdnRoot ];
+  };
   desiredState = pkgs.writeText "vm-served-candidate.example.desired.json" (builtins.toJSON {
     cluster = "local-test";
     generation = 3;
@@ -25,12 +45,12 @@ let
         };
         site = {
           enabled = false;
-          store_path = "";
+          store_path = "${siteArtifact}";
           gcroot_path = "";
         };
         cdn_runtime = {
           enabled = false;
-          store_path = "";
+          store_path = "${cdnServingRoot}";
           gcroot_path = "";
         };
         dolt_service = {
@@ -46,11 +66,45 @@ let
         mode = "read_only";
       };
     };
+    releases.previous-release = {
+      generation = 2;
+      git_rev = "previous-served-test";
+      dolt_commit = "previous-served-test";
+      closures = {
+        api = {
+          enabled = false;
+          store_path = "";
+          gcroot_path = "";
+        };
+        site = {
+          enabled = false;
+          store_path = "";
+          gcroot_path = "";
+        };
+        cdn_runtime = {
+          enabled = false;
+          store_path = "${previousCdnRoot}";
+          gcroot_path = "";
+        };
+        dolt_service = {
+          enabled = false;
+          store_path = "";
+          gcroot_path = "";
+        };
+      };
+      dolt = {
+        repository = "fishystuff/fishystuff";
+        commit = "previous-served-test";
+        branch_context = "local-test";
+        mode = "read_only";
+      };
+    };
     environments.local-test = {
       enabled = true;
       strategy = "single_active";
       host = "vm-single-host";
       active_release = "example-release";
+      retained_releases = [ "previous-release" ];
       serve = true;
     };
   });
@@ -63,6 +117,12 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
+      virtualisation.additionalPaths = [
+        siteArtifact
+        currentCdnRoot
+        previousCdnRoot
+        cdnServingRoot
+      ];
       environment.systemPackages = [
         mgmtPackage
         pkgs.jq
@@ -85,10 +145,15 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file(instance)
     machine.wait_for_file(admission)
 
-    machine.succeed(f"jq -e '.desired_generation == 3 and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true' {status}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .instance_name == \"local-test-example-release\" and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
-    machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"example-release\"' {instance}")
+    machine.succeed(f"jq -e '.desired_generation == 3 and .release_id == \"example-release\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"example-release\" and .instance_name == \"local-test-example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"] and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_fixture\"' {active}")
+    machine.succeed(f"jq -e '.serve_requested == true and .release_id == \"example-release\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnServingRoot}\" and .retained_release_ids == [\"previous-release\"]' {instance}")
     machine.succeed(f"jq -e '.admission_state == \"passed_fixture\" and .probe == \"local-fixture\"' {admission}")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/runtime-manifest.json)\" = \"current manifest\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.current.js)\" = \"current runtime\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.current.js.map)\" = \"current source map\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.previous.js)\" = \"previous runtime\"")
+    machine.succeed("test \"$(cat ${cdnServingRoot}/map/fishystuff_ui_bevy.previous.js.map)\" = \"previous source map\"")
 
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-mgmt.pid)")
 

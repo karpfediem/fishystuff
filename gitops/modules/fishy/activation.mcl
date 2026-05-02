@@ -6,6 +6,9 @@ class active($st) {
 	$host str = $st->host
 	$release_id str = $st->release_id
 	$instance_name str = $st->instance_name
+	$site_content str = $st->site_content || ""
+	$cdn_runtime_content str = $st->cdn_runtime_content || ""
+	$retained_release_ids_json str = $st->retained_release_ids_json || "[]"
 	$admission_state str = $st->admission_state || "not_run"
 	$served bool = $st->served || false
 	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
@@ -13,13 +16,15 @@ class active($st) {
 	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
 	$active_dir = fmt.printf("%s/active", $state_dir)
 	$active_path = fmt.printf("%s/%s.json", $active_dir, $environment)
-	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"instance_name\": \"%s\",\n  \"admission_state\": \"%s\",\n  \"served\": %t,\n  \"route_state\": \"selected_local_fixture\"\n}\n", $environment, $host, $release_id, $instance_name, $admission_state, $served)
+	$content = fmt.printf("{\n  \"environment\": \"%s\",\n  \"host\": \"%s\",\n  \"release_id\": \"%s\",\n  \"instance_name\": \"%s\",\n  \"site_content\": \"%s\",\n  \"cdn_runtime_content\": \"%s\",\n  \"retained_release_ids\": %s,\n  \"admission_state\": \"%s\",\n  \"served\": %t,\n  \"route_state\": \"selected_local_fixture\"\n}\n", $environment, $host, $release_id, $instance_name, $site_content, $cdn_runtime_content, $retained_release_ids_json, $admission_state, $served)
 
 	panic($environment == "", "activation requires environment")
 	panic($host == "", "activation requires host")
 	panic($release_id == "", "activation requires release_id")
 	panic($instance_name == "", "activation requires instance_name")
 	panic($served and ($admission_state != "passed_fixture"), "activation requires passed fixture admission")
+	panic($served and ($site_content == ""), "served activation requires site content")
+	panic($served and ($cdn_runtime_content == ""), "served activation requires CDN runtime content")
 
 	if $write_local_state {
 		if $served {

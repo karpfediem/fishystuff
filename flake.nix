@@ -290,12 +290,14 @@
                 printf 'current-manifest' > "$out/map/runtime-manifest.json"
                 printf 'current-metadata' > "$out/.cdn-metadata.json"
                 printf 'new-runtime' > "$out/map/fishystuff_ui_bevy.new.js"
+                printf 'new-source-map' > "$out/map/fishystuff_ui_bevy.new.js.map"
               '';
               previousFixture = pkgs.runCommand "cdn-serving-previous-fixture" { } ''
                 mkdir -p "$out/map"
                 printf 'previous-manifest' > "$out/map/runtime-manifest.json"
                 printf 'previous-metadata' > "$out/.cdn-metadata.json"
                 printf 'old-runtime' > "$out/map/fishystuff_ui_bevy.old.js"
+                printf 'old-source-map' > "$out/map/fishystuff_ui_bevy.old.js.map"
               '';
               servingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
                 currentRoot = currentFixture;
@@ -308,10 +310,12 @@
               test "$(cat ${servingRoot}/map/runtime-manifest.json)" = "current-manifest"
               test "$(cat ${servingRoot}/.cdn-metadata.json)" = "current-metadata"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js)" = "new-runtime"
+              test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js.map)" = "new-source-map"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.old.js)" = "old-runtime"
+              test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.old.js.map)" = "old-source-map"
 
               test "$(jq -r '.retained_root_count' ${servingRoot}/cdn-serving-manifest.json)" = "1"
-              test "$(jq -r '[.assets[] | select(.source == "retained")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "1"
+              test "$(jq -r '[.assets[] | select(.source == "retained")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "2"
               touch "$out"
             '';
 

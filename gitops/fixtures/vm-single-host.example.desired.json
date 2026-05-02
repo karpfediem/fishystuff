@@ -50,6 +50,7 @@
       "strategy": "single_active",
       "host": "vm-single-host",
       "active_release": "example-release",
+      "retained_releases": [],
       "serve": false
     }
   }

@@ -77,6 +77,7 @@ The minimal JSON shape is:
       "strategy": "single_active",
       "host": "vm-single-host",
       "active_release": "example-release",
+      "retained_releases": [],
       "serve": false
     }
   }
@@ -107,6 +108,25 @@ desired state object
 ```
 
 The current release ID is the desired-state release key. That is acceptable for the first milestone because the fixtures are synthetic. Future release IDs should be derived from the exact git revision, Dolt commit, and closure paths.
+
+## Release Artifact Contract
+
+A release candidate is the exact tuple of:
+
+- Git revision
+- Dolt commit/data identity
+- API closure
+- Dolt service closure
+- site content closure
+- CDN runtime/serving-root closure
+- retained rollback release IDs for the selected environment
+- admission result for that exact tuple
+
+The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation.
+
+`retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Activation records this list in the local active/status documents so operators can tell which rollback set was selected with the active release.
+
+Source maps are public in production because the project is open source. They are emitted with content-hashed filenames and retained as immutable CDN assets, but generated HTML/runtime manifests do not eagerly reference them, so normal users do not fetch them.
 
 ## Safety Defaults
 

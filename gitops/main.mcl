@@ -1,5 +1,6 @@
 import "encoding"
 import "fmt"
+import "golang/strings" as golang_strings
 import "os"
 import "sys"
 
@@ -14,12 +15,13 @@ $state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "gitops/fixtures/em
 
 $raw_desired = encoding.decode_json_flexible(
 	os.readfile($state_file),
-	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}}}"
+	"struct{cluster str; generation int; mode str; hosts map{str: struct{enabled bool; role str; hostname str}}; releases map{str: struct{generation int; git_rev str; dolt_commit str; closures map{str: struct{enabled bool; store_path str; gcroot_path str}}; dolt struct{repository str; commit str; branch_context str; mode str}}}; environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}}}"
 )
 
 include fishy_desired.model($raw_desired) as desired
 
 $empty_hosts map{str: struct{enabled bool; role str; hostname str}} = {}
+$empty_list []str = []
 $empty_closures map{str: struct{enabled bool; store_path str; gcroot_path str}} = {}
 $empty_dolt struct{repository str; commit str; branch_context str; mode str} = struct {
 	repository => "",
@@ -34,17 +36,18 @@ $empty_releases map{str: struct{
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 	dolt struct{repository str; commit str; branch_context str; mode str}
 }} = {}
-$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = {}
+$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}} = {}
 $empty_host struct{enabled bool; role str; hostname str} = struct {
 	enabled => false,
 	role => "",
 	hostname => "",
 }
-$empty_environment struct{enabled bool; strategy str; host str; active_release str; serve bool} = struct {
+$empty_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool} = struct {
 	enabled => false,
 	strategy => "",
 	host => "",
 	active_release => "",
+	retained_releases => $empty_list,
 	serve => false,
 }
 $empty_release struct{
@@ -71,7 +74,7 @@ $releases map{str: struct{
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 	dolt struct{repository str; commit str; branch_context str; mode str}
 }} = $raw_desired->releases || $empty_releases
-$environments map{str: struct{enabled bool; strategy str; host str; active_release str; serve bool}} = $raw_desired->environments || $empty_environments
+$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool}} = $raw_desired->environments || $empty_environments
 
 $example_release struct{
 	generation int;
@@ -80,8 +83,8 @@ $example_release struct{
 	closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 	dolt struct{repository str; commit str; branch_context str; mode str}
 } = $releases["example-release"] || $empty_release
-$local_test_environment struct{enabled bool; strategy str; host str; active_release str; serve bool} = $environments["local-test"] || $empty_environment
-$beta_environment struct{enabled bool; strategy str; host str; active_release str; serve bool} = $environments["beta"] || $empty_environment
+$local_test_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool} = $environments["local-test"] || $empty_environment
+$beta_environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool} = $environments["beta"] || $empty_environment
 $vm_single_host struct{enabled bool; role str; hostname str} = $hosts["vm-single-host"] || $empty_host
 $beta_single_host struct{enabled bool; role str; hostname str} = $hosts["beta-single-host"] || $empty_host
 $example_dolt struct{repository str; commit str; branch_context str; mode str} = $example_release->dolt || $empty_dolt
@@ -101,6 +104,19 @@ if $local_test_environment->enabled {
 	$admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") { "passed_fixture" } else { "not_run" }
 	$served = $local_test_environment->serve and ($admission_state == "passed_fixture")
 	$instance_name = fmt.printf("%s-%s", "local-test", $local_test_environment->active_release)
+	$retained_releases []str = $local_test_environment->retained_releases || $empty_list
+	$retained_release_ids_json = if len($retained_releases) == 0 {
+		"[]"
+	} else {
+		fmt.printf("[\"%s\"]", golang_strings.join($retained_releases, "\", \""))
+	}
+	$empty_artifact struct{enabled bool; store_path str; gcroot_path str} = struct {
+		enabled => false,
+		store_path => "",
+		gcroot_path => "",
+	}
+	$site_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["site"] || $empty_artifact
+	$cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $example_release->closures["cdn_runtime"] || $empty_artifact
 
 	panic($local_test_environment->host != "vm-single-host", "local-test environment currently expects vm-single-host")
 	panic(not $vm_single_host->enabled, "local-test environment references a disabled host")
@@ -121,6 +137,7 @@ if $local_test_environment->enabled {
 		dolt_commit => $example_dolt->commit,
 		dolt_branch_context => $example_dolt->branch_context,
 		dolt_mode => $example_dolt->mode,
+		retained_release_ids_json => $retained_release_ids_json,
 		serve => $local_test_environment->serve,
 	})
 
@@ -138,6 +155,9 @@ if $local_test_environment->enabled {
 		host => $vm_single_host->hostname,
 		release_id => $local_test_environment->active_release,
 		instance_name => $instance_name,
+		site_content => $site_artifact->store_path,
+		cdn_runtime_content => $cdn_runtime_artifact->store_path,
+		retained_release_ids_json => $retained_release_ids_json,
 		admission_state => $admission_state,
 		served => $served,
 	})
@@ -150,6 +170,7 @@ if $local_test_environment->enabled {
 		release_id => $local_test_environment->active_release,
 		phase => if $served { "served" } else { "candidate" },
 		admission_state => $admission_state,
+		retained_release_ids_json => $retained_release_ids_json,
 		served => $served,
 		failure_reason => "",
 	})

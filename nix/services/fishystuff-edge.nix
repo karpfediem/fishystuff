@@ -17,7 +17,9 @@ let
   cdnImmutablePaths = lib.concatStringsSep " " [
     "/map/runtime-manifest.*.json"
     "/map/fishystuff_ui_bevy.*.js"
+    "/map/fishystuff_ui_bevy.*.js.map"
     "/map/fishystuff_ui_bevy_bg.*.wasm"
+    "/map/fishystuff_ui_bevy_bg.*.wasm.map"
     "/images/items/*.webp"
     "/images/pets/*.webp"
     "/images/tiles/*"
