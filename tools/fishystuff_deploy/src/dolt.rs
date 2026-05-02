@@ -129,6 +129,8 @@ pub fn fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Re
 
     if !request.cache_dir.join(".dolt").is_dir() {
         clone_cache(&request, dolt_bin)?;
+    } else {
+        ensure_origin_remote(&request, dolt_bin)?;
     }
 
     run_dolt(
@@ -510,6 +512,38 @@ fn clone_cache(request: &FetchPinRequest, dolt_bin: &Path) -> Result<()> {
     })?;
 
     Ok(())
+}
+
+fn ensure_origin_remote(request: &FetchPinRequest, dolt_bin: &Path) -> Result<()> {
+    let current_origin = read_origin_remote(&request.cache_dir, dolt_bin)?;
+    if current_origin.as_deref() == Some(request.remote_url.as_str()) {
+        return Ok(());
+    }
+
+    if current_origin.is_some() {
+        run_dolt(
+            dolt_bin,
+            Some(&request.cache_dir),
+            ["remote", "remove", "origin"],
+        )?;
+    }
+    run_dolt(
+        dolt_bin,
+        Some(&request.cache_dir),
+        ["remote", "add", "origin", request.remote_url.as_str()],
+    )?;
+    Ok(())
+}
+
+fn read_origin_remote(cache_dir: &Path, dolt_bin: &Path) -> Result<Option<String>> {
+    let stdout = run_dolt(dolt_bin, Some(cache_dir), ["remote", "-v"])?;
+    for line in stdout.lines() {
+        let mut fields = line.split_whitespace();
+        if fields.next() == Some("origin") {
+            return Ok(fields.next().map(str::to_owned));
+        }
+    }
+    Ok(None)
 }
 
 fn write_probe_sql_scalar_status(

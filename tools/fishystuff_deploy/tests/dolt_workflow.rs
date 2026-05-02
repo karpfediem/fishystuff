@@ -16,12 +16,14 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
     let root = TestRoot::new("fishystuff-deploy-dolt-workflow")?;
     let source = root.path().join("source");
     let remote = root.path().join("remote");
+    let alternate_remote = root.path().join("alternate-remote");
     let home = root.path().join("home");
     let cache = root.path().join("cache/fishystuff");
     let release_ref = "fishystuff/gitops/example-release";
 
     fs::create_dir_all(&source)?;
     fs::create_dir_all(&remote)?;
+    fs::create_dir_all(&alternate_remote)?;
     fs::create_dir_all(&home)?;
 
     run(
@@ -83,6 +85,23 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
         ],
     )?;
     run(&dolt_bin, &home, Some(&source), ["push", "origin", "main"])?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        [
+            "remote",
+            "add",
+            "alternate",
+            &format!("file://{}", alternate_remote.display()),
+        ],
+    )?;
+    run(
+        &dolt_bin,
+        &home,
+        Some(&source),
+        ["push", "alternate", "main"],
+    )?;
     let commit1 = dolt_hash_of(&dolt_bin, &home, &source, "main")?;
 
     let fetch_status = root.path().join("status/fetch.json");
@@ -135,6 +154,20 @@ fn dolt_fetch_pin_and_sql_scalar_admission_follows_exact_commit() -> Result<()> 
             dolt_bin.to_str().context("dolt path is not UTF-8")?,
         ],
     )?;
+    fetch_pin_from_remote(
+        &root,
+        &home,
+        &dolt_bin,
+        &cache,
+        &format!("file://{}", alternate_remote.display()),
+        release_ref,
+        &commit1,
+        &fetch_status,
+    )?;
+    assert_eq!(
+        origin_remote_url(&dolt_bin, &home, &cache)?,
+        format!("file://{}", alternate_remote.display())
+    );
     probe_sql_scalar(
         &root,
         &home,
@@ -374,6 +407,28 @@ fn fetch_pin(
     commit: &str,
     status: &Path,
 ) -> Result<()> {
+    fetch_pin_from_remote(
+        root,
+        home,
+        dolt_bin,
+        cache,
+        &format!("file://{}", root.path().join("remote").display()),
+        release_ref,
+        commit,
+        status,
+    )
+}
+
+fn fetch_pin_from_remote(
+    root: &TestRoot,
+    home: &Path,
+    dolt_bin: &Path,
+    cache: &Path,
+    remote_url: &str,
+    release_ref: &str,
+    commit: &str,
+    status: &Path,
+) -> Result<()> {
     let request = root.path().join("requests/fetch.json");
     write_json(
         &request,
@@ -383,7 +438,7 @@ fn fetch_pin(
             "release_id": "example-release",
             "release_identity": format!("release=example-release;dolt_commit={commit}"),
             "repository": "fishystuff/fishystuff",
-            "remote_url": format!("file://{}", root.path().join("remote").display()),
+            "remote_url": remote_url,
             "branch_context": "main",
             "commit": commit,
             "access_mode": "read_only",
@@ -405,6 +460,21 @@ fn fetch_pin(
             dolt_bin.to_str().context("dolt path is not UTF-8")?,
         ],
     )
+}
+
+fn origin_remote_url(dolt_bin: &Path, home: &Path, cache: &Path) -> Result<String> {
+    let output = run(dolt_bin, home, Some(cache), ["remote", "-v"])?;
+    output
+        .lines()
+        .find_map(|line| {
+            let mut fields = line.split_whitespace();
+            if fields.next() == Some("origin") {
+                fields.next().map(str::to_owned)
+            } else {
+                None
+            }
+        })
+        .context("origin remote was not configured")
 }
 
 #[allow(clippy::too_many_arguments)]
