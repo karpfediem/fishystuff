@@ -234,6 +234,35 @@
             mode = "validate";
             serve = false;
           };
+          gitopsDesiredStateServeFixtureApi = pkgs.writeText "gitops-desired-state-serve-api-fixture" "api fixture\n";
+          gitopsDesiredStateServeFixtureDoltService =
+            pkgs.writeText "gitops-desired-state-serve-dolt-service-fixture" "dolt service fixture\n";
+          gitopsDesiredStateServeFixtureSite = pkgs.runCommand "gitops-desired-state-serve-site-fixture" { } ''
+            mkdir -p "$out"
+            printf 'served fixture site\n' > "$out/index.html"
+          '';
+          gitopsDesiredStateServeFixtureCdn = pkgs.runCommand "gitops-desired-state-serve-cdn-fixture" { } ''
+            mkdir -p "$out/map"
+            printf '{"module":"fishystuff_ui_bevy.fixture.js","wasm":"fishystuff_ui_bevy_bg.fixture.wasm"}\n' > "$out/map/runtime-manifest.json"
+            printf 'fixture module\n' > "$out/map/fishystuff_ui_bevy.fixture.js"
+            printf 'fixture wasm\n' > "$out/map/fishystuff_ui_bevy_bg.fixture.wasm"
+          '';
+          gitopsDesiredStateVmServeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "local-test";
+            environment = "local-test";
+            hostKey = "vm-single-host";
+            generation = 7;
+            releaseGeneration = 7;
+            gitRev = "serve-fixture";
+            doltCommit = "serve-fixture";
+            doltBranchContext = "local-test";
+            apiClosure = gitopsDesiredStateServeFixtureApi;
+            siteClosure = gitopsDesiredStateServeFixtureSite;
+            cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+            doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+            mode = "vm-test";
+            serve = true;
+          };
           edgeServiceBundleFor =
             deploymentEnvironment:
             mkServiceBundle {
@@ -381,6 +410,27 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateVmServeFixtureCheck = pkgs.runCommand "gitops-desired-state-vm-serve-fixture-check" {
+            nativeBuildInputs = [
+              mgmt-fishystuff-beta.packages.${system}.minimal
+              pkgs.jq
+            ];
+          } ''
+            set -euo pipefail
+
+            release_id="$(jq -r '.environments."local-test".active_release' ${gitopsDesiredStateVmServeFixture})"
+            test "$release_id" != example-release
+            jq -e --arg release_id "$release_id" '
+              .mode == "vm-test"
+              and .environments."local-test".serve == true
+              and .releases[$release_id].generation == 7
+              and ([.releases[$release_id].closures[] | .enabled] | all)
+            ' ${gitopsDesiredStateVmServeFixture}
+
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateVmServeFixture}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
 
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
@@ -413,6 +463,7 @@
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
+            gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;
             jaeger-service-bundle = jaegerServiceBundle;
             loki-service-bundle = lokiServiceBundle;
@@ -436,6 +487,7 @@
               cdn-serving-root-retention = cdnServingRootRetentionCheck;
               cdn-required-files = cdnRequiredFilesCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
+              gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;
               modular-service-runtime = modularServiceRuntime;
               site-asset-finalizer = siteAssetFinalizerCheck;
             };

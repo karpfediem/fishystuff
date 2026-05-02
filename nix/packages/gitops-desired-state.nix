@@ -91,6 +91,10 @@ assert lib.assertMsg (gitRev != "") "gitops desired state requires gitRev";
 assert lib.assertMsg (doltCommit != "") "gitops desired state requires doltCommit";
 assert lib.assertMsg (doltBranchContext != "") "gitops desired state requires doltBranchContext";
 assert lib.assertMsg (!serve || mode != "validate") "validate-mode desired state must not request serve";
+assert lib.assertMsg (!serve || apiClosure != null) "serving desired state requires apiClosure";
+assert lib.assertMsg (!serve || siteClosure != null) "serving desired state requires siteClosure";
+assert lib.assertMsg (!serve || cdnRuntimeClosure != null) "serving desired state requires cdnRuntimeClosure";
+assert lib.assertMsg (!serve || doltServiceClosure != null) "serving desired state requires doltServiceClosure";
 writeText "fishystuff-gitops-${environment}-${releaseId}.desired.json" (
   builtins.toJSON payload + "\n"
 )
