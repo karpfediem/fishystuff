@@ -18,7 +18,10 @@ class active($st) {
 	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
 	$active_dir = fmt.printf("%s/active", $state_dir)
 	$active_path = fmt.printf("%s/%s.json", $active_dir, $environment)
-	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"retained_release_ids\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_fixture\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), $retained_release_ids_json, fishy_json.quote($admission_state), $served)
+	$served_dir = fmt.printf("%s/served", $state_dir)
+	$served_site_link = fmt.printf("%s/site", $served_dir)
+	$served_cdn_link = fmt.printf("%s/cdn", $served_dir)
+	$content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"site_link\": %s,\n  \"cdn_link\": %s,\n  \"retained_release_ids\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_symlinks\"\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($served_site_link), fishy_json.quote($served_cdn_link), $retained_release_ids_json, fishy_json.quote($admission_state), $served)
 
 	panic($environment == "", "activation requires environment")
 	panic($host == "", "activation requires host")
@@ -43,10 +46,44 @@ class active($st) {
 				mode => "0644",
 			}
 
+			file "${served_dir}/" {
+				state => "exists",
+				recurse => true,
+				mode => "0755",
+			}
+
+			file "${served_site_link}" {
+				state => "exists",
+				source => $site_content,
+				symlink => true,
+				force => true,
+			}
+
+			file "${served_cdn_link}" {
+				state => "exists",
+				source => $cdn_runtime_content,
+				symlink => true,
+				force => true,
+			}
+
 			File["${active_dir}/"] -> File["${active_path}"]
+			File["${served_dir}/"] -> File["${served_site_link}"]
+			File["${served_dir}/"] -> File["${served_cdn_link}"]
+			File["${served_site_link}"] -> File["${active_path}"]
+			File["${served_cdn_link}"] -> File["${active_path}"]
 		} else {
 			file "${active_path}" {
 				state => "absent",
+			}
+
+			file "${served_site_link}" {
+				state => "absent",
+				force => true,
+			}
+
+			file "${served_cdn_link}" {
+				state => "absent",
+				force => true,
 			}
 		}
 	}
