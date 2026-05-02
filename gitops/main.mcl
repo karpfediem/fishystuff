@@ -195,6 +195,10 @@ if $local_test_environment->enabled {
 
 		panic($retained_release->generation == 0, fmt.printf("retained release %s is missing from releases", $retained_release_id))
 		panic($retained_release->dolt_commit != $retained_dolt->commit, fmt.printf("retained release %s dolt_commit must match dolt.commit", $retained_release_id))
+		panic($local_test_environment->serve and ($retained_api_artifact->store_path == ""), fmt.printf("serving retained release %s requires api store_path", $retained_release_id))
+		panic($local_test_environment->serve and ($retained_site_artifact->store_path == ""), fmt.printf("serving retained release %s requires site store_path", $retained_release_id))
+		panic($local_test_environment->serve and ($retained_cdn_runtime_artifact->store_path == ""), fmt.printf("serving retained release %s requires cdn_runtime store_path", $retained_release_id))
+		panic($local_test_environment->serve and ($retained_dolt_service_artifact->store_path == ""), fmt.printf("serving retained release %s requires dolt_service store_path", $retained_release_id))
 
 		include fishy_admission.retained_cdn_root(struct {
 			requires_serving_artifacts => $local_test_environment->serve,
@@ -213,6 +217,11 @@ if $local_test_environment->enabled {
 			closures => $retained_release->closures,
 		})
 	}
+
+	panic($local_test_environment->serve and ($active_api_artifact->store_path == ""), "serving active release requires api store_path")
+	panic($local_test_environment->serve and ($active_site_artifact->store_path == ""), "serving active release requires site store_path")
+	panic($local_test_environment->serve and ($active_cdn_runtime_artifact->store_path == ""), "serving active release requires cdn_runtime store_path")
+	panic($local_test_environment->serve and ($active_dolt_service_artifact->store_path == ""), "serving active release requires dolt_service store_path")
 
 	include fishy_instance.candidate(struct {
 		mode => $mode,

@@ -4,6 +4,12 @@
   gitopsSrc,
 }:
 let
+  oldApi = pkgs.writeText "fishystuff-gitops-transition-old-api" "old api\n";
+  previousApi = pkgs.writeText "fishystuff-gitops-transition-previous-api" "previous api\n";
+  candidateApi = pkgs.writeText "fishystuff-gitops-transition-candidate-api" "candidate api\n";
+  oldDoltService = pkgs.writeText "fishystuff-gitops-transition-old-dolt-service" "old dolt service\n";
+  previousDoltService = pkgs.writeText "fishystuff-gitops-transition-previous-dolt-service" "previous dolt service\n";
+  candidateDoltService = pkgs.writeText "fishystuff-gitops-transition-candidate-dolt-service" "candidate dolt service\n";
   oldSite = pkgs.runCommand "fishystuff-gitops-transition-old-site" { } ''
     mkdir -p "$out"
     printf 'old site\n' > "$out/index.html"
@@ -50,8 +56,10 @@ let
       generation,
       gitRev,
       doltCommit,
+      api,
       site,
       cdn,
+      doltService,
     }:
     {
       inherit generation;
@@ -60,7 +68,7 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${api}";
           gcroot_path = "";
         };
         site = {
@@ -75,7 +83,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${doltService}";
           gcroot_path = "";
         };
       };
@@ -101,15 +109,19 @@ let
         generation = 19;
         gitRev = "old-transition";
         doltCommit = "old-transition";
+        api = oldApi;
         site = oldSite;
         cdn = oldCdnServingRoot;
+        doltService = oldDoltService;
       };
       previous-release = release {
         generation = 20;
         gitRev = "previous-transition";
         doltCommit = "previous-transition";
+        api = previousApi;
         site = previousSite;
         cdn = previousCdnServingRoot;
+        doltService = previousDoltService;
       };
     };
     environments.local-test = {
@@ -131,15 +143,19 @@ let
         generation = 20;
         gitRev = "previous-transition";
         doltCommit = "previous-transition";
+        api = previousApi;
         site = previousSite;
         cdn = previousCdnServingRoot;
+        doltService = previousDoltService;
       };
       candidate-release = release {
         generation = 21;
         gitRev = "candidate-transition";
         doltCommit = "candidate-transition";
+        api = candidateApi;
         site = candidateSite;
         cdn = candidateCdnServingRoot;
+        doltService = candidateDoltService;
       };
     };
     environments.local-test = {
@@ -161,6 +177,12 @@ pkgs.testers.runNixOSTest {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
       virtualisation.additionalPaths = [
+        oldApi
+        previousApi
+        candidateApi
+        oldDoltService
+        previousDoltService
+        candidateDoltService
         oldSite
         previousSite
         candidateSite

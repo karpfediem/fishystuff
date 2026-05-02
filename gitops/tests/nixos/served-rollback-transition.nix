@@ -4,6 +4,10 @@
   gitopsSrc,
 }:
 let
+  previousApi = pkgs.writeText "fishystuff-gitops-rollback-previous-api" "previous api\n";
+  candidateApi = pkgs.writeText "fishystuff-gitops-rollback-candidate-api" "candidate api\n";
+  previousDoltService = pkgs.writeText "fishystuff-gitops-rollback-previous-dolt-service" "previous dolt service\n";
+  candidateDoltService = pkgs.writeText "fishystuff-gitops-rollback-candidate-dolt-service" "candidate dolt service\n";
   previousSite = pkgs.runCommand "fishystuff-gitops-rollback-previous-site" { } ''
     mkdir -p "$out"
     printf 'previous site\n' > "$out/index.html"
@@ -40,8 +44,10 @@ let
       generation,
       gitRev,
       doltCommit,
+      api,
       site,
       cdn,
+      doltService,
     }:
     {
       inherit generation;
@@ -50,7 +56,7 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${api}";
           gcroot_path = "";
         };
         site = {
@@ -65,7 +71,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${doltService}";
           gcroot_path = "";
         };
       };
@@ -91,15 +97,19 @@ let
         generation = 29;
         gitRev = "previous-rollback";
         doltCommit = "previous-rollback";
+        api = previousApi;
         site = previousSite;
         cdn = previousCdnServingRoot;
+        doltService = previousDoltService;
       };
       candidate-release = release {
         generation = 30;
         gitRev = "candidate-rollback";
         doltCommit = "candidate-rollback";
+        api = candidateApi;
         site = candidateSite;
         cdn = candidateCdnServingRoot;
+        doltService = candidateDoltService;
       };
     };
     environments.local-test = {
@@ -121,15 +131,19 @@ let
         generation = 31;
         gitRev = "previous-rollback";
         doltCommit = "previous-rollback";
+        api = previousApi;
         site = previousSite;
         cdn = rollbackCdnServingRoot;
+        doltService = previousDoltService;
       };
       candidate-release = release {
         generation = 30;
         gitRev = "candidate-rollback";
         doltCommit = "candidate-rollback";
+        api = candidateApi;
         site = candidateSite;
         cdn = candidateCdnServingRoot;
+        doltService = candidateDoltService;
       };
     };
     environments.local-test = {
@@ -151,6 +165,10 @@ pkgs.testers.runNixOSTest {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
       virtualisation.additionalPaths = [
+        previousApi
+        candidateApi
+        previousDoltService
+        candidateDoltService
         previousSite
         candidateSite
         previousCdnRoot

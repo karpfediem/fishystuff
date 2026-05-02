@@ -4,9 +4,17 @@
   gitopsSrc,
 }:
 let
+  apiArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-serving-entry-api" "missing cdn serving manifest entry api\n";
+  doltServiceArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-serving-entry-dolt-service" "missing cdn serving manifest entry dolt service\n";
+  previousApiArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-serving-entry-previous-api" "previous missing cdn serving manifest entry api\n";
+  previousDoltServiceArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-serving-entry-previous-dolt-service" "previous missing cdn serving manifest entry dolt service\n";
   siteArtifact = pkgs.runCommand "fishystuff-gitops-missing-cdn-serving-entry-site" { } ''
     mkdir -p "$out"
     printf 'missing cdn serving manifest entry refusal site\n' > "$out/index.html"
+  '';
+  previousSiteArtifact = pkgs.runCommand "fishystuff-gitops-missing-cdn-serving-entry-previous-site" { } ''
+    mkdir -p "$out"
+    printf 'previous missing cdn serving manifest entry refusal site\n' > "$out/index.html"
   '';
   previousCdnRoot = pkgs.runCommand "fishystuff-gitops-missing-cdn-serving-entry-previous" { } ''
     mkdir -p "$out/map"
@@ -37,7 +45,7 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${apiArtifact}";
           gcroot_path = "";
         };
         site = {
@@ -52,7 +60,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${doltServiceArtifact}";
           gcroot_path = "";
         };
       };
@@ -70,12 +78,12 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousApiArtifact}";
           gcroot_path = "";
         };
         site = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousSiteArtifact}";
           gcroot_path = "";
         };
         cdn_runtime = {
@@ -85,7 +93,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousDoltServiceArtifact}";
           gcroot_path = "";
         };
       };
@@ -115,7 +123,12 @@ pkgs.testers.runNixOSTest {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
       virtualisation.additionalPaths = [
+        apiArtifact
+        doltServiceArtifact
+        previousApiArtifact
+        previousDoltServiceArtifact
         siteArtifact
+        previousSiteArtifact
         brokenCdnServingRoot
         previousCdnRoot
         desiredState

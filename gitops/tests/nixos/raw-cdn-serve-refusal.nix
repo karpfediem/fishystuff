@@ -4,9 +4,17 @@
   gitopsSrc,
 }:
 let
+  apiArtifact = pkgs.writeText "fishystuff-gitops-raw-cdn-refusal-api" "raw cdn refusal api\n";
+  doltServiceArtifact = pkgs.writeText "fishystuff-gitops-raw-cdn-refusal-dolt-service" "raw cdn refusal dolt service\n";
+  previousApiArtifact = pkgs.writeText "fishystuff-gitops-raw-cdn-refusal-previous-api" "previous raw cdn refusal api\n";
+  previousDoltServiceArtifact = pkgs.writeText "fishystuff-gitops-raw-cdn-refusal-previous-dolt-service" "previous raw cdn refusal dolt service\n";
   siteArtifact = pkgs.runCommand "fishystuff-gitops-raw-cdn-refusal-site" { } ''
     mkdir -p "$out"
     printf 'raw cdn refusal site\n' > "$out/index.html"
+  '';
+  previousSiteArtifact = pkgs.runCommand "fishystuff-gitops-raw-cdn-refusal-previous-site" { } ''
+    mkdir -p "$out"
+    printf 'previous raw cdn refusal site\n' > "$out/index.html"
   '';
   rawCdnRuntime = pkgs.runCommand "fishystuff-gitops-raw-cdn-runtime" { } ''
     mkdir -p "$out/map"
@@ -36,7 +44,7 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${apiArtifact}";
           gcroot_path = "";
         };
         site = {
@@ -51,7 +59,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${doltServiceArtifact}";
           gcroot_path = "";
         };
       };
@@ -69,12 +77,12 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousApiArtifact}";
           gcroot_path = "";
         };
         site = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousSiteArtifact}";
           gcroot_path = "";
         };
         cdn_runtime = {
@@ -84,7 +92,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousDoltServiceArtifact}";
           gcroot_path = "";
         };
       };
@@ -114,7 +122,12 @@ pkgs.testers.runNixOSTest {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
       virtualisation.additionalPaths = [
+        apiArtifact
+        doltServiceArtifact
+        previousApiArtifact
+        previousDoltServiceArtifact
         siteArtifact
+        previousSiteArtifact
         rawCdnRuntime
         previousCdnRoot
         desiredState

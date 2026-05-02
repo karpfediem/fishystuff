@@ -4,49 +4,49 @@
   gitopsSrc,
 }:
 let
-  apiArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-retained-root-api" "missing cdn retained root api\n";
-  doltServiceArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-retained-root-dolt-service" "missing cdn retained root dolt service\n";
-  previousApiArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-retained-root-previous-api" "previous missing cdn retained root api\n";
-  previousDoltServiceArtifact = pkgs.writeText "fishystuff-gitops-missing-cdn-retained-root-previous-dolt-service" "previous missing cdn retained root dolt service\n";
-  siteArtifact = pkgs.runCommand "fishystuff-gitops-missing-cdn-retained-root-site" { } ''
+  apiArtifact = pkgs.writeText "fishystuff-gitops-missing-retained-artifact-api" "candidate api\n";
+  doltServiceArtifact = pkgs.writeText "fishystuff-gitops-missing-retained-artifact-dolt-service" "candidate dolt service\n";
+  previousDoltServiceArtifact = pkgs.writeText "fishystuff-gitops-missing-retained-artifact-previous-dolt-service" "previous dolt service\n";
+  siteArtifact = pkgs.runCommand "fishystuff-gitops-missing-retained-artifact-site" { } ''
     mkdir -p "$out"
-    printf 'missing cdn retained root refusal site\n' > "$out/index.html"
+    printf 'missing retained artifact site\n' > "$out/index.html"
   '';
-  previousSiteArtifact = pkgs.runCommand "fishystuff-gitops-missing-cdn-retained-root-previous-site" { } ''
+  previousSiteArtifact = pkgs.runCommand "fishystuff-gitops-missing-retained-artifact-previous-site" { } ''
     mkdir -p "$out"
-    printf 'previous missing cdn retained root refusal site\n' > "$out/index.html"
+    printf 'previous missing retained artifact site\n' > "$out/index.html"
   '';
-  currentCdnRoot = pkgs.runCommand "fishystuff-gitops-missing-cdn-retained-root-current" { } ''
+  currentCdnRoot = pkgs.runCommand "fishystuff-gitops-missing-retained-artifact-current-cdn" { } ''
     mkdir -p "$out/map"
     printf '{"module":"fishystuff_ui_bevy.current.js","wasm":"fishystuff_ui_bevy_bg.current.wasm"}\n' > "$out/map/runtime-manifest.json"
     printf 'current module\n' > "$out/map/fishystuff_ui_bevy.current.js"
     printf 'current wasm\n' > "$out/map/fishystuff_ui_bevy_bg.current.wasm"
   '';
-  previousCdnRoot = pkgs.runCommand "fishystuff-gitops-missing-cdn-retained-root-previous" { } ''
+  previousCdnRoot = pkgs.runCommand "fishystuff-gitops-missing-retained-artifact-previous-cdn" { } ''
     mkdir -p "$out/map"
     printf '{"module":"fishystuff_ui_bevy.previous.js","wasm":"fishystuff_ui_bevy_bg.previous.wasm"}\n' > "$out/map/runtime-manifest.json"
     printf 'previous module\n' > "$out/map/fishystuff_ui_bevy.previous.js"
     printf 'previous wasm\n' > "$out/map/fishystuff_ui_bevy_bg.previous.wasm"
   '';
-  currentOnlyCdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
+  activeCdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
     currentRoot = currentCdnRoot;
+    previousRoots = [ previousCdnRoot ];
   };
   previousCdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
     currentRoot = previousCdnRoot;
   };
-  desiredState = pkgs.writeText "vm-missing-cdn-retained-root-refusal.desired.json" (builtins.toJSON {
+  desiredState = pkgs.writeText "vm-missing-retained-artifact-refusal.desired.json" (builtins.toJSON {
     cluster = "local-test";
-    generation = 15;
+    generation = 18;
     mode = "vm-test";
     hosts.vm-single-host = {
       enabled = true;
       role = "single-site";
       hostname = "vm-single-host";
     };
-    releases.missing-cdn-retained-root-release = {
-      generation = 15;
-      git_rev = "missing-cdn-retained-root-refusal";
-      dolt_commit = "missing-cdn-retained-root-refusal";
+    releases.candidate-release = {
+      generation = 18;
+      git_rev = "missing-retained-artifact";
+      dolt_commit = "missing-retained-artifact";
       closures = {
         api = {
           enabled = false;
@@ -60,7 +60,7 @@ let
         };
         cdn_runtime = {
           enabled = false;
-          store_path = "${currentOnlyCdnServingRoot}";
+          store_path = "${activeCdnServingRoot}";
           gcroot_path = "";
         };
         dolt_service = {
@@ -71,19 +71,19 @@ let
       };
       dolt = {
         repository = "fishystuff/fishystuff";
-        commit = "missing-cdn-retained-root-refusal";
+        commit = "missing-retained-artifact";
         branch_context = "local-test";
         mode = "read_only";
       };
     };
     releases.previous-release = {
-      generation = 14;
-      git_rev = "previous-missing-cdn-retained-root-refusal";
-      dolt_commit = "previous-missing-cdn-retained-root-refusal";
+      generation = 17;
+      git_rev = "previous-missing-retained-artifact";
+      dolt_commit = "previous-missing-retained-artifact";
       closures = {
         api = {
           enabled = false;
-          store_path = "${previousApiArtifact}";
+          store_path = "";
           gcroot_path = "";
         };
         site = {
@@ -104,7 +104,7 @@ let
       };
       dolt = {
         repository = "fishystuff/fishystuff";
-        commit = "previous-missing-cdn-retained-root-refusal";
+        commit = "previous-missing-retained-artifact";
         branch_context = "local-test";
         mode = "read_only";
       };
@@ -113,14 +113,14 @@ let
       enabled = true;
       strategy = "single_active";
       host = "vm-single-host";
-      active_release = "missing-cdn-retained-root-release";
+      active_release = "candidate-release";
       retained_releases = [ "previous-release" ];
       serve = true;
     };
   });
 in
 pkgs.testers.runNixOSTest {
-  name = "fishystuff-gitops-missing-cdn-retained-root-refusal";
+  name = "fishystuff-gitops-missing-retained-artifact-refusal";
 
   nodes.machine =
     { ... }:
@@ -130,11 +130,12 @@ pkgs.testers.runNixOSTest {
       virtualisation.additionalPaths = [
         apiArtifact
         doltServiceArtifact
-        previousApiArtifact
         previousDoltServiceArtifact
         siteArtifact
         previousSiteArtifact
-        currentOnlyCdnServingRoot
+        currentCdnRoot
+        previousCdnRoot
+        activeCdnServingRoot
         previousCdnServingRoot
         desiredState
       ];
@@ -148,16 +149,13 @@ pkgs.testers.runNixOSTest {
     start_all()
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
-    machine.succeed("jq -e '.mode == \"vm-test\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".retained_releases == [\"previous-release\"]' ${desiredState}")
-    machine.succeed("jq -e '.retained_root_count == 0' ${currentOnlyCdnServingRoot}/cdn-serving-manifest.json")
-    machine.succeed("jq -e '.retained_root_count == 0' ${previousCdnServingRoot}/cdn-serving-manifest.json")
-    machine.succeed("test -f ${currentOnlyCdnServingRoot}/map/runtime-manifest.json")
-    machine.succeed("test -f ${currentOnlyCdnServingRoot}/map/fishystuff_ui_bevy.current.js")
-    machine.succeed("test -f ${currentOnlyCdnServingRoot}/map/fishystuff_ui_bevy_bg.current.wasm")
-    machine.fail("timeout 15s env FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-missing-cdn-retained-root-refusal.log 2>&1")
+    machine.succeed("jq -e '.mode == \"vm-test\" and .environments.\"local-test\".serve == true and .releases.\"previous-release\".closures.api.store_path == \"\"' ${desiredState}")
+    machine.fail("timeout 15s env FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-missing-retained-artifact-refusal.log 2>&1")
+    machine.succeed("grep -F 'serving retained release previous-release requires api store_path' /tmp/fishystuff-gitops-missing-retained-artifact-refusal.log")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/status/local-test.json")
-    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/instances/local-test-missing-cdn-retained-root-release.json")
+    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/instances/local-test-candidate-release.json")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
+    machine.succeed("test ! -e /run/fishystuff/gitops-test/routes/local-test.json")
     machine.succeed("test ! -e /srv/fishystuff")
     machine.succeed("test ! -e /var/lib/fishystuff/mgmt")
   '';

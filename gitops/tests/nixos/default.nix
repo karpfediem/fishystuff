@@ -58,6 +58,14 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-missing-active-artifact-refusal = import ./missing-active-artifact-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
+  gitops-missing-retained-artifact-refusal = import ./missing-retained-artifact-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-missing-retained-release-refusal = import ./missing-retained-release-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

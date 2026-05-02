@@ -4,9 +4,17 @@
   gitopsSrc,
 }:
 let
+  apiArtifact = pkgs.writeText "fishystuff-gitops-wrong-cdn-retained-root-api" "wrong cdn retained root api\n";
+  doltServiceArtifact = pkgs.writeText "fishystuff-gitops-wrong-cdn-retained-root-dolt-service" "wrong cdn retained root dolt service\n";
+  previousApiArtifact = pkgs.writeText "fishystuff-gitops-wrong-cdn-retained-root-previous-api" "previous wrong cdn retained root api\n";
+  previousDoltServiceArtifact = pkgs.writeText "fishystuff-gitops-wrong-cdn-retained-root-previous-dolt-service" "previous wrong cdn retained root dolt service\n";
   siteArtifact = pkgs.runCommand "fishystuff-gitops-wrong-cdn-retained-root-site" { } ''
     mkdir -p "$out"
     printf 'wrong cdn retained root refusal site\n' > "$out/index.html"
+  '';
+  previousSiteArtifact = pkgs.runCommand "fishystuff-gitops-wrong-cdn-retained-root-previous-site" { } ''
+    mkdir -p "$out"
+    printf 'previous wrong cdn retained root refusal site\n' > "$out/index.html"
   '';
   currentCdnRoot = pkgs.runCommand "fishystuff-gitops-wrong-cdn-retained-root-current" { } ''
     mkdir -p "$out/map"
@@ -49,7 +57,7 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${apiArtifact}";
           gcroot_path = "";
         };
         site = {
@@ -64,7 +72,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${doltServiceArtifact}";
           gcroot_path = "";
         };
       };
@@ -82,12 +90,12 @@ let
       closures = {
         api = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousApiArtifact}";
           gcroot_path = "";
         };
         site = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousSiteArtifact}";
           gcroot_path = "";
         };
         cdn_runtime = {
@@ -97,7 +105,7 @@ let
         };
         dolt_service = {
           enabled = false;
-          store_path = "";
+          store_path = "${previousDoltServiceArtifact}";
           gcroot_path = "";
         };
       };
@@ -127,7 +135,12 @@ pkgs.testers.runNixOSTest {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
       virtualisation.additionalPaths = [
+        apiArtifact
+        doltServiceArtifact
+        previousApiArtifact
+        previousDoltServiceArtifact
         siteArtifact
+        previousSiteArtifact
         currentCdnRoot
         unrelatedCdnRoot
         activeCdnServingRoot
