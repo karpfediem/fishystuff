@@ -72,6 +72,28 @@ function resolveTitleFontSize(tagline) {
   return "2.2rem";
 }
 
+export function mimeTypeForPath(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".png") {
+    return "image/png";
+  }
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "image/jpeg";
+  }
+  if (extension === ".webp") {
+    return "image/webp";
+  }
+  if (extension === ".svg") {
+    return "image/svg+xml";
+  }
+  return "application/octet-stream";
+}
+
+export function assetDataUrl(filePath) {
+  const data = fs.readFileSync(filePath);
+  return `data:${mimeTypeForPath(filePath)};base64,${data.toString("base64")}`;
+}
+
 function resolveOutputPaths(locale) {
   if (locale === LANGUAGE_CONFIG.defaultContentLang) {
     return [path.join(assetsDir, "img", "embed.png")];
@@ -94,11 +116,11 @@ function cleanupObsoleteFiles() {
   }
 }
 
-function buildHtmlDocument({ locale, tagline, logoPath }) {
+export function buildHtmlDocument({ locale, tagline, logoPath }) {
   const templateSource = fs.readFileSync(templatePath, "utf8");
   const fontsCssHref = pathToFileURL(fontsCssPath).href;
   const siteCssHref = pathToFileURL(siteCssPath).href;
-  const logoHref = pathToFileURL(logoPath).href;
+  const logoHref = assetDataUrl(logoPath);
   const homeHref = locale === LANGUAGE_CONFIG.defaultContentLang ? "/" : `/${locale}/`;
   return templateSource
     .replace("__LOCALE__", escapeHtml(locale))

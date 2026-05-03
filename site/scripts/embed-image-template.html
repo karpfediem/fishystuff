@@ -77,8 +77,19 @@
     </div>
   </div>
   <script>
+    function waitForImage(image) {
+      if (image.complete && image.naturalWidth > 0) {
+        return image.decode ? image.decode().catch(() => undefined) : Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      }).then(() => image.decode ? image.decode().catch(() => undefined) : undefined);
+    }
+
     Promise.all([
       document.fonts ? document.fonts.ready : Promise.resolve(),
+      Promise.all(Array.from(document.images).map(waitForImage)),
       new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     ]).then(() => {
       document.documentElement.setAttribute("data-ready", "true");
