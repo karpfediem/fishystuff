@@ -78,6 +78,7 @@
 
   const calculatorState = {
     persistBinding: null,
+    evalEchoBinding: null,
     actionBinding: null,
     layoutPresetBinding: null,
     calculatorPresetBinding: null,
@@ -88,6 +89,8 @@
     pendingLayoutPresetRestore: false,
     pendingCalculatorDataState: null,
     pendingCalculatorUiState: null,
+    evalEchoPatches: [],
+    applyingSignalPatch: false,
   };
   const calculatorPetUiState = {
     imageFallbackBound: false,
@@ -330,6 +333,57 @@
       ), source);
   }
 
+  function hasSignalPath(source, path) {
+    const parts = String(path ?? "").split(".").filter(Boolean);
+    let current = source;
+    for (const key of parts) {
+      if (!current || typeof current !== "object" || !Object.prototype.hasOwnProperty.call(current, key)) {
+        return false;
+      }
+      current = current[key];
+    }
+    return parts.length > 0;
+  }
+
+  function assignSignalPath(target, path, value) {
+    const parts = String(path ?? "").split(".").filter(Boolean);
+    if (!isPlainObject(target) || parts.length === 0) {
+      return target;
+    }
+    let current = target;
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      const key = parts[index];
+      if (!isPlainObject(current[key])) {
+        current[key] = {};
+      }
+      current = current[key];
+    }
+    current[parts[parts.length - 1]] = cloneCalculatorSignals(value);
+    return target;
+  }
+
+  function calculatorSignalsEqual(left, right) {
+    if (Array.isArray(left) || Array.isArray(right)) {
+      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+        return false;
+      }
+      return left.every((value, index) => calculatorSignalsEqual(value, right[index]));
+    }
+    if (isPlainObject(left) || isPlainObject(right)) {
+      if (!isPlainObject(left) || !isPlainObject(right)) {
+        return false;
+      }
+      const leftKeys = Object.keys(left);
+      const rightKeys = Object.keys(right);
+      return leftKeys.length === rightKeys.length
+        && leftKeys.every((key) => (
+          Object.prototype.hasOwnProperty.call(right, key)
+          && calculatorSignalsEqual(left[key], right[key])
+        ));
+    }
+    return Object.is(left, right);
+  }
+
   function signalPatchLeafPaths(patch, prefix = "") {
     if (!isPlainObject(patch)) {
       return [];
@@ -351,6 +405,41 @@
       .filter((path) => !CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN.test(path));
   }
 
+  function calculatorEvalEchoPatch(patch) {
+    const echoPatch = {};
+    for (const path of calculatorEvalPatchPaths(patch)) {
+      assignSignalPath(echoPatch, path, readSignalPath(patch, path));
+    }
+    return Object.keys(echoPatch).length > 0 ? echoPatch : null;
+  }
+
+  function calculatorPatchMatchesEvalEcho(patch) {
+    const paths = calculatorEvalPatchPaths(patch);
+    if (paths.length === 0) {
+      return -1;
+    }
+    return calculatorState.evalEchoPatches.findIndex((echoPatch) => (
+      isPlainObject(echoPatch) && paths.every((path) => (
+        hasSignalPath(echoPatch, path)
+        && calculatorSignalsEqual(readSignalPath(patch, path), readSignalPath(echoPatch, path))
+      ))
+    ));
+  }
+
+  function rememberCalculatorEvalEchoPatch(patch) {
+    const echoPatch = calculatorEvalEchoPatch(patch);
+    if (!echoPatch) {
+      return;
+    }
+    if (calculatorState.evalEchoPatches.some((existing) => calculatorSignalsEqual(existing, echoPatch))) {
+      return;
+    }
+    calculatorState.evalEchoPatches.push(echoPatch);
+    if (calculatorState.evalEchoPatches.length > 4) {
+      calculatorState.evalEchoPatches.splice(0, calculatorState.evalEchoPatches.length - 4);
+    }
+  }
+
   function calculatorEvalOptionsForPatch(patch) {
     const paths = calculatorEvalPatchPaths(patch);
     const touchesPetCards = paths.some((path) => CALCULATOR_PET_CARD_SIGNAL_PATTERN.test(path))
@@ -366,6 +455,52 @@
       includeTradeOriginSelect: touchesTradeOriginSelection,
       includeTradeDestinationSelect: touchesTradeDestinationSelection,
       reselectTradeForZone: touchesTradeOriginSelection,
+    };
+  }
+
+  function calculatorPatchRequiresEval(patch) {
+    if (calculatorState.applyingSignalPatch) {
+      return false;
+    }
+    if (!isPlainObject(patch)) {
+      return false;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(patch, "_calc")
+      || Object.prototype.hasOwnProperty.call(patch, "_defaults")
+      || Object.prototype.hasOwnProperty.call(patch, "_loading")
+    ) {
+      if (Object.prototype.hasOwnProperty.call(patch, "_calc")) {
+        rememberCalculatorEvalEchoPatch(patch);
+      }
+      return false;
+    }
+    if (calculatorEvalPatchPaths(patch).length === 0) {
+      return false;
+    }
+    const echoIndex = calculatorPatchMatchesEvalEcho(patch);
+    if (echoIndex >= 0) {
+      calculatorState.evalEchoPatches.splice(echoIndex, 1);
+      return false;
+    }
+    return true;
+  }
+
+  function bindEvalEchoListener() {
+    if (calculatorState.evalEchoBinding) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      const patch = event && event.detail ? event.detail : null;
+      if (isPlainObject(patch) && Object.prototype.hasOwnProperty.call(patch, "_calc")) {
+        rememberCalculatorEvalEchoPatch(patch);
+      }
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    calculatorState.evalEchoBinding = {
+      dispose() {
+        document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
     };
   }
 
@@ -964,11 +1099,37 @@
       return null;
     }
     const normalizedPatch = cloneCalculatorSignals(patch);
-    assignCalculatorSignalPatch(signalStore.signalObject(), normalizedPatch, {
-      replaceCalculatorData: options.replaceCalculatorData === true,
-      replaceTopLevel: options.replaceTopLevel === true,
-    });
+    const eventPatch = cloneCalculatorSignals(normalizedPatch);
+    const signals = signalStore.signalObject();
+    if (options.replaceCalculatorData === true && isPlainObject(signals)) {
+      for (const key of Object.keys(signals)) {
+        if (!key.startsWith("_") && key !== "overlay" && !(key in normalizedPatch)) {
+          eventPatch[key] = null;
+        }
+      }
+    }
+    calculatorState.applyingSignalPatch = true;
+    try {
+      assignCalculatorSignalPatch(signalStore.signalObject(), normalizedPatch, {
+        replaceCalculatorData: options.replaceCalculatorData === true,
+        replaceTopLevel: options.replaceTopLevel === true,
+      });
+    } finally {
+      calculatorState.applyingSignalPatch = false;
+    }
+    dispatchCalculatorSignalPatch(eventPatch);
     return signalStore.signalObject();
+  }
+
+  function dispatchCalculatorSignalPatch(patch) {
+    if (!isPlainObject(patch) || Object.keys(patch).length === 0) {
+      return;
+    }
+    document.dispatchEvent?.(
+      new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+        detail: cloneCalculatorSignals(patch),
+      }),
+    );
   }
 
   function replaceCalculatorPresetSignals(signals, payload) {
@@ -1977,6 +2138,7 @@
     bindCalculatorPresetAdapter();
     bindCalculatorLayoutPresetAdapter();
     sharedUserPresets()?.bindDatastar?.(signals);
+    bindEvalEchoListener();
     bindPersistListener();
     bindActionListener();
     bindCalculatorPresetListener();
@@ -2943,6 +3105,7 @@
     ready: languageReady,
     initUrl: calculatorInitUrl,
     evalUrl: calculatorEvalUrl,
+    shouldEvalPatch: calculatorPatchRequiresEval,
     signalObject() {
       return signalStore.signalObject();
     },

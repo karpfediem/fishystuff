@@ -11546,7 +11546,7 @@ fn render_calculator_app(
 <div id="calculator-app" class="grid gap-6">
     __CANONICAL_SIGNAL_COMPUTEDS__
     <div class="hidden"
-         data-on-signal-patch__debounce.150ms="!Object.prototype.hasOwnProperty.call(patch || {}, '_calc') && Object.keys(patch || {}).some((key) => key && key[0] !== '_') ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"></div>
+         data-on-signal-patch="window.__fishystuffCalculator.shouldEvalPatch(patch) ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null"></div>
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-4">
@@ -17256,8 +17256,9 @@ mod tests {
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #calculator-app"));
         assert!(text.contains("<div id=\"calculator-app\""));
-        assert!(text.contains("hasOwnProperty.call(patch || {}, '_calc')"));
-        assert!(text.contains("Object.keys(patch || {}).some((key) => key && key[0] !== '_')"));
+        assert!(text.contains("data-on-signal-patch=\"window.__fishystuffCalculator.shouldEvalPatch(patch) ? @post(window.__fishystuffCalculator.evalUrl(patch)) : null\""));
+        assert!(!text.contains("data-on-signal-patch__debounce.150ms"));
+        assert!(!text.contains("fishystuff-calculator-eval-request"));
         assert!(!text.contains("data-on-signal-patch-filter"));
         assert!(text.contains("fishy-zone-rgb-indicator"));
         assert!(text.contains("--fishy-zone-rgb: 240 74 74"));

@@ -332,10 +332,6 @@ function defaultSignals() {
 
 function patchCalculatorSignals(env, patch, options = {}) {
   env.window.__fishystuffCalculator.patchSignals(patch, options);
-  env.document.dispatchEvent({
-    type: "datastar-signal-patch",
-    detail: cloneTestValue(patch),
-  });
 }
 
 test("calculator restore canonicalizes stored signals", () => {
@@ -397,6 +393,42 @@ test("calculator restore canonicalizes stored signals", () => {
     },
   });
   assert.equal(env.window.__fishystuffCalculator.signalObject(), signals);
+});
+
+test("calculator eval patch predicate only accepts user input signal patches", () => {
+  const env = createContext();
+  const calculator = env.window.__fishystuffCalculator;
+
+  assert.equal(calculator.shouldEvalPatch({ zone: "143,190,212" }), true);
+  assert.equal(calculator.shouldEvalPatch({ level: 10 }), true);
+  assert.equal(calculator.shouldEvalPatch({ zone: null }), true);
+  assert.equal(calculator.shouldEvalPatch({ _calculator_actions: { discardCalculatorToken: 1 } }), false);
+  assert.equal(calculator.shouldEvalPatch({ _calculator_ui: { workspace_tab: "custom" } }), false);
+  assert.equal(calculator.shouldEvalPatch({ _calc: { zone_name: "Velia Beach" }, zone: "240,74,74" }), false);
+  assert.equal(calculator.shouldEvalPatch({ _defaults: {}, zone: "240,74,74" }), false);
+  assert.equal(calculator.shouldEvalPatch({ _loading: false, zone: "240,74,74" }), false);
+});
+
+test("calculator eval patch predicate ignores eval-response morph echoes", () => {
+  const env = createContext();
+  const calculator = env.window.__fishystuffCalculator;
+
+  assert.equal(calculator.shouldEvalPatch({
+    _calc: { zone_name: "Ahrmo Sea - Depth 3" },
+    food: ["item:9359"],
+    pet1: { skills: ["49023", "49014", "49017"] },
+    tradeDestinationNpc: "45348",
+    tradeOriginRegion: "406",
+  }), false);
+  assert.equal(calculator.shouldEvalPatch({
+    food: ["item:9359"],
+    pet1: { skills: ["49023", "49014", "49017"] },
+    tradeDestinationNpc: "45348",
+    tradeOriginRegion: "406",
+  }), false);
+  assert.equal(calculator.shouldEvalPatch({
+    food: ["item:9359", "item:16017"],
+  }), true);
 });
 
 test("pack leader change applies exclusivity without scheduling full pet card replacement", () => {
@@ -1030,6 +1062,46 @@ test("calculator presets apply durable inputs without changing the layout preset
   });
   assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), preset.id);
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+});
+
+test("calculator preset activation publishes a merged Datastar signal patch", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  const signalPatches = [];
+  env.document.addEventListener("datastar-signal-patch", (event) => {
+    signalPatches.push(cloneTestValue(event.detail));
+  });
+  env.window.__fishystuffCalculator.restore(signals);
+
+  const preset = env.window.__fishystuffUserPresets.createPreset("calculator-presets", {
+    name: "Reactive setup",
+    payload: {
+      active: true,
+      fishingMode: "harpoon",
+      level: 5,
+      resources: 44,
+      food: ["item:9359"],
+      pet1: {
+        tier: "5",
+        skills: ["49023", "49014", "49017"],
+      },
+    },
+    select: false,
+  });
+
+  env.window.__fishystuffUserPresets.activatePreset("calculator-presets", preset.id);
+
+  const calculatorPatch = signalPatches.find((patch) => (
+    patch.active === true
+    && patch.fishingMode === "harpoon"
+    && patch.level === 5
+    && patch.resources === 44
+  ));
+  assert.ok(calculatorPatch);
+  assert.deepEqual(Array.from(calculatorPatch.food), ["item:9359"]);
+  assert.deepEqual(Array.from(calculatorPatch._food_slots), ["item:9359"]);
+  assert.equal(calculatorPatch.pet1.tier, "5");
+  assert.equal(calculatorPatch._pet1_skill_slot3, "49017");
 });
 
 test("calculator restore reapplies the persisted selected calculator preset after init defaults", () => {
@@ -1730,6 +1802,10 @@ test("calculator action listener handles copy and discard tokens once", () => {
 test("calculator action listener discards calculator preset current when defaults are fully restored", () => {
   const env = createContext();
   const signals = defaultSignals();
+  const signalPatches = [];
+  env.document.addEventListener("datastar-signal-patch", (event) => {
+    signalPatches.push(cloneTestValue(event.detail));
+  });
 
   env.window.__fishystuffCalculator.restore(signals);
   signals.level = 20;
@@ -1761,6 +1837,13 @@ test("calculator action listener discards calculator preset current when default
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
   assert.equal(signals.level, 0);
   assert.deepEqual(Array.from(signals.food), []);
+  assert.ok(signalPatches.some((patch) => (
+    patch.level === 0
+    && Array.isArray(patch.food)
+    && patch.food.length === 0
+    && Array.isArray(patch._food_slots)
+    && patch._food_slots.length === 0
+  )));
 });
 
 test("calculator action listener saves modified default calculator preset as a new preset", () => {

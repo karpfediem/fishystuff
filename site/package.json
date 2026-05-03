@@ -19,6 +19,7 @@
   },
   "scripts": {
     "test": "bun test",
+    "test:e2e": "FISHYSTUFF_E2E=1 bun test e2e/*.test.mjs",
     "content-shells:build": "bun run ./scripts/build-shell-pages.mjs",
     "i18n:build": "bun run ./scripts/build-i18n.mjs",
     "d3:build": "bun run ./scripts/build-d3.mjs",
