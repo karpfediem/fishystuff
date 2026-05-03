@@ -69,10 +69,14 @@ case "$host" in
     bootstrap_advertise_client_urls="${bootstrap_advertise_client_urls:-http://127.0.0.1:2379}"
     bootstrap_advertise_server_urls="${bootstrap_advertise_server_urls:-http://127.0.0.1:2380}"
     ;;
-  site-nbg1-beta | telemetry-nbg1 | site-nbg1-prod)
+  site-nbg1-beta | telemetry-nbg1)
     bootstrap_seeds="${bootstrap_seeds:-http://127.0.0.1:2379}"
-    bootstrap_ssh_url="${bootstrap_ssh_url:-root@204.168.223.57}"
     bootstrap_ssh_id="${bootstrap_ssh_id:-/root/.ssh/fishystuff-mgmt-control}"
+    require_value "$bootstrap_ssh_url" "bootstrap_ssh_url=... is required for beta subscriber host $host; do not rely on an old control-host address"
+    ;;
+  site-nbg1-prod)
+    echo "mgmt-resident-kickstart-remote refuses site-nbg1-prod; production bootstrap must use production-owned tooling and keys" >&2
+    exit 2
     ;;
 esac
 

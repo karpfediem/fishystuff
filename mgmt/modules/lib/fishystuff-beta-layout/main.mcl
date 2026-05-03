@@ -22,11 +22,6 @@ class catalog:nbg1 {
 	$site_beta_private_ip = "10.0.0.3"
 	$site_beta_servertype = "cx33"
 
-	$site_prod_enabled = true
-	$site_prod_name = "site-nbg1-prod"
-	$site_prod_private_ip = "10.0.0.5"
-	$site_prod_servertype = "cx33"
-
 	$api_db_enabled = $site_beta_enabled
 	$api_db_name = $site_beta_name
 	$api_db_private_ip = $site_beta_private_ip

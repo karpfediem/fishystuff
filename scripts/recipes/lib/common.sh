@@ -370,10 +370,25 @@ deployment_telemetry_target() {
 
 deployment_control_target() {
   local deployment
+  local resident_target=""
+
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "mgmt-root")" ;;
-    production) printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "mgmt-root")" ;;
+    production)
+      resident_target="$(deployment_env_or_default "$deployment" "resident_target" "root@fishystuff.fish")"
+      printf '%s' "$(deployment_env_or_default "$deployment" "control_target" "$resident_target")"
+      ;;
+    local) printf '%s' "" ;;
+  esac
+}
+
+deployment_control_hostname() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    beta) printf '%s' "$(deployment_env_or_default "$deployment" "control_hostname" "mgmt-root")" ;;
+    production) printf '%s' "$(deployment_resident_hostname "$deployment")" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -542,7 +557,7 @@ deployment_target_mentions_beta() {
   [[ -n "$value" ]] || return 1
   host="$(ssh_target_host "$value")"
   case "$host" in
-    beta.fishystuff.fish | api.beta.fishystuff.fish | cdn.beta.fishystuff.fish | telemetry.beta.fishystuff.fish | site-nbg1-beta | telemetry-nbg1)
+    beta.fishystuff.fish | api.beta.fishystuff.fish | cdn.beta.fishystuff.fish | telemetry.beta.fishystuff.fish | site-nbg1-beta | telemetry-nbg1 | mgmt-root)
       return 0
       ;;
   esac
@@ -849,6 +864,9 @@ deployment_expected_remote_hostname_for_role() {
     telemetry)
       deployment_telemetry_hostname "$deployment"
       ;;
+    control)
+      deployment_control_hostname "$deployment"
+      ;;
     *)
       echo "unknown deployment remote role: $role" >&2
       exit 2
@@ -919,6 +937,8 @@ assert_remote_deployment_hosts_for_configured_targets() {
   local telemetry_target="${3:-}"
   local resident_host="${4:-}"
   local telemetry_host="${5:-}"
+  local control_target="${6:-}"
+  local control_host="${7:-}"
 
   deployment="$(canonical_deployment_name "$deployment")"
   if [[ -n "$resident_target" ]]; then
@@ -926,6 +946,9 @@ assert_remote_deployment_hosts_for_configured_targets() {
   fi
   if [[ -n "$telemetry_target" && "$telemetry_target" != "$resident_target" ]]; then
     assert_remote_deployment_host "$deployment" "telemetry" "$telemetry_target" "$telemetry_host"
+  fi
+  if [[ -n "$control_target" && "$control_target" != "$resident_target" && "$control_target" != "$telemetry_target" ]]; then
+    assert_remote_deployment_host "$deployment" "control" "$control_target" "$control_host"
   fi
 }
 

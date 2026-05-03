@@ -23,7 +23,7 @@ remote deploy can push closures or run mgmt:
 - Beta deploy target values must not mention production public hostnames or
   `site-nbg1-prod`.
 - Production deploy target values must not mention beta public hostnames,
-  `site-nbg1-beta`, or `telemetry-nbg1`.
+  `site-nbg1-beta`, `telemetry-nbg1`, or the beta `mgmt-root` control target.
 - Beta deploys require a complete beta service set, including the dedicated
   `telemetry-nbg1` host reached through `telemetry.beta.fishystuff.fish`; beta
   telemetry must not be collapsed onto the beta site host.
@@ -32,6 +32,8 @@ remote deploy can push closures or run mgmt:
 - Beta and production use different SSH keys. The beta key must not be
   authorized on production hosts, and the production key must not be authorized
   on beta hosts.
+- Production control defaults to the production site target after DNS cutover;
+  it must not use the beta `mgmt-root` control path.
 
 Run a local-only preflight with:
 
@@ -75,7 +77,7 @@ Remaining hardening work:
 - Ensure the production host only has the production deploy public key in its
   authorized keys, and beta hosts only have the beta deploy public key.
 - Keep beta and production on separate hosts/service sets. Do not share telemetry
-  or operator services between beta and production.
+  or operator/control services between beta and production.
 - Scope Cloudflare tokens so beta can never edit production records.
 - Move the long-term deployment path to the GitOps desired-state model with
   exact release identities and admission gates.

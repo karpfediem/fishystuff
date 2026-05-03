@@ -89,6 +89,8 @@ The `production-deploy` profile carries the production deploy key separately.
 The beta key must not be authorized on production hosts, and the production key
 must not be authorized on beta hosts. Run `just deploy-key-boundary-check` after
 key rotation or host bootstrap to verify that boundary without mutating hosts.
+After DNS cutover, production control defaults to the production site target,
+not the old beta `mgmt-root` control path.
 
 For local debugging, the bootstrap helper also supports optional Prometheus and
 pprof output without enabling them by default:

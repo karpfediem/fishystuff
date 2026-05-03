@@ -74,6 +74,10 @@ expect_fail "production Dolt branch cannot be beta" \
   env FISHYSTUFF_PRODUCTION_DOLT_REMOTE_BRANCH=beta bash -c \
     'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe production'
 
+expect_fail "production control target cannot use beta mgmt-root" \
+  env FISHYSTUFF_PRODUCTION_CONTROL_TARGET=mgmt-root bash -c \
+    'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe production'
+
 expect_fail "beta resident manifest cannot carry prod host" \
   bash -c 'source scripts/recipes/lib/common.sh; assert_resident_push_scope_safe beta root@beta.fishystuff.fish root@telemetry.beta.fishystuff.fish site-nbg1-beta telemetry-nbg1 site-nbg1-prod https://beta.fishystuff.fish https://api.beta.fishystuff.fish https://cdn.beta.fishystuff.fish https://telemetry.beta.fishystuff.fish beta'
 
@@ -88,6 +92,7 @@ expect_ok "production resident push scope" \
 
 expect_eq "production telemetry tunnel has no beta fallback" "" "$(deployment_tunnel_target production grafana)"
 expect_eq "beta telemetry tunnel target" "root@telemetry.beta.fishystuff.fish" "$(deployment_tunnel_target beta grafana)"
+expect_eq "production control target defaults to production site" "root@fishystuff.fish" "$(deployment_control_target production)"
 
 expect_ok "bundled resident beta manifest has safe target identity" \
   jq -e '

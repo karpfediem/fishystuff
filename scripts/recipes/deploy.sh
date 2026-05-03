@@ -31,6 +31,7 @@ telemetry_target="$(deployment_telemetry_target "$deployment")"
 control_target="$(deployment_control_target "$deployment")"
 resident_host="$(deployment_resident_hostname "$deployment")"
 telemetry_host="$(deployment_telemetry_hostname "$deployment")"
+control_host="$(deployment_control_hostname "$deployment")"
 prod_host="$(deployment_prod_hostname "$deployment")"
 tls_challenge="$(deployment_tls_challenge "$deployment")"
 tls_dns_provider="$(deployment_tls_dns_provider "$deployment")"
@@ -244,7 +245,7 @@ if [[ "$deployment" == "production" && -z "$resident_target" ]]; then
   printf '[deploy] discovered production resident target for %s: %s\n' "$resident_host" "$resident_target" >&2
 fi
 require_value "$resident_target" "deployment $deployment does not define a resident target"
-assert_remote_deployment_hosts_for_configured_targets "$deployment" "$resident_target" "$telemetry_target" "$resident_host" "$telemetry_host"
+assert_remote_deployment_hosts_for_configured_targets "$deployment" "$resident_target" "$telemetry_target" "$resident_host" "$telemetry_host" "$control_target" "$control_host"
 
 if (( ${#requested_services[@]} == 0 )); then
   used_default_services=true

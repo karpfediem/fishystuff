@@ -67,11 +67,7 @@ class topology($st) {
 	$telemetry_dns_targets []str = if $telemetry_public_ipv4_hint != "" {
 		[$telemetry_public_ipv4_hint,]
 	} else {
-		if $site_public_ipv4 != "" {
-			[$site_public_ipv4,]
-		} else {
-			[]
-		}
+		[]
 	}
 
 	include fishystuff_beta_dns.zone(struct {
@@ -159,10 +155,7 @@ class topology($st) {
 		api_db_role => "site",
 		api_db_private_ip => $nbg1.api_db_private_ip,
 		api_db_servertype => $nbg1.api_db_servertype,
-		site_prod_enabled => $nbg1.site_prod_enabled,
-		site_prod_name => $nbg1.site_prod_name,
-		site_prod_private_ip => $nbg1.site_prod_private_ip,
-		site_prod_servertype => $nbg1.site_prod_servertype,
+		site_prod_enabled => false,
 		dolt_volume_enabled => $nbg1.dolt_volume_enabled,
 		dolt_volume_name => $nbg1.dolt_volume_name,
 		dolt_volume_size => $nbg1.dolt_volume_size,

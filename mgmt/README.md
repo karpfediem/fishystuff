@@ -94,8 +94,7 @@ Current scope:
 - keep the desired first beta topology explicit:
   - `mgmt-root` as the single embedded etcd node
   - `site-nbg1-beta` as the beta site/API/Dolt host
-  - `telemetry-nbg1` as shared telemetry for beta and later prod traffic
-  - `site-nbg1-prod` as a deferred prod host
+  - `telemetry-nbg1` as beta-owned telemetry
 - provide a local bootstrap entrypoint that reads `HETZNER_API_TOKEN` from the
   SecretSpec `beta-deploy` profile
 - keep the initial beta inventory within the current project primary-IP ceiling
@@ -122,8 +121,7 @@ Current compact beta shape:
 
 - `mgmt-root` is the only embedded etcd member and also runs ACME solvers
 - `site-nbg1-beta` carries beta site, API, Dolt, and edge serving
-- `telemetry-nbg1` carries the shared telemetry stack and its public edge route
-- `site-nbg1-prod` is modeled but intentionally disabled until beta works again
+- `telemetry-nbg1` carries the beta telemetry stack and its public edge route
 - `ash` and `sin` CDN hosts are disabled until we have real geo-routing such as
   GeoDNS or BGP
 
@@ -191,7 +189,8 @@ just mgmt-resident-kickstart-remote \
 
 just mgmt-resident-kickstart-remote \
   target=root@<beta-nbg1-public-ip-or-name> \
-  host=site-nbg1-beta
+  host=site-nbg1-beta \
+  bootstrap_ssh_url=root@<beta-control-public-ip-or-name>
 ```
 
 The default resident handoff now builds `mgmt` from
@@ -290,8 +289,8 @@ Default topology inputs:
   - `beta` follows `site-nbg1-beta`
   - `api.beta` follows `site-nbg1-beta`
   - `cdn.beta` follows `site-nbg1-beta` for now
-  - `telemetry.beta` follows `telemetry-nbg1`, falling back to
-    `site-nbg1-beta` only while telemetry has no observed public IPv4
+  - `telemetry.beta` follows `telemetry-nbg1`; it intentionally does not fall
+    back to `site-nbg1-beta`
 - `nbg1` core region:
   - private network: `beta-nbg1-private`
   - private network range: `10.0.0.0/16`
@@ -300,12 +299,10 @@ Default topology inputs:
     - `mgmt-root`: `10.0.0.2`
     - `site-nbg1-beta`: `10.0.0.3`
     - `telemetry-nbg1`: `10.0.0.4`
-    - `site-nbg1-prod`: `10.0.0.5` when prod is enabled later
   - Dolt data volume: `site-nbg1-beta-dolt-data` at `20 GB`
   - server plans:
     - `site-nbg1-beta`: `cx33`
     - `telemetry-nbg1`: `cx33`
-    - `site-nbg1-prod`: `cx33` when prod is enabled later
 - `ash` and `sin` edge regions are known to the layout library but disabled in
   the current beta topology
 
@@ -340,9 +337,9 @@ Resident mgmt operation:
 
 - `mgmt-root` is the only embedded etcd member and listens on loopback:
   `127.0.0.1:2379` and `127.0.0.1:2380`
-- `site-nbg1-beta`, `telemetry-nbg1`, and later `site-nbg1-prod` are
-  SSH-tunneled subscribers with `--ssh-url=root@204.168.223.57` and
-  `--seeds=http://127.0.0.1:2379`; they do not expose etcd ports
+- `site-nbg1-beta` and `telemetry-nbg1` are SSH-tunneled subscribers with an
+  explicit beta control SSH URL and `--seeds=http://127.0.0.1:2379`; they do
+  not expose etcd ports
 - ACME solver resources are scoped to `mgmt-root`; workload hosts materialize
   the finalized certificate bundle from shared world state
 - VM, network, volume, and base DNS resources are reconciled by the one-shot
