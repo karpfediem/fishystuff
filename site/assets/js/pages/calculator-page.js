@@ -66,13 +66,14 @@
   ]);
   const CALCULATOR_DISTRIBUTION_TABS = new Set([
     "groups",
+    "value_split",
+    "loot_flow",
+    "target_fish",
+  ]);
+  const CALCULATOR_LOOT_METRICS = new Set([
     "silver",
     "exp",
     "totem_exp",
-    "loot_flow",
-    "exp_flow",
-    "totem_exp_flow",
-    "target_fish",
   ]);
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
@@ -914,12 +915,37 @@
     const distributionTab = String(
       current.distribution_tab || "groups",
     ).trim();
+    let normalizedDistributionTab = distributionTab;
+    let valueSplitMetric = String(
+      current.value_split_metric || "silver",
+    ).trim();
+    let lootFlowMetric = String(
+      current.loot_flow_metric || "silver",
+    ).trim();
+    if (["silver", "exp", "totem_exp"].includes(distributionTab)) {
+      normalizedDistributionTab = "value_split";
+      valueSplitMetric = distributionTab;
+    } else if (distributionTab === "exp_flow") {
+      normalizedDistributionTab = "loot_flow";
+      lootFlowMetric = "exp";
+    } else if (distributionTab === "totem_exp_flow") {
+      normalizedDistributionTab = "loot_flow";
+      lootFlowMetric = "totem_exp";
+    }
+    if (!CALCULATOR_LOOT_METRICS.has(valueSplitMetric)) {
+      valueSplitMetric = "silver";
+    }
+    if (!CALCULATOR_LOOT_METRICS.has(lootFlowMetric)) {
+      lootFlowMetric = "silver";
+    }
     const customLayout = customLayoutFromUiState(current);
     const normalized = {
       workspace_tab: normalizeCalculatorWorkspaceTab(current.workspace_tab),
-      distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
-        ? distributionTab
+      distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(normalizedDistributionTab)
+        ? normalizedDistributionTab
         : "groups",
+      value_split_metric: valueSplitMetric,
+      loot_flow_metric: lootFlowMetric,
       custom_layout: customLayout,
       custom_sections: flattenCustomLayout(customLayout),
     };
@@ -1026,6 +1052,8 @@
     });
     targetUiState.workspace_tab = normalized.workspace_tab;
     targetUiState.distribution_tab = normalized.distribution_tab;
+    targetUiState.value_split_metric = normalized.value_split_metric;
+    targetUiState.loot_flow_metric = normalized.loot_flow_metric;
     targetUiState.custom_layout = normalized.custom_layout;
     targetUiState.custom_sections = normalized.custom_sections;
     return targetUiState;

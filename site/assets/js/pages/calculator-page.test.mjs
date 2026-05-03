@@ -85,6 +85,8 @@ function defaultCalculatorUiState(overrides = {}) {
   return {
     workspace_tab: "basics",
     distribution_tab: "groups",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: cloneTestValue(DEFAULT_CUSTOM_LAYOUT),
     custom_sections: Array.from(DEFAULT_CUSTOM_SECTIONS),
     ...cloneTestValue(overrides),
@@ -666,6 +668,8 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
     {
       workspace_tab: "basics",
       distribution_tab: "groups",
+      value_split_metric: "silver",
+      loot_flow_metric: "silver",
       custom_layout: [[["overview"]], [["zone"]], [["distribution"]]],
       custom_sections: ["overview", "zone", "distribution"],
     },
@@ -680,6 +684,8 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
     {
       workspace_tab: "basics",
       distribution_tab: "groups",
+      value_split_metric: "silver",
+      loot_flow_metric: "silver",
       custom_layout: [[["overview"]], [["loot"]], [["trade"]]],
       custom_sections: ["overview", "loot", "trade"],
     },
@@ -694,6 +700,8 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
     {
       workspace_tab: "basics",
       distribution_tab: "groups",
+      value_split_metric: "silver",
+      loot_flow_metric: "silver",
       custom_layout: [],
       custom_sections: [],
     },
@@ -708,6 +716,8 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
   assert.deepEqual(JSON.parse(JSON.stringify(uiState)), {
     workspace_tab: "basics",
     distribution_tab: "loot_flow",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"]], [["zone"]]],
     custom_sections: ["overview", "zone"],
   });
@@ -721,6 +731,8 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
   assert.deepEqual(JSON.parse(JSON.stringify(selectedCustomState)), {
     workspace_tab: "basics",
     distribution_tab: "groups",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"]], [["loot"]], [["trade"]]],
     custom_sections: ["overview", "loot", "trade"],
   });
@@ -734,6 +746,8 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
   assert.deepEqual(JSON.parse(JSON.stringify(removableCustomState)), {
     workspace_tab: "basics",
     distribution_tab: "groups",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"]]],
     custom_sections: ["overview"],
   });
@@ -821,6 +835,38 @@ test("calculator custom helpers keep custom sections ordered and placeable", () 
     }),
     false,
   );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calculator.assignCustomUiState({}, {
+      workspace_tab: "basics",
+      distribution_tab: "exp",
+      custom_layout: [[["overview"]]],
+      custom_sections: ["overview"],
+    }))),
+    {
+      workspace_tab: "basics",
+      distribution_tab: "value_split",
+      value_split_metric: "exp",
+      loot_flow_metric: "silver",
+      custom_layout: [[["overview"]]],
+      custom_sections: ["overview"],
+    },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calculator.assignCustomUiState({}, {
+      workspace_tab: "basics",
+      distribution_tab: "totem_exp_flow",
+      custom_layout: [[["overview"]]],
+      custom_sections: ["overview"],
+    }))),
+    {
+      workspace_tab: "basics",
+      distribution_tab: "loot_flow",
+      value_split_metric: "silver",
+      loot_flow_metric: "totem_exp",
+      custom_layout: [[["overview"]]],
+      custom_sections: ["overview"],
+    },
+  );
 });
 
 test("calculator reset layout restores the default custom mosaic while keeping the selected tab", () => {
@@ -836,6 +882,8 @@ test("calculator reset layout restores the default custom mosaic while keeping t
   assert.deepEqual(JSON.parse(JSON.stringify(calculator.resetCalculatorLayout(uiState))), {
     workspace_tab: "basics",
     distribution_tab: "loot_flow",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: cloneTestValue(DEFAULT_CUSTOM_LAYOUT),
     custom_sections: Array.from(DEFAULT_CUSTOM_SECTIONS),
   });
@@ -844,6 +892,8 @@ test("calculator reset layout restores the default custom mosaic while keeping t
   assert.deepEqual(JSON.parse(JSON.stringify(uiState)), {
     workspace_tab: "basics",
     distribution_tab: "loot_flow",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: cloneTestValue(DEFAULT_CUSTOM_LAYOUT),
     custom_sections: Array.from(DEFAULT_CUSTOM_SECTIONS),
   });
@@ -886,6 +936,8 @@ test("calculator layout presets register a shared adapter and apply layout-only 
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
     workspace_tab: "basics",
     distribution_tab: "target_fish",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
     custom_sections: ["overview", "distribution", "loot"],
   });
@@ -894,6 +946,8 @@ test("calculator layout presets register a shared adapter and apply layout-only 
     {
       workspace_tab: "basics",
       distribution_tab: "target_fish",
+      value_split_metric: "silver",
+      loot_flow_metric: "silver",
       custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
       custom_sections: ["overview", "distribution", "loot"],
     },
@@ -1057,6 +1111,8 @@ test("calculator presets apply durable inputs without changing the layout preset
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
     workspace_tab: "basics",
     distribution_tab: "groups",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"]], [["trade"]]],
     custom_sections: ["overview", "trade"],
   });
@@ -1376,6 +1432,8 @@ test("calculator restore keeps selected layout preset and tab after init", () =>
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
     workspace_tab: "basics",
     distribution_tab: "target_fish",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
     custom_sections: ["overview", "distribution", "loot"],
   });
@@ -1592,6 +1650,8 @@ test("calculator restore reapplies persisted calculator UI after init defaults",
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
     workspace_tab: "basics",
     distribution_tab: "target_fish",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: [[["overview"], ["distribution"]], [["loot"]]],
     custom_sections: ["overview", "distribution", "loot"],
   });
@@ -2068,6 +2128,8 @@ test("calculator action listener discards only layout preset modifications", () 
   assert.deepEqual(JSON.parse(JSON.stringify(signals._calculator_ui)), {
     workspace_tab: "basics",
     distribution_tab: "target_fish",
+    value_split_metric: "silver",
+    loot_flow_metric: "silver",
     custom_layout: cloneTestValue(DEFAULT_CUSTOM_LAYOUT),
     custom_sections: Array.from(DEFAULT_CUSTOM_SECTIONS),
   });
@@ -2078,6 +2140,8 @@ test("calculator action listener discards only layout preset modifications", () 
     {
       workspace_tab: "basics",
       distribution_tab: "target_fish",
+      value_split_metric: "silver",
+      loot_flow_metric: "silver",
       custom_layout: cloneTestValue(DEFAULT_CUSTOM_LAYOUT),
       custom_sections: Array.from(DEFAULT_CUSTOM_SECTIONS),
     },

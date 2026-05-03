@@ -4095,6 +4095,8 @@ fn default_reset_signals_patch_map(
         json!({
             "workspace_tab": "basics",
             "distribution_tab": "groups",
+            "value_split_metric": "silver",
+            "loot_flow_metric": "silver",
             "custom_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
             "custom_sections": ["overview", "zone", "session", "bite_time", "loot"],
         }),
@@ -15103,6 +15105,70 @@ fn render_totem_exp_sankey(lang: CalculatorLocale, chart: &LootChart) -> String 
     )
 }
 
+fn render_loot_metric_switch(lang: CalculatorLocale, state_key: &str, aria_key: &str) -> String {
+    format!(
+        r#"<div role="tablist" class="tabs tabs-box w-fit max-w-full overflow-x-auto" aria-label="{}">
+            <button type="button" role="tab" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.{} === 'silver'" data-attr:aria-selected="($_calculator_ui.{} === 'silver').toString()" data-on:click="$_calculator_ui.{} = 'silver'">{}</button>
+            <button type="button" role="tab" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.{} === 'exp'" data-attr:aria-selected="($_calculator_ui.{} === 'exp').toString()" data-on:click="$_calculator_ui.{} = 'exp'">{}</button>
+            <button type="button" role="tab" class="tab whitespace-nowrap" data-class:tab-active="$_calculator_ui.{} === 'totem_exp'" data-attr:aria-selected="($_calculator_ui.{} === 'totem_exp').toString()" data-on:click="$_calculator_ui.{} = 'totem_exp'">{}</button>
+        </div>"#,
+        escape_html(&calculator_route_text(lang, aria_key)),
+        state_key,
+        state_key,
+        state_key,
+        escape_html(&calculator_route_text(lang, "calculator.server.tab.silver")),
+        state_key,
+        state_key,
+        state_key,
+        escape_html(&calculator_route_text(lang, "calculator.server.tab.exp")),
+        state_key,
+        state_key,
+        state_key,
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.tab.totem_exp"
+        )),
+    )
+}
+
+fn render_value_split_chart_tab(lang: CalculatorLocale, chart: &LootChart) -> String {
+    format!(
+        "<div class=\"grid gap-3\">\
+            <div class=\"flex justify-end\">{}</div>\
+            <div data-show=\"$_calculator_ui.value_split_metric === 'silver'\">{}</div>\
+            <div data-show=\"$_calculator_ui.value_split_metric === 'exp'\">{}</div>\
+            <div data-show=\"$_calculator_ui.value_split_metric === 'totem_exp'\">{}</div>\
+        </div>",
+        render_loot_metric_switch(
+            lang,
+            "value_split_metric",
+            "calculator.server.chart.aria.value_split_metric_switch",
+        ),
+        render_fish_group_silver_chart(lang, chart),
+        render_fish_group_exp_chart(lang, chart),
+        render_fish_group_totem_exp_chart(lang, chart),
+    )
+}
+
+fn render_loot_flow_chart_tab(lang: CalculatorLocale, chart: &LootChart) -> String {
+    format!(
+        "<div class=\"grid gap-3\">\
+            <div class=\"flex justify-end\">{}</div>\
+            <div data-show=\"$_calculator_ui.loot_flow_metric === 'silver'\">{}</div>\
+            <div data-show=\"$_calculator_ui.loot_flow_metric === 'exp'\">{}</div>\
+            <div data-show=\"$_calculator_ui.loot_flow_metric === 'totem_exp'\">{}</div>\
+        </div>",
+        render_loot_metric_switch(
+            lang,
+            "loot_flow_metric",
+            "calculator.server.chart.aria.loot_flow_metric_switch",
+        ),
+        render_loot_chart(lang, chart),
+        render_exp_sankey(lang, chart),
+        render_totem_exp_sankey(lang, chart),
+    )
+}
+
 fn render_fish_group_chart(
     lang: CalculatorLocale,
     chart: &FishGroupChart,
@@ -15429,27 +15495,15 @@ fn render_fish_group_window(
                         </div>\
                         <div role=\"tablist\" class=\"tabs tabs-box\" aria-label=\"{}\">\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'groups'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'groups').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'groups'\">{}</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'silver'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'silver').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'silver'\">{}</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'exp'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'exp').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'exp'\">{}</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'totem_exp'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'totem_exp').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'totem_exp'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'value_split'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'value_split').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'value_split'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">{}</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'exp_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'exp_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'exp_flow'\">{}</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'totem_exp_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'totem_exp_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'totem_exp_flow'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">{}</button>\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\" class=\"grid gap-4\">{}\
                         </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'silver'\">{}\
-                        </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'exp'\">{}\
-                        </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'totem_exp'\">{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'value_split'\">{}\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'loot_flow'\">{}\
-                        </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'exp_flow'\">{}\
-                        </div>\
-                        <div data-show=\"$_calculator_ui.distribution_tab === 'totem_exp_flow'\">{}\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'target_fish'\">{}\
                         </div>\
@@ -15534,27 +15588,11 @@ fn render_fish_group_window(
         )),
         escape_html(&calculator_route_text(
             data.lang,
-            "calculator.server.tab.silver"
-        )),
-        escape_html(&calculator_route_text(
-            data.lang,
-            "calculator.server.tab.exp"
-        )),
-        escape_html(&calculator_route_text(
-            data.lang,
-            "calculator.server.tab.totem_exp"
+            "calculator.server.tab.value_split"
         )),
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.tab.loot_flow"
-        )),
-        escape_html(&calculator_route_text(
-            data.lang,
-            "calculator.server.tab.exp_flow"
-        )),
-        escape_html(&calculator_route_text(
-            data.lang,
-            "calculator.server.tab.totem_exp_flow"
         )),
         escape_html(&calculator_route_text(
             data.lang,
@@ -15565,12 +15603,8 @@ fn render_fish_group_window(
             fish_group_chart,
             signals.show_normalized_select_rates
         ),
-        render_fish_group_silver_chart(data.lang, loot_chart),
-        render_fish_group_exp_chart(data.lang, loot_chart),
-        render_fish_group_totem_exp_chart(data.lang, loot_chart),
-        render_loot_chart(data.lang, loot_chart),
-        render_exp_sankey(data.lang, loot_chart),
-        render_totem_exp_sankey(data.lang, loot_chart),
+        render_value_split_chart_tab(data.lang, loot_chart),
+        render_loot_flow_chart_tab(data.lang, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
     )
 }
@@ -20493,6 +20527,8 @@ mod tests {
             Some(&json!({
                 "workspace_tab": "basics",
                 "distribution_tab": "groups",
+                "value_split_metric": "silver",
+                "loot_flow_metric": "silver",
                 "custom_layout": [[["overview"]], [["zone"], ["session"]], [["bite_time"], ["loot"]]],
                 "custom_sections": ["overview", "zone", "session", "bite_time", "loot"],
             }))

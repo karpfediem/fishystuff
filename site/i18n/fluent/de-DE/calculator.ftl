@@ -321,6 +321,7 @@ calculator.server.helper.pet_skills.one = Wähle 1 Fähigkeit.
 calculator.server.helper.pet_skills.many = Wähle 1 bis {$count} Fähigkeiten.
 
 calculator.server.tab.groups = Gruppen
+calculator.server.tab.value_split = Wertaufteilung
 calculator.server.tab.silver = Silber
 calculator.server.tab.exp = EXP
 calculator.server.tab.loot_flow = Beutefluss
@@ -371,6 +372,8 @@ calculator.server.chart.aria.exp_flow = Erwarteter EXP-Fluss von Gruppen zu Beut
 calculator.server.chart.aria.target_distribution = Zielfisch-Sitzungsverteilung
 calculator.server.chart.aria.timeline = Angelzyklus-Zeitachse
 calculator.server.chart.aria.distribution_tabs = Verteilungs-Tabs
+calculator.server.chart.aria.value_split_metric_switch = Metrik für Wertaufteilung
+calculator.server.chart.aria.loot_flow_metric_switch = Metrik für Beutefluss
 calculator.server.chart.aria.workspace_tabs = Rechnerabschnitte
 calculator.server.chart.aria.custom_tabs = Custom-Arbeitsbereichskarten
 
