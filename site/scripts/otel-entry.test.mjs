@@ -9,6 +9,7 @@ import {
   createBrowserOperatorMetrics,
   createHttpError,
   createOtlpHttpLogExporter,
+  createTelemetryBridge,
   currentPageReadyDurationMs,
   extractFishystuffResponseContext,
   resolveRuntimeConfig,
@@ -421,4 +422,116 @@ test("createOtlpHttpLogExporter sends standard OTLP protobuf requests", async ()
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("createOtlpHttpLogExporter tracks failed OTLP responses", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("", { status: 502 });
+
+  try {
+    const exporter = createOtlpHttpLogExporter({
+      url: "http://telemetry.localhost:1990/v1/logs",
+    });
+
+    const result = await new Promise((resolve) => {
+      exporter.export([], resolve);
+    });
+
+    expect(result.code).toBe(1);
+    expect(exporter.lastExportResult().ok).toBe(false);
+    expect(exporter.lastExportResult().error).toContain("HTTP 502");
+    expect(await exporter.forceFlush()).toBe(false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("createTelemetryBridge sends diagnostic reports through active browser logs", async () => {
+  const emitted = [];
+  const loggerProvider = {
+    getLogger() {
+      return {
+        emit(record) {
+          emitted.push(record);
+        },
+      };
+    },
+    forceFlush() {
+      return Promise.resolve();
+    },
+  };
+  const logExporter = {
+    lastExportResult() {
+      return { ok: true, code: 0, at: "2026-05-03T00:00:00.000Z" };
+    },
+  };
+  const bridge = createTelemetryBridge(
+    {
+      serviceName: "fishystuff-site-test",
+      telemetryDefaultMode: "enabled",
+      telemetryPreference: "unset",
+      telemetryEffectiveEnabled: true,
+      telemetryReason: "enabled-by-runtime-default",
+      telemetrySource: "runtime-default",
+      logsConfiguredEnabled: true,
+      logsEnabled: true,
+      logsExporterEndpoint: "http://telemetry.localhost:1990/v1/logs",
+    },
+    null,
+    null,
+    loggerProvider,
+    null,
+    logExporter,
+  );
+
+  const result = await bridge.emitDiagnosticReport({
+    report: { id: "health-report-1", summary: "Map API failed" },
+    health: {
+      issues: [
+        {
+          id: "map-api:points",
+          source: "map-api",
+          severity: "warning",
+        },
+      ],
+    },
+  });
+
+  expect(result.sent).toBe(true);
+  expect(bridge.status().diagnosticReportsEnabled).toBe(true);
+  expect(emitted).toHaveLength(1);
+  expect(emitted[0].eventName).toBe("fishystuff.page_health.manual_report");
+  expect(emitted[0].severityText).toBe("WARN");
+  expect(emitted[0].attributes["fishystuff.health.report_id"]).toBe("health-report-1");
+  expect(emitted[0].attributes["fishystuff.health.issue_ids"]).toBe("map-api:points");
+  expect(emitted[0].attributes["fishystuff.health.report_mode"]).toBe("manual");
+  expect(emitted[0].attributes["fishystuff.health.manual_report"]).toBe(true);
+});
+
+test("createTelemetryBridge rejects diagnostic reports when automatic telemetry is inactive", async () => {
+  const bridge = createTelemetryBridge(
+    {
+      serviceName: "fishystuff-site-test",
+      telemetryDefaultMode: "opt-in",
+      telemetryPreference: "unset",
+      telemetryEffectiveEnabled: false,
+      telemetryReason: "opt-in-required",
+      telemetrySource: "runtime-default",
+      logsConfiguredEnabled: true,
+      logsEnabled: false,
+      logsExporterEndpoint: "http://telemetry.localhost:1990/v1/logs",
+    },
+    null,
+    null,
+    null,
+  );
+
+  const result = await bridge.emitDiagnosticReport({
+    report: { id: "health-report-1", summary: "Map API failed" },
+    health: { issues: [] },
+  });
+
+  expect(result.sent).toBe(false);
+  expect(result.reason).toBe("opt-in-required");
+  expect(result.status.diagnosticReportsEnabled).toBe(false);
 });

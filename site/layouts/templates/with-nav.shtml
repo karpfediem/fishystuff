@@ -150,6 +150,75 @@
                     <div class="navbar-end w-auto flex-none gap-1 lg:justify-self-end">
                         <div id="nav-page-controls" class="hidden items-center gap-1"></div>
 
+                        <div id="page-health-menu"
+                             class="dropdown dropdown-end hidden me-2"
+                             data-page-health-menu>
+                            <button type="button"
+                                    tabindex="0"
+                                    class="btn btn-circle btn-sm border border-warning/35 bg-warning/12 text-warning shadow-sm backdrop-blur hover:border-warning/60 hover:bg-warning/20"
+                                    aria-haspopup="menu"
+                                    aria-expanded="false"
+                                    aria-label="Open status menu">
+                                <span class="indicator">
+                                    <span class="badge badge-warning badge-xs indicator-item min-w-4 px-1 text-[10px]" data-health-count>0</span>
+                                    <svg class="fishy-icon size-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-alert-triangle"></use></svg>
+                                </span>
+                            </button>
+
+                            <div tabindex="0"
+                                 class="dropdown-content card card-sm card-border bg-base-100 z-10 mt-3 w-[min(24rem,calc(100vw-1.5rem))] shadow-2xl overflow-hidden">
+                                <div class="card-body gap-4 p-4">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <div class="inline-flex items-center gap-2 text-sm font-semibold text-base-content">
+                                                <svg class="fishy-icon size-4 shrink-0 text-warning" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-alert-triangle"></use></svg>
+                                                <span>Page status</span>
+                                            </div>
+                                            <p class="mt-1 text-xs leading-5 text-base-content/60" data-health-summary>0 active warnings</p>
+                                        </div>
+                                        <span class="badge badge-warning badge-sm shrink-0" data-health-count>0</span>
+                                    </div>
+
+                                    <div class="grid max-h-[18rem] gap-2 overflow-y-auto pr-1" data-health-issue-list></div>
+
+                                    <div class="rounded-box border border-base-300 bg-base-200/45 px-3 py-2 text-xs" data-health-telemetry-row>
+                                        <div class="flex min-w-0 items-center justify-between gap-3">
+                                            <span class="font-semibold text-base-content">Telemetry</span>
+                                            <span class="inline-flex shrink-0 items-center gap-1.5">
+                                                <span class="badge badge-ghost badge-sm" data-health-auto-report-state>Auto waiting</span>
+                                                <span class="badge badge-neutral badge-sm" data-health-telemetry-label>Checking</span>
+                                            </span>
+                                        </div>
+                                        <p class="mt-1 leading-5 text-base-content/55" data-health-telemetry-detail>Telemetry status is loading.</p>
+                                    </div>
+
+                                    <label class="flex cursor-pointer items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200/45 px-3 py-2 text-xs">
+                                        <span class="min-w-0">
+                                            <span class="block font-semibold text-base-content">Auto report warnings</span>
+                                            <span class="block text-base-content/55" data-health-auto-report-detail>Uses telemetry when ready</span>
+                                        </span>
+                                        <input type="checkbox" class="toggle toggle-info toggle-sm shrink-0" checked data-health-auto-report-toggle>
+                                    </label>
+
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-primary btn-sm flex-1" data-health-send-report>
+                                            <svg class="fishy-icon size-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-bug-fill"></use></svg>
+                                            Send report
+                                        </button>
+                                        <button type="button" class="btn btn-ghost btn-sm" data-health-dismiss-all>Dismiss all</button>
+                                    </div>
+
+                                    <label class="flex cursor-pointer items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200/45 px-3 py-2 text-xs">
+                                        <span class="min-w-0">
+                                            <span class="block font-semibold text-base-content">Show status menu</span>
+                                            <span class="block text-base-content/55" data-health-hidden-label>Visible when warnings are active</span>
+                                        </span>
+                                        <input type="checkbox" class="toggle toggle-warning toggle-sm shrink-0" checked data-health-menu-toggle>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="client-session-switcher"
                              class="dropdown dropdown-end"
                              data-signals="{
@@ -238,6 +307,24 @@
                                                         <div class="grid gap-3" data-language-panel data-language-panel-id="profile-menu"></div>
                                                     </div>
                                                 </details>
+                                            </li>
+                                            <li class="w-full">
+                                                <label class="flex cursor-pointer items-center justify-between gap-3">
+                                                    <span class="inline-flex items-center gap-2">
+                                                        <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-alert-triangle"></use></svg>
+                                                        <span>Show status warnings</span>
+                                                    </span>
+                                                    <input type="checkbox" class="toggle toggle-warning toggle-sm shrink-0" checked data-health-menu-toggle>
+                                                </label>
+                                            </li>
+                                            <li class="w-full">
+                                                <label class="flex cursor-pointer items-center justify-between gap-3">
+                                                    <span class="inline-flex items-center gap-2">
+                                                        <svg class="fishy-icon size-4 shrink-0 opacity-70" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="#fishy-bug-fill"></use></svg>
+                                                        <span>Auto report warnings</span>
+                                                    </span>
+                                                    <input type="checkbox" class="toggle toggle-info toggle-sm shrink-0" checked data-health-auto-report-toggle>
+                                                </label>
                                             </li>
                                             <li class="w-full">
                                                 <details class="w-full">

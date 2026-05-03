@@ -28,6 +28,7 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic
 const OTEL_GLOBAL_KEY = "__fishystuffOtel";
 const OTEL_FLUSH_HOOK_KEY = "__fishystuffOtelFlushHooksInstalled";
 const OTEL_LOG_HOOK_KEY = "__fishystuffOtelLogHooksInstalled";
+const TELEMETRY_STATUS_EVENT = "fishystuff:telemetry-status-change";
 const TRACE_QUERY_KEY = "trace";
 const TRACE_SAMPLE_QUERY_KEY = "trace_sample";
 const REQUEST_ID_HEADER = "x-request-id";
@@ -744,6 +745,21 @@ function installFlushHooks(providers) {
   globalThis[OTEL_FLUSH_HOOK_KEY] = true;
 }
 
+function dispatchTelemetryStatusChange(bridge, reason) {
+  if (typeof globalThis.dispatchEvent !== "function") {
+    return;
+  }
+  try {
+    globalThis.dispatchEvent(new CustomEvent(TELEMETRY_STATUS_EVENT, {
+      detail: {
+        reason: normalizeString(reason) || "update",
+        status: typeof bridge?.status === "function" ? bridge.status() : null,
+      },
+    }));
+  } catch {
+  }
+}
+
 function createOtlpHttpExporter({
   url,
   serializer,
@@ -755,8 +771,15 @@ function createOtlpHttpExporter({
 } = {}) {
   let shutdown = false;
   const inFlight = new Set();
+  let lastExportResult = null;
 
   function finish(resultCallback, result) {
+    lastExportResult = {
+      ok: result?.code === 0,
+      code: result?.code,
+      error: result?.error instanceof Error ? result.error.message : normalizeString(result?.error),
+      at: new Date().toISOString(),
+    };
     queueMicrotask(() => resultCallback(result));
   }
 
@@ -818,6 +841,22 @@ function createOtlpHttpExporter({
 
       inFlight.add(request);
     },
+    forceFlush() {
+      if (!inFlight.size) {
+        return Promise.resolve(lastExportResult?.ok !== false);
+      }
+      return Promise.allSettled(Array.from(inFlight)).then(
+        () => lastExportResult?.ok !== false,
+        () => false,
+      );
+    },
+    lastExportResult() {
+      return lastExportResult ? { ...lastExportResult } : null;
+    },
+    shutdown() {
+      shutdown = true;
+      return this.forceFlush();
+    },
   };
 }
 
@@ -840,6 +879,9 @@ function createOtlpHttpMetricExporter({
     export: exporter.export,
     forceFlush() {
       return exporter.forceFlush();
+    },
+    lastExportResult() {
+      return exporter.lastExportResult();
     },
     selectAggregationTemporality() {
       return AggregationTemporality.CUMULATIVE;
@@ -991,8 +1033,69 @@ function createTelemetryBridge(
   meterProvider,
   loggerProvider,
   browserMetrics = null,
+  logExporter = null,
 ) {
   const tracer = tracerProvider ? tracerProvider.getTracer(config.serviceName) : null;
+  const diagnosticReportsEnabled = Boolean(
+    loggerProvider
+    && config.telemetryEffectiveEnabled === true
+    && config.logsEnabled === true,
+  );
+
+  function telemetryStatus() {
+    let diagnosticReason = "ready";
+    if (config.telemetryDefaultMode === "disabled") {
+      diagnosticReason = "disabled-by-runtime-policy";
+    } else if (config.telemetryEffectiveEnabled !== true) {
+      diagnosticReason = config.telemetryReason || "automatic-telemetry-disabled";
+    } else if (config.logsConfiguredEnabled !== true) {
+      diagnosticReason = "logs-disabled";
+    } else if (!config.logsExporterEndpoint) {
+      diagnosticReason = "missing-logs-exporter";
+    } else if (!loggerProvider) {
+      diagnosticReason = "logs-unavailable";
+    }
+    const lastLogExport = logExporter?.lastExportResult?.() || null;
+    return {
+      initialized: Boolean(tracerProvider || meterProvider || loggerProvider),
+      automaticTelemetryActive: config.telemetryEffectiveEnabled === true,
+      tracingEnabled: Boolean(tracerProvider),
+      metricsEnabled: Boolean(meterProvider),
+      loggingEnabled: Boolean(loggerProvider),
+      diagnosticReportsEnabled,
+      reason: diagnosticReportsEnabled ? "ready" : diagnosticReason,
+      telemetryDefaultMode: config.telemetryDefaultMode,
+      telemetryPreference: config.telemetryPreference,
+      telemetryReason: config.telemetryReason,
+      telemetrySource: config.telemetrySource,
+      logsExporterEndpoint: config.logsExporterEndpoint,
+      lastLogExport,
+    };
+  }
+
+  function diagnosticReportAttributes(report, extraAttributes = {}) {
+    const issues = Array.isArray(report?.health?.issues) ? report.health.issues : [];
+    const mode = normalizeString(report?.report?.mode) || "manual";
+    return {
+      "fishystuff.health.report_id": normalizeString(report?.report?.id),
+      "fishystuff.health.issue_count": issues.length,
+      "fishystuff.health.issue_ids": issues.map((issue) => normalizeString(issue?.id)).filter(Boolean).join(","),
+      "fishystuff.health.issue_sources": Array.from(
+        new Set(issues.map((issue) => normalizeString(issue?.source)).filter(Boolean)),
+      ).join(","),
+      "fishystuff.health.report_mode": mode,
+      "fishystuff.health.manual_report": mode === "manual",
+      "fishystuff.health.automatic_report": mode === "automatic",
+      ...normalizeAttributes(extraAttributes),
+    };
+  }
+
+  function diagnosticReportSeverity(report) {
+    const issues = Array.isArray(report?.health?.issues) ? report.health.issues : [];
+    return issues.some((issue) => normalizeString(issue?.severity).toLowerCase() === "error")
+      ? { severityNumber: SeverityNumber.ERROR, severityText: "ERROR" }
+      : { severityNumber: SeverityNumber.WARN, severityText: "WARN" };
+  }
 
   return Object.freeze({
     initialized: Boolean(tracerProvider || meterProvider || loggerProvider),
@@ -1000,6 +1103,9 @@ function createTelemetryBridge(
     tracingEnabled: Boolean(tracerProvider),
     metricsEnabled: Boolean(meterProvider),
     loggingEnabled: Boolean(loggerProvider),
+    automaticLoggingEnabled: config.logsEnabled === true,
+    diagnosticReportsEnabled,
+    manualDiagnosticReportsEnabled: diagnosticReportsEnabled,
     telemetryDefaultMode: config.telemetryDefaultMode,
     telemetryPreference: config.telemetryPreference,
     telemetryEffectiveEnabled: config.telemetryEffectiveEnabled,
@@ -1056,6 +1162,70 @@ function createTelemetryBridge(
         ...(options && typeof options === "object" ? options : {}),
       });
     },
+    async emitDiagnosticReport(report, options = {}) {
+      const status = telemetryStatus();
+      if (!status.diagnosticReportsEnabled) {
+        return { sent: false, reason: status.reason || "telemetry-unavailable", status };
+      }
+      const mode = normalizeString(options.mode || report?.report?.mode) || "manual";
+      const emitted = emitBrowserLog(loggerProvider, config, {
+        loggerName: `${config.serviceName}.browser.app`,
+        source: mode === "automatic"
+          ? "page-health.automatic-report"
+          : "page-health.manual-report",
+        eventName: mode === "automatic"
+          ? "fishystuff.page_health.automatic_report"
+          : "fishystuff.page_health.manual_report",
+        body: JSON.stringify(report || {}),
+        attributes: diagnosticReportAttributes(
+          {
+            ...(report || {}),
+            report: {
+              ...(report?.report || {}),
+              mode,
+            },
+          },
+          options.attributes,
+        ),
+        ...diagnosticReportSeverity(report),
+      });
+      if (!emitted) {
+        return { sent: false, reason: "telemetry-unavailable", status: telemetryStatus() };
+      }
+      const flushed = await this.forceFlushLogs();
+      const nextStatus = telemetryStatus();
+      if (!flushed) {
+        dispatchTelemetryStatusChange(this, "diagnostic-report-failed");
+        return { sent: false, reason: "telemetry-export-failed", status: nextStatus };
+      }
+      dispatchTelemetryStatusChange(this, "diagnostic-report-sent");
+      return { sent: true, reason: "sent", status: nextStatus };
+    },
+    forceFlush() {
+      const flushables = [tracerProvider, meterProvider, loggerProvider].filter(Boolean);
+      if (!flushables.length) {
+        return Promise.resolve(false);
+      }
+      return Promise.allSettled(
+        flushables.map((provider) => Promise.resolve(provider.forceFlush?.())),
+      ).then((results) => {
+        const providersFlushed = results.every((result) => result.status === "fulfilled");
+        const logResult = logExporter?.lastExportResult?.();
+        return providersFlushed && logResult?.ok !== false;
+      });
+    },
+    forceFlushLogs() {
+      if (!loggerProvider || typeof loggerProvider.forceFlush !== "function") {
+        return Promise.resolve(false);
+      }
+      return Promise.resolve(loggerProvider.forceFlush())
+        .then(() => {
+          const logResult = logExporter?.lastExportResult?.();
+          return logResult?.ok !== false;
+        })
+        .catch(() => false);
+    },
+    status: telemetryStatus,
     responseContext(result) {
       return extractFishystuffResponseContext(result);
     },
@@ -1137,12 +1307,14 @@ function installBrowserTelemetry(config) {
       (traceRequested && !config.exporterEndpoint)
       || (metricsRequested && !config.metricsExporterEndpoint)
       || (logsRequested && !config.logsExporterEndpoint);
-    globalThis[OTEL_GLOBAL_KEY] = Object.freeze({
+    const bridge = Object.freeze({
       ...disabledBridge,
       reason: missingExporterEndpoint
         ? "missing-exporter-endpoint"
         : config.telemetryReason || "disabled",
     });
+    globalThis[OTEL_GLOBAL_KEY] = bridge;
+    dispatchTelemetryStatusChange(bridge, "initialized-disabled");
     return;
   }
 
@@ -1162,6 +1334,7 @@ function installBrowserTelemetry(config) {
 
   let tracerProvider = null;
   let loggerProvider = null;
+  let logExporter = null;
   if (traceEnabled) {
     const traceExporter = createOtlpHttpTraceExporter({
       url: config.exporterEndpoint,
@@ -1193,14 +1366,15 @@ function installBrowserTelemetry(config) {
   }
 
   if (logsEnabled) {
+    logExporter = createOtlpHttpLogExporter({
+      url: config.logsExporterEndpoint,
+      timeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
+    });
     loggerProvider = new LoggerProvider({
       resource,
       processors: [
         new BatchLogRecordProcessor(
-          createOtlpHttpLogExporter({
-            url: config.logsExporterEndpoint,
-            timeoutMillis: DEFAULT_METRIC_EXPORT_TIMEOUT_MS,
-          }),
+          logExporter,
           {
             maxQueueSize: DEFAULT_LOG_EXPORT_QUEUE_SIZE,
             maxExportBatchSize: DEFAULT_LOG_EXPORT_BATCH_SIZE,
@@ -1269,7 +1443,9 @@ function installBrowserTelemetry(config) {
     meterProvider,
     loggerProvider,
     browserMetrics,
+    logExporter,
   );
+  dispatchTelemetryStatusChange(globalThis[OTEL_GLOBAL_KEY], "initialized");
 }
 
 if (typeof document !== "undefined") {
@@ -1286,6 +1462,7 @@ export {
   createBrowserOperatorMetrics,
   createHttpError,
   createOtlpHttpLogExporter,
+  createTelemetryBridge,
   currentPageReadyDurationMs,
   extractFishystuffResponseContext,
   resolveAbsoluteUrl,

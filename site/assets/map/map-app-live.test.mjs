@@ -3,10 +3,14 @@ import assert from "node:assert/strict";
 
 const {
   createDeferredBridgeStateRefresher,
+  createBridgeInputPatchCoordinator,
+  apiFailureStatusLines,
   deferAfterAnimationFrames,
   bridgeSnapshotMatchesRestoreView,
   changedSignalPatch,
+  runtimeStatusLines,
   restoreViewPatchFromSignalPatch,
+  renderRuntimeStatusSurface,
   resolveBridgeSnapshot,
   startWhenDomReady,
   start,
@@ -141,6 +145,87 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
     viewMode: "3d",
     camera: { distance: 900000 },
   });
+});
+
+test("runtimeStatusLines returns stable labels for bridge statuses", () => {
+  assert.deepEqual(runtimeStatusLines({
+    metaStatus: "meta: loaded",
+    zonesStatus: "zones: 287",
+    fishStatus: "",
+  }), [
+    { key: "metaStatus", label: "Meta", status: "meta: loaded" },
+    { key: "zonesStatus", label: "Zones", status: "zones: 287" },
+  ]);
+});
+
+test("apiFailureStatusLines selects retrying API statuses", () => {
+  assert.deepEqual(apiFailureStatusLines({
+    metaStatus: "meta: request failed; retrying in 2s (Failed to fetch)",
+    layersStatus: "layers: waiting for API",
+    zonesStatus: "zones: 287",
+    pointsStatus: "points: mode=grid_aggregate rev=events-1 snapshot=network-initial api=\"request failed; retrying in 4s (Failed to fetch)\"",
+    fishStatus: "fish: request closed",
+  }), [
+    {
+      key: "metaStatus",
+      label: "Meta",
+      status: "request failed; retrying in 2s (Failed to fetch)",
+    },
+    {
+      key: "pointsStatus",
+      label: "Points",
+      status: "request failed; retrying in 4s (Failed to fetch)",
+    },
+    { key: "fishStatus", label: "Fish", status: "request closed" },
+  ]);
+});
+
+test("apiFailureStatusLines ignores normal network snapshot diagnostics", () => {
+  assert.deepEqual(apiFailureStatusLines({
+    metaStatus: "meta: loaded",
+    pointsStatus: "points: mode=grid_aggregate rev=events-69c20788fafa75e8 snapshot_events=47549 idx_bucket=128 cluster_bucket=256 candidates=47549 represented=47549 rendered_points=0 rendered_clusters=613 snapshot=network-initial",
+  }), []);
+});
+
+test("renderRuntimeStatusSurface syncs map API failures to page health", () => {
+  const calls = [];
+  const previousHealth = globalThis.__fishystuffPageHealth;
+  globalThis.__fishystuffPageHealth = {
+    syncSourceIssues(source, issues) {
+      calls.push({ source, issues });
+    },
+  };
+  try {
+    renderRuntimeStatusSurface({
+      querySelector() {
+        return null;
+      },
+    }, {
+      pointsStatus: "points: mode=grid_aggregate rev=events-1 snapshot=network-initial api=\"request failed; retrying in 4s (Failed to fetch)\"",
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].source, "map-api");
+    assert.equal(calls[0].issues.length, 1);
+    assert.equal(calls[0].issues[0].id, "map-api:pointsStatus");
+    assert.equal(calls[0].issues[0].detail, "request failed; retrying in 4s (Failed to fetch)");
+
+    renderRuntimeStatusSurface({
+      querySelector() {
+        return null;
+      },
+    }, {
+      pointsStatus: "points: mode=grid_aggregate snapshot=network-initial",
+    });
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[1], { source: "map-api", issues: [] });
+  } finally {
+    if (previousHealth === undefined) {
+      delete globalThis.__fishystuffPageHealth;
+    } else {
+      globalThis.__fishystuffPageHealth = previousHealth;
+    }
+  }
 });
 
 test("resolveBridgeSnapshot falls back to the current full snapshot when event state is missing", () => {
@@ -280,6 +365,28 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
       },
     },
   });
+});
+
+test("createBridgeInputPatchCoordinator defers signal-derived bridge patches until bridge sync completes", () => {
+  const calls = [];
+  const coordinator = createBridgeInputPatchCoordinator({
+    patchBridgeFromSignals() {
+      calls.push("patch");
+    },
+  });
+
+  assert.equal(coordinator.requestBridgePatch(), true);
+  assert.deepEqual(calls, ["patch"]);
+
+  coordinator.runBridgeSync(() => {
+    assert.equal(coordinator.isSyncingFromBridge(), true);
+    assert.equal(coordinator.requestBridgePatch(), false);
+    assert.equal(coordinator.requestBridgePatch(), false);
+    assert.deepEqual(calls, ["patch"]);
+  });
+
+  assert.equal(coordinator.isSyncingFromBridge(), false);
+  assert.deepEqual(calls, ["patch", "patch"]);
 });
 
 test("createDeferredBridgeStateRefresher refreshes once on the next frame", () => {

@@ -102,6 +102,39 @@ function patchTouchesLiveBridgeInputs(patch) {
   );
 }
 
+export function createBridgeInputPatchCoordinator({ patchBridgeFromSignals = () => {} } = {}) {
+  let syncingFromBridge = false;
+  let pendingBridgePatchAfterSync = false;
+
+  function requestBridgePatch() {
+    if (syncingFromBridge) {
+      pendingBridgePatchAfterSync = true;
+      return false;
+    }
+    patchBridgeFromSignals();
+    return true;
+  }
+
+  function runBridgeSync(callback) {
+    syncingFromBridge = true;
+    try {
+      return callback();
+    } finally {
+      syncingFromBridge = false;
+      if (pendingBridgePatchAfterSync) {
+        pendingBridgePatchAfterSync = false;
+        patchBridgeFromSignals();
+      }
+    }
+  }
+
+  return Object.freeze({
+    isSyncingFromBridge: () => syncingFromBridge,
+    requestBridgePatch,
+    runBridgeSync,
+  });
+}
+
 function sharedUserPresets() {
   return globalThis.window?.__fishystuffUserPresets ?? globalThis.__fishystuffUserPresets ?? null;
 }
@@ -118,6 +151,104 @@ function buildResetUiPatch() {
 
 function stableJson(value) {
   return JSON.stringify(value ?? null);
+}
+
+const RUNTIME_STATUS_FIELDS = Object.freeze([
+  ["metaStatus", "Meta"],
+  ["layersStatus", "Layers"],
+  ["zonesStatus", "Zones"],
+  ["pointsStatus", "Points"],
+  ["fishStatus", "Fish"],
+  ["zoneStatsStatus", "Zone stats"],
+]);
+
+const API_STATUS_FIELDS = Object.freeze(["metaStatus", "zonesStatus", "pointsStatus", "fishStatus"]);
+const API_FAILURE_STATUS_PATTERN =
+  /\b(?:request failed|retrying|request closed|failed to fetch|connection refused|http\s+[45]\d{2})\b/i;
+const API_STATUS_DETAIL_PATTERN = /\bapi="([^"]*)"/i;
+
+function trimStatus(value) {
+  return String(value ?? "").trim();
+}
+
+export function runtimeStatusLines(statuses) {
+  if (!isPlainObject(statuses)) {
+    return [];
+  }
+  return RUNTIME_STATUS_FIELDS.flatMap(([key, label]) => {
+    const status = trimStatus(statuses[key]);
+    return status ? [{ key, label, status }] : [];
+  });
+}
+
+export function apiFailureStatusLines(statuses) {
+  if (!isPlainObject(statuses)) {
+    return [];
+  }
+  return runtimeStatusLines(statuses).flatMap((line) => {
+    if (!API_STATUS_FIELDS.includes(line.key)) {
+      return [];
+    }
+    const attrMatch = line.status.match(API_STATUS_DETAIL_PATTERN);
+    const rawStatus = trimStatus(attrMatch ? attrMatch[1] : line.status);
+    const status = rawStatus.replace(/^[a-z][a-z0-9 _-]*:\s*/i, "");
+    if (!API_FAILURE_STATUS_PATTERN.test(status)) {
+      return [];
+    }
+    return [{ ...line, status }];
+  });
+}
+
+function syncApiHealthIssues(apiFailures) {
+  const health = globalThis.window?.__fishystuffPageHealth ?? globalThis.__fishystuffPageHealth;
+  if (!health || typeof health.syncSourceIssues !== "function") {
+    return;
+  }
+  health.syncSourceIssues("map-api", apiFailures.map((line) => ({
+    id: `map-api:${line.key}`,
+    severity: "warning",
+    source: "map-api",
+    category: "api",
+    title: `${line.label} API request failed`,
+    detail: line.status,
+    context: {
+      statusKey: line.key,
+      status: line.status,
+    },
+  })));
+}
+
+export function renderRuntimeStatusSurface(root, statuses) {
+  if (!root || typeof root.querySelector !== "function") {
+    return;
+  }
+
+  const statusLines = runtimeStatusLines(statuses);
+  const statusLinesElement = root.querySelector("#fishymap-status-lines");
+  if (statusLinesElement) {
+    const ownerDocument = root.ownerDocument || document;
+    statusLinesElement.replaceChildren(
+      ...statusLines.map((line) => {
+        const row = ownerDocument.createElement("div");
+        row.className = "flex min-w-0 items-start gap-2";
+
+        const label = ownerDocument.createElement("span");
+        label.className = "shrink-0 font-semibold text-base-content/55";
+        label.textContent = `${line.label}:`;
+        row.appendChild(label);
+
+        const status = ownerDocument.createElement("span");
+        status.className = "min-w-0 break-words";
+        status.textContent = line.status;
+        row.appendChild(status);
+
+        return row;
+      }),
+    );
+  }
+
+  const apiFailures = apiFailureStatusLines(statuses);
+  syncApiHealthIssues(apiFailures);
 }
 
 export function changedSignalPatch(projectedPatch, currentSignals) {
@@ -315,7 +446,6 @@ export async function start() {
     return Date.now();
   };
   const runtimeStartedAtMs = nowMs();
-  let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;
   let mounted = false;
   let lastBridgePatchJson = "";
@@ -350,8 +480,12 @@ export async function start() {
     }
   }
 
+  const bridgeInputPatchCoordinator = createBridgeInputPatchCoordinator({
+    patchBridgeFromSignals,
+  });
+
   function patchBridgeFromSignals() {
-    if (!mounted || syncingFromBridge) {
+    if (!mounted || bridgeInputPatchCoordinator.isSyncingFromBridge()) {
       return;
     }
     const patch = app.nextBridgePatch(signals());
@@ -379,8 +513,7 @@ export async function start() {
   }
 
   function patchSignalsFromBridge(snapshot) {
-    syncingFromBridge = true;
-    try {
+    bridgeInputPatchCoordinator.runBridgeSync(() => {
       const currentSignals = signals();
       const sessionPatch = pendingBridgeRestoreView
         ? (
@@ -397,9 +530,7 @@ export async function start() {
       if (changedPatch) {
         dispatchSignalPatch(changedPatch);
       }
-    } finally {
-      syncingFromBridge = false;
-    }
+    });
   }
 
   function restoreBridgeViewFromSignalPatch(patch) {
@@ -467,6 +598,7 @@ export async function start() {
     if (event?.type === "fishymap:ready" || snapshot?.ready === true) {
       recordRuntimeReady();
     }
+    renderRuntimeStatusSurface(shell, snapshot?.statuses);
   }
 
   shell.addEventListener("fishymap:ready", handleBridgeStateEvent);
@@ -482,7 +614,9 @@ export async function start() {
     if (applyingInternalSignalPatch) {
       return;
     }
-    const restoredBridgeView = syncingFromBridge ? false : restoreBridgeViewFromSignalPatch(patch);
+    const restoredBridgeView = bridgeInputPatchCoordinator.isSyncingFromBridge()
+      ? false
+      : restoreBridgeViewFromSignalPatch(patch);
     const touchesLiveBridgeInputs = patchTouchesLiveBridgeInputs(patch);
     if (!restoredBridgeView && !touchesLiveBridgeInputs) {
       return;
@@ -500,9 +634,12 @@ export async function start() {
     }
 
     if (touchesLiveBridgeInputs) {
-      patchBridgeFromSignals();
+      bridgeInputPatchCoordinator.requestBridgePatch();
     }
-    if (!syncingFromBridge && patch?._map_bookmarks?.entries != null) {
+    if (
+      !bridgeInputPatchCoordinator.isSyncingFromBridge() &&
+      patch?._map_bookmarks?.entries != null
+    ) {
       scheduleBookmarkDetailsRefresh();
     }
   });
@@ -553,6 +690,10 @@ export async function start() {
   actionState = app.consumeSignals(signals());
   lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());
+  renderRuntimeStatusSurface(
+    shell,
+    currentBridgeState()?.statuses || signals()?._map_runtime?.statuses,
+  );
   if (currentBridgeState()?.ready === true) {
     recordRuntimeReady();
   }

@@ -8,6 +8,7 @@ const THEME_EVENT = "fishystuff:themechange";
 const THEME_PROBE_ID = "fishystuff-theme-probe";
 const DEFAULT_PATCH_DEBOUNCE_MS = 48;
 const DEFAULT_BOOTSTRAP_SYNC_MS = 96;
+const RETRYING_BOOTSTRAP_SYNC_MS = 1000;
 const MIN_BOOTSTRAP_SYNC_PASSES = 4;
 const MAX_BOOTSTRAP_SYNC_PASSES = 120;
 
@@ -2692,6 +2693,13 @@ function fishCatalogPending(state) {
     .toLowerCase() === "fish: pending";
 }
 
+export function bootstrapApiRetrying(state) {
+  const statuses = state?.statuses || {};
+  return ["metaStatus", "zonesStatus", "pointsStatus", "fishStatus"].some((key) =>
+    /\b(?:request failed|retrying|request closed)\b/i.test(String(statuses[key] || "")),
+  );
+}
+
 function shouldRefreshStateOnRead(state) {
   if (!isPlainObject(state)) {
     return true;
@@ -3238,14 +3246,14 @@ class FishyMapBridgeImpl {
     });
   }
 
-  scheduleBootstrapStateSync() {
+  scheduleBootstrapStateSync(delayMs = DEFAULT_BOOTSTRAP_SYNC_MS) {
     if (!this.wasmReady || this.bootstrapSyncTimer) {
       return;
     }
     this.bootstrapSyncTimer = globalThis.setTimeout(() => {
       this.bootstrapSyncTimer = 0;
       this.runBootstrapStateSync();
-    }, DEFAULT_BOOTSTRAP_SYNC_MS);
+    }, delayMs);
   }
 
   runBootstrapStateSync() {
@@ -3266,6 +3274,7 @@ class FishyMapBridgeImpl {
       const becameReady = !wasReady && this.currentState.ready;
       const fishFinishedLoading =
         this.currentState.ready && fishWasPending && !fishCatalogPending(this.currentState);
+      const apiRetrying = bootstrapApiRetrying(this.currentState);
 
       if (becameReady || fishFinishedLoading) {
         this.refreshCurrentStateFromWasm();
@@ -3280,11 +3289,14 @@ class FishyMapBridgeImpl {
             state: this.getCurrentState(),
             inputState: this.getCurrentInputState(),
           });
-        } else if (wasReady && this.currentState.ready) {
+        } else {
+          const eventState = this.currentState.ready
+            ? this.getCurrentState()
+            : cloneJson(this.currentState);
           this.emit(FISHYMAP_EVENTS.stateChanged, {
             type: "state-changed",
             version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
-            state: this.getCurrentState(),
+            state: eventState,
             inputState: this.getCurrentInputState(),
           });
         }
@@ -3293,9 +3305,14 @@ class FishyMapBridgeImpl {
       const shouldContinue =
         this.bootstrapSyncPasses < MIN_BOOTSTRAP_SYNC_PASSES ||
         ((!this.currentState.ready || fishCatalogPending(this.currentState)) &&
-          this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES);
+          this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES) ||
+        apiRetrying;
       if (shouldContinue) {
-        this.scheduleBootstrapStateSync();
+        this.scheduleBootstrapStateSync(
+          apiRetrying && this.bootstrapSyncPasses >= MAX_BOOTSTRAP_SYNC_PASSES
+            ? RETRYING_BOOTSTRAP_SYNC_MS
+            : DEFAULT_BOOTSTRAP_SYNC_MS,
+        );
         return;
       }
       this.bootstrapSyncPasses = 0;

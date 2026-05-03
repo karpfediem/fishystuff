@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   FISHYMAP_EVENTS,
   applyStatePatch,
+  bootstrapApiRetrying,
   buildInitialRestorePatch,
   createFishyMapBridge,
   createSessionSnapshotFromState,
@@ -36,6 +37,20 @@ class MemoryStorage {
     this.map.delete(key);
   }
 }
+
+test("bootstrapApiRetrying detects retryable API bootstrap statuses", () => {
+  assert.equal(bootstrapApiRetrying({
+    statuses: {
+      pointsStatus: "points: request failed; retrying in 2s (Failed to fetch)",
+    },
+  }), true);
+  assert.equal(bootstrapApiRetrying({
+    statuses: {
+      zonesStatus: "zones: 287",
+      fishStatus: "fish: 10",
+    },
+  }), false);
+});
 
 class FakeElement extends EventTarget {
   constructor() {
@@ -1774,6 +1789,66 @@ test("bootstrap sync uses lightweight polling until the map becomes ready", asyn
     assert.equal(detail.state.ready, true);
     assert.deepEqual(detail.state.filters.layerIdsVisible, ["zones"]);
     assert.equal(wasm.calls.stateReads, initialStateReads + 1);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
+test("bootstrap sync emits retrying API status before the map is ready", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: false,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: { metaStatus: "meta: pending" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    const initialStateReads = wasm.calls.stateReads;
+    const stateChangedEvent = new Promise((resolve) => {
+      container.addEventListener(FISHYMAP_EVENTS.stateChanged, (event) => resolve(event.detail), {
+        once: true,
+      });
+    });
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      statuses: {
+        metaStatus: "meta: request failed; retrying in 1s (Failed to fetch)",
+      },
+    };
+
+    const detail = await stateChangedEvent;
+
+    assert.equal(detail.state.ready, false);
+    assert.equal(
+      detail.state.statuses.metaStatus,
+      "meta: request failed; retrying in 1s (Failed to fetch)",
+    );
+    assert.equal(
+      wasm.calls.stateReads,
+      initialStateReads,
+      "pre-ready retry status events should use the lightweight bootstrap snapshot",
+    );
   } finally {
     bridge?.destroy();
     env.restore();
