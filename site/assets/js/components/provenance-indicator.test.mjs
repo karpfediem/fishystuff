@@ -131,6 +131,19 @@ test("buildProvenanceSegments recognizes database and derived rate provenance la
     assert.equal(derivedRateSegment.color, ACTIVE_GREY_COLOR);
 });
 
+test("buildProvenanceSegments can label metric provenance separately from rates", () => {
+    const [, metricSegment] = buildProvenanceSegments({
+        rateLabel: "Totem EXP",
+        rateSourceKind: "derived",
+        rateDetail: "Missing source row; imputed from grade rule.",
+        rateValueText: "1,875",
+    });
+
+    assert.equal(metricSegment.label, "Totem EXP");
+    assert.equal(metricSegment.sourceLabel, "Derived");
+    assert.match(provenanceAriaLabel(metricSegment), /Totem EXP: Derived/);
+});
+
 test("buildProvenanceSegments recognizes personal overlay provenance", () => {
     const [, overlayRateSegment] = buildProvenanceSegments({
         rateSourceKind: "overlay",

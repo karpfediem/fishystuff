@@ -63,6 +63,10 @@ calculator.breakdown.title.loot_total_catches = Expected Catches ({$timespan})
 calculator.breakdown.title.loot_fish_per_hour = Catches / Hour
 calculator.breakdown.title.loot_total_profit = Expected Profit ({$timespan})
 calculator.breakdown.title.loot_profit_per_hour = Profit / Hour
+calculator.breakdown.title.loot_total_exp = Expected EXP ({$timespan})
+calculator.breakdown.title.loot_exp_per_hour = EXP / Hour
+calculator.breakdown.title.loot_total_totem_exp = Expected Totem EXP ({$timespan})
+calculator.breakdown.title.loot_totem_exp_per_hour = Totem EXP / Hour
 calculator.breakdown.title.trade_distance_bonus = Distance Bonus
 calculator.breakdown.title.trade_bargain_bonus = Bargain Bonus
 calculator.breakdown.title.trade_sale_multiplier = Final Sale Multiplier
@@ -109,9 +113,17 @@ calculator.breakdown.label.catches_per_hour = Catches / hour
 calculator.breakdown.label.expected_profit = Expected profit
 calculator.breakdown.label.expected_profit_for_timespan = Expected profit ({$timespan})
 calculator.breakdown.label.group_expected_silver = Group expected silver
+calculator.breakdown.label.expected_exp = Expected EXP
+calculator.breakdown.label.expected_exp_for_timespan = Expected EXP ({$timespan})
+calculator.breakdown.label.group_expected_exp = Group expected EXP
+calculator.breakdown.label.expected_totem_exp = Expected Totem EXP
+calculator.breakdown.label.expected_totem_exp_for_timespan = Expected Totem EXP ({$timespan})
+calculator.breakdown.label.group_expected_totem_exp = Group expected Totem EXP
 calculator.breakdown.label.trade_sale_multiplier = Trade sale multiplier
 calculator.breakdown.label.distance_bonus_used = Distance bonus used
 calculator.breakdown.label.profit_per_hour = Profit / hour
+calculator.breakdown.label.exp_per_hour = EXP / hour
+calculator.breakdown.label.totem_exp_per_hour = Totem EXP / hour
 calculator.breakdown.label.session_hours = Session hours
 calculator.breakdown.label.selected_zone_minimum_bite_time_entry = selected zone minimum bite-time entry
 calculator.breakdown.label.selected_zone_maximum_bite_time_entry = selected zone maximum bite-time entry
@@ -133,6 +145,9 @@ calculator.breakdown.label.chance = Chance
 calculator.breakdown.label.timing_cap = Timing cap
 calculator.breakdown.label.zone_average = Zone average
 calculator.breakdown.label.group_silver = Group silver
+calculator.breakdown.label.group_exp = Group EXP
+calculator.breakdown.label.group_totem_exp = Group Totem EXP
+calculator.breakdown.label.fishing_exp_multiplier = Fishing EXP multiplier
 calculator.breakdown.label.target_rows = Target rows
 calculator.breakdown.label.expected_count = Expected count
 calculator.breakdown.label.group_share = Group share
@@ -145,6 +160,7 @@ calculator.breakdown.label.probability = Probability
 calculator.breakdown.label.target_amount_minus_one = Target amount - 1
 calculator.breakdown.label.unassigned = Unassigned
 calculator.breakdown.label.pet_slot = Pet {$slot}
+calculator.breakdown.label.totem_exp_share = Totem EXP share
 
 calculator.breakdown.summary.total_time.active = Active mode uses bite time plus active catch time.
 calculator.breakdown.summary.total_time.afk = AFK mode uses bite time, passive auto-fishing time, and AFK catch time.
@@ -170,6 +186,10 @@ calculator.breakdown.summary.loot_total_catches = Expected catches over the curr
 calculator.breakdown.summary.loot_fish_per_hour = Hourly catch throughput after the active fish-per-cast multiplier is applied.
 calculator.breakdown.summary.loot_total_profit = Expected silver over the current session duration after prices and trade modifiers are applied.
 calculator.breakdown.summary.loot_profit_per_hour = Hourly silver throughput after prices and trade modifiers are applied.
+calculator.breakdown.summary.loot_total_exp = Expected EXP over the current session duration from source-backed fish EXP values and active EXP modifiers.
+calculator.breakdown.summary.loot_exp_per_hour = Hourly EXP throughput from source-backed fish EXP values and active EXP modifiers.
+calculator.breakdown.summary.loot_total_totem_exp = Expected Totem EXP over the current session duration from retained source-backed or grade-rule-imputed fish catches.
+calculator.breakdown.summary.loot_totem_exp_per_hour = Hourly Totem EXP throughput from retained source-backed or grade-rule-imputed fish catches.
 calculator.breakdown.summary.trade_distance_bonus = Distance bonus selected from the destination trader or custom distance entry.
 calculator.breakdown.summary.trade_bargain_bonus = Bargain bonus from the selected trade level.
 calculator.breakdown.summary.trade_sale_multiplier = Final fish sale multiplier after distance, bargain, and price curve settings.
@@ -201,6 +221,10 @@ calculator.breakdown.formula.loot_total_catches = Expected catches = Average cas
 calculator.breakdown.formula.loot_fish_per_hour = Catches / hour = (3600 / Average total fishing time) × Applied fish multiplier.
 calculator.breakdown.formula.loot_total_profit = Expected profit = Σ(Group expected silver).
 calculator.breakdown.formula.loot_profit_per_hour = Profit / hour = Expected profit / Session hours.
+calculator.breakdown.formula.loot_total_exp = Expected EXP = Σ(Group expected EXP).
+calculator.breakdown.formula.loot_exp_per_hour = EXP / hour = Expected EXP / Session hours.
+calculator.breakdown.formula.loot_total_totem_exp = Expected Totem EXP = Σ(Group expected Totem EXP).
+calculator.breakdown.formula.loot_totem_exp_per_hour = Totem EXP / hour = Expected Totem EXP / Session hours.
 calculator.breakdown.formula.trade_distance_bonus = Distance bonus used = min(selected distance bonus, 150%).
 calculator.breakdown.formula.trade_bargain_bonus = Bargain bonus = 5% + 0.5% × trade level index.
 calculator.breakdown.formula.trade_sale_multiplier = Final sale multiplier = (1 + min(distance bonus, 150%)) × trade price curve × (1 + bargain bonus).
@@ -256,6 +280,12 @@ calculator.breakdown.detail.expected_hourly_catch_throughput = Expected hourly c
 calculator.breakdown.detail.expected_silver_selected_session = Expected silver across the selected session duration.
 calculator.breakdown.detail.expected_silver_current_session = Expected silver over the current session duration.
 calculator.breakdown.detail.expected_hourly_silver_throughput = Expected hourly silver throughput.
+calculator.breakdown.detail.expected_exp_selected_session = Expected EXP across the selected session duration.
+calculator.breakdown.detail.expected_exp_current_session = Expected EXP over the current session duration.
+calculator.breakdown.detail.expected_hourly_exp_throughput = Expected hourly EXP throughput.
+calculator.breakdown.detail.expected_totem_exp_selected_session = Expected Totem EXP across the selected session duration.
+calculator.breakdown.detail.expected_totem_exp_current_session = Expected Totem EXP over the current session duration.
+calculator.breakdown.detail.expected_hourly_totem_exp_throughput = Expected hourly Totem EXP throughput.
 calculator.breakdown.detail.current_mastery_input_for_prize_curve_lookup = Current mastery input used for the prize curve lookup.
 calculator.breakdown.detail.prize_rate_from_current_mastery_bracket = Prize rate from the current mastery bracket.
 calculator.breakdown.detail.shown_before_zone_group_normalization = Shown before zone-group normalization.
@@ -274,6 +304,9 @@ calculator.breakdown.detail.applied_highest_fish_multiplier = Applied highest fi
 calculator.breakdown.detail.lower_source_highest_multiplier_applies = Lower source; the highest selected fish multiplier applies.
 calculator.breakdown.detail.no_selected_item_raises_fish_multiplier = No selected item currently raises fish per cast above the base multiplier.
 calculator.breakdown.detail.no_source_backed_loot_rows_contributing_expected_silver = No source-backed loot rows are currently contributing expected silver.
+calculator.breakdown.detail.no_source_backed_loot_rows_contributing_expected_exp = No source-backed fish EXP rows are currently contributing expected EXP.
+calculator.breakdown.detail.no_source_backed_loot_rows_contributing_expected_totem_exp = No retained fish rows with source-backed or grade-rule-imputed Totem EXP are currently contributing.
+calculator.breakdown.detail.fishing_exp_multiplier = Fishing EXP plus general Life EXP modifiers currently applied to source-backed fish EXP values.
 calculator.breakdown.detail.no_matching_source_backed_target_rows = No matching source-backed loot rows are currently contributing to this target.
 calculator.breakdown.detail.session_catch_volume_used_target_calc = Session catch volume used for the target calculation.
 calculator.breakdown.detail.combined_expected_count_matching_target_rows = Combined expected count across all matching loot rows.
@@ -494,6 +527,10 @@ calculator.server.stat.expected_catches = Expected Catches
 calculator.server.stat.expected_catches_per_hour = Expected Catches / Hour
 calculator.server.stat.expected_profit = Expected Profit
 calculator.server.stat.profit_per_hour = Profit / Hour
+calculator.server.stat.expected_exp = Expected EXP
+calculator.server.stat.exp_per_hour = EXP / Hour
+calculator.server.stat.expected_totem_exp = Expected Totem EXP
+calculator.server.stat.totem_exp_per_hour = Totem EXP / Hour
 calculator.server.stat.bargain_bonus = Bargain Bonus
 calculator.server.stat.sale_multiplier = Final Sale Multiplier
 
@@ -530,7 +567,11 @@ calculator.server.helper.pet_skills.many = Choose 1 to {$count} skills.
 
 calculator.server.tab.groups = Groups
 calculator.server.tab.silver = Silver
+calculator.server.tab.exp = EXP
+calculator.server.tab.totem_exp = Totem EXP
 calculator.server.tab.loot_flow = Loot Flow
+calculator.server.tab.exp_flow = EXP Flow
+calculator.server.tab.totem_exp_flow = Totem EXP Flow
 calculator.server.tab.target_fish = Target Fish
 calculator.server.tab.overview = Overview
 calculator.server.tab.inputs = Inputs
@@ -542,6 +583,11 @@ calculator.server.discard.white = White
 calculator.server.discard.green = Green
 calculator.server.discard.blue = Blue
 calculator.server.discard.yellow = Yellow
+calculator.server.grade.prize = Prize
+calculator.server.grade.rare = Yellow
+calculator.server.grade.high_quality = Blue
+calculator.server.grade.general = Green
+calculator.server.grade.trash = White
 
 calculator.server.target.expected = Expected ({$timespan})
 calculator.server.target.time_to_target = Time to Target
@@ -552,16 +598,30 @@ calculator.server.target.session_distribution_description = Discrete session out
 calculator.server.target.count_bucket_probability = count bucket probability
 
 calculator.server.chart.no_loot_rows = No source-backed loot rows are available for this zone yet.
+calculator.server.chart.no_exp_rows = No source-backed fish EXP rows are available for this zone yet.
+calculator.server.chart.no_totem_exp_rows = No retained fish rows with source-backed or grade-rule-imputed Totem EXP are contributing for this zone yet.
 calculator.server.chart.loot_flow_title = Loot Flow
 calculator.server.chart.loot_flow_description = Each flow starts at a fish group, passes through source-backed species rows, then recombines into silver-weighted group totals. Left-side metrics show droprate composition; right-side metrics show silver contribution.
+calculator.server.chart.exp_flow_title = EXP Flow
+calculator.server.chart.exp_flow_description = Each flow starts at a fish group, passes through source-backed species rows, then recombines into EXP-weighted group totals. Left-side metrics show droprate composition; right-side metrics show EXP contribution.
+calculator.server.chart.totem_exp_flow_title = Totem EXP Flow
+calculator.server.chart.totem_exp_flow_description = Each flow starts at a fish group, passes through retained fish rows, then recombines into Totem EXP-weighted group totals; the provenance rail marks source-backed and grade-rule-imputed values.
 calculator.server.chart.group_distribution_title = Group Droprate Distribution
 calculator.server.chart.group_distribution_description.normalized = Current fish-group share after prize, rare, and high-quality weighting.
 calculator.server.chart.group_distribution_description.raw = Raw fish-group rates after prize, rare, and high-quality weighting. These rates can total above or below 100%.
 calculator.server.chart.group_silver_distribution_title = Group Silver Distribution
 calculator.server.chart.group_silver_distribution_description = Expected silver share by fish group after trade and pricing settings.
+calculator.server.chart.group_exp_distribution_title = Group EXP Distribution
+calculator.server.chart.group_exp_distribution_description = Expected EXP share by fish group after source-backed fish EXP values and active EXP modifiers.
+calculator.server.chart.group_totem_exp_distribution_title = Group Totem EXP Distribution
+calculator.server.chart.group_totem_exp_distribution_description = Expected Totem EXP share by fish group from retained source-backed or grade-rule-imputed fish catches.
 calculator.server.chart.aria.group_distribution = Group Droprate Distribution
 calculator.server.chart.aria.group_silver_distribution = Group Silver Distribution
+calculator.server.chart.aria.group_exp_distribution = Group EXP Distribution
+calculator.server.chart.aria.group_totem_exp_distribution = Group Totem EXP Distribution
 calculator.server.chart.aria.loot_flow = Expected loot flow from groups to loot rows
+calculator.server.chart.aria.exp_flow = Expected EXP flow from groups to loot rows
+calculator.server.chart.aria.totem_exp_flow = Expected Totem EXP flow from groups to loot rows
 calculator.server.chart.aria.target_distribution = Target Fish Session Distribution
 calculator.server.chart.aria.timeline = Fishing cycle timeline
 calculator.server.chart.aria.distribution_tabs = Distribution tabs
@@ -580,8 +640,11 @@ calculator.server.badge.zone_origin = Zone origin
 
 calculator.breakdown.kind.computed_stat = Computed stat
 calculator.breakdown.label.silver_share = Silver share
+calculator.breakdown.label.exp_share = EXP share
 calculator.breakdown.detail.no_direct_inputs = No direct inputs were recorded for this value.
 calculator.breakdown.detail.group_expected_silver_share = {$share} of expected silver
+calculator.breakdown.detail.group_expected_exp_share = {$share} of expected EXP
+calculator.breakdown.detail.group_expected_totem_exp_share = {$share} of expected Totem EXP
 
 calculator.overlay.breakdown.title.accrued_bonus = {$group} accrued bonus
 calculator.overlay.breakdown.title.normalized_share = {$group} normalized share
@@ -661,42 +724,95 @@ calculator.server.group.breakdown.detail.expected_catches.session_size = Based o
 calculator.server.loot.breakdown.title.species_expected_catches = {$species} expected catches
 calculator.server.loot.breakdown.title.species_silver_share = {$species} silver share
 calculator.server.loot.breakdown.title.group_silver_share = {$group} silver share
+calculator.server.loot.breakdown.title.species_exp_share = {$species} EXP share
+calculator.server.loot.breakdown.title.group_exp_share = {$group} EXP share
+calculator.server.loot.breakdown.title.species_totem_exp_share = {$species} Totem EXP share
+calculator.server.loot.breakdown.title.group_totem_exp_share = {$group} Totem EXP share
 calculator.server.loot.breakdown.formula.species_expected_catches = Expected catches = Group share × In-group rate × Session catches.
 calculator.server.loot.breakdown.formula.species_silver_share = Item expected silver = Expected catches × Base price × Trade sale multiplier.; Silver share = Item expected silver / All-item expected silver total.
 calculator.server.loot.breakdown.formula.group_silver_share = Silver share = Group expected silver / All-group expected silver total.
+calculator.server.loot.breakdown.formula.species_exp_share = Item expected EXP = Expected catches × Base EXP × Fishing EXP multiplier.; EXP share = Item expected EXP / All-item expected EXP total.
+calculator.server.loot.breakdown.formula.group_exp_share = EXP share = Group expected EXP / All-group expected EXP total.
+calculator.server.loot.breakdown.formula.species_totem_exp_share = Item expected Totem EXP = Expected catches × Base Totem EXP for retained fish.; Totem EXP share = Item expected Totem EXP / All-item expected Totem EXP total.
+calculator.server.loot.breakdown.formula.group_totem_exp_share = Totem EXP share = Group expected Totem EXP / All-group expected Totem EXP total.
 calculator.server.loot.breakdown.label.group_share_for_group = {$group} share
 calculator.server.loot.breakdown.label.session_catches = Session catches
 calculator.server.loot.breakdown.label.base_price = Base price
+calculator.server.loot.breakdown.label.base_exp = Base EXP
+calculator.server.loot.breakdown.label.base_totem_exp = Base Totem EXP
 calculator.server.loot.breakdown.label.item_expected_silver = Item expected silver
 calculator.server.loot.breakdown.label.all_item_expected_silver_total = All-item expected silver total
+calculator.server.loot.breakdown.label.item_expected_exp = Item expected EXP
+calculator.server.loot.breakdown.label.all_item_expected_exp_total = All-item expected EXP total
+calculator.server.loot.breakdown.label.item_expected_totem_exp = Item expected Totem EXP
+calculator.server.loot.breakdown.label.all_item_expected_totem_exp_total = All-item expected Totem EXP total
 calculator.server.loot.breakdown.label.contributing_loot = Contributing loot
 calculator.server.loot.breakdown.label.normalized_group_share = Normalized group share
 calculator.server.loot.breakdown.label.all_group_expected_silver_total = All-group expected silver total
+calculator.server.loot.breakdown.label.all_group_expected_exp_total = All-group expected EXP total
+calculator.server.loot.breakdown.label.all_group_expected_totem_exp_total = All-group expected Totem EXP total
 calculator.server.loot.breakdown.summary.species_expected_catches.active = Expected catches for this loot row from the active session size, normalized group share, and in-group rate.
 calculator.server.loot.breakdown.summary.species_expected_catches.none = This loot row currently contributes no expected catches under the active session settings.
 calculator.server.loot.breakdown.summary.species_silver_share.active = Expected silver contribution from this loot row after current pricing and trade settings.
 calculator.server.loot.breakdown.summary.species_silver_share.none = This loot row currently contributes no expected silver after the active pricing, discard, and trade settings.
 calculator.server.loot.breakdown.summary.group_silver_share.active = Expected silver share from the loot rows currently mapped to this group after prices and trade settings.
 calculator.server.loot.breakdown.summary.group_silver_share.none = This group currently contributes no expected silver after the active prices, discard choices, and trade settings.
+calculator.server.loot.breakdown.summary.species_exp_share.active = Expected EXP contribution from this loot row after source-backed fish EXP and active EXP modifiers.
+calculator.server.loot.breakdown.summary.species_exp_share.none = This loot row currently contributes no expected EXP after the active source and EXP settings.
+calculator.server.loot.breakdown.summary.group_exp_share.active = Expected EXP share from the loot rows currently mapped to this group after source-backed fish EXP and active EXP modifiers.
+calculator.server.loot.breakdown.summary.group_exp_share.none = This group currently contributes no expected EXP after the active source and EXP settings.
+calculator.server.loot.breakdown.summary.species_totem_exp_share.active = Expected Totem EXP contribution from this retained fish row.
+calculator.server.loot.breakdown.summary.species_totem_exp_share.none = This loot row currently contributes no expected Totem EXP after the active source, imputation, and discard settings.
+calculator.server.loot.breakdown.summary.group_totem_exp_share.active = Expected Totem EXP share from retained fish rows currently mapped to this group.
+calculator.server.loot.breakdown.summary.group_totem_exp_share.none = This group currently contributes no expected Totem EXP after the active source, imputation, and discard settings.
 calculator.server.loot.breakdown.detail.in_group_rate_value = {$rate} in-group rate
 calculator.server.loot.breakdown.detail.expected_catches_value = {$count} expected catches
 calculator.server.loot.breakdown.detail.zero_silver_after_pricing_or_discard = 0 silver after current pricing or discard settings
+calculator.server.loot.breakdown.detail.zero_exp_after_source = 0 EXP after current source settings
+calculator.server.loot.breakdown.detail.zero_totem_exp_after_source = 0 Totem EXP after current source and imputation settings
 calculator.server.loot.breakdown.detail.group_share_before_loot_weighting = Normalized group share for {$group} before within-group loot weighting.
 calculator.server.loot.breakdown.detail.session_catches = Average catches over the current session duration.
 calculator.server.loot.breakdown.detail.species_expected_catches = Average catches for this loot row under the current settings.
 calculator.server.loot.breakdown.detail.average_catches_this_row = Average catches for this loot row.
 calculator.server.loot.breakdown.detail.base_price = Current price source for this loot row before trade sale modifiers.
+calculator.server.loot.breakdown.detail.base_exp = Source-backed base fish EXP value for this item.
+calculator.server.loot.breakdown.detail.base_totem_exp = Base Totem EXP for a retained fish catch.
 calculator.server.loot.breakdown.detail.silver_share.discarded = Currently zeroed because this loot row is being discarded under the active filters.
 calculator.server.loot.breakdown.detail.silver_share.no_priced_output = Currently zero because no priced output is available under the active settings.
 calculator.server.loot.breakdown.detail.silver_share.expected_silver = Expected catches multiplied by base price and the current trade sale multiplier.
+calculator.server.loot.breakdown.detail.exp_share.no_source_exp = Currently zero because no source-backed fish EXP value is available for this item.
+calculator.server.loot.breakdown.detail.exp_share.expected_exp = Expected catches multiplied by base fish EXP and active EXP modifiers.
+calculator.server.loot.breakdown.detail.totem_exp_share.discarded = Discarded fish give no Totem EXP.
+calculator.server.loot.breakdown.detail.totem_exp_share.no_source_exp = Currently zero because no source-backed or grade-rule Totem EXP value is available for this item.
+calculator.server.loot.breakdown.detail.totem_exp_share.expected_exp = Expected retained catches multiplied by base Totem EXP.
 calculator.server.loot.breakdown.detail.all_item_expected_silver_total = Denominator for the Loot Flow silver-share distribution.
 calculator.server.loot.breakdown.detail.silver_share.from_total = Calculated from item expected silver divided by total expected silver.
+calculator.server.loot.breakdown.detail.all_item_expected_exp_total = Denominator for the EXP Flow item-share distribution.
+calculator.server.loot.breakdown.detail.exp_share.from_total = Calculated from item expected EXP divided by total expected EXP.
+calculator.server.loot.breakdown.detail.all_item_expected_totem_exp_total = Denominator for the Totem EXP Flow item-share distribution.
+calculator.server.loot.breakdown.detail.totem_exp_share.from_total = Calculated from item expected Totem EXP divided by total expected Totem EXP.
 calculator.server.loot.breakdown.detail.contributing_loot.unavailable = No source-backed loot rows are currently contributing silver to this group.
+calculator.server.loot.breakdown.detail.contributing_loot_exp.unavailable = No source-backed fish EXP rows are currently contributing EXP to this group.
+calculator.server.loot.breakdown.detail.contributing_loot_totem_exp.unavailable = No retained fish rows with source-backed or grade-rule-imputed Totem EXP are currently contributing Totem EXP to this group.
 calculator.server.loot.breakdown.detail.normalized_group_share = Determines how many catches land in this group before within-group loot weighting.
 calculator.server.loot.breakdown.detail.group_expected_catches = Average catches landing in this group under the current session-size assumptions.
 calculator.server.loot.breakdown.detail.group_expected_silver = Sum of the contributing loot rows after prices and trade modifiers.
 calculator.server.loot.breakdown.detail.all_group_expected_silver_total = Denominator for the silver-share distribution.
 calculator.server.loot.breakdown.detail.group_silver_share_from_total = Calculated from group expected silver divided by total expected silver.
+calculator.server.loot.breakdown.detail.group_expected_exp = Sum of the contributing fish rows after source-backed fish EXP and active EXP modifiers.
+calculator.server.loot.breakdown.detail.all_group_expected_exp_total = Denominator for the EXP-share distribution.
+calculator.server.loot.breakdown.detail.group_exp_share_from_total = Calculated from group expected EXP divided by total expected EXP.
+calculator.server.loot.breakdown.detail.group_expected_totem_exp = Sum of retained contributing fish rows after source-backed or grade-rule-imputed Totem EXP values.
+calculator.server.loot.breakdown.detail.all_group_expected_totem_exp_total = Denominator for the Totem EXP-share distribution.
+calculator.server.loot.breakdown.detail.group_totem_exp_share_from_total = Calculated from group expected Totem EXP divided by total expected Totem EXP.
+calculator.server.provenance.metric.totem_exp = Totem EXP
+calculator.server.loot.totem_exp_source.source_backed = Source-backed %FishExpRate from fish_size (flock) Encyclopedia_Table (2021).
+calculator.server.loot.totem_exp_source.imputed_grade_rule = Missing source-backed Totem EXP row; imputed from grade rule ({$grade}: {$exp} EXP). Green uses 625 as a conservative lower bound because source-backed green rows split between 625 and 1250.
+calculator.server.loot.totem_exp_source.non_fish = Totem EXP can only be gained from fish.
+calculator.server.loot.totem_exp_source.none = No source-backed or grade-rule Totem EXP value is available.
+calculator.server.loot.totem_exp_source.group_source_backed = All Totem EXP values in this group are source-backed %FishExpRate rows.
+calculator.server.loot.totem_exp_source.group_imputed = All Totem EXP values in this group are grade-rule imputations.
+calculator.server.loot.totem_exp_source.group_mixed = Totem EXP combines source-backed %FishExpRate rows and grade-rule imputations ({$sourceBacked} source-backed, {$imputed} imputed).
 
 calculator.server.presence.scope.ring_full = ring fully inside zone
 calculator.server.presence.scope.ring_partial = ring overlaps zone edge

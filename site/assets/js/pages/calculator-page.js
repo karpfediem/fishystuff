@@ -64,7 +64,16 @@
     Object.freeze([Object.freeze(["zone"]), Object.freeze(["session"])]),
     Object.freeze([Object.freeze(["bite_time"]), Object.freeze(["loot"])]),
   ]);
-  const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
+  const CALCULATOR_DISTRIBUTION_TABS = new Set([
+    "groups",
+    "silver",
+    "exp",
+    "totem_exp",
+    "loot_flow",
+    "exp_flow",
+    "totem_exp_flow",
+    "target_fish",
+  ]);
   const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
     copyUrlToken: 0,
     copyShareToken: 0,

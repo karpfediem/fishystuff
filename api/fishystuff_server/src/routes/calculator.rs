@@ -124,11 +124,19 @@ struct CalculatorDerivedSignals {
     loot_total_catches_raw: f64,
     loot_fish_per_hour_raw: f64,
     loot_profit_per_catch_raw: f64,
+    loot_total_exp_raw: f64,
+    loot_exp_per_hour_raw: f64,
+    loot_total_totem_exp_raw: f64,
+    loot_totem_exp_per_hour_raw: f64,
     loot_total_catches: String,
     loot_fish_per_hour: String,
     loot_fish_multiplier_text: String,
     loot_total_profit: String,
     loot_profit_per_hour: String,
+    loot_total_exp: String,
+    loot_exp_per_hour: String,
+    loot_total_totem_exp: String,
+    loot_totem_exp_per_hour: String,
     trade_distance_bonus_text: String,
     trade_bargain_bonus_text: String,
     trade_sale_multiplier_text: String,
@@ -136,8 +144,12 @@ struct CalculatorDerivedSignals {
     raw_prize_mastery_text: String,
     fish_group_distribution_chart: DistributionChartSignal,
     fish_group_silver_distribution_chart: DistributionChartSignal,
+    fish_group_exp_distribution_chart: DistributionChartSignal,
+    fish_group_totem_exp_distribution_chart: DistributionChartSignal,
     target_fish_pmf_chart: PmfChartSignal,
     loot_sankey_chart: LootSankeySignal,
+    exp_sankey_chart: LootSankeySignal,
+    totem_exp_sankey_chart: LootSankeySignal,
     target_fish_selected_label: String,
     target_fish_pmf_count_hint: String,
     target_fish_expected_title: String,
@@ -222,6 +234,10 @@ struct CalculatorStatBreakdownSignals {
     loot_fish_per_hour: String,
     loot_total_profit: String,
     loot_profit_per_hour: String,
+    loot_total_exp: String,
+    loot_exp_per_hour: String,
+    loot_total_totem_exp: String,
+    loot_totem_exp_per_hour: String,
     trade_distance_bonus: String,
     trade_bargain_bonus: String,
     trade_sale_multiplier: String,
@@ -335,20 +351,36 @@ struct LootChartRow {
     drop_rate_source_kind: String,
     drop_rate_tooltip: String,
     #[serde(skip_serializing_if = "String::is_empty")]
+    metric_provenance_label: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    metric_source_kind: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    metric_source_detail: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     condition_text: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     condition_tooltip: String,
     expected_count_raw: f64,
     expected_profit_raw: f64,
+    expected_exp_raw: f64,
+    expected_totem_exp_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
+    expected_exp_text: String,
+    expected_totem_exp_text: String,
     current_share_pct: f64,
     count_share_text: String,
     silver_share_text: String,
+    exp_share_text: String,
+    totem_exp_share_text: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     count_breakdown: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     silver_breakdown: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    exp_breakdown: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    totem_exp_breakdown: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -364,6 +396,16 @@ struct LootChart {
     profit_per_hour_raw: f64,
     profit_per_hour_text: String,
     profit_per_catch_raw: f64,
+    total_exp_raw: f64,
+    total_exp_text: String,
+    exp_per_hour_raw: f64,
+    exp_per_hour_text: String,
+    exp_per_catch_raw: f64,
+    total_totem_exp_raw: f64,
+    total_totem_exp_text: String,
+    totem_exp_per_hour_raw: f64,
+    totem_exp_per_hour_text: String,
+    totem_exp_per_catch_raw: f64,
     rows: Vec<LootChartRow>,
     species_rows: Vec<LootSpeciesRow>,
 }
@@ -382,9 +424,15 @@ struct LootSpeciesRow {
     connector_color: &'static str,
     expected_count_raw: f64,
     expected_profit_raw: f64,
+    expected_exp_raw: f64,
+    expected_totem_exp_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
+    expected_exp_text: String,
+    expected_totem_exp_text: String,
     silver_share_text: String,
+    exp_share_text: String,
+    totem_exp_share_text: String,
     rate_text: String,
     rate_source_kind: String,
     rate_tooltip: String,
@@ -401,12 +449,32 @@ struct LootSpeciesRow {
     count_breakdown: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     silver_breakdown: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    exp_breakdown: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    totem_exp_breakdown: String,
     #[serde(skip_serializing)]
     within_group_rate_raw: f64,
     #[serde(skip_serializing)]
     base_price_raw: f64,
     #[serde(skip_serializing)]
     sale_multiplier_raw: f64,
+    #[serde(skip_serializing)]
+    base_exp_raw: f64,
+    #[serde(skip_serializing)]
+    exp_multiplier_raw: f64,
+    #[serde(skip_serializing)]
+    base_totem_exp_raw: f64,
+    #[serde(skip_serializing)]
+    totem_exp_source_kind: String,
+    #[serde(skip_serializing)]
+    totem_exp_source_detail: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    metric_provenance_label: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    metric_source_kind: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    metric_source_detail: String,
     #[serde(skip_serializing)]
     discarded: bool,
 }
@@ -3848,6 +3916,8 @@ fn apply_zone_overlay_to_loot_entries(
             name,
             icon: Some(format!("/images/items/{item_id:08}.webp")),
             vendor_price: None,
+            fish_exp: None,
+            totem_exp: None,
             grade: overlay_item
                 .grade
                 .as_deref()
@@ -4770,6 +4840,10 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
     let overlay_editor = build_overlay_editor_signal(signals, data, &fish_group_chart);
     let fish_multiplier_raw = effective_fish_multiplier(signals, &items_by_key);
+    let fishing_exp_bonus_raw =
+        selected_fishing_exp_bonus_raw(signals, &items_by_key, &pets, &data.catalog.pets);
+    let fishing_exp_multiplier_raw =
+        selected_fishing_exp_multiplier_raw(signals, &items_by_key, &pets, &data.catalog.pets);
 
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
     let timespan_text = timespan_text(data.lang, signals.timespan_amount, &signals.timespan_unit);
@@ -4859,6 +4933,8 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             "zoneName": zone_name,
             "petFishingExp": pet_fishing_exp,
             "petLifeExp": pet_life_exp,
+            "fishingExpBonus": fishing_exp_bonus_raw,
+            "fishingExpMultiplier": fishing_exp_multiplier_raw,
             "afrUncapped": afr_uncapped_raw,
             "afr": afr_raw,
             "itemDrr": item_drr_raw,
@@ -4876,6 +4952,12 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
                 "totalProfit": loot_chart.total_profit_raw,
                 "profitPerHour": loot_chart.profit_per_hour_raw,
                 "profitPerCatch": loot_chart.profit_per_catch_raw,
+                "totalExp": loot_chart.total_exp_raw,
+                "expPerHour": loot_chart.exp_per_hour_raw,
+                "expPerCatch": loot_chart.exp_per_catch_raw,
+                "totalTotemExp": loot_chart.total_totem_exp_raw,
+                "totemExpPerHour": loot_chart.totem_exp_per_hour_raw,
+                "totemExpPerCatch": loot_chart.totem_exp_per_catch_raw,
                 "tradeBargainBonusText": loot_chart.trade_bargain_bonus_text,
                 "tradeSaleMultiplierText": loot_chart.trade_sale_multiplier_text,
                 "rows": fish_group_chart.rows.iter().map(|row| json!({
@@ -4913,11 +4995,35 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             data.lang,
         ),
     };
+    let fish_group_exp_distribution_chart = DistributionChartSignal {
+        segments: group_exp_distribution_segments(
+            &loot_chart.rows,
+            &loot_chart.species_rows,
+            data.lang,
+        ),
+    };
+    let fish_group_totem_exp_distribution_chart = DistributionChartSignal {
+        segments: group_totem_exp_distribution_segments(
+            &loot_chart.rows,
+            &loot_chart.species_rows,
+            data.lang,
+        ),
+    };
     let target_fish_pmf_chart = target_fish_pmf_chart(&target_fish_summary);
     let loot_sankey_chart = LootSankeySignal {
         show_silver_amounts: loot_chart.show_silver_amounts,
         rows: filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows),
         species_rows: loot_chart.species_rows.clone(),
+    };
+    let exp_sankey_chart = LootSankeySignal {
+        show_silver_amounts: false,
+        rows: filtered_exp_flow_rows(&loot_chart.rows, &loot_chart.species_rows),
+        species_rows: filtered_exp_flow_species_rows(&loot_chart.species_rows),
+    };
+    let totem_exp_sankey_chart = LootSankeySignal {
+        show_silver_amounts: false,
+        rows: filtered_totem_exp_flow_rows(&loot_chart.rows, &loot_chart.species_rows, data.lang),
+        species_rows: filtered_totem_exp_flow_species_rows(&loot_chart.species_rows, data.lang),
     };
 
     CalculatorDerivedSignals {
@@ -4988,11 +5094,19 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_total_catches_raw,
         loot_fish_per_hour_raw,
         loot_profit_per_catch_raw: loot_chart.profit_per_catch_raw,
+        loot_total_exp_raw: loot_chart.total_exp_raw,
+        loot_exp_per_hour_raw: loot_chart.exp_per_hour_raw,
+        loot_total_totem_exp_raw: loot_chart.total_totem_exp_raw,
+        loot_totem_exp_per_hour_raw: loot_chart.totem_exp_per_hour_raw,
         loot_total_catches: fmt2(loot_total_catches_raw),
         loot_fish_per_hour: fmt2(loot_fish_per_hour_raw),
         loot_fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
         loot_total_profit: loot_chart.total_profit_text.clone(),
         loot_profit_per_hour: loot_chart.profit_per_hour_text.clone(),
+        loot_total_exp: loot_chart.total_exp_text.clone(),
+        loot_exp_per_hour: loot_chart.exp_per_hour_text.clone(),
+        loot_total_totem_exp: loot_chart.total_totem_exp_text.clone(),
+        loot_totem_exp_per_hour: loot_chart.totem_exp_per_hour_text.clone(),
         trade_distance_bonus_text: format_trade_distance_bonus(signals.trade_distance_bonus),
         trade_bargain_bonus_text: loot_chart.trade_bargain_bonus_text.clone(),
         trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
@@ -5000,8 +5114,12 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         raw_prize_mastery_text: fish_group_chart.mastery_text.clone(),
         fish_group_distribution_chart,
         fish_group_silver_distribution_chart,
+        fish_group_exp_distribution_chart,
+        fish_group_totem_exp_distribution_chart,
         target_fish_pmf_chart,
         loot_sankey_chart,
+        exp_sankey_chart,
+        totem_exp_sankey_chart,
         target_fish_selected_label: target_fish_summary.selected_label.clone(),
         target_fish_pmf_count_hint: target_fish_summary.pmf_count_hint_text.clone(),
         target_fish_expected_title: calculator_route_text_with_vars(
@@ -5133,6 +5251,57 @@ fn sum_item_property(
         }
     }
     total
+}
+
+fn selected_fishing_exp_bonus_raw(
+    signals: &CalculatorSignals,
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    pets: &[&CalculatorPetSignals],
+    pet_catalog: &CalculatorPetCatalog,
+) -> f64 {
+    let pet_fishing_exp = pets
+        .iter()
+        .map(|pet| pet_fishing_exp(pet, pet_catalog))
+        .sum::<f64>();
+    let pet_life_exp = pets
+        .iter()
+        .map(|pet| pet_life_exp(pet, pet_catalog))
+        .sum::<f64>();
+    let item_fishing_exp = sum_item_property(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.chair,
+            &signals.backpack,
+            &signals.lightstone_set,
+            &signals.float,
+        ],
+        &[&signals.buff, &signals.food, &signals.outfit],
+        |item| item.exp_fish.map(f64::from),
+    );
+    let item_life_exp = sum_item_property(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.chair,
+            &signals.backpack,
+            &signals.lightstone_set,
+            &signals.float,
+        ],
+        &[&signals.buff, &signals.food, &signals.outfit],
+        |item| item.exp_life.map(f64::from),
+    );
+
+    pet_fishing_exp + pet_life_exp + item_fishing_exp + item_life_exp
+}
+
+fn selected_fishing_exp_multiplier_raw(
+    signals: &CalculatorSignals,
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    pets: &[&CalculatorPetSignals],
+    pet_catalog: &CalculatorPetCatalog,
+) -> f64 {
+    1.0 + selected_fishing_exp_bonus_raw(signals, items_by_key, pets, pet_catalog).max(0.0)
 }
 
 fn computed_stat_breakdown_row(
@@ -5550,6 +5719,48 @@ fn loot_group_profit_breakdown_rows(
                     lang,
                     "calculator.breakdown.detail.group_expected_silver_share",
                     &[("share", &row.silver_share_text)],
+                ),
+            )
+        })
+        .collect()
+}
+
+fn loot_group_exp_breakdown_rows(
+    loot_rows: &[LootChartRow],
+    lang: CalculatorLocale,
+) -> Vec<ComputedStatBreakdownRow> {
+    loot_rows
+        .iter()
+        .filter(|row| row.expected_exp_raw > 0.0)
+        .map(|row| {
+            computed_stat_breakdown_row(
+                calculator_group_display_label(lang, &row.label),
+                row.expected_exp_text.clone(),
+                calculator_route_text_with_vars(
+                    lang,
+                    "calculator.breakdown.detail.group_expected_exp_share",
+                    &[("share", &row.exp_share_text)],
+                ),
+            )
+        })
+        .collect()
+}
+
+fn loot_group_totem_exp_breakdown_rows(
+    loot_rows: &[LootChartRow],
+    lang: CalculatorLocale,
+) -> Vec<ComputedStatBreakdownRow> {
+    loot_rows
+        .iter()
+        .filter(|row| row.expected_totem_exp_raw > 0.0)
+        .map(|row| {
+            computed_stat_breakdown_row(
+                calculator_group_display_label(lang, &row.label),
+                row.expected_totem_exp_text.clone(),
+                calculator_route_text_with_vars(
+                    lang,
+                    "calculator.breakdown.detail.group_expected_totem_exp_share",
+                    &[("share", &row.totem_exp_share_text)],
                 ),
             )
         })
@@ -6249,6 +6460,18 @@ fn item_grade_tone(grade: Option<&str>) -> &'static str {
     }
 }
 
+fn calculator_grade_label(lang: CalculatorLocale, grade: &str) -> String {
+    let key = match grade {
+        "Prize" => "calculator.server.grade.prize",
+        "Rare" => "calculator.server.grade.rare",
+        "HighQuality" => "calculator.server.grade.high_quality",
+        "General" => "calculator.server.grade.general",
+        "Trash" => "calculator.server.grade.trash",
+        _ => return grade.to_string(),
+    };
+    calculator_route_text(lang, key)
+}
+
 fn discard_grade_enabled(signals: &CalculatorSignals, grade: Option<&str>) -> bool {
     let Some(threshold) = discard_grade_threshold(&signals.discard_grade) else {
         return false;
@@ -6292,6 +6515,14 @@ fn compact_silver_text(value: f64) -> String {
     };
 
     format!("{}{}", trim_float_to(value / divisor, 1), suffix)
+}
+
+fn fmt_exp(value: f64) -> String {
+    fmt_silver(value)
+}
+
+fn compact_exp_text(value: f64) -> String {
+    compact_silver_text(value)
 }
 
 fn evidence_display_rate_for_setting(
@@ -6789,6 +7020,286 @@ fn loot_species_silver_share_breakdown(
     ])
 }
 
+fn loot_species_exp_breakdown_detail(row: &LootSpeciesRow, lang: CalculatorLocale) -> String {
+    let mut parts = Vec::new();
+    if !row.drop_rate_text.is_empty() {
+        parts.push(calculator_route_text_with_vars(
+            lang,
+            "calculator.server.loot.breakdown.detail.in_group_rate_value",
+            &[("rate", &row.drop_rate_text)],
+        ));
+    }
+    if !row.expected_count_text.is_empty() {
+        parts.push(calculator_route_text_with_vars(
+            lang,
+            "calculator.server.loot.breakdown.detail.expected_catches_value",
+            &[("count", &row.expected_count_text)],
+        ));
+    }
+    if row.expected_exp_raw <= 0.0 && row.expected_count_raw > 0.0 {
+        parts.push(calculator_route_text(
+            lang,
+            "calculator.server.loot.breakdown.detail.zero_exp_after_source",
+        ));
+    }
+    parts.join(" · ")
+}
+
+fn loot_species_exp_share_breakdown(
+    row: &LootSpeciesRow,
+    total_exp_raw: f64,
+    lang: CalculatorLocale,
+) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let base_exp_text = fmt_exp(row.base_exp_raw);
+    let exp_multiplier_text = format!("×{}", trim_float(row.exp_multiplier_raw));
+    let expected_exp_detail = if row.base_exp_raw <= 0.0 {
+        text("calculator.server.loot.breakdown.detail.exp_share.no_source_exp")
+    } else {
+        text("calculator.server.loot.breakdown.detail.exp_share.expected_exp")
+    };
+
+    computed_stat_breakdown(
+        text_with_vars(
+            "calculator.server.loot.breakdown.title.species_exp_share",
+            &[("species", &row.label)],
+        ),
+        row.exp_share_text.clone(),
+        if row.expected_exp_raw > 0.0 {
+            text("calculator.server.loot.breakdown.summary.species_exp_share.active")
+        } else {
+            text("calculator.server.loot.breakdown.summary.species_exp_share.none")
+        },
+        text("calculator.server.loot.breakdown.formula.species_exp_share"),
+        vec![
+            computed_stat_breakdown_section(
+                text("calculator.breakdown.section.inputs"),
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.breakdown.label.expected_catches"),
+                            row.expected_count_text.clone(),
+                            text("calculator.server.loot.breakdown.detail.average_catches_this_row"),
+                        ),
+                        text("calculator.breakdown.label.expected_catches"),
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.server.loot.breakdown.label.base_exp"),
+                            base_exp_text.clone(),
+                            text("calculator.server.loot.breakdown.detail.base_exp"),
+                        ),
+                        text("calculator.server.loot.breakdown.label.base_exp"),
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.breakdown.label.fishing_exp_multiplier"),
+                            exp_multiplier_text.clone(),
+                            text("calculator.breakdown.detail.fishing_exp_multiplier"),
+                        ),
+                        text("calculator.breakdown.label.fishing_exp_multiplier"),
+                        3,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.server.loot.breakdown.label.all_item_expected_exp_total"),
+                            fmt_exp(total_exp_raw),
+                            text("calculator.server.loot.breakdown.detail.all_item_expected_exp_total"),
+                        ),
+                        text("calculator.server.loot.breakdown.label.all_item_expected_exp_total"),
+                        4,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                text("calculator.breakdown.section.composition"),
+                vec![
+                    computed_stat_breakdown_row(
+                        text("calculator.server.loot.breakdown.label.item_expected_exp"),
+                        row.expected_exp_text.clone(),
+                        expected_exp_detail,
+                    ),
+                    computed_stat_breakdown_row(
+                        text("calculator.breakdown.label.exp_share"),
+                        row.exp_share_text.clone(),
+                        text("calculator.server.loot.breakdown.detail.exp_share.from_total"),
+                    ),
+                ],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.item_expected_exp"),
+            row.expected_exp_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.expected_catches"),
+            row.expected_count_text.clone(),
+        ),
+        computed_stat_formula_term(text("calculator.server.loot.breakdown.label.base_exp"), base_exp_text),
+        computed_stat_formula_term(text("calculator.breakdown.label.fishing_exp_multiplier"), exp_multiplier_text),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.exp_share"),
+            row.exp_share_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.all_item_expected_exp_total"),
+            fmt_exp(total_exp_raw),
+        ),
+    ])
+}
+
+fn loot_species_totem_exp_breakdown_detail(row: &LootSpeciesRow, lang: CalculatorLocale) -> String {
+    let mut parts = Vec::new();
+    if !row.drop_rate_text.is_empty() {
+        parts.push(calculator_route_text_with_vars(
+            lang,
+            "calculator.server.loot.breakdown.detail.in_group_rate_value",
+            &[("rate", &row.drop_rate_text)],
+        ));
+    }
+    if !row.expected_count_text.is_empty() {
+        parts.push(calculator_route_text_with_vars(
+            lang,
+            "calculator.server.loot.breakdown.detail.expected_catches_value",
+            &[("count", &row.expected_count_text)],
+        ));
+    }
+    if row.discarded {
+        parts.push(calculator_route_text(
+            lang,
+            "calculator.server.loot.breakdown.detail.totem_exp_share.discarded",
+        ));
+    } else if row.expected_totem_exp_raw <= 0.0 && row.expected_count_raw > 0.0 {
+        parts.push(if row.totem_exp_source_detail.is_empty() {
+            calculator_route_text(
+                lang,
+                "calculator.server.loot.breakdown.detail.zero_totem_exp_after_source",
+            )
+        } else {
+            row.totem_exp_source_detail.clone()
+        });
+    }
+    parts.join(" · ")
+}
+
+fn loot_species_totem_exp_share_breakdown(
+    row: &LootSpeciesRow,
+    total_totem_exp_raw: f64,
+    lang: CalculatorLocale,
+) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let base_totem_exp_text = fmt_exp(row.base_totem_exp_raw);
+    let base_totem_exp_detail = if row.totem_exp_source_detail.is_empty() {
+        text("calculator.server.loot.breakdown.detail.base_totem_exp")
+    } else {
+        row.totem_exp_source_detail.clone()
+    };
+    let expected_totem_exp_detail = if row.discarded {
+        text("calculator.server.loot.breakdown.detail.totem_exp_share.discarded")
+    } else if row.base_totem_exp_raw <= 0.0 {
+        if row.totem_exp_source_detail.is_empty() {
+            text("calculator.server.loot.breakdown.detail.totem_exp_share.no_source_exp")
+        } else {
+            row.totem_exp_source_detail.clone()
+        }
+    } else {
+        text("calculator.server.loot.breakdown.detail.totem_exp_share.expected_exp")
+    };
+
+    computed_stat_breakdown(
+        text_with_vars(
+            "calculator.server.loot.breakdown.title.species_totem_exp_share",
+            &[("species", &row.label)],
+        ),
+        row.totem_exp_share_text.clone(),
+        if row.expected_totem_exp_raw > 0.0 {
+            text("calculator.server.loot.breakdown.summary.species_totem_exp_share.active")
+        } else {
+            text("calculator.server.loot.breakdown.summary.species_totem_exp_share.none")
+        },
+        text("calculator.server.loot.breakdown.formula.species_totem_exp_share"),
+        vec![
+            computed_stat_breakdown_section(
+                text("calculator.breakdown.section.inputs"),
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.breakdown.label.expected_catches"),
+                            row.expected_count_text.clone(),
+                            text("calculator.server.loot.breakdown.detail.average_catches_this_row"),
+                        ),
+                        text("calculator.breakdown.label.expected_catches"),
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.server.loot.breakdown.label.base_totem_exp"),
+                            base_totem_exp_text.clone(),
+                            base_totem_exp_detail,
+                        ),
+                        text("calculator.server.loot.breakdown.label.base_totem_exp"),
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            text("calculator.server.loot.breakdown.label.all_item_expected_totem_exp_total"),
+                            fmt_exp(total_totem_exp_raw),
+                            text("calculator.server.loot.breakdown.detail.all_item_expected_totem_exp_total"),
+                        ),
+                        text("calculator.server.loot.breakdown.label.all_item_expected_totem_exp_total"),
+                        3,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                text("calculator.breakdown.section.composition"),
+                vec![
+                    computed_stat_breakdown_row(
+                        text("calculator.server.loot.breakdown.label.item_expected_totem_exp"),
+                        row.expected_totem_exp_text.clone(),
+                        expected_totem_exp_detail,
+                    ),
+                    computed_stat_breakdown_row(
+                        text("calculator.breakdown.label.totem_exp_share"),
+                        row.totem_exp_share_text.clone(),
+                        text("calculator.server.loot.breakdown.detail.totem_exp_share.from_total"),
+                    ),
+                ],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.item_expected_totem_exp"),
+            row.expected_totem_exp_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.expected_catches"),
+            row.expected_count_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.base_totem_exp"),
+            base_totem_exp_text,
+        ),
+        computed_stat_formula_term(
+            text("calculator.breakdown.label.totem_exp_share"),
+            row.totem_exp_share_text.clone(),
+        ),
+        computed_stat_formula_term(
+            text("calculator.server.loot.breakdown.label.all_item_expected_totem_exp_total"),
+            fmt_exp(total_totem_exp_raw),
+        ),
+    ])
+}
+
 fn group_silver_distribution_breakdown(
     row: &LootChartRow,
     species_rows: &[LootSpeciesRow],
@@ -6895,6 +7406,228 @@ fn group_silver_distribution_breakdown(
             computed_stat_formula_term(
                 text("calculator.server.loot.breakdown.label.all_group_expected_silver_total"),
                 fmt_silver(total_profit_raw),
+            ),
+        ],
+    }
+}
+
+fn group_exp_distribution_breakdown(
+    row: &LootChartRow,
+    species_rows: &[LootSpeciesRow],
+    total_exp_raw: f64,
+    lang: CalculatorLocale,
+) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let group_label = calculator_group_display_label(lang, &row.label);
+    let mut contributing_rows = species_rows
+        .iter()
+        .filter(|species_row| {
+            species_row.group_label == row.label && species_row.expected_count_raw > 0.0
+        })
+        .collect::<Vec<_>>();
+    contributing_rows.sort_by(|left, right| {
+        right
+            .expected_exp_raw
+            .partial_cmp(&left.expected_exp_raw)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
+
+    let input_rows = if contributing_rows.is_empty() {
+        vec![computed_stat_breakdown_row(
+            text("calculator.server.loot.breakdown.label.contributing_loot"),
+            text("calculator.server.value.unavailable"),
+            text("calculator.server.loot.breakdown.detail.contributing_loot_exp.unavailable"),
+        )]
+    } else {
+        contributing_rows
+            .into_iter()
+            .map(|species_row| {
+                computed_stat_breakdown_loot_species_row(
+                    species_row,
+                    species_row.expected_exp_text.clone(),
+                    loot_species_exp_breakdown_detail(species_row, lang),
+                )
+            })
+            .collect()
+    };
+
+    let composition_rows = vec![
+        computed_stat_breakdown_row(
+            text("calculator.server.loot.breakdown.label.normalized_group_share"),
+            row.count_share_text.clone(),
+            text("calculator.server.loot.breakdown.detail.normalized_group_share"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.breakdown.label.expected_catches"),
+            row.expected_count_text.clone(),
+            text("calculator.server.loot.breakdown.detail.group_expected_catches"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.breakdown.label.group_expected_exp"),
+            row.expected_exp_text.clone(),
+            text("calculator.server.loot.breakdown.detail.group_expected_exp"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.server.loot.breakdown.label.all_group_expected_exp_total"),
+            fmt_exp(total_exp_raw),
+            text("calculator.server.loot.breakdown.detail.all_group_expected_exp_total"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.breakdown.label.exp_share"),
+            row.exp_share_text.clone(),
+            text("calculator.server.loot.breakdown.detail.group_exp_share_from_total"),
+        ),
+    ];
+
+    ComputedStatBreakdown {
+        kind_label: text("calculator.breakdown.kind.computed_stat"),
+        title: text_with_vars(
+            "calculator.server.loot.breakdown.title.group_exp_share",
+            &[("group", &group_label)],
+        ),
+        value_text: row.exp_share_text.clone(),
+        summary_text: if row.expected_exp_raw > 0.0 {
+            text("calculator.server.loot.breakdown.summary.group_exp_share.active")
+        } else {
+            text("calculator.server.loot.breakdown.summary.group_exp_share.none")
+        },
+        formula_text: text("calculator.server.loot.breakdown.formula.group_exp_share"),
+        sections: vec![
+            ComputedStatBreakdownSection {
+                label: text("calculator.breakdown.section.inputs"),
+                rows: input_rows,
+            },
+            ComputedStatBreakdownSection {
+                label: text("calculator.breakdown.section.composition"),
+                rows: composition_rows,
+            },
+        ],
+        formula_terms: vec![
+            computed_stat_formula_term(
+                text("calculator.breakdown.label.exp_share"),
+                row.exp_share_text.clone(),
+            ),
+            computed_stat_formula_term(
+                text("calculator.breakdown.label.group_expected_exp"),
+                row.expected_exp_text.clone(),
+            ),
+            computed_stat_formula_term(
+                text("calculator.server.loot.breakdown.label.all_group_expected_exp_total"),
+                fmt_exp(total_exp_raw),
+            ),
+        ],
+    }
+}
+
+fn group_totem_exp_distribution_breakdown(
+    row: &LootChartRow,
+    species_rows: &[LootSpeciesRow],
+    total_totem_exp_raw: f64,
+    lang: CalculatorLocale,
+) -> ComputedStatBreakdown {
+    let text = |key: &str| calculator_route_text(lang, key);
+    let text_with_vars =
+        |key: &str, vars: &[(&str, &str)]| calculator_route_text_with_vars(lang, key, vars);
+    let group_label = calculator_group_display_label(lang, &row.label);
+    let mut contributing_rows = species_rows
+        .iter()
+        .filter(|species_row| {
+            species_row.group_label == row.label && species_row.expected_count_raw > 0.0
+        })
+        .collect::<Vec<_>>();
+    contributing_rows.sort_by(|left, right| {
+        right
+            .expected_totem_exp_raw
+            .partial_cmp(&left.expected_totem_exp_raw)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
+
+    let input_rows = if contributing_rows.is_empty() {
+        vec![computed_stat_breakdown_row(
+            text("calculator.server.loot.breakdown.label.contributing_loot"),
+            text("calculator.server.value.unavailable"),
+            text("calculator.server.loot.breakdown.detail.contributing_loot_totem_exp.unavailable"),
+        )]
+    } else {
+        contributing_rows
+            .into_iter()
+            .map(|species_row| {
+                computed_stat_breakdown_loot_species_row(
+                    species_row,
+                    species_row.expected_totem_exp_text.clone(),
+                    loot_species_totem_exp_breakdown_detail(species_row, lang),
+                )
+            })
+            .collect()
+    };
+
+    let composition_rows = vec![
+        computed_stat_breakdown_row(
+            text("calculator.server.loot.breakdown.label.normalized_group_share"),
+            row.count_share_text.clone(),
+            text("calculator.server.loot.breakdown.detail.normalized_group_share"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.breakdown.label.expected_catches"),
+            row.expected_count_text.clone(),
+            text("calculator.server.loot.breakdown.detail.group_expected_catches"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.breakdown.label.group_expected_totem_exp"),
+            row.expected_totem_exp_text.clone(),
+            text("calculator.server.loot.breakdown.detail.group_expected_totem_exp"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.server.loot.breakdown.label.all_group_expected_totem_exp_total"),
+            fmt_exp(total_totem_exp_raw),
+            text("calculator.server.loot.breakdown.detail.all_group_expected_totem_exp_total"),
+        ),
+        computed_stat_breakdown_row(
+            text("calculator.breakdown.label.totem_exp_share"),
+            row.totem_exp_share_text.clone(),
+            text("calculator.server.loot.breakdown.detail.group_totem_exp_share_from_total"),
+        ),
+    ];
+
+    ComputedStatBreakdown {
+        kind_label: text("calculator.breakdown.kind.computed_stat"),
+        title: text_with_vars(
+            "calculator.server.loot.breakdown.title.group_totem_exp_share",
+            &[("group", &group_label)],
+        ),
+        value_text: row.totem_exp_share_text.clone(),
+        summary_text: if row.expected_totem_exp_raw > 0.0 {
+            text("calculator.server.loot.breakdown.summary.group_totem_exp_share.active")
+        } else {
+            text("calculator.server.loot.breakdown.summary.group_totem_exp_share.none")
+        },
+        formula_text: text("calculator.server.loot.breakdown.formula.group_totem_exp_share"),
+        sections: vec![
+            ComputedStatBreakdownSection {
+                label: text("calculator.breakdown.section.inputs"),
+                rows: input_rows,
+            },
+            ComputedStatBreakdownSection {
+                label: text("calculator.breakdown.section.composition"),
+                rows: composition_rows,
+            },
+        ],
+        formula_terms: vec![
+            computed_stat_formula_term(
+                text("calculator.breakdown.label.totem_exp_share"),
+                row.totem_exp_share_text.clone(),
+            ),
+            computed_stat_formula_term(
+                text("calculator.breakdown.label.group_expected_totem_exp"),
+                row.expected_totem_exp_text.clone(),
+            ),
+            computed_stat_formula_term(
+                text("calculator.server.loot.breakdown.label.all_group_expected_totem_exp_total"),
+                fmt_exp(total_totem_exp_raw),
             ),
         ],
     }
@@ -8378,6 +9111,73 @@ fn percent_value_text(value_pct: f64) -> String {
     }
 }
 
+#[derive(Debug, Clone)]
+struct TotemExpBasis {
+    value: Option<i64>,
+    source_kind: String,
+    source_detail: String,
+}
+
+fn imputed_totem_exp_for_grade(grade: Option<&str>) -> Option<i64> {
+    match grade {
+        Some("Prize" | "Rare") => Some(2_500),
+        Some("HighQuality") => Some(1_875),
+        Some("General") => Some(625),
+        _ => None,
+    }
+}
+
+fn totem_exp_basis_for_entry(
+    entry: &CalculatorZoneLootEntry,
+    lang: CalculatorLocale,
+) -> TotemExpBasis {
+    if !entry.is_fish {
+        return TotemExpBasis {
+            value: None,
+            source_kind: String::new(),
+            source_detail: calculator_route_text(
+                lang,
+                "calculator.server.loot.totem_exp_source.non_fish",
+            ),
+        };
+    }
+
+    if let Some(value) = entry.totem_exp.filter(|value| *value > 0) {
+        return TotemExpBasis {
+            value: Some(value),
+            source_kind: "database".to_string(),
+            source_detail: calculator_route_text(
+                lang,
+                "calculator.server.loot.totem_exp_source.source_backed",
+            ),
+        };
+    }
+
+    if let Some(value) = imputed_totem_exp_for_grade(entry.grade.as_deref()) {
+        let grade = entry
+            .grade
+            .as_deref()
+            .map(|grade| calculator_grade_label(lang, grade))
+            .unwrap_or_else(|| calculator_route_text(lang, "calculator.server.value.unavailable"));
+        let value_text = fmt_exp(value as f64);
+        return TotemExpBasis {
+            value: Some(value),
+            source_kind: "derived".to_string(),
+            source_detail: calculator_route_text_with_vars(
+                lang,
+                "calculator.server.loot.totem_exp_source.imputed_grade_rule",
+                &[("grade", &grade), ("exp", &value_text)],
+            ),
+        };
+    }
+
+    TotemExpBasis {
+        value: None,
+        source_kind: String::new(),
+        source_detail: calculator_route_text(lang, "calculator.server.loot.totem_exp_source.none"),
+    }
+}
+
 fn derive_loot_chart(
     signals: &CalculatorSignals,
     data: &CalculatorData,
@@ -8401,11 +9201,36 @@ fn derive_loot_chart(
             profit_per_hour_raw: 0.0,
             profit_per_hour_text: "0".to_string(),
             profit_per_catch_raw: 0.0,
+            total_exp_raw: 0.0,
+            total_exp_text: "0".to_string(),
+            exp_per_hour_raw: 0.0,
+            exp_per_hour_text: "0".to_string(),
+            exp_per_catch_raw: 0.0,
+            total_totem_exp_raw: 0.0,
+            total_totem_exp_text: "0".to_string(),
+            totem_exp_per_hour_raw: 0.0,
+            totem_exp_per_hour_text: "0".to_string(),
+            totem_exp_per_catch_raw: 0.0,
             rows: Vec::new(),
             species_rows: Vec::new(),
         };
     }
 
+    let items_by_key = data
+        .catalog
+        .items
+        .iter()
+        .map(|item| (item.key.as_str(), item))
+        .collect::<HashMap<_, _>>();
+    let pets = [
+        &signals.pet1,
+        &signals.pet2,
+        &signals.pet3,
+        &signals.pet4,
+        &signals.pet5,
+    ];
+    let fishing_exp_multiplier_raw =
+        selected_fishing_exp_multiplier_raw(signals, &items_by_key, &pets, &data.catalog.pets);
     let bargain_bonus_raw = trade_bargain_bonus_from_level_key(&signals.trade_level);
     let sale_multiplier_raw = trade_sale_multiplier(signals);
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
@@ -8435,6 +9260,8 @@ fn derive_loot_chart(
     let group_conditions_by_slot = zone_loot_group_conditions_by_slot(&data.zone_loot_entries);
 
     let mut group_profit_by_slot = HashMap::<u8, f64>::new();
+    let mut group_exp_by_slot = HashMap::<u8, f64>::new();
+    let mut group_totem_exp_by_slot = HashMap::<u8, f64>::new();
     let mut species_rows = Vec::new();
     for entry in &data.zone_loot_entries {
         if entry.within_group_rate <= 0.0 {
@@ -8461,12 +9288,27 @@ fn derive_loot_chart(
         } else {
             expected_count_raw * base_price_raw * sale_multiplier_raw
         };
+        let base_exp_raw = if entry.is_fish {
+            entry.fish_exp.unwrap_or_default() as f64
+        } else {
+            0.0
+        };
+        let expected_exp_raw = expected_count_raw * base_exp_raw * fishing_exp_multiplier_raw;
+        let totem_exp_basis = totem_exp_basis_for_entry(entry, data.lang);
+        let base_totem_exp_raw = totem_exp_basis.value.unwrap_or_default() as f64;
+        let expected_totem_exp_raw = if discarded {
+            0.0
+        } else {
+            expected_count_raw * base_totem_exp_raw
+        };
         let drop_rate_text = loot_species_drop_rate_text(signals, entry);
         let drop_rate_source_kind = loot_species_drop_rate_source_kind(entry).to_string();
         let drop_rate_tooltip = loot_species_drop_rate_tooltip(signals, entry, data.lang);
         let presence_text = loot_species_presence_text(entry, data.lang);
         let presence_tooltip = loot_species_presence_tooltip(entry, data.lang);
         *group_profit_by_slot.entry(entry.slot_idx).or_default() += expected_profit_raw;
+        *group_exp_by_slot.entry(entry.slot_idx).or_default() += expected_exp_raw;
+        *group_totem_exp_by_slot.entry(entry.slot_idx).or_default() += expected_totem_exp_raw;
         species_rows.push(LootSpeciesRow {
             slot_idx: entry.slot_idx,
             item_id: entry.item_id,
@@ -8483,9 +9325,15 @@ fn derive_loot_chart(
             connector_color: group_row.connector_color,
             expected_count_raw,
             expected_profit_raw,
+            expected_exp_raw,
+            expected_totem_exp_raw,
             expected_count_text: trim_float(expected_count_raw),
             expected_profit_text: fmt_silver(expected_profit_raw),
+            expected_exp_text: fmt_exp(expected_exp_raw),
+            expected_totem_exp_text: fmt_exp(expected_totem_exp_raw),
             silver_share_text: String::new(),
+            exp_share_text: String::new(),
+            totem_exp_share_text: String::new(),
             rate_text: drop_rate_text.clone(),
             rate_source_kind: drop_rate_source_kind.clone(),
             rate_tooltip: drop_rate_tooltip.clone(),
@@ -8499,9 +9347,19 @@ fn derive_loot_chart(
             catch_methods: zone_loot_catch_methods(&entry.catch_methods),
             count_breakdown: String::new(),
             silver_breakdown: String::new(),
+            exp_breakdown: String::new(),
+            totem_exp_breakdown: String::new(),
             within_group_rate_raw: entry.within_group_rate,
             base_price_raw,
             sale_multiplier_raw,
+            base_exp_raw,
+            exp_multiplier_raw: fishing_exp_multiplier_raw,
+            base_totem_exp_raw,
+            totem_exp_source_kind: totem_exp_basis.source_kind,
+            totem_exp_source_detail: totem_exp_basis.source_detail,
+            metric_provenance_label: String::new(),
+            metric_source_kind: String::new(),
+            metric_source_detail: String::new(),
             discarded,
         });
     }
@@ -8518,6 +9376,8 @@ fn derive_loot_chart(
     });
 
     let total_profit_raw = group_profit_by_slot.values().sum::<f64>();
+    let total_exp_raw = group_exp_by_slot.values().sum::<f64>();
+    let total_totem_exp_raw = group_totem_exp_by_slot.values().sum::<f64>();
 
     for species_row in &mut species_rows {
         let silver_share = if total_profit_raw > 0.0 {
@@ -8525,7 +9385,19 @@ fn derive_loot_chart(
         } else {
             0.0
         };
+        let exp_share = if total_exp_raw > 0.0 {
+            (species_row.expected_exp_raw / total_exp_raw) * 100.0
+        } else {
+            0.0
+        };
+        let totem_exp_share = if total_totem_exp_raw > 0.0 {
+            (species_row.expected_totem_exp_raw / total_totem_exp_raw) * 100.0
+        } else {
+            0.0
+        };
         species_row.silver_share_text = percent_value_text(silver_share);
+        species_row.exp_share_text = percent_value_text(exp_share);
+        species_row.totem_exp_share_text = percent_value_text(totem_exp_share);
         let group_share_pct = group_share_by_slot
             .get(&species_row.slot_idx)
             .copied()
@@ -8542,6 +9414,14 @@ fn derive_loot_chart(
             total_profit_raw,
             data.lang,
         ));
+        species_row.exp_breakdown = stat_breakdown_json(loot_species_exp_share_breakdown(
+            species_row,
+            total_exp_raw,
+            data.lang,
+        ));
+        species_row.totem_exp_breakdown = stat_breakdown_json(
+            loot_species_totem_exp_share_breakdown(species_row, total_totem_exp_raw, data.lang),
+        );
         if signals.show_silver_amounts {
             species_row.rate_text = percent_value_text(silver_share);
             species_row.rate_source_kind = "derived".to_string();
@@ -8576,8 +9456,26 @@ fn derive_loot_chart(
                 .get(&slot_idx)
                 .copied()
                 .unwrap_or_default();
+            let expected_exp_raw = group_exp_by_slot
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default();
+            let expected_totem_exp_raw = group_totem_exp_by_slot
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default();
             let silver_share_pct = if total_profit_raw > 0.0 {
                 (expected_profit_raw / total_profit_raw) * 100.0
+            } else {
+                0.0
+            };
+            let exp_share_pct = if total_exp_raw > 0.0 {
+                (expected_exp_raw / total_exp_raw) * 100.0
+            } else {
+                0.0
+            };
+            let totem_exp_share_pct = if total_totem_exp_raw > 0.0 {
+                (expected_totem_exp_raw / total_totem_exp_raw) * 100.0
             } else {
                 0.0
             };
@@ -8589,15 +9487,24 @@ fn derive_loot_chart(
                 connector_color: row.connector_color,
                 drop_rate_source_kind: fish_group_drop_rate_source_kind(row),
                 drop_rate_tooltip: fish_group_drop_rate_tooltip(row),
+                metric_provenance_label: String::new(),
+                metric_source_kind: String::new(),
+                metric_source_detail: String::new(),
                 condition_text,
                 condition_tooltip,
                 expected_count_raw,
                 expected_profit_raw,
+                expected_exp_raw,
+                expected_totem_exp_raw,
                 expected_count_text: trim_float(expected_count_raw),
                 expected_profit_text: fmt_silver(expected_profit_raw),
+                expected_exp_text: fmt_exp(expected_exp_raw),
+                expected_totem_exp_text: fmt_exp(expected_totem_exp_raw),
                 current_share_pct: row.current_share_pct,
                 count_share_text: percent_value_text(row.current_share_pct),
                 silver_share_text: percent_value_text(silver_share_pct),
+                exp_share_text: percent_value_text(exp_share_pct),
+                totem_exp_share_text: percent_value_text(totem_exp_share_pct),
                 count_breakdown: stat_breakdown_json(fish_group_distribution_breakdown(
                     row,
                     total_catches_raw,
@@ -8606,6 +9513,8 @@ fn derive_loot_chart(
                     data.lang,
                 )),
                 silver_breakdown: String::new(),
+                exp_breakdown: String::new(),
+                totem_exp_breakdown: String::new(),
             }
         })
         .collect::<Vec<_>>();
@@ -8616,6 +9525,18 @@ fn derive_loot_chart(
             total_profit_raw,
             data.lang,
         ));
+        row.exp_breakdown = stat_breakdown_json(group_exp_distribution_breakdown(
+            row,
+            &species_rows,
+            total_exp_raw,
+            data.lang,
+        ));
+        row.totem_exp_breakdown = stat_breakdown_json(group_totem_exp_distribution_breakdown(
+            row,
+            &species_rows,
+            total_totem_exp_raw,
+            data.lang,
+        ));
     }
     let profit_per_catch_raw = if total_catches_raw > 0.0 {
         total_profit_raw / total_catches_raw
@@ -8623,6 +9544,18 @@ fn derive_loot_chart(
         0.0
     };
     let profit_per_hour_raw = fish_per_hour_raw * profit_per_catch_raw;
+    let exp_per_catch_raw = if total_catches_raw > 0.0 {
+        total_exp_raw / total_catches_raw
+    } else {
+        0.0
+    };
+    let exp_per_hour_raw = fish_per_hour_raw * exp_per_catch_raw;
+    let totem_exp_per_catch_raw = if total_catches_raw > 0.0 {
+        total_totem_exp_raw / total_catches_raw
+    } else {
+        0.0
+    };
+    let totem_exp_per_hour_raw = fish_per_hour_raw * totem_exp_per_catch_raw;
 
     LootChart {
         available: true,
@@ -8640,6 +9573,16 @@ fn derive_loot_chart(
         profit_per_hour_raw,
         profit_per_hour_text: fmt_silver(profit_per_hour_raw),
         profit_per_catch_raw,
+        total_exp_raw,
+        total_exp_text: fmt_exp(total_exp_raw),
+        exp_per_hour_raw,
+        exp_per_hour_text: fmt_exp(exp_per_hour_raw),
+        exp_per_catch_raw,
+        total_totem_exp_raw,
+        total_totem_exp_text: fmt_exp(total_totem_exp_raw),
+        totem_exp_per_hour_raw,
+        totem_exp_per_hour_text: fmt_exp(totem_exp_per_hour_raw),
+        totem_exp_per_catch_raw,
         rows,
         species_rows,
     }
@@ -10741,6 +11684,245 @@ fn derive_stat_breakdowns(
         ),
     ]);
 
+    let loot_group_exp_rows = loot_group_exp_breakdown_rows(&loot_chart.rows, data.lang);
+    let loot_group_exp_terms = join_formula_term_values(
+        loot_group_exp_rows
+            .iter()
+            .map(|row| row.value_text.as_str()),
+        " + ",
+        "0",
+    );
+    let loot_total_exp_breakdown = computed_stat_breakdown(
+        breakdown_text_with_vars(
+            "calculator.breakdown.title.loot_total_exp",
+            &[("timespan", timespan_text)],
+        ),
+        loot_chart.total_exp_text.clone(),
+        breakdown_text("calculator.breakdown.summary.loot_total_exp"),
+        breakdown_text("calculator.breakdown.formula.loot_total_exp"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                if loot_group_exp_rows.is_empty() {
+                    vec![computed_stat_breakdown_row(
+                        breakdown_text("calculator.breakdown.label.group_exp"),
+                        "0",
+                        breakdown_text(
+                            "calculator.breakdown.detail.no_source_backed_loot_rows_contributing_expected_exp",
+                        ),
+                    )]
+                } else {
+                    loot_group_exp_rows
+                },
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.breakdown.label.expected_exp"),
+                    loot_chart.total_exp_text.clone(),
+                    breakdown_text("calculator.breakdown.detail.expected_exp_selected_session"),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_exp"),
+            loot_chart.total_exp_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.group_expected_exp"),
+            loot_group_exp_terms,
+        ),
+    ]);
+
+    let loot_exp_per_hour_breakdown = computed_stat_breakdown(
+        breakdown_text("calculator.breakdown.title.loot_exp_per_hour"),
+        loot_chart.exp_per_hour_text.clone(),
+        breakdown_text("calculator.breakdown.summary.loot_exp_per_hour"),
+        breakdown_text("calculator.breakdown.formula.loot_exp_per_hour"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.label.expected_exp_for_timespan",
+                                &[("timespan", timespan_text)],
+                            ),
+                            loot_chart.total_exp_text.clone(),
+                            breakdown_text(
+                                "calculator.breakdown.detail.expected_exp_current_session",
+                            ),
+                        ),
+                        breakdown_text("calculator.breakdown.label.expected_exp"),
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.breakdown.label.session_duration"),
+                            human_duration_text(timespan_seconds),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.session_duration_seconds",
+                                &[
+                                    ("timespan", timespan_text),
+                                    ("seconds", &trim_float(timespan_seconds)),
+                                ],
+                            ),
+                        ),
+                        breakdown_text("calculator.breakdown.label.session_hours"),
+                        2,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.breakdown.label.exp_per_hour"),
+                    loot_chart.exp_per_hour_text.clone(),
+                    breakdown_text("calculator.breakdown.detail.expected_hourly_exp_throughput"),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.exp_per_hour"),
+            loot_chart.exp_per_hour_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_exp"),
+            loot_chart.total_exp_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.session_hours"),
+            session_hours_text.clone(),
+        ),
+    ]);
+
+    let loot_group_totem_exp_rows =
+        loot_group_totem_exp_breakdown_rows(&loot_chart.rows, data.lang);
+    let loot_group_totem_exp_terms = join_formula_term_values(
+        loot_group_totem_exp_rows
+            .iter()
+            .map(|row| row.value_text.as_str()),
+        " + ",
+        "0",
+    );
+    let loot_total_totem_exp_breakdown = computed_stat_breakdown(
+        breakdown_text_with_vars(
+            "calculator.breakdown.title.loot_total_totem_exp",
+            &[("timespan", timespan_text)],
+        ),
+        loot_chart.total_totem_exp_text.clone(),
+        breakdown_text("calculator.breakdown.summary.loot_total_totem_exp"),
+        breakdown_text("calculator.breakdown.formula.loot_total_totem_exp"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                if loot_group_totem_exp_rows.is_empty() {
+                    vec![computed_stat_breakdown_row(
+                        breakdown_text("calculator.breakdown.label.group_totem_exp"),
+                        "0",
+                        breakdown_text(
+                            "calculator.breakdown.detail.no_source_backed_loot_rows_contributing_expected_totem_exp",
+                        ),
+                    )]
+                } else {
+                    loot_group_totem_exp_rows
+                },
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.breakdown.label.expected_totem_exp"),
+                    loot_chart.total_totem_exp_text.clone(),
+                    breakdown_text(
+                        "calculator.breakdown.detail.expected_totem_exp_selected_session",
+                    ),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_totem_exp"),
+            loot_chart.total_totem_exp_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.group_expected_totem_exp"),
+            loot_group_totem_exp_terms,
+        ),
+    ]);
+
+    let loot_totem_exp_per_hour_breakdown = computed_stat_breakdown(
+        breakdown_text("calculator.breakdown.title.loot_totem_exp_per_hour"),
+        loot_chart.totem_exp_per_hour_text.clone(),
+        breakdown_text("calculator.breakdown.summary.loot_totem_exp_per_hour"),
+        breakdown_text("calculator.breakdown.formula.loot_totem_exp_per_hour"),
+        vec![
+            computed_stat_breakdown_section(
+                breakdown_inputs.clone(),
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.label.expected_totem_exp_for_timespan",
+                                &[("timespan", timespan_text)],
+                            ),
+                            loot_chart.total_totem_exp_text.clone(),
+                            breakdown_text(
+                                "calculator.breakdown.detail.expected_totem_exp_current_session",
+                            ),
+                        ),
+                        breakdown_text("calculator.breakdown.label.expected_totem_exp"),
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            breakdown_text("calculator.breakdown.label.session_duration"),
+                            human_duration_text(timespan_seconds),
+                            breakdown_text_with_vars(
+                                "calculator.breakdown.detail.session_duration_seconds",
+                                &[
+                                    ("timespan", timespan_text),
+                                    ("seconds", &trim_float(timespan_seconds)),
+                                ],
+                            ),
+                        ),
+                        breakdown_text("calculator.breakdown.label.session_hours"),
+                        2,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                breakdown_composition.clone(),
+                vec![computed_stat_breakdown_row(
+                    breakdown_text("calculator.breakdown.label.totem_exp_per_hour"),
+                    loot_chart.totem_exp_per_hour_text.clone(),
+                    breakdown_text(
+                        "calculator.breakdown.detail.expected_hourly_totem_exp_throughput",
+                    ),
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.totem_exp_per_hour"),
+            loot_chart.totem_exp_per_hour_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.expected_totem_exp"),
+            loot_chart.total_totem_exp_text.clone(),
+        ),
+        computed_stat_formula_term(
+            breakdown_text("calculator.breakdown.label.session_hours"),
+            session_hours_text.clone(),
+        ),
+    ]);
+
     let trade_distance_bonus_text = format_trade_distance_bonus(signals.trade_distance_bonus);
     let trade_distance_bonus_used_raw = signals.trade_distance_bonus.max(0.0).min(150.0);
     let trade_distance_bonus_used_text = format_trade_distance_bonus(trade_distance_bonus_used_raw);
@@ -11155,6 +12337,10 @@ fn derive_stat_breakdowns(
         loot_fish_per_hour: stat_breakdown_json(loot_fish_per_hour_breakdown),
         loot_total_profit: stat_breakdown_json(loot_total_profit_breakdown),
         loot_profit_per_hour: stat_breakdown_json(loot_profit_per_hour_breakdown),
+        loot_total_exp: stat_breakdown_json(loot_total_exp_breakdown),
+        loot_exp_per_hour: stat_breakdown_json(loot_exp_per_hour_breakdown),
+        loot_total_totem_exp: stat_breakdown_json(loot_total_totem_exp_breakdown),
+        loot_totem_exp_per_hour: stat_breakdown_json(loot_totem_exp_per_hour_breakdown),
         trade_distance_bonus: stat_breakdown_json(trade_distance_bonus_breakdown),
         trade_bargain_bonus: stat_breakdown_json(trade_bargain_bonus_breakdown),
         trade_sale_multiplier: stat_breakdown_json(trade_sale_multiplier_breakdown),
@@ -13447,6 +14633,76 @@ fn group_silver_distribution_segments(
         .collect()
 }
 
+fn group_exp_distribution_segments(
+    loot_rows: &[LootChartRow],
+    species_rows: &[LootSpeciesRow],
+    lang: CalculatorLocale,
+) -> Vec<DistributionChartSegment> {
+    let total_exp_raw = loot_rows
+        .iter()
+        .map(|row| row.expected_exp_raw)
+        .sum::<f64>();
+
+    loot_rows
+        .iter()
+        .map(|row| DistributionChartSegment {
+            label: calculator_group_display_label(lang, row.label),
+            value_text: row.exp_share_text.clone(),
+            detail_text: compact_exp_text(row.expected_exp_raw),
+            width_pct: if total_exp_raw > 0.0 {
+                (row.expected_exp_raw / total_exp_raw) * 100.0
+            } else {
+                0.0
+            },
+            fill_color: row.fill_color,
+            stroke_color: row.stroke_color,
+            text_color: row.text_color,
+            connector_color: row.connector_color,
+            breakdown: Some(group_exp_distribution_breakdown(
+                row,
+                species_rows,
+                total_exp_raw,
+                lang,
+            )),
+        })
+        .collect()
+}
+
+fn group_totem_exp_distribution_segments(
+    loot_rows: &[LootChartRow],
+    species_rows: &[LootSpeciesRow],
+    lang: CalculatorLocale,
+) -> Vec<DistributionChartSegment> {
+    let total_totem_exp_raw = loot_rows
+        .iter()
+        .map(|row| row.expected_totem_exp_raw)
+        .sum::<f64>();
+
+    loot_rows
+        .iter()
+        .map(|row| DistributionChartSegment {
+            label: calculator_group_display_label(lang, row.label),
+            value_text: row.totem_exp_share_text.clone(),
+            detail_text: compact_exp_text(row.expected_totem_exp_raw),
+            width_pct: if total_totem_exp_raw > 0.0 {
+                (row.expected_totem_exp_raw / total_totem_exp_raw) * 100.0
+            } else {
+                0.0
+            },
+            fill_color: row.fill_color,
+            stroke_color: row.stroke_color,
+            text_color: row.text_color,
+            connector_color: row.connector_color,
+            breakdown: Some(group_totem_exp_distribution_breakdown(
+                row,
+                species_rows,
+                total_totem_exp_raw,
+                lang,
+            )),
+        })
+        .collect()
+}
+
 fn timeline_chart_segment(
     label: &str,
     value_seconds: f64,
@@ -13595,6 +14851,169 @@ fn filtered_loot_flow_rows(
         .collect()
 }
 
+fn exp_flow_group_row(row: &LootChartRow) -> LootChartRow {
+    let mut row = row.clone();
+    row.expected_profit_raw = row.expected_exp_raw;
+    row.expected_profit_text = row.expected_exp_text.clone();
+    row.silver_share_text = row.exp_share_text.clone();
+    row.silver_breakdown = row.exp_breakdown.clone();
+    row
+}
+
+fn exp_flow_species_row(row: &LootSpeciesRow) -> LootSpeciesRow {
+    let mut row = row.clone();
+    row.expected_profit_raw = row.expected_exp_raw;
+    row.expected_profit_text = row.expected_exp_text.clone();
+    row.silver_share_text = row.exp_share_text.clone();
+    row.silver_breakdown = row.exp_breakdown.clone();
+    row
+}
+
+fn filtered_exp_flow_rows(
+    loot_rows: &[LootChartRow],
+    species_rows: &[LootSpeciesRow],
+) -> Vec<LootChartRow> {
+    let groups_with_species = species_rows
+        .iter()
+        .filter(|row| row.expected_exp_raw > 0.0)
+        .map(|row| row.group_label)
+        .collect::<HashSet<_>>();
+
+    loot_rows
+        .iter()
+        .filter(|row| {
+            row.current_share_pct > 0.0
+                && row.expected_exp_raw > 0.0
+                && groups_with_species.contains(row.label)
+        })
+        .map(exp_flow_group_row)
+        .collect()
+}
+
+fn filtered_exp_flow_species_rows(species_rows: &[LootSpeciesRow]) -> Vec<LootSpeciesRow> {
+    species_rows
+        .iter()
+        .filter(|row| row.expected_exp_raw > 0.0)
+        .map(exp_flow_species_row)
+        .collect()
+}
+
+fn totem_exp_group_metric_source(
+    group_label: &str,
+    species_rows: &[LootSpeciesRow],
+    lang: CalculatorLocale,
+) -> (String, String) {
+    let contributing_rows = species_rows
+        .iter()
+        .filter(|row| row.group_label == group_label && row.expected_totem_exp_raw > 0.0)
+        .collect::<Vec<_>>();
+    if contributing_rows.is_empty() {
+        return (String::new(), String::new());
+    }
+
+    let source_backed_count = contributing_rows
+        .iter()
+        .filter(|row| row.totem_exp_source_kind == "database")
+        .count();
+    let imputed_count = contributing_rows
+        .iter()
+        .filter(|row| row.totem_exp_source_kind == "derived")
+        .count();
+
+    match (source_backed_count, imputed_count) {
+        (0, 0) => (String::new(), String::new()),
+        (_, 0) => (
+            "database".to_string(),
+            calculator_route_text(
+                lang,
+                "calculator.server.loot.totem_exp_source.group_source_backed",
+            ),
+        ),
+        (0, _) => (
+            "derived".to_string(),
+            calculator_route_text(
+                lang,
+                "calculator.server.loot.totem_exp_source.group_imputed",
+            ),
+        ),
+        _ => (
+            "mixed".to_string(),
+            calculator_route_text_with_vars(
+                lang,
+                "calculator.server.loot.totem_exp_source.group_mixed",
+                &[
+                    ("sourceBacked", &source_backed_count.to_string()),
+                    ("imputed", &imputed_count.to_string()),
+                ],
+            ),
+        ),
+    }
+}
+
+fn totem_exp_flow_group_row(
+    row: &LootChartRow,
+    species_rows: &[LootSpeciesRow],
+    lang: CalculatorLocale,
+) -> LootChartRow {
+    let mut row = row.clone();
+    let (source_kind, source_detail) = totem_exp_group_metric_source(row.label, species_rows, lang);
+    row.expected_profit_raw = row.expected_totem_exp_raw;
+    row.expected_profit_text = row.expected_totem_exp_text.clone();
+    row.silver_share_text = row.totem_exp_share_text.clone();
+    row.silver_breakdown = row.totem_exp_breakdown.clone();
+    row.metric_provenance_label =
+        calculator_route_text(lang, "calculator.server.provenance.metric.totem_exp");
+    row.metric_source_kind = source_kind;
+    row.metric_source_detail = source_detail;
+    row
+}
+
+fn totem_exp_flow_species_row(row: &LootSpeciesRow, lang: CalculatorLocale) -> LootSpeciesRow {
+    let mut row = row.clone();
+    row.expected_profit_raw = row.expected_totem_exp_raw;
+    row.expected_profit_text = row.expected_totem_exp_text.clone();
+    row.silver_share_text = row.totem_exp_share_text.clone();
+    row.silver_breakdown = row.totem_exp_breakdown.clone();
+    row.metric_provenance_label =
+        calculator_route_text(lang, "calculator.server.provenance.metric.totem_exp");
+    row.metric_source_kind = row.totem_exp_source_kind.clone();
+    row.metric_source_detail = row.totem_exp_source_detail.clone();
+    row
+}
+
+fn filtered_totem_exp_flow_rows(
+    loot_rows: &[LootChartRow],
+    species_rows: &[LootSpeciesRow],
+    lang: CalculatorLocale,
+) -> Vec<LootChartRow> {
+    let groups_with_species = species_rows
+        .iter()
+        .filter(|row| row.expected_totem_exp_raw > 0.0)
+        .map(|row| row.group_label)
+        .collect::<HashSet<_>>();
+
+    loot_rows
+        .iter()
+        .filter(|row| {
+            row.current_share_pct > 0.0
+                && row.expected_totem_exp_raw > 0.0
+                && groups_with_species.contains(row.label)
+        })
+        .map(|row| totem_exp_flow_group_row(row, species_rows, lang))
+        .collect()
+}
+
+fn filtered_totem_exp_flow_species_rows(
+    species_rows: &[LootSpeciesRow],
+    lang: CalculatorLocale,
+) -> Vec<LootSpeciesRow> {
+    species_rows
+        .iter()
+        .filter(|row| row.expected_totem_exp_raw > 0.0)
+        .map(|row| totem_exp_flow_species_row(row, lang))
+        .collect()
+}
+
 fn render_loot_sankey(lang: CalculatorLocale, chart: &LootChart) -> String {
     if chart.species_rows.is_empty() {
         return format!(
@@ -13618,6 +15037,68 @@ fn render_loot_sankey(lang: CalculatorLocale, chart: &LootChart) -> String {
         escape_html(&calculator_route_text(
             lang,
             "calculator.server.chart.aria.loot_flow",
+        )),
+    )
+}
+
+fn render_exp_sankey(lang: CalculatorLocale, chart: &LootChart) -> String {
+    if chart
+        .species_rows
+        .iter()
+        .all(|row| row.expected_exp_raw <= 0.0)
+    {
+        return format!(
+            "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.chart.no_exp_rows",
+            ))
+        );
+    }
+    format!(
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"{}\" signal-path=\"_calc.exp_sankey_chart\"></fishy-loot-sankey></div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.exp_flow_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.exp_flow_description",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.aria.exp_flow",
+        )),
+    )
+}
+
+fn render_totem_exp_sankey(lang: CalculatorLocale, chart: &LootChart) -> String {
+    if chart
+        .species_rows
+        .iter()
+        .all(|row| row.expected_totem_exp_raw <= 0.0)
+    {
+        return format!(
+            "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&calculator_route_text(
+                lang,
+                "calculator.server.chart.no_totem_exp_rows",
+            ))
+        );
+    }
+    format!(
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"{}\" signal-path=\"_calc.totem_exp_sankey_chart\"></fishy-loot-sankey></div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.totem_exp_flow_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.totem_exp_flow_description",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.aria.totem_exp_flow",
         )),
     )
 }
@@ -13681,6 +15162,58 @@ fn render_fish_group_silver_chart(lang: CalculatorLocale, chart: &LootChart) -> 
                 "calculator.server.chart.aria.group_silver_distribution"
             ),
             "_calc.fish_group_silver_distribution_chart",
+        ),
+    )
+}
+
+fn render_fish_group_exp_chart(lang: CalculatorLocale, chart: &LootChart) -> String {
+    if !chart.available {
+        return format!(
+            "<div id=\"calculator-fish-group-exp-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&chart.note)
+        );
+    }
+
+    format!(
+        "<div id=\"calculator-fish-group-exp-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div>{}</div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_exp_distribution_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_exp_distribution_description",
+        )),
+        render_distribution_chart(
+            "fish-group-exp-distribution-chart",
+            &calculator_route_text(lang, "calculator.server.chart.aria.group_exp_distribution"),
+            "_calc.fish_group_exp_distribution_chart",
+        ),
+    )
+}
+
+fn render_fish_group_totem_exp_chart(lang: CalculatorLocale, chart: &LootChart) -> String {
+    if !chart.available {
+        return format!(
+            "<div id=\"calculator-fish-group-totem-exp-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&chart.note)
+        );
+    }
+
+    format!(
+        "<div id=\"calculator-fish-group-totem-exp-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div>{}</div></div>",
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_totem_exp_distribution_title",
+        )),
+        escape_html(&calculator_route_text(
+            lang,
+            "calculator.server.chart.group_totem_exp_distribution_description",
+        )),
+        render_distribution_chart(
+            "fish-group-totem-exp-distribution-chart",
+            &calculator_route_text(lang, "calculator.server.chart.aria.group_totem_exp_distribution"),
+            "_calc.fish_group_totem_exp_distribution_chart",
         ),
     )
 }
@@ -13897,14 +15430,26 @@ fn render_fish_group_window(
                         <div role=\"tablist\" class=\"tabs tabs-box\" aria-label=\"{}\">\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'groups'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'groups').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'groups'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'silver'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'silver').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'silver'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'exp'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'exp').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'exp'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'totem_exp'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'totem_exp').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'totem_exp'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'exp_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'exp_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'exp_flow'\">{}</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'totem_exp_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'totem_exp_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'totem_exp_flow'\">{}</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">{}</button>\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\" class=\"grid gap-4\">{}\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'silver'\">{}\
                         </div>\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'exp'\">{}\
+                        </div>\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'totem_exp'\">{}\
+                        </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'loot_flow'\">{}\
+                        </div>\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'exp_flow'\">{}\
+                        </div>\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'totem_exp_flow'\">{}\
                         </div>\
                         <div data-show=\"$_calculator_ui.distribution_tab === 'target_fish'\">{}\
                         </div>\
@@ -13993,7 +15538,23 @@ fn render_fish_group_window(
         )),
         escape_html(&calculator_route_text(
             data.lang,
+            "calculator.server.tab.exp"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.totem_exp"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
             "calculator.server.tab.loot_flow"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.exp_flow"
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.tab.totem_exp_flow"
         )),
         escape_html(&calculator_route_text(
             data.lang,
@@ -14005,7 +15566,11 @@ fn render_fish_group_window(
             signals.show_normalized_select_rates
         ),
         render_fish_group_silver_chart(data.lang, loot_chart),
+        render_fish_group_exp_chart(data.lang, loot_chart),
+        render_fish_group_totem_exp_chart(data.lang, loot_chart),
         render_loot_chart(data.lang, loot_chart),
+        render_exp_sankey(data.lang, loot_chart),
+        render_totem_exp_sankey(data.lang, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
     )
 }
@@ -14035,6 +15600,22 @@ fn render_loot_window(data: &CalculatorData, signals: &CalculatorSignals) -> Str
                     <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_profit_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
                         <div class=\"stat-title\">{}</div>\
                         <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_profit_per_hour\"></div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_exp || ''\" data-fishy-stat-color=\"var(--color-info)\">\
+                        <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_exp\"></div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_exp_per_hour || ''\" data-fishy-stat-color=\"var(--color-info)\">\
+                        <div class=\"stat-title\">{}</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_exp_per_hour\"></div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_totem_exp || ''\" data-fishy-stat-color=\"var(--color-secondary)\">\
+                        <div class=\"stat-title whitespace-normal leading-snug\">{} (<span data-text=\"$_live.timespan_text || {}\"></span>)</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_totem_exp\"></div>\
+                    </div>\
+                    <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_totem_exp_per_hour || ''\" data-fishy-stat-color=\"var(--color-secondary)\">\
+                        <div class=\"stat-title\">{}</div>\
+                        <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_totem_exp_per_hour\"></div>\
                     </div>\
                 </div>\
             </div>\
@@ -14078,6 +15659,32 @@ fn render_loot_window(data: &CalculatorData, signals: &CalculatorSignals) -> Str
         escape_html(&calculator_route_text(
             data.lang,
             "calculator.server.stat.profit_per_hour",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.expected_exp",
+        )),
+        escaped_js_string_literal(&timespan_text(
+            data.lang,
+            signals.timespan_amount,
+            &signals.timespan_unit,
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.exp_per_hour",
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.expected_totem_exp",
+        )),
+        escaped_js_string_literal(&timespan_text(
+            data.lang,
+            signals.timespan_amount,
+            &signals.timespan_unit,
+        )),
+        escape_html(&calculator_route_text(
+            data.lang,
+            "calculator.server.stat.totem_exp_per_hour",
         )),
     )
 }
@@ -16778,7 +18385,8 @@ mod tests {
         derive_fish_group_chart, derive_loot_chart, derive_target_fish_summary,
         derive_zone_loot_summary_response,
         derive_zone_loot_summary_response_with_condition_options, discard_grade_enabled,
-        filtered_loot_flow_rows, find_trade_origin, get_calculator_datastar_init,
+        filtered_exp_flow_rows, filtered_loot_flow_rows, filtered_totem_exp_flow_rows,
+        filtered_totem_exp_flow_species_rows, find_trade_origin, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         init_signals_patch_map, load_calculator_runtime_data, loot_entries_presence_source_kind,
         loot_entries_presence_text, loot_entries_presence_tooltip,
@@ -22169,17 +23777,28 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 drop_rate_source_kind: "derived".to_string(),
                 drop_rate_tooltip: "Derived from group share".to_string(),
+                metric_provenance_label: String::new(),
+                metric_source_kind: String::new(),
+                metric_source_detail: String::new(),
                 condition_text: String::new(),
                 condition_tooltip: String::new(),
                 expected_count_raw: 3.02,
                 expected_profit_raw: 120_000.0,
+                expected_exp_raw: 12_000.0,
+                expected_totem_exp_raw: 0.0,
                 expected_count_text: "3.02".to_string(),
                 expected_profit_text: "120,000".to_string(),
+                expected_exp_text: "12,000".to_string(),
+                expected_totem_exp_text: "0".to_string(),
                 current_share_pct: 5.81,
                 count_share_text: "5.81%".to_string(),
                 silver_share_text: "24.00%".to_string(),
+                exp_share_text: "24.00%".to_string(),
+                totem_exp_share_text: "0.00%".to_string(),
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
+                exp_breakdown: String::new(),
+                totem_exp_breakdown: String::new(),
             },
             LootChartRow {
                 label: "General",
@@ -22189,17 +23808,28 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 drop_rate_source_kind: "derived".to_string(),
                 drop_rate_tooltip: "Derived from group share".to_string(),
+                metric_provenance_label: String::new(),
+                metric_source_kind: String::new(),
+                metric_source_detail: String::new(),
                 condition_text: String::new(),
                 condition_tooltip: String::new(),
                 expected_count_raw: 48.98,
                 expected_profit_raw: 380_000.0,
+                expected_exp_raw: 38_000.0,
+                expected_totem_exp_raw: 0.0,
                 expected_count_text: "48.98".to_string(),
                 expected_profit_text: "380,000".to_string(),
+                expected_exp_text: "38,000".to_string(),
+                expected_totem_exp_text: "0".to_string(),
                 current_share_pct: 94.19,
                 count_share_text: "94.19%".to_string(),
                 silver_share_text: "76.00%".to_string(),
+                exp_share_text: "76.00%".to_string(),
+                totem_exp_share_text: "0.00%".to_string(),
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
+                exp_breakdown: String::new(),
+                totem_exp_breakdown: String::new(),
             },
         ];
         let species_rows = vec![
@@ -22216,9 +23846,15 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 expected_count_raw: 2.0,
                 expected_profit_raw: 100_000.0,
+                expected_exp_raw: 10_000.0,
+                expected_totem_exp_raw: 0.0,
                 expected_count_text: "2".to_string(),
                 expected_profit_text: "100,000".to_string(),
+                expected_exp_text: "10,000".to_string(),
+                expected_totem_exp_text: "0".to_string(),
                 silver_share_text: "20.00%".to_string(),
+                exp_share_text: "20.00%".to_string(),
+                totem_exp_share_text: "0.00%".to_string(),
                 rate_text: "60%".to_string(),
                 rate_source_kind: "database".to_string(),
                 rate_tooltip: "Database in-group rate".to_string(),
@@ -22232,9 +23868,19 @@ mod tests {
                 catch_methods: vec!["rod".to_string()],
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
+                exp_breakdown: String::new(),
+                totem_exp_breakdown: String::new(),
                 within_group_rate_raw: 0.60,
                 base_price_raw: 50_000.0,
                 sale_multiplier_raw: 1.0,
+                base_exp_raw: 5_000.0,
+                exp_multiplier_raw: 1.0,
+                base_totem_exp_raw: 0.0,
+                totem_exp_source_kind: String::new(),
+                totem_exp_source_detail: String::new(),
+                metric_provenance_label: String::new(),
+                metric_source_kind: String::new(),
+                metric_source_detail: String::new(),
                 discarded: false,
             },
             LootSpeciesRow {
@@ -22250,9 +23896,15 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 expected_count_raw: 1.02,
                 expected_profit_raw: 20_000.0,
+                expected_exp_raw: 2_000.0,
+                expected_totem_exp_raw: 0.0,
                 expected_count_text: "1.02".to_string(),
                 expected_profit_text: "20,000".to_string(),
+                expected_exp_text: "2,000".to_string(),
+                expected_totem_exp_text: "0".to_string(),
                 silver_share_text: "4.00%".to_string(),
+                exp_share_text: "4.00%".to_string(),
+                totem_exp_share_text: "0.00%".to_string(),
                 rate_text: "40%".to_string(),
                 rate_source_kind: "database".to_string(),
                 rate_tooltip: "Database in-group rate".to_string(),
@@ -22266,9 +23918,19 @@ mod tests {
                 catch_methods: vec!["rod".to_string()],
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
+                exp_breakdown: String::new(),
+                totem_exp_breakdown: String::new(),
                 within_group_rate_raw: 0.40,
                 base_price_raw: 19_607.843137254902,
                 sale_multiplier_raw: 1.0,
+                base_exp_raw: 1_960.7843137254902,
+                exp_multiplier_raw: 1.0,
+                base_totem_exp_raw: 0.0,
+                totem_exp_source_kind: String::new(),
+                totem_exp_source_detail: String::new(),
+                metric_provenance_label: String::new(),
+                metric_source_kind: String::new(),
+                metric_source_detail: String::new(),
                 discarded: false,
             },
             LootSpeciesRow {
@@ -22284,9 +23946,15 @@ mod tests {
                 connector_color: "rgba(0,0,0,0.2)",
                 expected_count_raw: 48.98,
                 expected_profit_raw: 380_000.0,
+                expected_exp_raw: 38_000.0,
+                expected_totem_exp_raw: 0.0,
                 expected_count_text: "48.98".to_string(),
                 expected_profit_text: "380,000".to_string(),
+                expected_exp_text: "38,000".to_string(),
+                expected_totem_exp_text: "0".to_string(),
                 silver_share_text: "76.00%".to_string(),
+                exp_share_text: "76.00%".to_string(),
+                totem_exp_share_text: "0.00%".to_string(),
                 rate_text: "100%".to_string(),
                 rate_source_kind: "database".to_string(),
                 rate_tooltip: "Database in-group rate".to_string(),
@@ -22300,9 +23968,19 @@ mod tests {
                 catch_methods: vec!["rod".to_string()],
                 count_breakdown: String::new(),
                 silver_breakdown: String::new(),
+                exp_breakdown: String::new(),
+                totem_exp_breakdown: String::new(),
                 within_group_rate_raw: 1.0,
                 base_price_raw: 7_758.268681094324,
                 sale_multiplier_raw: 1.0,
+                base_exp_raw: 775.8268681094324,
+                exp_multiplier_raw: 1.0,
+                base_totem_exp_raw: 0.0,
+                totem_exp_source_kind: String::new(),
+                totem_exp_source_detail: String::new(),
+                metric_provenance_label: String::new(),
+                metric_source_kind: String::new(),
+                metric_source_detail: String::new(),
                 discarded: false,
             },
         ];
@@ -22380,6 +24058,9 @@ mod tests {
                 item_id: 820001,
                 name: "Weighted Fish".to_string(),
                 vendor_price: Some(50_000),
+                fish_exp: Some(500),
+                totem_exp: Some(7),
+                is_fish: true,
                 within_group_rate: 0.25,
                 icon: Some("/items/weighted-fish.webp".to_string()),
                 group_conditions_raw: vec!["getLifeLevel(1)>80;".to_string()],
@@ -22389,20 +24070,45 @@ mod tests {
 
         let loot_chart = derive_loot_chart(&signals, &data, &fish_group_chart, 40.0, 1.0);
         let flow_rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
+        let exp_flow_rows = filtered_exp_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
+        let totem_exp_flow_rows =
+            filtered_totem_exp_flow_rows(&loot_chart.rows, &loot_chart.species_rows, data.lang);
         let group_payload = serde_json::from_str::<Value>(&flow_rows[0].count_breakdown)
             .expect("group breakdown should be valid json");
         let group_silver_payload = serde_json::from_str::<Value>(&flow_rows[0].silver_breakdown)
             .expect("group silver breakdown should be valid json");
+        let group_exp_payload = serde_json::from_str::<Value>(&exp_flow_rows[0].silver_breakdown)
+            .expect("group EXP breakdown should be valid json");
+        let group_totem_exp_payload =
+            serde_json::from_str::<Value>(&totem_exp_flow_rows[0].silver_breakdown)
+                .expect("group Totem EXP breakdown should be valid json");
         let species_payload =
             serde_json::from_str::<Value>(&loot_chart.species_rows[0].count_breakdown)
                 .expect("species count breakdown should be valid json");
         let species_silver_payload =
             serde_json::from_str::<Value>(&loot_chart.species_rows[0].silver_breakdown)
                 .expect("species silver breakdown should be valid json");
+        let species_exp_payload =
+            serde_json::from_str::<Value>(&loot_chart.species_rows[0].exp_breakdown)
+                .expect("species EXP breakdown should be valid json");
+        let species_totem_exp_payload =
+            serde_json::from_str::<Value>(&loot_chart.species_rows[0].totem_exp_breakdown)
+                .expect("species Totem EXP breakdown should be valid json");
 
+        assert_eq!(loot_chart.total_exp_text, "5,000");
+        assert_eq!(loot_chart.total_totem_exp_text, "70");
+        assert_eq!(exp_flow_rows[0].expected_profit_text, "5,000");
+        assert_eq!(totem_exp_flow_rows[0].expected_profit_text, "70");
+        assert_eq!(totem_exp_flow_rows[0].metric_provenance_label, "Totem EXP");
+        assert_eq!(totem_exp_flow_rows[0].metric_source_kind, "database");
+        assert!(totem_exp_flow_rows[0]
+            .metric_source_detail
+            .contains("source-backed"));
         assert_eq!(group_payload["title"], "General group");
         assert_eq!(flow_rows[0].condition_text, "Fishing Level Guru 1+");
         assert_eq!(group_silver_payload["title"], "General silver share");
+        assert_eq!(group_exp_payload["title"], "General EXP share");
+        assert_eq!(group_totem_exp_payload["title"], "General Totem EXP share");
         assert_eq!(species_payload["title"], "Weighted Fish expected catches");
         assert_eq!(species_payload["formula_terms"][1]["label"], "Group share");
         assert_eq!(
@@ -22417,6 +24123,172 @@ mod tests {
             species_silver_payload["formula_terms"][4]["label"],
             "Silver share"
         );
+        assert_eq!(species_exp_payload["title"], "Weighted Fish EXP share");
+        assert_eq!(
+            species_exp_payload["formula_terms"][0]["label"],
+            "Item expected EXP"
+        );
+        assert_eq!(
+            species_exp_payload["formula_terms"][4]["label"],
+            "EXP share"
+        );
+        assert_eq!(
+            species_totem_exp_payload["title"],
+            "Weighted Fish Totem EXP share"
+        );
+        assert_eq!(
+            species_totem_exp_payload["formula_terms"][0]["label"],
+            "Item expected Totem EXP"
+        );
+    }
+
+    #[test]
+    fn derive_loot_chart_keeps_fish_exp_when_discarding_but_drops_totem_exp() {
+        let signals = CalculatorSignals {
+            discard_grade: "green".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "0%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 100.0,
+                default_weight_pct: 100.0,
+                weight_pct: 100.0,
+                current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
+                rate_inputs: Vec::new(),
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: DataLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 820001,
+                name: "Discarded Fish".to_string(),
+                vendor_price: Some(50_000),
+                fish_exp: Some(500),
+                totem_exp: Some(7),
+                grade: Some("General".to_string()),
+                is_fish: true,
+                within_group_rate: 0.5,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let loot_chart = derive_loot_chart(&signals, &data, &fish_group_chart, 20.0, 1.0);
+        let species = &loot_chart.species_rows[0];
+
+        assert!(species.discarded);
+        assert_eq!(species.expected_count_text, "10");
+        assert_eq!(species.expected_profit_text, "0");
+        assert_eq!(species.expected_exp_text, "5,000");
+        assert_eq!(species.expected_totem_exp_text, "0");
+        assert_eq!(loot_chart.total_profit_text, "0");
+        assert_eq!(loot_chart.total_exp_text, "5,000");
+        assert_eq!(loot_chart.total_totem_exp_text, "0");
+    }
+
+    #[test]
+    fn derive_loot_chart_imputes_missing_totem_exp_by_grade_with_provenance() {
+        let signals = CalculatorSignals::default();
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "0%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 100.0,
+                default_weight_pct: 100.0,
+                weight_pct: 100.0,
+                current_share_pct: 100.0,
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
+                rate_inputs: Vec::new(),
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: CalculatorLocale::EnUs,
+            api_lang: DataLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![
+                CalculatorZoneLootEntry {
+                    slot_idx: 1,
+                    item_id: 820001,
+                    name: "Missing Blue Totem EXP".to_string(),
+                    grade: Some("HighQuality".to_string()),
+                    is_fish: true,
+                    within_group_rate: 0.4,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 1,
+                    item_id: 820002,
+                    name: "Missing Green Totem EXP".to_string(),
+                    grade: Some("General".to_string()),
+                    is_fish: true,
+                    within_group_rate: 0.6,
+                    ..CalculatorZoneLootEntry::default()
+                },
+            ],
+        };
+
+        let loot_chart = derive_loot_chart(&signals, &data, &fish_group_chart, 10.0, 1.0);
+        let blue = loot_chart
+            .species_rows
+            .iter()
+            .find(|row| row.label == "Missing Blue Totem EXP")
+            .expect("blue test row should be present");
+        let green = loot_chart
+            .species_rows
+            .iter()
+            .find(|row| row.label == "Missing Green Totem EXP")
+            .expect("green test row should be present");
+        let totem_exp_flow_rows =
+            filtered_totem_exp_flow_rows(&loot_chart.rows, &loot_chart.species_rows, data.lang);
+        let totem_exp_flow_species_rows =
+            filtered_totem_exp_flow_species_rows(&loot_chart.species_rows, data.lang);
+
+        assert_eq!(blue.base_totem_exp_raw, 1_875.0);
+        assert_eq!(blue.expected_totem_exp_text, "7,500");
+        assert_eq!(blue.totem_exp_source_kind, "derived");
+        assert!(blue.totem_exp_source_detail.contains("imputed"));
+        assert_eq!(green.base_totem_exp_raw, 625.0);
+        assert_eq!(green.expected_totem_exp_text, "3,750");
+        assert_eq!(loot_chart.total_totem_exp_text, "11,250");
+        assert_eq!(totem_exp_flow_rows[0].metric_source_kind, "derived");
+        assert!(totem_exp_flow_rows[0]
+            .metric_source_detail
+            .contains("grade-rule imputations"));
+        assert!(totem_exp_flow_species_rows
+            .iter()
+            .all(|row| row.metric_provenance_label == "Totem EXP"));
+        assert!(totem_exp_flow_species_rows
+            .iter()
+            .all(|row| row.metric_source_kind == "derived"));
     }
 
     #[test]

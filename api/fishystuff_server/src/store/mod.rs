@@ -76,6 +76,8 @@ pub struct CalculatorZoneLootEntry {
     pub name: String,
     pub icon: Option<String>,
     pub vendor_price: Option<i64>,
+    pub fish_exp: Option<i64>,
+    pub totem_exp: Option<i64>,
     pub grade: Option<String>,
     pub is_fish: bool,
     pub catch_methods: Vec<String>,

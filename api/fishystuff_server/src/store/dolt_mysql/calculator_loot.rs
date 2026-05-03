@@ -77,6 +77,17 @@ struct RankingPresenceMeta {
 }
 
 #[derive(Debug, Clone)]
+struct ItemMeta {
+    name: String,
+    icon: Option<String>,
+    grade: Option<String>,
+    vendor_price: Option<i64>,
+    fish_exp: Option<i64>,
+    totem_exp: Option<i64>,
+    is_fish: bool,
+}
+
+#[derive(Debug, Clone)]
 struct MainGroupOption {
     option_idx: u32,
     select_rate: i64,
@@ -1092,9 +1103,13 @@ impl DoltMySqlStore {
                 NULLIF(TRIM(it.`IconImageFile`), '') AS icon_file, \
                 it.`GradeType`, \
                 it.`OriginalPrice`, \
+                CAST(fx.`exp` AS SIGNED) AS fish_exp, \
+                CAST(tx.`exp` AS SIGNED) AS totem_exp, \
                 CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish \
              FROM item_table{as_of} it \
              LEFT JOIN fish_table{as_of} ft ON ft.item_key = it.`Index` \
+             LEFT JOIN fish_exp_table{as_of} fx ON fx.item_key = it.`Index` \
+             LEFT JOIN totem_exp_table{as_of} tx ON tx.item_key = it.`Index` \
              LEFT JOIN languagedata{as_of} item_name \
                ON item_name.`lang` = '{}' \
               AND item_name.`id` = CAST(it.`Index` AS SIGNED) \
@@ -1109,11 +1124,14 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<i64>,
+            Option<i64>,
             i64,
         )> = conn.query(item_query).map_err(db_unavailable)?;
-        let mut item_meta =
-            HashMap::<i32, (String, Option<String>, Option<String>, Option<i64>, bool)>::new();
-        for (item_id, name, icon_file, grade_type, original_price, is_fish) in item_rows {
+        let mut item_meta = HashMap::<i32, ItemMeta>::new();
+        for (item_id, name, icon_file, grade_type, original_price, fish_exp, totem_exp, is_fish) in
+            item_rows
+        {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
@@ -1125,7 +1143,18 @@ impl DoltMySqlStore {
             ));
             let (grade, _, _is_prize) = item_grade_from_db(grade_type);
             let vendor_price = parse_positive_i64(original_price);
-            item_meta.insert(item_id, (name, icon, grade, vendor_price, is_fish > 0));
+            item_meta.insert(
+                item_id,
+                ItemMeta {
+                    name,
+                    icon,
+                    grade,
+                    vendor_price,
+                    fish_exp,
+                    totem_exp,
+                    is_fish: is_fish > 0,
+                },
+            );
         }
 
         let mut matched_community_presence_indexes = HashSet::<usize>::new();
@@ -1138,15 +1167,17 @@ impl DoltMySqlStore {
                     return None;
                 }
                 let within_group_rate = weight / total_weight;
-                let (name, icon, grade, vendor_price, is_fish) =
-                    item_meta.get(&item_id).cloned().unwrap_or_else(|| {
-                        (
-                            item_id.to_string(),
-                            Some(calculator_loot_item_icon_path(item_id)),
-                            None,
-                            None,
-                            false,
-                        )
+                let item = item_meta
+                    .get(&item_id)
+                    .cloned()
+                    .unwrap_or_else(|| ItemMeta {
+                        name: item_id.to_string(),
+                        icon: Some(calculator_loot_item_icon_path(item_id)),
+                        grade: None,
+                        vendor_price: None,
+                        fish_exp: None,
+                        totem_exp: None,
+                        is_fish: false,
                     });
                 let catch_methods = slot_method_by_idx
                     .get(&slot_idx)
@@ -1290,11 +1321,13 @@ impl DoltMySqlStore {
                 Some(CalculatorZoneLootEntry {
                     slot_idx,
                     item_id,
-                    name,
-                    icon,
-                    vendor_price,
-                    grade,
-                    is_fish,
+                    name: item.name,
+                    icon: item.icon,
+                    vendor_price: item.vendor_price,
+                    fish_exp: item.fish_exp,
+                    totem_exp: item.totem_exp,
+                    grade: item.grade,
+                    is_fish: item.is_fish,
                     catch_methods,
                     group_conditions_raw,
                     within_group_rate,
@@ -1349,15 +1382,17 @@ impl DoltMySqlStore {
             );
         }
         for ((slot_idx, item_id), evidence) in synthetic_evidence_by_key {
-            let (name, icon, grade, vendor_price, is_fish) =
-                item_meta.get(&item_id).cloned().unwrap_or_else(|| {
-                    (
-                        item_id.to_string(),
-                        Some(calculator_loot_item_icon_path(item_id)),
-                        None,
-                        None,
-                        false,
-                    )
+            let item = item_meta
+                .get(&item_id)
+                .cloned()
+                .unwrap_or_else(|| ItemMeta {
+                    name: item_id.to_string(),
+                    icon: Some(calculator_loot_item_icon_path(item_id)),
+                    grade: None,
+                    vendor_price: None,
+                    fish_exp: None,
+                    totem_exp: None,
+                    is_fish: false,
                 });
             let item_main_group_key = slot_main_group_by_idx
                 .get(&slot_idx)
@@ -1376,11 +1411,13 @@ impl DoltMySqlStore {
             entries.push(CalculatorZoneLootEntry {
                 slot_idx,
                 item_id,
-                name,
-                icon,
-                vendor_price,
-                grade,
-                is_fish,
+                name: item.name,
+                icon: item.icon,
+                vendor_price: item.vendor_price,
+                fish_exp: item.fish_exp,
+                totem_exp: item.totem_exp,
+                grade: item.grade,
+                is_fish: item.is_fish,
                 catch_methods,
                 group_conditions_raw: group_conditions_raw
                     .get(&item_main_group_key)

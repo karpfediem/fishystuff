@@ -56,6 +56,37 @@ const TRADE_ORIGIN_REGIONS_TABLE: &str = "trade_origin_regions";
 const TRADE_ZONE_ORIGIN_REGIONS_TABLE: &str = "trade_zone_origin_regions";
 const TRADE_NPC_DESTINATIONS_TABLE: &str = "trade_npc_destinations";
 const TRADE_NPC_EXCLUDED_TABLE: &str = "trade_npc_excluded";
+const FISH_EXP_TABLE: &str = "fish_exp_table";
+const FISH_EXP_SHEET: &str = "Fish XP";
+const FISH_EXP_SOURCE_ID: &str = "flockfish_fish_xp_workbook";
+const FISH_EXP_SOURCE_LABEL: &str = "Flockfish Fish XP workbook";
+const FISH_EXP_HEADERS: [&str; 8] = [
+    "item_key",
+    "item_name_ko",
+    "exp",
+    "source_id",
+    "source_label",
+    "source_sha256",
+    "source_sheet",
+    "source_row",
+];
+const FISH_EXP_SOURCE_HEADERS: [&str; 3] = ["ItemKey", "ItemName", "Exp"];
+const TOTEM_EXP_TABLE: &str = "totem_exp_table";
+const TOTEM_ITEM_TABLE_SHEET: &str = "Item_Table";
+const TOTEM_EXP_SHEET: &str = "Encyclopedia_Table (2021)";
+const TOTEM_EXP_SOURCE_ID: &str = "fish_size_flock_encyclopedia_2021_fish_exp_rate";
+const TOTEM_EXP_SOURCE_LABEL: &str =
+    "fish_size (flock) Encyclopedia_Table (2021) %FishExpRate Totem EXP";
+const TOTEM_EXP_HEADERS: [&str; 8] = [
+    "item_key",
+    "item_name_ko",
+    "exp",
+    "source_id",
+    "source_label",
+    "source_sha256",
+    "source_sheet",
+    "source_row",
+];
 
 const MAIN_GROUP_HEADERS: [&str; 17] = [
     "ItemMainGroupKey",
@@ -419,6 +450,32 @@ enum Commands {
         #[arg(long)]
         commit_msg: Option<String>,
     },
+    ImportFishExpXlsx {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        workbook_xlsx: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
+    ImportTotemExpXlsx {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        item_table_xlsx: PathBuf,
+        #[arg(long)]
+        encyclopedia_table_xlsx: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
     ImportTradeNpcCatalog {
         #[arg(long)]
         dolt_repo: PathBuf,
@@ -749,6 +806,23 @@ struct FlockfishSubgroupImportCommand {
     commit_msg: Option<String>,
 }
 
+struct FishExpImportCommand {
+    dolt_repo: PathBuf,
+    workbook_xlsx: PathBuf,
+    output_dir: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct TotemExpImportCommand {
+    dolt_repo: PathBuf,
+    item_table_xlsx: PathBuf,
+    encyclopedia_table_xlsx: PathBuf,
+    output_dir: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
 struct TradeNpcCatalogImportCommand {
     dolt_repo: PathBuf,
     catalog_json: PathBuf,
@@ -771,6 +845,23 @@ struct FlockfishSubgroupOutputs {
     main_group_csv: PathBuf,
     sub_group_csv: PathBuf,
     zone_group_slots_csv: PathBuf,
+}
+
+struct FishExpImportOutputs {
+    fish_exp_csv: PathBuf,
+}
+
+struct FishExpImportStats {
+    row_count: usize,
+}
+
+struct TotemExpImportOutputs {
+    totem_exp_csv: PathBuf,
+}
+
+struct TotemExpImportStats {
+    row_count: usize,
+    source_description_count: usize,
 }
 
 struct FlockfishZoneGroupSlotsImport {
@@ -1157,6 +1248,34 @@ fn main() -> Result<()> {
         } => run_flockfish_subgroup_import(FlockfishSubgroupImportCommand {
             dolt_repo,
             workbook_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportFishExpXlsx {
+            dolt_repo,
+            workbook_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        } => run_fish_exp_import(FishExpImportCommand {
+            dolt_repo,
+            workbook_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportTotemExpXlsx {
+            dolt_repo,
+            item_table_xlsx,
+            encyclopedia_table_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        } => run_totem_exp_import(TotemExpImportCommand {
+            dolt_repo,
+            item_table_xlsx,
+            encyclopedia_table_xlsx,
             output_dir,
             commit,
             commit_msg,
@@ -3412,6 +3531,99 @@ fn run_flockfish_subgroup_import(command: FlockfishSubgroupImportCommand) -> Res
     Ok(())
 }
 
+fn run_fish_exp_import(command: FishExpImportCommand) -> Result<()> {
+    let FishExpImportCommand {
+        dolt_repo,
+        workbook_xlsx,
+        output_dir,
+        commit,
+        commit_msg,
+    } = command;
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    let workbook_sha = sha256_file(&workbook_xlsx)?;
+    let outputs = FishExpImportOutputs {
+        fish_exp_csv: output_dir.join("fish_exp_table.csv"),
+    };
+    let stats = import_fish_exp_sheet(&workbook_xlsx, &workbook_sha, &outputs.fish_exp_csv)?;
+
+    ensure_fish_exp_table(&dolt_repo)?;
+    run_dolt_sql_table_import_or_remote(&dolt_repo, FISH_EXP_TABLE, &outputs.fish_exp_csv)?;
+
+    if commit {
+        let msg = match commit_msg {
+            Some(msg) => format!("{msg} (FlockfishWorkbook={workbook_sha})"),
+            None => format!("Import fish EXP table (FlockfishWorkbook={workbook_sha})"),
+        };
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!("fish EXP rows emitted: {}", stats.row_count);
+    println!("output fish EXP csv: {}", outputs.fish_exp_csv.display());
+
+    Ok(())
+}
+
+fn run_totem_exp_import(command: TotemExpImportCommand) -> Result<()> {
+    let TotemExpImportCommand {
+        dolt_repo,
+        item_table_xlsx,
+        encyclopedia_table_xlsx,
+        output_dir,
+        commit,
+        commit_msg,
+    } = command;
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    let workbook_sha = sha256_file(&item_table_xlsx)?;
+    let encyclopedia_table_sha = sha256_file(&encyclopedia_table_xlsx)?;
+    let outputs = TotemExpImportOutputs {
+        totem_exp_csv: output_dir.join("totem_exp_table.csv"),
+    };
+    let stats = import_totem_exp_sheet(
+        &item_table_xlsx,
+        &encyclopedia_table_xlsx,
+        &encyclopedia_table_sha,
+        &outputs.totem_exp_csv,
+    )?;
+
+    ensure_totem_exp_table(&dolt_repo)?;
+    run_dolt_sql_table_import_or_remote(&dolt_repo, TOTEM_EXP_TABLE, &outputs.totem_exp_csv)?;
+
+    if commit {
+        let msg = match commit_msg {
+            Some(msg) => {
+                format!("{msg} (ItemTable={workbook_sha}, EncyclopediaTable={encyclopedia_table_sha})")
+            }
+            None => format!(
+                "Import Totem EXP table (ItemTable={workbook_sha}, EncyclopediaTable={encyclopedia_table_sha})"
+            ),
+        };
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!("totem EXP rows emitted: {}", stats.row_count);
+    println!(
+        "sea totem EXP descriptions seen: {}",
+        stats.source_description_count
+    );
+    println!("output totem EXP csv: {}", outputs.totem_exp_csv.display());
+
+    Ok(())
+}
+
 fn run_trade_npc_catalog_import(command: TradeNpcCatalogImportCommand) -> Result<()> {
     let TradeNpcCatalogImportCommand {
         dolt_repo,
@@ -4054,6 +4266,44 @@ fn optional_u32_csv(value: Option<u32>) -> String {
 
 fn optional_f64_csv(value: Option<f64>) -> String {
     value.map(|value| value.to_string()).unwrap_or_default()
+}
+
+fn ensure_fish_exp_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `fish_exp_table` (\
+            `item_key` BIGINT NOT NULL,\
+            `item_name_ko` VARCHAR(255) NULL,\
+            `exp` BIGINT NOT NULL,\
+            `source_id` VARCHAR(128) NOT NULL,\
+            `source_label` VARCHAR(255) NOT NULL,\
+            `source_sha256` CHAR(64) NOT NULL,\
+            `source_sheet` VARCHAR(128) NOT NULL,\
+            `source_row` INT UNSIGNED NOT NULL,\
+            PRIMARY KEY (`item_key`),\
+            KEY `idx_fish_exp_source` (`source_id`, `source_sheet`, `source_row`)\
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "ensure fish EXP table",
+    )
+}
+
+fn ensure_totem_exp_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `totem_exp_table` (\
+            `item_key` BIGINT NOT NULL,\
+            `item_name_ko` VARCHAR(255) NULL,\
+            `exp` BIGINT NOT NULL,\
+            `source_id` VARCHAR(128) NOT NULL,\
+            `source_label` VARCHAR(255) NOT NULL,\
+            `source_sha256` CHAR(64) NOT NULL,\
+            `source_sheet` VARCHAR(128) NOT NULL,\
+            `source_row` INT UNSIGNED NOT NULL,\
+            PRIMARY KEY (`item_key`),\
+            KEY `idx_totem_exp_source` (`source_id`, `source_sheet`, `source_row`)\
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "ensure Totem EXP table",
+    )
 }
 
 fn ensure_trade_npc_catalog_tables(dolt_repo: &Path) -> Result<()> {
@@ -5111,6 +5361,189 @@ fn import_fishing_table(path: &Path, output_csv: &Path) -> Result<FishingImport>
 
     writer.flush()?;
     Ok(FishingImport { row_count, mg_keys })
+}
+
+fn import_fish_exp_sheet(
+    workbook_xlsx: &Path,
+    workbook_sha: &str,
+    output_csv: &Path,
+) -> Result<FishExpImportStats> {
+    let range = read_sheet(workbook_xlsx, FISH_EXP_SHEET)?;
+    let headers = read_headers(&range)?;
+    if headers.len() < FISH_EXP_SOURCE_HEADERS.len() {
+        bail!(
+            "{}:{FISH_EXP_SHEET} has too few columns. expected at least [{}], got [{}]",
+            workbook_xlsx.display(),
+            FISH_EXP_SOURCE_HEADERS.join(", "),
+            headers.join(", ")
+        );
+    }
+    validate_headers(
+        &headers[..FISH_EXP_SOURCE_HEADERS.len()],
+        &FISH_EXP_SOURCE_HEADERS,
+        &format!("{}:{FISH_EXP_SHEET}", workbook_xlsx.display()),
+    )?;
+
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(FISH_EXP_HEADERS)?;
+
+    let mut seen_item_keys = BTreeSet::<i64>::new();
+    let mut row_count = 0usize;
+    for (idx, row) in range.rows().enumerate().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+        let Some(item_key) = cell_to_i64_import_key_opt(row.get(0))?.filter(|value| *value > 0)
+        else {
+            bail!(
+                "missing fish EXP item key in {}:{FISH_EXP_SHEET} row {}",
+                workbook_xlsx.display(),
+                idx + 1
+            );
+        };
+        if !seen_item_keys.insert(item_key) {
+            bail!(
+                "duplicate fish EXP item key in {}:{FISH_EXP_SHEET} row {}: {item_key}",
+                workbook_xlsx.display(),
+                idx + 1
+            );
+        }
+        let Some(exp) = cell_to_i64_opt(row.get(2))?.filter(|value| *value > 0) else {
+            bail!(
+                "missing positive fish EXP value in {}:{FISH_EXP_SHEET} row {} item {item_key}",
+                workbook_xlsx.display(),
+                idx + 1
+            );
+        };
+        let item_name_ko = cell_to_string_opt(row.get(1))?.unwrap_or_default();
+        writer.write_record([
+            item_key.to_string(),
+            item_name_ko,
+            exp.to_string(),
+            FISH_EXP_SOURCE_ID.to_string(),
+            FISH_EXP_SOURCE_LABEL.to_string(),
+            workbook_sha.to_string(),
+            FISH_EXP_SHEET.to_string(),
+            (idx + 1).to_string(),
+        ])?;
+        row_count += 1;
+    }
+
+    writer.flush()?;
+    Ok(FishExpImportStats { row_count })
+}
+
+fn import_totem_exp_sheet(
+    item_table_xlsx: &Path,
+    encyclopedia_table_xlsx: &Path,
+    encyclopedia_table_sha: &str,
+    output_csv: &Path,
+) -> Result<TotemExpImportStats> {
+    let item_range = read_sheet(item_table_xlsx, TOTEM_ITEM_TABLE_SHEET)?;
+    let item_headers = read_headers(&item_range)?;
+    validate_headers(
+        &item_headers,
+        &ITEM_TABLE_HEADERS,
+        &format!("{}:{TOTEM_ITEM_TABLE_SHEET}", item_table_xlsx.display()),
+    )?;
+
+    let item_col = |name: &str| -> Result<usize> {
+        item_headers
+            .iter()
+            .position(|header| header == name)
+            .with_context(|| {
+                format!(
+                    "{}:{TOTEM_ITEM_TABLE_SHEET} missing expected column {name}",
+                    item_table_xlsx.display()
+                )
+            })
+    };
+    let item_name_col = item_col("ItemName")?;
+    let description_col = item_col("Description")?;
+
+    let mut source_description_count = 0usize;
+    for row in item_range.rows().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+
+        let item_name_ko = cell_to_string_opt(row.get(item_name_col))?.unwrap_or_default();
+        let description = cell_to_string_opt(row.get(description_col))?.unwrap_or_default();
+        if item_name_ko.contains("바다의 토템") && description.contains("토템의 경험치")
+        {
+            source_description_count += 1;
+        }
+    }
+
+    if source_description_count == 0 {
+        bail!(
+            "{}:{TOTEM_ITEM_TABLE_SHEET} did not contain a sea totem EXP description",
+            item_table_xlsx.display()
+        );
+    }
+
+    let encyclopedia_range = read_sheet(encyclopedia_table_xlsx, TOTEM_EXP_SHEET)?;
+    let encyclopedia_headers = read_headers(&encyclopedia_range)?;
+    let encyclopedia_col = |names: &[&str]| -> Result<usize> {
+        encyclopedia_headers
+            .iter()
+            .position(|header| names.iter().any(|name| header == name))
+            .with_context(|| {
+                format!(
+                    "{}:{TOTEM_EXP_SHEET} missing expected column {}",
+                    encyclopedia_table_xlsx.display(),
+                    names.join(" or ")
+                )
+            })
+    };
+    let type_key_col = encyclopedia_col(&["TypeKey"])?;
+    let item_name_col = encyclopedia_col(&["#이름"])?;
+    let fish_exp_rate_col = encyclopedia_col(&["%FishExpRate"])?;
+
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(TOTEM_EXP_HEADERS)?;
+    let mut seen_item_keys = BTreeSet::<i64>::new();
+    let mut row_count = 0usize;
+    for (idx, row) in encyclopedia_range.rows().enumerate().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+
+        let Some(item_key) =
+            cell_to_i64_import_key_opt(row.get(type_key_col))?.filter(|value| *value > 0)
+        else {
+            continue;
+        };
+        let Some(exp) = cell_to_i64_opt(row.get(fish_exp_rate_col))?.filter(|value| *value > 0)
+        else {
+            continue;
+        };
+        if !seen_item_keys.insert(item_key) {
+            bail!(
+                "duplicate Totem EXP item key in {}:{TOTEM_EXP_SHEET} row {}: {item_key}",
+                encyclopedia_table_xlsx.display(),
+                idx + 1
+            );
+        }
+        let item_name_ko = cell_to_string_opt(row.get(item_name_col))?.unwrap_or_default();
+
+        writer.write_record([
+            item_key.to_string(),
+            item_name_ko,
+            exp.to_string(),
+            TOTEM_EXP_SOURCE_ID.to_string(),
+            TOTEM_EXP_SOURCE_LABEL.to_string(),
+            encyclopedia_table_sha.to_string(),
+            TOTEM_EXP_SHEET.to_string(),
+            (idx + 1).to_string(),
+        ])?;
+        row_count += 1;
+    }
+    writer.flush()?;
+    Ok(TotemExpImportStats {
+        row_count,
+        source_description_count,
+    })
 }
 
 fn import_main_group_table(

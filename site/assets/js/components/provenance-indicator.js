@@ -354,6 +354,7 @@ export function provenanceAriaLabel(segment) {
 }
 
 export function buildProvenanceSegments({
+    rateLabel,
     rateSourceKind,
     rateDetail,
     rateValueText,
@@ -371,7 +372,7 @@ export function buildProvenanceSegments({
         }),
         buildSegment({
             channel: "rate",
-            label: "Rate",
+            label: trimString(rateLabel) || "Rate",
             sourceKind: rateSourceKind,
             detail: rateDetail,
             valueText: rateValueText,

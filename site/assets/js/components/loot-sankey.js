@@ -427,8 +427,11 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             const labelY = conditionText ? mid - 15 : mid - 8;
             const valueY = conditionText ? mid + 1 : mid + 10;
             const provenanceSegments = buildProvenanceSegments({
-                rateSourceKind: String(row.drop_rate_source_kind ?? ""),
-                rateDetail: String(row.drop_rate_tooltip ?? ""),
+                rateLabel: optionalString(row, "metric_provenance_label"),
+                rateSourceKind: optionalString(row, "metric_source_kind")
+                    || String(row.drop_rate_source_kind ?? ""),
+                rateDetail: optionalString(row, "metric_source_detail")
+                    || String(row.drop_rate_tooltip ?? ""),
                 rateValueText: String(row.count_share_text ?? ""),
             });
             const provenanceRailX =
@@ -560,8 +563,11 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 profitSpeciesHeights[index] ?? 0,
             );
             const provenanceSegments = buildProvenanceSegments({
-                rateSourceKind: String(row.drop_rate_source_kind ?? ""),
-                rateDetail: String(row.drop_rate_tooltip ?? ""),
+                rateLabel: optionalString(row, "metric_provenance_label"),
+                rateSourceKind: optionalString(row, "metric_source_kind")
+                    || String(row.drop_rate_source_kind ?? ""),
+                rateDetail: optionalString(row, "metric_source_detail")
+                    || String(row.drop_rate_tooltip ?? ""),
                 rateValueText: dropMetricText,
                 presenceSourceKind: optionalString(row, "presence_source_kind"),
                 presenceDetail: optionalString(row, "presence_tooltip"),
