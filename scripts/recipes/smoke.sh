@@ -17,8 +17,7 @@ case "$deployment" in
     site_base_url="$(deployment_public_base_url "$deployment" "site")"
     ;;
   *)
-    profile="$(deployment_secretspec_profile "$deployment")"
-    exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment"
+    assert_deployment_public_urls_safe "$deployment"
     api_base_url="$(deployment_public_base_url "$deployment" "api")"
     site_base_url="$(deployment_public_base_url "$deployment" "site")"
     ;;

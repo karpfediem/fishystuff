@@ -75,8 +75,9 @@ operator_secretspec_profile() {
 
 exec_with_secretspec_profile_if_needed() {
   local profile="${1-}"
+  local active_profile="${FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE:-}"
   shift
-  if [[ -n "$profile" && -z "${HETZNER_SSH_PRIVATE_KEY:-}" ]]; then
+  if [[ -n "$profile" && ( -z "${HETZNER_SSH_PRIVATE_KEY:-}" || "$active_profile" != "$profile" ) ]]; then
     exec env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE="$profile" secretspec run --profile "$profile" -- "$@"
   fi
 }
@@ -407,7 +408,7 @@ deployment_prod_hostname() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
-    beta) printf '%s' "$(deployment_env_or_default "$deployment" "prod_hostname" "site-nbg1-prod")" ;;
+    beta) printf '%s' "" ;;
     production) printf '%s' "$(deployment_env_or_default "$deployment" "prod_hostname" "site-nbg1-prod")" ;;
     local) printf '%s' "" ;;
   esac
@@ -456,7 +457,7 @@ deployment_open_secretspec_profile() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
-    beta | production) operator_secretspec_profile ;;
+    beta | production) deployment_secretspec_profile "$deployment" ;;
     local) printf '%s' "" ;;
   esac
 }
@@ -466,8 +467,351 @@ deployment_secretspec_profile() {
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "beta-deploy" ;;
-    production) operator_secretspec_profile ;;
+    production) printf '%s' "production-deploy" ;;
     local) printf '%s' "" ;;
+  esac
+}
+
+url_host() {
+  local value="$1"
+  value="${value#*://}"
+  value="${value%%/*}"
+  value="${value%%\?*}"
+  value="${value%%#*}"
+  value="${value#*@}"
+  value="${value%%:*}"
+  printf '%s' "$value"
+}
+
+ssh_target_host() {
+  local value="$1"
+  value="${value#ssh://}"
+  value="${value#*@}"
+  value="${value%%/*}"
+  value="${value%%:*}"
+  printf '%s' "$value"
+}
+
+deployment_expected_public_host() {
+  local deployment
+  local service
+
+  deployment="$(canonical_deployment_name "$1")"
+  service="$(canonical_public_service_name "$2")"
+  case "$deployment:$service" in
+    beta:site) printf '%s' "beta.fishystuff.fish" ;;
+    beta:api) printf '%s' "api.beta.fishystuff.fish" ;;
+    beta:cdn) printf '%s' "cdn.beta.fishystuff.fish" ;;
+    beta:telemetry) printf '%s' "telemetry.beta.fishystuff.fish" ;;
+    production:site) printf '%s' "fishystuff.fish" ;;
+    production:api) printf '%s' "api.fishystuff.fish" ;;
+    production:cdn) printf '%s' "cdn.fishystuff.fish" ;;
+    production:telemetry) printf '%s' "telemetry.fishystuff.fish" ;;
+    *)
+      echo "deployment $deployment does not define an expected public host for $service" >&2
+      exit 2
+      ;;
+  esac
+}
+
+deployment_public_host_is_production() {
+  case "$1" in
+    fishystuff.fish | api.fishystuff.fish | cdn.fishystuff.fish | telemetry.fishystuff.fish)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+deployment_public_host_is_beta() {
+  case "$1" in
+    beta.fishystuff.fish | api.beta.fishystuff.fish | cdn.beta.fishystuff.fish | telemetry.beta.fishystuff.fish)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+deployment_target_mentions_production() {
+  local value="$1"
+  local host=""
+  [[ -n "$value" ]] || return 1
+  host="$(ssh_target_host "$value")"
+  case "$host" in
+    fishystuff.fish | api.fishystuff.fish | cdn.fishystuff.fish | telemetry.fishystuff.fish | site-nbg1-prod)
+      return 0
+      ;;
+  esac
+  case "$value" in
+    *production* | *site-nbg1-prod* | *fishystuff.fish*)
+      if [[ "$value" != *beta.fishystuff.fish* ]]; then
+        return 0
+      fi
+      ;;
+  esac
+  return 1
+}
+
+deployment_target_mentions_beta() {
+  local value="$1"
+  local host=""
+  [[ -n "$value" ]] || return 1
+  host="$(ssh_target_host "$value")"
+  case "$host" in
+    beta.fishystuff.fish | api.beta.fishystuff.fish | cdn.beta.fishystuff.fish | telemetry.beta.fishystuff.fish | site-nbg1-beta | telemetry-nbg1)
+      return 0
+      ;;
+  esac
+  case "$value" in
+    *beta.fishystuff.fish* | *site-nbg1-beta* | *telemetry-nbg1*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+assert_deployment_public_urls_safe() {
+  local deployment="$1"
+  local service=""
+  local expected_host=""
+  local actual_host=""
+  local url=""
+
+  for service in site api cdn telemetry; do
+    url="$(deployment_public_base_url "$deployment" "$service")"
+    actual_host="$(url_host "$url")"
+    expected_host="$(deployment_expected_public_host "$deployment" "$service")"
+    if [[ "$actual_host" != "$expected_host" ]]; then
+      echo "unsafe $deployment $service URL host: expected $expected_host, got ${actual_host:-<empty>} from $url" >&2
+      exit 2
+    fi
+    case "$deployment" in
+      beta)
+        if deployment_public_host_is_production "$actual_host"; then
+          echo "unsafe beta $service URL points at production host: $actual_host" >&2
+          exit 2
+        fi
+        ;;
+      production)
+        if deployment_public_host_is_beta "$actual_host"; then
+          echo "unsafe production $service URL points at beta host: $actual_host" >&2
+          exit 2
+        fi
+        ;;
+    esac
+  done
+}
+
+assert_deployment_secret_scope_safe() {
+  local deployment="$1"
+  local expected_profile=""
+  local active_profile="${FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE:-}"
+
+  expected_profile="$(deployment_secretspec_profile "$deployment")"
+  [[ -n "$expected_profile" ]] || return 0
+
+  if [[ -n "${HETZNER_SSH_PRIVATE_KEY:-}" && -z "$active_profile" ]]; then
+    echo "unsafe $deployment secret scope: deploy secrets are loaded but FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE is unset" >&2
+    exit 2
+  fi
+
+  if [[ -n "$active_profile" && "$active_profile" != "$expected_profile" ]]; then
+    echo "unsafe $deployment secret scope: expected SecretSpec profile $expected_profile, got $active_profile" >&2
+    exit 2
+  fi
+}
+
+assert_deployment_targets_safe() {
+  local deployment="$1"
+  local label=""
+  local value=""
+
+  for label in resident_target telemetry_target tunnel_target control_target; do
+    case "$label" in
+      resident_target) value="$(deployment_resident_target "$deployment")" ;;
+      telemetry_target) value="$(deployment_telemetry_target "$deployment")" ;;
+      tunnel_target) value="$(deployment_tunnel_target "$deployment")" ;;
+      control_target) value="$(deployment_control_target "$deployment")" ;;
+    esac
+    [[ -n "$value" ]] || continue
+    case "$deployment" in
+      beta)
+        if deployment_target_mentions_production "$value"; then
+          echo "unsafe beta $label mentions production: $value" >&2
+          exit 2
+        fi
+        ;;
+      production)
+        if deployment_target_mentions_beta "$value"; then
+          echo "unsafe production $label mentions beta: $value" >&2
+          exit 2
+        fi
+        ;;
+    esac
+  done
+}
+
+assert_deployment_branch_safe() {
+  local deployment="$1"
+  local branch=""
+
+  branch="$(deployment_dolt_remote_branch "$deployment")"
+  case "$deployment" in
+    beta)
+      if [[ "$branch" != "beta" ]]; then
+        echo "unsafe beta Dolt branch: expected beta, got ${branch:-<empty>}" >&2
+        exit 2
+      fi
+      ;;
+    production)
+      if [[ "$branch" != "main" ]]; then
+        echo "unsafe production Dolt branch: expected main, got ${branch:-<empty>}" >&2
+        exit 2
+      fi
+      ;;
+  esac
+}
+
+assert_deployment_environment_safe() {
+  local deployment="$1"
+  local environment=""
+
+  environment="$(deployment_environment_name "$deployment")"
+  case "$deployment" in
+    beta)
+      if [[ "$environment" != "beta" ]]; then
+        echo "unsafe beta deployment environment: expected beta, got ${environment:-<empty>}" >&2
+        exit 2
+      fi
+      ;;
+    production)
+      if [[ "$environment" != "production" ]]; then
+        echo "unsafe production deployment environment: expected production, got ${environment:-<empty>}" >&2
+        exit 2
+      fi
+      ;;
+  esac
+}
+
+assert_deployment_prod_hostname_safe() {
+  local deployment="$1"
+  local prod_hostname=""
+
+  prod_hostname="$(deployment_prod_hostname "$deployment")"
+  case "$deployment" in
+    beta)
+      if [[ -n "$prod_hostname" ]]; then
+        echo "unsafe beta production hostname setting: $prod_hostname" >&2
+        exit 2
+      fi
+      ;;
+    production)
+      if [[ -n "$prod_hostname" && ( "$prod_hostname" == *beta* || "$prod_hostname" == "site-nbg1-beta" ) ]]; then
+        echo "unsafe production prod hostname setting: $prod_hostname" >&2
+        exit 2
+      fi
+      ;;
+  esac
+}
+
+assert_deployment_configuration_safe() {
+  local deployment
+  deployment="$(canonical_deployment_name "$1")"
+  case "$deployment" in
+    local) return 0 ;;
+  esac
+
+  assert_deployment_secret_scope_safe "$deployment"
+  assert_deployment_environment_safe "$deployment"
+  assert_deployment_prod_hostname_safe "$deployment"
+  assert_deployment_public_urls_safe "$deployment"
+  assert_deployment_targets_safe "$deployment"
+  assert_deployment_branch_safe "$deployment"
+}
+
+assert_resident_push_scope_safe() {
+  local environment="$1"
+  local target="$2"
+  local telemetry_target="$3"
+  local host="$4"
+  local telemetry_host="$5"
+  local prod_host="$6"
+  local site_base_url="$7"
+  local api_base_url="$8"
+  local cdn_base_url="$9"
+  local telemetry_base_url="${10}"
+  local dolt_remote_branch="${11}"
+  local deployment=""
+  local service=""
+  local url=""
+  local actual_host=""
+  local expected_host=""
+
+  case "$environment" in
+    beta) deployment="beta" ;;
+    production) deployment="production" ;;
+    *)
+      echo "resident push supports only beta or production deployment_environment, got: ${environment:-<empty>}" >&2
+      exit 2
+      ;;
+  esac
+
+  for service in site api cdn telemetry; do
+    case "$service" in
+      site) url="$site_base_url" ;;
+      api) url="$api_base_url" ;;
+      cdn) url="$cdn_base_url" ;;
+      telemetry) url="$telemetry_base_url" ;;
+    esac
+    actual_host="$(url_host "$url")"
+    expected_host="$(deployment_expected_public_host "$deployment" "$service")"
+    if [[ "$actual_host" != "$expected_host" ]]; then
+      echo "unsafe resident push $environment $service URL host: expected $expected_host, got ${actual_host:-<empty>} from $url" >&2
+      exit 2
+    fi
+  done
+
+  case "$deployment" in
+    beta)
+      if [[ "$host" == "site-nbg1-prod" || "$host" == *production* ]]; then
+        echo "unsafe beta resident hostname: $host" >&2
+        exit 2
+      fi
+      if [[ -n "$prod_host" ]]; then
+        echo "unsafe beta resident manifest carries production hostname: $prod_host" >&2
+        exit 2
+      fi
+      if deployment_target_mentions_production "$target"; then
+        echo "unsafe beta resident target mentions production: $target" >&2
+        exit 2
+      fi
+      if deployment_target_mentions_production "$telemetry_target"; then
+        echo "unsafe beta telemetry target mentions production: $telemetry_target" >&2
+        exit 2
+      fi
+      if [[ "$dolt_remote_branch" != "beta" ]]; then
+        echo "unsafe beta Dolt branch: expected beta, got ${dolt_remote_branch:-<empty>}" >&2
+        exit 2
+      fi
+      ;;
+    production)
+      if [[ "$host" == "site-nbg1-beta" || "$host" == *beta* ]]; then
+        echo "unsafe production resident hostname: $host" >&2
+        exit 2
+      fi
+      if deployment_target_mentions_beta "$target"; then
+        echo "unsafe production resident target mentions beta: $target" >&2
+        exit 2
+      fi
+      if deployment_target_mentions_beta "$telemetry_target"; then
+        echo "unsafe production telemetry target mentions beta: $telemetry_target" >&2
+        exit 2
+      fi
+      if [[ "$dolt_remote_branch" != "main" ]]; then
+        echo "unsafe production Dolt branch: expected main, got ${dolt_remote_branch:-<empty>}" >&2
+        exit 2
+      fi
+      ;;
   esac
 }
 

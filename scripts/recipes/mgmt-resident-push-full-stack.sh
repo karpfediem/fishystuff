@@ -7,14 +7,29 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 cd "$RECIPE_REPO_ROOT"
 
-exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$@"
+bootstrap_deployment_environment="beta"
+for arg in "$@"; do
+  case "$arg" in
+    deployment_environment=*) bootstrap_deployment_environment="${arg#deployment_environment=}" ;;
+  esac
+done
+bootstrap_deployment_environment="$(normalize_deployment_environment "$bootstrap_deployment_environment")"
+case "$bootstrap_deployment_environment" in
+  beta | production)
+    exec_with_secretspec_profile_if_needed "$(deployment_secretspec_profile "$bootstrap_deployment_environment")" bash "$SCRIPT_PATH" "$@"
+    ;;
+  *)
+    echo "resident push supports only beta or production deployment_environment, got: $bootstrap_deployment_environment" >&2
+    exit 2
+    ;;
+esac
 
 target=""
 telemetry_target=""
 deploy_target=""
 host="site-nbg1-beta"
 telemetry_host="telemetry-nbg1"
-prod_host="site-nbg1-prod"
+prod_host=""
 timeout="${FISHYSTUFF_RESIDENT_DEPLOY_TIMEOUT:-180}"
 remote_mgmt_bin="/usr/local/bin/mgmt"
 api_gcroot="/nix/var/nix/gcroots/mgmt/fishystuff/api-current"
@@ -274,12 +289,25 @@ resolve_dolt_remote_branch() {
 }
 
 deployment_environment="$(normalize_deployment_environment "$deployment_environment")"
+assert_deployment_secret_scope_safe "$deployment_environment"
 dolt_remote_branch="$(resolve_dolt_remote_branch "$dolt_remote_branch" "$deployment_environment")"
 deployment_domain_name="$(deployment_domain "$deployment_environment")"
 site_base_url="${site_base_url_override:-https://$deployment_domain_name}"
 api_base_url="${api_base_url_override:-https://api.$deployment_domain_name}"
 cdn_base_url="${cdn_base_url_override:-https://cdn.$deployment_domain_name}"
 telemetry_base_url="${telemetry_base_url_override:-https://telemetry.$deployment_domain_name}"
+assert_resident_push_scope_safe \
+  "$deployment_environment" \
+  "$target" \
+  "$telemetry_target" \
+  "$host" \
+  "$telemetry_host" \
+  "$prod_host" \
+  "$site_base_url" \
+  "$api_base_url" \
+  "$cdn_base_url" \
+  "$telemetry_base_url" \
+  "$dolt_remote_branch"
 if [[ "$tls_challenge" == "dns-01" && "$tls_dns_provider" == "cloudflare" && -z "$tls_dns_env_keys_csv" && -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
   tls_dns_env_keys_csv="CLOUDFLARE_API_TOKEN"
 fi

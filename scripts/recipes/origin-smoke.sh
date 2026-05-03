@@ -31,8 +31,7 @@ case "$deployment" in
     exit 2
     ;;
   *)
-    profile="$(deployment_secretspec_profile "$deployment")"
-    exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "$origin_ipv4"
+    assert_deployment_public_urls_safe "$deployment"
     ;;
 esac
 

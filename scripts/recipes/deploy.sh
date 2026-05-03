@@ -24,6 +24,7 @@ esac
 
 profile="$(deployment_secretspec_profile "$deployment")"
 exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "$@"
+assert_deployment_configuration_safe "$deployment"
 
 resident_target="$(deployment_resident_target "$deployment")"
 telemetry_target="$(deployment_telemetry_target "$deployment")"
@@ -91,6 +92,58 @@ remote_exec_with_operator_key() {
     "$@"
   rm -f "$tmp_key"
   trap - RETURN
+}
+
+assert_remote_deployment_host() {
+  local deployment="$1"
+  local role="$2"
+  local ssh_target="$3"
+  local expected_hostname="$4"
+  local tmp_key=""
+  local remote_hostname=""
+
+  [[ -n "$ssh_target" && -n "$expected_hostname" ]] || return 0
+
+  tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-deploy-host-id.XXXXXX)"
+  remote_hostname="$(
+    ssh \
+      -i "$tmp_key" \
+      -o IdentitiesOnly=yes \
+      -o StrictHostKeyChecking=accept-new \
+      "$ssh_target" \
+      'hostname -s 2>/dev/null || hostname' \
+      2>/dev/null
+  )" || {
+    rm -f "$tmp_key"
+    echo "could not verify $deployment $role host identity through $ssh_target" >&2
+    exit 2
+  }
+  rm -f "$tmp_key"
+  remote_hostname="${remote_hostname//$'\r'/}"
+  remote_hostname="${remote_hostname//$'\n'/}"
+
+  if [[ "$remote_hostname" != "$expected_hostname" ]]; then
+    cat >&2 <<EOF
+refusing deploy:
+  $deployment $role target $ssh_target resolved to host $remote_hostname
+  expected host identity: $expected_hostname
+
+This prevents a stale DNS record, bad SSH target, or copied config from applying a
+$deployment deploy to the wrong resident machine.
+EOF
+    exit 2
+  fi
+
+  case "$deployment:$remote_hostname" in
+    beta:site-nbg1-prod | beta:*production*)
+      echo "refusing beta deploy to production-looking host identity: $remote_hostname" >&2
+      exit 2
+      ;;
+    production:site-nbg1-beta | production:*beta*)
+      echo "refusing production deploy to beta-looking host identity: $remote_hostname" >&2
+      exit 2
+      ;;
+  esac
 }
 
 copy_remote_store_paths_to_local() {
@@ -243,6 +296,10 @@ if [[ "$deployment" == "production" && -z "$resident_target" ]]; then
   printf '[deploy] discovered production resident target for %s: %s\n' "$resident_host" "$resident_target" >&2
 fi
 require_value "$resident_target" "deployment $deployment does not define a resident target"
+assert_remote_deployment_host "$deployment" "resident" "$resident_target" "$resident_host"
+if [[ -n "$telemetry_target" && "$telemetry_target" != "$resident_target" ]]; then
+  assert_remote_deployment_host "$deployment" "telemetry" "$telemetry_target" "$telemetry_host"
+fi
 
 if (( ${#requested_services[@]} == 0 )); then
   used_default_services=true

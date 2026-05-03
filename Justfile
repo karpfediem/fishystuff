@@ -91,6 +91,10 @@ push-closure host *closures:
 deploy deployment *services:
   bash scripts/recipes/deploy.sh "{{deployment}}" {{services}}
 
+# Validate local deploy target boundaries without contacting remote hosts.
+deploy-safety-check deployment:
+  bash scripts/recipes/deploy-safety-check.sh "{{deployment}}"
+
 # Build the current map runtime and map-serving CDN payload once
 build-map:
   ./tools/scripts/build_map.sh

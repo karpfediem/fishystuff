@@ -26,7 +26,7 @@ panic($manifest->hostname == "", "missing resident beta hostname in /files/resid
 
 $control_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_CONTROL_HOSTNAME", "mgmt-root")
 $telemetry_hostname = $manifest->telemetry_hostname || "telemetry-nbg1"
-$prod_hostname = $manifest->prod_hostname || "site-nbg1-prod"
+$prod_hostname = $manifest->prod_hostname || ""
 $runtime_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_RUNTIME_HOSTNAME", sys.hostname())
 
 if $runtime_hostname == $control_hostname {
@@ -36,7 +36,7 @@ if $runtime_hostname == $control_hostname {
 	})
 }
 
-if ($runtime_hostname == $manifest->hostname) or ($runtime_hostname == $telemetry_hostname) or ($runtime_hostname == $prod_hostname) {
+if ($runtime_hostname == $manifest->hostname) or ($runtime_hostname == $telemetry_hostname) or (($prod_hostname != "") and ($runtime_hostname == $prod_hostname)) {
 	include fishystuff_beta_resident.host(struct {
 		manifest => $manifest,
 		hostname => $runtime_hostname,
