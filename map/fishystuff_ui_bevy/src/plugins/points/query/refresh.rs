@@ -39,7 +39,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         || !fish_evidence_visible
         || refresh.view_mode.mode != ViewMode::Map2D
     {
-        refresh.points.status = "points: hidden".to_string();
+        refresh.points.status = points_status_with_api_status("points: hidden", &refresh.snapshot);
         refresh.points.request_sig = None;
         return;
     }
@@ -51,12 +51,11 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     }
     if refresh.snapshot.failed && !refresh.snapshot.loaded {
         refresh.points.status = format!(
-            "points: snapshot failed ({})",
+            "points: {}",
             refresh
                 .snapshot
-                .last_error
-                .as_deref()
-                .unwrap_or("unknown snapshot error")
+                .failure_status()
+                .unwrap_or_else(|| "request failed; retrying".to_string())
         );
         clear_render_points(&mut refresh.points, &mut refresh.render_state);
         return;
@@ -602,7 +601,7 @@ fn points_status_line(points: &PointsState, snapshot: &EventsSnapshotState) -> S
         .bucket_px
         .map(|value| value.to_string())
         .unwrap_or_else(|| "-".to_string());
-    format!(
+    points_status_with_api_status(&format!(
         "points: mode={} rev={} snapshot_events={} idx_bucket={} cluster_bucket={} candidates={} represented={} rendered_points={} rendered_clusters={} snapshot={}",
         mode,
         revision,
@@ -614,5 +613,12 @@ fn points_status_line(points: &PointsState, snapshot: &EventsSnapshotState) -> S
         points.rendered_point_count,
         points.rendered_cluster_count,
         snapshot.last_load_kind.label(),
-    )
+    ), snapshot)
+}
+
+fn points_status_with_api_status(base: &str, snapshot: &EventsSnapshotState) -> String {
+    snapshot
+        .failure_status()
+        .map(|status| format!("{base} api=\"{status}\""))
+        .unwrap_or_else(|| base.to_string())
 }

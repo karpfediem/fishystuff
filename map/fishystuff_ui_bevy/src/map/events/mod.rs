@@ -12,6 +12,5 @@ pub use index::{
 };
 pub use snapshot::{
     EventsSnapshotState, SnapshotLoadKind, SnapshotMetaAction, META_RECHECK_INTERVAL_SECS,
-    RETRY_BACKOFF_SECS,
 };
 pub use zone_footprint::{EventZoneSetResolver, SAMPLE_RING_RADIUS_WORLD_UNITS};

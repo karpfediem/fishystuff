@@ -19,31 +19,35 @@ use super::state::{
 pub(super) fn ensure_meta_request(
     pending: ResMut<PendingRequests>,
     bootstrap: Res<ApiBootstrapState>,
+    time: Res<Time>,
 ) {
-    ensure::ensure_meta_request(pending, bootstrap);
+    ensure::ensure_meta_request(pending, bootstrap, time);
 }
 
 pub(super) fn ensure_zones_request(
     pending: ResMut<PendingRequests>,
     bootstrap: Res<ApiBootstrapState>,
+    time: Res<Time>,
 ) {
-    ensure::ensure_zones_request(pending, bootstrap);
+    ensure::ensure_zones_request(pending, bootstrap, time);
 }
 
 pub(super) fn ensure_fish_catalog_request(
     pending: ResMut<PendingRequests>,
     fish: Res<FishCatalog>,
     bootstrap: Res<ApiBootstrapState>,
+    time: Res<Time>,
 ) {
-    ensure::ensure_fish_catalog_request(pending, fish, bootstrap);
+    ensure::ensure_fish_catalog_request(pending, fish, bootstrap, time);
 }
 
 pub(super) fn ensure_community_fish_zone_support_request(
     pending: ResMut<PendingRequests>,
     community: Res<CommunityFishZoneSupportIndex>,
     bootstrap: Res<ApiBootstrapState>,
+    time: Res<Time>,
 ) {
-    ensure::ensure_community_fish_zone_support_request(pending, community, bootstrap);
+    ensure::ensure_community_fish_zone_support_request(pending, community, bootstrap, time);
 }
 
 pub(super) fn poll_requests(state: poll::RequestPollState<'_, '_>) {

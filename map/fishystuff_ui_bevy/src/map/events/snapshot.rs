@@ -14,7 +14,8 @@ use crate::plugins::api::resolve_api_request_url;
 use crate::runtime_io;
 
 pub const META_RECHECK_INTERVAL_SECS: f64 = 20.0;
-pub const RETRY_BACKOFF_SECS: f64 = 2.0;
+const RETRY_BACKOFF_BASE_SECS: f64 = 2.0;
+const RETRY_BACKOFF_MAX_SECS: f64 = 30.0;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SnapshotLoadKind {
@@ -61,6 +62,8 @@ pub struct EventsSnapshotState {
     pub snapshot_refresh_reason: String,
     pub last_meta_poll_at_secs: f64,
     pub next_retry_at_secs: f64,
+    pub last_retry_delay_secs: f64,
+    pub retry_failure_count: u32,
     pub pending_meta: Option<Receiver<Result<EventsSnapshotMetaResponse, String>>>,
     pub pending_snapshot: Option<Receiver<Result<EventsSnapshotResponse, String>>>,
 }
@@ -84,6 +87,8 @@ impl Default for EventsSnapshotState {
             snapshot_refresh_reason: "not-loaded".to_string(),
             last_meta_poll_at_secs: -1.0,
             next_retry_at_secs: 0.0,
+            last_retry_delay_secs: 0.0,
+            retry_failure_count: 0,
             pending_meta: None,
             pending_snapshot: None,
         }
@@ -120,6 +125,7 @@ impl EventsSnapshotState {
             self.loading = false;
             self.failed = false;
             self.last_error = None;
+            self.reset_retry_state();
             self.last_load_kind = SnapshotLoadKind::CacheReuse;
             self.snapshot_refresh_reason = "meta-unchanged".to_string();
             return SnapshotMetaAction::ReuseLoaded;
@@ -156,7 +162,7 @@ impl EventsSnapshotState {
         self.failed = false;
         self.last_error = None;
         self.pending_snapshot_revision = None;
-        self.next_retry_at_secs = 0.0;
+        self.reset_retry_state();
         self.last_load_kind = if last_revision.is_some() {
             SnapshotLoadKind::NetworkRefetch
         } else {
@@ -168,8 +174,33 @@ impl EventsSnapshotState {
         self.loading = false;
         self.failed = true;
         self.last_error = Some(error);
-        self.next_retry_at_secs = now_secs + RETRY_BACKOFF_SECS;
+        self.retry_failure_count = self.retry_failure_count.saturating_add(1);
+        let delay_secs = retry_delay_secs_for_failure_count(self.retry_failure_count);
+        self.last_retry_delay_secs = delay_secs;
+        self.next_retry_at_secs = now_secs + delay_secs;
         self.pending_snapshot_revision = None;
+    }
+
+    pub fn failure_status(&self) -> Option<String> {
+        let error = compact_snapshot_error(
+            self.last_error
+                .as_deref()
+                .unwrap_or("unknown snapshot error"),
+        );
+        if !self.failed {
+            return None;
+        }
+        let delay_secs = self.last_retry_delay_secs.max(RETRY_BACKOFF_BASE_SECS);
+        Some(format!(
+            "request failed; retrying in {} ({error})",
+            format_retry_delay_secs(delay_secs)
+        ))
+    }
+
+    fn reset_retry_state(&mut self) {
+        self.next_retry_at_secs = 0.0;
+        self.last_retry_delay_secs = 0.0;
+        self.retry_failure_count = 0;
     }
 
     pub fn select_for_view(&self, query: &LocalEventQuery<'_>) -> ViewSelection {
@@ -240,6 +271,39 @@ impl EventsSnapshotState {
             filtered_indices: std::mem::take(&mut filtered_indices),
         }
     }
+}
+
+fn retry_delay_secs_for_failure_count(failure_count: u32) -> f64 {
+    if failure_count == 0 {
+        return 0.0;
+    }
+    let multiplier = 1u32 << failure_count.saturating_sub(1).min(8);
+    (RETRY_BACKOFF_BASE_SECS * f64::from(multiplier)).min(RETRY_BACKOFF_MAX_SECS)
+}
+
+fn format_retry_delay_secs(delay_secs: f64) -> String {
+    let seconds = delay_secs.ceil().max(1.0) as u64;
+    if seconds >= 60 {
+        return format!("{}m", seconds.div_ceil(60));
+    }
+    format!("{seconds}s")
+}
+
+fn compact_snapshot_error(error: &str) -> String {
+    const MAX_ERROR_CHARS: usize = 120;
+    let single_line = error.split_whitespace().collect::<Vec<_>>().join(" ");
+    if single_line.is_empty() {
+        return "unknown error".to_string();
+    }
+    if single_line.chars().count() <= MAX_ERROR_CHARS {
+        return single_line;
+    }
+    let mut compact = single_line
+        .chars()
+        .take(MAX_ERROR_CHARS.saturating_sub(3))
+        .collect::<String>();
+    compact.push_str("...");
+    compact
 }
 
 fn spawn_events_snapshot_meta_request() -> Receiver<Result<EventsSnapshotMetaResponse, String>> {
@@ -368,6 +432,52 @@ mod tests {
                 source_id: None,
             },
         ]
+    }
+
+    #[test]
+    fn snapshot_retry_backoff_grows_and_caps() {
+        let mut state = EventsSnapshotState::default();
+
+        state.mark_failure(10.0, "Failed to fetch".to_string());
+        assert_eq!(state.next_retry_at_secs, 12.0);
+        assert!(!state.should_poll_meta(11.999));
+        assert!(state.should_poll_meta(12.0));
+        assert_eq!(
+            state.failure_status().as_deref(),
+            Some("request failed; retrying in 2s (Failed to fetch)")
+        );
+
+        state.mark_failure(12.0, "Failed to fetch".to_string());
+        assert_eq!(state.next_retry_at_secs, 16.0);
+        state.mark_failure(16.0, "Failed to fetch".to_string());
+        assert_eq!(state.next_retry_at_secs, 24.0);
+
+        for _ in 0..8 {
+            state.mark_failure(100.0, "Failed to fetch".to_string());
+        }
+        assert_eq!(state.last_retry_delay_secs, 30.0);
+    }
+
+    #[test]
+    fn snapshot_retry_state_resets_after_success() {
+        let mut state = EventsSnapshotState::default();
+        state.mark_failure(10.0, "Failed to fetch".to_string());
+        assert!(state.failed);
+
+        state.apply_snapshot(EventsSnapshotResponse {
+            revision: "rev-1".to_string(),
+            event_count: 0,
+            events: Vec::new(),
+            ..Default::default()
+        });
+
+        assert!(!state.failed);
+        assert_eq!(state.next_retry_at_secs, 0.0);
+        assert_eq!(state.last_retry_delay_secs, 0.0);
+        assert_eq!(state.failure_status(), None);
+
+        state.mark_failure(20.0, "Failed to fetch".to_string());
+        assert_eq!(state.next_retry_at_secs, 22.0);
     }
 
     #[test]
