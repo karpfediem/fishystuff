@@ -19,6 +19,7 @@ build_ssh_options() {
     -o KbdInteractiveAuthentication=no
     -o ConnectTimeout=10
     -o StrictHostKeyChecking=accept-new
+    -o LogLevel=ERROR
     -o "UserKnownHostsFile=$known_hosts_file"
   )
 }
@@ -129,7 +130,17 @@ if [[ "${FISHYSTUFF_DEPLOY_KEY_BOUNDARY_DRY_RUN:-false}" == "true" ]]; then
   exit 0
 fi
 
-secretspec run --profile beta-deploy -- bash "$SCRIPT_PATH" __with-profile beta-deploy "$beta_target" "$beta_telemetry_target" "$production_target"
-secretspec run --profile production-deploy -- bash "$SCRIPT_PATH" __with-profile production-deploy "$beta_target" "$beta_telemetry_target" "$production_target"
+status=0
+if ! secretspec run --profile beta-deploy -- bash "$SCRIPT_PATH" __with-profile beta-deploy "$beta_target" "$beta_telemetry_target" "$production_target"; then
+  status=1
+fi
+if ! secretspec run --profile production-deploy -- bash "$SCRIPT_PATH" __with-profile production-deploy "$beta_target" "$beta_telemetry_target" "$production_target"; then
+  status=1
+fi
+
+if (( status != 0 )); then
+  printf '[deploy-key-boundary] failed\n' >&2
+  exit "$status"
+fi
 
 printf '[deploy-key-boundary] passed\n'

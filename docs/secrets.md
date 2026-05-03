@@ -24,7 +24,6 @@ Supported local profiles:
   - `HETZNER_SSH_PUBLIC_KEY`
   - `HETZNER_SSH_PRIVATE_KEY`
 - `production-deploy`
-  - `HETZNER_API_TOKEN`
   - `HETZNER_SSH_PRIVATE_KEY`
 - `bot`
   - `DISCORD_TOKEN`
@@ -90,7 +89,8 @@ The beta key must not be authorized on production hosts, and the production key
 must not be authorized on beta hosts. Run `just deploy-key-boundary-check` after
 key rotation or host bootstrap to verify that boundary without mutating hosts.
 After DNS cutover, production control defaults to the production site target,
-not the old beta `mgmt-root` control path.
+not the old beta `mgmt-root` control path. `HETZNER_API_TOKEN` is optional for
+production and only needed for explicit host discovery flows.
 
 For local debugging, the bootstrap helper also supports optional Prometheus and
 pprof output without enabling them by default:
