@@ -8,6 +8,7 @@ import {
 
 test("layerSearchTermKindLabels exposes human-readable layer support", () => {
   assert.deepEqual(layerSearchTermKindLabels("zone_mask"), ["Fish", "Fish filters", "Zones"]);
+  assert.deepEqual(layerSearchTermKindLabels("hotspots"), ["Fish", "Fish filters"]);
   assert.deepEqual(layerSearchTermKindLabels("regions"), ["Semantic fields"]);
 });
 

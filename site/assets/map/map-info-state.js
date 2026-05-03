@@ -52,8 +52,8 @@ function normalizeSelectionLayerSamples(selection) {
 
 const INFO_WINDOW_TITLE_ICON = "inspect-fill";
 const INFO_WINDOW_STATUS_ICON = "information-circle";
-const FISHING_HOTSPOTS_LAYER_ID = "fishing_hotspots";
-const FISHING_HOTSPOT_KIND = "fishing_hotspot";
+const HOTSPOTS_LAYER_ID = "hotspots";
+const HOTSPOT_KIND = "hotspot";
 const HOTSPOT_UNSET_STAT_VALUE = "Not set";
 const LANDMARK_LAYER_IDS = Object.freeze([
   "trade_npcs",
@@ -462,8 +462,8 @@ function hotspotMetric(label, value, icon) {
 
 function isHotspotSample(sample) {
   return (
-    trimString(sample?.layerId) === FISHING_HOTSPOTS_LAYER_ID ||
-    trimString(sample?.kind) === FISHING_HOTSPOT_KIND
+    trimString(sample?.layerId) === HOTSPOTS_LAYER_ID ||
+    trimString(sample?.kind) === HOTSPOT_KIND
   );
 }
 

@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fishing-domain-icons-json", required=True)
     parser.add_argument("--fish-catalog-icons-json", required=True)
     parser.add_argument("--fish-table-icons-json", required=True)
-    parser.add_argument("--fishing-hotspots-json", default="")
+    parser.add_argument("--hotspots-json", default="")
     parser.add_argument("--out", default="-")
     return parser.parse_args()
 
@@ -305,15 +305,15 @@ def add_hotspot_icon(report: Report, source_path: str | None, icon_id: object) -
         add_icon_filename(report, icon_name)
 
 
-def add_fishing_hotspot_assets(report: Report, cdn_root: Path, hotspot_json: str) -> None:
+def add_hotspot_assets(report: Report, cdn_root: Path, hotspot_json: str) -> None:
     if not hotspot_json:
         return
     hotspot_path = Path(hotspot_json).resolve()
     try:
         rel_hotspot_path = hotspot_path.relative_to(cdn_root).as_posix()
     except ValueError:
-        rel_hotspot_path = "hotspots/fishing_hotspots.v1.json"
-    report.add("fishing_hotspots_layer", rel_hotspot_path)
+        rel_hotspot_path = "hotspots/hotspots.v1.json"
+    report.add("hotspots_layer", rel_hotspot_path)
 
     payload = load_json_optional(hotspot_path)
     def add_loot_items(items: object) -> None:
@@ -440,7 +440,7 @@ def main() -> None:
         raw_key="item_icon_file",
     )
     add_fish_table_icons(report, load_rows(Path(args.fish_table_icons_json)))
-    add_fishing_hotspot_assets(report, cdn_root, args.fishing_hotspots_json)
+    add_hotspot_assets(report, cdn_root, args.hotspots_json)
 
     payload = report.finalize()
     payload["map_version"] = map_version

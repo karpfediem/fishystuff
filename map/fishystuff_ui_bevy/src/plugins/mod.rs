@@ -4,7 +4,7 @@ pub mod camera;
 #[cfg(target_arch = "wasm32")]
 pub mod diagnostics;
 pub mod field_tile_layers;
-pub mod fishing_hotspots;
+pub mod hotspots;
 pub mod hover_targets;
 pub mod input;
 pub mod local_layers;
@@ -36,7 +36,7 @@ impl PluginGroup for FishystuffPlugins {
             .add(field_tile_layers::FieldTileLayersPlugin)
             .add(vector_layers::VectorLayersPlugin)
             .add(waypoint_layers::WaypointLayersPlugin)
-            .add(fishing_hotspots::FishingHotspotLayersPlugin)
+            .add(hotspots::HotspotLayersPlugin)
             .add(api::ApiPlugin)
             .add(bookmarks::BookmarksPlugin)
             .add(points::PointsPlugin)

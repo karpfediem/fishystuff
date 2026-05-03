@@ -17,7 +17,7 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layer_query::LayerQuerySample;
 use crate::map::layers::{
     GeometrySpace, LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, WaypointSourceSpec,
-    FISHING_HOTSPOTS_LAYER_KEY,
+    HOTSPOTS_LAYER_KEY,
 };
 use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::world::MapToWorld;
@@ -184,7 +184,7 @@ fn update_waypoint_layers(
             runtime_state.manifest_status = LayerManifestStatus::Missing;
             continue;
         }
-        if layer.key == FISHING_HOTSPOTS_LAYER_KEY {
+        if layer.key == HOTSPOTS_LAYER_KEY {
             continue;
         }
         let Some(source) = layer.waypoint_source.as_ref() else {

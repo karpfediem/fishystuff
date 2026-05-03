@@ -1,5 +1,5 @@
 mod field_layers;
-mod fishing_hotspots;
+mod hotspots;
 mod mysql_store;
 mod ranking;
 mod region_groups;
@@ -254,7 +254,7 @@ enum Commands {
         #[arg(long)]
         out: PathBuf,
     },
-    BuildFishingHotspotsAsset {
+    BuildHotspotsAsset {
         #[arg(long)]
         float_fishing_point_xlsx: PathBuf,
         #[arg(long)]
@@ -591,13 +591,13 @@ fn main() -> Result<()> {
             waypoint_xml,
             out,
         ),
-        Commands::BuildFishingHotspotsAsset {
+        Commands::BuildHotspotsAsset {
             float_fishing_point_xlsx,
             float_fishing_xlsx,
             source_loot_groups_json,
             bdolytics_hotspots_json,
             out,
-        } => run_build_fishing_hotspots_asset(
+        } => run_build_hotspots_asset(
             float_fishing_point_xlsx,
             float_fishing_xlsx,
             source_loot_groups_json,
@@ -1593,14 +1593,14 @@ fn run_build_region_nodes_geojson(
     Ok(())
 }
 
-fn run_build_fishing_hotspots_asset(
+fn run_build_hotspots_asset(
     float_fishing_point_xlsx: PathBuf,
     float_fishing_xlsx: PathBuf,
     source_loot_groups_json: PathBuf,
     bdolytics_hotspots_json: Option<PathBuf>,
     out: PathBuf,
 ) -> Result<()> {
-    let summary = fishing_hotspots::build_fishing_hotspot_asset(
+    let summary = hotspots::build_hotspot_asset(
         &float_fishing_point_xlsx,
         &float_fishing_xlsx,
         &source_loot_groups_json,
@@ -1608,7 +1608,7 @@ fn run_build_fishing_hotspots_asset(
         &out,
     )?;
     println!(
-        "build-fishing-hotspots-asset: out={} hotspots={} source_points={} source_groups={} source_loot_options={} source_loot_variants={} imported_metadata={} matched_imported_metadata={} expanded_degenerate_rectangles={}",
+        "build-hotspots-asset: out={} hotspots={} source_points={} source_groups={} source_loot_options={} source_loot_variants={} imported_metadata={} matched_imported_metadata={} expanded_degenerate_rectangles={}",
         out.display(),
         summary.hotspot_count,
         summary.source_point_rows,

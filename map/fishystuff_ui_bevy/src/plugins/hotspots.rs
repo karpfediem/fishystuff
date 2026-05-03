@@ -8,22 +8,26 @@ use fishystuff_core::field_metadata::{FieldDetailFact, FieldDetailSection, Field
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::bridge::contract::{FishyMapSearchExpressionNode, FishyMapSharedFishState};
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::layer_query::LayerQuerySample;
 use crate::map::layers::{
-    LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, FISHING_HOTSPOTS_LAYER_KEY,
+    LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, HOTSPOTS_LAYER_KEY,
+};
+use crate::map::search_filters::{
+    fish_id_matches_search_expression, project_expression_for_fish_selection,
 };
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{
-    fish_item_icon_url, remote_image_handle, HoverState, MapDisplayState, RemoteImageCache,
-    RemoteImageStatus,
+    fish_item_icon_url, remote_image_handle, FishCatalog, HoverState, MapDisplayState,
+    RemoteImageCache, RemoteImageStatus, SearchExpressionState,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::waypoint_layers::{WaypointLayerInteractionSample, WaypointSampleOptions};
 use crate::runtime_io;
 
-pub(crate) const FISHING_HOTSPOT_TARGET_KEY: &str = "fishing_hotspot";
+pub(crate) const HOTSPOT_TARGET_KEY: &str = "hotspot";
 
 const HOTSPOT_FILL_Z_OFFSET: f32 = 0.03;
 const HOTSPOT_BORDER_Z_OFFSET: f32 = 0.04;
@@ -34,33 +38,30 @@ const HOTSPOT_BORDER_THICKNESS_SCREEN_PX: f32 = 2.0;
 const HOTSPOT_ICON_SIZE_SCREEN_PX: f32 = 18.0;
 const HOTSPOT_SAMPLE_RGB: Rgb = Rgb::new(255, 179, 56);
 
-pub struct FishingHotspotLayersPlugin;
+pub struct HotspotLayersPlugin;
 
-impl Plugin for FishingHotspotLayersPlugin {
+impl Plugin for HotspotLayersPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<FishingHotspotLayerRuntime>()
-            .add_systems(
-                Update,
-                (update_fishing_hotspot_layers, sync_fishing_hotspot_entities),
-            );
+        app.init_resource::<HotspotLayerRuntime>()
+            .add_systems(Update, (update_hotspot_layers, sync_hotspot_entities));
     }
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct FishingHotspotLayerRuntime {
-    states: HashMap<LayerId, FishingHotspotLayerState>,
+pub(crate) struct HotspotLayerRuntime {
+    states: HashMap<LayerId, HotspotLayerState>,
 }
 
 #[derive(Default)]
-struct FishingHotspotLayerState {
+struct HotspotLayerState {
     source_key: Option<String>,
-    pending: Option<Receiver<Result<FishingHotspotAsset, String>>>,
-    hotspots: Vec<FishingHotspotRecord>,
+    pending: Option<Receiver<Result<HotspotAsset, String>>>,
+    hotspots: Vec<HotspotRecord>,
     entities: Vec<Entity>,
 }
 
 #[derive(Component, Clone, Copy)]
-struct FishingHotspotLayerFeature {
+struct HotspotLayerFeature {
     layer_id: LayerId,
     hotspot_id: u32,
     min_x: f32,
@@ -73,15 +74,15 @@ struct FishingHotspotLayerFeature {
 }
 
 #[derive(Component)]
-struct FishingHotspotLayerFill;
+struct HotspotLayerFill;
 
 #[derive(Component)]
-struct FishingHotspotLayerBorder {
+struct HotspotLayerBorder {
     edge: HotspotBorderEdge,
 }
 
 #[derive(Component)]
-struct FishingHotspotLayerIcon;
+struct HotspotLayerIcon;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum HotspotBorderEdge {
@@ -93,13 +94,13 @@ enum HotspotBorderEdge {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-struct FishingHotspotAsset {
+struct HotspotAsset {
     schema: String,
     version: u32,
-    hotspots: Vec<FishingHotspotRecord>,
+    hotspots: Vec<HotspotRecord>,
 }
 
-impl Default for FishingHotspotAsset {
+impl Default for HotspotAsset {
     fn default() -> Self {
         Self {
             schema: String::new(),
@@ -111,7 +112,7 @@ impl Default for FishingHotspotAsset {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
-struct FishingHotspotRecord {
+struct HotspotRecord {
     id: u32,
     point_size: f64,
     start_x: f64,
@@ -135,7 +136,7 @@ struct FishingHotspotRecord {
     spawn_action_index: Option<u32>,
     point_contents_group_key: Option<u32>,
     fishing_contents_group_key: Option<u32>,
-    drop_groups: Vec<FishingHotspotDropGroup>,
+    drop_groups: Vec<HotspotDropGroup>,
     min_wait_time: Option<u32>,
     max_wait_time: Option<u32>,
     point_remain_time: Option<u32>,
@@ -143,13 +144,13 @@ struct FishingHotspotRecord {
     max_fish_count: Option<u32>,
     available_fishing_level: Option<u32>,
     observe_fishing_level: Option<u32>,
-    source_stats: FishingHotspotSourceStats,
-    imported_metadata: Option<FishingHotspotImportedMetadata>,
+    source_stats: HotspotSourceStats,
+    imported_metadata: Option<HotspotImportedMetadata>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
-struct FishingHotspotDropGroup {
+struct HotspotDropGroup {
     slot: u8,
     drop_rate: Option<u32>,
     group_key: u32,
@@ -157,7 +158,7 @@ struct FishingHotspotDropGroup {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
-struct FishingHotspotSourceStats {
+struct HotspotSourceStats {
     min_wait_time: u32,
     max_wait_time: u32,
     point_remain_time: u32,
@@ -169,7 +170,7 @@ struct FishingHotspotSourceStats {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
-struct FishingHotspotImportedMetadata {
+struct HotspotImportedMetadata {
     source_id: String,
     source_hotspot_id: u32,
     min_wait_time: Option<u32>,
@@ -181,17 +182,17 @@ struct FishingHotspotImportedMetadata {
     observe_fishing_level: Option<u32>,
 }
 
-fn update_fishing_hotspot_layers(
+fn update_hotspot_layers(
     mut commands: Commands,
     registry: Res<LayerRegistry>,
     mut layer_runtime: ResMut<LayerRuntime>,
-    mut runtime: ResMut<FishingHotspotLayerRuntime>,
+    mut runtime: ResMut<HotspotLayerRuntime>,
 ) {
     layer_runtime.sync_to_registry(&registry);
-    prune_stale_fishing_hotspot_layers(&registry, &mut runtime, &mut commands);
+    prune_stale_hotspot_layers(&registry, &mut runtime, &mut commands);
 
     for layer in registry.ordered() {
-        if layer.key != FISHING_HOTSPOTS_LAYER_KEY {
+        if layer.key != HOTSPOTS_LAYER_KEY {
             continue;
         }
         let Some(runtime_state) = layer_runtime.get_mut(layer.id) else {
@@ -227,7 +228,7 @@ fn update_fishing_hotspot_layers(
                         }
                         Err(err) => {
                             bevy::log::warn!(
-                                "failed to load fishing hotspot layer {} from {}: {}",
+                                "failed to load hotspot layer {} from {}: {}",
                                 layer.key,
                                 resolve_hotspot_source_url(&source.url),
                                 err
@@ -258,38 +259,40 @@ fn update_fishing_hotspot_layers(
     }
 }
 
-fn sync_fishing_hotspot_entities(
+fn sync_hotspot_entities(
     display_state: Res<MapDisplayState>,
     view_mode: Res<ViewModeState>,
     hover_state: Res<HoverState>,
     layer_runtime: Res<LayerRuntime>,
+    fish_catalog: Res<FishCatalog>,
+    search_expression: Res<SearchExpressionState>,
     mut remote_images: ResMut<RemoteImageCache>,
     camera_q: Query<&Projection, With<Map2dCamera>>,
     mut queries: ParamSet<(
         Query<
             (
-                &FishingHotspotLayerFeature,
+                &HotspotLayerFeature,
                 &mut Transform,
                 &mut Visibility,
                 &mut Sprite,
             ),
-            With<FishingHotspotLayerFill>,
+            With<HotspotLayerFill>,
         >,
         Query<(
-            &FishingHotspotLayerFeature,
-            &FishingHotspotLayerBorder,
+            &HotspotLayerFeature,
+            &HotspotLayerBorder,
             &mut Transform,
             &mut Visibility,
             &mut Sprite,
         )>,
         Query<
             (
-                &FishingHotspotLayerFeature,
+                &HotspotLayerFeature,
                 &mut Transform,
                 &mut Visibility,
                 &mut Sprite,
             ),
-            With<FishingHotspotLayerIcon>,
+            With<HotspotLayerIcon>,
         >,
     )>,
 ) {
@@ -297,7 +300,9 @@ fn sync_fishing_hotspot_entities(
     let camera_scale = camera_world_scale(&camera_q);
     let border_thickness = HOTSPOT_BORDER_THICKNESS_SCREEN_PX * camera_scale;
     let icon_size = hotspot_icon_world_size(&display_state, camera_scale);
-    let hovered_hotspot_id = hovered_fishing_hotspot_id(&hover_state);
+    let hovered_hotspot_id = hovered_hotspot_id(&hover_state);
+    let projected_search_expression =
+        project_expression_for_fish_selection(&search_expression.expression);
 
     for (feature, mut transform, mut visibility, mut sprite) in &mut queries.p0() {
         let Some(state) = layer_runtime.get(feature.layer_id) else {
@@ -307,7 +312,17 @@ fn sync_fishing_hotspot_entities(
         let width = feature.width();
         let height = feature.height();
         let hovered = hovered_hotspot_id == Some(feature.hotspot_id);
-        if !ui_visible || !state.visible || width <= f32::EPSILON || height <= f32::EPSILON {
+        if !ui_visible
+            || !state.visible
+            || width <= f32::EPSILON
+            || height <= f32::EPSILON
+            || !hotspot_feature_matches_search_expression(
+                feature,
+                projected_search_expression.as_ref(),
+                &fish_catalog,
+                &search_expression.shared_fish_state,
+            )
+        {
             *visibility = Visibility::Hidden;
             continue;
         }
@@ -333,7 +348,17 @@ fn sync_fishing_hotspot_entities(
         };
         let width = feature.width();
         let height = feature.height();
-        if !ui_visible || !state.visible || width <= f32::EPSILON || height <= f32::EPSILON {
+        if !ui_visible
+            || !state.visible
+            || width <= f32::EPSILON
+            || height <= f32::EPSILON
+            || !hotspot_feature_matches_search_expression(
+                feature,
+                projected_search_expression.as_ref(),
+                &fish_catalog,
+                &search_expression.shared_fish_state,
+            )
+        {
             *visibility = Visibility::Hidden;
             continue;
         }
@@ -354,7 +379,15 @@ fn sync_fishing_hotspot_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
-        if !ui_visible || !state.visible {
+        if !ui_visible
+            || !state.visible
+            || !hotspot_feature_matches_search_expression(
+                feature,
+                projected_search_expression.as_ref(),
+                &fish_catalog,
+                &search_expression.shared_fish_state,
+            )
+        {
             *visibility = Visibility::Hidden;
             continue;
         }
@@ -382,28 +415,28 @@ fn sync_fishing_hotspot_entities(
     }
 }
 
-fn validate_hotspot_asset(asset: FishingHotspotAsset) -> Result<FishingHotspotAsset, String> {
-    if asset.schema != "fishystuff.fishing_hotspots" {
+fn validate_hotspot_asset(asset: HotspotAsset) -> Result<HotspotAsset, String> {
+    if asset.schema != "fishystuff.hotspots" {
         return Err(format!("unexpected schema `{}`", asset.schema));
     }
     if asset.version != 1 {
         return Err(format!(
-            "unsupported fishing hotspot asset version {}",
+            "unsupported hotspot asset version {}",
             asset.version
         ));
     }
     Ok(asset)
 }
 
-fn prune_stale_fishing_hotspot_layers(
+fn prune_stale_hotspot_layers(
     registry: &LayerRegistry,
-    runtime: &mut FishingHotspotLayerRuntime,
+    runtime: &mut HotspotLayerRuntime,
     commands: &mut Commands,
 ) {
     let valid_ids: HashSet<LayerId> = registry
         .ordered()
         .iter()
-        .filter(|layer| layer.key == FISHING_HOTSPOTS_LAYER_KEY)
+        .filter(|layer| layer.key == HOTSPOTS_LAYER_KEY)
         .map(|layer| layer.id)
         .collect();
     runtime.states.retain(|layer_id, state| {
@@ -425,7 +458,7 @@ fn clear_hotspot_layer_entities(entities: &mut Vec<Entity>, commands: &mut Comma
 fn spawn_hotspot_entities(
     commands: &mut Commands,
     layer_id: LayerId,
-    hotspots: &[FishingHotspotRecord],
+    hotspots: &[HotspotRecord],
 ) -> Vec<Entity> {
     let mut entities = Vec::with_capacity(hotspots.len().saturating_mul(6));
     for hotspot in hotspots {
@@ -434,7 +467,7 @@ fn spawn_hotspot_entities(
         if width <= f32::EPSILON || height <= f32::EPSILON {
             continue;
         }
-        let feature = FishingHotspotLayerFeature {
+        let feature = HotspotLayerFeature {
             layer_id,
             hotspot_id: hotspot.id,
             min_x: hotspot.min_x as f32,
@@ -447,9 +480,9 @@ fn spawn_hotspot_entities(
         };
         let fill = commands
             .spawn((
-                Name::new(format!("Fishing Hotspot #{}", hotspot.id)),
+                Name::new(format!("Hotspot #{}", hotspot.id)),
                 feature,
-                FishingHotspotLayerFill,
+                HotspotLayerFill,
                 World2dRenderEntity,
                 world_2d_layers(),
                 Sprite::from_color(HOTSPOT_FILL_COLOR, Vec2::new(width, height)),
@@ -466,9 +499,9 @@ fn spawn_hotspot_entities(
         ] {
             let border = commands
                 .spawn((
-                    Name::new(format!("Fishing Hotspot #{} Border", hotspot.id)),
+                    Name::new(format!("Hotspot #{} Border", hotspot.id)),
                     feature,
-                    FishingHotspotLayerBorder { edge },
+                    HotspotLayerBorder { edge },
                     World2dRenderEntity,
                     world_2d_layers(),
                     Sprite::from_color(HOTSPOT_BORDER_COLOR, Vec2::ZERO),
@@ -480,9 +513,9 @@ fn spawn_hotspot_entities(
         }
         let icon = commands
             .spawn((
-                Name::new(format!("Fishing Hotspot #{} Fish Icon", hotspot.id)),
+                Name::new(format!("Hotspot #{} Fish Icon", hotspot.id)),
                 feature,
-                FishingHotspotLayerIcon,
+                HotspotLayerIcon,
                 World2dRenderEntity,
                 world_2d_layers(),
                 Sprite::default(),
@@ -496,40 +529,48 @@ fn spawn_hotspot_entities(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn fishing_hotspot_sample_at_world_point_with_options(
+pub(crate) fn hotspot_sample_at_world_point_with_options(
     world_point: WorldPoint,
-    hotspot_runtime: &FishingHotspotLayerRuntime,
+    hotspot_runtime: &HotspotLayerRuntime,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
+    fish_catalog: &FishCatalog,
+    search_expression: &SearchExpressionState,
     options: WaypointSampleOptions,
 ) -> Option<WaypointLayerInteractionSample> {
-    fishing_hotspot_samples_at_world_point_with_options(
+    hotspot_samples_at_world_point_with_options(
         world_point,
         hotspot_runtime,
         layer_registry,
         layer_runtime,
+        fish_catalog,
+        search_expression,
         options,
     )
     .into_iter()
     .next()
 }
 
-pub(crate) fn fishing_hotspot_samples_at_world_point_with_options(
+pub(crate) fn hotspot_samples_at_world_point_with_options(
     world_point: WorldPoint,
-    hotspot_runtime: &FishingHotspotLayerRuntime,
+    hotspot_runtime: &HotspotLayerRuntime,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
+    fish_catalog: &FishCatalog,
+    search_expression: &SearchExpressionState,
     options: WaypointSampleOptions,
 ) -> Vec<WaypointLayerInteractionSample> {
     if options
         .target_key
-        .is_some_and(|target_key| target_key != FISHING_HOTSPOT_TARGET_KEY)
+        .is_some_and(|target_key| target_key != HOTSPOT_TARGET_KEY)
     {
         return Vec::new();
     }
     let mut hits = Vec::new();
+    let projected_search_expression =
+        project_expression_for_fish_selection(&search_expression.expression);
     for layer in layer_registry.ordered() {
-        if layer.key != FISHING_HOTSPOTS_LAYER_KEY {
+        if layer.key != HOTSPOTS_LAYER_KEY {
             continue;
         }
         if !options.include_hidden_layers && !layer_runtime.visible(layer.id) {
@@ -542,17 +583,25 @@ pub(crate) fn fishing_hotspot_samples_at_world_point_with_options(
             continue;
         }
         for hotspot in &layer_state.hotspots {
+            if !hotspot_matches_search_expression(
+                hotspot,
+                projected_search_expression.as_ref(),
+                fish_catalog,
+                &search_expression.shared_fish_state,
+            ) {
+                continue;
+            }
             if !hotspot_contains_world_point(hotspot, world_point) {
                 continue;
             }
-            hits.push(FishingHotspotHit {
+            hits.push(HotspotHit {
                 area: hotspot_area(hotspot),
                 center_distance_sq: hotspot_center_distance_sq(hotspot, world_point),
                 display_order: layer_runtime
                     .get(layer.id)
                     .map(|state| state.display_order)
                     .unwrap_or(layer.display_order),
-                sample: fishing_hotspot_interaction_sample(layer, hotspot),
+                sample: hotspot_interaction_sample(layer, hotspot),
             });
         }
     }
@@ -573,20 +622,20 @@ pub(crate) fn fishing_hotspot_samples_at_world_point_with_options(
     hits.into_iter().map(|hit| hit.sample).collect()
 }
 
-pub(crate) fn fishing_hotspot_layers_pending(
-    hotspot_runtime: &FishingHotspotLayerRuntime,
+pub(crate) fn hotspot_layers_pending(
+    hotspot_runtime: &HotspotLayerRuntime,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
     options: WaypointSampleOptions,
 ) -> bool {
     if options
         .target_key
-        .is_some_and(|target_key| target_key != FISHING_HOTSPOT_TARGET_KEY)
+        .is_some_and(|target_key| target_key != HOTSPOT_TARGET_KEY)
     {
         return false;
     }
     layer_registry.ordered().iter().any(|layer| {
-        layer.key == FISHING_HOTSPOTS_LAYER_KEY
+        layer.key == HOTSPOTS_LAYER_KEY
             && (options.include_hidden_layers || layer_runtime.visible(layer.id))
             && hotspot_runtime
                 .states
@@ -596,14 +645,14 @@ pub(crate) fn fishing_hotspot_layers_pending(
     })
 }
 
-struct FishingHotspotHit {
+struct HotspotHit {
     area: f64,
     center_distance_sq: f64,
     display_order: i32,
     sample: WaypointLayerInteractionSample,
 }
 
-impl FishingHotspotLayerFeature {
+impl HotspotLayerFeature {
     fn width(self) -> f32 {
         (self.max_x - self.min_x).abs()
     }
@@ -611,6 +660,49 @@ impl FishingHotspotLayerFeature {
     fn height(self) -> f32 {
         (self.max_z - self.min_z).abs()
     }
+}
+
+fn hotspot_feature_matches_search_expression(
+    feature: &HotspotLayerFeature,
+    projected_expression: Option<&FishyMapSearchExpressionNode>,
+    fish_catalog: &FishCatalog,
+    shared_fish_state: &FishyMapSharedFishState,
+) -> bool {
+    fish_item_id_matches_search_expression(
+        feature.primary_fish_item_id,
+        projected_expression,
+        fish_catalog,
+        shared_fish_state,
+    )
+}
+
+fn hotspot_matches_search_expression(
+    hotspot: &HotspotRecord,
+    projected_expression: Option<&FishyMapSearchExpressionNode>,
+    fish_catalog: &FishCatalog,
+    shared_fish_state: &FishyMapSharedFishState,
+) -> bool {
+    fish_item_id_matches_search_expression(
+        hotspot.primary_fish_item_id,
+        projected_expression,
+        fish_catalog,
+        shared_fish_state,
+    )
+}
+
+fn fish_item_id_matches_search_expression(
+    fish_item_id: Option<u32>,
+    projected_expression: Option<&FishyMapSearchExpressionNode>,
+    fish_catalog: &FishCatalog,
+    shared_fish_state: &FishyMapSharedFishState,
+) -> bool {
+    let Some(expression) = projected_expression else {
+        return true;
+    };
+    let Some(fish_id) = fish_item_id.and_then(|item_id| i32::try_from(item_id).ok()) else {
+        return false;
+    };
+    fish_id_matches_search_expression(fish_catalog, fish_id, expression, shared_fish_state)
 }
 
 fn camera_world_scale(camera_q: &Query<&Projection, With<Map2dCamera>>) -> f32 {
@@ -634,21 +726,18 @@ fn hotspot_icon_world_size(display_state: &MapDisplayState, camera_scale: f32) -
         )
 }
 
-fn hovered_fishing_hotspot_id(hover_state: &HoverState) -> Option<u32> {
+fn hovered_hotspot_id(hover_state: &HoverState) -> Option<u32> {
     hover_state
         .info
         .as_ref()?
         .layer_samples
         .iter()
-        .find(|sample| {
-            sample.layer_id == FISHING_HOTSPOTS_LAYER_KEY
-                && sample.kind == FISHING_HOTSPOT_TARGET_KEY
-        })
+        .find(|sample| sample.layer_id == HOTSPOTS_LAYER_KEY && sample.kind == HOTSPOT_TARGET_KEY)
         .and_then(|sample| sample.field_id)
 }
 
 fn border_transform_and_size(
-    feature: &FishingHotspotLayerFeature,
+    feature: &HotspotLayerFeature,
     edge: HotspotBorderEdge,
     thickness: f32,
 ) -> (Vec2, Vec2) {
@@ -675,28 +764,28 @@ fn border_transform_and_size(
     }
 }
 
-fn hotspot_contains_world_point(hotspot: &FishingHotspotRecord, world_point: WorldPoint) -> bool {
+fn hotspot_contains_world_point(hotspot: &HotspotRecord, world_point: WorldPoint) -> bool {
     world_point.x >= hotspot.min_x
         && world_point.x <= hotspot.max_x
         && world_point.z >= hotspot.min_z
         && world_point.z <= hotspot.max_z
 }
 
-fn hotspot_area(hotspot: &FishingHotspotRecord) -> f64 {
+fn hotspot_area(hotspot: &HotspotRecord) -> f64 {
     (hotspot.max_x - hotspot.min_x).abs() * (hotspot.max_z - hotspot.min_z).abs()
 }
 
-fn hotspot_center_distance_sq(hotspot: &FishingHotspotRecord, world_point: WorldPoint) -> f64 {
+fn hotspot_center_distance_sq(hotspot: &HotspotRecord, world_point: WorldPoint) -> f64 {
     let dx = world_point.x - hotspot.center_x;
     let dz = world_point.z - hotspot.center_z;
     dx * dx + dz * dz
 }
 
-fn fishing_hotspot_interaction_sample(
+fn hotspot_interaction_sample(
     layer: &crate::map::layers::LayerSpec,
-    hotspot: &FishingHotspotRecord,
+    hotspot: &HotspotRecord,
 ) -> WaypointLayerInteractionSample {
-    let label = fishing_hotspot_label(hotspot);
+    let label = hotspot_label(hotspot);
     WaypointLayerInteractionSample {
         world_x: hotspot.center_x,
         world_z: hotspot.center_z,
@@ -704,37 +793,37 @@ fn fishing_hotspot_interaction_sample(
         layer_sample: LayerQuerySample {
             layer_id: layer.key.clone(),
             layer_name: layer.name.clone(),
-            kind: FISHING_HOTSPOT_TARGET_KEY.to_string(),
+            kind: HOTSPOT_TARGET_KEY.to_string(),
             rgb: HOTSPOT_SAMPLE_RGB,
             rgb_u32: HOTSPOT_SAMPLE_RGB.to_u32(),
             field_id: Some(hotspot.id),
             targets: vec![FieldHoverTarget {
-                key: FISHING_HOTSPOT_TARGET_KEY.to_string(),
+                key: HOTSPOT_TARGET_KEY.to_string(),
                 label,
                 world_x: hotspot.center_x,
                 world_z: hotspot.center_z,
             }],
             detail_pane: None,
-            detail_sections: fishing_hotspot_detail_sections(hotspot),
+            detail_sections: hotspot_detail_sections(hotspot),
         },
     }
 }
 
-fn fishing_hotspot_label(hotspot: &FishingHotspotRecord) -> String {
+fn hotspot_label(hotspot: &HotspotRecord) -> String {
     hotspot
         .primary_fish_name
         .as_deref()
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .map(|name| format!("{name} Hotspot #{}", hotspot.id))
-        .unwrap_or_else(|| format!("Fishing Hotspot #{}", hotspot.id))
+        .unwrap_or_else(|| format!("Hotspot #{}", hotspot.id))
 }
 
-fn fishing_hotspot_detail_sections(hotspot: &FishingHotspotRecord) -> Vec<FieldDetailSection> {
+fn hotspot_detail_sections(hotspot: &HotspotRecord) -> Vec<FieldDetailSection> {
     let mut hotspot_facts = vec![
         detail_fact("hotspot_id", "Hotspot", hotspot.id.to_string(), "map-pin"),
         detail_fact(
-            FISHING_HOTSPOT_TARGET_KEY,
+            HOTSPOT_TARGET_KEY,
             "Hotspot",
             format!("#{}", hotspot.id),
             "map-pin",
@@ -839,7 +928,7 @@ fn fishing_hotspot_detail_sections(hotspot: &FishingHotspotRecord) -> Vec<FieldD
     push_optional_detail_fact(
         &mut hotspot_facts,
         "point_remain_time_ms",
-        "Hotspot Lifetime",
+        "Lifetime",
         imported_metadata
             .and_then(|metadata| metadata.point_remain_time)
             .or(hotspot.point_remain_time),
@@ -915,9 +1004,9 @@ fn fishing_hotspot_detail_sections(hotspot: &FishingHotspotRecord) -> Vec<FieldD
     }
 
     Vec::from([FieldDetailSection {
-        id: "fishing-hotspot".to_string(),
+        id: "hotspot".to_string(),
         kind: "hotspot".to_string(),
-        title: Some("Fishing Hotspot".to_string()),
+        title: Some("Hotspot".to_string()),
         facts: hotspot_facts,
         targets: Vec::new(),
     }])
@@ -942,7 +1031,7 @@ fn metadata_source_label(source_id: &str) -> &'static str {
     }
 }
 
-fn source_stats_summary(stats: &FishingHotspotSourceStats) -> String {
+fn source_stats_summary(stats: &HotspotSourceStats) -> String {
     if stats.min_wait_time == 0
         && stats.max_wait_time == 0
         && stats.point_remain_time == 0
@@ -981,7 +1070,7 @@ fn detail_fact(
     }
 }
 
-fn hotspot_drop_group_summary(hotspot: &FishingHotspotRecord) -> String {
+fn hotspot_drop_group_summary(hotspot: &HotspotRecord) -> String {
     hotspot
         .drop_groups
         .iter()
@@ -1021,20 +1110,24 @@ fn is_api_path(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        border_transform_and_size, fishing_hotspot_detail_sections, fishing_hotspot_label,
-        hotspot_contains_world_point, hovered_fishing_hotspot_id, FishingHotspotDropGroup,
-        FishingHotspotImportedMetadata, FishingHotspotLayerFeature, FishingHotspotRecord,
-        HotspotBorderEdge, FISHING_HOTSPOT_TARGET_KEY,
+        border_transform_and_size, hotspot_contains_world_point, hotspot_detail_sections,
+        hotspot_label, hotspot_matches_search_expression, hovered_hotspot_id, HotspotBorderEdge,
+        HotspotDropGroup, HotspotImportedMetadata, HotspotLayerFeature, HotspotRecord,
+        HOTSPOT_TARGET_KEY,
+    };
+    use crate::bridge::contract::{
+        FishyMapSearchExpressionNode, FishyMapSearchExpressionOperator, FishyMapSearchTerm,
+        FishyMapSharedFishState,
     };
     use crate::map::layer_query::LayerQuerySample;
-    use crate::map::layers::FISHING_HOTSPOTS_LAYER_KEY;
+    use crate::map::layers::HOTSPOTS_LAYER_KEY;
     use crate::map::spaces::WorldPoint;
-    use crate::plugins::api::{HoverInfo, HoverState};
+    use crate::plugins::api::{FishCatalog, FishEntry, HoverInfo, HoverState};
     use fishystuff_api::Rgb;
     use serde_json::json;
 
-    fn hotspot() -> FishingHotspotRecord {
-        FishingHotspotRecord {
+    fn hotspot() -> HotspotRecord {
+        HotspotRecord {
             id: 2,
             point_size: 2000.0,
             start_x: -73592.0,
@@ -1088,7 +1181,7 @@ mod tests {
             max_fish_count: Some(1),
             spawn_character_key: Some(917),
             spawn_action_index: Some(4),
-            drop_groups: vec![FishingHotspotDropGroup {
+            drop_groups: vec![HotspotDropGroup {
                 slot: 2,
                 drop_rate: Some(1_000_000),
                 group_key: 10944,
@@ -1112,7 +1205,7 @@ mod tests {
 
     #[test]
     fn hotspot_detail_sections_use_source_group_metadata() {
-        let sections = fishing_hotspot_detail_sections(&hotspot());
+        let sections = hotspot_detail_sections(&hotspot());
         assert_eq!(sections.len(), 1);
         let facts = &sections[0].facts;
         assert!(facts
@@ -1142,7 +1235,7 @@ mod tests {
         let mut hotspot = hotspot();
         hotspot.min_fish_count = None;
         hotspot.max_fish_count = None;
-        hotspot.imported_metadata = Some(FishingHotspotImportedMetadata {
+        hotspot.imported_metadata = Some(HotspotImportedMetadata {
             source_id: "bdolytics_community_hotspot_metadata".to_string(),
             source_hotspot_id: 2,
             min_wait_time: Some(79_496),
@@ -1154,7 +1247,7 @@ mod tests {
             observe_fishing_level: Some(1),
         });
 
-        let sections = fishing_hotspot_detail_sections(&hotspot);
+        let sections = hotspot_detail_sections(&hotspot);
         let facts = &sections[0].facts;
         assert!(facts
             .iter()
@@ -1172,7 +1265,7 @@ mod tests {
 
     #[test]
     fn hotspot_label_uses_fish_identity_when_available() {
-        assert_eq!(fishing_hotspot_label(&hotspot()), "Coelacanth Hotspot #2");
+        assert_eq!(hotspot_label(&hotspot()), "Coelacanth Hotspot #2");
     }
 
     #[test]
@@ -1187,12 +1280,12 @@ mod tests {
                 point_samples: Vec::new(),
             }),
         };
-        assert_eq!(hovered_fishing_hotspot_id(&hover_state), Some(7));
+        assert_eq!(hovered_hotspot_id(&hover_state), Some(7));
     }
 
     #[test]
     fn border_segments_follow_source_bounds() {
-        let feature = FishingHotspotLayerFeature {
+        let feature = HotspotLayerFeature {
             layer_id: crate::map::layers::LayerId::from_raw(7),
             hotspot_id: 2,
             min_x: -100.0,
@@ -1212,11 +1305,58 @@ mod tests {
         assert_eq!(size, bevy::prelude::Vec2::new(4.0, 204.0));
     }
 
+    #[test]
+    fn hotspot_search_filter_matches_primary_fish_item() {
+        let mut fish_catalog = FishCatalog::default();
+        fish_catalog.replace(vec![FishEntry {
+            id: 452,
+            item_id: 8452,
+            encyclopedia_key: Some(452),
+            encyclopedia_id: Some(8452),
+            name: "Coelacanth".to_string(),
+            name_lower: "coelacanth".to_string(),
+            grade: Some("Rare".to_string()),
+            is_prize: false,
+        }]);
+        let expression = FishyMapSearchExpressionNode::Group {
+            operator: FishyMapSearchExpressionOperator::And,
+            children: vec![
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::Fish { fish_id: 452 },
+                    negated: false,
+                },
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::FishFilter {
+                        term: "yellow".to_string(),
+                    },
+                    negated: false,
+                },
+            ],
+            negated: false,
+        };
+
+        assert!(hotspot_matches_search_expression(
+            &hotspot(),
+            Some(&expression),
+            &fish_catalog,
+            &FishyMapSharedFishState::default(),
+        ));
+        assert!(!hotspot_matches_search_expression(
+            &hotspot(),
+            Some(&FishyMapSearchExpressionNode::Term {
+                term: FishyMapSearchTerm::Fish { fish_id: 777 },
+                negated: false,
+            }),
+            &fish_catalog,
+            &FishyMapSharedFishState::default(),
+        ));
+    }
+
     fn hotspot_layer_sample(id: u32) -> LayerQuerySample {
         LayerQuerySample {
-            layer_id: FISHING_HOTSPOTS_LAYER_KEY.to_string(),
-            layer_name: "Fishing Hotspots".to_string(),
-            kind: FISHING_HOTSPOT_TARGET_KEY.to_string(),
+            layer_id: HOTSPOTS_LAYER_KEY.to_string(),
+            layer_name: "Hotspots".to_string(),
+            kind: HOTSPOT_TARGET_KEY.to_string(),
             rgb: Rgb::new(255, 179, 56),
             rgb_u32: Rgb::new(255, 179, 56).to_u32(),
             field_id: Some(id),

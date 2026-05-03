@@ -45,7 +45,7 @@ const FISHING_HEADERS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, Copy)]
-pub struct FishingHotspotBuildSummary {
+pub struct HotspotBuildSummary {
     pub hotspot_count: usize,
     pub source_point_rows: usize,
     pub source_fishing_group_rows: usize,
@@ -58,18 +58,18 @@ pub struct FishingHotspotBuildSummary {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotAsset {
+struct HotspotAsset {
     schema: &'static str,
     version: u32,
     coordinate_space: &'static str,
-    sources: Vec<FishingHotspotSourceDescriptor>,
-    summary: FishingHotspotAssetSummary,
-    hotspots: Vec<FishingHotspotAssetRecord>,
+    sources: Vec<HotspotSourceDescriptor>,
+    summary: HotspotAssetSummary,
+    hotspots: Vec<HotspotAssetRecord>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotSourceDescriptor {
+struct HotspotSourceDescriptor {
     id: &'static str,
     file: String,
     role: &'static str,
@@ -77,7 +77,7 @@ struct FishingHotspotSourceDescriptor {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotAssetSummary {
+struct HotspotAssetSummary {
     hotspot_count: usize,
     source_point_rows: usize,
     source_fishing_group_rows: usize,
@@ -90,7 +90,7 @@ struct FishingHotspotAssetSummary {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotAssetRecord {
+struct HotspotAssetRecord {
     id: u32,
     point_size: f64,
     start_x: f64,
@@ -107,15 +107,15 @@ struct FishingHotspotAssetRecord {
     primary_fish_item_id: Option<u32>,
     primary_fish_name: Option<String>,
     primary_fish_icon_image: Option<String>,
-    loot_items: Vec<FishingHotspotLootItem>,
-    loot_groups: Vec<FishingHotspotLootGroup>,
+    loot_items: Vec<HotspotLootItem>,
+    loot_groups: Vec<HotspotLootGroup>,
     fishing_group_key: u32,
     spawn_rate: Option<u32>,
     spawn_character_key: Option<u32>,
     spawn_action_index: Option<u32>,
     point_contents_group_key: Option<u32>,
     fishing_contents_group_key: Option<u32>,
-    drop_groups: Vec<FishingHotspotDropGroup>,
+    drop_groups: Vec<HotspotDropGroup>,
     min_wait_time: Option<u32>,
     max_wait_time: Option<u32>,
     point_remain_time: Option<u32>,
@@ -123,13 +123,13 @@ struct FishingHotspotAssetRecord {
     max_fish_count: Option<u32>,
     available_fishing_level: Option<u32>,
     observe_fishing_level: Option<u32>,
-    source_stats: FishingHotspotSourceStats,
-    imported_metadata: Option<FishingHotspotImportedMetadata>,
+    source_stats: HotspotSourceStats,
+    imported_metadata: Option<HotspotImportedMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotDropGroup {
+struct HotspotDropGroup {
     slot: u8,
     drop_rate: Option<u32>,
     group_key: u32,
@@ -137,7 +137,7 @@ struct FishingHotspotDropGroup {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotSourceStats {
+struct HotspotSourceStats {
     min_wait_time: u32,
     max_wait_time: u32,
     point_remain_time: u32,
@@ -149,7 +149,7 @@ struct FishingHotspotSourceStats {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotImportedMetadata {
+struct HotspotImportedMetadata {
     source_id: &'static str,
     source_hotspot_id: u32,
     min_wait_time: Option<u32>,
@@ -163,7 +163,7 @@ struct FishingHotspotImportedMetadata {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotLootItem {
+struct HotspotLootItem {
     item_id: u32,
     name: String,
     label: String,
@@ -187,7 +187,7 @@ struct FishingHotspotLootItem {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotLootGroup {
+struct HotspotLootGroup {
     slot_idx: u8,
     label: String,
     condition_option_key: String,
@@ -201,7 +201,7 @@ struct FishingHotspotLootGroup {
     normalized_drop_rate_text: String,
     normalized_drop_rate_tooltip: String,
     catch_methods: Vec<String>,
-    condition_options: Vec<FishingHotspotLootConditionOption>,
+    condition_options: Vec<HotspotLootConditionOption>,
 }
 
 #[derive(Debug, Clone)]
@@ -223,7 +223,7 @@ struct FishingPointRecord {
 #[derive(Debug, Clone)]
 struct FishingGroupRecord {
     fishing_group_key: u32,
-    drop_groups: Vec<FishingHotspotDropGroup>,
+    drop_groups: Vec<HotspotDropGroup>,
     min_wait_time: Option<u32>,
     max_wait_time: Option<u32>,
     point_remain_time: Option<u32>,
@@ -232,12 +232,12 @@ struct FishingGroupRecord {
     available_fishing_level: Option<u32>,
     observe_fishing_level: Option<u32>,
     contents_group_key: Option<u32>,
-    source_stats: FishingHotspotSourceStats,
+    source_stats: HotspotSourceStats,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FishingHotspotLootConditionOption {
+struct HotspotLootConditionOption {
     option_idx: u32,
     condition_key: String,
     condition_text: String,
@@ -252,7 +252,7 @@ struct FishingHotspotLootConditionOption {
     normalized_drop_rate_text: String,
     normalized_drop_rate_tooltip: String,
     active: bool,
-    species_rows: Vec<FishingHotspotLootItem>,
+    species_rows: Vec<HotspotLootItem>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -348,13 +348,13 @@ struct SourceTable {
     rows: Vec<Vec<Data>>,
 }
 
-pub fn build_fishing_hotspot_asset(
+pub fn build_hotspot_asset(
     float_fishing_point_xlsx: &Path,
     float_fishing_xlsx: &Path,
     source_loot_groups_json: &Path,
     bdolytics_hotspots_json: Option<&Path>,
     out_path: &Path,
-) -> Result<FishingHotspotBuildSummary> {
+) -> Result<HotspotBuildSummary> {
     let point_records = load_fishing_point_records(float_fishing_point_xlsx)?;
     let group_records = load_fishing_group_records(float_fishing_xlsx)?;
     let source_loot = load_source_loot_lookup(source_loot_groups_json)?;
@@ -393,7 +393,7 @@ pub fn build_fishing_hotspot_asset(
         if imported_metadata.is_some() {
             matched_imported_metadata_rows = matched_imported_metadata_rows.saturating_add(1);
         }
-        hotspots.push(FishingHotspotAssetRecord {
+        hotspots.push(HotspotAssetRecord {
             id: point.point_key,
             point_size: point.point_size,
             start_x: point.start_x,
@@ -432,7 +432,7 @@ pub fn build_fishing_hotspot_asset(
     }
     hotspots.sort_by_key(|hotspot| hotspot.id);
 
-    let summary = FishingHotspotBuildSummary {
+    let summary = HotspotBuildSummary {
         hotspot_count: hotspots.len(),
         source_point_rows: point_records.len(),
         source_fishing_group_rows: group_records.len(),
@@ -454,7 +454,7 @@ pub fn build_fishing_hotspot_asset(
             "hotspot drop group, count, level, wait, and contents-group metadata",
         ),
         source_descriptor_literal(
-            "dolt_fishing_hotspot_loot_groups",
+            "dolt_hotspot_loot_groups",
             "dolt:item_main_group_options,item_sub_group_item_variants,item_table,languagedata,fish_table",
             "source item main group options, subgroup variants, item metadata, and condition branches",
         ),
@@ -466,12 +466,12 @@ pub fn build_fishing_hotspot_asset(
             "one-off imported hotspot count, level, bite-time, and lifetime metadata; original FloatFishing source stat columns remain preserved separately",
         ));
     }
-    let asset = FishingHotspotAsset {
-        schema: "fishystuff.fishing_hotspots",
+    let asset = HotspotAsset {
+        schema: "fishystuff.hotspots",
         version: 1,
         coordinate_space: "bdo_world_xz",
         sources,
-        summary: FishingHotspotAssetSummary {
+        summary: HotspotAssetSummary {
             hotspot_count: summary.hotspot_count,
             source_point_rows: summary.source_point_rows,
             source_fishing_group_rows: summary.source_fishing_group_rows,
@@ -654,7 +654,7 @@ fn load_source_loot_lookup(path: &Path) -> Result<SourceLootLookup> {
 
 fn load_bdolytics_metadata_lookup(
     path: Option<&Path>,
-) -> Result<BTreeMap<u32, FishingHotspotImportedMetadata>> {
+) -> Result<BTreeMap<u32, HotspotImportedMetadata>> {
     let Some(path) = path else {
         return Ok(BTreeMap::new());
     };
@@ -669,7 +669,7 @@ fn load_bdolytics_metadata_lookup(
         }
         rows.insert(
             row.id,
-            FishingHotspotImportedMetadata {
+            HotspotImportedMetadata {
                 source_id: "bdolytics_community_hotspot_metadata",
                 source_hotspot_id: row.id,
                 min_wait_time: row.min_wait_time,
@@ -689,8 +689,8 @@ impl SourceLootLookup {
     fn hotspot_loot_groups(
         &self,
         hotspot_id: u32,
-        drop_groups: &[FishingHotspotDropGroup],
-    ) -> Vec<FishingHotspotLootGroup> {
+        drop_groups: &[HotspotDropGroup],
+    ) -> Vec<HotspotLootGroup> {
         drop_groups
             .iter()
             .enumerate()
@@ -710,7 +710,7 @@ impl SourceLootLookup {
                     "FloatFishing_Table DropID{} main group {}",
                     drop_group.slot, drop_group.group_key
                 );
-                FishingHotspotLootGroup {
+                HotspotLootGroup {
                     slot_idx: drop_group.slot,
                     label,
                     condition_option_key: format!(
@@ -819,7 +819,7 @@ fn source_loot_condition_option(
     option: &ExpandedSourceLootOption,
     slot_idx: u8,
     group_label: &str,
-) -> FishingHotspotLootConditionOption {
+) -> HotspotLootConditionOption {
     let condition = source_condition_fields(option.condition_raw.as_deref());
     let species_rows = source_loot_species_rows(option, slot_idx, group_label);
     let drop_rate_text = option
@@ -830,7 +830,7 @@ fn source_loot_condition_option(
         "item_main_group_options {}",
         source_loot_lineage_tooltip(&option.lineage)
     );
-    FishingHotspotLootConditionOption {
+    HotspotLootConditionOption {
         option_idx: option.branch_idx,
         condition_key: condition.key,
         condition_text: condition.text,
@@ -849,7 +849,7 @@ fn source_loot_condition_option(
     }
 }
 
-fn mark_active_condition_option(options: &mut [FishingHotspotLootConditionOption]) {
+fn mark_active_condition_option(options: &mut [HotspotLootConditionOption]) {
     if options.is_empty() {
         return;
     }
@@ -941,7 +941,7 @@ fn source_loot_species_rows(
     option: &ExpandedSourceLootOption,
     slot_idx: u8,
     group_label: &str,
-) -> Vec<FishingHotspotLootItem> {
+) -> Vec<HotspotLootItem> {
     let mut items_by_id = HashMap::<u32, AggregatedLootItem>::new();
     for item in &option.items {
         let entry = items_by_id
@@ -976,7 +976,7 @@ fn source_loot_species_rows(
                     option.item_sub_group_key, aggregate.select_rate, total
                 )
             });
-            FishingHotspotLootItem {
+            HotspotLootItem {
                 item_id: item.item_id,
                 name: item.name.clone(),
                 label: item.name,
@@ -1010,7 +1010,7 @@ fn source_loot_species_rows(
     rows
 }
 
-fn active_loot_items(groups: &[FishingHotspotLootGroup]) -> Vec<FishingHotspotLootItem> {
+fn active_loot_items(groups: &[HotspotLootGroup]) -> Vec<HotspotLootItem> {
     groups
         .iter()
         .flat_map(|group| &group.condition_options)
@@ -1026,7 +1026,7 @@ struct PrimaryFishIdentity {
     icon_image: Option<String>,
 }
 
-fn primary_fish_identity(groups: &[FishingHotspotLootGroup]) -> Option<PrimaryFishIdentity> {
+fn primary_fish_identity(groups: &[HotspotLootGroup]) -> Option<PrimaryFishIdentity> {
     let active_rows = groups
         .iter()
         .flat_map(|group| &group.condition_options)
@@ -1043,7 +1043,7 @@ fn primary_fish_identity(groups: &[FishingHotspotLootGroup]) -> Option<PrimaryFi
     })
 }
 
-fn best_primary_fish(rows: &[&FishingHotspotLootItem]) -> Option<PrimaryFishIdentity> {
+fn best_primary_fish(rows: &[&HotspotLootItem]) -> Option<PrimaryFishIdentity> {
     rows.iter()
         .copied()
         .filter(|row| row.is_fish)
@@ -1180,13 +1180,13 @@ fn load_fishing_group_records(path: &Path) -> Result<Vec<FishingGroupRecord>> {
                 continue;
             }
             let drop_rate_header = format!("DropRate{slot}");
-            drop_groups.push(FishingHotspotDropGroup {
+            drop_groups.push(HotspotDropGroup {
                 slot,
                 drop_rate: nonzero_table_cell_u32(&table, row, drop_rate_header.as_str())?,
                 group_key,
             });
         }
-        let source_stats = FishingHotspotSourceStats {
+        let source_stats = HotspotSourceStats {
             min_wait_time: table_cell_u32(&table, row, "MinWaitTime")?.unwrap_or_default(),
             max_wait_time: table_cell_u32(&table, row, "MaxWaitTime")?.unwrap_or_default(),
             point_remain_time: table_cell_u32(&table, row, "PointRemainTime")?.unwrap_or_default(),
@@ -1403,12 +1403,8 @@ fn format_float(value: f64) -> String {
     }
 }
 
-fn source_descriptor(
-    id: &'static str,
-    path: &Path,
-    role: &'static str,
-) -> FishingHotspotSourceDescriptor {
-    FishingHotspotSourceDescriptor {
+fn source_descriptor(id: &'static str, path: &Path, role: &'static str) -> HotspotSourceDescriptor {
+    HotspotSourceDescriptor {
         id,
         file: path
             .file_name()
@@ -1423,8 +1419,8 @@ fn source_descriptor_literal(
     id: &'static str,
     file: &'static str,
     role: &'static str,
-) -> FishingHotspotSourceDescriptor {
-    FishingHotspotSourceDescriptor {
+) -> HotspotSourceDescriptor {
+    HotspotSourceDescriptor {
         id,
         file: file.to_string(),
         role,

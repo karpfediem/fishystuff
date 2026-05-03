@@ -85,6 +85,30 @@ pub(crate) fn project_expression_for_semantic_layer(
     })
 }
 
+pub(crate) fn project_expression_for_fish_selection(
+    expression: &FishyMapSearchExpressionNode,
+) -> Option<FishyMapSearchExpressionNode> {
+    project_expression(expression, &|term| {
+        matches!(
+            term,
+            FishyMapSearchTerm::Fish { .. } | FishyMapSearchTerm::FishFilter { .. }
+        )
+    })
+}
+
+pub(crate) fn fish_id_matches_search_expression(
+    fish_catalog: &FishCatalog,
+    fish_id: i32,
+    expression: &FishyMapSearchExpressionNode,
+    shared_fish_state: &crate::bridge::contract::FishyMapSharedFishState,
+) -> bool {
+    let caught_ids = shared_fish_state.caught_ids.iter().copied().collect();
+    let favourite_ids = shared_fish_state.favourite_ids.iter().copied().collect();
+    evaluate_expression(expression, &mut |term| {
+        fish_id_matches_search_term(fish_catalog, fish_id, term, &caught_ids, &favourite_ids)
+    })
+}
+
 pub(crate) fn expression_contains_negation(expression: &FishyMapSearchExpressionNode) -> bool {
     match expression {
         FishyMapSearchExpressionNode::Term { negated, .. } => *negated,
@@ -394,6 +418,29 @@ impl<'a> LayerSearchEvaluator<'a> {
                 }
             }
         }
+    }
+}
+
+fn fish_id_matches_search_term(
+    fish_catalog: &FishCatalog,
+    fish_id: i32,
+    term: &FishyMapSearchTerm,
+    caught_ids: &HashSet<i32>,
+    favourite_ids: &HashSet<i32>,
+) -> bool {
+    if let Some(fish) = fish_catalog.entry_for_fish(fish_id) {
+        return fish_matches_search_term(fish, term, caught_ids, favourite_ids);
+    }
+    match term {
+        FishyMapSearchTerm::Fish { fish_id: target } => *target == fish_id,
+        FishyMapSearchTerm::FishFilter { term } => match term.as_str() {
+            "favourite" => favourite_ids.contains(&fish_id),
+            "missing" => !caught_ids.contains(&fish_id),
+            _ => false,
+        },
+        FishyMapSearchTerm::PatchBound { .. }
+        | FishyMapSearchTerm::Zone { .. }
+        | FishyMapSearchTerm::Semantic { .. } => false,
     }
 }
 
@@ -758,13 +805,15 @@ mod tests {
     use std::collections::{BTreeMap, HashSet};
 
     use super::{
-        effective_search_expression, project_expression_for_semantic_layer,
+        effective_search_expression, fish_id_matches_search_expression,
+        project_expression_for_fish_selection, project_expression_for_semantic_layer,
         project_expression_for_zone_membership, search_expression_key, zone_catalog_rgbs,
         LayerSearchEvaluator, SearchBindingSupport,
     };
     use crate::bridge::contract::FishyMapInputState;
     use crate::bridge::contract::{
         FishyMapSearchExpressionNode, FishyMapSearchExpressionOperator, FishyMapSearchTerm,
+        FishyMapSharedFishState,
     };
     use crate::map::events::EventsSnapshotState;
     use crate::map::field_metadata::FieldMetadataCache;
@@ -892,6 +941,87 @@ mod tests {
             search_expression_key(projected.as_ref().expect("projected")),
             search_expression_key(&expression)
         );
+    }
+
+    #[test]
+    fn fish_projection_keeps_fish_terms_only() {
+        let expression = FishyMapSearchExpressionNode::Group {
+            operator: FishyMapSearchExpressionOperator::And,
+            children: vec![
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::Fish { fish_id: 240 },
+                    negated: false,
+                },
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::FishFilter {
+                        term: "yellow".to_string(),
+                    },
+                    negated: false,
+                },
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::Zone { zone_rgb: 0x123456 },
+                    negated: false,
+                },
+            ],
+            negated: false,
+        };
+
+        let projected = project_expression_for_fish_selection(&expression).expect("projected");
+
+        assert_eq!(
+            projected,
+            FishyMapSearchExpressionNode::Group {
+                operator: FishyMapSearchExpressionOperator::And,
+                children: vec![
+                    FishyMapSearchExpressionNode::Term {
+                        term: FishyMapSearchTerm::Fish { fish_id: 240 },
+                        negated: false,
+                    },
+                    FishyMapSearchExpressionNode::Term {
+                        term: FishyMapSearchTerm::FishFilter {
+                            term: "yellow".to_string(),
+                        },
+                        negated: false,
+                    },
+                ],
+                negated: false,
+            }
+        );
+    }
+
+    #[test]
+    fn fish_id_expression_match_resolves_item_aliases_and_grade_filters() {
+        let mut fish_catalog = FishCatalog::default();
+        fish_catalog.replace(vec![fish(240, 820240, Some("Rare"), false)]);
+        let expression = FishyMapSearchExpressionNode::Group {
+            operator: FishyMapSearchExpressionOperator::And,
+            children: vec![
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::Fish { fish_id: 240 },
+                    negated: false,
+                },
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::FishFilter {
+                        term: "yellow".to_string(),
+                    },
+                    negated: false,
+                },
+            ],
+            negated: false,
+        };
+
+        assert!(fish_id_matches_search_expression(
+            &fish_catalog,
+            820240,
+            &expression,
+            &FishyMapSharedFishState::default(),
+        ));
+        assert!(!fish_id_matches_search_expression(
+            &fish_catalog,
+            820777,
+            &expression,
+            &FishyMapSharedFishState::default(),
+        ));
     }
 
     #[test]

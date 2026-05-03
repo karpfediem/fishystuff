@@ -4,7 +4,7 @@ use fishystuff_api::models::trade::{TRADE_NPC_MAP_LAYER_ID, TRADE_NPC_MAP_LAYER_
 use super::{
     default_layer_filter_bindings_for_runtime_layer, FieldColorMode, FieldMetadataSourceSpec,
     FieldSourceSpec, GeometrySpace, LayerKind, LayerSpec, LayerTransform, LodPolicy, PickMode,
-    WaypointSourceSpec, FISHING_HOTSPOTS_LAYER_KEY, FISH_EVIDENCE_LAYER_KEY,
+    WaypointSourceSpec, FISH_EVIDENCE_LAYER_KEY, HOTSPOTS_LAYER_KEY,
 };
 
 const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v6";
@@ -18,7 +18,7 @@ pub enum AvailableLayerTemplate {
     RegionGroups,
     Regions,
     RegionNodes,
-    FishingHotspots,
+    Hotspots,
     TradeNpcs,
 }
 
@@ -128,9 +128,9 @@ impl Default for AvailableLayerCatalog {
                     display_order: 41,
                 },
                 AvailableLayerDefinition {
-                    layer_id: FISHING_HOTSPOTS_LAYER_KEY.to_string(),
-                    name: "Fishing Hotspots".to_string(),
-                    template: AvailableLayerTemplate::FishingHotspots,
+                    layer_id: HOTSPOTS_LAYER_KEY.to_string(),
+                    name: "Hotspots".to_string(),
+                    template: AvailableLayerTemplate::Hotspots,
                     visible_default: false,
                     opacity_default: 0.85,
                     z_base: 41.5,
@@ -398,7 +398,7 @@ fn build_local_layer_spec(
             pick_mode: PickMode::None,
             display_order: entry.display_order,
         },
-        AvailableLayerTemplate::FishingHotspots => LayerSpec {
+        AvailableLayerTemplate::Hotspots => LayerSpec {
             id: super::LayerId::from_raw(raw_id),
             key: entry.layer_id.clone(),
             name: entry.name.clone(),
@@ -413,13 +413,13 @@ fn build_local_layer_spec(
             waypoint_source: Some(WaypointSourceSpec {
                 url: cache_busted_public(
                     &format!(
-                        "/hotspots/fishing_hotspots.{}.json",
+                        "/hotspots/hotspots.{}.json",
                         version_or_default(map_version_id)
                     ),
-                    "fishing-hotspots-v1-icons",
+                    "hotspots-v1-icons",
                     public_base_url,
                 ),
-                revision: "fishing-hotspots-v1-icons".to_string(),
+                revision: "hotspots-v1-icons".to_string(),
                 geometry_space: GeometrySpace::World,
                 feature_id_property: None,
                 label_property: None,
@@ -435,11 +435,7 @@ fn build_local_layer_spec(
             y_flip: false,
             field_source: None,
             field_metadata_source: None,
-            filter_bindings: default_layer_filter_bindings_for_runtime_layer(
-                &entry.layer_id,
-                LayerKind::Waypoints,
-                false,
-            ),
+            filter_bindings: Vec::new(),
             lod_policy: default_lod_policy(),
             request_weight: 1.0,
             pick_mode: PickMode::None,
@@ -711,12 +707,12 @@ mod tests {
     }
 
     #[test]
-    fn fishing_hotspot_layer_uses_source_backed_hotspot_asset() {
+    fn hotspot_layer_uses_source_backed_hotspot_asset() {
         let (_, layers) = build_local_layer_specs(
             &[AvailableLayerDefinition {
-                layer_id: "fishing_hotspots".to_string(),
-                name: "Fishing Hotspots".to_string(),
-                template: AvailableLayerTemplate::FishingHotspots,
+                layer_id: "hotspots".to_string(),
+                name: "Hotspots".to_string(),
+                template: AvailableLayerTemplate::Hotspots,
                 visible_default: false,
                 opacity_default: 0.85,
                 z_base: 41.5,
@@ -728,8 +724,8 @@ mod tests {
         assert_eq!(layers.len(), 1);
         assert_eq!(layers[0].kind, LayerKind::Waypoints);
         let source = layers[0].waypoint_source.as_ref().expect("hotspot source");
-        assert!(source.url.starts_with("/hotspots/fishing_hotspots.v1.json"));
-        assert_eq!(source.revision, "fishing-hotspots-v1-icons");
+        assert!(source.url.starts_with("/hotspots/hotspots.v1.json"));
+        assert_eq!(source.revision, "hotspots-v1-icons");
         assert!(!source.supports_connections);
         assert!(!source.supports_labels);
     }

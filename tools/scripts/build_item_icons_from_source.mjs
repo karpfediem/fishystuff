@@ -12,12 +12,12 @@ const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
 const defaultOutputDir = path.join(repoRoot, "data/cdn/public/images/items");
-const defaultFishingHotspotsAssetPath = path.join(repoRoot, "data/cdn/public/hotspots/fishing_hotspots.v1.json");
+const defaultHotspotsAssetPath = path.join(repoRoot, "data/cdn/public/hotspots/hotspots.v1.json");
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
 const buildStateVersion = 1;
-const targetCacheVersion = 7;
+const targetCacheVersion = 8;
 const sourceResolutionCacheVersion = 2;
 const consumableIconTargetsSqlPath = path.join(scriptDir, "sql", "calculator_consumable_icon_targets.sql");
 const consumableIconTargetsSqlStat = statSync(consumableIconTargetsSqlPath);
@@ -67,7 +67,7 @@ function parseArgs(argv) {
     quiet: false,
     outputDir: defaultOutputDir,
     sourceArchive: defaultSourceArchive,
-    fishingHotspotsAsset: defaultFishingHotspotsAssetPath,
+    hotspotsAsset: defaultHotspotsAssetPath,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -90,9 +90,9 @@ function parseArgs(argv) {
       options.sourceArchive = argv[index] ? path.resolve(argv[index]) : null;
       continue;
     }
-    if (arg === "--fishing-hotspots-asset") {
+    if (arg === "--hotspots-asset") {
       index += 1;
-      options.fishingHotspotsAsset = argv[index] ? path.resolve(argv[index]) : null;
+      options.hotspotsAsset = argv[index] ? path.resolve(argv[index]) : null;
       continue;
     }
     fail(`unknown argument: ${arg}`);
@@ -653,7 +653,7 @@ function queryLightstoneIconRows() {
   `);
 }
 
-function loadFishingHotspotIconRows(assetPath) {
+function loadHotspotIconRows(assetPath) {
   const payload = readJsonFile(assetPath);
   if (!payload || !Array.isArray(payload.hotspots)) {
     return [];
@@ -774,7 +774,7 @@ function queryFishTableIconRows() {
   `);
 }
 
-function queryCalculatorIconTargets(fishingHotspotsAsset) {
+function queryCalculatorIconTargets(hotspotsAsset) {
   const targets = new Map();
   for (const row of queryLegacyIconRows()) {
     addIconTarget(targets, row);
@@ -823,13 +823,13 @@ function queryCalculatorIconTargets(fishingHotspotsAsset) {
       }
     }
   }
-  for (const row of loadFishingHotspotIconRows(fishingHotspotsAsset)) {
+  for (const row of loadHotspotIconRows(hotspotsAsset)) {
     addIconTarget(targets, row);
   }
   return [...targets.values()];
 }
 
-function loadCachedTargets(outputDir, doltWorkingHash, fishingHotspotsAssetSignature) {
+function loadCachedTargets(outputDir, doltWorkingHash, hotspotsAssetSignature) {
   const cached = readJsonFile(targetCachePath(outputDir));
   if (!cached || cached.version !== targetCacheVersion) {
     return null;
@@ -840,17 +840,17 @@ function loadCachedTargets(outputDir, doltWorkingHash, fishingHotspotsAssetSigna
     cached.consumableIconTargetsSqlPath !== consumableIconTargetsSqlPath ||
     cached.consumableIconTargetsSqlMtimeMs !== consumableIconTargetsSqlStat.mtimeMs ||
     cached.consumableIconTargetsSqlSize !== consumableIconTargetsSqlStat.size ||
-    cached.fishingHotspotsAssetPath !== fishingHotspotsAssetSignature.path ||
-    cached.fishingHotspotsAssetExists !== fishingHotspotsAssetSignature.exists ||
-    cached.fishingHotspotsAssetMtimeMs !== fishingHotspotsAssetSignature.mtimeMs ||
-    cached.fishingHotspotsAssetSize !== fishingHotspotsAssetSignature.size
+    cached.hotspotsAssetPath !== hotspotsAssetSignature.path ||
+    cached.hotspotsAssetExists !== hotspotsAssetSignature.exists ||
+    cached.hotspotsAssetMtimeMs !== hotspotsAssetSignature.mtimeMs ||
+    cached.hotspotsAssetSize !== hotspotsAssetSignature.size
   ) {
     return null;
   }
   return Array.isArray(cached.targets) ? cached.targets : null;
 }
 
-function writeCachedTargets(outputDir, doltWorkingHash, fishingHotspotsAssetSignature, targets) {
+function writeCachedTargets(outputDir, doltWorkingHash, hotspotsAssetSignature, targets) {
   writeJsonFile(targetCachePath(outputDir), {
     version: targetCacheVersion,
     scriptMtimeMs,
@@ -858,10 +858,10 @@ function writeCachedTargets(outputDir, doltWorkingHash, fishingHotspotsAssetSign
     consumableIconTargetsSqlPath,
     consumableIconTargetsSqlMtimeMs: consumableIconTargetsSqlStat.mtimeMs,
     consumableIconTargetsSqlSize: consumableIconTargetsSqlStat.size,
-    fishingHotspotsAssetPath: fishingHotspotsAssetSignature.path,
-    fishingHotspotsAssetExists: fishingHotspotsAssetSignature.exists,
-    fishingHotspotsAssetMtimeMs: fishingHotspotsAssetSignature.mtimeMs,
-    fishingHotspotsAssetSize: fishingHotspotsAssetSignature.size,
+    hotspotsAssetPath: hotspotsAssetSignature.path,
+    hotspotsAssetExists: hotspotsAssetSignature.exists,
+    hotspotsAssetMtimeMs: hotspotsAssetSignature.mtimeMs,
+    hotspotsAssetSize: hotspotsAssetSignature.size,
     generatedAtUtc: new Date().toISOString(),
     targets,
   });
@@ -1116,10 +1116,10 @@ async function main() {
   }
 
   const doltWorkingHash = queryDoltWorkingHash();
-  const fishingHotspotsAssetSignature = fileSignature(options.fishingHotspotsAsset);
-  let targets = loadCachedTargets(options.outputDir, doltWorkingHash, fishingHotspotsAssetSignature);
+  const hotspotsAssetSignature = fileSignature(options.hotspotsAsset);
+  let targets = loadCachedTargets(options.outputDir, doltWorkingHash, hotspotsAssetSignature);
   if (!targets) {
-    targets = queryCalculatorIconTargets(options.fishingHotspotsAsset);
+    targets = queryCalculatorIconTargets(options.hotspotsAsset);
   } else if (!options.quiet) {
     console.log(`using cached source-backed item icon targets (${targets.length} targets)`);
   }
@@ -1131,7 +1131,7 @@ async function main() {
       `collapsed ${dedupedTargets.duplicateCount} duplicate source-backed icon targets into ${targets.length} output files`,
     );
   }
-  writeCachedTargets(options.outputDir, doltWorkingHash, fishingHotspotsAssetSignature, targets);
+  writeCachedTargets(options.outputDir, doltWorkingHash, hotspotsAssetSignature, targets);
 
   const buildState = loadBuildState(options.outputDir);
   pruneStaleOutputs(options.outputDir, targets, options.quiet);

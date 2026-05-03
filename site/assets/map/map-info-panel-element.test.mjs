@@ -1187,7 +1187,7 @@ test("render shows the calculator warning without the calculator inputs notice",
   assert.doesNotMatch(panelSlot.innerHTML, /Calculator defaults/);
 });
 
-test("render shows condition labels for fishing hotspot loot groups", () => {
+test("render shows condition labels for hotspot loot groups", () => {
   globalThis.window = globalThis.window || {};
   globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
   const element = new FishyMapInfoPanelElement();
@@ -1200,15 +1200,15 @@ test("render shows condition labels for fishing hotspot loot groups", () => {
           pointLabel: "Coelacanth Hotspot #1",
           layerSamples: [
             {
-              layerId: "fishing_hotspots",
-              layerName: "Fishing Hotspots",
-              kind: "fishing_hotspot",
-              targets: [{ key: "fishing_hotspot", label: "Coelacanth Hotspot #1", worldX: 10, worldZ: 20 }],
+              layerId: "hotspots",
+              layerName: "Hotspots",
+              kind: "hotspot",
+              targets: [{ key: "hotspot", label: "Coelacanth Hotspot #1", worldX: 10, worldZ: 20 }],
               detailSections: [
                 {
-                  id: "fishing-hotspot",
+                  id: "hotspot",
                   kind: "hotspot",
-                  title: "Fishing Hotspot",
+                  title: "Hotspot",
                   facts: [
                     { key: "primary_fish", label: "Fish", value: "Coelacanth", icon: "fish-fill" },
                     { key: "primary_fish_item_id", label: "Fish Item", value: "8452", icon: "fish-fill" },
@@ -1228,7 +1228,7 @@ test("render shows condition labels for fishing hotspot loot groups", () => {
                     { key: "max_wait_time_ms", label: "Bite Time Maximum", value: "107667", icon: "stopwatch" },
                     { key: "min_fish_count", label: "Min. Catches", value: "2", icon: "information-circle" },
                     { key: "max_fish_count", label: "Max. Catches", value: "4", icon: "information-circle" },
-                    { key: "point_remain_time_ms", label: "Hotspot Lifetime", value: "600000", icon: "time-fill" },
+                    { key: "point_remain_time_ms", label: "Lifetime", value: "600000", icon: "time-fill" },
                     { key: "available_fishing_level", label: "Catchable at", value: "1", icon: "information-circle" },
                     { key: "observe_fishing_level", label: "Visible at", value: "1", icon: "information-circle" },
                     {
@@ -1265,7 +1265,7 @@ test("render shows condition labels for fishing hotspot loot groups", () => {
           ],
         },
         catalog: {
-          layers: [{ layerId: "fishing_hotspots", displayOrder: 42 }],
+          layers: [{ layerId: "hotspots", displayOrder: 42 }],
         },
       },
     },

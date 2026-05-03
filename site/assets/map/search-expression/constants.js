@@ -24,6 +24,10 @@ export const MAP_SEARCH_LAYER_SUPPORT = Object.freeze({
     termKinds: Object.freeze(["fish", "fish-filter", "zone"]),
     attachmentClipModes: Object.freeze(["zone-membership"]),
   }),
+  hotspots: Object.freeze({
+    termKinds: Object.freeze(["fish", "fish-filter"]),
+    attachmentClipModes: Object.freeze([]),
+  }),
   minimap: Object.freeze({
     termKinds: Object.freeze([]),
     attachmentClipModes: Object.freeze(["mask-sample"]),

@@ -572,7 +572,7 @@ test("buildInfoViewModel exposes selected waypoint detail sections as a landmark
   );
 });
 
-test("buildInfoViewModel exposes fishing hotspot detail sections as a dedicated pane", () => {
+test("buildInfoViewModel exposes hotspot detail sections as a dedicated pane", () => {
   globalThis.window = globalThis.window || {};
   globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
   const viewModel = buildInfoViewModel({
@@ -582,15 +582,15 @@ test("buildInfoViewModel exposes fishing hotspot detail sections as a dedicated 
         pointLabel: "Porgy Hotspot #423",
         layerSamples: [
           {
-            layerId: "fishing_hotspots",
-            layerName: "Fishing Hotspots",
-            kind: "fishing_hotspot",
-            targets: [{ key: "fishing_hotspot", label: "Porgy Hotspot #423", worldX: 50, worldZ: 60 }],
+            layerId: "hotspots",
+            layerName: "Hotspots",
+            kind: "hotspot",
+            targets: [{ key: "hotspot", label: "Porgy Hotspot #423", worldX: 50, worldZ: 60 }],
             detailSections: [
               {
-                id: "fishing-hotspot",
+                id: "hotspot",
                 kind: "hotspot",
-                title: "Fishing Hotspot",
+                title: "Hotspot",
                 facts: [
                   { key: "hotspot_id", label: "Hotspot", value: "423", icon: "map-pin" },
                   { key: "primary_fish", label: "Fish", value: "Porgy", icon: "fish-fill" },
@@ -613,7 +613,7 @@ test("buildInfoViewModel exposes fishing hotspot detail sections as a dedicated 
                   { key: "observe_fishing_level", label: "Visible at", value: "1", icon: "information-circle" },
                   { key: "min_wait_time_ms", label: "Bite Time Minimum", value: "77667", icon: "stopwatch" },
                   { key: "max_wait_time_ms", label: "Bite Time Maximum", value: "107667", icon: "stopwatch" },
-                  { key: "point_remain_time_ms", label: "Hotspot Lifetime", value: "600000", icon: "time-fill" },
+                  { key: "point_remain_time_ms", label: "Lifetime", value: "600000", icon: "time-fill" },
                   { key: "drop_groups", label: "Drop Groups", value: "10944 (1000000)", icon: "information-circle" },
                   {
                     key: "loot_group",
@@ -670,7 +670,7 @@ test("buildInfoViewModel exposes fishing hotspot detail sections as a dedicated 
         ],
       },
       catalog: {
-        layers: [{ layerId: "fishing_hotspots", displayOrder: 42 }],
+        layers: [{ layerId: "hotspots", displayOrder: 42 }],
       },
     },
   });
@@ -723,7 +723,7 @@ test("buildInfoViewModel exposes fishing hotspot detail sections as a dedicated 
   );
 });
 
-test("buildInfoViewModel keeps fishing hotspot contents-group branches and defaults open", () => {
+test("buildInfoViewModel keeps hotspot contents-group branches and defaults open", () => {
   globalThis.window = globalThis.window || {};
   globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
   const viewModel = buildInfoViewModel({
@@ -733,15 +733,15 @@ test("buildInfoViewModel keeps fishing hotspot contents-group branches and defau
         pointLabel: "Porgy Hotspot #413",
         layerSamples: [
           {
-            layerId: "fishing_hotspots",
-            layerName: "Fishing Hotspots",
-            kind: "fishing_hotspot",
-            targets: [{ key: "fishing_hotspot", label: "Porgy Hotspot #413", worldX: 50, worldZ: 60 }],
+            layerId: "hotspots",
+            layerName: "Hotspots",
+            kind: "hotspot",
+            targets: [{ key: "hotspot", label: "Porgy Hotspot #413", worldX: 50, worldZ: 60 }],
             detailSections: [
               {
-                id: "fishing-hotspot",
+                id: "hotspot",
                 kind: "hotspot",
-                title: "Fishing Hotspot",
+                title: "Hotspot",
                 facts: [
                   { key: "primary_fish", label: "Fish", value: "Porgy", icon: "fish-fill" },
                   { key: "primary_fish_item_id", label: "Fish Item", value: "8207", icon: "fish-fill" },
@@ -801,7 +801,7 @@ test("buildInfoViewModel keeps fishing hotspot contents-group branches and defau
         ],
       },
       catalog: {
-        layers: [{ layerId: "fishing_hotspots", displayOrder: 42 }],
+        layers: [{ layerId: "hotspots", displayOrder: 42 }],
       },
     },
   });

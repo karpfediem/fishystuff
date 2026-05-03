@@ -160,5 +160,5 @@ python3 "$ROOT_DIR/tools/scripts/compute_required_cdn_filenames.py" \
   --fishing-domain-icons-json "$tmpdir/fishing-domain-icons.json" \
   --fish-catalog-icons-json "$tmpdir/fish-catalog-icons.json" \
   --fish-table-icons-json "$tmpdir/fish-table-icons.json" \
-  --fishing-hotspots-json "$CDN_ROOT/hotspots/fishing_hotspots.v1.json" \
+  --hotspots-json "$CDN_ROOT/hotspots/hotspots.v1.json" \
   --out "$OUT_PATH"

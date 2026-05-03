@@ -62,11 +62,11 @@ rm -f \
   "$SITE_MAP_ASSET_DIR/fishystuff_ui_bevy_bg.wasm"
 
 WASM_BINDGEN_TMP_DIR="$(mktemp -d)"
-FISHING_HOTSPOT_SOURCE_LOOT_JSON=""
+HOTSPOT_SOURCE_LOOT_JSON=""
 cleanup_temp_files() {
   rm -rf "$WASM_BINDGEN_TMP_DIR"
-  if [ -n "$FISHING_HOTSPOT_SOURCE_LOOT_JSON" ]; then
-    rm -f "$FISHING_HOTSPOT_SOURCE_LOOT_JSON"
+  if [ -n "$HOTSPOT_SOURCE_LOOT_JSON" ]; then
+    rm -f "$HOTSPOT_SOURCE_LOOT_JSON"
   fi
 }
 trap cleanup_temp_files EXIT
@@ -453,7 +453,7 @@ region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
 regions_field_metadata_output="$CDN_FIELD_ASSET_DIR/regions.v1.meta.json"
 region_groups_field_metadata_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.meta.json"
 region_nodes_output="$CDN_WAYPOINT_ASSET_DIR/region_nodes.v1.geojson"
-fishing_hotspots_output="$CDN_HOTSPOT_ASSET_DIR/fishing_hotspots.v1.json"
+hotspots_output="$CDN_HOTSPOT_ASSET_DIR/hotspots.v1.json"
 waypoint_xml_args=()
 if [ -f "$waypoint_xml_primary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_primary")
@@ -461,7 +461,7 @@ fi
 if [ -f "$waypoint_xml_secondary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_secondary")
 fi
-build_fishing_hotspot_source_loot_json() {
+build_hotspot_source_loot_json() {
   local out_path="$1"
   dolt sql -r json -q "
     SELECT *
@@ -635,17 +635,17 @@ if [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f
 fi
 
 if [ -f "$float_fishing_point_xlsx_input" ] && [ -f "$float_fishing_xlsx_input" ]; then
-  FISHING_HOTSPOT_SOURCE_LOOT_JSON="$(mktemp)"
-  build_fishing_hotspot_source_loot_json "$FISHING_HOTSPOT_SOURCE_LOOT_JSON"
-  fishing_hotspot_metadata_args=()
+  HOTSPOT_SOURCE_LOOT_JSON="$(mktemp)"
+  build_hotspot_source_loot_json "$HOTSPOT_SOURCE_LOOT_JSON"
+  hotspot_metadata_args=()
   if [ -f "$bdolytics_hotspots_json_input" ]; then
-    fishing_hotspot_metadata_args+=(--bdolytics-hotspots-json "$bdolytics_hotspots_json_input")
+    hotspot_metadata_args+=(--bdolytics-hotspots-json "$bdolytics_hotspots_json_input")
   fi
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
-    build-fishing-hotspots-asset \
+    build-hotspots-asset \
     --float-fishing-point-xlsx "$float_fishing_point_xlsx_input" \
     --float-fishing-xlsx "$float_fishing_xlsx_input" \
-    --source-loot-groups-json "$FISHING_HOTSPOT_SOURCE_LOOT_JSON" \
-    "${fishing_hotspot_metadata_args[@]}" \
-    --out "$fishing_hotspots_output"
+    --source-loot-groups-json "$HOTSPOT_SOURCE_LOOT_JSON" \
+    "${hotspot_metadata_args[@]}" \
+    --out "$hotspots_output"
 fi
