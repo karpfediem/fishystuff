@@ -758,7 +758,7 @@
   "calculator.server.provenance.metric.totem_exp": "토템 경험치",
   "calculator.server.loot.totem_exp_source.source_backed": "fish_size (flock) Encyclopedia_Table (2021)의 소스 기반 %FishExpRate입니다.",
   "calculator.server.loot.totem_exp_source.imputed_grade_rule": "소스 기반 토템 경험치 행이 없어 등급 규칙으로 추정했습니다({$grade}: {$exp} EXP). 녹색은 소스 기반 녹색 행이 625와 1250으로 나뉘므로 보수적으로 625를 사용합니다.",
-  "calculator.server.loot.totem_exp_source.non_fish": "토템 경험치는 물고기에서만 얻을 수 있습니다.",
+  "calculator.server.loot.totem_exp_source.non_fish": "물고기만 토템 경험치를 줍니다.",
   "calculator.server.loot.totem_exp_source.none": "사용할 수 있는 소스 기반 또는 등급 규칙 토템 경험치 값이 없습니다.",
   "calculator.server.loot.totem_exp_source.group_source_backed": "이 그룹의 모든 토템 경험치 값은 소스 기반 %FishExpRate 행입니다.",
   "calculator.server.loot.totem_exp_source.group_imputed": "이 그룹의 모든 토템 경험치 값은 등급 규칙으로 추정되었습니다.",

@@ -758,7 +758,7 @@
   "calculator.server.provenance.metric.totem_exp": "Totem-EXP",
   "calculator.server.loot.totem_exp_source.source_backed": "Quellgestützter %FishExpRate aus fish_size (flock) Encyclopedia_Table (2021).",
   "calculator.server.loot.totem_exp_source.imputed_grade_rule": "Quellgestützte Totem-EXP-Zeile fehlt; per Stufenregel geschätzt ({$grade}: {$exp} EXP). Grün verwendet konservativ 625, weil quellgestützte grüne Zeilen zwischen 625 und 1250 aufgeteilt sind.",
-  "calculator.server.loot.totem_exp_source.non_fish": "Totem-EXP kann nur durch Fische erhalten werden.",
+  "calculator.server.loot.totem_exp_source.non_fish": "Nur Fische geben Totem-EXP.",
   "calculator.server.loot.totem_exp_source.none": "Kein quellgestützter oder per Stufenregel geschätzter Totem-EXP-Wert verfügbar.",
   "calculator.server.loot.totem_exp_source.group_source_backed": "Alle Totem-EXP-Werte in dieser Gruppe sind quellgestützte %FishExpRate-Zeilen.",
   "calculator.server.loot.totem_exp_source.group_imputed": "Alle Totem-EXP-Werte in dieser Gruppe sind per Stufenregel geschätzt.",
