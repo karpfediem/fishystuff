@@ -15,6 +15,7 @@ deployment="$(canonical_deployment_name "$deployment")"
 
 profile="$(deployment_secretspec_profile "$deployment")"
 exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "$manifest_path"
+assert_deployment_configuration_safe "$deployment"
 
 if [[ ! -f "$manifest_path" ]]; then
   echo "deployment manifest does not exist: $manifest_path" >&2
@@ -26,7 +27,10 @@ require_value "$marker" "deployment manifest does not include deployment_marker"
 
 resident_target="$(resolve_deployment_resident_target "$deployment")"
 telemetry_target="$(deployment_telemetry_target "$deployment")"
+resident_host="$(deployment_resident_hostname "$deployment")"
+telemetry_host="$(deployment_telemetry_hostname "$deployment")"
 require_value "$resident_target" "deployment $deployment does not define a resident target"
+assert_remote_deployment_hosts_for_configured_targets "$deployment" "$resident_target" "$telemetry_target" "$resident_host" "$telemetry_host"
 
 timeout_secs="${FISHYSTUFF_DEPLOY_WAIT_TIMEOUT_SECS:-900}"
 interval_secs="${FISHYSTUFF_DEPLOY_WAIT_INTERVAL_SECS:-5}"

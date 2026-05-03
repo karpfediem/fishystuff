@@ -376,7 +376,7 @@ deployment_shared_telemetry_target() {
       deployment_telemetry_target "$deployment"
       ;;
     production)
-      printf '%s' "$(deployment_env_or_default "$deployment" "telemetry_target" "$(deployment_telemetry_target beta)")"
+      deployment_telemetry_target "$deployment"
       ;;
     local)
       printf '%s' ""
@@ -813,6 +813,98 @@ assert_resident_push_scope_safe() {
       fi
       ;;
   esac
+}
+
+deployment_expected_remote_hostname_for_role() {
+  local deployment="$1"
+  local role="$2"
+
+  deployment="$(canonical_deployment_name "$deployment")"
+  case "$role" in
+    resident)
+      deployment_resident_hostname "$deployment"
+      ;;
+    telemetry)
+      deployment_telemetry_hostname "$deployment"
+      ;;
+    *)
+      echo "unknown deployment remote role: $role" >&2
+      exit 2
+      ;;
+  esac
+}
+
+assert_remote_deployment_host() {
+  local deployment="$1"
+  local role="$2"
+  local ssh_target="$3"
+  local expected_hostname="${4:-}"
+  local tmp_key=""
+  local remote_hostname=""
+
+  deployment="$(canonical_deployment_name "$deployment")"
+  [[ -n "$ssh_target" ]] || return 0
+  if [[ -z "$expected_hostname" ]]; then
+    expected_hostname="$(deployment_expected_remote_hostname_for_role "$deployment" "$role")"
+  fi
+  [[ -n "$expected_hostname" ]] || return 0
+
+  tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-deploy-host-id.XXXXXX)"
+  remote_hostname="$(
+    ssh \
+      -i "$tmp_key" \
+      -o IdentitiesOnly=yes \
+      -o StrictHostKeyChecking=accept-new \
+      "$ssh_target" \
+      'hostname -s 2>/dev/null || hostname' \
+      2>/dev/null
+  )" || {
+    rm -f "$tmp_key"
+    echo "could not verify $deployment $role host identity through $ssh_target" >&2
+    exit 2
+  }
+  rm -f "$tmp_key"
+  remote_hostname="${remote_hostname//$'\r'/}"
+  remote_hostname="${remote_hostname//$'\n'/}"
+
+  if [[ "$remote_hostname" != "$expected_hostname" ]]; then
+    cat >&2 <<EOF
+refusing remote access:
+  $deployment $role target $ssh_target resolved to host $remote_hostname
+  expected host identity: $expected_hostname
+
+This prevents stale DNS records, bad SSH targets, or copied config from reaching
+the wrong resident machine.
+EOF
+    exit 2
+  fi
+
+  case "$deployment:$remote_hostname" in
+    beta:site-nbg1-prod | beta:*production*)
+      echo "refusing beta access to production-looking host identity: $remote_hostname" >&2
+      exit 2
+      ;;
+    production:site-nbg1-beta | production:*beta*)
+      echo "refusing production access to beta-looking host identity: $remote_hostname" >&2
+      exit 2
+      ;;
+  esac
+}
+
+assert_remote_deployment_hosts_for_configured_targets() {
+  local deployment="$1"
+  local resident_target="${2:-}"
+  local telemetry_target="${3:-}"
+  local resident_host="${4:-}"
+  local telemetry_host="${5:-}"
+
+  deployment="$(canonical_deployment_name "$deployment")"
+  if [[ -n "$resident_target" ]]; then
+    assert_remote_deployment_host "$deployment" "resident" "$resident_target" "$resident_host"
+  fi
+  if [[ -n "$telemetry_target" && "$telemetry_target" != "$resident_target" ]]; then
+    assert_remote_deployment_host "$deployment" "telemetry" "$telemetry_target" "$telemetry_host"
+  fi
 }
 
 deployment_tls_enabled() {

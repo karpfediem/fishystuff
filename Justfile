@@ -95,6 +95,10 @@ deploy deployment *services:
 deploy-safety-check deployment:
   bash scripts/recipes/deploy-safety-check.sh "{{deployment}}"
 
+# Run local deploy safety guard regression tests.
+deploy-safety-test:
+  bash scripts/recipes/deploy-safety-test.sh
+
 # Build the current map runtime and map-serving CDN payload once
 build-map:
   ./tools/scripts/build_map.sh

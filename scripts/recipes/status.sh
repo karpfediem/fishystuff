@@ -14,6 +14,7 @@ shift || true
 
 profile="$(deployment_secretspec_profile "$deployment")"
 exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "$@"
+assert_deployment_configuration_safe "$deployment"
 
 declare -a requested_services=()
 declare -A seen_services=()
@@ -42,6 +43,7 @@ fi
 resident_target="$(resolve_deployment_resident_target "$deployment")"
 telemetry_target="$(deployment_telemetry_target "$deployment")"
 resident_host="$(deployment_resident_hostname "$deployment")"
+telemetry_host="$(deployment_telemetry_hostname "$deployment")"
 
 declare -A remote_unit_active=()
 declare -A remote_unit_enabled=()
@@ -182,6 +184,7 @@ status_target_for_service() {
 if [[ "$deployment" != "local" ]]; then
   require_value "$resident_target" "deployment $deployment does not define a resident target"
   require_value "$resident_host" "deployment $deployment does not define a resident hostname"
+  assert_remote_deployment_hosts_for_configured_targets "$deployment" "$resident_target" "$telemetry_target" "$resident_host" "$telemetry_host"
   declare -A services_by_target=()
   for service in "${requested_services[@]}"; do
     target_for_service="$(status_target_for_service "$service")"

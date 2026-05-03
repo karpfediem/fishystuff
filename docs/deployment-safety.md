@@ -32,11 +32,16 @@ Run a local-only preflight with:
 ```sh
 just deploy-safety-check beta
 just deploy-safety-check production
+just deploy-safety-test
 ```
 
 This does not contact remote hosts. The actual deploy path repeats the same
 configuration checks and then performs the remote hostname identity check before
 copying closures or applying the resident graph.
+
+The status, wait, and private tunnel recipes use the same target-boundary checks.
+Production observability tunnels intentionally do not fall back to beta telemetry;
+they require production telemetry configuration or fail closed.
 
 The beta resident manifest no longer carries a default production hostname. A
 production deploy targets production through its own `hostname`, not through a

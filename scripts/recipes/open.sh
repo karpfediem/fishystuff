@@ -11,6 +11,7 @@ deployment="${1-}"
 require_value "$deployment" "usage: open.sh <deployment> [service ...]"
 deployment="$(canonical_deployment_name "$deployment")"
 shift || true
+assert_deployment_configuration_safe "$deployment"
 
 if (( $# == 0 )); then
   set -- site
@@ -33,6 +34,7 @@ done
 profile="$(deployment_open_secretspec_profile "$deployment")"
 if (( needs_tunnel )); then
   exec_with_secretspec_profile_if_needed "$profile" bash "$SCRIPT_PATH" "$deployment" "${services[@]}"
+  assert_deployment_configuration_safe "$deployment"
 fi
 
 tmp_key=""
@@ -44,6 +46,8 @@ fi
 ensure_tunnel() {
   local service="$1"
   local tunnel_target=""
+  local tunnel_role=""
+  local tunnel_expected_host=""
   local preferred_local_port=""
   local local_port=""
   local remote_port=""
@@ -58,6 +62,22 @@ ensure_tunnel() {
 
   tunnel_target="$(deployment_tunnel_target "$deployment" "$service")"
   require_value "$tunnel_target" "deployment $deployment does not define a tunnel target"
+  case "$service" in
+    grafana | dashboard | jaeger | loki | logs | loki-status | prometheus | vector)
+      if [[ -n "$(deployment_telemetry_target "$deployment")" ]]; then
+        tunnel_role="telemetry"
+        tunnel_expected_host="$(deployment_telemetry_hostname "$deployment")"
+      else
+        tunnel_role="resident"
+        tunnel_expected_host="$(deployment_resident_hostname "$deployment")"
+      fi
+      ;;
+    *)
+      tunnel_role="resident"
+      tunnel_expected_host="$(deployment_resident_hostname "$deployment")"
+      ;;
+  esac
+  assert_remote_deployment_host "$deployment" "$tunnel_role" "$tunnel_target" "$tunnel_expected_host"
   preferred_local_port="$(deployment_open_tunnel_local_port "$service")"
   local_port="$preferred_local_port"
   remote_port="$(deployment_open_tunnel_remote_port "$service")"
