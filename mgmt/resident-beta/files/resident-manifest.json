@@ -2,7 +2,7 @@
   "cluster": "beta",
   "hostname": "site-nbg1-beta",
   "telemetry_hostname": "telemetry-nbg1",
-  "prod_hostname": "site-nbg1-prod",
+  "prod_hostname": "",
   "public_urls": {
     "site_base_url": "https://beta.fishystuff.fish",
     "api_base_url": "https://api.beta.fishystuff.fish",
@@ -16,7 +16,7 @@
     "cfg_dir": "/var/lib/fishystuff/dolt/.doltcfg",
     "database_name": "fishystuff",
     "remote_url": "fishystuff/fishystuff",
-    "remote_branch": "",
+    "remote_branch": "beta",
     "refresh_enabled": true,
     "repo_snapshot_store_path": "",
     "repo_snapshot_gcroot_path": "/nix/var/nix/gcroots/mgmt/fishystuff/dolt-repo-current",

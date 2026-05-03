@@ -24,9 +24,45 @@ $manifest struct{
 
 panic($manifest->hostname == "", "missing resident beta hostname in /files/resident-manifest.json")
 
+$deployment_environment = $manifest->deployment_environment || "beta"
+$site_base_url = $manifest->public_urls->site_base_url || ""
+$api_base_url = $manifest->public_urls->api_base_url || ""
+$cdn_base_url = $manifest->public_urls->cdn_base_url || ""
+$telemetry_base_url = $manifest->public_urls->telemetry_base_url || ""
+$dolt_remote_branch = $manifest->dolt->remote_branch || ""
+$manifest_telemetry_hostname = $manifest->telemetry_hostname || ""
+$manifest_prod_hostname = $manifest->prod_hostname || ""
+
+panic(
+	($deployment_environment != "beta") and ($deployment_environment != "production"),
+	"resident manifest deployment_environment must be beta or production"
+)
+
+if $deployment_environment == "beta" {
+	panic($manifest->hostname != "site-nbg1-beta", "beta resident manifest hostname must be site-nbg1-beta")
+	panic($manifest_telemetry_hostname != "telemetry-nbg1", "beta resident manifest telemetry hostname must be telemetry-nbg1")
+	panic($manifest_prod_hostname != "", "beta resident manifest must not carry a production hostname")
+	panic($site_base_url != "https://beta.fishystuff.fish", "beta resident manifest site URL must be https://beta.fishystuff.fish")
+	panic($api_base_url != "https://api.beta.fishystuff.fish", "beta resident manifest API URL must be https://api.beta.fishystuff.fish")
+	panic($cdn_base_url != "https://cdn.beta.fishystuff.fish", "beta resident manifest CDN URL must be https://cdn.beta.fishystuff.fish")
+	panic($telemetry_base_url != "https://telemetry.beta.fishystuff.fish", "beta resident manifest telemetry URL must be https://telemetry.beta.fishystuff.fish")
+	panic($dolt_remote_branch != "beta", "beta resident manifest Dolt branch must be beta")
+}
+
+if $deployment_environment == "production" {
+	panic($manifest->hostname != "site-nbg1-prod", "production resident manifest hostname must be site-nbg1-prod")
+	panic($manifest_telemetry_hostname != "", "production resident manifest must not fall back to beta telemetry host")
+	panic(($manifest_prod_hostname != "") and ($manifest_prod_hostname != "site-nbg1-prod"), "production resident manifest prod hostname must be empty or site-nbg1-prod")
+	panic($site_base_url != "https://fishystuff.fish", "production resident manifest site URL must be https://fishystuff.fish")
+	panic($api_base_url != "https://api.fishystuff.fish", "production resident manifest API URL must be https://api.fishystuff.fish")
+	panic($cdn_base_url != "https://cdn.fishystuff.fish", "production resident manifest CDN URL must be https://cdn.fishystuff.fish")
+	panic($telemetry_base_url != "https://telemetry.fishystuff.fish", "production resident manifest telemetry URL must be https://telemetry.fishystuff.fish")
+	panic($dolt_remote_branch != "main", "production resident manifest Dolt branch must be main")
+}
+
 $control_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_CONTROL_HOSTNAME", "mgmt-root")
-$telemetry_hostname = $manifest->telemetry_hostname || "telemetry-nbg1"
-$prod_hostname = $manifest->prod_hostname || ""
+$telemetry_hostname = if $deployment_environment == "beta" { $manifest_telemetry_hostname } else { "" }
+$prod_hostname = $manifest_prod_hostname
 $runtime_hostname = sys.defaultenv("FISHYSTUFF_RESIDENT_RUNTIME_HOSTNAME", sys.hostname())
 
 if $runtime_hostname == $control_hostname {

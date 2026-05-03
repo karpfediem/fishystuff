@@ -47,6 +47,12 @@ The beta resident manifest no longer carries a default production hostname. A
 production deploy targets production through its own `hostname`, not through a
 deferred prod placeholder in a beta manifest.
 
+The resident MCL graph also validates the manifest before including any host
+classes. It refuses mismatched environment names, public URLs, Dolt branches, and
+beta manifests that carry production host identity. This keeps the graph
+fail-closed even if someone bypasses the shell recipe and runs the packaged MCL
+directly.
+
 Remaining hardening work:
 
 - Move from shared root SSH to separate OS deploy identities with sudoers limited

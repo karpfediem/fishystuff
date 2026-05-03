@@ -75,4 +75,17 @@ expect_ok "production resident push scope" \
 expect_eq "production telemetry tunnel has no beta fallback" "" "$(deployment_tunnel_target production grafana)"
 expect_eq "beta telemetry tunnel target" "root@telemetry.beta.fishystuff.fish" "$(deployment_tunnel_target beta grafana)"
 
+expect_ok "bundled resident beta manifest has safe target identity" \
+  jq -e '
+    .deployment_environment == "beta"
+    and .hostname == "site-nbg1-beta"
+    and .telemetry_hostname == "telemetry-nbg1"
+    and .prod_hostname == ""
+    and .public_urls.site_base_url == "https://beta.fishystuff.fish"
+    and .public_urls.api_base_url == "https://api.beta.fishystuff.fish"
+    and .public_urls.cdn_base_url == "https://cdn.beta.fishystuff.fish"
+    and .public_urls.telemetry_base_url == "https://telemetry.beta.fishystuff.fish"
+    and .dolt.remote_branch == "beta"
+  ' mgmt/resident-beta/files/resident-manifest.json >/dev/null
+
 printf '[deploy-safety-test] %s checks passed\n' "$pass_count"
