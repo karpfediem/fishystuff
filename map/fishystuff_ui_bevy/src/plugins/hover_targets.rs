@@ -18,6 +18,7 @@ use crate::plugins::api::{
 };
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::fishing_hotspots::FISHING_HOTSPOT_TARGET_KEY;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 use crate::plugins::ui::{UiFonts, UiRoot};
@@ -83,6 +84,7 @@ const RESOURCE_BAR_MARKER_COLOR: [u8; 3] = [77, 211, 255];
 const ORIGIN_NODE_MARKER_COLOR: [u8; 3] = [255, 196, 66];
 const REGION_NODE_MARKER_COLOR: [u8; 3] = [244, 240, 232];
 const TRADE_NPC_MARKER_COLOR: [u8; 3] = [255, 196, 66];
+const FISHING_HOTSPOT_MARKER_COLOR: [u8; 3] = [255, 179, 56];
 const BOOKMARK_MARKER_COLOR: [u8; 3] = [239, 92, 31];
 const TERRITORY_DETAIL_PANE_ID: &str = "territory";
 const BOOKMARK_LAYER_KEY: &str = "bookmarks";
@@ -1111,7 +1113,10 @@ fn hover_targets_from_sample(
 fn is_landmark_target_key(key: &str) -> bool {
     matches!(
         key,
-        WAYPOINT_TARGET_KEY | BOOKMARK_TARGET_KEY | FIELD_HOVER_TARGET_KEY_TRADE_NPC
+        WAYPOINT_TARGET_KEY
+            | BOOKMARK_TARGET_KEY
+            | FIELD_HOVER_TARGET_KEY_TRADE_NPC
+            | FISHING_HOTSPOT_TARGET_KEY
     )
 }
 
@@ -1277,6 +1282,12 @@ fn hover_target_visual(
                 REGION_NODE_MARKER_SIZE_SCREEN_PX,
                 REGION_NODE_LABEL_OFFSET_SCREEN_PX,
                 REGION_NODE_MARKER_COLOR,
+                UiSvgIconKind::MapPin,
+            ),
+            FISHING_HOTSPOT_TARGET_KEY => (
+                REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                FISHING_HOTSPOT_MARKER_COLOR,
                 UiSvgIconKind::MapPin,
             ),
             BOOKMARK_TARGET_KEY => (

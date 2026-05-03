@@ -1,4 +1,5 @@
 mod field_layers;
+mod fishing_hotspots;
 mod mysql_store;
 mod ranking;
 mod region_groups;
@@ -250,6 +251,18 @@ enum Commands {
         loc: PathBuf,
         #[arg(long = "waypoint-xml", required = true)]
         waypoint_xml: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    BuildFishingHotspotsAsset {
+        #[arg(long)]
+        float_fishing_point_xlsx: PathBuf,
+        #[arg(long)]
+        float_fishing_xlsx: PathBuf,
+        #[arg(long)]
+        source_loot_groups_json: PathBuf,
+        #[arg(long)]
+        bdolytics_hotspots_json: Option<PathBuf>,
         #[arg(long)]
         out: PathBuf,
     },
@@ -576,6 +589,19 @@ fn main() -> Result<()> {
             regiongroupinfo_bss,
             loc,
             waypoint_xml,
+            out,
+        ),
+        Commands::BuildFishingHotspotsAsset {
+            float_fishing_point_xlsx,
+            float_fishing_xlsx,
+            source_loot_groups_json,
+            bdolytics_hotspots_json,
+            out,
+        } => run_build_fishing_hotspots_asset(
+            float_fishing_point_xlsx,
+            float_fishing_xlsx,
+            source_loot_groups_json,
+            bdolytics_hotspots_json,
             out,
         ),
         Commands::BuildTradeNpcDestinations {
@@ -1563,6 +1589,35 @@ fn run_build_region_nodes_geojson(
         summary.feature_count,
         summary.named_feature_count,
         summary.connection_feature_count,
+    );
+    Ok(())
+}
+
+fn run_build_fishing_hotspots_asset(
+    float_fishing_point_xlsx: PathBuf,
+    float_fishing_xlsx: PathBuf,
+    source_loot_groups_json: PathBuf,
+    bdolytics_hotspots_json: Option<PathBuf>,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = fishing_hotspots::build_fishing_hotspot_asset(
+        &float_fishing_point_xlsx,
+        &float_fishing_xlsx,
+        &source_loot_groups_json,
+        bdolytics_hotspots_json.as_deref(),
+        &out,
+    )?;
+    println!(
+        "build-fishing-hotspots-asset: out={} hotspots={} source_points={} source_groups={} source_loot_options={} source_loot_variants={} imported_metadata={} matched_imported_metadata={} expanded_degenerate_rectangles={}",
+        out.display(),
+        summary.hotspot_count,
+        summary.source_point_rows,
+        summary.source_fishing_group_rows,
+        summary.source_loot_option_rows,
+        summary.source_loot_variant_rows,
+        summary.imported_metadata_rows,
+        summary.matched_imported_metadata_rows,
+        summary.expanded_degenerate_rectangles,
     );
     Ok(())
 }

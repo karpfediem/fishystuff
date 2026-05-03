@@ -23,6 +23,10 @@ use crate::plugins::api::{
 };
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::fishing_hotspots::{
+    fishing_hotspot_layers_pending, fishing_hotspot_sample_at_world_point_with_options,
+    FishingHotspotLayerRuntime, FISHING_HOTSPOT_TARGET_KEY,
+};
 use crate::plugins::input::PanState;
 use crate::plugins::points::{
     point_hover_samples_at_world_point, point_samples_at_world_point, PointsState,
@@ -50,6 +54,7 @@ impl Plugin for MaskPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ExactLookupCache>()
             .init_resource::<WaypointLayerRuntime>()
+            .init_resource::<FishingHotspotLayerRuntime>()
             .init_resource::<PendingSelectionDetails>()
             .add_systems(
                 Update,
@@ -338,16 +343,9 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
                 ),
                 target_key: waypoint_probe_target_key(&request),
             };
-            let waypoint_sample = waypoint_sample_at_world_point_with_options(
+            let waypoint_sample = landmark_sample_at_world_point_with_options(
                 request.click_world_point,
-                &context.waypoint_runtime,
-                &context.layer_registry,
-                &context.layer_runtime,
-                &context.exact_lookups,
-                &context.tile_cache,
-                &context.vector_runtime,
-                &context.layer_filters,
-                &context.point_camera_q,
+                &context,
                 waypoint_options,
             )
             .filter(|sample| {
@@ -355,12 +353,7 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
             });
             if waypoint_sample.is_none()
                 && waypoint_options.include_hidden_layers
-                && waypoint_layers_pending(
-                    &context.waypoint_runtime,
-                    &context.layer_registry,
-                    &context.layer_runtime,
-                    waypoint_options,
-                )
+                && landmark_layers_pending(&context, waypoint_options)
             {
                 context.pending_selection_details.request = Some(request);
                 return;
@@ -394,8 +387,63 @@ fn waypoint_probe_target_key(request: &PendingSelectionDetailsRequest) -> Option
     match request.element_kind.trim() {
         "npc" => Some(FIELD_HOVER_TARGET_KEY_TRADE_NPC),
         "waypoint" => Some(WAYPOINT_TARGET_KEY),
+        "hotspot" => Some(FISHING_HOTSPOT_TARGET_KEY),
         _ => None,
     }
+}
+
+fn landmark_sample_at_world_point_with_options(
+    world_point: WorldPoint,
+    context: &SelectionDetailsContext<'_, '_>,
+    options: WaypointSampleOptions,
+) -> Option<WaypointLayerInteractionSample> {
+    if options
+        .target_key
+        .is_some_and(|target_key| target_key == FISHING_HOTSPOT_TARGET_KEY)
+    {
+        return fishing_hotspot_sample_at_world_point_with_options(
+            world_point,
+            &context.fishing_hotspot_runtime,
+            &context.layer_registry,
+            &context.layer_runtime,
+            options,
+        );
+    }
+    waypoint_sample_at_world_point_with_options(
+        world_point,
+        &context.waypoint_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        &context.exact_lookups,
+        &context.tile_cache,
+        &context.vector_runtime,
+        &context.layer_filters,
+        &context.point_camera_q,
+        options,
+    )
+}
+
+fn landmark_layers_pending(
+    context: &SelectionDetailsContext<'_, '_>,
+    options: WaypointSampleOptions,
+) -> bool {
+    if options
+        .target_key
+        .is_some_and(|target_key| target_key == FISHING_HOTSPOT_TARGET_KEY)
+    {
+        return fishing_hotspot_layers_pending(
+            &context.fishing_hotspot_runtime,
+            &context.layer_registry,
+            &context.layer_runtime,
+            options,
+        );
+    }
+    waypoint_layers_pending(
+        &context.waypoint_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        options,
+    )
 }
 
 fn waypoint_sample_matches_requested_label(
@@ -587,6 +635,15 @@ fn landmark_hover_layer_samples_at_world_point(
         .into_iter()
         .map(|sample| sample.layer_sample),
     );
+    if let Some(sample) = fishing_hotspot_sample_at_world_point_with_options(
+        world_point,
+        &context.fishing_hotspot_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        WaypointSampleOptions::default(),
+    ) {
+        layer_samples.push(sample.layer_sample);
+    }
     layer_samples
 }
 
@@ -633,7 +690,20 @@ fn selection_candidate_at_world_point(
     .and_then(|sample| {
         waypoint_selection_candidate(&sample, &context.layer_registry, &context.layer_runtime)
     });
-    preferred_selection_candidate(bookmark_candidate, waypoint_candidate)
+    let hotspot_candidate = fishing_hotspot_sample_at_world_point_with_options(
+        world_point,
+        &context.fishing_hotspot_runtime,
+        &context.layer_registry,
+        &context.layer_runtime,
+        WaypointSampleOptions::default(),
+    )
+    .and_then(|sample| {
+        waypoint_selection_candidate(&sample, &context.layer_registry, &context.layer_runtime)
+    });
+    preferred_selection_candidate(
+        preferred_selection_candidate(bookmark_candidate, waypoint_candidate),
+        hotspot_candidate,
+    )
 }
 
 fn preferred_selection_candidate(
@@ -785,6 +855,7 @@ fn selection_candidate_from_layer_sample(
             BOOKMARK_TARGET_KEY => ("bookmark", FishyMapSelectionPointKind::Bookmark),
             WAYPOINT_TARGET_KEY => ("waypoint", FishyMapSelectionPointKind::Waypoint),
             FIELD_HOVER_TARGET_KEY_TRADE_NPC => ("npc", FishyMapSelectionPointKind::Waypoint),
+            FISHING_HOTSPOT_TARGET_KEY => ("hotspot", FishyMapSelectionPointKind::Waypoint),
             _ => return None,
         };
         Some(SelectionCandidate {
@@ -1022,6 +1093,7 @@ struct SelectionCandidateContext<'w, 's> {
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     waypoint_runtime: Res<'w, WaypointLayerRuntime>,
+    fishing_hotspot_runtime: Res<'w, FishingHotspotLayerRuntime>,
     bookmarks: Res<'w, BookmarkState>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     point_camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
@@ -1070,6 +1142,7 @@ struct SelectionDetailsContext<'w, 's> {
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     waypoint_runtime: Res<'w, WaypointLayerRuntime>,
+    fishing_hotspot_runtime: Res<'w, FishingHotspotLayerRuntime>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     pending: ResMut<'w, PendingRequests>,
     pending_selection_details: ResMut<'w, PendingSelectionDetails>,
@@ -1108,6 +1181,7 @@ mod tests {
     use crate::map::layer_query::LayerQuerySample;
     use crate::map::spaces::WorldPoint;
     use crate::plugins::api::{HoverInfo, PointSampleSummary};
+    use crate::plugins::fishing_hotspots::FISHING_HOTSPOT_TARGET_KEY;
     use crate::plugins::waypoint_layers::WaypointLayerInteractionSample;
     use fishystuff_api::Rgb;
     use fishystuff_core::field_metadata::{FieldHoverTarget, FIELD_HOVER_TARGET_KEY_TRADE_NPC};
@@ -1389,6 +1463,13 @@ mod tests {
         assert_eq!(
             waypoint_probe_target_key(&npc),
             Some(FIELD_HOVER_TARGET_KEY_TRADE_NPC)
+        );
+
+        let mut hotspot = base.clone();
+        hotspot.element_kind = "hotspot".to_string();
+        assert_eq!(
+            waypoint_probe_target_key(&hotspot),
+            Some(FISHING_HOTSPOT_TARGET_KEY)
         );
 
         let mut generic = base;

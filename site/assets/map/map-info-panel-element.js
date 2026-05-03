@@ -340,7 +340,12 @@ function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = []
   const targetPointLabel = trimString(target?.pointLabel);
   const pointLabel = trimString(targetPointLabel || selection?.pointLabel);
   const elementKind = trimString(target?.elementKind);
-  if (elementKind === "bookmark" || elementKind === "waypoint" || elementKind === "npc") {
+  if (
+    elementKind === "bookmark" ||
+    elementKind === "waypoint" ||
+    elementKind === "npc" ||
+    elementKind === "hotspot"
+  ) {
     if (targetPointLabel) {
       return targetPointLabel;
     }
@@ -963,10 +968,105 @@ function pointSampleSectionMarkup(section, { pointSamplePage = 0 } = {}) {
   `;
 }
 
+function hotspotStatMarkup(metric) {
+  const icon = trimString(metric?.icon);
+  const iconMarkup = icon
+    ? `
+      <div class="stat-figure text-base-content/45">
+        ${spriteIcon(icon, "size-5")}
+      </div>
+    `
+    : "";
+  return `
+    <div class="stat min-w-0 px-3 py-3">
+      ${iconMarkup}
+      <div class="stat-title text-[11px] font-semibold uppercase tracking-[0.16em] text-base-content/45">${escapeHtml(metric?.label || "")}</div>
+      <div class="stat-value truncate text-base font-semibold text-base-content">${escapeHtml(metric?.value || "")}</div>
+    </div>
+  `;
+}
+
+function hotspotStatsRowMarkup(metrics) {
+  const visibleMetrics = metrics.filter((metric) => trimString(metric?.value));
+  if (!visibleMetrics.length) {
+    return "";
+  }
+  return `
+    <div class="stats stats-vertical min-w-0 border border-base-300/75 bg-base-100/75 shadow-none sm:stats-horizontal">
+      ${visibleMetrics.map((metric) => hotspotStatMarkup(metric)).join("")}
+    </div>
+  `;
+}
+
+function hotspotStatsMarkup(section) {
+  const metrics = Array.isArray(section?.metrics) ? section.metrics : [];
+  const timingMetrics = [
+    {
+      label: "Bite Min",
+      value: trimString(section?.biteTime?.minimum),
+      icon: "stopwatch",
+    },
+    {
+      label: "Bite Avg",
+      value: trimString(section?.biteTime?.average),
+      icon: "stopwatch",
+    },
+    {
+      label: "Bite Max",
+      value: trimString(section?.biteTime?.maximum),
+      icon: "stopwatch",
+    },
+  ];
+  const catchMetrics = [
+    ...metrics.slice(0, 2),
+    {
+      label: "Lifetime",
+      value: trimString(section?.lifetime),
+      icon: "time-fill",
+    },
+  ];
+  const rows = [timingMetrics, catchMetrics, metrics.slice(2, 4)]
+    .map((row) => row.filter((metric) => trimString(metric?.value)))
+    .filter((row) => row.length > 0);
+  if (!rows.length) {
+    return "";
+  }
+  return `
+    <div class="grid gap-2">
+      ${rows.map((row) => hotspotStatsRowMarkup(row)).join("")}
+    </div>
+  `;
+}
+
+function hotspotSectionMarkup(section) {
+  const groups = Array.isArray(section?.groups) ? section.groups : [];
+  const profiles = Array.isArray(section?.profiles) ? section.profiles : [];
+  const profileMarkup = profiles.length
+    ? profiles.map((profile) => zoneLootProfileMarkup(profile)).join("")
+    : zoneLootGroupCollectionMarkup(groups);
+  return `
+    <section class="space-y-3">
+      ${
+        trimString(section?.title)
+          ? `<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title)}</p>`
+          : ""
+      }
+      ${hotspotStatsMarkup(section)}
+      ${
+        groups.length || profiles.length
+          ? `<div class="fishymap-zone-loot-profiles">${profileMarkup}</div>`
+          : ""
+      }
+    </section>
+  `;
+}
+
 function sectionMarkup(section, options = {}) {
   switch (trimString(section?.kind)) {
     case "point-samples":
       return pointSampleSectionMarkup(section, options);
+    case "hotspot":
+      return hotspotSectionMarkup(section);
     case "facts":
       return `
         <section class="space-y-2">

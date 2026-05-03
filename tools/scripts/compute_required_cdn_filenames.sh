@@ -83,11 +83,13 @@ ORDER BY CAST(it.Index AS SIGNED)
 
 run_query "lightstone-icons" "
 SELECT DISTINCT
-  source_name_en AS display_name,
-  set_name_ko,
-  skill_icon_file
-FROM calculator_lightstone_effect_sources
-WHERE NULLIF(TRIM(skill_icon_file), '') IS NOT NULL
+  NULLIF(TRIM(stype.SkillName), '') AS display_name,
+  NULLIF(TRIM(ls.Description), '') AS set_name_ko,
+  NULLIF(TRIM(stype.IconImageFile), '') AS skill_icon_file
+FROM lightstone_set_option ls
+LEFT JOIN skilltype_table_new stype
+  ON stype.SkillNo = ls.SetOptionSkillNo
+WHERE NULLIF(TRIM(stype.IconImageFile), '') IS NOT NULL
 "
 
 run_query "fishing-domain-icons" "
@@ -158,4 +160,5 @@ python3 "$ROOT_DIR/tools/scripts/compute_required_cdn_filenames.py" \
   --fishing-domain-icons-json "$tmpdir/fishing-domain-icons.json" \
   --fish-catalog-icons-json "$tmpdir/fish-catalog-icons.json" \
   --fish-table-icons-json "$tmpdir/fish-table-icons.json" \
+  --fishing-hotspots-json "$CDN_ROOT/hotspots/fishing_hotspots.v1.json" \
   --out "$OUT_PATH"

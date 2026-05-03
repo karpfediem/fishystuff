@@ -1187,6 +1187,127 @@ test("render shows the calculator warning without the calculator inputs notice",
   assert.doesNotMatch(panelSlot.innerHTML, /Calculator defaults/);
 });
 
+test("render shows condition labels for fishing hotspot loot groups", () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const element = new FishyMapInfoPanelElement();
+  const panelSlot = renderSlot();
+  element._shell = {
+    __fishymapInitialSignals: {
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+          pointLabel: "Coelacanth Hotspot #1",
+          layerSamples: [
+            {
+              layerId: "fishing_hotspots",
+              layerName: "Fishing Hotspots",
+              kind: "fishing_hotspot",
+              targets: [{ key: "fishing_hotspot", label: "Coelacanth Hotspot #1", worldX: 10, worldZ: 20 }],
+              detailSections: [
+                {
+                  id: "fishing-hotspot",
+                  kind: "hotspot",
+                  title: "Fishing Hotspot",
+                  facts: [
+                    { key: "primary_fish", label: "Fish", value: "Coelacanth", icon: "fish-fill" },
+                    { key: "primary_fish_item_id", label: "Fish Item", value: "8452", icon: "fish-fill" },
+                    {
+                      key: "metadata_source",
+                      label: "Metadata Source",
+                      value: "bdolytics community snapshot",
+                      icon: "information-circle",
+                    },
+                    {
+                      key: "source_metadata_stats",
+                      label: "Source Table Metadata",
+                      value: "FloatFishing_Table stat columns are 0",
+                      icon: "source-database",
+                    },
+                    { key: "min_wait_time_ms", label: "Bite Time Minimum", value: "77667", icon: "stopwatch" },
+                    { key: "max_wait_time_ms", label: "Bite Time Maximum", value: "107667", icon: "stopwatch" },
+                    { key: "min_fish_count", label: "Min. Catches", value: "2", icon: "information-circle" },
+                    { key: "max_fish_count", label: "Max. Catches", value: "4", icon: "information-circle" },
+                    { key: "point_remain_time_ms", label: "Hotspot Lifetime", value: "600000", icon: "time-fill" },
+                    { key: "available_fishing_level", label: "Catchable at", value: "1", icon: "information-circle" },
+                    { key: "observe_fishing_level", label: "Visible at", value: "1", icon: "information-circle" },
+                    {
+                      key: "loot_group",
+                      label: "Loot Group",
+                      value: JSON.stringify({
+                        slotIdx: 2,
+                        label: "Group 1",
+                        conditionOptionKey: "hotspot:1:2:10944",
+                        conditionOptions: [
+                          {
+                            conditionKey: "getLifeLevel(1)>80;",
+                            conditionText: "Fishing Level Guru 1+",
+                            conditionTooltip: "getLifeLevel(1)>80;",
+                            active: true,
+                            speciesRows: [
+                              {
+                                itemId: 42285,
+                                label: "Mystical Fish",
+                                selectRate: 50,
+                                gradeType: 4,
+                                iconItemId: 42281,
+                              },
+                            ],
+                          },
+                        ],
+                      }),
+                      icon: "fish-fill",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        catalog: {
+          layers: [{ layerId: "fishing_hotspots", displayOrder: 42 }],
+        },
+      },
+    },
+  };
+  element._elements = {
+    title: renderSlot(),
+    titleIcon: renderSlot(),
+    statusIcon: renderSlot(),
+    statusText: renderSlot(),
+    tabs: renderSlot(),
+    panel: panelSlot,
+  };
+
+  element.render();
+
+  assert.doesNotMatch(panelSlot.innerHTML, /Zoom to Hotspot/);
+  assert.doesNotMatch(panelSlot.innerHTML, /alert alert-soft/);
+  assert.doesNotMatch(panelSlot.innerHTML, /Metadata imported from bdolytics community snapshot/);
+  assert.doesNotMatch(panelSlot.innerHTML, /FloatFishing_Table stat columns are 0/);
+  assert.match(panelSlot.innerHTML, /stat-value/);
+  assert.match(panelSlot.innerHTML, /stats stats-vertical/);
+  assert.match(panelSlot.innerHTML, /Bite Min/);
+  assert.match(panelSlot.innerHTML, /Bite Avg/);
+  assert.match(panelSlot.innerHTML, /Bite Max/);
+  assert.doesNotMatch(panelSlot.innerHTML, /#fishy-information-circle/);
+  assert.doesNotMatch(panelSlot.innerHTML, /Imported metadata/);
+  assert.match(panelSlot.innerHTML, /77.7s/);
+  assert.match(panelSlot.innerHTML, /92.7s/);
+  assert.match(panelSlot.innerHTML, /Lifetime/);
+  assert.doesNotMatch(panelSlot.innerHTML, /Hotspot Lifetime/);
+  assert.match(panelSlot.innerHTML, /10:00/);
+  assert.match(panelSlot.innerHTML, /Catchable at/);
+  assert.match(panelSlot.innerHTML, /Visible at/);
+  assert.ok(panelSlot.innerHTML.indexOf("Bite Min") < panelSlot.innerHTML.indexOf("Min. Catches"));
+  assert.ok(panelSlot.innerHTML.indexOf("Bite Max") < panelSlot.innerHTML.indexOf("Lifetime"));
+  assert.ok(panelSlot.innerHTML.indexOf("Lifetime") < panelSlot.innerHTML.indexOf("Catchable at"));
+  assert.match(panelSlot.innerHTML, /fishymap-zone-loot-profile/);
+  assert.match(panelSlot.innerHTML, /Fishing Level Guru 1\+/);
+  assert.match(panelSlot.innerHTML, /Mystical Fish/);
+  assert.match(panelSlot.innerHTML, /0.005%/);
+});
+
 test("condition arrow buttons switch the visible zone loot branch", async () => {
   const element = new FishyMapInfoPanelElement();
   const panelSlot = renderSlot();

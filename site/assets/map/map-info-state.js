@@ -52,7 +52,14 @@ function normalizeSelectionLayerSamples(selection) {
 
 const INFO_WINDOW_TITLE_ICON = "inspect-fill";
 const INFO_WINDOW_STATUS_ICON = "information-circle";
-const LANDMARK_LAYER_IDS = Object.freeze(["trade_npcs", "region_nodes", "bookmarks"]);
+const FISHING_HOTSPOTS_LAYER_ID = "fishing_hotspots";
+const FISHING_HOTSPOT_KIND = "fishing_hotspot";
+const HOTSPOT_UNSET_STAT_VALUE = "Not set";
+const LANDMARK_LAYER_IDS = Object.freeze([
+  "trade_npcs",
+  "region_nodes",
+  "bookmarks",
+]);
 
 function pointKindStatusText(pointKind, pointLabel) {
   const normalizedLabel = trimString(pointLabel);
@@ -83,7 +90,12 @@ function selectionTargetPointLabel(selection) {
 function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers) {
   const elementKind = selectionTargetElementKind(selection);
   const targetPointLabel = selectionTargetPointLabel(selection);
-  if (elementKind === "bookmark" || elementKind === "waypoint" || elementKind === "npc") {
+  if (
+    elementKind === "bookmark" ||
+    elementKind === "waypoint" ||
+    elementKind === "npc" ||
+    elementKind === "hotspot"
+  ) {
     if (targetPointLabel) {
       return targetPointLabel;
     }
@@ -110,6 +122,10 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
 }
 
 function zoneLootConditionKey(group, index) {
+  const explicitKey = trimString(group?.conditionOptionKey);
+  if (explicitKey) {
+    return explicitKey;
+  }
   const slotIdx = Number.parseInt(group?.slotIdx, 10) || index + 1;
   const label = trimString(group?.label) || `slot-${slotIdx}`;
   return `${slotIdx}:${label}`;
@@ -402,6 +418,358 @@ function buildPointSampleSection(selection, stateBundle, zoneCatalog) {
   };
 }
 
+function integerValue(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function fishItemIconUrl(itemId) {
+  const parsed = integerValue(itemId);
+  if (parsed == null || parsed <= 0) {
+    return "";
+  }
+  const resolver = globalThis.window?.__fishystuffResolveFishItemIconUrl;
+  if (typeof resolver === "function") {
+    return trimString(resolver(parsed));
+  }
+  return `/images/items/${String(parsed).padStart(8, "0")}.webp`;
+}
+
+function detailSectionFacts(section) {
+  return (Array.isArray(section?.facts) ? section.facts : [])
+    .filter((fact) => isPlainObject(fact))
+    .map((fact) => ({
+      key: trimString(fact.key),
+      label: trimString(fact.label),
+      value: trimString(fact.value),
+      icon: trimString(fact.icon),
+    }))
+    .filter((fact) => fact.key && fact.value);
+}
+
+function firstFactValue(facts, key) {
+  return facts.find((fact) => fact.key === key)?.value || "";
+}
+
+function hotspotMetric(label, value, icon) {
+  const normalizedValue = trimString(value);
+  return {
+    label,
+    value: normalizedValue || HOTSPOT_UNSET_STAT_VALUE,
+    icon,
+  };
+}
+
+function isHotspotSample(sample) {
+  return (
+    trimString(sample?.layerId) === FISHING_HOTSPOTS_LAYER_ID ||
+    trimString(sample?.kind) === FISHING_HOTSPOT_KIND
+  );
+}
+
+function hotspotDetailSection(sample) {
+  return (Array.isArray(sample?.detailSections) ? sample.detailSections : [])
+    .find((section) => isPlainObject(section) && trimString(section.kind) === "hotspot") || null;
+}
+
+function formatHotspotLifeLevel(value) {
+  const raw = integerValue(value);
+  if (raw == null || raw < 0) {
+    return "";
+  }
+  const levelIndex = raw + 1;
+  const tiers = [
+    ["Beginner", 10],
+    ["Apprentice", 10],
+    ["Skilled", 10],
+    ["Professional", 10],
+    ["Artisan", 10],
+    ["Master", 30],
+    ["Guru", 100],
+  ];
+  let remaining = levelIndex;
+  for (const [tier, count] of tiers) {
+    if (remaining <= count) {
+      return `${tier} ${remaining}`;
+    }
+    remaining -= count;
+  }
+  return `Guru ${Math.max(1, remaining + 100)}`;
+}
+
+function formatHotspotSeconds(value) {
+  const ms = integerValue(value);
+  if (ms == null || ms < 0) {
+    return "";
+  }
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(1).replace(/\.0$/, "")}s`;
+}
+
+function formatHotspotAverageSeconds(minValue, maxValue) {
+  const minMs = integerValue(minValue);
+  const maxMs = integerValue(maxValue);
+  if (minMs == null || maxMs == null || minMs < 0 || maxMs < 0) {
+    return "";
+  }
+  return formatHotspotSeconds(Math.round((minMs + maxMs) / 2));
+}
+
+function formatHotspotDuration(value) {
+  const ms = integerValue(value);
+  if (ms == null || ms < 0) {
+    return "";
+  }
+  const totalSeconds = Math.round(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatHotspotRate(value) {
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate < 0) {
+    return "";
+  }
+  const percent = rate / 10_000;
+  return `${percent.toFixed(3).replace(/\.?0+$/, "")}%`;
+}
+
+function hotspotGradeTone(gradeType) {
+  switch (integerValue(gradeType)) {
+    case 4:
+      return "red";
+    case 3:
+      return "yellow";
+    case 2:
+      return "blue";
+    case 1:
+      return "green";
+    case 0:
+      return "white";
+    default:
+      return "unknown";
+  }
+}
+
+function parseHotspotJsonPayload(value) {
+  let payload = null;
+  try {
+    payload = JSON.parse(value);
+  } catch (_error) {
+    return null;
+  }
+  return isPlainObject(payload) ? payload : null;
+}
+
+function parseHotspotLootPayload(payload, keySuffix = "", { slotIdx = 0, groupLabel = "" } = {}) {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+  const itemId = integerValue(payload.itemId);
+  const iconItemId = integerValue(payload.iconItemId) || itemId;
+  const label = trimString(payload.label) || trimString(payload.name);
+  if (!itemId || !label) {
+    return null;
+  }
+  const iconGradeTone = trimString(payload.iconGradeTone) || hotspotGradeTone(payload.gradeType);
+  const dropRateText = trimString(payload.dropRateText) || formatHotspotRate(payload.selectRate);
+  const dropRateTooltip = trimString(payload.dropRateTooltip);
+  return {
+    key: `hotspot-loot:${keySuffix}:${itemId}:${trimString(payload.selectRate)}`,
+    itemId,
+    label,
+    slotIdx: integerValue(payload.slotIdx) || slotIdx,
+    groupLabel: trimString(payload.groupLabel) || groupLabel,
+    iconUrl: iconItemId ? fishItemIconUrl(iconItemId) : "",
+    iconGradeTone,
+    fillColor: trimString(payload.fillColor),
+    strokeColor: trimString(payload.strokeColor),
+    textColor: trimString(payload.textColor),
+    dropRateText,
+    dropRateSourceKind: trimString(payload.dropRateSourceKind),
+    dropRateTooltip,
+    rawDropRateText: trimString(payload.rawDropRateText) || dropRateText,
+    rawDropRateTooltip: trimString(payload.rawDropRateTooltip) || dropRateTooltip,
+    normalizedDropRateText: trimString(payload.normalizedDropRateText) || dropRateText,
+    normalizedDropRateTooltip: trimString(payload.normalizedDropRateTooltip) || dropRateTooltip,
+    catchMethods: normalizeCatchMethods(payload.catchMethods),
+  };
+}
+
+function parseHotspotLootFact(fact) {
+  if (fact.key !== "loot_item") {
+    return null;
+  }
+  return parseHotspotLootPayload(parseHotspotJsonPayload(fact.value));
+}
+
+function parseHotspotLootGroupFact(fact, index) {
+  if (fact.key !== "loot_group") {
+    return null;
+  }
+  const payload = parseHotspotJsonPayload(fact.value);
+  if (!payload) {
+    return null;
+  }
+  const slotIdx = integerValue(payload.slotIdx) || index + 1;
+  const label = trimString(payload.label) || `Group ${index + 1}`;
+  const conditionOptions = (Array.isArray(payload.conditionOptions) ? payload.conditionOptions : [])
+    .filter((option) => isPlainObject(option))
+    .map((option, optionIndex) => {
+      const rows = (Array.isArray(option.speciesRows) ? option.speciesRows : [])
+        .map((row, rowIndex) =>
+          parseHotspotLootPayload(
+            row,
+            `${trimString(option.conditionKey) || optionIndex}:${rowIndex}`,
+            { slotIdx, groupLabel: label },
+          ),
+        )
+        .filter(Boolean);
+      const optionDropRateText = trimString(option.dropRateText);
+      const optionDropRateTooltip = trimString(option.dropRateTooltip);
+      return {
+        conditionText: trimString(option.conditionText),
+        conditionTooltip: trimString(option.conditionTooltip),
+        dropRateText: optionDropRateText,
+        dropRateSourceKind: trimString(option.dropRateSourceKind),
+        dropRateTooltip: optionDropRateTooltip,
+        rawDropRateText: trimString(option.rawDropRateText) || optionDropRateText,
+        rawDropRateTooltip: trimString(option.rawDropRateTooltip) || optionDropRateTooltip,
+        normalizedDropRateText: trimString(option.normalizedDropRateText) || optionDropRateText,
+        normalizedDropRateTooltip: trimString(option.normalizedDropRateTooltip) || optionDropRateTooltip,
+        active: option.active === true,
+        speciesRows: rows,
+      };
+    })
+    .filter((option) => option.conditionText || option.speciesRows.length > 0);
+  if (!conditionOptions.length) {
+    return null;
+  }
+  const groupDropRateText = trimString(payload.dropRateText);
+  const groupDropRateTooltip = trimString(payload.dropRateTooltip);
+  return {
+    slotIdx,
+    label,
+    conditionOptionKey: trimString(payload.conditionOptionKey),
+    fillColor: trimString(payload.fillColor),
+    strokeColor: trimString(payload.strokeColor),
+    textColor: trimString(payload.textColor),
+    dropRateText: groupDropRateText,
+    dropRateSourceKind: trimString(payload.dropRateSourceKind),
+    dropRateTooltip: groupDropRateTooltip,
+    rawDropRateText: trimString(payload.rawDropRateText) || groupDropRateText,
+    rawDropRateTooltip: trimString(payload.rawDropRateTooltip) || groupDropRateTooltip,
+    normalizedDropRateText: trimString(payload.normalizedDropRateText) || groupDropRateText,
+    normalizedDropRateTooltip: trimString(payload.normalizedDropRateTooltip) || groupDropRateTooltip,
+    catchMethods: normalizeCatchMethods(payload.catchMethods),
+    conditionOptions,
+  };
+}
+
+function buildHotspotSection(layerSamples, conditionSelection = {}, normalizeRates = true) {
+  const sample = layerSamples.find(isHotspotSample);
+  const section = hotspotDetailSection(sample);
+  if (!sample || !section) {
+    return null;
+  }
+  const facts = detailSectionFacts(section);
+  const fishName = firstFactValue(facts, "primary_fish") || trimString(sample?.targets?.[0]?.label);
+  const fishItemId = integerValue(firstFactValue(facts, "primary_fish_item_id"));
+  const hotspotId = firstFactValue(facts, "hotspot_id");
+  const metadataSource = firstFactValue(facts, "metadata_source");
+  const sourceMetadataStats = firstFactValue(facts, "source_metadata_stats");
+  const target = Array.isArray(sample?.targets) ? sample.targets[0] : null;
+  const worldX = Number(target?.worldX);
+  const worldZ = Number(target?.worldZ);
+  const focusAction = Number.isFinite(worldX) && Number.isFinite(worldZ)
+    ? {
+        kind: "focus-world-point",
+        focusWorldPoint: {
+          worldX,
+          worldZ,
+          elementKind: "hotspot",
+          pointKind: "waypoint",
+          pointLabel: trimString(sample?.targets?.[0]?.label) || fishName,
+        },
+      }
+    : null;
+  const metricRows = [
+    hotspotMetric("Min. Catches", firstFactValue(facts, "min_fish_count"), ""),
+    hotspotMetric("Max. Catches", firstFactValue(facts, "max_fish_count"), ""),
+    hotspotMetric(
+      "Catchable at",
+      formatHotspotLifeLevel(firstFactValue(facts, "available_fishing_level")),
+      "fish-fill",
+    ),
+    hotspotMetric(
+      "Visible at",
+      formatHotspotLifeLevel(firstFactValue(facts, "observe_fishing_level")),
+      "eye",
+    ),
+  ];
+  const minWaitTimeMs = firstFactValue(facts, "min_wait_time_ms");
+  const maxWaitTimeMs = firstFactValue(facts, "max_wait_time_ms");
+  const biteTime = {
+    minimum: formatHotspotSeconds(minWaitTimeMs) || HOTSPOT_UNSET_STAT_VALUE,
+    average: formatHotspotAverageSeconds(minWaitTimeMs, maxWaitTimeMs) || HOTSPOT_UNSET_STAT_VALUE,
+    maximum: formatHotspotSeconds(maxWaitTimeMs) || HOTSPOT_UNSET_STAT_VALUE,
+  };
+  const lifetime = formatHotspotDuration(firstFactValue(facts, "point_remain_time_ms")) || HOTSPOT_UNSET_STAT_VALUE;
+  const lootGroups = facts
+    .filter((fact) => fact.key === "loot_group")
+    .map((fact, index) => parseHotspotLootGroupFact(fact, index))
+    .filter(Boolean);
+  const lootRows = facts.map(parseHotspotLootFact).filter(Boolean);
+  const fallbackLootRows = !lootRows.length && fishItemId && fishName
+    ? [{
+        key: `hotspot-loot:${fishItemId}`,
+        itemId: fishItemId,
+        label: fishName,
+        iconUrl: fishItemIconUrl(fishItemId),
+        iconGradeTone: "unknown",
+        dropRateText: "",
+      }]
+    : [];
+  const groups = lootGroups.length
+    ? buildZoneLootGroups(
+        {
+          groups: lootGroups,
+          speciesRows: [],
+        },
+        conditionSelection,
+        normalizeRates,
+      )
+    : (lootRows.length ? lootRows : fallbackLootRows).length
+      ? [{
+          label: "Group 1",
+          rows: lootRows.length ? lootRows : fallbackLootRows,
+        }]
+      : [];
+  const profiles = buildZoneLootMethodProfiles(groups);
+  return {
+    id: "hotspot-details",
+    kind: "hotspot",
+    title: "Hotspot Details",
+    fishName,
+    fishItemId,
+    hotspotId,
+    iconUrl: fishItemId ? fishItemIconUrl(fishItemId) : "",
+    focusAction,
+    metadataSource,
+    sourceMetadataStats,
+    metrics: metricRows,
+    biteTime,
+    lifetime,
+    groups,
+    profiles,
+  };
+}
+
 function normalizeDetailFacts(sample) {
   if (!Array.isArray(sample?.detailSections)) {
     return [];
@@ -552,6 +920,11 @@ export function buildInfoViewModel(
     pointSampleStateBundle,
     zoneCatalog,
   );
+  const hotspotSection = buildHotspotSection(
+    layerSamples,
+    zoneLootConditionSelection,
+    typeof normalizeRates === "boolean" ? normalizeRates : normalizeRatesFromSignals(signals),
+  );
   const panes = [
     pointSampleSection
       ? paneDescriptor(
@@ -560,6 +933,15 @@ export function buildInfoViewModel(
           "date-confirmed",
           pointSampleSection.rows[0]?.fishName || "",
           [pointSampleSection],
+        )
+      : null,
+    hotspotSection
+      ? paneDescriptor(
+          "hotspot",
+          "Hotspot",
+          "fish-fill",
+          hotspotSection.fishName || "",
+          [hotspotSection],
         )
       : null,
     paneDescriptor(

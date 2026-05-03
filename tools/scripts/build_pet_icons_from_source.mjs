@@ -302,12 +302,8 @@ function queryPetIconTargets() {
   const rows = doltQueryJson(`
     SELECT DISTINCT
       NULLIF(TRIM(p.IconImageFile1), '') AS pet_icon_file,
-      NULLIF(TRIM(ld.text), '') AS display_name
+      NULL AS display_name
     FROM pet_table p
-    LEFT JOIN languagedata ld
-      ON ld.lang = 'en'
-     AND TRIM(ld.id) = TRIM(p.CharacterKey)
-     AND TRIM(ld.category) = '6'
     WHERE NULLIF(TRIM(p.IconImageFile1), '') IS NOT NULL
     ORDER BY pet_icon_file
   `);

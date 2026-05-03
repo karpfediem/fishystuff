@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fishing-domain-icons-json", required=True)
     parser.add_argument("--fish-catalog-icons-json", required=True)
     parser.add_argument("--fish-table-icons-json", required=True)
+    parser.add_argument("--fishing-hotspots-json", default="")
     parser.add_argument("--out", default="-")
     return parser.parse_args()
 
@@ -69,6 +70,14 @@ def load_rows(path: Path) -> list[dict]:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     return payload.get("rows", [])
+
+
+def load_json_optional(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return payload if isinstance(payload, dict) else {}
 
 
 def parse_asset_stem(raw_path: str | None) -> str:
@@ -285,6 +294,65 @@ def add_fish_table_icons(report: Report, rows: list[dict]) -> None:
             add_icon_filename(report, encyclopedia_stem)
 
 
+def add_hotspot_icon(report: Report, source_path: str | None, icon_id: object) -> None:
+    icon_name = parse_asset_stem(source_path)
+    if not icon_name and icon_id not in (None, ""):
+        try:
+            icon_name = pad_icon_id(int(icon_id))
+        except (TypeError, ValueError):
+            icon_name = ""
+    if icon_name:
+        add_icon_filename(report, icon_name)
+
+
+def add_fishing_hotspot_assets(report: Report, cdn_root: Path, hotspot_json: str) -> None:
+    if not hotspot_json:
+        return
+    hotspot_path = Path(hotspot_json).resolve()
+    try:
+        rel_hotspot_path = hotspot_path.relative_to(cdn_root).as_posix()
+    except ValueError:
+        rel_hotspot_path = "hotspots/fishing_hotspots.v1.json"
+    report.add("fishing_hotspots_layer", rel_hotspot_path)
+
+    payload = load_json_optional(hotspot_path)
+    def add_loot_items(items: object) -> None:
+        if not isinstance(items, list):
+            return
+        for loot_item in items:
+            if not isinstance(loot_item, dict):
+                continue
+            add_hotspot_icon(
+                report,
+                loot_item.get("iconImage"),
+                loot_item.get("iconItemId") or loot_item.get("itemId"),
+            )
+
+    def add_loot_group(group: object) -> None:
+        if not isinstance(group, dict):
+            return
+        add_loot_items(group.get("lootItems"))
+        add_loot_items(group.get("speciesRows"))
+        options = group.get("conditionOptions")
+        if not isinstance(options, list):
+            return
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            add_loot_items(option.get("lootItems"))
+            add_loot_items(option.get("speciesRows"))
+
+    for hotspot in payload.get("hotspots", []):
+        add_hotspot_icon(
+            report,
+            hotspot.get("primaryFishIconImage"),
+            hotspot.get("primaryFishItemId"),
+        )
+        add_loot_items(hotspot.get("lootItems"))
+        for loot_group in hotspot.get("lootGroups", []):
+            add_loot_group(loot_group)
+
+
 def main() -> None:
     args = parse_args()
     cdn_root = Path(args.cdn_root).resolve()
@@ -372,6 +440,7 @@ def main() -> None:
         raw_key="item_icon_file",
     )
     add_fish_table_icons(report, load_rows(Path(args.fish_table_icons_json)))
+    add_fishing_hotspot_assets(report, cdn_root, args.fishing_hotspots_json)
 
     payload = report.finalize()
     payload["map_version"] = map_version

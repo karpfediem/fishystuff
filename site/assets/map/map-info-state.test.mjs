@@ -572,6 +572,264 @@ test("buildInfoViewModel exposes selected waypoint detail sections as a landmark
   );
 });
 
+test("buildInfoViewModel exposes fishing hotspot detail sections as a dedicated pane", () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        pointKind: "waypoint",
+        pointLabel: "Porgy Hotspot #423",
+        layerSamples: [
+          {
+            layerId: "fishing_hotspots",
+            layerName: "Fishing Hotspots",
+            kind: "fishing_hotspot",
+            targets: [{ key: "fishing_hotspot", label: "Porgy Hotspot #423", worldX: 50, worldZ: 60 }],
+            detailSections: [
+              {
+                id: "fishing-hotspot",
+                kind: "hotspot",
+                title: "Fishing Hotspot",
+                facts: [
+                  { key: "hotspot_id", label: "Hotspot", value: "423", icon: "map-pin" },
+                  { key: "primary_fish", label: "Fish", value: "Porgy", icon: "fish-fill" },
+                  { key: "primary_fish_item_id", label: "Fish Item", value: "8207", icon: "fish-fill" },
+                  {
+                    key: "metadata_source",
+                    label: "Metadata Source",
+                    value: "bdolytics community snapshot",
+                    icon: "information-circle",
+                  },
+                  {
+                    key: "source_metadata_stats",
+                    label: "Source Table Metadata",
+                    value: "FloatFishing_Table stat columns are 0",
+                    icon: "source-database",
+                  },
+                  { key: "min_fish_count", label: "Min. Catches", value: "2", icon: "information-circle" },
+                  { key: "max_fish_count", label: "Max. Catches", value: "4", icon: "information-circle" },
+                  { key: "available_fishing_level", label: "Catchable at", value: "1", icon: "information-circle" },
+                  { key: "observe_fishing_level", label: "Visible at", value: "1", icon: "information-circle" },
+                  { key: "min_wait_time_ms", label: "Bite Time Minimum", value: "77667", icon: "stopwatch" },
+                  { key: "max_wait_time_ms", label: "Bite Time Maximum", value: "107667", icon: "stopwatch" },
+                  { key: "point_remain_time_ms", label: "Hotspot Lifetime", value: "600000", icon: "time-fill" },
+                  { key: "drop_groups", label: "Drop Groups", value: "10944 (1000000)", icon: "information-circle" },
+                  {
+                    key: "loot_group",
+                    label: "Loot Group",
+                    value: JSON.stringify({
+                      slotIdx: 2,
+                      label: "Group 1",
+                      conditionOptionKey: "hotspot:423:2:10944",
+                      conditionOptions: [
+                        {
+                          conditionKey: "getLifeLevel(1)>80;",
+                          conditionText: "Fishing Level Guru 1+",
+                          conditionTooltip: "getLifeLevel(1)>80;",
+                          active: true,
+                          speciesRows: [
+                            {
+                              itemId: 8207,
+                              label: "Porgy",
+                              selectRate: 999950,
+                              gradeType: 3,
+                              iconItemId: 8207,
+                            },
+                            {
+                              itemId: 42285,
+                              label: "Mystical Fish",
+                              selectRate: 50,
+                              gradeType: 4,
+                              iconItemId: 42281,
+                            },
+                          ],
+                        },
+                        {
+                          conditionKey: "default",
+                          conditionText: "Default",
+                          active: false,
+                          speciesRows: [
+                            {
+                              itemId: 8207,
+                              label: "Porgy",
+                              selectRate: 1000000,
+                              gradeType: 3,
+                              iconItemId: 8207,
+                            },
+                          ],
+                        },
+                      ],
+                    }),
+                    icon: "fish-fill",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      catalog: {
+        layers: [{ layerId: "fishing_hotspots", displayOrder: 42 }],
+      },
+    },
+  });
+
+  assert.equal(viewModel.descriptor.title, "Porgy Hotspot #423");
+  assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["hotspot"]);
+  assert.equal(viewModel.activePane.sections[0].fishName, "Porgy");
+  assert.equal(viewModel.activePane.sections[0].iconUrl, "/items/8207.webp");
+  assert.equal(viewModel.activePane.sections[0].metadataSource, "bdolytics community snapshot");
+  assert.equal(viewModel.activePane.sections[0].sourceMetadataStats, "FloatFishing_Table stat columns are 0");
+  assert.deepEqual(
+    viewModel.activePane.sections[0].metrics.map((metric) => [metric.label, metric.value]),
+    [
+      ["Min. Catches", "2"],
+      ["Max. Catches", "4"],
+      ["Catchable at", "Beginner 2"],
+      ["Visible at", "Beginner 2"],
+    ],
+  );
+  assert.deepEqual(viewModel.activePane.sections[0].biteTime, {
+    minimum: "77.7s",
+    average: "92.7s",
+    maximum: "107.7s",
+  });
+  assert.equal(viewModel.activePane.sections[0].lifetime, "10:00");
+  assert.deepEqual(
+    viewModel.activePane.sections[0].groups.map((group) => [
+      group.label,
+      group.conditionText,
+      group.rows.map((row) => [row.label, row.dropRateText, row.iconUrl]),
+    ]),
+    [
+      [
+        "Group 1",
+        "Fishing Level Guru 1+",
+        [
+          ["Porgy", "99.995%", "/items/8207.webp"],
+          ["Mystical Fish", "0.005%", "/items/42281.webp"],
+        ],
+      ],
+    ],
+  );
+  assert.equal(viewModel.activePane.sections[0].groups[0].conditionOptions.length, 2);
+  assert.deepEqual(
+    viewModel.activePane.sections[0].profiles.map((profile) => [
+      profile.label,
+      profile.groups.map((group) => group.label),
+    ]),
+    [["Fishing", ["Group 1"]]],
+  );
+});
+
+test("buildInfoViewModel keeps fishing hotspot contents-group branches and defaults open", () => {
+  globalThis.window = globalThis.window || {};
+  globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        pointKind: "waypoint",
+        pointLabel: "Porgy Hotspot #413",
+        layerSamples: [
+          {
+            layerId: "fishing_hotspots",
+            layerName: "Fishing Hotspots",
+            kind: "fishing_hotspot",
+            targets: [{ key: "fishing_hotspot", label: "Porgy Hotspot #413", worldX: 50, worldZ: 60 }],
+            detailSections: [
+              {
+                id: "fishing-hotspot",
+                kind: "hotspot",
+                title: "Fishing Hotspot",
+                facts: [
+                  { key: "primary_fish", label: "Fish", value: "Porgy", icon: "fish-fill" },
+                  { key: "primary_fish_item_id", label: "Fish Item", value: "8207", icon: "fish-fill" },
+                  {
+                    key: "loot_group",
+                    label: "Loot Group",
+                    value: JSON.stringify({
+                      slotIdx: 2,
+                      label: "Group 1",
+                      conditionOptionKey: "hotspot:413:2:10916",
+                      conditionOptions: [
+                        {
+                          conditionKey: "isContentsGroupOpen(0,689);",
+                          conditionText: "Contents Group 689 Open",
+                          conditionTooltip: "isContentsGroupOpen(0,689);",
+                          active: true,
+                          speciesRows: [
+                            {
+                              itemId: 800108,
+                              label: "Object Tangled in an Abandoned Net",
+                              selectRate: 500000,
+                              gradeType: 1,
+                              iconItemId: 800108,
+                            },
+                            {
+                              itemId: 8207,
+                              label: "Porgy",
+                              selectRate: 500000,
+                              gradeType: 3,
+                              iconItemId: 8207,
+                            },
+                          ],
+                        },
+                        {
+                          conditionKey: "!isContentsGroupOpen(0,689);",
+                          conditionText: "Contents Group 689 Closed",
+                          conditionTooltip: "!isContentsGroupOpen(0,689);",
+                          active: false,
+                          speciesRows: [
+                            {
+                              itemId: 8207,
+                              label: "Porgy",
+                              selectRate: 1000000,
+                              gradeType: 3,
+                              iconItemId: 8207,
+                            },
+                          ],
+                        },
+                      ],
+                    }),
+                    icon: "fish-fill",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      catalog: {
+        layers: [{ layerId: "fishing_hotspots", displayOrder: 42 }],
+      },
+    },
+  });
+
+  const group = viewModel.activePane.sections[0].groups[0];
+  assert.deepEqual(
+    viewModel.activePane.sections[0].metrics.map((metric) => [metric.label, metric.value]),
+    [
+      ["Min. Catches", "Not set"],
+      ["Max. Catches", "Not set"],
+      ["Catchable at", "Not set"],
+      ["Visible at", "Not set"],
+    ],
+  );
+  assert.deepEqual(viewModel.activePane.sections[0].biteTime, {
+    minimum: "Not set",
+    average: "Not set",
+    maximum: "Not set",
+  });
+  assert.equal(viewModel.activePane.sections[0].lifetime, "Not set");
+  assert.equal(group.conditionText, "Contents Group 689 Open");
+  assert.equal(group.conditionOptions.length, 2);
+  assert.deepEqual(group.rows.map((row) => [row.label, row.dropRateText]), [
+    ["Object Tangled in an Abandoned Net", "50%"],
+    ["Porgy", "50%"],
+  ]);
+});
+
 test("buildInfoViewModel titles selected bookmarks from the details target identity", () => {
   const viewModel = buildInfoViewModel({
     _map_runtime: {

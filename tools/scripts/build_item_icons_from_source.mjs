@@ -12,11 +12,12 @@ const scriptDir = path.dirname(scriptPath);
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultSourceArchive = path.join(repoRoot, "data/scratch/paz");
 const defaultOutputDir = path.join(repoRoot, "data/cdn/public/images/items");
+const defaultFishingHotspotsAssetPath = path.join(repoRoot, "data/cdn/public/hotspots/fishing_hotspots.v1.json");
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
 const buildStateVersion = 1;
-const targetCacheVersion = 6;
+const targetCacheVersion = 7;
 const sourceResolutionCacheVersion = 2;
 const consumableIconTargetsSqlPath = path.join(scriptDir, "sql", "calculator_consumable_icon_targets.sql");
 const consumableIconTargetsSqlStat = statSync(consumableIconTargetsSqlPath);
@@ -66,6 +67,7 @@ function parseArgs(argv) {
     quiet: false,
     outputDir: defaultOutputDir,
     sourceArchive: defaultSourceArchive,
+    fishingHotspotsAsset: defaultFishingHotspotsAssetPath,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -86,6 +88,11 @@ function parseArgs(argv) {
     if (arg === "--source-archive") {
       index += 1;
       options.sourceArchive = argv[index] ? path.resolve(argv[index]) : null;
+      continue;
+    }
+    if (arg === "--fishing-hotspots-asset") {
+      index += 1;
+      options.fishingHotspotsAsset = argv[index] ? path.resolve(argv[index]) : null;
       continue;
     }
     fail(`unknown argument: ${arg}`);
@@ -219,7 +226,7 @@ function runCommandWithHeartbeat(
 }
 
 function readJsonFile(filePath) {
-  if (!existsSync(filePath)) {
+  if (!filePath || !existsSync(filePath)) {
     return null;
   }
   try {
@@ -227,6 +234,25 @@ function readJsonFile(filePath) {
   } catch {
     return null;
   }
+}
+
+function fileSignature(filePath) {
+  const resolvedPath = filePath ? path.resolve(filePath) : "";
+  if (!resolvedPath || !existsSync(resolvedPath)) {
+    return {
+      path: resolvedPath,
+      exists: false,
+      mtimeMs: null,
+      size: null,
+    };
+  }
+  const stats = statSync(resolvedPath);
+  return {
+    path: resolvedPath,
+    exists: true,
+    mtimeMs: stats.mtimeMs,
+    size: stats.size,
+  };
 }
 
 function writeJsonFile(filePath, payload) {
@@ -617,12 +643,73 @@ function queryEnchantItemIconRows() {
 function queryLightstoneIconRows() {
   return doltQueryJson(`
     SELECT DISTINCT
-      source_name_en AS display_name,
-      set_name_ko,
-      skill_icon_file
-    FROM calculator_lightstone_effect_sources
-    WHERE NULLIF(TRIM(skill_icon_file), '') IS NOT NULL
+      NULLIF(TRIM(stype.SkillName), '') AS display_name,
+      NULLIF(TRIM(ls.Description), '') AS set_name_ko,
+      NULLIF(TRIM(stype.IconImageFile), '') AS skill_icon_file
+    FROM lightstone_set_option ls
+    LEFT JOIN skilltype_table_new stype
+      ON stype.SkillNo = ls.SetOptionSkillNo
+    WHERE NULLIF(TRIM(stype.IconImageFile), '') IS NOT NULL
   `);
+}
+
+function loadFishingHotspotIconRows(assetPath) {
+  const payload = readJsonFile(assetPath);
+  if (!payload || !Array.isArray(payload.hotspots)) {
+    return [];
+  }
+
+  const rows = [];
+  const addRow = ({ itemId, iconId, displayName, sourcePath }) => {
+    const numericItemId = Number(itemId);
+    const numericIconId = Number(iconId);
+    if (
+      (!Number.isFinite(numericItemId) || numericItemId <= 0) &&
+      (!Number.isFinite(numericIconId) || numericIconId <= 0) &&
+      !sourcePath
+    ) {
+      return;
+    }
+    rows.push({
+      item_id: Number.isFinite(numericItemId) && numericItemId > 0 ? numericItemId : null,
+      icon_id: Number.isFinite(numericIconId) && numericIconId > 0 ? numericIconId : null,
+      display_name: displayName || null,
+      item_icon_file: sourcePath || null,
+      kind: "item",
+    });
+  };
+  const visitLootItems = (items) => {
+    for (const lootItem of items ?? []) {
+      addRow({
+        itemId: lootItem.itemId,
+        iconId: lootItem.iconItemId ?? lootItem.itemId,
+        displayName: lootItem.label ?? lootItem.name,
+        sourcePath: lootItem.iconImage,
+      });
+    }
+  };
+  const visitLootGroup = (lootGroup) => {
+    visitLootItems(lootGroup?.lootItems);
+    visitLootItems(lootGroup?.speciesRows);
+    for (const option of lootGroup?.conditionOptions ?? []) {
+      visitLootItems(option?.lootItems);
+      visitLootItems(option?.speciesRows);
+    }
+  };
+
+  for (const hotspot of payload.hotspots) {
+    addRow({
+      itemId: hotspot.primaryFishItemId,
+      iconId: hotspot.primaryFishItemId,
+      displayName: hotspot.primaryFishName,
+      sourcePath: hotspot.primaryFishIconImage,
+    });
+    visitLootItems(hotspot.lootItems);
+    for (const lootGroup of hotspot.lootGroups ?? []) {
+      visitLootGroup(lootGroup);
+    }
+  }
+  return rows;
 }
 
 function queryFishingDomainItemIconRows() {
@@ -687,7 +774,7 @@ function queryFishTableIconRows() {
   `);
 }
 
-function queryCalculatorIconTargets() {
+function queryCalculatorIconTargets(fishingHotspotsAsset) {
   const targets = new Map();
   for (const row of queryLegacyIconRows()) {
     addIconTarget(targets, row);
@@ -736,10 +823,13 @@ function queryCalculatorIconTargets() {
       }
     }
   }
+  for (const row of loadFishingHotspotIconRows(fishingHotspotsAsset)) {
+    addIconTarget(targets, row);
+  }
   return [...targets.values()];
 }
 
-function loadCachedTargets(outputDir, doltWorkingHash) {
+function loadCachedTargets(outputDir, doltWorkingHash, fishingHotspotsAssetSignature) {
   const cached = readJsonFile(targetCachePath(outputDir));
   if (!cached || cached.version !== targetCacheVersion) {
     return null;
@@ -749,14 +839,18 @@ function loadCachedTargets(outputDir, doltWorkingHash) {
     cached.doltWorkingHash !== doltWorkingHash ||
     cached.consumableIconTargetsSqlPath !== consumableIconTargetsSqlPath ||
     cached.consumableIconTargetsSqlMtimeMs !== consumableIconTargetsSqlStat.mtimeMs ||
-    cached.consumableIconTargetsSqlSize !== consumableIconTargetsSqlStat.size
+    cached.consumableIconTargetsSqlSize !== consumableIconTargetsSqlStat.size ||
+    cached.fishingHotspotsAssetPath !== fishingHotspotsAssetSignature.path ||
+    cached.fishingHotspotsAssetExists !== fishingHotspotsAssetSignature.exists ||
+    cached.fishingHotspotsAssetMtimeMs !== fishingHotspotsAssetSignature.mtimeMs ||
+    cached.fishingHotspotsAssetSize !== fishingHotspotsAssetSignature.size
   ) {
     return null;
   }
   return Array.isArray(cached.targets) ? cached.targets : null;
 }
 
-function writeCachedTargets(outputDir, doltWorkingHash, targets) {
+function writeCachedTargets(outputDir, doltWorkingHash, fishingHotspotsAssetSignature, targets) {
   writeJsonFile(targetCachePath(outputDir), {
     version: targetCacheVersion,
     scriptMtimeMs,
@@ -764,6 +858,10 @@ function writeCachedTargets(outputDir, doltWorkingHash, targets) {
     consumableIconTargetsSqlPath,
     consumableIconTargetsSqlMtimeMs: consumableIconTargetsSqlStat.mtimeMs,
     consumableIconTargetsSqlSize: consumableIconTargetsSqlStat.size,
+    fishingHotspotsAssetPath: fishingHotspotsAssetSignature.path,
+    fishingHotspotsAssetExists: fishingHotspotsAssetSignature.exists,
+    fishingHotspotsAssetMtimeMs: fishingHotspotsAssetSignature.mtimeMs,
+    fishingHotspotsAssetSize: fishingHotspotsAssetSignature.size,
     generatedAtUtc: new Date().toISOString(),
     targets,
   });
@@ -1018,9 +1116,10 @@ async function main() {
   }
 
   const doltWorkingHash = queryDoltWorkingHash();
-  let targets = loadCachedTargets(options.outputDir, doltWorkingHash);
+  const fishingHotspotsAssetSignature = fileSignature(options.fishingHotspotsAsset);
+  let targets = loadCachedTargets(options.outputDir, doltWorkingHash, fishingHotspotsAssetSignature);
   if (!targets) {
-    targets = queryCalculatorIconTargets();
+    targets = queryCalculatorIconTargets(options.fishingHotspotsAsset);
   } else if (!options.quiet) {
     console.log(`using cached source-backed item icon targets (${targets.length} targets)`);
   }
@@ -1032,7 +1131,7 @@ async function main() {
       `collapsed ${dedupedTargets.duplicateCount} duplicate source-backed icon targets into ${targets.length} output files`,
     );
   }
-  writeCachedTargets(options.outputDir, doltWorkingHash, targets);
+  writeCachedTargets(options.outputDir, doltWorkingHash, fishingHotspotsAssetSignature, targets);
 
   const buildState = loadBuildState(options.outputDir);
   pruneStaleOutputs(options.outputDir, targets, options.quiet);

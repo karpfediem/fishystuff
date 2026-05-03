@@ -18,6 +18,7 @@ pub use registry::LayerRegistry;
 pub use runtime::{LayerManifestStatus, LayerRuntime, LayerRuntimeState, LayerSettings};
 
 pub const FISH_EVIDENCE_LAYER_KEY: &str = "fish_evidence";
+pub const FISHING_HOTSPOTS_LAYER_KEY: &str = "fishing_hotspots";
 pub const LAYER_FILTER_BINDING_FISH_SELECTION: &str = "fish_selection";
 pub const LAYER_FILTER_BINDING_ZONE_SELECTION: &str = "zone_selection";
 pub const LAYER_FILTER_BINDING_SEMANTIC_SELECTION: &str = "semantic_selection";

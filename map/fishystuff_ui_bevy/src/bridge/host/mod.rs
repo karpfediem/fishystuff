@@ -378,7 +378,7 @@ mod tests {
         app.insert_resource(BrowserBridgeState::default());
         app.insert_resource(ApiBootstrapState {
             meta_status: "meta: loaded".to_string(),
-            layers_status: "layers: local (7, v1)".to_string(),
+            layers_status: "layers: local (8, v1)".to_string(),
             zones_status: "zones: 287".to_string(),
             meta: Some(MetaResponse::default()),
             ..Default::default()

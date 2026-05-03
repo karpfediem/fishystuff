@@ -3,6 +3,7 @@ import { buildPointSampleRows } from "./map-hover-facts.js";
 
 const DEFAULT_LANDMARK_ICON = "information-circle";
 const TRADE_NPC_TARGET_KEY = "trade_npc";
+const FISHING_HOTSPOT_TARGET_KEY = "fishing_hotspot";
 
 const LANDMARK_HOVER_TARGET_PRESENTATION = Object.freeze({
   bookmark: {
@@ -14,6 +15,11 @@ const LANDMARK_HOVER_TARGET_PRESENTATION = Object.freeze({
     icon: "trade-origin",
     label: "NPC",
     swatchRgb: "255 196 66",
+  },
+  [FISHING_HOTSPOT_TARGET_KEY]: {
+    icon: "map-pin",
+    label: "Hotspot",
+    swatchRgb: "255 179 56",
   },
   waypoint: {
     icon: "map-pin",

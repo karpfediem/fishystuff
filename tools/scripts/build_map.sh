@@ -47,12 +47,14 @@ CDN_MAP_ASSET_DIR="$CDN_ROOT/map"
 CDN_IMAGE_ASSET_DIR="$CDN_ROOT/images"
 CDN_FIELD_ASSET_DIR="$CDN_ROOT/fields"
 CDN_WAYPOINT_ASSET_DIR="$CDN_ROOT/waypoints"
+CDN_HOTSPOT_ASSET_DIR="$CDN_ROOT/hotspots"
 MINIMAP_SOURCE_TILE_DIR="${MINIMAP_SOURCE_TILE_DIR:-$ROOT_DIR/data/scratch/minimap/source_tiles}"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
 mkdir -p "$CDN_MAP_ASSET_DIR"
 mkdir -p "$CDN_IMAGE_ASSET_DIR"
 mkdir -p "$CDN_FIELD_ASSET_DIR"
 mkdir -p "$CDN_WAYPOINT_ASSET_DIR"
+mkdir -p "$CDN_HOTSPOT_ASSET_DIR"
 
 cp -f map/fishystuff_ui_bevy/assets/ui/fishystuff.css "$SITE_MAP_ASSET_DIR/ui/fishystuff.css"
 rm -f \
@@ -60,10 +62,14 @@ rm -f \
   "$SITE_MAP_ASSET_DIR/fishystuff_ui_bevy_bg.wasm"
 
 WASM_BINDGEN_TMP_DIR="$(mktemp -d)"
-cleanup_wasm_bindgen_tmp_dir() {
+FISHING_HOTSPOT_SOURCE_LOOT_JSON=""
+cleanup_temp_files() {
   rm -rf "$WASM_BINDGEN_TMP_DIR"
+  if [ -n "$FISHING_HOTSPOT_SOURCE_LOOT_JSON" ]; then
+    rm -f "$FISHING_HOTSPOT_SOURCE_LOOT_JSON"
+  fi
 }
-trap cleanup_wasm_bindgen_tmp_dir EXIT
+trap cleanup_temp_files EXIT
 
 wasm-bindgen --target web --no-typescript --out-dir "$WASM_BINDGEN_TMP_DIR" "$WASM_INPUT"
 
@@ -430,6 +436,12 @@ character_table_xlsx_input="${CHARACTER_TABLE_XLSX_INPUT:-$(first_existing_path 
   data/data/excel/Character_Table.xlsx)}"
 selling_to_npc_xlsx_input="${SELLING_TO_NPC_XLSX_INPUT:-$(first_existing_path \
   data/data/excel/SellingToNpc_Table.xlsx)}"
+float_fishing_point_xlsx_input="${FLOAT_FISHING_POINT_XLSX_INPUT:-$(first_existing_path \
+  data/data/excel/FloatFishingPoint_Table.xlsx)}"
+float_fishing_xlsx_input="${FLOAT_FISHING_XLSX_INPUT:-$(first_existing_path \
+  data/data/excel/FloatFishing_Table.xlsx)}"
+bdolytics_hotspots_json_input="${BDOLYTICS_HOTSPOTS_JSON_INPUT:-$(first_existing_path \
+  data/data/hotspots_bdolytics.json)}"
 regionclientdata_input="${REGIONCLIENTDATA_INPUT:-$(first_existing_path \
   data/scratch/gamecommondata/regionclientdata_en_.xml)}"
 waypoint_xml_primary="${WAYPOINT_XML_PRIMARY:-$(first_existing_path \
@@ -441,6 +453,7 @@ region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
 regions_field_metadata_output="$CDN_FIELD_ASSET_DIR/regions.v1.meta.json"
 region_groups_field_metadata_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.meta.json"
 region_nodes_output="$CDN_WAYPOINT_ASSET_DIR/region_nodes.v1.geojson"
+fishing_hotspots_output="$CDN_HOTSPOT_ASSET_DIR/fishing_hotspots.v1.json"
 waypoint_xml_args=()
 if [ -f "$waypoint_xml_primary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_primary")
@@ -448,6 +461,104 @@ fi
 if [ -f "$waypoint_xml_secondary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_secondary")
 fi
+build_fishing_hotspot_source_loot_json() {
+  local out_path="$1"
+  dolt sql -r json -q "
+    SELECT *
+    FROM (
+    SELECT
+      CAST(m.item_main_group_key AS SIGNED) AS item_main_group_key,
+      CAST(m.option_idx AS SIGNED) AS option_idx,
+      CAST(m.select_rate AS SIGNED) AS option_select_rate,
+      NULLIF(TRIM(m.condition_raw), '') AS condition_raw,
+      CAST(m.item_sub_group_key AS SIGNED) AS item_sub_group_key,
+      CAST(v.item_key AS SIGNED) AS item_key,
+      CAST(v.select_rate AS SIGNED) AS item_select_rate,
+      NULLIF(TRIM(item_name.\`text\`), '') AS item_name,
+      NULLIF(TRIM(it.IconImageFile), '') AS icon_image,
+      it.GradeType AS grade_type,
+      CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish,
+      NULL AS item_source_tooltip
+    FROM item_main_group_options m
+    LEFT JOIN item_sub_group_item_variants v
+      ON v.item_sub_group_key = m.item_sub_group_key
+    LEFT JOIN item_table it
+      ON CAST(it.\`Index\` AS SIGNED) = CAST(v.item_key AS SIGNED)
+    LEFT JOIN fish_table ft
+      ON CAST(ft.item_key AS SIGNED) = CAST(v.item_key AS SIGNED)
+    LEFT JOIN languagedata item_name
+      ON item_name.lang = 'en'
+     AND item_name.id = CAST(v.item_key AS SIGNED)
+     AND item_name.format = 'A'
+     AND item_name.category = ''
+    UNION ALL
+    SELECT
+      CAST(m.item_main_group_key AS SIGNED) AS item_main_group_key,
+      CAST(m.option_idx AS SIGNED) AS option_idx,
+      CAST(m.select_rate AS SIGNED) AS option_select_rate,
+      NULLIF(TRIM(m.condition_raw), '') AS condition_raw,
+      CAST(m.item_sub_group_key AS SIGNED) AS item_sub_group_key,
+      CAST(it.\`Index\` AS SIGNED) AS item_key,
+      CAST(500000 AS SIGNED) AS item_select_rate,
+      NULLIF(TRIM(item_name.\`text\`), '') AS item_name,
+      NULLIF(TRIM(it.IconImageFile), '') AS icon_image,
+      it.GradeType AS grade_type,
+      CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish,
+      'Contents group 689 open branch: item_main_group_options subgroup 11185 plus item_table item 800108' AS item_source_tooltip
+    FROM item_main_group_options m
+    JOIN item_table it
+      ON CAST(it.\`Index\` AS SIGNED) = 800108
+    LEFT JOIN fish_table ft
+      ON CAST(ft.item_key AS SIGNED) = CAST(it.\`Index\` AS SIGNED)
+    LEFT JOIN languagedata item_name
+      ON item_name.lang = 'en'
+     AND item_name.id = CAST(it.\`Index\` AS SIGNED)
+     AND item_name.format = 'A'
+     AND item_name.category = ''
+    WHERE CAST(m.item_sub_group_key AS SIGNED) = 11185
+      AND NULLIF(TRIM(m.condition_raw), '') = 'isContentsGroupOpen(0,689);'
+    UNION ALL
+    SELECT
+      CAST(m.item_main_group_key AS SIGNED) AS item_main_group_key,
+      CAST(m.option_idx AS SIGNED) AS option_idx,
+      CAST(m.select_rate AS SIGNED) AS option_select_rate,
+      NULLIF(TRIM(m.condition_raw), '') AS condition_raw,
+      CAST(m.item_sub_group_key AS SIGNED) AS item_sub_group_key,
+      CAST(fallback.item_key AS SIGNED) AS item_key,
+      CAST(500000 AS SIGNED) AS item_select_rate,
+      NULLIF(TRIM(item_name.\`text\`), '') AS item_name,
+      NULLIF(TRIM(it.IconImageFile), '') AS icon_image,
+      it.GradeType AS grade_type,
+      CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish,
+      'Contents group 689 open branch: fallback fish from sibling closed subgroup for item_main_group_options subgroup 11185' AS item_source_tooltip
+    FROM item_main_group_options m
+    JOIN item_main_group_options sibling
+      ON sibling.item_main_group_key = m.item_main_group_key
+     AND NULLIF(TRIM(sibling.condition_raw), '') = CONCAT('!', NULLIF(TRIM(m.condition_raw), ''))
+    JOIN (
+      SELECT DISTINCT item_sub_group_key, item_key
+      FROM item_sub_group_item_variants
+    ) fallback
+      ON fallback.item_sub_group_key = sibling.item_sub_group_key
+    LEFT JOIN item_table it
+      ON CAST(it.\`Index\` AS SIGNED) = CAST(fallback.item_key AS SIGNED)
+    LEFT JOIN fish_table ft
+      ON CAST(ft.item_key AS SIGNED) = CAST(fallback.item_key AS SIGNED)
+    LEFT JOIN languagedata item_name
+      ON item_name.lang = 'en'
+     AND item_name.id = CAST(fallback.item_key AS SIGNED)
+     AND item_name.format = 'A'
+     AND item_name.category = ''
+    WHERE CAST(m.item_sub_group_key AS SIGNED) = 11185
+      AND NULLIF(TRIM(m.condition_raw), '') = 'isContentsGroupOpen(0,689);'
+    ) hotspot_loot_rows
+    ORDER BY
+      item_main_group_key,
+      option_idx,
+      item_sub_group_key,
+      item_key
+  " > "$out_path"
+}
 
 if [ -f "$regions_field_input" ] && { [ "${REBUILD_REGIONS_FIELD:-0}" = "1" ] || [ ! -f "$regions_field_output" ] || [ "$regions_field_input" -nt "$regions_field_output" ]; }; then
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
@@ -521,4 +632,20 @@ if [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f
     --loc "$region_loc_input" \
     "${waypoint_xml_args[@]}" \
     --out "$region_nodes_output"
+fi
+
+if [ -f "$float_fishing_point_xlsx_input" ] && [ -f "$float_fishing_xlsx_input" ]; then
+  FISHING_HOTSPOT_SOURCE_LOOT_JSON="$(mktemp)"
+  build_fishing_hotspot_source_loot_json "$FISHING_HOTSPOT_SOURCE_LOOT_JSON"
+  fishing_hotspot_metadata_args=()
+  if [ -f "$bdolytics_hotspots_json_input" ]; then
+    fishing_hotspot_metadata_args+=(--bdolytics-hotspots-json "$bdolytics_hotspots_json_input")
+  fi
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-fishing-hotspots-asset \
+    --float-fishing-point-xlsx "$float_fishing_point_xlsx_input" \
+    --float-fishing-xlsx "$float_fishing_xlsx_input" \
+    --source-loot-groups-json "$FISHING_HOTSPOT_SOURCE_LOOT_JSON" \
+    "${fishing_hotspot_metadata_args[@]}" \
+    --out "$fishing_hotspots_output"
 fi

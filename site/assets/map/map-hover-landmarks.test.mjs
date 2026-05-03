@@ -53,6 +53,11 @@ test("buildLandmarkHoverRows builds explicit landmark rows for samples and targe
           targets: [{ key: "bookmark", label: "Saved Hotspot", worldX: 30, worldZ: 40 }],
           detailSections: [],
         },
+        {
+          layerId: "fishing_hotspots",
+          targets: [{ key: "fishing_hotspot", label: "Fishing Hotspot #2", worldX: 50, worldZ: 60 }],
+          detailSections: [],
+        },
       ],
     },
   });
@@ -67,6 +72,7 @@ test("buildLandmarkHoverRows builds explicit landmark rows for samples and targe
       ["point-sample", 10, "Grunt", 3],
       ["landmark-hover", "trade_npcs", "trade_npc", "NPC", "Bahar", "trade-origin"],
       ["landmark-hover", "bookmarks", "bookmark", "Bookmark", "Saved Hotspot", "bookmark"],
+      ["landmark-hover", "fishing_hotspots", "fishing_hotspot", "Hotspot", "Fishing Hotspot #2", "map-pin"],
     ],
   );
 });
