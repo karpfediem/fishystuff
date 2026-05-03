@@ -24,8 +24,14 @@ remote deploy can push closures or run mgmt:
   `site-nbg1-prod`.
 - Production deploy target values must not mention beta public hostnames,
   `site-nbg1-beta`, or `telemetry-nbg1`.
+- Beta deploys require a complete beta service set, including the dedicated
+  `telemetry-nbg1` host reached through `telemetry.beta.fishystuff.fish`; beta
+  telemetry must not be collapsed onto the beta site host.
 - Before a deploy mutates a remote host, the SSH target must report the expected
   short hostname with `hostname -s`.
+- Beta and production use different SSH keys. The beta key must not be
+  authorized on production hosts, and the production key must not be authorized
+  on beta hosts.
 
 Run a local-only preflight with:
 
@@ -38,6 +44,17 @@ just deploy-safety-test
 This does not contact remote hosts. The actual deploy path repeats the same
 configuration checks and then performs the remote hostname identity check before
 copying closures or applying the resident graph.
+
+The key boundary can be verified with:
+
+```sh
+just deploy-key-boundary-check
+```
+
+That check is non-mutating. It uses the beta key to confirm access to the beta
+site and telemetry hosts, confirms the beta key is denied by production, then
+uses the production key to confirm access to production and denial by both beta
+hosts.
 
 The status, wait, and private tunnel recipes use the same target-boundary checks.
 Production observability tunnels intentionally do not fall back to beta telemetry;
@@ -55,10 +72,10 @@ directly.
 
 Remaining hardening work:
 
-- Move from shared root SSH to separate OS deploy identities with sudoers limited
-  to each environment's service names and paths.
-- Split remote gcroots and mutable roots by environment if beta and production
-  ever share a machine.
+- Ensure the production host only has the production deploy public key in its
+  authorized keys, and beta hosts only have the beta deploy public key.
+- Keep beta and production on separate hosts/service sets. Do not share telemetry
+  or operator services between beta and production.
 - Scope Cloudflare tokens so beta can never edit production records.
 - Move the long-term deployment path to the GitOps desired-state model with
   exact release identities and admission gates.

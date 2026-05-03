@@ -368,22 +368,6 @@ deployment_telemetry_target() {
   esac
 }
 
-deployment_shared_telemetry_target() {
-  local deployment
-  deployment="$(canonical_deployment_name "$1")"
-  case "$deployment" in
-    beta)
-      deployment_telemetry_target "$deployment"
-      ;;
-    production)
-      deployment_telemetry_target "$deployment"
-      ;;
-    local)
-      printf '%s' ""
-      ;;
-  esac
-}
-
 deployment_control_target() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
@@ -439,7 +423,7 @@ deployment_tunnel_target() {
         if [[ -n "$telemetry_tunnel_target" ]]; then
           printf '%s' "$telemetry_tunnel_target"
         else
-          printf '%s' "$(deployment_shared_telemetry_target "$deployment")"
+          printf '%s' "$(deployment_telemetry_target "$deployment")"
         fi
         return
         ;;
@@ -714,6 +698,34 @@ assert_deployment_prod_hostname_safe() {
   esac
 }
 
+assert_deployment_service_set_safe() {
+  local deployment="$1"
+  local resident_target=""
+  local telemetry_target=""
+  local telemetry_hostname=""
+
+  case "$deployment" in
+    beta)
+      resident_target="$(deployment_resident_target "$deployment")"
+      telemetry_target="$(deployment_telemetry_target "$deployment")"
+      telemetry_hostname="$(deployment_telemetry_hostname "$deployment")"
+      require_value "$telemetry_target" "beta deployment requires a dedicated telemetry target"
+      if [[ -n "$resident_target" && "$telemetry_target" == "$resident_target" ]]; then
+        echo "unsafe beta telemetry target is not dedicated: $telemetry_target" >&2
+        exit 2
+      fi
+      if [[ "$telemetry_hostname" != "telemetry-nbg1" ]]; then
+        echo "unsafe beta telemetry hostname: expected telemetry-nbg1, got ${telemetry_hostname:-<empty>}" >&2
+        exit 2
+      fi
+      if deployment_target_mentions_production "$telemetry_target"; then
+        echo "unsafe beta telemetry target mentions production: $telemetry_target" >&2
+        exit 2
+      fi
+      ;;
+  esac
+}
+
 assert_deployment_configuration_safe() {
   local deployment
   deployment="$(canonical_deployment_name "$1")"
@@ -724,6 +736,7 @@ assert_deployment_configuration_safe() {
   assert_deployment_secret_scope_safe "$deployment"
   assert_deployment_environment_safe "$deployment"
   assert_deployment_prod_hostname_safe "$deployment"
+  assert_deployment_service_set_safe "$deployment"
   assert_deployment_public_urls_safe "$deployment"
   assert_deployment_targets_safe "$deployment"
   assert_deployment_branch_safe "$deployment"
@@ -775,6 +788,15 @@ assert_resident_push_scope_safe() {
     beta)
       if [[ "$host" == "site-nbg1-prod" || "$host" == *production* ]]; then
         echo "unsafe beta resident hostname: $host" >&2
+        exit 2
+      fi
+      require_value "$telemetry_target" "beta resident push requires a dedicated telemetry target"
+      if [[ "$telemetry_target" == "$target" ]]; then
+        echo "unsafe beta telemetry target is not dedicated: $telemetry_target" >&2
+        exit 2
+      fi
+      if [[ "$telemetry_host" != "telemetry-nbg1" ]]; then
+        echo "unsafe beta telemetry hostname: expected telemetry-nbg1, got ${telemetry_host:-<empty>}" >&2
         exit 2
       fi
       if [[ -n "$prod_host" ]]; then

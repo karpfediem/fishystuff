@@ -62,12 +62,26 @@ expect_fail "beta resident target cannot point at production" \
   env FISHYSTUFF_BETA_RESIDENT_TARGET=root@fishystuff.fish bash -c \
     'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe beta'
 
+expect_fail "beta telemetry target cannot point at production" \
+  env FISHYSTUFF_BETA_TELEMETRY_TARGET=root@fishystuff.fish bash -c \
+    'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe beta'
+
+expect_fail "beta telemetry target must be dedicated" \
+  env FISHYSTUFF_BETA_TELEMETRY_TARGET=root@beta.fishystuff.fish bash -c \
+    'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe beta'
+
 expect_fail "production Dolt branch cannot be beta" \
   env FISHYSTUFF_PRODUCTION_DOLT_REMOTE_BRANCH=beta bash -c \
     'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe production'
 
 expect_fail "beta resident manifest cannot carry prod host" \
   bash -c 'source scripts/recipes/lib/common.sh; assert_resident_push_scope_safe beta root@beta.fishystuff.fish root@telemetry.beta.fishystuff.fish site-nbg1-beta telemetry-nbg1 site-nbg1-prod https://beta.fishystuff.fish https://api.beta.fishystuff.fish https://cdn.beta.fishystuff.fish https://telemetry.beta.fishystuff.fish beta'
+
+expect_fail "beta resident push requires telemetry host" \
+  bash -c 'source scripts/recipes/lib/common.sh; assert_resident_push_scope_safe beta root@beta.fishystuff.fish "" site-nbg1-beta "" "" https://beta.fishystuff.fish https://api.beta.fishystuff.fish https://cdn.beta.fishystuff.fish https://telemetry.beta.fishystuff.fish beta'
+
+expect_fail "beta resident push requires dedicated telemetry target" \
+  bash -c 'source scripts/recipes/lib/common.sh; assert_resident_push_scope_safe beta root@beta.fishystuff.fish root@beta.fishystuff.fish site-nbg1-beta telemetry-nbg1 "" https://beta.fishystuff.fish https://api.beta.fishystuff.fish https://cdn.beta.fishystuff.fish https://telemetry.beta.fishystuff.fish beta'
 
 expect_ok "production resident push scope" \
   bash -c 'source scripts/recipes/lib/common.sh; assert_resident_push_scope_safe production root@116.203.126.191 "" site-nbg1-prod "" site-nbg1-prod https://fishystuff.fish https://api.fishystuff.fish https://cdn.fishystuff.fish https://telemetry.fishystuff.fish main'

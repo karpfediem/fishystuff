@@ -99,6 +99,10 @@ deploy-safety-check deployment:
 deploy-safety-test:
   bash scripts/recipes/deploy-safety-test.sh
 
+# Verify deploy keys are accepted only by their own environment hosts.
+deploy-key-boundary-check beta_target="root@beta.fishystuff.fish" production_target="root@fishystuff.fish" beta_telemetry_target="root@telemetry.beta.fishystuff.fish":
+  bash scripts/recipes/deploy-key-boundary-check.sh "{{beta_target}}" "{{production_target}}" "{{beta_telemetry_target}}"
+
 # Build the current map runtime and map-serving CDN payload once
 build-map:
   ./tools/scripts/build_map.sh

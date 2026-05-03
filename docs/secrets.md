@@ -23,6 +23,9 @@ Supported local profiles:
   - `HETZNER_SSH_KEY_NAME`
   - `HETZNER_SSH_PUBLIC_KEY`
   - `HETZNER_SSH_PRIVATE_KEY`
+- `production-deploy`
+  - `HETZNER_API_TOKEN`
+  - `HETZNER_SSH_PRIVATE_KEY`
 - `bot`
   - `DISCORD_TOKEN`
   - `MOD_INFO_CHANNEL_ID`
@@ -81,6 +84,11 @@ process that needs it. The local bootstrap helper runs mgmt in one-shot mode
 with `--converged-timeout` and `--no-watch`, binds its embedded etcd only on
 explicit loopback URLs, and exits after the Hetzner topology has stabilized
 instead of remaining attached as a long-running polling process.
+
+The `production-deploy` profile carries the production deploy key separately.
+The beta key must not be authorized on production hosts, and the production key
+must not be authorized on beta hosts. Run `just deploy-key-boundary-check` after
+key rotation or host bootstrap to verify that boundary without mutating hosts.
 
 For local debugging, the bootstrap helper also supports optional Prometheus and
 pprof output without enabling them by default:
