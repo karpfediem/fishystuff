@@ -238,6 +238,9 @@ class single_host($st) {
 				rollback_site_content => $retained_site_artifact->store_path,
 				rollback_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
 				rollback_dolt_commit => $retained_dolt->commit,
+				rollback_dolt_materialization => $retained_dolt_materialization,
+				rollback_dolt_cache_dir => $retained_dolt_cache_dir,
+				rollback_dolt_release_ref => $retained_dolt_release_ref,
 				served => $served,
 			})
 

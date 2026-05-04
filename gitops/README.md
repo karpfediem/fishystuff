@@ -360,7 +360,7 @@ The active selection document includes the desired generation that selected the 
 
 The route selection document is the local-only handoff shape for future Caddy integration. It records the selected release, the active selection document path, and the stable site/CDN symlink roots that Caddy would serve, without starting or reloading Caddy in VM tests. The route document is declared after the active selection so a future file-watching edge does not observe a selected route before the active symlinks and active JSON exist.
 
-The rollback readiness document records the primary retained rollback release, currently the first `retained_releases` entry, with its exact API, Dolt service, site, CDN runtime, Dolt commit, and release identity tuple. This keeps rollback availability explicit instead of inferring it from an operator's memory of the desired-state object.
+The rollback readiness document records the primary retained rollback release, currently the first `retained_releases` entry, with its exact API, Dolt service, site, CDN runtime, Dolt commit, Dolt materialization/cache/ref tuple, and release identity. This keeps rollback availability explicit instead of inferring it from an operator's memory of the desired-state object.
 
 KV publication can be added later when the status consumer is clear.
 

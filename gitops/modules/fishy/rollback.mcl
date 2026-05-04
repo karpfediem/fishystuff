@@ -15,6 +15,9 @@ class readiness($st) {
 	$rollback_site_content str = $st->rollback_site_content || ""
 	$rollback_cdn_runtime_content str = $st->rollback_cdn_runtime_content || ""
 	$rollback_dolt_commit str = $st->rollback_dolt_commit || ""
+	$rollback_dolt_materialization str = $st->rollback_dolt_materialization || "metadata_only"
+	$rollback_dolt_cache_dir str = $st->rollback_dolt_cache_dir || ""
+	$rollback_dolt_release_ref str = $st->rollback_dolt_release_ref || ""
 	$served bool = $st->served || false
 	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
 	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
@@ -22,7 +25,7 @@ class readiness($st) {
 	$rollback_dir = fmt.printf("%s/rollback", $state_dir)
 	$rollback_path = fmt.printf("%s/%s.json", $rollback_dir, $environment)
 	$rollback_available = $served and ($rollback_release_id != "")
-	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"current_release_id\": %s,\n  \"current_release_identity\": %s,\n  \"rollback_release_id\": %s,\n  \"rollback_release_identity\": %s,\n  \"rollback_api_bundle\": %s,\n  \"rollback_dolt_service_bundle\": %s,\n  \"rollback_site_content\": %s,\n  \"rollback_cdn_runtime_content\": %s,\n  \"rollback_dolt_commit\": %s,\n  \"rollback_available\": %t,\n  \"rollback_state\": \"retained_hot_release\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($current_release_id), fishy_json.quote($current_release_identity), fishy_json.quote($rollback_release_id), fishy_json.quote($rollback_release_identity), fishy_json.quote($rollback_api_bundle), fishy_json.quote($rollback_dolt_service_bundle), fishy_json.quote($rollback_site_content), fishy_json.quote($rollback_cdn_runtime_content), fishy_json.quote($rollback_dolt_commit), $rollback_available)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"current_release_id\": %s,\n  \"current_release_identity\": %s,\n  \"rollback_release_id\": %s,\n  \"rollback_release_identity\": %s,\n  \"rollback_api_bundle\": %s,\n  \"rollback_dolt_service_bundle\": %s,\n  \"rollback_site_content\": %s,\n  \"rollback_cdn_runtime_content\": %s,\n  \"rollback_dolt_commit\": %s,\n  \"rollback_dolt_materialization\": %s,\n  \"rollback_dolt_cache_dir\": %s,\n  \"rollback_dolt_release_ref\": %s,\n  \"rollback_available\": %t,\n  \"rollback_state\": \"retained_hot_release\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($current_release_id), fishy_json.quote($current_release_identity), fishy_json.quote($rollback_release_id), fishy_json.quote($rollback_release_identity), fishy_json.quote($rollback_api_bundle), fishy_json.quote($rollback_dolt_service_bundle), fishy_json.quote($rollback_site_content), fishy_json.quote($rollback_cdn_runtime_content), fishy_json.quote($rollback_dolt_commit), fishy_json.quote($rollback_dolt_materialization), fishy_json.quote($rollback_dolt_cache_dir), fishy_json.quote($rollback_dolt_release_ref), $rollback_available)
 
 	panic($environment == "", "rollback readiness requires environment")
 	panic($desired_generation == 0, "rollback readiness requires desired_generation")
@@ -36,6 +39,9 @@ class readiness($st) {
 	panic($served and ($rollback_site_content == ""), "served rollback readiness requires rollback site content")
 	panic($served and ($rollback_cdn_runtime_content == ""), "served rollback readiness requires rollback CDN runtime content")
 	panic($served and ($rollback_dolt_commit == ""), "served rollback readiness requires rollback Dolt commit")
+	panic($served and ($rollback_dolt_materialization == ""), "served rollback readiness requires rollback Dolt materialization")
+	panic($served and ($rollback_dolt_materialization == "fetch_pin") and ($rollback_dolt_cache_dir == ""), "served fetch_pin rollback readiness requires rollback Dolt cache dir")
+	panic($served and ($rollback_dolt_materialization == "fetch_pin") and ($rollback_dolt_release_ref == ""), "served fetch_pin rollback readiness requires rollback Dolt release ref")
 
 	if $write_local_state {
 		if $rollback_available {
