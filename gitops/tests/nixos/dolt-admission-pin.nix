@@ -12,7 +12,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
-      virtualisation.memorySize = 4096;
+      virtualisation.memorySize = 8192;
       environment.systemPackages = [
         fishystuffDeployPackage
         mgmtPackage
@@ -33,6 +33,7 @@ pkgs.testers.runNixOSTest {
     dolt_status = "/run/fishystuff/gitops-test/dolt/local-test-example-release.json"
     admission = "/run/fishystuff/gitops-test/admission/local-test.json"
     status = "/var/lib/fishystuff/gitops-test/status/local-test.json"
+    rollback = "/var/lib/fishystuff/gitops-test/rollback/local-test.json"
     cache = "/var/lib/fishystuff/gitops-test/dolt-cache/fishystuff"
     release_ref = "fishystuff/gitops/example-release"
 
@@ -137,6 +138,7 @@ pkgs.testers.runNixOSTest {
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.state == \"pinned\" and .verified_commit == $commit' {dolt_status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.admission_state == \"passed_fixture\" and .probe == \"dolt-sql-scalar\" and .expected_commit == $commit and .verified_commit == $commit and .scalar == \"one\" and .expected_scalar == \"one\"' {admission}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.desired_generation == 1 and .admission_state == \"passed_fixture\" and .dolt_commit == $commit' {status}")
+    machine.succeed(f"test ! -e {rollback}")
     machine.succeed(f"touch {cache}/cache-survives-admission")
     stop_mgmt()
 
@@ -156,6 +158,7 @@ pkgs.testers.runNixOSTest {
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.state == \"pinned\" and .verified_commit == $commit' {dolt_status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.admission_state == \"passed_fixture\" and .probe == \"dolt-sql-scalar\" and .expected_commit == $commit and .verified_commit == $commit and .scalar == \"two\" and .expected_scalar == \"two\"' {admission}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.desired_generation == 2 and .admission_state == \"passed_fixture\" and .dolt_commit == $commit' {status}")
+    machine.succeed(f"test ! -e {rollback}")
     machine.succeed(f"test -f {cache}/cache-survives-admission")
     stop_mgmt()
 

@@ -12,7 +12,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
-      virtualisation.memorySize = 4096;
+      virtualisation.memorySize = 8192;
       environment.systemPackages = [
         fishystuffDeployPackage
         mgmtPackage
@@ -34,6 +34,7 @@ pkgs.testers.runNixOSTest {
     status = "/var/lib/fishystuff/gitops-test/status/local-test.json"
     admission = "/run/fishystuff/gitops-test/admission/local-test.json"
     instance = "/var/lib/fishystuff/gitops-test/instances/local-test-example-release.json"
+    rollback = "/var/lib/fishystuff/gitops-test/rollback/local-test.json"
     cache = "/var/lib/fishystuff/gitops-test/dolt-cache/fishystuff"
     release_ref = "fishystuff/gitops/example-release"
 
@@ -131,6 +132,7 @@ pkgs.testers.runNixOSTest {
     wait_for_gitops_file(instance)
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.state == \"pinned\" and .requested_commit == $commit and .verified_commit == $commit and .materialization == \"fetch_pin\" and .cache_dir == \"{cache}\" and .release_ref == \"{release_ref}\"' {dolt_status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.desired_generation == 1 and .dolt_commit == $commit and .dolt_materialization == \"fetch_pin\" and .dolt_cache_dir == \"{cache}\" and .dolt_release_ref == \"{release_ref}\"' {status}")
+    machine.succeed(f"test ! -e {rollback}")
     machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{release_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit1)\"")
     machine.succeed(f"test ! -e {cache}/.fishystuff-dolt-snapshot-source")
     machine.succeed(f"touch {cache}/cache-survives-fetch")
@@ -201,6 +203,7 @@ pkgs.testers.runNixOSTest {
     start_mgmt()
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.state == \"pinned\" and .verified_commit == $commit' {dolt_status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.desired_generation == 2 and .dolt_commit == $commit' {status}")
+    machine.succeed(f"test ! -e {rollback}")
     machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{release_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit2)\"")
     machine.succeed(f"test -f {cache}/cache-survives-fetch")
     stop_mgmt()
