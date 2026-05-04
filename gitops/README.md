@@ -23,6 +23,8 @@ just gitops-unify auto gitops/fixtures/beta-single-host.example.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test dolt-fetch-pin
+just gitops-vm-test dolt-admission-pin
+just gitops-vm-test served-retained-dolt-fetch-pin
 just gitops-vm-test multi-environment-candidates
 just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
@@ -56,6 +58,7 @@ nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-dolt-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-dolt-admission-pin-vm
+nix build .#checks.x86_64-linux.gitops-served-retained-dolt-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
@@ -98,6 +101,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-dolt-fetch-pin-vm` boots one local NixOS VM, creates a local file-backed Dolt remote, and reconciles a `fetch_pin` desired state against it. The test first pins commit 1 in a persistent VM-local cache, then pushes commit 2 to the same local remote and changes desired state. It verifies the existing cache is fetched forward, the release ref points at the exact desired commit, and no `.dolt` snapshot/full closure path is used.
 
 `gitops-dolt-admission-pin-vm` adds a local DB-backed admission step to the `fetch_pin` path. Desired state includes `admission_probe.kind = "dolt_sql_scalar"` with a single-scalar SQL query and expected value. The graph runs the probe only after the Dolt materialization helper has pinned the exact release ref, and the helper refuses admission if the materialization status, ref hash, or query result does not match the desired commit tuple.
+
+`gitops-served-retained-dolt-fetch-pin-vm` proves the rollback data side of serving. It creates a local Dolt remote, serves a candidate release, retains the previous release, and verifies both the active and primary retained rollback release refs are pinned in the same VM-local Dolt cache before served active/status/route/rollback documents publish.
 
 `gitops-json-status-escaping-vm` proves the VM-local JSON outputs preserve quote/backslash characters from the exact release identity tuple instead of emitting malformed JSON.
 
@@ -289,6 +294,8 @@ The closure and gcroot resources are both declared for each enabled artifact. A 
 `gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses the `fishystuff_deploy dolt fetch-pin` helper, backed by Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM, to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
 
 `gitops-dolt-admission-pin-vm` keeps admission local and synthetic while making it DB-backed. The optional VM-only `admission_probe.kind = "dolt_sql_scalar"` path writes a probe request, waits for `fetch_pin`, verifies the pinned materialization status, and executes a one-row/one-column Dolt SQL query through `fishystuff_deploy dolt probe-sql-scalar` before writing the admission document.
+
+`gitops-served-retained-dolt-fetch-pin-vm` covers the rollback data path: when a served environment retains a rollback release whose Dolt materialization is `fetch_pin`, the primary retained release is also materialized through the same VM-local cache and release-ref status path. Served active/status/route/rollback files depend on that retained materialization so rollback readiness does not claim a previous release whose Dolt commit was never pinned locally.
 
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 

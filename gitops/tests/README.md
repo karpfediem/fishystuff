@@ -17,6 +17,7 @@ nix build .#checks.x86_64-linux.gitops-empty-unify
 nix build .#checks.x86_64-linux.gitops-single-host-candidate-vm
 nix build .#checks.x86_64-linux.gitops-dolt-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-dolt-admission-pin-vm
+nix build .#checks.x86_64-linux.gitops-served-retained-dolt-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-candidates-vm
 nix build .#checks.x86_64-linux.gitops-multi-environment-served-vm
 nix build .#checks.x86_64-linux.gitops-closure-roots-vm
@@ -54,6 +55,7 @@ just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test dolt-fetch-pin
 just gitops-vm-test dolt-admission-pin
+just gitops-vm-test served-retained-dolt-fetch-pin
 just gitops-vm-test multi-environment-candidates
 just gitops-vm-test multi-environment-served
 just gitops-vm-test closure-roots
@@ -89,6 +91,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-dolt-fetch-pin-vm` boots a local NixOS VM, creates a local file-backed Dolt remote, and runs a `fetch_pin` desired state through the `fishystuff_deploy dolt fetch-pin` helper. It verifies mgmt pins an exact release ref in a persistent VM-local Dolt cache, then pushes a second commit to the same local remote and verifies the cache is fetched forward instead of recloned.
 
 `gitops-dolt-admission-pin-vm` extends that path with an explicit `admission_probe.kind = "dolt_sql_scalar"` desired-state object. It runs `fishystuff_deploy dolt probe-sql-scalar` after `fetch_pin`, verifies the materialization status still names the exact requested commit/ref/cache, and runs a single-scalar Dolt SQL query against the pinned release ref before admission can publish `passed_fixture`.
+
+`gitops-served-retained-dolt-fetch-pin-vm` boots a local NixOS VM, creates a local file-backed Dolt remote, and serves a candidate while retaining the previous release. It checks that both the active candidate and the primary retained rollback release have pinned Dolt refs in the same VM-local cache before active/status/route/rollback state is published.
 
 `gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 
@@ -144,4 +148,4 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
 
-GitOps VM tests set `virtualisation.memorySize = 2048` because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph.
+GitOps VM tests set explicit VM memory because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph. Heavier Dolt/rollback tests use 8 GiB.

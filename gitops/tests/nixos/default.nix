@@ -22,6 +22,10 @@
     inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-served-retained-dolt-fetch-pin-vm = import ./served-retained-dolt-fetch-pin.nix {
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-multi-environment-candidates-vm = import ./multi-environment-candidates.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

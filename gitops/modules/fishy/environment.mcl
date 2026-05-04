@@ -161,6 +161,19 @@ class single_host($st) {
 		$retained_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["site"] || $empty_artifact
 		$retained_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["cdn_runtime"] || $empty_artifact
 		$retained_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["dolt_service"] || $empty_artifact
+		$raw_retained_dolt_materialization str = $retained_dolt->materialization || ""
+		$retained_dolt_materialization str = if $raw_retained_dolt_materialization == "" { "metadata_only" } else { $raw_retained_dolt_materialization }
+		$retained_dolt_cache_dir str = if ($retained_dolt_materialization == "fetch_pin") and ($retained_dolt->cache_dir == "") {
+			fmt.printf("%s/dolt-cache/%s", $local_state_dir, $retained_dolt->repository)
+		} else {
+			$retained_dolt->cache_dir
+		}
+		$retained_dolt_release_ref str = if ($retained_dolt_materialization == "fetch_pin") and ($retained_dolt->release_ref == "") {
+			fmt.printf("fishystuff/gitops/%s", $retained_release_id)
+		} else {
+			$retained_dolt->release_ref
+		}
+		$retained_dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $retained_release_id)
 		$retained_release_identity str = if $retained_release->generation == 0 {
 			""
 		} else {
@@ -195,6 +208,22 @@ class single_host($st) {
 		})
 
 		if $index == 0 {
+			include fishy_dolt.materialization(struct {
+				mode => $mode,
+				environment => $environment_name,
+				host => $host->hostname,
+				release_id => $retained_release_id,
+				release_identity => $retained_release_identity,
+				repository => $retained_dolt->repository,
+				commit => $retained_dolt->commit,
+				branch_context => $retained_dolt->branch_context,
+				access_mode => $retained_dolt->mode,
+				materialization => $retained_dolt_materialization,
+				remote_url => $retained_dolt->remote_url,
+				cache_dir => $retained_dolt_cache_dir,
+				release_ref => $retained_dolt_release_ref,
+			})
+
 			include fishy_rollback.readiness(struct {
 				mode => $mode,
 				desired_generation => $desired_generation,
@@ -211,6 +240,21 @@ class single_host($st) {
 				rollback_dolt_commit => $retained_dolt->commit,
 				served => $served,
 			})
+
+			if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
+				if $active_dolt_materialization == "fetch_pin" {
+					if $use_dolt_sql_admission_probe {
+						Exec["${dolt_admission_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
+					} else {
+						Exec["${dolt_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
+					}
+				}
+
+				Exec["${retained_dolt_exec_name}"] -> File["${status_path}"]
+				Exec["${retained_dolt_exec_name}"] -> File["${active_path}"]
+				Exec["${retained_dolt_exec_name}"] -> File["${route_path}"]
+				Exec["${retained_dolt_exec_name}"] -> File["${rollback_path}"]
+			}
 		}
 	}
 
