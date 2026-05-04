@@ -88,7 +88,9 @@ with_loaded_profile() {
 
   key_path="$(create_temp_ssh_key_from_env /tmp/fishystuff-deploy-key-boundary.XXXXXX)"
   known_hosts_file="$(mktemp /tmp/fishystuff-deploy-key-boundary-known-hosts.XXXXXX)"
-  trap 'rm -f "$key_path" "$known_hosts_file"' EXIT
+  DEPLOY_KEY_BOUNDARY_KEY_PATH="$key_path"
+  DEPLOY_KEY_BOUNDARY_KNOWN_HOSTS_FILE="$known_hosts_file"
+  trap 'rm -f "${DEPLOY_KEY_BOUNDARY_KEY_PATH:-}" "${DEPLOY_KEY_BOUNDARY_KNOWN_HOSTS_FILE:-}"' EXIT
 
   case "$profile" in
     beta-deploy)
@@ -106,6 +108,9 @@ with_loaded_profile() {
       exit 2
       ;;
   esac
+
+  rm -f "$key_path" "$known_hosts_file"
+  trap - EXIT
 }
 
 if [[ "${1-}" == "__with-profile" ]]; then
