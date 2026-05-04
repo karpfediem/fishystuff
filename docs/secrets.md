@@ -90,7 +90,8 @@ must not be authorized on beta hosts. Run `just deploy-key-boundary-check` after
 key rotation or host bootstrap to verify that boundary without mutating hosts.
 After DNS cutover, production control defaults to the production site target,
 not the old beta `mgmt-root` control path. `HETZNER_API_TOKEN` is optional for
-production and only needed for explicit host discovery flows.
+production and only needed for explicit host discovery flows. Production
+resident access defaults to `root@fishystuff.fish`.
 
 For local debugging, the bootstrap helper also supports optional Prometheus and
 pprof output without enabling them by default:

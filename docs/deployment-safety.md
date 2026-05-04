@@ -32,6 +32,8 @@ remote deploy can push closures or run mgmt:
 - Beta and production use different SSH keys. The beta key must not be
   authorized on production hosts, and the production key must not be authorized
   on beta hosts.
+- Production resident access defaults to `root@fishystuff.fish` after DNS
+  cutover; Hetzner host discovery is only a special-case override path.
 - Production control defaults to the production site target after DNS cutover;
   it must not use the beta `mgmt-root` control path.
 

@@ -318,7 +318,7 @@ deployment_resident_target() {
   deployment="$(canonical_deployment_name "$1")"
   case "$deployment" in
     beta) printf '%s' "$(deployment_env_or_default "$deployment" "resident_target" "root@beta.fishystuff.fish")" ;;
-    production) printf '%s' "$(deployment_env_value "$deployment" "resident_target")" ;;
+    production) printf '%s' "$(deployment_env_or_default "$deployment" "resident_target" "root@fishystuff.fish")" ;;
     local) printf '%s' "" ;;
   esac
 }

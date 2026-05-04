@@ -92,6 +92,7 @@ expect_ok "production resident push scope" \
 
 expect_eq "production telemetry tunnel has no beta fallback" "" "$(deployment_tunnel_target production grafana)"
 expect_eq "beta telemetry tunnel target" "root@telemetry.beta.fishystuff.fish" "$(deployment_tunnel_target beta grafana)"
+expect_eq "production resident target defaults to production DNS" "root@fishystuff.fish" "$(deployment_resident_target production)"
 expect_eq "production control target defaults to production site" "root@fishystuff.fish" "$(deployment_control_target production)"
 
 expect_ok "bundled resident beta manifest has safe target identity" \
