@@ -1,11 +1,18 @@
 use std::ffi::OsString;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+
+const CACHE_LOCK_TIMEOUT: Duration = Duration::from_secs(300);
+const CACHE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Deserialize)]
 struct FetchPinRequest {
@@ -126,6 +133,7 @@ pub fn fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Re
 
     ensure_parent_dir(&request.cache_dir)?;
     ensure_parent_dir(status_path)?;
+    let _lock = acquire_cache_lock(&request.cache_dir)?;
 
     if !request.cache_dir.join(".dolt").is_dir() {
         clone_cache(&request, dolt_bin)?;
@@ -161,6 +169,10 @@ pub fn fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> Re
 
     write_status(status_path, &request, &verified_commit)?;
     Ok(())
+}
+
+struct CacheLock {
+    _file: File,
 }
 
 pub fn needs_fetch_pin(request_path: &Path, status_path: &Path, dolt_bin: &Path) -> bool {
@@ -463,6 +475,88 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
         .with_context(|| format!("{} has no parent directory", path.display()))?;
     fs::create_dir_all(parent)
         .with_context(|| format!("creating parent directory {}", parent.display()))
+}
+
+fn acquire_cache_lock(cache_dir: &Path) -> Result<CacheLock> {
+    let lock_path = cache_lock_path(cache_dir)?;
+    ensure_parent_dir(&lock_path)?;
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .with_context(|| format!("opening Dolt cache lock {}", lock_path.display()))?;
+    let start = Instant::now();
+
+    loop {
+        match try_lock_file(&file) {
+            Ok(true) => {
+                file.set_len(0).with_context(|| {
+                    format!("truncating Dolt cache lock {}", lock_path.display())
+                })?;
+                writeln!(file, "pid={}", std::process::id())
+                    .with_context(|| format!("writing Dolt cache lock {}", lock_path.display()))?;
+                writeln!(file, "cache_dir={}", cache_dir.display())
+                    .with_context(|| format!("writing Dolt cache lock {}", lock_path.display()))?;
+                file.sync_all()
+                    .with_context(|| format!("syncing Dolt cache lock {}", lock_path.display()))?;
+                return Ok(CacheLock { _file: file });
+            }
+            Ok(false) => {
+                if start.elapsed() >= CACHE_LOCK_TIMEOUT {
+                    bail!(
+                        "timed out waiting for Dolt cache lock {} for cache {}",
+                        lock_path.display(),
+                        cache_dir.display()
+                    );
+                }
+
+                thread::sleep(CACHE_LOCK_POLL_INTERVAL);
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("locking Dolt cache lock {}", lock_path.display()));
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn try_lock_file(file: &File) -> Result<bool> {
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc == 0 {
+        return Ok(true);
+    }
+
+    let error = std::io::Error::last_os_error();
+    let raw = error.raw_os_error();
+    if matches!(raw, Some(code) if code == libc::EWOULDBLOCK || code == libc::EAGAIN) {
+        Ok(false)
+    } else {
+        Err(error).context("flock failed")
+    }
+}
+
+#[cfg(not(unix))]
+fn try_lock_file(_file: &File) -> Result<bool> {
+    bail!("Dolt cache locking requires a Unix platform")
+}
+
+fn cache_lock_path(cache_dir: &Path) -> Result<PathBuf> {
+    let parent = cache_dir
+        .parent()
+        .with_context(|| format!("Dolt cache path {} has no parent", cache_dir.display()))?;
+    let file_name = cache_dir
+        .file_name()
+        .with_context(|| {
+            format!(
+                "Dolt cache path {} has no final component",
+                cache_dir.display()
+            )
+        })?
+        .to_string_lossy();
+    Ok(parent.join(format!(".{file_name}.lock")))
 }
 
 fn verify_probe_ref(request: &ProbeSqlScalarRequest, dolt_bin: &Path) -> Result<String> {
@@ -786,9 +880,40 @@ fn parse_single_scalar_csv(stdout: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_read_query, parse_single_hash_csv, parse_single_scalar_csv,
-        remote_url_contains_userinfo, sql_quote,
+        acquire_cache_lock, cache_lock_path, is_read_query, parse_single_hash_csv,
+        parse_single_scalar_csv, remote_url_contains_userinfo, sql_quote,
     };
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    struct TempRoot {
+        path: PathBuf,
+    }
+
+    impl TempRoot {
+        fn new(name: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock is before UNIX_EPOCH")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!("{name}-{}-{nonce}", std::process::id()));
+            fs::create_dir_all(&path).expect("failed to create temp root");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempRoot {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     #[test]
     fn parses_dolt_hash_csv() {
@@ -849,5 +974,33 @@ mod tests {
         assert!(!remote_url_contains_userinfo(
             "file:///tmp/fishy@example.invalid/fishystuff"
         ));
+    }
+
+    #[test]
+    fn cache_lock_path_stays_next_to_cache_dir() {
+        let path = cache_lock_path(Path::new("/var/lib/fishy/cache/fishystuff")).unwrap();
+        assert_eq!(path, Path::new("/var/lib/fishy/cache/.fishystuff.lock"));
+    }
+
+    #[test]
+    fn cache_lock_is_exclusive_until_released() {
+        let root = TempRoot::new("fishystuff-deploy-cache-lock");
+        let cache = root.path().join("cache/fishystuff");
+        fs::create_dir_all(cache.parent().unwrap()).unwrap();
+
+        let first_lock = acquire_cache_lock(&cache).unwrap();
+        let (sender, receiver) = mpsc::channel();
+        let cache_for_thread = cache.clone();
+        let handle = thread::spawn(move || {
+            let second_lock = acquire_cache_lock(&cache_for_thread).unwrap();
+            sender.send(()).unwrap();
+            drop(second_lock);
+        });
+
+        assert!(receiver.recv_timeout(Duration::from_millis(250)).is_err());
+        drop(first_lock);
+        receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+        handle.join().unwrap();
+        assert!(cache_lock_path(&cache).unwrap().is_file());
     }
 }
