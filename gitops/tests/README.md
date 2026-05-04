@@ -92,7 +92,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-dolt-admission-pin-vm` extends that path with an explicit `admission_probe.kind = "dolt_sql_scalar"` desired-state object. It runs `fishystuff_deploy dolt probe-sql-scalar` after `fetch_pin`, verifies the materialization status still names the exact requested commit/ref/cache, and runs a single-scalar Dolt SQL query against the pinned release ref before admission can publish `passed_fixture`.
 
-`gitops-served-retained-dolt-fetch-pin-vm` boots a local NixOS VM, creates a local file-backed Dolt remote, and serves a candidate while retaining the previous release. It checks that both the active candidate and the primary retained rollback release have pinned Dolt refs in the same VM-local cache before active/status/route/rollback state is published.
+`gitops-served-retained-dolt-fetch-pin-vm` boots a local NixOS VM, creates a local file-backed Dolt remote, and serves a candidate while retaining multiple rollback releases. It checks that the active candidate and every retained rollback release have pinned Dolt refs in the same VM-local cache before active/status/route state is published, while the rollback readiness document records the first retained release as the primary rollback target.
 
 `gitops-closure-roots-vm` boots a local NixOS VM, generates desired state with tiny real Nix store artifacts, and checks that `nix:closure` verifies them and `nix:gcroot` roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
 

@@ -207,23 +207,37 @@ class single_host($st) {
 			retained_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
 		})
 
-		if $index == 0 {
-			include fishy_dolt.materialization(struct {
-				mode => $mode,
-				environment => $environment_name,
-				host => $host->hostname,
-				release_id => $retained_release_id,
-				release_identity => $retained_release_identity,
-				repository => $retained_dolt->repository,
-				commit => $retained_dolt->commit,
-				branch_context => $retained_dolt->branch_context,
-				access_mode => $retained_dolt->mode,
-				materialization => $retained_dolt_materialization,
-				remote_url => $retained_dolt->remote_url,
-				cache_dir => $retained_dolt_cache_dir,
-				release_ref => $retained_dolt_release_ref,
-			})
+		include fishy_dolt.materialization(struct {
+			mode => $mode,
+			environment => $environment_name,
+			host => $host->hostname,
+			release_id => $retained_release_id,
+			release_identity => $retained_release_identity,
+			repository => $retained_dolt->repository,
+			commit => $retained_dolt->commit,
+			branch_context => $retained_dolt->branch_context,
+			access_mode => $retained_dolt->mode,
+			materialization => $retained_dolt_materialization,
+			remote_url => $retained_dolt->remote_url,
+			cache_dir => $retained_dolt_cache_dir,
+			release_ref => $retained_dolt_release_ref,
+		})
 
+		if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
+			if $active_dolt_materialization == "fetch_pin" {
+				if $use_dolt_sql_admission_probe {
+					Exec["${dolt_admission_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
+				} else {
+					Exec["${dolt_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
+				}
+			}
+
+			Exec["${retained_dolt_exec_name}"] -> File["${status_path}"]
+			Exec["${retained_dolt_exec_name}"] -> File["${active_path}"]
+			Exec["${retained_dolt_exec_name}"] -> File["${route_path}"]
+		}
+
+		if $index == 0 {
 			include fishy_rollback.readiness(struct {
 				mode => $mode,
 				desired_generation => $desired_generation,
@@ -245,17 +259,6 @@ class single_host($st) {
 			})
 
 			if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
-				if $active_dolt_materialization == "fetch_pin" {
-					if $use_dolt_sql_admission_probe {
-						Exec["${dolt_admission_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
-					} else {
-						Exec["${dolt_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
-					}
-				}
-
-				Exec["${retained_dolt_exec_name}"] -> File["${status_path}"]
-				Exec["${retained_dolt_exec_name}"] -> File["${active_path}"]
-				Exec["${retained_dolt_exec_name}"] -> File["${route_path}"]
 				Exec["${retained_dolt_exec_name}"] -> File["${rollback_path}"]
 			}
 		}

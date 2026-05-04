@@ -5,10 +5,16 @@
   gitopsSrc,
 }:
 let
+  olderApi = pkgs.writeText "fishystuff-gitops-retained-dolt-older-api" "older api\n";
   previousApi = pkgs.writeText "fishystuff-gitops-retained-dolt-previous-api" "previous api\n";
   candidateApi = pkgs.writeText "fishystuff-gitops-retained-dolt-candidate-api" "candidate api\n";
+  olderDoltService = pkgs.writeText "fishystuff-gitops-retained-dolt-older-dolt-service" "older dolt service\n";
   previousDoltService = pkgs.writeText "fishystuff-gitops-retained-dolt-previous-dolt-service" "previous dolt service\n";
   candidateDoltService = pkgs.writeText "fishystuff-gitops-retained-dolt-candidate-dolt-service" "candidate dolt service\n";
+  olderSite = pkgs.runCommand "fishystuff-gitops-retained-dolt-older-site" { } ''
+    mkdir -p "$out"
+    printf 'older retained Dolt site\n' > "$out/index.html"
+  '';
   previousSite = pkgs.runCommand "fishystuff-gitops-retained-dolt-previous-site" { } ''
     mkdir -p "$out"
     printf 'previous retained Dolt site\n' > "$out/index.html"
@@ -16,6 +22,12 @@ let
   candidateSite = pkgs.runCommand "fishystuff-gitops-retained-dolt-candidate-site" { } ''
     mkdir -p "$out"
     printf 'candidate retained Dolt site\n' > "$out/index.html"
+  '';
+  olderCdnRoot = pkgs.runCommand "fishystuff-gitops-retained-dolt-older-cdn-current" { } ''
+    mkdir -p "$out/map"
+    printf '{"module":"fishystuff_ui_bevy.older.js","wasm":"fishystuff_ui_bevy_bg.older.wasm"}\n' > "$out/map/runtime-manifest.json"
+    printf 'older retained Dolt module\n' > "$out/map/fishystuff_ui_bevy.older.js"
+    printf 'older retained Dolt wasm\n' > "$out/map/fishystuff_ui_bevy_bg.older.wasm"
   '';
   previousCdnRoot = pkgs.runCommand "fishystuff-gitops-retained-dolt-previous-cdn-current" { } ''
     mkdir -p "$out/map"
@@ -31,7 +43,10 @@ let
   '';
   candidateCdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
     currentRoot = candidateCdnRoot;
-    previousRoots = [ previousCdnRoot ];
+    previousRoots = [
+      previousCdnRoot
+      olderCdnRoot
+    ];
   };
 in
 pkgs.testers.runNixOSTest {
@@ -44,12 +59,16 @@ pkgs.testers.runNixOSTest {
       networking.hostName = "vm-single-host";
       virtualisation.memorySize = 8192;
       virtualisation.additionalPaths = [
+        olderApi
         previousApi
         candidateApi
+        olderDoltService
         previousDoltService
         candidateDoltService
+        olderSite
         previousSite
         candidateSite
+        olderCdnRoot
         previousCdnRoot
         candidateCdnRoot
         candidateCdnServingRoot
@@ -74,8 +93,10 @@ pkgs.testers.runNixOSTest {
     cache = "/var/lib/fishystuff/gitops-test/dolt-cache/fishystuff"
     candidate_ref = "fishystuff/gitops/candidate-release"
     previous_ref = "fishystuff/gitops/previous-release"
+    older_ref = "fishystuff/gitops/older-release"
     candidate_dolt_status = "/run/fishystuff/gitops-test/dolt/local-test-candidate-release.json"
     previous_dolt_status = "/run/fishystuff/gitops-test/dolt/local-test-previous-release.json"
+    older_dolt_status = "/run/fishystuff/gitops-test/dolt/local-test-older-release.json"
     active = "/var/lib/fishystuff/gitops-test/active/local-test.json"
     status = "/var/lib/fishystuff/gitops-test/status/local-test.json"
     rollback = "/var/lib/fishystuff/gitops-test/rollback/local-test.json"
@@ -100,10 +121,15 @@ pkgs.testers.runNixOSTest {
       export HOME={work}/home
       cd {work}/source
       dolt init --name "FishyStuff GitOps Test" --email fishystuff-gitops@example.invalid
-      dolt sql -q "create table t (pk int primary key, v varchar(20)); insert into t values (1, 'previous');"
+      dolt sql -q "create table t (pk int primary key, v varchar(20)); insert into t values (0, 'older');"
+      dolt add t
+      dolt commit -m older-release
+      dolt remote add origin file://{work}/remote
+      dolt push origin main
+      dolt sql -r csv -q "select dolt_hashof('main') as hash" | tail -n 1 > {work}/commit0
+      dolt sql -q "insert into t values (1, 'previous');"
       dolt add t
       dolt commit -m previous-release
-      dolt remote add origin file://{work}/remote
       dolt push origin main
       dolt sql -r csv -q "select dolt_hashof('main') as hash" | tail -n 1 > {work}/commit1
       dolt sql -q "insert into t values (2, 'candidate');"
@@ -114,6 +140,7 @@ pkgs.testers.runNixOSTest {
     """))
     machine.succeed(textwrap.dedent(f"""
       set -euo pipefail
+      older_commit="$(cat {work}/commit0)"
       previous_commit="$(cat {work}/commit1)"
       candidate_commit="$(cat {work}/commit2)"
       cat > {desired} <<EOF
@@ -129,6 +156,27 @@ pkgs.testers.runNixOSTest {
           }}
         }},
         "releases": {{
+          "older-release": {{
+            "generation": 48,
+            "git_rev": "older-retained-dolt-fetch-pin",
+            "dolt_commit": "$older_commit",
+            "closures": {{
+              "api": {{"enabled": false, "store_path": "${olderApi}", "gcroot_path": ""}},
+              "site": {{"enabled": false, "store_path": "${olderSite}", "gcroot_path": ""}},
+              "cdn_runtime": {{"enabled": false, "store_path": "${olderCdnRoot}", "gcroot_path": ""}},
+              "dolt_service": {{"enabled": false, "store_path": "${olderDoltService}", "gcroot_path": ""}}
+            }},
+            "dolt": {{
+              "repository": "fishystuff/fishystuff",
+              "commit": "$older_commit",
+              "branch_context": "main",
+              "mode": "read_only",
+              "materialization": "fetch_pin",
+              "remote_url": "file://{work}/remote",
+              "cache_dir": "{cache}",
+              "release_ref": "{older_ref}"
+            }}
+          }},
           "previous-release": {{
             "generation": 49,
             "git_rev": "previous-retained-dolt-fetch-pin",
@@ -178,7 +226,7 @@ pkgs.testers.runNixOSTest {
             "strategy": "single_active",
             "host": "vm-single-host",
             "active_release": "candidate-release",
-            "retained_releases": ["previous-release"],
+            "retained_releases": ["previous-release", "older-release"],
             "serve": true
           }}
         }}
@@ -190,18 +238,21 @@ pkgs.testers.runNixOSTest {
 
     wait_for_gitops_file(candidate_dolt_status)
     wait_for_gitops_file(previous_dolt_status)
+    wait_for_gitops_file(older_dolt_status)
     wait_for_gitops_file(active)
     wait_for_gitops_file(status)
     wait_for_gitops_file(rollback)
     wait_for_gitops_file(route)
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.release_id == \"candidate-release\" and .requested_commit == $commit and .verified_commit == $commit and .cache_dir == \"{cache}\" and .release_ref == \"{candidate_ref}\" and .state == \"pinned\"' {candidate_dolt_status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.release_id == \"previous-release\" and .requested_commit == $commit and .verified_commit == $commit and .cache_dir == \"{cache}\" and .release_ref == \"{previous_ref}\" and .state == \"pinned\"' {previous_dolt_status}")
-    machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .retained_release_ids == [\"previous-release\"] and .served == true' {active}")
-    machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .phase == \"served\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
+    machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit0)\" '.release_id == \"older-release\" and .requested_commit == $commit and .verified_commit == $commit and .cache_dir == \"{cache}\" and .release_ref == \"{older_ref}\" and .state == \"pinned\"' {older_dolt_status}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .retained_release_ids == [\"previous-release\", \"older-release\"] and .served == true' {active}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .phase == \"served\" and .served == true and .retained_release_ids == [\"previous-release\", \"older-release\"]' {status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.desired_generation == 50 and .current_release_id == \"candidate-release\" and .rollback_release_id == \"previous-release\" and .rollback_dolt_commit == $commit and .rollback_dolt_materialization == \"fetch_pin\" and .rollback_dolt_cache_dir == \"{cache}\" and .rollback_dolt_release_ref == \"{previous_ref}\" and .rollback_available == true' {rollback}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .state == \"selected_local_route\"' {route}")
     machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{candidate_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit2)\"")
     machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{previous_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit1)\"")
+    machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{older_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit0)\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/local-test/site)\" = \"${candidateSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/local-test/cdn)\" = \"${candidateCdnServingRoot}\"")
     machine.succeed(f"kill $(cat {mgmt_pid}) || true")
