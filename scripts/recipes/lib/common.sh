@@ -27,6 +27,25 @@ RECIPE_DEFAULT_MUTATING_DEPLOY_SERVICES=(
   jaeger
   grafana
 )
+RECIPE_PRODUCTION_LIGHTWEIGHT_DEPLOYMENT_SERVICES=(
+  api
+  dolt
+  edge
+  site
+  cdn
+  vector
+)
+RECIPE_PRODUCTION_LIGHTWEIGHT_MUTATING_DEPLOY_SERVICES=(
+  api
+  dolt
+  edge
+  site
+)
+RECIPE_PRODUCTION_LIGHTWEIGHT_RESIDENT_BUNDLE_SERVICES=(
+  api
+  dolt
+  edge
+)
 
 if [[ -n "${FISHYSTUFF_RECIPE_ENV_FILE:-}" ]]; then
   if [[ ! -f "$FISHYSTUFF_RECIPE_ENV_FILE" ]]; then
@@ -1012,15 +1031,67 @@ deployment_tls_acme_email() {
 }
 
 deployment_default_services() {
+  local deployment="${1-}"
+  if [[ -n "$deployment" ]]; then
+    deployment="$(canonical_deployment_name "$deployment")"
+  fi
+  case "$deployment" in
+    production)
+      if [[ -z "$(deployment_telemetry_target "$deployment")" ]]; then
+        printf '%s\n' "${RECIPE_PRODUCTION_LIGHTWEIGHT_DEPLOYMENT_SERVICES[@]}"
+        return
+      fi
+      ;;
+  esac
   printf '%s\n' "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"
 }
 
 deployment_default_mutating_services() {
+  local deployment="${1-}"
+  if [[ -n "$deployment" ]]; then
+    deployment="$(canonical_deployment_name "$deployment")"
+  fi
+  case "$deployment" in
+    production)
+      if [[ -z "$(deployment_telemetry_target "$deployment")" ]]; then
+        printf '%s\n' "${RECIPE_PRODUCTION_LIGHTWEIGHT_MUTATING_DEPLOY_SERVICES[@]}"
+        return
+      fi
+      ;;
+  esac
   printf '%s\n' "${RECIPE_DEFAULT_MUTATING_DEPLOY_SERVICES[@]}"
 }
 
 deployment_resident_bundle_services() {
+  local deployment="${1-}"
+  if [[ -n "$deployment" ]]; then
+    deployment="$(canonical_deployment_name "$deployment")"
+  fi
+  case "$deployment" in
+    production)
+      if [[ -z "$(deployment_telemetry_target "$deployment")" ]]; then
+        printf '%s\n' "${RECIPE_PRODUCTION_LIGHTWEIGHT_RESIDENT_BUNDLE_SERVICES[@]}"
+        return
+      fi
+      ;;
+  esac
   printf '%s\n' "${RECIPE_RESIDENT_BUNDLE_SERVICES[@]}"
+}
+
+deployment_manifest_service_candidates() {
+  local deployment="${1-}"
+  if [[ -n "$deployment" ]]; then
+    deployment="$(canonical_deployment_name "$deployment")"
+  fi
+  case "$deployment" in
+    production)
+      if [[ -z "$(deployment_telemetry_target "$deployment")" ]]; then
+        printf '%s\n' api dolt edge site cdn
+        return
+      fi
+      ;;
+  esac
+  printf '%s\n' "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"
 }
 
 extract_ipv4_from_ssh_target() {

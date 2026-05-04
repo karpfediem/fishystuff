@@ -275,7 +275,7 @@ EOF
   printf 'warning: deploying API against active Dolt state; reason: %s\n' "$allow_api_with_active_dolt_reason" >&2
 fi
 
-readarray -t resident_services < <(deployment_resident_bundle_services)
+readarray -t resident_services < <(deployment_resident_bundle_services "$deployment")
 backend_services=()
 for service in "${resident_services[@]}"; do
   backend_services+=("$(deploy_service_backend_name "$service")")
@@ -314,7 +314,8 @@ if [[ "$tls_challenge" == "dns-01" ]]; then
   backend_args+=("tls_dns_env_json=$(jq -cn --arg zone "$tls_dns_zone" '{CLOUDFLARE_ZONE_NAME: $zone}')")
 fi
 
-for service in "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"; do
+while IFS= read -r service; do
+  [[ -n "$service" ]] || continue
   if [[ -n "${selected_services[$service]:-}" ]]; then
     continue
   fi
@@ -334,7 +335,7 @@ for service in "${RECIPE_DEFAULT_DEPLOYMENT_SERVICES[@]}"; do
     fi
     backend_args+=("vector_agent_bundle=$vector_agent_store_path")
   fi
-done
+done < <(deployment_manifest_service_candidates "$deployment")
 
 if [[ -z "${selected_services[dolt]:-}" ]]; then
   backend_args+=("dolt_refresh_enabled=false")

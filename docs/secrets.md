@@ -92,6 +92,9 @@ After DNS cutover, production control defaults to the production site target,
 not the old beta `mgmt-root` control path. `HETZNER_API_TOKEN` is optional for
 production and only needed for explicit host discovery flows. Production
 resident access defaults to `root@fishystuff.fish`.
+Production observability is intentionally lightweight for now: the production
+site host runs the vector agent, while Loki, OTel collector, Prometheus, Jaeger,
+and Grafana require a future production-owned telemetry target.
 
 For local debugging, the bootstrap helper also supports optional Prometheus and
 pprof output without enabling them by default:

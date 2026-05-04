@@ -36,6 +36,9 @@ remote deploy can push closures or run mgmt:
   cutover; Hetzner host discovery is only a special-case override path.
 - Production control defaults to the production site target after DNS cutover;
   it must not use the beta `mgmt-root` control path.
+- Production observability is intentionally lightweight until a production-owned
+  telemetry host exists: default status/deploy paths cover the vector agent but
+  not Loki, OTel collector, Prometheus, Jaeger, or Grafana.
 
 Run a local-only preflight with:
 

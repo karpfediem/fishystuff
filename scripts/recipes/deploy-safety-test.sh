@@ -94,6 +94,9 @@ expect_eq "production telemetry tunnel has no beta fallback" "" "$(deployment_tu
 expect_eq "beta telemetry tunnel target" "root@telemetry.beta.fishystuff.fish" "$(deployment_tunnel_target beta grafana)"
 expect_eq "production resident target defaults to production DNS" "root@fishystuff.fish" "$(deployment_resident_target production)"
 expect_eq "production control target defaults to production site" "root@fishystuff.fish" "$(deployment_control_target production)"
+expect_eq "production default services stay lightweight" $'api\ndolt\nedge\nsite\ncdn\nvector' "$(deployment_default_services production)"
+expect_eq "production default mutating services stay lightweight" $'api\ndolt\nedge\nsite' "$(deployment_default_mutating_services production)"
+expect_eq "production resident bundle services stay lightweight" $'api\ndolt\nedge' "$(deployment_resident_bundle_services production)"
 
 expect_ok "bundled resident beta manifest has safe target identity" \
   jq -e '

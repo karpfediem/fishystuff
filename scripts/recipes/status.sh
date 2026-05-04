@@ -33,7 +33,7 @@ if (( $# == 0 )); then
   while IFS= read -r service; do
     [[ -n "$service" ]] || continue
     add_requested_service "$service"
-  done < <(deployment_default_services)
+  done < <(deployment_default_services "$deployment")
 else
   for service in "$@"; do
     add_requested_service "$service"
