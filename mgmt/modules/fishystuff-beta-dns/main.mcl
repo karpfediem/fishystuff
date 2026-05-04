@@ -1,8 +1,10 @@
 import "fmt"
+import "strings" as core_strings
 import "../providers/cloudflare-dnsmanager/"
 
 class zone($st) {
 	$cluster str = $st->cluster || "beta"
+	$cluster_normalized str = core_strings.to_lower($cluster)
 	$apitoken str = $st->apitoken || ""
 	$state str = $st->state || "absent"
 	$ttl int = $st->ttl || 300
@@ -82,6 +84,15 @@ class zone($st) {
 	}
 
 	if $apitoken != "" {
+		panic(len(core_strings.split($cluster, ".")) > 1, fmt.printf("refusing dotted beta DNS cluster label %s", $cluster))
+		panic($cluster_normalized == "prod", "refusing reserved beta DNS cluster label prod")
+		panic($cluster_normalized == "production", "refusing reserved beta DNS cluster label production")
+		panic($cluster_normalized == "fishystuff", "refusing reserved beta DNS cluster label fishystuff")
+		panic($cluster_normalized == "www", "refusing reserved beta DNS cluster label www")
+		panic($cluster_normalized == "api", "refusing reserved beta DNS cluster label api")
+		panic($cluster_normalized == "cdn", "refusing reserved beta DNS cluster label cdn")
+		panic($cluster_normalized == "telemetry", "refusing reserved beta DNS cluster label telemetry")
+
 		panic(len($site_contents) > 1, fmt.printf("cloudflare:dnsmanager supports one content value for %s site DNS", $cluster))
 		panic(len($api_contents) > 1, fmt.printf("cloudflare:dnsmanager supports one content value for %s API DNS", $cluster))
 		panic(len($cdn_contents) > 1, fmt.printf("cloudflare:dnsmanager supports one content value for %s CDN DNS", $cluster))

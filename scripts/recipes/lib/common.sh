@@ -776,6 +776,26 @@ assert_deployment_configuration_safe() {
   assert_deployment_branch_safe "$deployment"
 }
 
+assert_beta_infra_cluster_dns_scope_safe() {
+  local cluster="${FISHYSTUFF_HETZNER_CLUSTER:-beta}"
+
+  if [[ -z "$cluster" ]]; then
+    cluster="beta"
+  fi
+
+  if [[ ! "$cluster" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]]; then
+    echo "unsafe beta infra cluster DNS label: $cluster" >&2
+    exit 2
+  fi
+
+  case "$cluster" in
+    prod | production | fishystuff | www | api | cdn | telemetry)
+      echo "unsafe beta infra cluster DNS label is reserved: $cluster" >&2
+      exit 2
+      ;;
+  esac
+}
+
 assert_resident_push_scope_safe() {
   local environment="$1"
   local target="$2"

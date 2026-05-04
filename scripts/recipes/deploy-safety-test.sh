@@ -49,6 +49,7 @@ expect_eq() {
 
 expect_ok "beta default safety" assert_deployment_configuration_safe beta
 expect_ok "production default safety" assert_deployment_configuration_safe production
+expect_ok "beta infra DNS cluster default is safe" assert_beta_infra_cluster_dns_scope_safe
 
 expect_fail "beta site URL cannot point at production" \
   env FISHYSTUFF_BETA_SITE_BASE_URL=https://fishystuff.fish/ bash -c \
@@ -77,6 +78,18 @@ expect_fail "production Dolt branch cannot be beta" \
 expect_fail "production control target cannot use beta mgmt-root" \
   env FISHYSTUFF_PRODUCTION_CONTROL_TARGET=mgmt-root bash -c \
     'source scripts/recipes/lib/common.sh; assert_deployment_configuration_safe production'
+
+expect_fail "beta infra DNS cluster cannot be dotted" \
+  env FISHYSTUFF_HETZNER_CLUSTER=fishystuff.fish bash -c \
+    'source scripts/recipes/lib/common.sh; assert_beta_infra_cluster_dns_scope_safe'
+
+expect_fail "beta infra DNS cluster cannot be production" \
+  env FISHYSTUFF_HETZNER_CLUSTER=production bash -c \
+    'source scripts/recipes/lib/common.sh; assert_beta_infra_cluster_dns_scope_safe'
+
+expect_fail "beta infra DNS cluster cannot be api" \
+  env FISHYSTUFF_HETZNER_CLUSTER=api bash -c \
+    'source scripts/recipes/lib/common.sh; assert_beta_infra_cluster_dns_scope_safe'
 
 expect_fail "beta resident manifest cannot carry prod host" \
   bash -c 'source scripts/recipes/lib/common.sh; assert_resident_push_scope_safe beta root@beta.fishystuff.fish root@telemetry.beta.fishystuff.fish site-nbg1-beta telemetry-nbg1 site-nbg1-prod https://beta.fishystuff.fish https://api.beta.fishystuff.fish https://cdn.beta.fishystuff.fish https://telemetry.beta.fishystuff.fish beta'

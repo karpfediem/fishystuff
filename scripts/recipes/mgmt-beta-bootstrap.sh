@@ -15,6 +15,8 @@ prometheus="$(normalize_named_arg prometheus "${6-false}")"
 prometheus_listen="$(normalize_named_arg prometheus_listen "${7-127.0.0.1:9233}")"
 pprof_path="$(normalize_named_arg pprof_path "${8-}")"
 
+assert_beta_infra_cluster_dns_scope_safe
+
 FISHYSTUFF_HETZNER_STATE="$state" \
   secretspec run --profile beta-deploy -- \
   bash -lc '

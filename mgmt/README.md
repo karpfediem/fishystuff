@@ -131,6 +131,9 @@ Safety defaults:
 - `mgmt/main.mcl` defaults `FISHYSTUFF_HETZNER_HTTP01_HOST` to empty, so
   public port `80` stays closed unless you explicitly target a host for an
   `http-01` issuance window
+- beta DNS automation may use DNS-01 Cloudflare credentials today, but the graph
+  refuses dotted or production-looking cluster labels before it can manage DNS
+  records
 - destructive rebuilds remain blocked unless
   `FISHYSTUFF_HETZNER_ALLOW_REBUILD=ifneeded` is set explicitly
 

@@ -32,6 +32,11 @@ remote deploy can push closures or run mgmt:
 - Beta and production use different SSH keys. The beta key must not be
   authorized on production hosts, and the production key must not be authorized
   on beta hosts.
+- Beta still uses DNS-01 for TLS today, so its Cloudflare token is a known
+  parent-zone authority until DNS automation is split. The beta infrastructure
+  graph must therefore keep managed DNS names under safe beta cluster labels and
+  refuses dotted or production-looking cluster labels such as `fishystuff.fish`,
+  `production`, `api`, `cdn`, or `telemetry`.
 - Production resident access defaults to `root@fishystuff.fish` after DNS
   cutover; Hetzner host discovery is only a special-case override path.
 - Production control defaults to the production site target after DNS cutover;
@@ -87,10 +92,9 @@ directly.
 
 Remaining hardening work:
 
-- Ensure the production host only has the production deploy public key in its
-  authorized keys, and beta hosts only have the beta deploy public key.
 - Keep beta and production on separate hosts/service sets. Do not share telemetry
   or operator/control services between beta and production.
-- Scope Cloudflare tokens so beta can never edit production records.
+- Split DNS mutation authority so beta DNS-01 can no longer carry parent-zone
+  authority over production records.
 - Move the long-term deployment path to the GitOps desired-state model with
   exact release identities and admission gates.
