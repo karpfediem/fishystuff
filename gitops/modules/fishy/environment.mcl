@@ -1,4 +1,5 @@
 import "fmt"
+import "iter"
 
 import "activation.mcl" as fishy_activation
 import "admission.mcl" as fishy_admission
@@ -116,6 +117,7 @@ class single_host($st) {
 	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
 	$retained_releases []str = $environment->retained_releases || $empty_list
 	$retained_release_ids_json = fishy_json.string_list($retained_releases)
+	$retained_dolt_status_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $retained_release_id) }))
 	$has_rollback_readiness = len($retained_releases) > 0
 	$dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $active_release_id)
 	$dolt_admission_exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment_name, $active_release_id)
@@ -356,6 +358,7 @@ class single_host($st) {
 		site_content => $active_site_artifact->store_path,
 		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
 		retained_release_ids_json => $retained_release_ids_json,
+		retained_dolt_status_paths_json => $retained_dolt_status_paths_json,
 		admission_state => $admission_state,
 		served => $served,
 	})
@@ -384,6 +387,7 @@ class single_host($st) {
 		dolt_cache_dir => $active_dolt_cache_dir,
 		dolt_release_ref => $active_dolt_release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
+		retained_dolt_status_paths_json => $retained_dolt_status_paths_json,
 		served => $served,
 		failure_reason => if $admission_failed { "admission_failed" } else { "" },
 	})
