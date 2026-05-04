@@ -95,6 +95,10 @@ deploy deployment *services:
 deploy-safety-check deployment:
   bash scripts/recipes/deploy-safety-check.sh "{{deployment}}"
 
+# Report the local deploy authority boundary without contacting remote hosts.
+deploy-authority-check deployment *services:
+  bash scripts/recipes/deploy-authority-check.sh "{{deployment}}" {{services}}
+
 # Run local deploy safety guard regression tests.
 deploy-safety-test:
   bash scripts/recipes/deploy-safety-test.sh

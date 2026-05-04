@@ -50,12 +50,20 @@ Run a local-only preflight with:
 ```sh
 just deploy-safety-check beta
 just deploy-safety-check production
+just deploy-authority-check beta
+just deploy-authority-check production
 just deploy-safety-test
 ```
 
 This does not contact remote hosts. The actual deploy path repeats the same
 configuration checks and then performs the remote hostname identity check before
 copying closures or applying the resident graph.
+
+`deploy-authority-check` is the more explicit operator view. It prints the
+SecretSpec profile, expected host identities, SSH targets, Dolt branch, public
+URLs, TLS/DNS mode, selected mutating services, resident bundle services, and
+smoke mode that a matching deploy would use. It does not load secrets, SSH,
+query DNS, run mgmt, copy closures, or mutate infrastructure.
 
 After a deploy, `just smoke <deployment>` checks more than basic HTTP liveness:
 it verifies the generated runtime config points at that deployment's site/API/CDN

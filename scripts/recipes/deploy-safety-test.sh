@@ -47,6 +47,14 @@ expect_eq() {
   exit 1
 }
 
+authority_value() {
+  local deployment="$1"
+  local key="$2"
+  shift 2
+  bash scripts/recipes/deploy-authority-check.sh "$deployment" "$@" \
+    | awk -F': ' -v key="$key" '$1 == key { print $2; found = 1 } END { exit found ? 0 : 1 }'
+}
+
 expect_ok "beta default safety" assert_deployment_configuration_safe beta
 expect_ok "production default safety" assert_deployment_configuration_safe production
 expect_ok "beta infra DNS cluster default is safe" assert_beta_infra_cluster_dns_scope_safe
@@ -110,6 +118,19 @@ expect_eq "production control target defaults to production site" "root@fishystu
 expect_eq "production default services stay lightweight" $'api\ndolt\nedge\nsite\ncdn\nvector' "$(deployment_default_services production)"
 expect_eq "production default mutating services stay lightweight" $'api\ndolt\nedge\nsite' "$(deployment_default_mutating_services production)"
 expect_eq "production resident bundle services stay lightweight" $'api\ndolt\nedge' "$(deployment_resident_bundle_services production)"
+expect_eq "beta authority check profile" "beta-deploy" "$(authority_value beta secretspec_profile)"
+expect_eq "beta authority check Dolt branch" "beta" "$(authority_value beta dolt_remote_branch)"
+expect_eq "beta authority check DNS-01 risk is explicit" "accepted_parent_zone_scope_until_split" "$(authority_value beta dns_mutation_authority_risk)"
+expect_eq "production authority check profile" "production-deploy" "$(authority_value production secretspec_profile)"
+expect_eq "production authority check Dolt branch" "main" "$(authority_value production dolt_remote_branch)"
+expect_eq "production authority check default services are lightweight" "api,dolt,edge,site" "$(authority_value production selected_mutating_services)"
+expect_eq "explicit site deploy expands edge/site/cdn" "edge,site,cdn" "$(authority_value beta selected_mutating_services site)"
+
+expect_fail "authority check refuses API without Dolt" \
+  bash scripts/recipes/deploy-authority-check.sh beta api
+
+expect_eq "authority check allows documented API with active Dolt" "true" \
+  "$(authority_value beta api_with_active_dolt api --allow-api-with-active-dolt --reason 'inspection only')"
 
 expect_ok "bundled resident beta manifest has safe target identity" \
   jq -e '
