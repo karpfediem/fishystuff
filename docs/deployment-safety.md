@@ -52,6 +52,14 @@ This does not contact remote hosts. The actual deploy path repeats the same
 configuration checks and then performs the remote hostname identity check before
 copying closures or applying the resident graph.
 
+After a deploy, `just smoke <deployment>` checks more than basic HTTP liveness:
+it verifies the generated runtime config points at that deployment's site/API/CDN
+and telemetry origins, the site HTML carries generated CSP and SRI metadata, the
+asset manifest contains SRI entries, and the CDN runtime manifest points at
+available content-hashed JS/WASM assets. For remote deployments it also verifies
+that mutable runtime pointers are `no-store` while hashed map runtime JS/WASM
+assets are served with immutable cache headers.
+
 The key boundary can be verified with:
 
 ```sh

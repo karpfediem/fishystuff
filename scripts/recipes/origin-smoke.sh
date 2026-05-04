@@ -4,8 +4,11 @@ set -euo pipefail
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
+RECIPE_SMOKE_LOG_PREFIX="origin-smoke"
+source "${SCRIPT_DIR}/lib/http-smoke.sh"
 
 cd "$RECIPE_REPO_ROOT"
+trap smoke_cleanup_temp_files EXIT
 
 deployment="${1-}"
 origin_ipv4="${2:-${FISHYSTUFF_ORIGIN_SMOKE_IPV4:-${FISHYSTUFF_SMOKE_ORIGIN_IPV4:-}}}"
@@ -80,47 +83,65 @@ probe() {
   local name="$1"
   local url="$2"
   local expected="${3:-200}"
-  local tmp_body
-  local http_code
   local resolve
 
-  tmp_body="$(mktemp /tmp/fishystuff-origin-smoke.XXXXXX)"
   resolve="$(resolve_for_url "$url")"
-  http_code="$(
-    curl -sS \
-      --max-time 60 \
-      --connect-timeout 10 \
-      --resolve "$resolve" \
-      --output "$tmp_body" \
-      --write-out '%{http_code}' \
-      "$url" 2>"$tmp_body.err" || true
-  )"
-  if [[ "$http_code" == "$expected" ]]; then
-    rm -f "$tmp_body" "$tmp_body.err"
-    return 0
-  fi
+  smoke_fetch "$name through $origin_ipv4" "$url" "$expected" "$resolve"
+}
 
-  printf '[origin-smoke] %s failed through %s: expected HTTP %s, got %s\n' "$name" "$origin_ipv4" "$expected" "${http_code:-curl-error}" >&2
-  if [[ -s "$tmp_body.err" ]]; then
-    sed -n '1,20p' "$tmp_body.err" >&2
-  fi
-  if [[ -s "$tmp_body" ]]; then
-    head -c 2000 "$tmp_body" >&2
-    printf '\n' >&2
-  fi
-  rm -f "$tmp_body" "$tmp_body.err"
-  return 1
+probe_site_contract() {
+  probe "site homepage" "$site_base_url/" || return 1
+  smoke_assert_site_html_contract "$deployment" "$SMOKE_LAST_BODY" || return 1
+  smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "site homepage cache policy" || return 1
+
+  probe "site runtime config" "$site_base_url/runtime-config.js" || return 1
+  smoke_assert_runtime_config_contract "$deployment" "$SMOKE_LAST_BODY" || return 1
+  smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "runtime config cache policy" || return 1
+
+  probe "site asset manifest" "$site_base_url/asset-manifest.json" || return 1
+  smoke_assert_asset_manifest_contract "$SMOKE_LAST_BODY" || {
+    echo "[origin-smoke] site asset manifest failed integrity contract" >&2
+    return 1
+  }
+  smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "asset manifest cache policy" || return 1
+}
+
+probe_cdn_runtime_contract() {
+  local manifest_body=""
+  local module_path=""
+  local wasm_path=""
+  local module_url=""
+  local wasm_url=""
+
+  probe "cdn runtime manifest" "$cdn_base_url/map/runtime-manifest.json" || return 1
+  manifest_body="$SMOKE_LAST_BODY"
+  smoke_assert_cdn_runtime_manifest_contract "$manifest_body" || {
+    echo "[origin-smoke] cdn runtime manifest failed module/wasm contract" >&2
+    return 1
+  }
+  smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "cdn runtime manifest cache policy" || return 1
+
+  module_path="$(jq -er '.module' "$manifest_body")"
+  wasm_path="$(jq -er '.wasm' "$manifest_body")"
+  module_url="$(smoke_join_url "$cdn_base_url/map" "$module_path")"
+  wasm_url="$(smoke_join_url "$cdn_base_url/map" "$wasm_path")"
+
+  probe "cdn runtime module" "$module_url" || return 1
+  smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn runtime module cache policy" || return 1
+
+  probe "cdn runtime wasm" "$wasm_url" || return 1
+  smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn runtime wasm cache policy" || return 1
 }
 
 run_once() {
   local failed=0
-  probe "site homepage" "$site_base_url/" || failed=1
+  probe_site_contract || failed=1
   probe "api healthz" "$api_base_url/healthz" || failed=1
   probe "api readyz" "$api_base_url/readyz" || failed=1
   probe "api meta" "$api_base_url/api/v1/meta" || failed=1
   probe "calculator catalog" "$api_base_url/api/v1/calculator?lang=en" || failed=1
   probe "calculator datastar init" "$api_base_url/api/v1/calculator/datastar/init?lang=en&locale=en-US" || failed=1
-  probe "cdn runtime manifest" "$cdn_base_url/map/runtime-manifest.json" || failed=1
+  probe_cdn_runtime_contract || failed=1
   return "$failed"
 }
 

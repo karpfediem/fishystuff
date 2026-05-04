@@ -4,8 +4,10 @@ set -euo pipefail
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/http-smoke.sh"
 
 cd "$RECIPE_REPO_ROOT"
+trap smoke_cleanup_temp_files EXIT
 
 deployment="${1-}"
 require_value "$deployment" "usage: smoke.sh <deployment>"
@@ -15,16 +17,19 @@ case "$deployment" in
   local)
     api_base_url="$(deployment_public_base_url "$deployment" "api")"
     site_base_url="$(deployment_public_base_url "$deployment" "site")"
+    cdn_base_url="$(deployment_public_base_url "$deployment" "cdn")"
     ;;
   *)
     assert_deployment_public_urls_safe "$deployment"
     api_base_url="$(deployment_public_base_url "$deployment" "api")"
     site_base_url="$(deployment_public_base_url "$deployment" "site")"
+    cdn_base_url="$(deployment_public_base_url "$deployment" "cdn")"
     ;;
 esac
 
 api_base_url="${api_base_url%/}"
 site_base_url="${site_base_url%/}"
+cdn_base_url="${cdn_base_url%/}"
 timeout_secs="${FISHYSTUFF_SMOKE_TIMEOUT_SECS:-900}"
 interval_secs="${FISHYSTUFF_SMOKE_INTERVAL_SECS:-5}"
 started_at="$(date +%s)"
@@ -33,43 +38,75 @@ probe() {
   local name="$1"
   local url="$2"
   local expected="${3:-200}"
-  local tmp_body
-  local http_code
 
-  tmp_body="$(mktemp /tmp/fishystuff-smoke.XXXXXX)"
-  http_code="$(
-    curl -sS \
-      --max-time 60 \
-      --connect-timeout 10 \
-      --output "$tmp_body" \
-      --write-out '%{http_code}' \
-      "$url" 2>"$tmp_body.err" || true
-  )"
-  if [[ "$http_code" == "$expected" ]]; then
-    rm -f "$tmp_body" "$tmp_body.err"
-    return 0
+  smoke_fetch "$name" "$url" "$expected"
+}
+
+probe_site_contract() {
+  smoke_fetch "site homepage" "$site_base_url/" || return 1
+  smoke_assert_site_html_contract "$deployment" "$SMOKE_LAST_BODY" || return 1
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "site homepage cache policy" || return 1
   fi
 
-  printf '[smoke] %s failed: expected HTTP %s, got %s\n' "$name" "$expected" "${http_code:-curl-error}" >&2
-  if [[ -s "$tmp_body.err" ]]; then
-    sed -n '1,20p' "$tmp_body.err" >&2
+  smoke_fetch "site runtime config" "$site_base_url/runtime-config.js" || return 1
+  smoke_assert_runtime_config_contract "$deployment" "$SMOKE_LAST_BODY" || return 1
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "runtime config cache policy" || return 1
   fi
-  if [[ -s "$tmp_body" ]]; then
-    head -c 2000 "$tmp_body" >&2
-    printf '\n' >&2
+
+  smoke_fetch "site asset manifest" "$site_base_url/asset-manifest.json" || return 1
+  smoke_assert_asset_manifest_contract "$SMOKE_LAST_BODY" || {
+    echo "[smoke] site asset manifest failed integrity contract" >&2
+    return 1
+  }
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "asset manifest cache policy" || return 1
   fi
-  rm -f "$tmp_body" "$tmp_body.err"
-  return 1
+}
+
+probe_cdn_runtime_contract() {
+  local manifest_body=""
+  local module_path=""
+  local wasm_path=""
+  local module_url=""
+  local wasm_url=""
+
+  smoke_fetch "cdn runtime manifest" "$cdn_base_url/map/runtime-manifest.json" || return 1
+  manifest_body="$SMOKE_LAST_BODY"
+  smoke_assert_cdn_runtime_manifest_contract "$manifest_body" || {
+    echo "[smoke] cdn runtime manifest failed module/wasm contract" >&2
+    return 1
+  }
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "cdn runtime manifest cache policy" || return 1
+  fi
+
+  module_path="$(jq -er '.module' "$manifest_body")"
+  wasm_path="$(jq -er '.wasm' "$manifest_body")"
+  module_url="$(smoke_join_url "$cdn_base_url/map" "$module_path")"
+  wasm_url="$(smoke_join_url "$cdn_base_url/map" "$wasm_path")"
+
+  smoke_fetch "cdn runtime module" "$module_url" || return 1
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn runtime module cache policy" || return 1
+  fi
+
+  smoke_fetch "cdn runtime wasm" "$wasm_url" || return 1
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn runtime wasm cache policy" || return 1
+  fi
 }
 
 run_once() {
   local failed=0
-  probe "site homepage" "$site_base_url/" || failed=1
+  probe_site_contract || failed=1
   probe "api healthz" "$api_base_url/healthz" || failed=1
   probe "api readyz" "$api_base_url/readyz" || failed=1
   probe "api meta" "$api_base_url/api/v1/meta" || failed=1
   probe "calculator catalog" "$api_base_url/api/v1/calculator?lang=en" || failed=1
   probe "calculator datastar init" "$api_base_url/api/v1/calculator/datastar/init?lang=en&locale=en-US" || failed=1
+  probe_cdn_runtime_contract || failed=1
   return "$failed"
 }
 
