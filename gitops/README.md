@@ -109,7 +109,7 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 
 `gitops-served-caddy-handoff-vm` boots one local NixOS VM, runs Caddy against the VM-local served site/CDN symlink roots, and then changes the served desired state. It proves the future Caddy-facing handoff shape can serve the selected release and then observe the next selected release through stable symlink roots without restarting Caddy.
 
-`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the route selection document.
+`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the route selection and rollback readiness documents.
 
 `gitops-failed-candidate-vm` boots a local NixOS VM with a failed admission fixture and `serve: false`. It proves candidate failure is status, not activation: instance/admission/status are published, but no active selection or served symlinks are created.
 
@@ -346,11 +346,14 @@ Local active selection is written only when a VM/local desired state is explicit
 /var/lib/fishystuff/gitops-test/served/<environment>/site
 /var/lib/fishystuff/gitops-test/served/<environment>/cdn
 /run/fishystuff/gitops-test/routes/<environment>.json
+/var/lib/fishystuff/gitops-test/rollback/<environment>.json
 ```
 
 The active selection document includes the desired generation that selected the served symlinks so route state can be correlated with the desired-state object that produced it.
 
 The route selection document is the local-only handoff shape for future Caddy integration. It records the selected release, the active selection document path, and the stable site/CDN symlink roots that Caddy would serve, without starting or reloading Caddy in VM tests. The route document is declared after the active selection so a future file-watching edge does not observe a selected route before the active symlinks and active JSON exist.
+
+The rollback readiness document records the primary retained rollback release, currently the first `retained_releases` entry, with its exact API, Dolt service, site, CDN runtime, Dolt commit, and release identity tuple. This keeps rollback availability explicit instead of inferring it from an operator's memory of the desired-state object.
 
 KV publication can be added later when the status consumer is clear.
 

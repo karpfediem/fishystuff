@@ -110,7 +110,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-served-caddy-handoff-vm` boots a local NixOS VM, runs Caddy against `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, and runs two served desired states in sequence. It checks that Caddy serves the previous release, retained previous CDN assets, the candidate release, and retained candidate CDN assets through stable symlink roots without restarting Caddy.
 
-`gitops-served-rollback-transition-vm` boots a local NixOS VM and runs a served candidate desired state followed by a rollback desired state. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}` and the route selection document move back to the previous release and that the rollback CDN serving root retains the candidate CDN root for stale clients.
+`gitops-served-rollback-transition-vm` boots a local NixOS VM and runs a served candidate desired state followed by a rollback desired state. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, the route selection document, and the rollback readiness document move back to the previous release and that the rollback CDN serving root retains the candidate CDN root for stale clients.
 
 `gitops-failed-candidate-vm` boots a local NixOS VM with a deterministic failed admission fixture. It checks that a failed non-serving candidate still publishes candidate, admission, and status facts, records `failure_reason: admission_failed`, and does not create an active selection or served symlinks.
 

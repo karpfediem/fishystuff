@@ -1,0 +1,61 @@
+import "fmt"
+import "json.mcl" as fishy_json
+
+class readiness($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$environment str = $st->environment
+	$host str = $st->host
+	$current_release_id str = $st->current_release_id
+	$current_release_identity str = $st->current_release_identity || ""
+	$rollback_release_id str = $st->rollback_release_id || ""
+	$rollback_release_identity str = $st->rollback_release_identity || ""
+	$rollback_api_bundle str = $st->rollback_api_bundle || ""
+	$rollback_dolt_service_bundle str = $st->rollback_dolt_service_bundle || ""
+	$rollback_site_content str = $st->rollback_site_content || ""
+	$rollback_cdn_runtime_content str = $st->rollback_cdn_runtime_content || ""
+	$rollback_dolt_commit str = $st->rollback_dolt_commit || ""
+	$served bool = $st->served || false
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
+	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
+	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$rollback_dir = fmt.printf("%s/rollback", $state_dir)
+	$rollback_path = fmt.printf("%s/%s.json", $rollback_dir, $environment)
+	$rollback_available = $served and ($rollback_release_id != "")
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"current_release_id\": %s,\n  \"current_release_identity\": %s,\n  \"rollback_release_id\": %s,\n  \"rollback_release_identity\": %s,\n  \"rollback_api_bundle\": %s,\n  \"rollback_dolt_service_bundle\": %s,\n  \"rollback_site_content\": %s,\n  \"rollback_cdn_runtime_content\": %s,\n  \"rollback_dolt_commit\": %s,\n  \"rollback_available\": %t,\n  \"rollback_state\": \"retained_hot_release\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($current_release_id), fishy_json.quote($current_release_identity), fishy_json.quote($rollback_release_id), fishy_json.quote($rollback_release_identity), fishy_json.quote($rollback_api_bundle), fishy_json.quote($rollback_dolt_service_bundle), fishy_json.quote($rollback_site_content), fishy_json.quote($rollback_cdn_runtime_content), fishy_json.quote($rollback_dolt_commit), $rollback_available)
+
+	panic($environment == "", "rollback readiness requires environment")
+	panic($desired_generation == 0, "rollback readiness requires desired_generation")
+	panic($host == "", "rollback readiness requires host")
+	panic($current_release_id == "", "rollback readiness requires current_release_id")
+	panic($current_release_identity == "", "rollback readiness requires current_release_identity")
+	panic($served and ($rollback_release_id == ""), "served rollback readiness requires rollback_release_id")
+	panic($served and ($rollback_release_identity == ""), "served rollback readiness requires rollback_release_identity")
+	panic($served and ($rollback_api_bundle == ""), "served rollback readiness requires rollback api bundle")
+	panic($served and ($rollback_dolt_service_bundle == ""), "served rollback readiness requires rollback dolt service bundle")
+	panic($served and ($rollback_site_content == ""), "served rollback readiness requires rollback site content")
+	panic($served and ($rollback_cdn_runtime_content == ""), "served rollback readiness requires rollback CDN runtime content")
+	panic($served and ($rollback_dolt_commit == ""), "served rollback readiness requires rollback Dolt commit")
+
+	if $write_local_state {
+		if $rollback_available {
+			file "${rollback_dir}/" {
+				state => "exists",
+				recurse => true,
+				mode => "0755",
+			}
+
+			file "${rollback_path}" {
+				state => "exists",
+				content => $content,
+				mode => "0644",
+			}
+
+			File["${rollback_dir}/"] -> File["${rollback_path}"]
+		} else {
+			file "${rollback_path}" {
+				state => "absent",
+			}
+		}
+	}
+}

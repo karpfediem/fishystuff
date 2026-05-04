@@ -6,6 +6,7 @@ import "dolt.mcl" as fishy_dolt
 import "instance.mcl" as fishy_instance
 import "json.mcl" as fishy_json
 import "route.mcl" as fishy_route
+import "rollback.mcl" as fishy_rollback
 import "status.mcl" as fishy_status
 
 class single_host($st) {
@@ -121,6 +122,7 @@ class single_host($st) {
 	$dolt_status_path = fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $active_release_id)
 	$status_path = fmt.printf("%s/status/%s.json", $vm_state_dir, $environment_name)
 	$active_path = fmt.printf("%s/active/%s.json", $vm_state_dir, $environment_name)
+	$rollback_path = fmt.printf("%s/rollback/%s.json", $vm_state_dir, $environment_name)
 	$route_path = fmt.printf("%s/routes/%s.json", $vm_run_dir, $environment_name)
 
 	panic($environment_name == "", "environment requires a name")
@@ -158,6 +160,24 @@ class single_host($st) {
 		$retained_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["site"] || $empty_artifact
 		$retained_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["cdn_runtime"] || $empty_artifact
 		$retained_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $retained_release->closures["dolt_service"] || $empty_artifact
+		$retained_release_identity str = if $retained_release->generation == 0 {
+			""
+		} else {
+			fmt.printf(
+				"release=%s;generation=%d;git_rev=%s;dolt_commit=%s;dolt_repository=%s;dolt_branch_context=%s;dolt_mode=%s;api=%s;site=%s;cdn_runtime=%s;dolt_service=%s",
+				$retained_release_id,
+				$retained_release->generation,
+				$retained_release->git_rev,
+				$retained_release->dolt_commit,
+				$retained_dolt->repository,
+				$retained_dolt->branch_context,
+				$retained_dolt->mode,
+				$retained_api_artifact->store_path,
+				$retained_site_artifact->store_path,
+				$retained_cdn_runtime_artifact->store_path,
+				$retained_dolt_service_artifact->store_path
+			)
+		}
 
 		panic($retained_release->generation == 0, fmt.printf("environment %s retained release %s is missing from releases", $environment_name, $retained_release_id))
 		panic($retained_release->dolt_commit != $retained_dolt->commit, fmt.printf("environment %s retained release %s dolt_commit must match dolt.commit", $environment_name, $retained_release_id))
@@ -172,6 +192,25 @@ class single_host($st) {
 			retained_release_id => $retained_release_id,
 			retained_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
 		})
+
+		if $index == 0 {
+			include fishy_rollback.readiness(struct {
+				mode => $mode,
+				desired_generation => $desired_generation,
+				environment => $environment_name,
+				host => $host->hostname,
+				current_release_id => $active_release_id,
+				current_release_identity => $active_release_identity,
+				rollback_release_id => $retained_release_id,
+				rollback_release_identity => $retained_release_identity,
+				rollback_api_bundle => $retained_api_artifact->store_path,
+				rollback_dolt_service_bundle => $retained_dolt_service_artifact->store_path,
+				rollback_site_content => $retained_site_artifact->store_path,
+				rollback_cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
+				rollback_dolt_commit => $retained_dolt->commit,
+				served => $served,
+			})
+		}
 	}
 
 	include fishy_dolt.materialization(struct {
@@ -293,11 +332,13 @@ class single_host($st) {
 			Exec["${dolt_exec_name}"] -> Exec["${dolt_admission_exec_name}"]
 			Exec["${dolt_admission_exec_name}"] -> File["${status_path}"]
 			Exec["${dolt_admission_exec_name}"] -> File["${active_path}"]
+			Exec["${dolt_admission_exec_name}"] -> File["${rollback_path}"]
 			Exec["${dolt_admission_exec_name}"] -> File["${route_path}"]
 		} else {
 			Exec["${dolt_exec_name}"] -> File["${admission_path}"]
 			Exec["${dolt_exec_name}"] -> File["${status_path}"]
 			Exec["${dolt_exec_name}"] -> File["${active_path}"]
+			Exec["${dolt_exec_name}"] -> File["${rollback_path}"]
 			Exec["${dolt_exec_name}"] -> File["${route_path}"]
 		}
 	}
