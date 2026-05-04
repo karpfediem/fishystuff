@@ -149,6 +149,16 @@ class single_host($st) {
 	panic($environment->serve and ($active_dolt_service_artifact->store_path == ""), fmt.printf("environment %s serving active release requires dolt_service store_path", $environment_name))
 
 	for $index, $retained_release_id in $retained_releases {
+		if $retained_release_id == $active_release_id {
+			panic(fmt.printf("environment %s retained release %s must not also be active_release", $environment_name, $retained_release_id))
+		}
+
+		for $other_index, $other_retained_release_id in $retained_releases {
+			if ($other_index > $index) and ($other_retained_release_id == $retained_release_id) {
+				panic(fmt.printf("environment %s retained release %s is listed more than once", $environment_name, $retained_release_id))
+			}
+		}
+
 		$retained_release struct{
 			generation int;
 			git_rev str;

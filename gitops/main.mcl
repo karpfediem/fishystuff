@@ -65,6 +65,23 @@ $enabled_environment_keys = iter.filter(map.keys($environments), func($environme
 	$environments[$environment_name]->enabled
 })
 
+for $index, $environment_name in $enabled_environment_keys {
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; query str; expected_scalar str}} = $environments[$environment_name]
+	$retained_releases []str = $environment->retained_releases || $empty_list
+
+	for $retained_index, $retained_release_id in $retained_releases {
+		if $retained_release_id == $environment->active_release {
+			panic(fmt.printf("environment %s retained release %s must not also be active_release", $environment_name, $retained_release_id))
+		}
+
+		for $other_retained_index, $other_retained_release_id in $retained_releases {
+			if ($other_retained_index > $retained_index) and ($other_retained_release_id == $retained_release_id) {
+				panic(fmt.printf("environment %s retained release %s is listed more than once", $environment_name, $retained_release_id))
+			}
+		}
+	}
+}
+
 for $index, $release_id in map.keys($releases) {
 	$release struct{
 		generation int;

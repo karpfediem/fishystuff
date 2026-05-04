@@ -38,8 +38,10 @@ nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
+nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
+nix build .#checks.x86_64-linux.gitops-active-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
@@ -74,6 +76,7 @@ just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test no-retained-release-refusal
+just gitops-vm-test active-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
@@ -130,11 +133,15 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-no-retained-release-refusal` boots a local NixOS VM and checks that `serve: true` must include at least one retained rollback release before the graph can publish candidate, admission, status, or active state.
 
+`gitops-active-retained-release-refusal` checks that a hand-written desired-state file that lists the active release as retained cannot publish candidate, status, active, route, or rollback state.
+
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 
 `gitops-desired-state-vm-serve-fixture` type-checks a generated local `vm-test` serving desired-state package. It uses tiny local store artifacts and verifies the generator emits `serve: true` only with API, Dolt service, site, and finalized CDN runtime closures present.
 
 `gitops-desired-state-serve-without-retained-refusal` checks that the generated desired-state helper refuses to emit serving JSON unless at least one retained rollback release is provided.
+
+`gitops-desired-state-active-retained-refusal` checks that the generated desired-state helper refuses to emit a rollback set that includes the active release.
 
 `gitops-raw-cdn-serve-refusal` boots a local NixOS VM and checks the negative path: a serving desired state with `cdn_runtime` pointed at a raw runtime directory must fail before activation because it lacks `cdn-serving-manifest.json`.
 

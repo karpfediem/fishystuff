@@ -571,6 +571,44 @@
               test "${if attempted.success then "success" else "failure"}" = "failure"
               touch "$out"
             '';
+          gitopsDesiredStateActiveRetainedCheck =
+            let
+              attempted = builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+                cluster = "local-test";
+                environment = "local-test";
+                hostKey = "vm-single-host";
+                activeRelease = "candidate-release";
+                generation = 9;
+                releaseGeneration = 9;
+                gitRev = "active-retained-fixture";
+                doltCommit = "active-retained-fixture";
+                doltBranchContext = "local-test";
+                apiClosure = gitopsDesiredStateServeFixtureApi;
+                siteClosure = gitopsDesiredStateServeFixtureSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+                retainedReleaseObjects = [
+                  {
+                    releaseId = "candidate-release";
+                    generation = 8;
+                    gitRev = "active-retained-fixture-previous";
+                    doltCommit = "active-retained-fixture-previous";
+                    apiClosure = gitopsDesiredStateServeFixturePreviousApi;
+                    siteClosure = gitopsDesiredStateServeFixturePreviousSite;
+                    cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
+                    doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
+                  }
+                ];
+                mode = "vm-test";
+                serve = true;
+              }) true);
+            in
+            pkgs.runCommand "gitops-desired-state-active-retained-check" { } ''
+              set -euo pipefail
+
+              test "${if attempted.success then "success" else "failure"}" = "failure"
+              touch "$out"
+            '';
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
             tag = "latest";
@@ -628,6 +666,7 @@
               cdn-required-files = cdnRequiredFilesCheck;
               fishystuff-deploy-tests = fishystuffDeployTests;
               gitops-desired-state-admission-probe = gitopsDesiredStateAdmissionProbeCheck;
+              gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               gitops-desired-state-serve-without-retained-refusal = gitopsDesiredStateServeWithoutRetainedCheck;
               gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;

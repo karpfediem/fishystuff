@@ -43,6 +43,7 @@ just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test no-retained-release-refusal
+just gitops-vm-test active-retained-release-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
@@ -79,8 +80,10 @@ nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
+nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
+nix build .#checks.x86_64-linux.gitops-active-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
@@ -97,6 +100,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-desired-state-admission-probe` proves the generated desired-state helper can emit `admission_probe.kind = "dolt_sql_scalar"` for a VM-only `fetch_pin` candidate and still unify through `gitops/main.mcl`. It does not run the probe or contact a remote.
 
 `gitops-desired-state-serve-without-retained-refusal` proves the generated desired-state helper refuses `serve: true` without at least one retained rollback release.
+
+`gitops-desired-state-active-retained-refusal` proves the generated desired-state helper refuses a retained rollback set that includes the active release.
 
 `gitops-dolt-fetch-pin-vm` boots one local NixOS VM, creates a local file-backed Dolt remote, and reconciles a `fetch_pin` desired state against it. The test first pins commit 1 in a persistent VM-local cache, then pushes commit 2 to the same local remote and changes desired state. It verifies the existing cache is fetched forward, the release ref points at the exact desired commit, and no `.dolt` snapshot/full closure path is used.
 
@@ -129,6 +134,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-missing-retained-release-refusal` proves retained rollback release IDs are not informational labels: each retained ID must reference a release object before candidate/admission/status/active state can be published.
 
 `gitops-no-retained-release-refusal` proves serving is refused when no rollback release is retained.
+
+`gitops-active-retained-release-refusal` proves a hand-written desired-state file that lists the active release as retained cannot publish candidate, status, active, route, or rollback state.
 
 `gitops-raw-cdn-serve-refusal` is a negative VM check. It proves a `serve: true` desired state cannot pass admission when `cdn_runtime` points at a raw runtime directory instead of a finalized CDN serving root with `cdn-serving-manifest.json`.
 
@@ -263,7 +270,7 @@ Dolt cache state is not itself a release artifact. A release artifact names the 
 
 The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can point at directly. For real deployments this should be built from the current CDN content plus retained immutable assets from prior CDN roots, for example with `.#cdn-serving-root` or an equivalent derivation constructed from exact store paths. The `cdn-serving-root` derivation validates the current root's runtime manifest when present and refuses a root whose selected JS/WASM files are missing. The GitOps graph should receive that final store path as desired state; it should not infer prior roots from a mutable remote host during activation. Serving admission requires this root to include `cdn-serving-manifest.json`, which records the current root and retained roots. When the desired environment retains rollback releases, serving admission checks that the active CDN serving manifest accounts for the CDN root required by each retained release. If a retained release's `cdn_runtime` is itself a serving root, admission checks its recorded `current_root`; otherwise it checks the retained `cdn_runtime` path directly.
 
-`retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Each retained ID must reference a release object in desired state, and serving requires at least one retained rollback release. Activation records this list in the local active/status documents so operators can tell which rollback set was selected with the active release.
+`retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Each retained ID must reference a release object in desired state, retained IDs must be unique, and the active release must not be listed as retained. Serving requires at least one retained rollback release. Activation records this list in the local active/status documents so operators can tell which rollback set was selected with the active release.
 
 For serving desired state, both the active release and each retained rollback release must include non-empty `store_path` values for `api`, `dolt_service`, `site`, and `cdn_runtime`. In plain `vm-test` mode these paths are not realized/rooted, but they still make the exact deployment tuple explicit. `vm-test-closures` and future local/production modes can add realization and gcroot guarantees on top of the same tuple.
 

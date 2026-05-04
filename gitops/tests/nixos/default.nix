@@ -111,6 +111,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-active-retained-release-refusal = import ./active-retained-release-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-raw-cdn-serve-refusal = import ./raw-cdn-serve-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };
