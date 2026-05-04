@@ -165,6 +165,7 @@ origin_smoke_mode="public"
 if [[ "$deployment" == "production" && "${FISHYSTUFF_DEPLOY_PUBLIC_SMOKE:-false}" != "true" ]]; then
   origin_smoke_mode="origin-ip"
 fi
+remote_mutation_state="${RECIPE_DEPLOY_AUTHORITY_REMOTE_MUTATION:-none}"
 
 printf 'deployment: %s\n' "$deployment"
 printf 'authority_check: passed\n'
@@ -199,4 +200,4 @@ printf 'default_mutating_services: %s\n' "$(join_array ',' "${default_mutating_s
 printf 'resident_bundle_services: %s\n' "$(join_array ',' "${resident_bundle_services[@]}")"
 printf 'resident_manifest_service_candidates: %s\n' "$(join_array ',' "${manifest_service_candidates[@]}")"
 printf 'post_deploy_smoke_mode: %s\n' "$origin_smoke_mode"
-printf 'remote_mutation: none\n'
+printf 'remote_mutation: %s\n' "$remote_mutation_state"

@@ -64,6 +64,8 @@ SecretSpec profile, expected host identities, SSH targets, Dolt branch, public
 URLs, TLS/DNS mode, selected mutating services, resident bundle services, and
 smoke mode that a matching deploy would use. It does not load secrets, SSH,
 query DNS, run mgmt, copy closures, or mutate infrastructure.
+The deploy recipe prints the same report before it starts remote hostname
+checks, retained gcroot reads, closure copies, or resident apply.
 
 After a deploy, `just smoke <deployment>` checks more than basic HTTP liveness:
 it verifies the generated runtime config points at that deployment's site/API/CDN

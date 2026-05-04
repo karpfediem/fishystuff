@@ -121,6 +121,9 @@ expect_eq "production resident bundle services stay lightweight" $'api\ndolt\ned
 expect_eq "beta authority check profile" "beta-deploy" "$(authority_value beta secretspec_profile)"
 expect_eq "beta authority check Dolt branch" "beta" "$(authority_value beta dolt_remote_branch)"
 expect_eq "beta authority check DNS-01 risk is explicit" "accepted_parent_zone_scope_until_split" "$(authority_value beta dns_mutation_authority_risk)"
+expect_eq "authority check reports no mutation by default" "none" "$(authority_value beta remote_mutation)"
+expect_eq "authority check can report pending deploy mutation" "pending_after_report" \
+  "$(RECIPE_DEPLOY_AUTHORITY_REMOTE_MUTATION=pending_after_report authority_value beta remote_mutation)"
 expect_eq "production authority check profile" "production-deploy" "$(authority_value production secretspec_profile)"
 expect_eq "production authority check Dolt branch" "main" "$(authority_value production dolt_remote_branch)"
 expect_eq "production authority check default services are lightweight" "api,dolt,edge,site" "$(authority_value production selected_mutating_services)"

@@ -11,6 +11,7 @@ deployment="${1-}"
 require_value "$deployment" "usage: deploy.sh <deployment> [service ...]"
 deployment="$(canonical_deployment_name "$deployment")"
 shift || true
+original_deploy_args=("$@")
 allow_api_with_active_dolt=false
 allow_api_with_active_dolt_reason=""
 used_default_services=false
@@ -238,15 +239,6 @@ while (( $# > 0 )); do
   esac
 done
 
-discovered_resident_ipv4=""
-if [[ "$deployment" == "production" && -z "$resident_target" ]]; then
-  discovered_resident_ipv4="$(hetzner_server_public_ipv4 "$resident_host")"
-  resident_target="root@$discovered_resident_ipv4"
-  printf '[deploy] discovered production resident target for %s: %s\n' "$resident_host" "$resident_target" >&2
-fi
-require_value "$resident_target" "deployment $deployment does not define a resident target"
-assert_remote_deployment_hosts_for_configured_targets "$deployment" "$resident_target" "$telemetry_target" "$resident_host" "$telemetry_host" "$control_target" "$control_host"
-
 if (( ${#requested_services[@]} == 0 )); then
   used_default_services=true
   while IFS= read -r service; do
@@ -274,6 +266,19 @@ EOF
 
   printf 'warning: deploying API against active Dolt state; reason: %s\n' "$allow_api_with_active_dolt_reason" >&2
 fi
+
+printf '[deploy] authority preflight report\n' >&2
+RECIPE_DEPLOY_AUTHORITY_REMOTE_MUTATION="pending_after_report" \
+  bash "${SCRIPT_DIR}/deploy-authority-check.sh" "$deployment" "${original_deploy_args[@]}" >&2
+
+discovered_resident_ipv4=""
+if [[ "$deployment" == "production" && -z "$resident_target" ]]; then
+  discovered_resident_ipv4="$(hetzner_server_public_ipv4 "$resident_host")"
+  resident_target="root@$discovered_resident_ipv4"
+  printf '[deploy] discovered production resident target for %s: %s\n' "$resident_host" "$resident_target" >&2
+fi
+require_value "$resident_target" "deployment $deployment does not define a resident target"
+assert_remote_deployment_hosts_for_configured_targets "$deployment" "$resident_target" "$telemetry_target" "$resident_host" "$telemetry_host" "$control_target" "$control_host"
 
 readarray -t resident_services < <(deployment_resident_bundle_services "$deployment")
 backend_services=()
