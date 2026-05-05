@@ -52,10 +52,12 @@ class candidate_service($st) {
 			state => "exists",
 			content => $env_content,
 			mode => "0640",
+			Notify => Svc["${service_name}"],
 		}
 
 		svc "${service_name}" {
 			state => "running",
+			refresh_action => "try-restart",
 		}
 
 		File["${config_dir}/"] -> File["${config_path}"]
