@@ -11,7 +11,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
-      virtualisation.memorySize = 4096;
+      virtualisation.memorySize = 12288;
       environment.systemPackages = [
         mgmtPackage
         pkgs.jq

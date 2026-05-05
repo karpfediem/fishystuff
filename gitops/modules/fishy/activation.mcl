@@ -1,5 +1,6 @@
 import "fmt"
 import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
 
 class active($st) {
 	$mode str = $st->mode || "validate"
@@ -19,9 +20,8 @@ class active($st) {
 	$rollback_reason str = $st->rollback_reason || ""
 	$admission_state str = $st->admission_state || "not_run"
 	$served bool = $st->served || false
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
 	$active_dir = fmt.printf("%s/active", $state_dir)
 	$active_path = fmt.printf("%s/%s.json", $active_dir, $environment)
 	$served_dir = fmt.printf("%s/served/%s", $state_dir, $environment)

@@ -40,6 +40,7 @@ just gitops-vm-test served-rollback-transition
 just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test local-apply-without-optin-refusal
+just gitops-vm-test local-apply-candidate
 just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
@@ -77,6 +78,7 @@ nix build .#checks.x86_64-linux.gitops-served-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
+nix build .#checks.x86_64-linux.gitops-local-apply-candidate-vm
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
@@ -138,6 +140,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-failed-served-candidate-refusal` proves a desired state cannot request serving for a candidate whose admission fixture failed.
 
 `gitops-local-apply-without-optin-refusal` proves `local-apply` desired state is refused unless the operator sets `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. This keeps the still-scaffolded host-local mode from mutating a machine because a fixture or operator file used the wrong mode.
+
+`gitops-local-apply-candidate-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` and a non-serving `local-apply` candidate. It proves local-apply writes candidate/status facts under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, not the VM-test directories, while still avoiding `/srv/fishystuff` and real service mutation.
 
 `gitops-missing-active-artifact-refusal` proves graph-side serving checks require the active release to name the API, Dolt service, site, and CDN artifact paths even when desired state is hand-written.
 
@@ -225,7 +229,7 @@ Supported modes:
 - `validate`: decode, shape, and unify only. It does not write local state and does not run admission.
 - `vm-test`: create only VM-local files under `/var/lib/fishystuff/gitops-test` and `/run/fishystuff/gitops-test`.
 - `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
-- `local-apply`: reserved for future host-local activation. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set, and the first milestone does not include fixtures that use it.
+- `local-apply`: opt-in host-local mode. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set. Non-serving candidate/status facts use `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`; serving still requires real admission work before it should be used outside tests.
 
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
@@ -307,7 +311,7 @@ This graph does not import Hetzner, Cloudflare, or SSH providers. It does not ca
 
 `gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `vm-test-closures` and future `local-apply` mode. In `validate` and plain `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
 
-The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM and set `virtualisation.memorySize = 2048` for enough headroom with the pinned mgmt build. They do not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
+The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM and set explicit VM memory because the pinned mgmt build can use several GiB while converging this graph. They do not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
 
 `gitops-closure-roots-vm` generates desired state from tiny real Nix store artifacts inside the test derivation. It proves closure verification and gcroot creation without using fake enabled store paths or serving anything.
 

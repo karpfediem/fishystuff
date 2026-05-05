@@ -2,6 +2,7 @@ import "fmt"
 import "strings" as core_strings
 
 import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
 
 class release_metadata($st) {
 	$mode str = $st->mode || "validate"
@@ -41,9 +42,9 @@ class materialization($st) {
 	$raw_materialization str = $st->materialization || ""
 	$materialization str = if $raw_materialization == "" { "metadata_only" } else { $raw_materialization }
 	$remote_url str = $st->remote_url || ""
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
-	$run_dir = if $write_vm_state { "/run/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test/run" }
+	$write_vm_state = fishy_paths.is_vm_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
 	$cache_dir str = $st->cache_dir || fmt.printf("%s/dolt-cache/%s", $state_dir, $repository)
 	$release_ref str = $st->release_ref || fmt.printf("fishystuff/gitops/%s", $release_id)
 	$request_dir = fmt.printf("%s/dolt/requests", $state_dir)

@@ -6,6 +6,7 @@ import "admission.mcl" as fishy_admission
 import "dolt.mcl" as fishy_dolt
 import "instance.mcl" as fishy_instance
 import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
 import "route.mcl" as fishy_route
 import "rollback.mcl" as fishy_rollback
 import "status.mcl" as fishy_status
@@ -75,10 +76,9 @@ class single_host($st) {
 	$active_dolt struct{repository str; commit str; branch_context str; mode str; materialization str; remote_url str; cache_dir str; release_ref str} = $active_release->dolt || $empty_dolt
 	$raw_active_dolt_materialization str = $active_dolt->materialization || ""
 	$active_dolt_materialization str = if $raw_active_dolt_materialization == "" { "metadata_only" } else { $raw_active_dolt_materialization }
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$vm_state_dir = "/var/lib/fishystuff/gitops-test"
-	$vm_run_dir = "/run/fishystuff/gitops-test"
-	$local_state_dir = if $write_vm_state { $vm_state_dir } else { "/tmp/fishystuff-gitops-test" }
+	$write_vm_state = fishy_paths.is_vm_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
 	$active_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["api"] || $empty_artifact
 	$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
 	$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact
@@ -102,7 +102,7 @@ class single_host($st) {
 		)
 	}
 	$active_dolt_cache_dir str = if ($active_dolt_materialization == "fetch_pin") and ($active_dolt->cache_dir == "") {
-		fmt.printf("%s/dolt-cache/%s", $local_state_dir, $active_dolt->repository)
+		fmt.printf("%s/dolt-cache/%s", $state_dir, $active_dolt->repository)
 	} else {
 		$active_dolt->cache_dir
 	}
@@ -127,18 +127,18 @@ class single_host($st) {
 	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
 	$retained_releases []str = $environment->retained_releases || $empty_list
 	$retained_release_ids_json = fishy_json.string_list($retained_releases)
-	$retained_dolt_status_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $retained_release_id) }))
-	$retained_release_document_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/rollback-set/%s/%s.json", $vm_state_dir, $environment_name, $retained_release_id) }))
+	$retained_dolt_status_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/dolt/%s-%s.json", $run_dir, $environment_name, $retained_release_id) }))
+	$retained_release_document_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/rollback-set/%s/%s.json", $state_dir, $environment_name, $retained_release_id) }))
 	$has_rollback_readiness = len($retained_releases) > 0
 	$dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $active_release_id)
 	$dolt_admission_exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment_name, $active_release_id)
-	$admission_path = fmt.printf("%s/admission/%s.json", $vm_run_dir, $environment_name)
-	$dolt_status_path = fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $active_release_id)
-	$status_path = fmt.printf("%s/status/%s.json", $vm_state_dir, $environment_name)
-	$active_path = fmt.printf("%s/active/%s.json", $vm_state_dir, $environment_name)
-	$rollback_path = fmt.printf("%s/rollback/%s.json", $vm_state_dir, $environment_name)
-	$rollback_set_path = fmt.printf("%s/rollback-set/%s.json", $vm_state_dir, $environment_name)
-	$route_path = fmt.printf("%s/routes/%s.json", $vm_run_dir, $environment_name)
+	$admission_path = fmt.printf("%s/admission/%s.json", $run_dir, $environment_name)
+	$dolt_status_path = fmt.printf("%s/dolt/%s-%s.json", $run_dir, $environment_name, $active_release_id)
+	$status_path = fmt.printf("%s/status/%s.json", $state_dir, $environment_name)
+	$active_path = fmt.printf("%s/active/%s.json", $state_dir, $environment_name)
+	$rollback_path = fmt.printf("%s/rollback/%s.json", $state_dir, $environment_name)
+	$rollback_set_path = fmt.printf("%s/rollback-set/%s.json", $state_dir, $environment_name)
+	$route_path = fmt.printf("%s/routes/%s.json", $run_dir, $environment_name)
 
 	panic($environment_name == "", "environment requires a name")
 	panic($desired_generation == 0, fmt.printf("environment %s requires desired_generation", $environment_name))
@@ -196,7 +196,7 @@ class single_host($st) {
 		$raw_retained_dolt_materialization str = $retained_dolt->materialization || ""
 		$retained_dolt_materialization str = if $raw_retained_dolt_materialization == "" { "metadata_only" } else { $raw_retained_dolt_materialization }
 		$retained_dolt_cache_dir str = if ($retained_dolt_materialization == "fetch_pin") and ($retained_dolt->cache_dir == "") {
-			fmt.printf("%s/dolt-cache/%s", $local_state_dir, $retained_dolt->repository)
+			fmt.printf("%s/dolt-cache/%s", $state_dir, $retained_dolt->repository)
 		} else {
 			$retained_dolt->cache_dir
 		}
@@ -206,12 +206,12 @@ class single_host($st) {
 			$retained_dolt->release_ref
 		}
 		$retained_dolt_status_path str = if $retained_dolt_materialization == "fetch_pin" {
-			fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $retained_release_id)
+			fmt.printf("%s/dolt/%s-%s.json", $run_dir, $environment_name, $retained_release_id)
 		} else {
 			""
 		}
 		$retained_dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $retained_release_id)
-		$retained_rollback_set_release_path = fmt.printf("%s/rollback-set/%s/%s.json", $vm_state_dir, $environment_name, $retained_release_id)
+		$retained_rollback_set_release_path = fmt.printf("%s/rollback-set/%s/%s.json", $state_dir, $environment_name, $retained_release_id)
 		$retained_release_identity str = if $retained_release->generation == 0 {
 			""
 		} else {

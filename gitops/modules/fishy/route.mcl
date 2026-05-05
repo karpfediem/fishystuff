@@ -1,5 +1,6 @@
 import "fmt"
 import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
 
 class local($st) {
 	$mode str = $st->mode || "validate"
@@ -10,10 +11,9 @@ class local($st) {
 	$release_identity str = $st->release_identity || ""
 	$served bool = $st->served || false
 	$api_upstream str = $st->api_upstream || ""
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
-	$run_dir = if $write_vm_state { "/run/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test/run" }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
 	$active_path = $st->active_path || fmt.printf("%s/active/%s.json", $state_dir, $environment)
 	$site_root = $st->site_root || fmt.printf("%s/served/%s/site", $state_dir, $environment)
 	$cdn_root = $st->cdn_root || fmt.printf("%s/served/%s/cdn", $state_dir, $environment)

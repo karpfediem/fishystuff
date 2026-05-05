@@ -43,7 +43,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
-      virtualisation.memorySize = 4096;
+      virtualisation.memorySize = 12288;
       virtualisation.additionalPaths = [ desiredState ];
       environment.systemPackages = [
         mgmtPackage
@@ -56,7 +56,7 @@ pkgs.testers.runNixOSTest {
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
     machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == false' ${desiredState}")
-    machine.fail("timeout 15s env FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-local-apply-without-optin-refusal.log 2>&1")
+    machine.fail("timeout 120s env FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-local-apply-without-optin-refusal.log 2>&1")
     machine.succeed("grep -F 'local-apply requires FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1' /tmp/fishystuff-gitops-local-apply-without-optin-refusal.log")
 
     machine.succeed("test ! -e /var/lib/fishystuff/gitops")

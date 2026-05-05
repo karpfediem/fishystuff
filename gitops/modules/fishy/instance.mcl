@@ -1,5 +1,6 @@
 import "fmt"
 import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
 
 class candidate($st) {
 	$mode str = $st->mode || "validate"
@@ -21,10 +22,9 @@ class candidate($st) {
 	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$retained_release_ids_json str = $st->retained_release_ids_json || "[]"
 	$serve bool = $st->serve || false
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
-	$run_dir = if $write_vm_state { "/run/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test/run" }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
 	$instance_name = fmt.printf("%s-%s", $environment, $release_id)
 	$instance_path = fmt.printf("%s/instances/%s.json", $state_dir, $instance_name)
 	$marker_path = fmt.printf("%s/candidates/%s.ready", $run_dir, $instance_name)

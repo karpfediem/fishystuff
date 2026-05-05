@@ -33,6 +33,7 @@ nix build .#checks.x86_64-linux.gitops-served-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
+nix build .#checks.x86_64-linux.gitops-local-apply-candidate-vm
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
@@ -77,6 +78,7 @@ just gitops-vm-test served-rollback-transition
 just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test local-apply-without-optin-refusal
+just gitops-vm-test local-apply-candidate
 just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
@@ -133,6 +135,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-local-apply-without-optin-refusal` boots a local NixOS VM and checks that `local-apply` mode is refused without `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, before any GitOps, service, or served state paths are written.
 
+`gitops-local-apply-candidate-vm` boots a local NixOS VM and runs a non-serving `local-apply` candidate with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. It checks that candidate/status facts are written under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, that VM-test paths are not used, and that `/srv/fishystuff` and real FishyStuff services remain untouched.
+
 `gitops-missing-active-artifact-refusal` boots a local NixOS VM and checks that hand-written serving desired state cannot omit an active release artifact path.
 
 `gitops-missing-retained-artifact-refusal` boots a local NixOS VM and checks that retained rollback releases cannot omit rollback-critical artifact paths.
@@ -169,4 +173,4 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
 
-GitOps VM tests set explicit VM memory because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph. Heavier Dolt/rollback tests use 8-12 GiB.
+GitOps VM tests set explicit VM memory because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph. Current checks use up to 12 GiB.

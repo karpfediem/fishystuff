@@ -1,5 +1,6 @@
 import "fmt"
 import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
 
 class readiness($st) {
 	$mode str = $st->mode || "validate"
@@ -19,9 +20,8 @@ class readiness($st) {
 	$rollback_dolt_cache_dir str = $st->rollback_dolt_cache_dir || ""
 	$rollback_dolt_release_ref str = $st->rollback_dolt_release_ref || ""
 	$served bool = $st->served || false
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
 	$rollback_dir = fmt.printf("%s/rollback", $state_dir)
 	$rollback_path = fmt.printf("%s/%s.json", $rollback_dir, $environment)
 	$rollback_available = $served and ($rollback_release_id != "")
@@ -84,9 +84,8 @@ class retained_release($st) {
 	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$dolt_status_path str = $st->dolt_status_path || ""
 	$served bool = $st->served || false
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
 	$rollback_set_release_dir = fmt.printf("%s/rollback-set/%s", $state_dir, $environment)
 	$rollback_set_release_path = fmt.printf("%s/%s.json", $rollback_set_release_dir, $retained_release_id)
 	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"current_release_id\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"api_bundle\": %s,\n  \"dolt_service_bundle\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_materialization\": %s,\n  \"dolt_cache_dir\": %s,\n  \"dolt_release_ref\": %s,\n  \"dolt_status_path\": %s,\n  \"rollback_member_state\": \"retained_hot_release\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($current_release_id), fishy_json.quote($retained_release_id), fishy_json.quote($retained_release_identity), fishy_json.quote($api_bundle), fishy_json.quote($dolt_service_bundle), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), fishy_json.quote($dolt_status_path))
@@ -138,9 +137,8 @@ class retained_set($st) {
 	$retained_release_ids_json str = $st->retained_release_ids_json || "[]"
 	$retained_release_document_paths_json str = $st->retained_release_document_paths_json || "[]"
 	$served bool = $st->served || false
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
-	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
 	$rollback_set_dir = fmt.printf("%s/rollback-set", $state_dir)
 	$rollback_set_path = fmt.printf("%s/%s.json", $rollback_set_dir, $environment)
 	$rollback_set_available = $served and ($retained_release_count > 0)

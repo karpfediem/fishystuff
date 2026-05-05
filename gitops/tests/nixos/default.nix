@@ -99,6 +99,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-local-apply-candidate-vm = import ./local-apply-candidate.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-missing-active-artifact-refusal = import ./missing-active-artifact-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

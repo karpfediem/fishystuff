@@ -1,0 +1,31 @@
+func is_vm_state($mode) {
+	($mode == "vm-test") or ($mode == "vm-test-closures")
+}
+
+func writes_local_state($mode) {
+	is_vm_state($mode) or ($mode == "local-apply")
+}
+
+func state_dir($mode) {
+	if is_vm_state($mode) {
+		"/var/lib/fishystuff/gitops-test"
+	} else {
+		if $mode == "local-apply" {
+			"/var/lib/fishystuff/gitops"
+		} else {
+			"/tmp/fishystuff-gitops-test"
+		}
+	}
+}
+
+func run_dir($mode) {
+	if is_vm_state($mode) {
+		"/run/fishystuff/gitops-test"
+	} else {
+		if $mode == "local-apply" {
+			"/run/fishystuff/gitops"
+		} else {
+			"/tmp/fishystuff-gitops-test/run"
+		}
+	}
+}
