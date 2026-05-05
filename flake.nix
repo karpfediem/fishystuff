@@ -521,6 +521,7 @@
               doltServiceBundle
               doltServiceBundleProduction
               edgeServiceBundle
+              edgeServiceBundleProduction
               pkgs
               ;
           };

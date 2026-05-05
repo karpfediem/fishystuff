@@ -6,6 +6,7 @@
   doltServiceBundle,
   doltServiceBundleProduction,
   edgeServiceBundle,
+  edgeServiceBundleProduction,
 }:
 let
   mkBundleCheck =
@@ -21,6 +22,7 @@ let
       minArgvLength ? 1,
       requiredEnvironment ? { },
       requiredConfigLines ? [ ],
+      forbiddenConfigFragments ? [ ],
       requiredUnitLines ? [ ],
       forbiddenUnitLines ? [ ],
       expectedReloadMode ? "restart",
@@ -108,6 +110,17 @@ let
         grep -F "Restart=on-failure" "$unit_path" >/dev/null
         grep -F "WantedBy=multi-user.target" "$unit_path" >/dev/null
         ${lib.concatStringsSep "\n" (map (line: "grep -F ${lib.escapeShellArg line} \"$config_path\" >/dev/null") requiredConfigLines)}
+        ${lib.concatStringsSep "\n" (
+          map (
+            fragment:
+            ''
+              if grep -F ${lib.escapeShellArg fragment} "$config_path" >/dev/null; then
+                echo "unexpected config fragment present: ${fragment}" >&2
+                exit 1
+              fi
+            ''
+          ) forbiddenConfigFragments
+        )}
         ${lib.concatStringsSep "\n" (map (line: "grep -Fx ${lib.escapeShellArg line} \"$unit_path\" >/dev/null") requiredUnitLines)}
         ${lib.concatStringsSep "\n" (
           map (
@@ -288,6 +301,10 @@ in
     requiredMaterializationHandle = "pkg/main";
     requiredMaterializationAcquisition = "substitute";
     requiredConfigLines = [
+      "https://beta.fishystuff.fish {"
+      "https://api.beta.fishystuff.fish {"
+      "https://cdn.beta.fishystuff.fish {"
+      "https://telemetry.beta.fishystuff.fish {"
       "@runtime_manifest path /map/runtime-manifest.json"
       "/map/fishystuff_ui_bevy.*.js"
       "/map/fishystuff_ui_bevy.*.js.map"
@@ -295,6 +312,44 @@ in
       "/map/fishystuff_ui_bevy_bg.*.wasm.map"
       "header Cache-Control \"no-store\""
       "header Cache-Control \"public, max-age=31536000, immutable\""
+    ];
+    requiredUnitLines = [
+      "LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem"
+      "LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem"
+      "AmbientCapabilities=CAP_NET_BIND_SERVICE"
+      "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
+  };
+
+  edge-service-bundle-production = mkBundleCheck {
+    name = "edge-service-bundle-production-check";
+    bundle = edgeServiceBundleProduction;
+    serviceId = "fishystuff-edge";
+    configDestination = "Caddyfile";
+    unitName = "fishystuff-edge.service";
+    minArgvLength = 5;
+    expectedReloadMode = "command";
+    expectedRuntimeOverlayCount = 2;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
+    requiredConfigLines = [
+      "https://fishystuff.fish {"
+      "https://api.fishystuff.fish {"
+      "https://cdn.fishystuff.fish {"
+      "https://telemetry.fishystuff.fish {"
+      "@runtime_manifest path /map/runtime-manifest.json"
+      "/map/fishystuff_ui_bevy.*.js"
+      "/map/fishystuff_ui_bevy.*.js.map"
+      "/map/fishystuff_ui_bevy_bg.*.wasm"
+      "/map/fishystuff_ui_bevy_bg.*.wasm.map"
+      "header Cache-Control \"no-store\""
+      "header Cache-Control \"public, max-age=31536000, immutable\""
+    ];
+    forbiddenConfigFragments = [
+      "beta.fishystuff.fish"
     ];
     requiredUnitLines = [
       "LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem"
