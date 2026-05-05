@@ -56,6 +56,10 @@ let
     currentRoot = secondCdnRoot;
     previousRoots = [ currentCdnRoot ];
   };
+  rollbackCdnServingRoot = pkgs.callPackage ../../../nix/packages/cdn-serving-root.nix {
+    currentRoot = currentCdnRoot;
+    previousRoots = [ secondCdnRoot ];
+  };
   doltFixtureSeeder = pkgs.writeShellApplication {
     name = "seed-fishystuff-gitops-dolt-meta-fixture";
     runtimeInputs = [ pkgs.dolt ];
@@ -111,6 +115,7 @@ let
   };
   expectedReleaseIdentity = "release=local-apply-http-release;generation=62;git_rev=local-apply-http-admission;dolt_commit=local-apply-http-admission;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=${apiArtifact};site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=${doltServiceArtifact}";
   expectedSecondReleaseIdentity = "release=second-local-apply-http-release;generation=63;git_rev=second-local-apply-http-admission;dolt_commit=second-local-apply-http-admission;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=${apiArtifact};site=${secondSiteArtifact};cdn_runtime=${secondCdnServingRoot};dolt_service=${secondDoltServiceArtifact}";
+  expectedRollbackReleaseIdentity = "release=local-apply-http-release;generation=64;git_rev=rollback-local-apply-http-admission;dolt_commit=rollback-local-apply-http-admission;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=${apiArtifact};site=${siteArtifact};cdn_runtime=${rollbackCdnServingRoot};dolt_service=${doltServiceArtifact}";
   desiredState = pkgs.writeText "vm-local-apply-http-admission.desired.json" (builtins.toJSON {
     cluster = "local-test";
     generation = 62;
@@ -297,6 +302,104 @@ let
       };
     };
   });
+  rollbackDesiredState = pkgs.writeText "vm-local-apply-http-admission-rollback.desired.json" (builtins.toJSON {
+    cluster = "local-test";
+    generation = 64;
+    mode = "local-apply";
+    hosts.vm-single-host = {
+      enabled = true;
+      role = "single-site";
+      hostname = "vm-single-host";
+    };
+    releases.local-apply-http-release = {
+      generation = 64;
+      git_rev = "rollback-local-apply-http-admission";
+      dolt_commit = "rollback-local-apply-http-admission";
+      closures = {
+        api = {
+          enabled = false;
+          store_path = "${apiArtifact}";
+          gcroot_path = "";
+        };
+        site = {
+          enabled = false;
+          store_path = "${siteArtifact}";
+          gcroot_path = "";
+        };
+        cdn_runtime = {
+          enabled = false;
+          store_path = "${rollbackCdnServingRoot}";
+          gcroot_path = "";
+        };
+        dolt_service = {
+          enabled = false;
+          store_path = "${doltServiceArtifact}";
+          gcroot_path = "";
+        };
+      };
+      dolt = {
+        repository = "fishystuff/fishystuff";
+        commit = "rollback-local-apply-http-admission";
+        branch_context = "local-test";
+        mode = "read_only";
+      };
+    };
+    releases.second-local-apply-http-release = {
+      generation = 63;
+      git_rev = "second-local-apply-http-admission";
+      dolt_commit = "second-local-apply-http-admission";
+      closures = {
+        api = {
+          enabled = false;
+          store_path = "${apiArtifact}";
+          gcroot_path = "";
+        };
+        site = {
+          enabled = false;
+          store_path = "${secondSiteArtifact}";
+          gcroot_path = "";
+        };
+        cdn_runtime = {
+          enabled = false;
+          store_path = "${secondCdnServingRoot}";
+          gcroot_path = "";
+        };
+        dolt_service = {
+          enabled = false;
+          store_path = "${secondDoltServiceArtifact}";
+          gcroot_path = "";
+        };
+      };
+      dolt = {
+        repository = "fishystuff/fishystuff";
+        commit = "second-local-apply-http-admission";
+        branch_context = "local-test";
+        mode = "read_only";
+      };
+    };
+    environments.local-test = {
+      enabled = true;
+      strategy = "single_active";
+      host = "vm-single-host";
+      active_release = "local-apply-http-release";
+      retained_releases = [ "second-local-apply-http-release" ];
+      serve = true;
+      api_upstream = "http://127.0.0.1:18082";
+      api_service = "fishystuff-gitops-candidate-api-local-test";
+      admission_probe = {
+        kind = "api_meta";
+        probe_name = "api-meta";
+        url = "http://127.0.0.1:18082/api/v1/meta";
+        expected_status = 200;
+        timeout_ms = 2000;
+      };
+      transition = {
+        kind = "rollback";
+        from_release = "second-local-apply-http-release";
+        reason = "operator-requested local apply API rollback test";
+      };
+    };
+  });
 in
 pkgs.testers.runNixOSTest {
   name = "fishystuff-gitops-local-apply-http-admission";
@@ -321,8 +424,10 @@ pkgs.testers.runNixOSTest {
         secondCdnRoot
         cdnServingRoot
         secondCdnServingRoot
+        rollbackCdnServingRoot
         desiredState
         secondDesiredState
+        rollbackDesiredState
       ];
       environment.systemPackages = [
         fishystuffDeployPackage
@@ -365,6 +470,8 @@ pkgs.testers.runNixOSTest {
     mgmt_pid = "/tmp/fishystuff-gitops-local-apply-http-admission.pid"
     second_mgmt_log = "/tmp/fishystuff-gitops-local-apply-http-admission-second.log"
     second_mgmt_pid = "/tmp/fishystuff-gitops-local-apply-http-admission-second.pid"
+    rollback_mgmt_log = "/tmp/fishystuff-gitops-local-apply-http-admission-rollback.log"
+    rollback_mgmt_pid = "/tmp/fishystuff-gitops-local-apply-http-admission-rollback.pid"
     api_config = "/var/lib/fishystuff/gitops/api/local-test.json"
     api_env = "/var/lib/fishystuff/gitops/api/local-test.env"
     status = "/var/lib/fishystuff/gitops/status/local-test.json"
@@ -376,11 +483,13 @@ pkgs.testers.runNixOSTest {
     instance = "/var/lib/fishystuff/gitops/instances/local-test-local-apply-http-release.json"
     second_instance = "/var/lib/fishystuff/gitops/instances/local-test-second-local-apply-http-release.json"
     rollback_set = "/var/lib/fishystuff/gitops/rollback-set/local-test.json"
+    rollback = "/var/lib/fishystuff/gitops/rollback/local-test.json"
+    second_rollback_member = "/var/lib/fishystuff/gitops/rollback-set/local-test/second-local-apply-http-release.json"
     candidate_service = "fishystuff-gitops-candidate-api-local-test"
     dolt_fixture_service = "fishystuff-gitops-dolt-sql-fixture"
 
     def dump_gitops_debug():
-      _, output = machine.execute(f"echo '--- mgmt log head ---'; head -120 {mgmt_log} 2>/dev/null || true; echo '--- mgmt log tail ---'; tail -240 {mgmt_log} 2>/dev/null || true; echo '--- second mgmt log head ---'; head -120 {second_mgmt_log} 2>/dev/null || true; echo '--- second mgmt log tail ---'; tail -240 {second_mgmt_log} 2>/dev/null || true; echo '--- api config ---'; cat {api_config} 2>/dev/null || true; echo '--- api env ---'; cat {api_env} 2>/dev/null || true; echo '--- admission request ---'; cat {request} 2>/dev/null || true; echo '--- second admission request ---'; cat {second_request} 2>/dev/null || true; echo '--- current status ---'; cat {status} 2>/dev/null || true; echo '--- current active ---'; cat {active} 2>/dev/null || true; echo '--- candidate api status ---'; systemctl status {candidate_service} --no-pager 2>&1 || true; echo '--- candidate api journal ---'; journalctl -u {candidate_service} --no-pager -n 160 2>&1 || true; echo '--- dolt fixture status ---'; systemctl status {dolt_fixture_service} --no-pager 2>&1 || true; echo '--- dolt fixture journal ---'; journalctl -u {dolt_fixture_service} --no-pager -n 160 2>&1 || true; echo '--- probe curl ---'; curl -v http://127.0.0.1:18082/api/v1/meta 2>&1 || true; echo '--- gitops state tree ---'; find /var/lib/fishystuff/gitops /run/fishystuff/gitops -maxdepth 6 -ls 2>/dev/null || true; echo '--- mgmt process ---'; ps -ef | grep '[m]gmt' || true")
+      _, output = machine.execute(f"echo '--- mgmt log head ---'; head -120 {mgmt_log} 2>/dev/null || true; echo '--- mgmt log tail ---'; tail -240 {mgmt_log} 2>/dev/null || true; echo '--- second mgmt log head ---'; head -120 {second_mgmt_log} 2>/dev/null || true; echo '--- second mgmt log tail ---'; tail -240 {second_mgmt_log} 2>/dev/null || true; echo '--- rollback mgmt log head ---'; head -120 {rollback_mgmt_log} 2>/dev/null || true; echo '--- rollback mgmt log tail ---'; tail -240 {rollback_mgmt_log} 2>/dev/null || true; echo '--- api config ---'; cat {api_config} 2>/dev/null || true; echo '--- api env ---'; cat {api_env} 2>/dev/null || true; echo '--- admission request ---'; cat {request} 2>/dev/null || true; echo '--- second admission request ---'; cat {second_request} 2>/dev/null || true; echo '--- current status ---'; cat {status} 2>/dev/null || true; echo '--- current active ---'; cat {active} 2>/dev/null || true; echo '--- rollback ---'; cat {rollback} 2>/dev/null || true; echo '--- rollback set ---'; cat {rollback_set} 2>/dev/null || true; echo '--- second rollback member ---'; cat {second_rollback_member} 2>/dev/null || true; echo '--- candidate api status ---'; systemctl status {candidate_service} --no-pager 2>&1 || true; echo '--- candidate api journal ---'; journalctl -u {candidate_service} --no-pager -n 200 2>&1 || true; echo '--- dolt fixture status ---'; systemctl status {dolt_fixture_service} --no-pager 2>&1 || true; echo '--- dolt fixture journal ---'; journalctl -u {dolt_fixture_service} --no-pager -n 160 2>&1 || true; echo '--- probe curl ---'; curl -v http://127.0.0.1:18082/api/v1/meta 2>&1 || true; echo '--- gitops state tree ---'; find /var/lib/fishystuff/gitops /run/fishystuff/gitops -maxdepth 6 -ls 2>/dev/null || true; echo '--- mgmt process ---'; ps -ef | grep '[m]gmt' || true")
       print(output)
 
     def wait_for_gitops_file(path):
@@ -407,6 +516,8 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl show fishystuff-gitops-candidate-api-local-test -p ExecStart --value | grep -F -- '--bind 127.0.0.1:18082 --request-timeout-secs 5'")
     machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\" and .environments.\"local-test\".admission_probe.kind == \"api_meta\"' ${desiredState}")
     machine.succeed("jq -e '.generation == 63 and .environments.\"local-test\".active_release == \"second-local-apply-http-release\" and .environments.\"local-test\".retained_releases == [\"local-apply-http-release\"] and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\"' ${secondDesiredState}")
+    machine.succeed("jq -e '.generation == 64 and .environments.\"local-test\".active_release == \"local-apply-http-release\" and .environments.\"local-test\".retained_releases == [\"second-local-apply-http-release\"] and .environments.\"local-test\".transition.kind == \"rollback\" and .environments.\"local-test\".transition.from_release == \"second-local-apply-http-release\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\"' ${rollbackDesiredState}")
+    machine.succeed("jq -e '.retained_roots == [\"${secondCdnRoot}\"]' ${rollbackCdnServingRoot}/cdn-serving-manifest.json")
     machine.fail("systemctl is-active fishystuff-gitops-candidate-api-local-test")
     machine.fail("systemctl is-active fishystuff-gitops-dolt-sql-fixture")
     machine.succeed(f"env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >{mgmt_log} 2>&1 & echo $! >{mgmt_pid}")
@@ -450,6 +561,9 @@ pkgs.testers.runNixOSTest {
     wait_for_gitops_command(f"grep -Fx \"FISHYSTUFF_RELEASE_IDENTITY='${expectedSecondReleaseIdentity}'\" {api_env}")
     wait_for_gitops_command(f"grep -Fx \"FISHYSTUFF_DOLT_COMMIT='second-local-apply-http-admission'\" {api_env}")
     wait_for_gitops_command(f"pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); test \"$pid\" != \"{first_api_pid}\"")
+    second_api_pid = machine.succeed("systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value").strip()
+    machine.succeed("pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep -Fx 'FISHYSTUFF_RELEASE_ID=second-local-apply-http-release'")
+    machine.succeed("pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep -Fx 'FISHYSTUFF_DOLT_COMMIT=second-local-apply-http-admission'")
     wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"second-local-apply-http-release\" and .release_identity == \"${expectedSecondReleaseIdentity}\" and .dolt_commit == \"second-local-apply-http-admission\" and .default_patch.patch_id == \"gitops-api-meta-patch\" and .map_versions[0].map_version_id == \"gitops-vm-map\" and (.data_languages | index(\"en\"))'")
     wait_for_gitops_file(second_request)
     wait_for_gitops_file(second_instance)
@@ -461,6 +575,28 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops/served/local-test/site)\" = \"${secondSiteArtifact}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops/served/local-test/cdn)\" = \"${secondCdnServingRoot}\"")
     machine.succeed(f"kill $(cat {second_mgmt_pid}) || true")
+
+    machine.succeed(f"env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${rollbackDesiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >{rollback_mgmt_log} 2>&1 & echo $! >{rollback_mgmt_pid}")
+    wait_for_gitops_command(f"grep -F 'gapi: generating new graph' {rollback_mgmt_log}", timeout=180)
+    wait_for_gitops_command(f"grep -Fx \"FISHYSTUFF_RELEASE_ID='local-apply-http-release'\" {api_env}")
+    wait_for_gitops_command(f"grep -Fx \"FISHYSTUFF_RELEASE_IDENTITY='${expectedRollbackReleaseIdentity}'\" {api_env}")
+    wait_for_gitops_command(f"grep -Fx \"FISHYSTUFF_DOLT_COMMIT='rollback-local-apply-http-admission'\" {api_env}")
+    wait_for_gitops_command(f"pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); test \"$pid\" != \"{second_api_pid}\"")
+    machine.succeed("pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep -Fx 'FISHYSTUFF_RELEASE_ID=local-apply-http-release'")
+    machine.succeed("pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep -Fx 'FISHYSTUFF_DOLT_COMMIT=rollback-local-apply-http-admission'")
+    wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\" and .release_identity == \"${expectedRollbackReleaseIdentity}\" and .dolt_commit == \"rollback-local-apply-http-admission\" and .default_patch.patch_id == \"gitops-api-meta-patch\" and .map_versions[0].map_version_id == \"gitops-vm-map\" and (.data_languages | index(\"en\"))'")
+    wait_for_gitops_file(second_rollback_member)
+    wait_for_gitops_command(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .expected_scalars.\"/release_id\" == \"local-apply-http-release\" and .expected_scalars.\"/release_identity\" == \"${expectedRollbackReleaseIdentity}\" and .expected_scalars.\"/dolt_commit\" == \"rollback-local-apply-http-admission\"' {request}")
+    wait_for_gitops_command(f"jq -e '.release_id == \"local-apply-http-release\" and .release_identity == \"${expectedRollbackReleaseIdentity}\" and .scalars.\"/release_id\" == \"local-apply-http-release\" and .scalars.\"/release_identity\" == \"${expectedRollbackReleaseIdentity}\" and .scalars.\"/dolt_commit\" == \"rollback-local-apply-http-admission\" and .admission_state == \"passed_fixture\"' {admission}")
+    wait_for_gitops_command(f"jq -e '.desired_generation == 64 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedRollbackReleaseIdentity}\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"second-local-apply-http-release\"] and .transition_kind == \"rollback\" and .rollback_from_release == \"second-local-apply-http-release\" and .rollback_to_release == \"local-apply-http-release\" and .rollback_reason == \"operator-requested local apply API rollback test\"' {status}")
+    wait_for_gitops_command(f"jq -e '.desired_generation == 64 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedRollbackReleaseIdentity}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${rollbackCdnServingRoot}\" and .retained_release_ids == [\"second-local-apply-http-release\"] and .transition_kind == \"rollback\" and .rollback_from_release == \"second-local-apply-http-release\" and .rollback_to_release == \"local-apply-http-release\" and .served == true' {active}")
+    wait_for_gitops_command(f"jq -e '.desired_generation == 64 and .current_release_id == \"local-apply-http-release\" and .rollback_release_id == \"second-local-apply-http-release\" and .rollback_available == true' {rollback}")
+    wait_for_gitops_command(f"jq -e '.desired_generation == 64 and .current_release_id == \"local-apply-http-release\" and .retained_release_ids == [\"second-local-apply-http-release\"] and .rollback_set_available == true' {rollback_set}")
+    wait_for_gitops_command(f"jq -e '.desired_generation == 64 and .current_release_id == \"local-apply-http-release\" and .release_id == \"second-local-apply-http-release\" and .cdn_runtime_content == \"${secondCdnServingRoot}\" and .rollback_member_state == \"retained_hot_release\"' {second_rollback_member}")
+    wait_for_gitops_command(f"jq -e '.desired_generation == 64 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedRollbackReleaseIdentity}\" and .serve_requested == true' {instance}")
+    machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops/served/local-test/site)\" = \"${siteArtifact}\"")
+    machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops/served/local-test/cdn)\" = \"${rollbackCdnServingRoot}\"")
+    machine.succeed(f"kill $(cat {rollback_mgmt_pid}) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")
