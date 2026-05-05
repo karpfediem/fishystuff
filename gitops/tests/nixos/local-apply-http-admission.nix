@@ -38,12 +38,29 @@ let
     previousRoots = [ previousCdnRoot ];
   };
   candidateApiServer = pkgs.writeText "fishystuff-gitops-candidate-api-server.py" ''
+    import argparse
     import json
+    import os
     import sys
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    config_path = sys.argv[1]
-    port = int(sys.argv[2])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--bind", required=True)
+    args = parser.parse_args()
+
+    host, port_text = args.bind.rsplit(":", 1)
+    port = int(port_text)
+
+    required_env = [
+        "FISHYSTUFF_RELEASE_ID",
+        "FISHYSTUFF_RELEASE_IDENTITY",
+        "FISHYSTUFF_DOLT_COMMIT",
+        "FISHYSTUFF_DEPLOYMENT_ENVIRONMENT",
+    ]
+    missing = [name for name in required_env if os.environ.get(name) is None]
+    if missing:
+        sys.stderr.write("missing deployment identity env vars: " + ", ".join(missing) + "\n")
+        sys.exit(1)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -52,15 +69,12 @@ let
                 self.end_headers()
                 return
 
-            with open(config_path, encoding="utf-8") as config_file:
-                config = json.load(config_file)
-
             body = json.dumps({
                 "state": "ok",
-                "release_id": config["release_id"],
-                "release_identity": config["release_identity"],
-                "dolt_commit": config["dolt_commit"],
-                "api_upstream": config["api_upstream"],
+                "release_id": os.environ["FISHYSTUFF_RELEASE_ID"],
+                "release_identity": os.environ["FISHYSTUFF_RELEASE_IDENTITY"],
+                "dolt_commit": os.environ["FISHYSTUFF_DOLT_COMMIT"],
+                "deployment_environment": os.environ["FISHYSTUFF_DEPLOYMENT_ENVIRONMENT"],
             }).encode("utf-8")
             self.send_response(200)
             self.send_header("content-type", "application/json")
@@ -71,8 +85,15 @@ let
         def log_message(self, format, *args):
             return
 
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    ThreadingHTTPServer((host, port), Handler).serve_forever()
   '';
+  candidateApiPackage = pkgs.writeShellApplication {
+    name = "fishystuff_server";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      exec python3 ${candidateApiServer} "$@"
+    '';
+  };
   expectedReleaseIdentity = "release=local-apply-http-release;generation=62;git_rev=local-apply-http-admission;dolt_commit=local-apply-http-admission;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=${apiArtifact};site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=${doltServiceArtifact}";
   desiredState = pkgs.writeText "vm-local-apply-http-admission.desired.json" (builtins.toJSON {
     cluster = "local-test";
@@ -194,11 +215,11 @@ pkgs.testers.runNixOSTest {
         mgmtPackage
         pkgs.curl
         pkgs.jq
-        pkgs.python3
       ];
       systemd.services.fishystuff-gitops-candidate-api-local-test = {
         serviceConfig = {
-          ExecStart = "${pkgs.python3}/bin/python3 ${candidateApiServer} /var/lib/fishystuff/gitops/api/local-test.json 18082";
+          EnvironmentFile = "/var/lib/fishystuff/gitops/api/local-test.env";
+          ExecStart = "${candidateApiPackage}/bin/fishystuff_server --bind 127.0.0.1:18082";
           Restart = "always";
           RestartSec = "1s";
         };
@@ -242,6 +263,8 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
     machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
     machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
+    machine.succeed("systemctl cat fishystuff-gitops-candidate-api-local-test | grep -Fx 'EnvironmentFile=/var/lib/fishystuff/gitops/api/local-test.env'")
+    machine.succeed("systemctl show fishystuff-gitops-candidate-api-local-test -p ExecStart --value | grep -F '/bin/fishystuff_server --bind 127.0.0.1:18082'")
     machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\" and .environments.\"local-test\".admission_probe.kind == \"api_meta\"' ${desiredState}")
     machine.fail("systemctl is-active fishystuff-gitops-candidate-api-local-test")
     machine.succeed(f"env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >{mgmt_log} 2>&1 & echo $! >{mgmt_pid}")
@@ -249,7 +272,7 @@ pkgs.testers.runNixOSTest {
     wait_for_gitops_file(api_config)
     wait_for_gitops_file(api_env)
     wait_for_gitops_command("systemctl is-active fishystuff-gitops-candidate-api-local-test")
-    wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\" and .api_upstream == \"http://127.0.0.1:18082\"'")
+    wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .dolt_commit == \"local-apply-http-admission\" and .deployment_environment == \"local-test\"'")
     wait_for_gitops_file(request)
     wait_for_gitops_file(admission)
     wait_for_gitops_file(status)
@@ -262,6 +285,8 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"grep -Fx \"FISHYSTUFF_RELEASE_IDENTITY='${expectedReleaseIdentity}'\" {api_env}")
     machine.succeed(f"grep -Fx \"FISHYSTUFF_DOLT_COMMIT='local-apply-http-admission'\" {api_env}")
     machine.succeed(f"grep -Fx \"FISHYSTUFF_DEPLOYMENT_ENVIRONMENT='local-test'\" {api_env}")
+    machine.succeed("pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep -Fx 'FISHYSTUFF_RELEASE_ID=local-apply-http-release'")
+    machine.succeed("pid=$(systemctl show fishystuff-gitops-candidate-api-local-test -p MainPID --value); tr '\\0' '\\n' < /proc/$pid/environ | grep -Fx 'FISHYSTUFF_DOLT_COMMIT=local-apply-http-admission'")
     machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .timeout_ms == 2000 and .expected_scalars.\"/release_id\" == \"local-apply-http-release\" and .expected_scalars.\"/release_identity\" == \"${expectedReleaseIdentity}\" and .expected_scalars.\"/dolt_commit\" == \"local-apply-http-admission\"' {request}")
     machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .observed_status == 200 and .expected_scalars.\"/release_id\" == \"local-apply-http-release\" and .expected_scalars.\"/release_identity\" == \"${expectedReleaseIdentity}\" and .expected_scalars.\"/dolt_commit\" == \"local-apply-http-admission\" and .scalars.\"/release_id\" == \"local-apply-http-release\" and .scalars.\"/release_identity\" == \"${expectedReleaseIdentity}\" and .scalars.\"/dolt_commit\" == \"local-apply-http-admission\" and .admission_state == \"passed_fixture\" and .probe == \"http-json-scalars\"' {admission}")
     machine.succeed(f"jq -e '.desired_generation == 62 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
