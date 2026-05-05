@@ -6,6 +6,15 @@ environment="${2:-local-test}"
 state_dir="${3:-/var/lib/fishystuff/gitops}"
 host="${4:-}"
 release_id="${5:-}"
+helper_command="${6:-check-served}"
+
+case "$helper_command" in
+  check-served | summary-served) ;;
+  *)
+    echo "unsupported GitOps helper command: $helper_command" >&2
+    exit 2
+    ;;
+esac
 
 if [[ -z "$environment" ]]; then
   echo "environment must not be empty" >&2
@@ -39,7 +48,7 @@ rollback_set_path="${state_dir%/}/rollback-set/${environment}.json"
 
 args=(
   gitops
-  check-served
+  "$helper_command"
   --status "$status_path"
   --active "$active_path"
   --rollback-set "$rollback_set_path"

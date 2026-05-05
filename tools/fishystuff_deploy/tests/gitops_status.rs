@@ -44,6 +44,42 @@ fn gitops_check_served_accepts_consistent_rollback_ready_documents() -> Result<(
 }
 
 #[test]
+fn gitops_summary_served_prints_active_and_retained_releases() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-summary")?;
+    let status = root.path().join("status.json");
+    let active = root.path().join("active.json");
+    let rollback_set = root.path().join("rollback-set.json");
+
+    write_served_documents(&status, &active, &rollback_set)?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "summary-served",
+        "--status",
+        path_str(&status)?,
+        "--active",
+        path_str(&active)?,
+        "--rollback-set",
+        path_str(&rollback_set)?,
+        "--environment",
+        "local-test",
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops summary-served", output);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("environment: local-test"));
+    assert!(stdout.contains("host: vm-single-host"));
+    assert!(stdout.contains("generation: 42"));
+    assert!(stdout.contains("served_release: active-release"));
+    assert!(stdout.contains("rollback_primary: previous-release"));
+    assert!(stdout.contains("retained_rollback_releases: previous-release"));
+    assert!(stdout.contains("retained_count: 1"));
+
+    Ok(())
+}
+
+#[test]
 fn gitops_check_served_rejects_missing_rollback_readiness() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-gitops-not-ready")?;
     let status = root.path().join("status.json");

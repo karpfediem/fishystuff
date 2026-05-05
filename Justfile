@@ -81,6 +81,10 @@ gitops-helper-test:
 gitops-check-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" host="" release_id="":
   bash scripts/recipes/gitops-check-served.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{host}}" "{{release_id}}"
 
+# Print a local GitOps served release and rollback target summary.
+gitops-served-summary deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" host="" release_id="":
+  bash scripts/recipes/gitops-check-served.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{host}}" "{{release_id}}" "summary-served"
+
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
   bash scripts/recipes/gitops-vm-test.sh "{{test_name}}"

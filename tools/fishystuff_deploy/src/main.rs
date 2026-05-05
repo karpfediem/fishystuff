@@ -124,6 +124,20 @@ enum GitopsCommands {
         #[arg(long)]
         release_id: Option<String>,
     },
+    SummaryServed {
+        #[arg(long)]
+        status: PathBuf,
+        #[arg(long)]
+        active: PathBuf,
+        #[arg(long)]
+        rollback_set: PathBuf,
+        #[arg(long)]
+        environment: Option<String>,
+        #[arg(long)]
+        host: Option<String>,
+        #[arg(long)]
+        release_id: Option<String>,
+    },
 }
 
 fn main() -> Result<ExitCode> {
@@ -203,6 +217,25 @@ fn main() -> Result<ExitCode> {
                     release_id.as_deref(),
                 )?;
                 println!("{}", summary.summary_line());
+                Ok(ExitCode::SUCCESS)
+            }
+            GitopsCommands::SummaryServed {
+                status,
+                active,
+                rollback_set,
+                environment,
+                host,
+                release_id,
+            } => {
+                let summary = gitops::check_served(
+                    &status,
+                    &active,
+                    &rollback_set,
+                    environment.as_deref(),
+                    host.as_deref(),
+                    release_id.as_deref(),
+                )?;
+                print!("{}", summary.operator_summary());
                 Ok(ExitCode::SUCCESS)
             }
         },

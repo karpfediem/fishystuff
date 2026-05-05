@@ -300,6 +300,12 @@ The same local check is available through:
 just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
 ```
 
+For a human-readable summary of the served release and retained rollback releases:
+
+```bash
+just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
+```
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.

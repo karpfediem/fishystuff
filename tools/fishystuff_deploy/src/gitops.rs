@@ -45,11 +45,14 @@ struct RollbackSetDocument {
 }
 
 pub struct ServedSummary {
+    desired_generation: u64,
     environment: String,
     host: String,
     release_id: String,
+    release_identity: String,
     rollback_primary_release_id: String,
     rollback_retained_count: usize,
+    retained_release_ids: Vec<String>,
 }
 
 impl ServedSummary {
@@ -60,6 +63,21 @@ impl ServedSummary {
             self.host,
             self.release_id,
             self.rollback_primary_release_id,
+            self.rollback_retained_count
+        )
+    }
+
+    pub fn operator_summary(&self) -> String {
+        let retained = self.retained_release_ids.join(", ");
+        format!(
+            "environment: {}\nhost: {}\ngeneration: {}\nserved_release: {}\nrelease_identity: {}\nrollback_primary: {}\nretained_rollback_releases: {}\nretained_count: {}\n",
+            self.environment,
+            self.host,
+            self.desired_generation,
+            self.release_id,
+            self.release_identity,
+            self.rollback_primary_release_id,
+            retained,
             self.rollback_retained_count
         )
     }
@@ -180,11 +198,14 @@ pub fn check_served(
     )?;
 
     Ok(ServedSummary {
+        desired_generation: status.desired_generation,
         environment: status.environment,
         host: status.host,
         release_id: status.release_id,
+        release_identity: status.release_identity,
         rollback_primary_release_id: status.rollback_primary_release_id,
         rollback_retained_count: status.rollback_retained_count,
+        retained_release_ids: status.retained_release_ids,
     })
 }
 
