@@ -2486,6 +2486,9 @@ impl Store for DoltMySqlStore {
             let canonical_map = CanonicalMapInfo::default();
             let meta = MetaResponse {
                 api_version: API_VERSION.to_string(),
+                release_id: None,
+                release_identity: None,
+                dolt_commit: None,
                 canonical_map,
                 patches,
                 default_patch,

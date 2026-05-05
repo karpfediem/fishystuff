@@ -25,9 +25,12 @@ pub async fn get_meta(
     State(state): State<SharedState>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<impl IntoResponse> {
-    let meta = with_timeout(state.config.request_timeout_secs, state.store.get_meta())
+    let mut meta = with_timeout(state.config.request_timeout_secs, state.store.get_meta())
         .await
         .map_err(|err| err.with_request_id(request_id.0))?;
+    meta.release_id = state.config.deployment.release_id.clone();
+    meta.release_identity = state.config.deployment.release_identity.clone();
+    meta.dolt_commit = state.config.deployment.dolt_commit.clone();
     Ok((meta_headers(), Json(meta)))
 }
 

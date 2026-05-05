@@ -54,6 +54,13 @@ impl Default for TelemetryConfig {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct DeploymentIdentity {
+    pub release_id: Option<String>,
+    pub release_identity: Option<String>,
+    pub dolt_commit: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub bind: String,
@@ -68,6 +75,7 @@ pub struct AppConfig {
     pub cache_log: bool,
     pub request_timeout_secs: u64,
     pub telemetry: TelemetryConfig,
+    pub deployment: DeploymentIdentity,
 }
 
 impl AppConfig {
@@ -166,6 +174,7 @@ impl AppConfig {
                 .unwrap_or_default(),
             sample_ratio: parse_env_f64("FISHYSTUFF_OTEL_SAMPLE_RATIO", 0.25).clamp(0.0, 1.0),
         };
+        let deployment = parse_deployment_identity()?;
 
         let mut i = 0usize;
         while i < args.len() {
@@ -307,8 +316,31 @@ impl AppConfig {
             cache_log,
             request_timeout_secs,
             telemetry,
+            deployment,
         })
     }
+}
+
+fn parse_deployment_identity() -> Result<DeploymentIdentity> {
+    let deployment = DeploymentIdentity {
+        release_id: parse_env_string("FISHYSTUFF_RELEASE_ID"),
+        release_identity: parse_env_string("FISHYSTUFF_RELEASE_IDENTITY"),
+        dolt_commit: parse_env_string("FISHYSTUFF_DOLT_COMMIT"),
+    };
+    let set_count = [
+        deployment.release_id.as_ref(),
+        deployment.release_identity.as_ref(),
+        deployment.dolt_commit.as_ref(),
+    ]
+    .into_iter()
+    .filter(Option::is_some)
+    .count();
+    if set_count != 0 && set_count != 3 {
+        bail!(
+            "FISHYSTUFF_RELEASE_ID, FISHYSTUFF_RELEASE_IDENTITY, and FISHYSTUFF_DOLT_COMMIT must be set together"
+        );
+    }
+    Ok(deployment)
 }
 
 fn parse_cors_allowed_origins(value: Option<&str>) -> Result<Vec<String>> {

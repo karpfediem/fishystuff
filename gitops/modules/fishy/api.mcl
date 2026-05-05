@@ -19,7 +19,9 @@ class candidate_service($st) {
 	$state_dir = fishy_paths.state_dir($mode)
 	$config_dir = fmt.printf("%s/api", $state_dir)
 	$config_path = fmt.printf("%s/%s.json", $config_dir, $environment)
+	$env_path = fmt.printf("%s/%s.env", $config_dir, $environment)
 	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"api_bundle\": %s,\n  \"api_upstream\": %s,\n  \"service_name\": %s,\n  \"dolt_commit\": %s,\n  \"state\": \"candidate_api_config\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($api_bundle), fishy_json.quote($api_upstream), fishy_json.quote($service_name), fishy_json.quote($dolt_commit))
+	$env_content = fmt.printf("FISHYSTUFF_RELEASE_ID='%s'\nFISHYSTUFF_RELEASE_IDENTITY='%s'\nFISHYSTUFF_DOLT_COMMIT='%s'\nFISHYSTUFF_DEPLOYMENT_ENVIRONMENT='%s'\n", $release_id, $release_identity, $dolt_commit, $environment)
 
 	panic($enabled and (not $write_local_state), "candidate API service is only supported in local writing modes")
 	panic($enabled and ($environment == ""), "candidate API service requires environment")
@@ -28,6 +30,10 @@ class candidate_service($st) {
 	panic($enabled and ($release_identity == ""), "candidate API service requires release_identity")
 	panic($enabled and ($api_upstream == ""), "candidate API service requires api_upstream")
 	panic($enabled and core_strings.has_suffix($service_name, ".service"), "candidate API service expects a mgmt svc name, not a systemd unit filename")
+	panic($enabled and (len(core_strings.split($environment, "'")) > 1), "candidate API service environment must not contain single quotes")
+	panic($enabled and (len(core_strings.split($release_id, "'")) > 1), "candidate API service release_id must not contain single quotes")
+	panic($enabled and (len(core_strings.split($release_identity, "'")) > 1), "candidate API service release_identity must not contain single quotes")
+	panic($enabled and (len(core_strings.split($dolt_commit, "'")) > 1), "candidate API service dolt_commit must not contain single quotes")
 	panic($enabled and (len(core_strings.split($service_name, "'")) > 1), "candidate API service name must not contain single quotes")
 
 	if $enabled and $write_local_state {
@@ -42,11 +48,19 @@ class candidate_service($st) {
 			mode => "0644",
 		}
 
+		file "${env_path}" {
+			state => "exists",
+			content => $env_content,
+			mode => "0640",
+		}
+
 		svc "${service_name}" {
 			state => "running",
 		}
 
 		File["${config_dir}/"] -> File["${config_path}"]
+		File["${config_dir}/"] -> File["${env_path}"]
 		File["${config_path}"] -> Svc["${service_name}"]
+		File["${env_path}"] -> Svc["${service_name}"]
 	}
 }

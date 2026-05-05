@@ -46,6 +46,17 @@ The API's default Dolt ref now follows the deployment environment first.
 explicit overrides, and routes that already accept `ref_id` can still override
 the default per request.
 
+For deployment admission, `/api/v1/meta` can also expose the exact API identity
+when all three values are provided to the process:
+
+- `FISHYSTUFF_RELEASE_ID`
+- `FISHYSTUFF_RELEASE_IDENTITY`
+- `FISHYSTUFF_DOLT_COMMIT`
+
+These fields are optional for local development, but deployment wrappers should
+set them together so GitOps admission can verify that the candidate API is wired
+to the intended release and Dolt data before it becomes served.
+
 ## Fly deployment
 
 The Fly deployment path now assumes:

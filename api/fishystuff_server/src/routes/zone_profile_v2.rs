@@ -206,6 +206,7 @@ mod tests {
             cache_log: false,
             request_timeout_secs: 5,
             telemetry: TelemetryConfig::default(),
+            deployment: Default::default(),
         };
         AppState::for_tests(config, Arc::new(MockStore))
     }

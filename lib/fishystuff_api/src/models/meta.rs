@@ -6,6 +6,12 @@ use crate::ids::{MapVersionId, PatchId, Timestamp};
 pub struct MetaResponse {
     #[serde(default)]
     pub api_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_identity: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dolt_commit: Option<String>,
     #[serde(default)]
     pub canonical_map: CanonicalMapInfo,
     #[serde(default)]

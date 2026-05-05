@@ -141,6 +141,8 @@ mod tests {
 
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use hyper::body::to_bytes;
+    use serde_json::Value;
     use tower::util::ServiceExt;
 
     use fishystuff_api::models::calculator::CalculatorCatalogResponse;
@@ -154,7 +156,7 @@ mod tests {
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
 
-    use crate::config::{AppConfig, TelemetryConfig, ZoneStatusConfig};
+    use crate::config::{AppConfig, DeploymentIdentity, TelemetryConfig, ZoneStatusConfig};
     use crate::state::AppState;
     use crate::store::{DataLang, Store};
 
@@ -329,6 +331,7 @@ mod tests {
             cache_log: false,
             request_timeout_secs: 5,
             telemetry: TelemetryConfig::default(),
+            deployment: Default::default(),
         }
     }
 
@@ -426,6 +429,38 @@ mod tests {
             .expect("response");
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn meta_reports_deployment_identity_from_config() {
+        let mut config = test_config(vec!["https://fishystuff.fish"]);
+        config.deployment = DeploymentIdentity {
+            release_id: Some("release-123".to_string()),
+            release_identity: Some("release=release-123;dolt_commit=abc123".to_string()),
+            dolt_commit: Some("abc123".to_string()),
+        };
+        let router = build_router(AppState::for_tests(config, Arc::new(MockStore)));
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/meta")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.expect("body");
+        let document: Value = serde_json::from_slice(&body).expect("meta JSON");
+        assert_eq!(document["release_id"], "release-123");
+        assert_eq!(
+            document["release_identity"],
+            "release=release-123;dolt_commit=abc123"
+        );
+        assert_eq!(document["dolt_commit"], "abc123");
     }
 }
 
