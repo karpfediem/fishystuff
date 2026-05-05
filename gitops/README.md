@@ -86,6 +86,7 @@ nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-local-apply-rollback
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
@@ -111,6 +112,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-desired-state-admission-probe` proves the generated desired-state helper can emit `admission_probe.kind = "dolt_sql_scalar"` for a VM-only `fetch_pin` candidate and still unify through `gitops/main.mcl`. It does not run the probe or contact a remote.
 
 `gitops-desired-state-http-admission-probe` proves the generated desired-state helper can emit a `local-apply` loopback API meta admission probe without requiring Dolt `fetch_pin` materialization.
+
+`gitops-desired-state-local-apply-rollback` proves the generated desired-state helper can emit a serving `local-apply` rollback transition with loopback API meta admission and a managed candidate API service.
 
 `gitops-desired-state-rollback-transition` proves the generated desired-state helper can emit an explicit rollback transition with the rolled-away release retained for rollback and stale CDN clients.
 

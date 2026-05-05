@@ -162,6 +162,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-desired-state-rollback-transition` type-checks a generated local `vm-test` rollback desired-state package. It verifies the generated environment names the previous release as active, retains the rolled-away candidate release, and emits `transition.kind = "rollback"` with the retained `from_release`.
 
+`gitops-desired-state-local-apply-rollback` type-checks a generated `local-apply` rollback desired-state package with `api_service`, `api_upstream`, and API meta admission. It is the fast JSON/schema companion to the heavier real-API VM rollback handoff test.
+
 `gitops-desired-state-rollback-transition-retention-refusal` checks that the generated desired-state helper refuses rollback desired state when `transition.from_release` would not remain retained after rollback.
 
 `gitops-desired-state-serve-without-retained-refusal` checks that the generated desired-state helper refuses to emit serving JSON unless at least one retained rollback release is provided.

@@ -392,6 +392,50 @@
             mode = "local-apply";
             serve = false;
           };
+          gitopsDesiredStateLocalApplyRollbackFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "local-test";
+            environment = "local-test";
+            hostKey = "vm-single-host";
+            activeRelease = "previous-release";
+            generation = 12;
+            releaseGeneration = 12;
+            gitRev = "previous-serve-fixture";
+            doltCommit = "previous-serve-fixture";
+            doltBranchContext = "local-test";
+            apiClosure = gitopsDesiredStateServeFixturePreviousApi;
+            siteClosure = gitopsDesiredStateServeFixturePreviousSite;
+            cdnRuntimeClosure = gitopsDesiredStateServeFixtureRollbackCdn;
+            doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
+            apiService = "fishystuff-gitops-candidate-api-local-test";
+            apiUpstream = "http://127.0.0.1:18082";
+            admissionProbe = {
+              kind = "api_meta";
+              probe_name = "api-meta";
+              url = "http://127.0.0.1:18082/api/v1/meta";
+              expected_status = 200;
+              timeout_ms = 2000;
+            };
+            retainedReleaseObjects = [
+              {
+                releaseId = "candidate-release";
+                generation = 11;
+                gitRev = "serve-fixture";
+                doltCommit = "serve-fixture";
+                doltBranchContext = "local-test";
+                apiClosure = gitopsDesiredStateServeFixtureApi;
+                siteClosure = gitopsDesiredStateServeFixtureSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+              }
+            ];
+            transition = {
+              kind = "rollback";
+              from_release = "candidate-release";
+              reason = "generated local apply rollback fixture";
+            };
+            mode = "local-apply";
+            serve = true;
+          };
           edgeServiceBundleFor =
             deploymentEnvironment:
             mkServiceBundle {
@@ -666,6 +710,38 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateLocalApplyRollbackCheck = pkgs.runCommand "gitops-desired-state-local-apply-rollback-check" {
+            nativeBuildInputs = [
+              mgmtGitopsPackage
+              pkgs.jq
+            ];
+          } ''
+            set -euo pipefail
+
+            jq -e '
+              .mode == "local-apply"
+              and .generation == 12
+              and .environments."local-test".serve == true
+              and .environments."local-test".active_release == "previous-release"
+              and .environments."local-test".retained_releases == ["candidate-release"]
+              and .environments."local-test".api_upstream == "http://127.0.0.1:18082"
+              and .environments."local-test".api_service == "fishystuff-gitops-candidate-api-local-test"
+              and .environments."local-test".admission_probe.kind == "api_meta"
+              and .environments."local-test".admission_probe.url == "http://127.0.0.1:18082/api/v1/meta"
+              and .environments."local-test".transition.kind == "rollback"
+              and .environments."local-test".transition.from_release == "candidate-release"
+              and .environments."local-test".transition.reason == "generated local apply rollback fixture"
+              and .releases."previous-release".generation == 12
+              and .releases."candidate-release".generation == 11
+              and ([.releases."previous-release".closures[] | .enabled] | all)
+              and ([.releases."candidate-release".closures[] | .enabled] | all)
+            ' ${gitopsDesiredStateLocalApplyRollbackFixture}
+
+            export FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateLocalApplyRollbackFixture}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
           gitopsDesiredStateServeWithoutRetainedCheck =
             let
               attempted = builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
@@ -805,6 +881,7 @@
             fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;
+            gitops-desired-state-local-apply-rollback-fixture = gitopsDesiredStateLocalApplyRollbackFixture;
             gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;
@@ -832,6 +909,7 @@
               fishystuff-deploy-tests = fishystuffDeployTests;
               gitops-desired-state-admission-probe = gitopsDesiredStateAdmissionProbeCheck;
               gitops-desired-state-http-admission-probe = gitopsDesiredStateHttpAdmissionProbeCheck;
+              gitops-desired-state-local-apply-rollback = gitopsDesiredStateLocalApplyRollbackCheck;
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               gitops-desired-state-rollback-transition = gitopsDesiredStateRollbackTransitionCheck;
