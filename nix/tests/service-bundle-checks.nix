@@ -2,7 +2,9 @@
   pkgs,
   lib ? pkgs.lib,
   apiServiceBundle,
+  apiServiceBundleProduction,
   doltServiceBundle,
+  doltServiceBundleProduction,
   edgeServiceBundle,
 }:
 let
@@ -195,6 +197,27 @@ in
     unitName = "fishystuff-api.service";
     minArgvLength = 3;
     requireSecretSpecPath = true;
+    requiredEnvironment = {
+      FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = "beta";
+      FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = "beta";
+    };
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "push";
+  };
+
+  api-service-bundle-production = mkBundleCheck {
+    name = "api-service-bundle-production-check";
+    bundle = apiServiceBundleProduction;
+    serviceId = "fishystuff-api";
+    configDestination = "config.toml";
+    runtimeEnvTarget = "/run/fishystuff/api/env";
+    unitName = "fishystuff-api.service";
+    minArgvLength = 3;
+    requireSecretSpecPath = true;
+    requiredEnvironment = {
+      FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = "production";
+      FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = "production";
+    };
     requiredMaterializationHandle = "pkg/main";
     requiredMaterializationAcquisition = "push";
   };
@@ -208,6 +231,34 @@ in
     unitName = "fishystuff-dolt.service";
     workingDirectory = "/var/lib/fishystuff/dolt";
     requiredEnvironment = {
+      FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = "beta";
+      HOME = "/var/lib/fishystuff/dolt/home";
+    };
+    requiredUnitLines = [
+      "User=fishystuff-dolt"
+      "Group=fishystuff-dolt"
+      "StateDirectory=fishystuff/dolt"
+      "StateDirectoryMode=0750"
+    ];
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
+    forbiddenUnitLines = [
+      "DynamicUser=true"
+      "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
+    ];
+    expectedReloadMode = "command";
+  };
+
+  dolt-service-bundle-production = mkBundleCheck {
+    name = "dolt-service-bundle-production-check";
+    bundle = doltServiceBundleProduction;
+    serviceId = "fishystuff-dolt";
+    configDestination = "sql-server.yaml";
+    runtimeEnvTarget = "/run/fishystuff/api/env";
+    unitName = "fishystuff-dolt.service";
+    workingDirectory = "/var/lib/fishystuff/dolt";
+    requiredEnvironment = {
+      FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = "production";
       HOME = "/var/lib/fishystuff/dolt/home";
     };
     requiredUnitLines = [

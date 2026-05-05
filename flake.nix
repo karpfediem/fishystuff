@@ -517,7 +517,9 @@
           serviceBundleChecks = import ./nix/tests/service-bundle-checks.nix {
             inherit
               apiServiceBundle
+              apiServiceBundleProduction
               doltServiceBundle
+              doltServiceBundleProduction
               edgeServiceBundle
               pkgs
               ;
