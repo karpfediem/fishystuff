@@ -134,6 +134,33 @@ fn gitops_check_served_rejects_cross_document_release_mismatch() -> Result<()> {
 }
 
 #[test]
+fn gitops_check_served_rejects_stale_active_retained_list() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-stale-active-retained")?;
+    let status = root.path().join("status.json");
+    let active = root.path().join("active.json");
+    let rollback_set = root.path().join("rollback-set.json");
+
+    write_served_documents(&status, &active, &rollback_set)?;
+    let mut stale_active = read_json(&active)?;
+    stale_active["retained_release_ids"] = json!(["older-release"]);
+    write_json(&active, stale_active)?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "check-served",
+            "--status",
+            path_str(&status)?,
+            "--active",
+            path_str(&active)?,
+            "--rollback-set",
+            path_str(&rollback_set)?,
+        ],
+        "active retained_release_ids was [\"older-release\"], expected [\"previous-release\"]",
+    )
+}
+
+#[test]
 fn gitops_check_served_rejects_stale_rollback_set_retained_list() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-gitops-stale-rollback-set")?;
     let status = root.path().join("status.json");
