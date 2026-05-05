@@ -35,6 +35,7 @@ just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
+just gitops-vm-test served-caddy-rollback-transition
 just gitops-vm-test served-rollback-transition
 just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
@@ -71,6 +72,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
+nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
@@ -120,6 +122,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-served-symlink-transition-vm` boots one local NixOS VM, serves one desired state, then serves a second desired state. It proves the VM-local active symlinks and route selection document move by reconciliation through desired state, not by an imperative deployment command.
 
 `gitops-served-caddy-handoff-vm` boots one local NixOS VM, runs Caddy against the VM-local served site/CDN symlink roots, and then changes the served desired state. It proves the future Caddy-facing handoff shape can serve the selected release and then observe the next selected release through stable symlink roots without restarting Caddy.
+
+`gitops-served-caddy-rollback-transition-vm` boots one local NixOS VM, runs Caddy against the same stable served site/CDN roots, serves a candidate, then rolls back to the previous release. It proves the Caddy-facing handoff observes the rollback target over HTTP while the rolled-away candidate CDN root remains retained for stale clients.
 
 `gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state with `transition.kind = "rollback"`. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the active/status transition fields, route selection, primary rollback readiness, and rollback-set documents.
 
@@ -310,6 +314,8 @@ The closure and gcroot resources are both declared for each enabled artifact. A 
 `gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`, VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}`, and a route selection document under `/run/fishystuff/gitops-test/routes/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
 
 `gitops-served-caddy-handoff-vm` adds a real local Caddy consumer for that handoff shape. Caddy serves the stable symlink roots while mgmt reconciles the underlying active release. The test verifies site content, current CDN runtime files, and retained prior CDN runtime files over HTTP before and after the selected release changes.
+
+`gitops-served-caddy-rollback-transition-vm` applies the same Caddy consumer to rollback. It verifies the active site and runtime manifest switch back to the previous release over HTTP, and that the CDN serving root still serves the rolled-away candidate runtime asset after rollback.
 
 `gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses the `fishystuff_deploy dolt fetch-pin` helper, backed by Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM, to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
 

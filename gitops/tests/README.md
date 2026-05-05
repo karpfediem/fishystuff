@@ -28,6 +28,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
+nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
@@ -69,6 +70,7 @@ just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
+just gitops-vm-test served-caddy-rollback-transition
 just gitops-vm-test served-rollback-transition
 just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
@@ -119,6 +121,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-served-caddy-handoff-vm` boots a local NixOS VM, runs Caddy against `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, and runs two served desired states in sequence. It checks that Caddy serves the previous release, retained previous CDN assets, the candidate release, and retained candidate CDN assets through stable symlink roots without restarting Caddy.
 
+`gitops-served-caddy-rollback-transition-vm` boots a local NixOS VM, runs Caddy against `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, serves a candidate, and then rolls back to the previous release. It checks that Caddy serves the candidate first, then the previous release after rollback, while the rolled-away candidate CDN runtime asset remains available through the retained CDN serving root.
+
 `gitops-served-rollback-transition-vm` boots a local NixOS VM and runs a served candidate desired state followed by a rollback desired state with `transition.kind = "rollback"`. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, the active/status transition fields, the route selection document, the primary rollback readiness document, and the rollback-set index/member documents move back to the previous release and that the rollback CDN serving root retains the candidate CDN root for stale clients.
 
 `gitops-failed-candidate-vm` boots a local NixOS VM with a deterministic failed admission fixture. It checks that a failed non-serving candidate still publishes candidate, admission, and status facts, records `failure_reason: admission_failed`, and does not create an active selection or served symlinks.
@@ -159,4 +163,4 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
 
-GitOps VM tests set explicit VM memory because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph. Heavier Dolt/rollback tests use 8 GiB.
+GitOps VM tests set explicit VM memory because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph. Heavier Dolt/rollback tests use 8-12 GiB.
