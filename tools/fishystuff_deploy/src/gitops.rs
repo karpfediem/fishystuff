@@ -63,6 +63,7 @@ pub struct ServedSummary {
     release_id: String,
     release_identity: String,
     rollback_primary_release_id: String,
+    rollback_primary_release_identity: String,
     rollback_retained_count: usize,
     retained_release_ids: Vec<String>,
 }
@@ -82,13 +83,14 @@ impl ServedSummary {
     pub fn operator_summary(&self) -> String {
         let retained = self.retained_release_ids.join(", ");
         format!(
-            "environment: {}\nhost: {}\ngeneration: {}\nserved_release: {}\nrelease_identity: {}\nrollback_primary: {}\nretained_rollback_releases: {}\nretained_count: {}\n",
+            "environment: {}\nhost: {}\ngeneration: {}\nserved_release: {}\nrelease_identity: {}\nrollback_primary: {}\nrollback_primary_identity: {}\nretained_rollback_releases: {}\nretained_count: {}\n",
             self.environment,
             self.host,
             self.desired_generation,
             self.release_id,
             self.release_identity,
             self.rollback_primary_release_id,
+            self.rollback_primary_release_identity,
             retained,
             self.rollback_retained_count
         )
@@ -250,6 +252,7 @@ pub fn check_served(
         release_id: status.release_id,
         release_identity: status.release_identity,
         rollback_primary_release_id: status.rollback_primary_release_id,
+        rollback_primary_release_identity: rollback.rollback_release_identity,
         rollback_retained_count: status.rollback_retained_count,
         retained_release_ids: status.retained_release_ids,
     })

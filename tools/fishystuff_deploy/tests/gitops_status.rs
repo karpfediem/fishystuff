@@ -79,6 +79,7 @@ fn gitops_summary_served_prints_active_and_retained_releases() -> Result<()> {
     assert!(stdout.contains("generation: 42"));
     assert!(stdout.contains("served_release: active-release"));
     assert!(stdout.contains("rollback_primary: previous-release"));
+    assert!(stdout.contains("rollback_primary_identity: release=previous-release;api=example"));
     assert!(stdout.contains("retained_rollback_releases: previous-release"));
     assert!(stdout.contains("retained_count: 1"));
 

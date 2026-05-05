@@ -304,7 +304,7 @@ The same local check is available through:
 just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
 ```
 
-For a human-readable summary of the served release and retained rollback releases:
+For a human-readable summary of the served release, primary rollback identity, and retained rollback releases:
 
 ```bash
 just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
