@@ -107,7 +107,7 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 
 `gitops-dolt-admission-pin-vm` adds a local DB-backed admission step to the `fetch_pin` path. Desired state includes `admission_probe.kind = "dolt_sql_scalar"` with a single-scalar SQL query and expected value. The graph runs the probe only after the Dolt materialization helper has pinned the exact release ref, and the helper refuses admission if the materialization status, ref hash, or query result does not match the desired commit tuple.
 
-`gitops-served-retained-dolt-fetch-pin-vm` proves the rollback data side of serving. It creates a local Dolt remote, serves a candidate release, retains multiple rollback releases, and verifies the active and all retained rollback release refs are pinned in the same VM-local Dolt cache before served active/status/route documents publish. The rollback readiness document still records the first retained release as the primary rollback target.
+`gitops-served-retained-dolt-fetch-pin-vm` proves the rollback data side of serving. It creates a local Dolt remote, serves a candidate release, retains multiple rollback releases, and verifies the active and all retained rollback release refs are pinned in the same VM-local Dolt cache before served active/status/route documents publish. The rollback readiness document still records the first retained release as the primary rollback target, and rollback-set member documents record every retained release's exact Dolt status path.
 
 `gitops-json-status-escaping-vm` proves the VM-local JSON outputs preserve quote/backslash characters from the exact release identity tuple instead of emitting malformed JSON.
 
@@ -304,7 +304,7 @@ The closure and gcroot resources are both declared for each enabled artifact. A 
 
 `gitops-dolt-admission-pin-vm` keeps admission local and synthetic while making it DB-backed. The optional VM-only `admission_probe.kind = "dolt_sql_scalar"` path writes a probe request, waits for `fetch_pin`, verifies the pinned materialization status, and executes a one-row/one-column Dolt SQL query through `fishystuff_deploy dolt probe-sql-scalar` before writing the admission document.
 
-`gitops-served-retained-dolt-fetch-pin-vm` covers the rollback data path: when a served environment retains rollback releases whose Dolt materialization is `fetch_pin`, every retained release is materialized through the same VM-local cache and its own release-ref status path. Served active/status/route files depend on every retained materialization, and the primary rollback readiness file depends on the first retained release's materialization, so served state does not claim a rollback set whose Dolt commits were never pinned locally.
+`gitops-served-retained-dolt-fetch-pin-vm` covers the rollback data path: when a served environment retains rollback releases whose Dolt materialization is `fetch_pin`, every retained release is materialized through the same VM-local cache and its own release-ref status path. Served active/status/route files and the rollback-set documents depend on every retained materialization, and the primary rollback readiness file depends on the first retained release's materialization, so served state does not claim a rollback set whose Dolt commits were never pinned locally.
 
 Fallbacks introduced: none to the old beta deployment graph. The validation no-op is a mode-specific safety guard, not compatibility with an old code path.
 

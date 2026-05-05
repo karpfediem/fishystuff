@@ -100,6 +100,9 @@ pkgs.testers.runNixOSTest {
     active = "/var/lib/fishystuff/gitops-test/active/local-test.json"
     status = "/var/lib/fishystuff/gitops-test/status/local-test.json"
     rollback = "/var/lib/fishystuff/gitops-test/rollback/local-test.json"
+    rollback_set = "/var/lib/fishystuff/gitops-test/rollback-set/local-test.json"
+    previous_rollback_member = "/var/lib/fishystuff/gitops-test/rollback-set/local-test/previous-release.json"
+    older_rollback_member = "/var/lib/fishystuff/gitops-test/rollback-set/local-test/older-release.json"
     route = "/run/fishystuff/gitops-test/routes/local-test.json"
 
     def wait_for_gitops_file(path):
@@ -242,6 +245,9 @@ pkgs.testers.runNixOSTest {
     wait_for_gitops_file(active)
     wait_for_gitops_file(status)
     wait_for_gitops_file(rollback)
+    wait_for_gitops_file(rollback_set)
+    wait_for_gitops_file(previous_rollback_member)
+    wait_for_gitops_file(older_rollback_member)
     wait_for_gitops_file(route)
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit2)\" '.release_id == \"candidate-release\" and .requested_commit == $commit and .verified_commit == $commit and .cache_dir == \"{cache}\" and .release_ref == \"{candidate_ref}\" and .state == \"pinned\"' {candidate_dolt_status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.release_id == \"previous-release\" and .requested_commit == $commit and .verified_commit == $commit and .cache_dir == \"{cache}\" and .release_ref == \"{previous_ref}\" and .state == \"pinned\"' {previous_dolt_status}")
@@ -249,6 +255,9 @@ pkgs.testers.runNixOSTest {
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .retained_release_ids == [\"previous-release\", \"older-release\"] and .retained_dolt_status_paths == [\"{previous_dolt_status}\", \"{older_dolt_status}\"] and .served == true' {active}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .phase == \"served\" and .served == true and .retained_release_ids == [\"previous-release\", \"older-release\"] and .retained_dolt_status_paths == [\"{previous_dolt_status}\", \"{older_dolt_status}\"]' {status}")
     machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.desired_generation == 50 and .current_release_id == \"candidate-release\" and .rollback_release_id == \"previous-release\" and .rollback_dolt_commit == $commit and .rollback_dolt_materialization == \"fetch_pin\" and .rollback_dolt_cache_dir == \"{cache}\" and .rollback_dolt_release_ref == \"{previous_ref}\" and .rollback_available == true' {rollback}")
+    machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .current_release_id == \"candidate-release\" and .retained_release_count == 2 and .retained_release_ids == [\"previous-release\", \"older-release\"] and .retained_release_document_paths == [\"{previous_rollback_member}\", \"{older_rollback_member}\"] and .rollback_set_available == true and .rollback_set_state == \"retained_hot_release_set\"' {rollback_set}")
+    machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit1)\" '.desired_generation == 50 and .current_release_id == \"candidate-release\" and .release_id == \"previous-release\" and .api_bundle == \"${previousApi}\" and .dolt_service_bundle == \"${previousDoltService}\" and .site_content == \"${previousSite}\" and .cdn_runtime_content == \"${previousCdnRoot}\" and .dolt_commit == $commit and .dolt_materialization == \"fetch_pin\" and .dolt_cache_dir == \"{cache}\" and .dolt_release_ref == \"{previous_ref}\" and .dolt_status_path == \"{previous_dolt_status}\" and .rollback_member_state == \"retained_hot_release\"' {previous_rollback_member}")
+    machine.wait_until_succeeds(f"jq -e --arg commit \"$(cat {work}/commit0)\" '.desired_generation == 50 and .current_release_id == \"candidate-release\" and .release_id == \"older-release\" and .api_bundle == \"${olderApi}\" and .dolt_service_bundle == \"${olderDoltService}\" and .site_content == \"${olderSite}\" and .cdn_runtime_content == \"${olderCdnRoot}\" and .dolt_commit == $commit and .dolt_materialization == \"fetch_pin\" and .dolt_cache_dir == \"{cache}\" and .dolt_release_ref == \"{older_ref}\" and .dolt_status_path == \"{older_dolt_status}\" and .rollback_member_state == \"retained_hot_release\"' {older_rollback_member}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 50 and .release_id == \"candidate-release\" and .state == \"selected_local_route\"' {route}")
     machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{candidate_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit2)\"")
     machine.succeed(f"cd {cache} && test \"$(dolt sql -r csv -q \"select dolt_hashof('{previous_ref}') as hash\" | tail -n 1)\" = \"$(cat {work}/commit1)\"")
