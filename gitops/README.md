@@ -86,6 +86,7 @@ nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-local-apply-rollback
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
@@ -105,6 +106,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 ```
 
 `.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It deliberately keeps `cdn_runtime` disabled so normal repo checks do not depend on private or ignored CDN staging state. Its release key is derived from the exact available tuple by default. It sets `serve: false`, `mode: validate`, and a placeholder Dolt commit; it is not a deploy/apply command.
+
+`.#gitops-desired-state-production-validate` is the production-shaped equivalent. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, `serve: false`, and `mode: validate`, so it can type-check production inputs without mutating production or selecting a served release.
 
 Real deployment desired state should import `nix/packages/gitops-desired-state.nix` from an operator/deployment flake and pass exact `doltCommit`, service bundles, site content, and finalized CDN serving roots as Nix values. The generated GitOps validation package intentionally does not use ambient environment variables for those deployment-critical inputs.
 

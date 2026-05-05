@@ -210,27 +210,35 @@
           mkServiceBundle = pkgs.callPackage ./nix/services/mk-service-bundle.nix {
             inherit evalService;
           };
-          apiServiceBundle = mkServiceBundle {
-            name = "fishystuff-api";
-            serviceModule = serviceModules.api;
-            configuration.fishystuff.api = {
-              package = api;
-              baseConfigSource = apiServiceBaseConfig;
-              requestTimeoutSecs = 90;
-              runtimeEnvFile = "/run/fishystuff/api/env";
-              environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
-              environment.FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
+          apiServiceBundleFor =
+            deploymentEnvironment:
+            mkServiceBundle {
+              name = "fishystuff-api";
+              serviceModule = serviceModules.api;
+              configuration.fishystuff.api = {
+                package = api;
+                baseConfigSource = apiServiceBaseConfig;
+                requestTimeoutSecs = 90;
+                runtimeEnvFile = "/run/fishystuff/api/env";
+                environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
+                environment.FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
+              };
             };
-          };
-          doltServiceBundle = mkServiceBundle {
-            name = "fishystuff-dolt";
-            serviceModule = serviceModules.dolt;
-            configuration.fishystuff.dolt = {
-              dynamicUser = false;
-              runtimeEnvFile = "/run/fishystuff/api/env";
-              environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = defaultDeploymentEnvironment;
+          apiServiceBundle = apiServiceBundleFor defaultDeploymentEnvironment;
+          apiServiceBundleProduction = apiServiceBundleFor "production";
+          doltServiceBundleFor =
+            deploymentEnvironment:
+            mkServiceBundle {
+              name = "fishystuff-dolt";
+              serviceModule = serviceModules.dolt;
+              configuration.fishystuff.dolt = {
+                dynamicUser = false;
+                runtimeEnvFile = "/run/fishystuff/api/env";
+                environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
+              };
             };
-          };
+          doltServiceBundle = doltServiceBundleFor defaultDeploymentEnvironment;
+          doltServiceBundleProduction = doltServiceBundleFor "production";
           gitopsDesiredStateBetaValidate = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "beta";
             environment = "beta";
@@ -244,6 +252,22 @@
             siteClosure = siteContentBeta;
             cdnRuntimeClosure = null;
             doltServiceClosure = doltServiceBundle;
+            mode = "validate";
+            serve = false;
+          };
+          gitopsDesiredStateProductionValidate = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "production";
+            environment = "production";
+            hostKey = "production-single-host";
+            generation = 1;
+            releaseGeneration = 1;
+            gitRev = frontendSourceRevision;
+            doltCommit = "validation-placeholder";
+            doltBranchContext = "main";
+            apiClosure = apiServiceBundleProduction;
+            siteClosure = siteContent;
+            cdnRuntimeClosure = null;
+            doltServiceClosure = doltServiceBundleProduction;
             mode = "validate";
             serve = false;
           };
@@ -610,6 +634,30 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateProductionValidateCheck = pkgs.runCommand "gitops-desired-state-production-validate-check" {
+            nativeBuildInputs = [
+              mgmtGitopsPackage
+              pkgs.jq
+            ];
+          } ''
+            set -euo pipefail
+
+            release_id="$(jq -r '.environments.production.active_release' ${gitopsDesiredStateProductionValidate})"
+            test "$release_id" != example-release
+            test "$release_id" != production-validation-release
+            jq -e --arg release_id "$release_id" '
+              .cluster == "production"
+              and .mode == "validate"
+              and .environments.production.serve == false
+              and .environments.production.host == "production-single-host"
+              and .releases[$release_id].generation == 1
+              and .releases[$release_id].dolt.branch_context == "main"
+            ' ${gitopsDesiredStateProductionValidate}
+
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateProductionValidate}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
           gitopsDesiredStateVmServeFixtureCheck = pkgs.runCommand "gitops-desired-state-vm-serve-fixture-check" {
             nativeBuildInputs = [
               mgmtGitopsPackage
@@ -945,16 +993,19 @@
             default = api;
             api-service-base-config = apiServiceBaseConfig;
             api-service-bundle = apiServiceBundle;
+            api-service-bundle-production = apiServiceBundleProduction;
             cdn-base-content = cdnBaseContent;
             cdn-content = cdnContent;
             cdn-serving-root = cdnServingRoot;
             dolt-service-bundle = doltServiceBundle;
+            dolt-service-bundle-production = doltServiceBundleProduction;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
             fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;
             gitops-desired-state-local-apply-rollback-fixture = gitopsDesiredStateLocalApplyRollbackFixture;
+            gitops-desired-state-production-validate = gitopsDesiredStateProductionValidate;
             gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;
@@ -985,6 +1036,7 @@
               gitops-desired-state-local-apply-rollback = gitopsDesiredStateLocalApplyRollbackCheck;
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
+              gitops-desired-state-production-validate = gitopsDesiredStateProductionValidateCheck;
               gitops-desired-state-rollback-transition = gitopsDesiredStateRollbackTransitionCheck;
               gitops-desired-state-rollback-transition-retention-refusal =
                 gitopsDesiredStateRollbackTransitionRetainedCheck;
