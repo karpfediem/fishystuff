@@ -45,6 +45,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-desired-state-production-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
@@ -171,6 +172,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-desired-state-production-validate` type-checks the production-shaped validation-only generated desired-state package from `.#gitops-desired-state-production-validate`. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, keeps `serve: false`, and does not mutate production.
 
 `gitops-desired-state-production-vm-serve-fixture` type-checks a production-shaped `vm-test` serving desired-state package. It uses production API/Dolt service bundles and production site content, but fixture CDN serving roots, and does not mutate production.
+
+`gitops-desired-state-production-rollback-transition` type-checks the production-shaped rollback companion. It serves `previous-production-release`, retains the exact candidate release ID derived from the production serve fixture, keeps `dolt.branch_context = "main"` on both releases, and verifies the rollback transition can unify without mutating production.
 
 `gitops-desired-state-production-serve-shape-refusal` checks that production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 

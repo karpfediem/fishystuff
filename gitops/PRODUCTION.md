@@ -26,10 +26,12 @@ The first production-shaped serving artifact is still VM-only:
 
 ```bash
 nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture --no-link
+nix build .#checks.x86_64-linux.gitops-desired-state-production-rollback-transition --no-link
 nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal --no-link
+nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm --no-link
 ```
 
-It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing.
+It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. The rollback check proves the production-shaped transition back to `previous-production-release` retains the exact candidate release ID and its CDN root. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing. The VM check proves this shape writes only VM-local state.
 
 ## Static Separation Checks
 

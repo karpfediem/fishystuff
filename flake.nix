@@ -312,6 +312,46 @@
             currentRoot = gitopsDesiredStateServeFixturePreviousCdnCurrent;
             previousRoots = [ gitopsDesiredStateServeFixtureCdnCurrent ];
           };
+          gitopsDesiredStateDerivedReleaseId =
+            {
+              apiClosure ? null,
+              cdnRuntimeClosure ? null,
+              doltBranchContext,
+              doltCommit,
+              doltMode ? "read_only",
+              doltRepository ? "fishystuff/fishystuff",
+              doltServiceClosure ? null,
+              gitRev,
+              releaseGeneration,
+              siteClosure ? null,
+            }:
+            let
+              storePathString = value: builtins.unsafeDiscardStringContext "${value}";
+              optionalStorePath = value: if value == null then "" else storePathString value;
+              releaseMaterial = {
+                generation = releaseGeneration;
+                git_rev = gitRev;
+                dolt_commit = doltCommit;
+                dolt_repository = doltRepository;
+                dolt_branch_context = doltBranchContext;
+                dolt_mode = doltMode;
+                api = optionalStorePath apiClosure;
+                site = optionalStorePath siteClosure;
+                cdn_runtime = optionalStorePath cdnRuntimeClosure;
+                dolt_service = optionalStorePath doltServiceClosure;
+              };
+            in
+            "release-${builtins.substring 0 16 (builtins.hashString "sha256" (builtins.toJSON releaseMaterial))}";
+          gitopsDesiredStateProductionVmServeReleaseId = gitopsDesiredStateDerivedReleaseId {
+            releaseGeneration = 2;
+            gitRev = "production-vm-serve-fixture";
+            doltCommit = "production-vm-serve-fixture";
+            doltBranchContext = "main";
+            apiClosure = apiServiceBundleProduction;
+            siteClosure = siteContent;
+            cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+            doltServiceClosure = doltServiceBundleProduction;
+          };
           gitopsDesiredStateProductionVmServeFixture =
             pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
               cluster = "production";
@@ -339,6 +379,42 @@
                   doltServiceClosure = doltServiceBundleProduction;
                 }
               ];
+              mode = "vm-test";
+              serve = true;
+            };
+          gitopsDesiredStateProductionRollbackTransitionFixture =
+            pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+              cluster = "production";
+              environment = "production";
+              hostKey = "production-single-host";
+              activeRelease = "previous-production-release";
+              generation = 3;
+              releaseGeneration = 1;
+              gitRev = "previous-production-vm-serve-fixture";
+              doltCommit = "previous-production-vm-serve-fixture";
+              doltBranchContext = "main";
+              apiClosure = apiServiceBundleProduction;
+              siteClosure = siteContentStableMapRuntime;
+              cdnRuntimeClosure = gitopsDesiredStateServeFixtureRollbackCdn;
+              doltServiceClosure = doltServiceBundleProduction;
+              retainedReleaseObjects = [
+                {
+                  releaseId = gitopsDesiredStateProductionVmServeReleaseId;
+                  generation = 2;
+                  gitRev = "production-vm-serve-fixture";
+                  doltCommit = "production-vm-serve-fixture";
+                  doltBranchContext = "main";
+                  apiClosure = apiServiceBundleProduction;
+                  siteClosure = siteContent;
+                  cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                  doltServiceClosure = doltServiceBundleProduction;
+                }
+              ];
+              transition = {
+                kind = "rollback";
+                from_release = gitopsDesiredStateProductionVmServeReleaseId;
+                reason = "production rollback fixture";
+              };
               mode = "vm-test";
               serve = true;
             };
@@ -717,6 +793,7 @@
 
               release_id="$(jq -r '.environments.production.active_release' ${gitopsDesiredStateProductionVmServeFixture})"
               test "$release_id" != example-release
+              test "$release_id" = "${gitopsDesiredStateProductionVmServeReleaseId}"
               jq -e --arg release_id "$release_id" '
                 .cluster == "production"
                 and .mode == "vm-test"
@@ -732,6 +809,38 @@
               ' ${gitopsDesiredStateProductionVmServeFixture}
 
               export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateProductionVmServeFixture}
+              mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+              touch "$out"
+            '';
+          gitopsDesiredStateProductionRollbackTransitionCheck =
+            pkgs.runCommand "gitops-desired-state-production-rollback-transition-check" {
+              nativeBuildInputs = [
+                mgmtGitopsPackage
+                pkgs.jq
+              ];
+            } ''
+              set -euo pipefail
+
+              jq -e --arg candidate_release_id "${gitopsDesiredStateProductionVmServeReleaseId}" '
+                .cluster == "production"
+                and .mode == "vm-test"
+                and .generation == 3
+                and .environments.production.serve == true
+                and .environments.production.host == "production-single-host"
+                and .environments.production.active_release == "previous-production-release"
+                and .environments.production.retained_releases == [$candidate_release_id]
+                and .environments.production.transition.kind == "rollback"
+                and .environments.production.transition.from_release == $candidate_release_id
+                and .environments.production.transition.reason == "production rollback fixture"
+                and .releases."previous-production-release".generation == 1
+                and .releases."previous-production-release".dolt.branch_context == "main"
+                and .releases[$candidate_release_id].generation == 2
+                and .releases[$candidate_release_id].dolt.branch_context == "main"
+                and ([.releases."previous-production-release".closures[] | .enabled] | all)
+                and ([.releases[$candidate_release_id].closures[] | .enabled] | all)
+              ' ${gitopsDesiredStateProductionRollbackTransitionFixture}
+
+              export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateProductionRollbackTransitionFixture}
               mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
               touch "$out"
             '';
@@ -1128,6 +1237,8 @@
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;
             gitops-desired-state-local-apply-rollback-fixture = gitopsDesiredStateLocalApplyRollbackFixture;
+            gitops-desired-state-production-rollback-transition-fixture =
+              gitopsDesiredStateProductionRollbackTransitionFixture;
             gitops-desired-state-production-validate = gitopsDesiredStateProductionValidate;
             gitops-desired-state-production-vm-serve-fixture = gitopsDesiredStateProductionVmServeFixture;
             gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
@@ -1161,6 +1272,8 @@
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               gitops-desired-state-production-serve-shape-refusal = gitopsDesiredStateProductionServeShapeCheck;
+              gitops-desired-state-production-rollback-transition =
+                gitopsDesiredStateProductionRollbackTransitionCheck;
               gitops-desired-state-production-validate = gitopsDesiredStateProductionValidateCheck;
               gitops-desired-state-production-vm-serve-fixture =
                 gitopsDesiredStateProductionVmServeFixtureCheck;

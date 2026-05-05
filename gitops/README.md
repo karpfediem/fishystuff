@@ -92,6 +92,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-desired-state-production-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-local-apply-rollback
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
@@ -116,6 +117,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 `.#gitops-desired-state-production-validate` is the production-shaped equivalent. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, `serve: false`, and `mode: validate`, so it can type-check production inputs without mutating production or selecting a served release.
 
 `.#gitops-desired-state-production-vm-serve-fixture` is a production-shaped VM fixture, not a production deployment. It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. `gitops-desired-state-production-serve-shape-refusal` proves production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
+
+`.#gitops-desired-state-production-rollback-transition-fixture` is the production-shaped rollback companion. It serves `previous-production-release`, retains the exact candidate release ID derived from the production serve fixture, uses `dolt.branch_context = "main"` for both releases, and keeps the rolled-away candidate CDN root retained for stale clients.
 
 Real deployment desired state should import `nix/packages/gitops-desired-state.nix` from an operator/deployment flake and pass exact `doltCommit`, service bundles, site content, and finalized CDN serving roots as Nix values. The generated GitOps validation package intentionally does not use ambient environment variables for those deployment-critical inputs.
 
