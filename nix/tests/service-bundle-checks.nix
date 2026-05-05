@@ -7,6 +7,8 @@
   doltServiceBundleProduction,
   edgeServiceBundle,
   edgeServiceBundleProduction,
+  vectorAgentServiceBundle,
+  vectorAgentServiceBundleProduction,
 }:
 let
   mkBundleCheck =
@@ -356,6 +358,64 @@ in
       "LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem"
       "AmbientCapabilities=CAP_NET_BIND_SERVICE"
       "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
+  };
+
+  vector-agent-service-bundle = mkBundleCheck {
+    name = "vector-agent-service-bundle-check";
+    bundle = vectorAgentServiceBundle;
+    serviceId = "fishystuff-vector";
+    configDestination = "vector.yaml";
+    unitName = "fishystuff-vector.service";
+    minArgvLength = 3;
+    workingDirectory = "/var/lib/fishystuff/vector";
+    expectedRuntimeOverlayCount = 0;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
+    requiredConfigLines = [
+      "env = \"beta\""
+      ".deployment_environment = \"beta\""
+      "agent_forward_to_telemetry_vector:"
+      "address: \"10.0.0.4:6000\""
+    ];
+    requiredUnitLines = [
+      "StateDirectory=fishystuff/vector"
+      "StateDirectoryMode=0750"
+      "SupplementaryGroups=systemd-journal"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
+  };
+
+  vector-agent-service-bundle-production = mkBundleCheck {
+    name = "vector-agent-service-bundle-production-check";
+    bundle = vectorAgentServiceBundleProduction;
+    serviceId = "fishystuff-vector";
+    configDestination = "vector.yaml";
+    unitName = "fishystuff-vector.service";
+    minArgvLength = 3;
+    workingDirectory = "/var/lib/fishystuff/vector";
+    expectedRuntimeOverlayCount = 0;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
+    requiredConfigLines = [
+      "env = \"production\""
+      ".deployment_environment = \"production\""
+      "agent_forward_to_telemetry_vector:"
+      "address: \"10.0.0.4:6000\""
+    ];
+    forbiddenConfigFragments = [
+      "env = \"beta\""
+      ".deployment_environment = \"beta\""
+    ];
+    requiredUnitLines = [
+      "StateDirectory=fishystuff/vector"
+      "StateDirectoryMode=0750"
+      "SupplementaryGroups=systemd-journal"
       "PrivateTmp=true"
       "ProtectSystem=strict"
       "NoNewPrivileges=true"

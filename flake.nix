@@ -523,6 +523,8 @@
               edgeServiceBundle
               edgeServiceBundleProduction
               pkgs
+              vectorAgentServiceBundle
+              vectorAgentServiceBundleProduction
               ;
           };
           modularServiceRuntime = pkgs.callPackage ./nix/tests/modular-service-runtime.nix {
