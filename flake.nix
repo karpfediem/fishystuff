@@ -380,6 +380,7 @@
             gitRev = "http-admission-probe-fixture";
             doltCommit = "http-admission-probe-fixture";
             doltBranchContext = "local-test";
+            apiUpstream = "http://127.0.0.1:18082";
             admissionProbe = {
               kind = "http_json_scalar";
               probe_name = "api-meta";
@@ -645,6 +646,7 @@
             jq -e --arg release_id "$release_id" '
               .mode == "local-apply"
               and .environments."local-test".serve == false
+              and .environments."local-test".api_upstream == "http://127.0.0.1:18082"
               and .environments."local-test".admission_probe.kind == "http_json_scalar"
               and .environments."local-test".admission_probe.probe_name == "api-meta"
               and .environments."local-test".admission_probe.url == "http://127.0.0.1:18082/api/v1/meta"

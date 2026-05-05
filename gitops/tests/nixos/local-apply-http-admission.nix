@@ -120,12 +120,15 @@ let
       active_release = "local-apply-http-release";
       retained_releases = [ "previous-release" ];
       serve = true;
+      api_upstream = "http://127.0.0.1:18082";
       admission_probe = {
-        kind = "http_status";
-        probe_name = "readyz";
-        url = "http://127.0.0.1:18082/readyz";
+        kind = "http_json_scalar";
+        probe_name = "api-meta";
+        url = "http://127.0.0.1:18082/api/v1/meta";
         expected_status = 200;
         timeout_ms = 2000;
+        json_pointer = "/release_id";
+        expected_scalar = "local-apply-http-release";
       };
     };
   });
@@ -166,17 +169,18 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
     machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
     machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
-    machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".admission_probe.kind == \"http_status\"' ${desiredState}")
-    machine.succeed("mkdir -p /tmp/fishystuff-gitops-http-probe && printf 'ok\n' >/tmp/fishystuff-gitops-http-probe/readyz")
+    machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".admission_probe.kind == \"http_json_scalar\"' ${desiredState}")
+    machine.succeed("mkdir -p /tmp/fishystuff-gitops-http-probe/api/v1 && printf '{\"release_id\":\"local-apply-http-release\",\"dolt_commit\":\"local-apply-http-admission\",\"state\":\"ok\"}\n' >/tmp/fishystuff-gitops-http-probe/api/v1/meta")
     machine.succeed("python3 -m http.server 18082 --bind 127.0.0.1 --directory /tmp/fishystuff-gitops-http-probe >/tmp/fishystuff-gitops-http-probe.log 2>&1 & echo $! >/tmp/fishystuff-gitops-http-probe.pid")
-    machine.wait_until_succeeds("curl -fsS http://127.0.0.1:18082/readyz >/dev/null", timeout=30)
+    machine.wait_until_succeeds("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\"'", timeout=30)
     machine.succeed("env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-local-apply-http-admission.log 2>&1 & echo $! >/tmp/fishystuff-gitops-local-apply-http-admission.pid")
 
     status = "/var/lib/fishystuff/gitops/status/local-test.json"
     active = "/var/lib/fishystuff/gitops/active/local-test.json"
     route = "/run/fishystuff/gitops/routes/local-test.json"
     admission = "/run/fishystuff/gitops/admission/local-test.json"
-    request = "/var/lib/fishystuff/gitops/admission/requests/local-test-local-apply-http-release-http-status.json"
+    request = "/var/lib/fishystuff/gitops/admission/requests/local-test-local-apply-http-release-http-json-scalar.json"
+    instance = "/var/lib/fishystuff/gitops/instances/local-test-local-apply-http-release.json"
     rollback_set = "/var/lib/fishystuff/gitops/rollback-set/local-test.json"
 
     machine.wait_for_file(request)
@@ -184,12 +188,14 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file(status)
     machine.wait_for_file(active)
     machine.wait_for_file(route)
+    machine.wait_for_file(instance)
     machine.wait_for_file(rollback_set)
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .probe_name == \"readyz\" and .url == \"http://127.0.0.1:18082/readyz\" and .expected_status == 200 and .timeout_ms == 2000' {request}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .probe_name == \"readyz\" and .url == \"http://127.0.0.1:18082/readyz\" and .expected_status == 200 and .observed_status == 200 and .admission_state == \"passed_fixture\" and .probe == \"http-status\"' {admission}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .timeout_ms == 2000 and .json_pointer == \"/release_id\" and .expected_scalar == \"local-apply-http-release\"' {request}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .observed_status == 200 and .json_pointer == \"/release_id\" and .scalar == \"local-apply-http-release\" and .expected_scalar == \"local-apply-http-release\" and .admission_state == \"passed_fixture\" and .probe == \"http-json-scalar\"' {admission}")
     machine.succeed(f"jq -e '.desired_generation == 62 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
-    machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .site_link == \"/var/lib/fishystuff/gitops/served/local-test/site\" and .cdn_link == \"/var/lib/fishystuff/gitops/served/local-test/cdn\" and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_symlinks\"' {active}")
-    machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .active_path == \"/var/lib/fishystuff/gitops/active/local-test.json\" and .site_root == \"/var/lib/fishystuff/gitops/served/local-test/site\" and .cdn_root == \"/var/lib/fishystuff/gitops/served/local-test/cdn\" and .served == true and .state == \"selected_local_route\"' {route}")
+    machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .api_upstream == \"http://127.0.0.1:18082\" and .site_link == \"/var/lib/fishystuff/gitops/served/local-test/site\" and .cdn_link == \"/var/lib/fishystuff/gitops/served/local-test/cdn\" and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_symlinks\"' {active}")
+    machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .api_upstream == \"http://127.0.0.1:18082\" and .active_path == \"/var/lib/fishystuff/gitops/active/local-test.json\" and .site_root == \"/var/lib/fishystuff/gitops/served/local-test/site\" and .cdn_root == \"/var/lib/fishystuff/gitops/served/local-test/cdn\" and .served == true and .state == \"selected_local_route\"' {route}")
+    machine.succeed(f"jq -e '.desired_generation == 62 and .release_id == \"local-apply-http-release\" and .api_upstream == \"http://127.0.0.1:18082\" and .serve_requested == true' {instance}")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops/served/local-test/site)\" = \"${siteArtifact}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops/served/local-test/cdn)\" = \"${cdnServingRoot}\"")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test")

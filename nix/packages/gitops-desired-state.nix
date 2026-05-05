@@ -3,6 +3,7 @@
   writeText,
   activeRelease ? null,
   admissionProbe ? null,
+  apiUpstream ? "",
   apiClosure ? null,
   cdnRuntimeClosure ? null,
   cluster,
@@ -124,6 +125,8 @@ let
     active_release = releaseId;
     retained_releases = retainedReleaseIds;
     inherit serve;
+  } // lib.optionalAttrs (apiUpstream != "") {
+    api_upstream = apiUpstream;
   } // lib.optionalAttrs (admissionProbe != null) {
     admission_probe = admissionProbe;
   } // lib.optionalAttrs (transition != null) {
@@ -142,6 +145,12 @@ let
 in
 assert lib.assertMsg (cluster != "") "gitops desired state requires cluster";
 assert lib.assertMsg (environment != "") "gitops desired state requires environment";
+assert lib.assertMsg (
+  apiUpstream == "" || !lib.hasSuffix "/" apiUpstream
+) "gitops apiUpstream must not end with /";
+assert lib.assertMsg (
+  apiUpstream == "" || !remoteUrlContainsUserinfo apiUpstream
+) "gitops apiUpstream must not contain embedded credentials";
 assert lib.assertMsg (activeRelease == null || activeRelease != "") "gitops desired state activeRelease override must not be empty";
 assert lib.assertMsg (generation > 0) "gitops desired state requires positive generation";
 assert lib.assertMsg (releaseGeneration > 0) "gitops desired state requires positive releaseGeneration";
@@ -206,6 +215,17 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   admissionProbe == null || !admissionProbeIsHttp || (admissionProbe.url or "") != ""
 ) "gitops HTTP admissionProbe requires url";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttp || !serve || apiUpstream != ""
+) "gitops serving HTTP admissionProbe requires apiUpstream";
+assert lib.assertMsg (
+  admissionProbe == null
+  || !admissionProbeIsHttp
+  || apiUpstream == ""
+  || (admissionProbe.url or "") == apiUpstream
+  || lib.hasPrefix "${apiUpstream}/" (admissionProbe.url or "")
+  || lib.hasPrefix "${apiUpstream}?" (admissionProbe.url or "")
+) "gitops HTTP admissionProbe url must target apiUpstream when apiUpstream is set";
 assert lib.assertMsg (
   admissionProbe == null || !admissionProbeIsHttp || (admissionProbeExpectedStatus >= 100 && admissionProbeExpectedStatus <= 599)
 ) "gitops HTTP admissionProbe expected_status must be between 100 and 599";

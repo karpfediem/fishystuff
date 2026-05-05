@@ -12,6 +12,7 @@ class active($st) {
 	$instance_name str = $st->instance_name
 	$site_content str = $st->site_content || ""
 	$cdn_runtime_content str = $st->cdn_runtime_content || ""
+	$api_upstream str = $st->api_upstream || ""
 	$retained_release_ids_json str = $st->retained_release_ids_json || "[]"
 	$retained_dolt_status_paths_json str = $st->retained_dolt_status_paths_json || "[]"
 	$transition_kind str = $st->transition_kind || "candidate"
@@ -27,7 +28,7 @@ class active($st) {
 	$served_dir = fmt.printf("%s/served/%s", $state_dir, $environment)
 	$served_site_link = fmt.printf("%s/site", $served_dir)
 	$served_cdn_link = fmt.printf("%s/cdn", $served_dir)
-	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"site_link\": %s,\n  \"cdn_link\": %s,\n  \"retained_release_ids\": %s,\n  \"retained_dolt_status_paths\": %s,\n  \"transition_kind\": %s,\n  \"rollback_from_release\": %s,\n  \"rollback_to_release\": %s,\n  \"rollback_reason\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_symlinks\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($served_site_link), fishy_json.quote($served_cdn_link), $retained_release_ids_json, $retained_dolt_status_paths_json, fishy_json.quote($transition_kind), fishy_json.quote($rollback_from_release), fishy_json.quote($rollback_to_release), fishy_json.quote($rollback_reason), fishy_json.quote($admission_state), $served)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"instance_name\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"api_upstream\": %s,\n  \"site_link\": %s,\n  \"cdn_link\": %s,\n  \"retained_release_ids\": %s,\n  \"retained_dolt_status_paths\": %s,\n  \"transition_kind\": %s,\n  \"rollback_from_release\": %s,\n  \"rollback_to_release\": %s,\n  \"rollback_reason\": %s,\n  \"admission_state\": %s,\n  \"served\": %t,\n  \"route_state\": \"selected_local_symlinks\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($instance_name), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($api_upstream), fishy_json.quote($served_site_link), fishy_json.quote($served_cdn_link), $retained_release_ids_json, $retained_dolt_status_paths_json, fishy_json.quote($transition_kind), fishy_json.quote($rollback_from_release), fishy_json.quote($rollback_to_release), fishy_json.quote($rollback_reason), fishy_json.quote($admission_state), $served)
 
 	panic($environment == "", "activation requires environment")
 	panic($desired_generation == 0, "activation requires desired_generation")
