@@ -43,6 +43,8 @@ nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
@@ -163,6 +165,10 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 
 `gitops-desired-state-production-validate` type-checks the production-shaped validation-only generated desired-state package from `.#gitops-desired-state-production-validate`. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, keeps `serve: false`, and does not mutate production.
+
+`gitops-desired-state-production-vm-serve-fixture` type-checks a production-shaped `vm-test` serving desired-state package. It uses production API/Dolt service bundles and production site content, but fixture CDN serving roots, and does not mutate production.
+
+`gitops-desired-state-production-serve-shape-refusal` checks that production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 
 `gitops-desired-state-vm-serve-fixture` type-checks a generated local `vm-test` serving desired-state package. It uses tiny local store artifacts and verifies the generator emits `serve: true` only with API, Dolt service, site, and finalized CDN runtime closures present.
 

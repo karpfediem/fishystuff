@@ -312,6 +312,36 @@
             currentRoot = gitopsDesiredStateServeFixturePreviousCdnCurrent;
             previousRoots = [ gitopsDesiredStateServeFixtureCdnCurrent ];
           };
+          gitopsDesiredStateProductionVmServeFixture =
+            pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+              cluster = "production";
+              environment = "production";
+              hostKey = "production-single-host";
+              generation = 2;
+              releaseGeneration = 2;
+              gitRev = "production-vm-serve-fixture";
+              doltCommit = "production-vm-serve-fixture";
+              doltBranchContext = "main";
+              apiClosure = apiServiceBundleProduction;
+              siteClosure = siteContent;
+              cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+              doltServiceClosure = doltServiceBundleProduction;
+              retainedReleaseObjects = [
+                {
+                  releaseId = "previous-production-release";
+                  generation = 1;
+                  gitRev = "previous-production-vm-serve-fixture";
+                  doltCommit = "previous-production-vm-serve-fixture";
+                  doltBranchContext = "main";
+                  apiClosure = apiServiceBundleProduction;
+                  siteClosure = siteContentStableMapRuntime;
+                  cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
+                  doltServiceClosure = doltServiceBundleProduction;
+                }
+              ];
+              mode = "vm-test";
+              serve = true;
+            };
           gitopsDesiredStateVmServeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "local-test";
             environment = "local-test";
@@ -663,6 +693,81 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateProductionVmServeFixtureCheck =
+            pkgs.runCommand "gitops-desired-state-production-vm-serve-fixture-check" {
+              nativeBuildInputs = [
+                mgmtGitopsPackage
+                pkgs.jq
+              ];
+            } ''
+              set -euo pipefail
+
+              release_id="$(jq -r '.environments.production.active_release' ${gitopsDesiredStateProductionVmServeFixture})"
+              test "$release_id" != example-release
+              jq -e --arg release_id "$release_id" '
+                .cluster == "production"
+                and .mode == "vm-test"
+                and .environments.production.serve == true
+                and .environments.production.host == "production-single-host"
+                and .environments.production.retained_releases == ["previous-production-release"]
+                and .releases[$release_id].generation == 2
+                and .releases[$release_id].dolt.branch_context == "main"
+                and .releases."previous-production-release".generation == 1
+                and .releases."previous-production-release".dolt.branch_context == "main"
+                and ([.releases[$release_id].closures[] | .enabled] | all)
+                and ([.releases."previous-production-release".closures[] | .enabled] | all)
+              ' ${gitopsDesiredStateProductionVmServeFixture}
+
+              export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateProductionVmServeFixture}
+              mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+              touch "$out"
+            '';
+          gitopsDesiredStateProductionServeShapeCheck =
+            let
+              attemptDesiredState =
+                args:
+                builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix args) true);
+              base = {
+                cluster = "production";
+                environment = "production";
+                hostKey = "production-single-host";
+                generation = 3;
+                releaseGeneration = 3;
+                gitRev = "production-serve-shape-fixture";
+                doltCommit = "production-serve-shape-fixture";
+                doltBranchContext = "main";
+                apiClosure = apiServiceBundleProduction;
+                siteClosure = siteContent;
+                doltServiceClosure = doltServiceBundleProduction;
+                mode = "vm-test";
+                serve = true;
+              };
+              retainedRelease = {
+                releaseId = "previous-production-release";
+                generation = 2;
+                gitRev = "previous-production-serve-shape-fixture";
+                doltCommit = "previous-production-serve-shape-fixture";
+                doltBranchContext = "main";
+                apiClosure = apiServiceBundleProduction;
+                siteClosure = siteContentStableMapRuntime;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
+                doltServiceClosure = doltServiceBundleProduction;
+              };
+              noRetainedProductionServe = attemptDesiredState (base // {
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+              });
+              missingCdnProductionServe = attemptDesiredState (base // {
+                cdnRuntimeClosure = null;
+                retainedReleaseObjects = [ retainedRelease ];
+              });
+            in
+            pkgs.runCommand "gitops-desired-state-production-serve-shape-check" { } ''
+              set -euo pipefail
+
+              test "${if noRetainedProductionServe.success then "success" else "failure"}" = "failure"
+              test "${if missingCdnProductionServe.success then "success" else "failure"}" = "failure"
+              touch "$out"
+            '';
           gitopsDesiredStateVmServeFixtureCheck = pkgs.runCommand "gitops-desired-state-vm-serve-fixture-check" {
             nativeBuildInputs = [
               mgmtGitopsPackage
@@ -1011,6 +1116,7 @@
             gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;
             gitops-desired-state-local-apply-rollback-fixture = gitopsDesiredStateLocalApplyRollbackFixture;
             gitops-desired-state-production-validate = gitopsDesiredStateProductionValidate;
+            gitops-desired-state-production-vm-serve-fixture = gitopsDesiredStateProductionVmServeFixture;
             gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;
@@ -1041,7 +1147,10 @@
               gitops-desired-state-local-apply-rollback = gitopsDesiredStateLocalApplyRollbackCheck;
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
+              gitops-desired-state-production-serve-shape-refusal = gitopsDesiredStateProductionServeShapeCheck;
               gitops-desired-state-production-validate = gitopsDesiredStateProductionValidateCheck;
+              gitops-desired-state-production-vm-serve-fixture =
+                gitopsDesiredStateProductionVmServeFixtureCheck;
               gitops-desired-state-rollback-transition = gitopsDesiredStateRollbackTransitionCheck;
               gitops-desired-state-rollback-transition-retention-refusal =
                 gitopsDesiredStateRollbackTransitionRetainedCheck;

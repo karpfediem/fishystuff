@@ -89,6 +89,8 @@ nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture
+nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-local-apply-rollback
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
@@ -110,6 +112,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 `.#gitops-desired-state-beta-validate` emits a validation-only desired-state JSON file from exact Nix build outputs: API bundle, Dolt service bundle, and site content. It deliberately keeps `cdn_runtime` disabled so normal repo checks do not depend on private or ignored CDN staging state. Its release key is derived from the exact available tuple by default. It sets `serve: false`, `mode: validate`, and a placeholder Dolt commit; it is not a deploy/apply command.
 
 `.#gitops-desired-state-production-validate` is the production-shaped equivalent. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, `serve: false`, and `mode: validate`, so it can type-check production inputs without mutating production or selecting a served release.
+
+`.#gitops-desired-state-production-vm-serve-fixture` is a production-shaped VM fixture, not a production deployment. It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. `gitops-desired-state-production-serve-shape-refusal` proves production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 
 Real deployment desired state should import `nix/packages/gitops-desired-state.nix` from an operator/deployment flake and pass exact `doltCommit`, service bundles, site content, and finalized CDN serving roots as Nix values. The generated GitOps validation package intentionally does not use ambient environment variables for those deployment-critical inputs.
 

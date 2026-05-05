@@ -22,6 +22,15 @@ That check proves the graph can decode and unify production-shaped desired state
 
 It does not write host state, start services, mutate DNS, or select a served release.
 
+The first production-shaped serving artifact is still VM-only:
+
+```bash
+nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture --no-link
+nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal --no-link
+```
+
+It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing.
+
 ## Static Separation Checks
 
 These checks guard common beta/prod mixups in service bundles:
