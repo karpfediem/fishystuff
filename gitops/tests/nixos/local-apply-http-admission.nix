@@ -1,11 +1,13 @@
 {
   pkgs,
   mgmtPackage,
+  fishystuffServerPackage,
   fishystuffDeployPackage,
   gitopsSrc,
 }:
 let
-  apiArtifact = pkgs.writeText "fishystuff-gitops-local-apply-http-api-bundle" "local apply http api bundle\n";
+  apiArtifact = fishystuffServerPackage;
+  apiBaseConfig = pkgs.callPackage ../../../nix/packages/api-service-base-config.nix { };
   doltServiceArtifact = pkgs.writeText "fishystuff-gitops-local-apply-http-dolt-service-bundle" "local apply http dolt service bundle\n";
   previousApiArtifact = pkgs.writeText "fishystuff-gitops-local-apply-http-previous-api-bundle" "previous local apply http api bundle\n";
   previousDoltServiceArtifact = pkgs.writeText "fishystuff-gitops-local-apply-http-previous-dolt-service-bundle" "previous local apply http dolt service bundle\n";
@@ -37,61 +39,57 @@ let
     currentRoot = currentCdnRoot;
     previousRoots = [ previousCdnRoot ];
   };
-  candidateApiServer = pkgs.writeText "fishystuff-gitops-candidate-api-server.py" ''
-    import argparse
-    import json
-    import os
-    import sys
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--bind", required=True)
-    args = parser.parse_args()
-
-    host, port_text = args.bind.rsplit(":", 1)
-    port = int(port_text)
-
-    required_env = [
-        "FISHYSTUFF_RELEASE_ID",
-        "FISHYSTUFF_RELEASE_IDENTITY",
-        "FISHYSTUFF_DOLT_COMMIT",
-        "FISHYSTUFF_DEPLOYMENT_ENVIRONMENT",
-    ]
-    missing = [name for name in required_env if os.environ.get(name) is None]
-    if missing:
-        sys.stderr.write("missing deployment identity env vars: " + ", ".join(missing) + "\n")
-        sys.exit(1)
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path != "/api/v1/meta":
-                self.send_response(404)
-                self.end_headers()
-                return
-
-            body = json.dumps({
-                "state": "ok",
-                "release_id": os.environ["FISHYSTUFF_RELEASE_ID"],
-                "release_identity": os.environ["FISHYSTUFF_RELEASE_IDENTITY"],
-                "dolt_commit": os.environ["FISHYSTUFF_DOLT_COMMIT"],
-                "deployment_environment": os.environ["FISHYSTUFF_DEPLOYMENT_ENVIRONMENT"],
-            }).encode("utf-8")
-            self.send_response(200)
-            self.send_header("content-type", "application/json")
-            self.send_header("content-length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, format, *args):
-            return
-
-    ThreadingHTTPServer((host, port), Handler).serve_forever()
-  '';
-  candidateApiPackage = pkgs.writeShellApplication {
-    name = "fishystuff_server";
-    runtimeInputs = [ pkgs.python3 ];
+  doltFixtureSeeder = pkgs.writeShellApplication {
+    name = "seed-fishystuff-gitops-dolt-meta-fixture";
+    runtimeInputs = [ pkgs.dolt ];
     text = ''
-      exec python3 ${candidateApiServer} "$@"
+      set -euo pipefail
+
+      data_dir=/var/lib/fishystuff/gitops-dolt-fixture
+      repo="$data_dir/fishystuff"
+
+      mkdir -p "$repo"
+      cd "$repo"
+
+      if [ ! -d .dolt ]; then
+        dolt init --name "FishyStuff GitOps VM" --email "gitops-vm@example.invalid"
+      fi
+
+      dolt sql <<'SQL'
+      CREATE TABLE IF NOT EXISTS patches (
+        patch_id varchar(255) NOT NULL,
+        start_ts_utc bigint NOT NULL,
+        patch_name varchar(255),
+        PRIMARY KEY (patch_id)
+      );
+      CREATE TABLE IF NOT EXISTS map_versions (
+        map_version_id varchar(255) NOT NULL,
+        name varchar(255),
+        is_default bigint,
+        PRIMARY KEY (map_version_id)
+      );
+      CREATE TABLE IF NOT EXISTS languagedata (
+        lang varchar(32) NOT NULL,
+        id bigint NOT NULL,
+        format varchar(32) NOT NULL,
+        category varchar(255) NOT NULL,
+        text varchar(255),
+        PRIMARY KEY (lang, id, format, category)
+      );
+      DELETE FROM patches;
+      DELETE FROM map_versions;
+      DELETE FROM languagedata;
+      INSERT INTO patches (patch_id, start_ts_utc, patch_name)
+        VALUES ('gitops-api-meta-patch', 1700000000, 'GitOps API Meta Patch');
+      INSERT INTO map_versions (map_version_id, name, is_default)
+        VALUES ('gitops-vm-map', 'GitOps VM Map', 1);
+      INSERT INTO languagedata (lang, id, format, category, text)
+        VALUES ('en', 1, 'A', 'gitops', 'GitOps fixture language row');
+      SQL
+
+      dolt add .
+      dolt commit -m "seed gitops real API meta fixture" || true
+      dolt branch -f local-test HEAD
     '';
   };
   expectedReleaseIdentity = "release=local-apply-http-release;generation=62;git_rev=local-apply-http-admission;dolt_commit=local-apply-http-admission;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=${apiArtifact};site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=${doltServiceArtifact}";
@@ -216,10 +214,28 @@ pkgs.testers.runNixOSTest {
         pkgs.curl
         pkgs.jq
       ];
-      systemd.services.fishystuff-gitops-candidate-api-local-test = {
+      systemd.services.fishystuff-gitops-dolt-sql-fixture = {
         serviceConfig = {
+          ExecStartPre = "${doltFixtureSeeder}/bin/seed-fishystuff-gitops-dolt-meta-fixture";
+          ExecStart = "${pkgs.dolt}/bin/dolt sql-server --host 127.0.0.1 --port 18083 --data-dir /var/lib/fishystuff/gitops-dolt-fixture --loglevel warning";
+          Restart = "always";
+          RestartSec = "1s";
+        };
+      };
+      systemd.services.fishystuff-gitops-candidate-api-local-test = {
+        after = [ "fishystuff-gitops-dolt-sql-fixture.service" ];
+        requires = [ "fishystuff-gitops-dolt-sql-fixture.service" ];
+        serviceConfig = {
+          Environment = [
+            "FISHYSTUFF_DATABASE_URL=mysql://root@127.0.0.1:18083/fishystuff"
+            "FISHYSTUFF_CORS_ALLOWED_ORIGINS=http://localhost"
+            "FISHYSTUFF_PUBLIC_SITE_BASE_URL=http://localhost"
+            "FISHYSTUFF_PUBLIC_CDN_BASE_URL=http://cdn.localhost"
+            "FISHYSTUFF_RUNTIME_CDN_BASE_URL=http://cdn.localhost"
+            "FISHYSTUFF_OTEL_ENABLED=0"
+          ];
           EnvironmentFile = "/var/lib/fishystuff/gitops/api/local-test.env";
-          ExecStart = "${candidateApiPackage}/bin/fishystuff_server --bind 127.0.0.1:18082";
+          ExecStart = "${fishystuffServerPackage}/bin/fishystuff_server --config ${apiBaseConfig} --bind 127.0.0.1:18082 --request-timeout-secs 5";
           Restart = "always";
           RestartSec = "1s";
         };
@@ -241,9 +257,10 @@ pkgs.testers.runNixOSTest {
     instance = "/var/lib/fishystuff/gitops/instances/local-test-local-apply-http-release.json"
     rollback_set = "/var/lib/fishystuff/gitops/rollback-set/local-test.json"
     candidate_service = "fishystuff-gitops-candidate-api-local-test"
+    dolt_fixture_service = "fishystuff-gitops-dolt-sql-fixture"
 
     def dump_gitops_debug():
-      _, output = machine.execute(f"echo '--- mgmt log head ---'; head -120 {mgmt_log} 2>/dev/null || true; echo '--- mgmt log tail ---'; tail -240 {mgmt_log} 2>/dev/null || true; echo '--- api config ---'; cat {api_config} 2>/dev/null || true; echo '--- api env ---'; cat {api_env} 2>/dev/null || true; echo '--- admission request ---'; cat {request} 2>/dev/null || true; echo '--- candidate api status ---'; systemctl status {candidate_service} --no-pager 2>&1 || true; echo '--- candidate api journal ---'; journalctl -u {candidate_service} --no-pager -n 120 2>&1 || true; echo '--- probe curl ---'; curl -v http://127.0.0.1:18082/api/v1/meta 2>&1 || true; echo '--- gitops state tree ---'; find /var/lib/fishystuff/gitops /run/fishystuff/gitops -maxdepth 6 -ls 2>/dev/null || true; echo '--- mgmt process ---'; ps -ef | grep '[m]gmt' || true")
+      _, output = machine.execute(f"echo '--- mgmt log head ---'; head -120 {mgmt_log} 2>/dev/null || true; echo '--- mgmt log tail ---'; tail -240 {mgmt_log} 2>/dev/null || true; echo '--- api config ---'; cat {api_config} 2>/dev/null || true; echo '--- api env ---'; cat {api_env} 2>/dev/null || true; echo '--- admission request ---'; cat {request} 2>/dev/null || true; echo '--- candidate api status ---'; systemctl status {candidate_service} --no-pager 2>&1 || true; echo '--- candidate api journal ---'; journalctl -u {candidate_service} --no-pager -n 160 2>&1 || true; echo '--- dolt fixture status ---'; systemctl status {dolt_fixture_service} --no-pager 2>&1 || true; echo '--- dolt fixture journal ---'; journalctl -u {dolt_fixture_service} --no-pager -n 160 2>&1 || true; echo '--- probe curl ---'; curl -v http://127.0.0.1:18082/api/v1/meta 2>&1 || true; echo '--- gitops state tree ---'; find /var/lib/fishystuff/gitops /run/fishystuff/gitops -maxdepth 6 -ls 2>/dev/null || true; echo '--- mgmt process ---'; ps -ef | grep '[m]gmt' || true")
       print(output)
 
     def wait_for_gitops_file(path):
@@ -262,17 +279,21 @@ pkgs.testers.runNixOSTest {
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
     machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
+    machine.succeed("test -x ${fishystuffServerPackage}/bin/fishystuff_server")
     machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
     machine.succeed("systemctl cat fishystuff-gitops-candidate-api-local-test | grep -Fx 'EnvironmentFile=/var/lib/fishystuff/gitops/api/local-test.env'")
-    machine.succeed("systemctl show fishystuff-gitops-candidate-api-local-test -p ExecStart --value | grep -F '/bin/fishystuff_server --bind 127.0.0.1:18082'")
+    machine.succeed("systemctl show fishystuff-gitops-candidate-api-local-test -p ExecStart --value | grep -F '/bin/fishystuff_server --config'")
+    machine.succeed("systemctl show fishystuff-gitops-candidate-api-local-test -p ExecStart --value | grep -F -- '--bind 127.0.0.1:18082 --request-timeout-secs 5'")
     machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\" and .environments.\"local-test\".admission_probe.kind == \"api_meta\"' ${desiredState}")
     machine.fail("systemctl is-active fishystuff-gitops-candidate-api-local-test")
+    machine.fail("systemctl is-active fishystuff-gitops-dolt-sql-fixture")
     machine.succeed(f"env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >{mgmt_log} 2>&1 & echo $! >{mgmt_pid}")
 
     wait_for_gitops_file(api_config)
     wait_for_gitops_file(api_env)
     wait_for_gitops_command("systemctl is-active fishystuff-gitops-candidate-api-local-test")
-    wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .dolt_commit == \"local-apply-http-admission\" and .deployment_environment == \"local-test\"'")
+    wait_for_gitops_command("systemctl is-active fishystuff-gitops-dolt-sql-fixture")
+    wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .dolt_commit == \"local-apply-http-admission\" and .default_patch.patch_id == \"gitops-api-meta-patch\" and .map_versions[0].map_version_id == \"gitops-vm-map\" and (.data_languages | index(\"en\"))'")
     wait_for_gitops_file(request)
     wait_for_gitops_file(admission)
     wait_for_gitops_file(status)

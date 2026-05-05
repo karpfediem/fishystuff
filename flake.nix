@@ -465,6 +465,7 @@
           gitopsTests = import ./gitops/tests/nixos {
             inherit pkgs;
             gitopsSrc = ./gitops;
+            fishystuffServerPackage = api;
             fishystuffDeployPackage = fishystuffDeploy;
             mgmtPackage = mgmtGitopsPackage;
             generatedServeFixture = {

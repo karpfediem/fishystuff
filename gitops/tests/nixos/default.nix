@@ -1,6 +1,7 @@
 {
   pkgs,
   mgmtPackage ? pkgs.mgmt,
+  fishystuffServerPackage,
   fishystuffDeployPackage,
   gitopsSrc,
   generatedServeFixture,
@@ -104,7 +105,7 @@
   };
 
   gitops-local-apply-http-admission-vm = import ./local-apply-http-admission.nix {
-    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
+    inherit fishystuffDeployPackage fishystuffServerPackage gitopsSrc mgmtPackage pkgs;
   };
 
   gitops-missing-active-artifact-refusal = import ./missing-active-artifact-refusal.nix {
