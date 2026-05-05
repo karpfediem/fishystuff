@@ -413,6 +413,10 @@ Status includes:
 - `dolt_materialization`
 - `dolt_cache_dir`
 - `dolt_release_ref`
+- `retained_release_ids`
+- `rollback_available`
+- `rollback_primary_release_id`
+- `rollback_retained_count`
 - `served`
 - `failure_reason`
 

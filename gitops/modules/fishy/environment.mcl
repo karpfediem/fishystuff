@@ -146,6 +146,7 @@ class single_host($st) {
 	$retained_dolt_status_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/dolt/%s-%s.json", $run_dir, $environment_name, $retained_release_id) }))
 	$retained_release_document_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/rollback-set/%s/%s.json", $state_dir, $environment_name, $retained_release_id) }))
 	$has_rollback_readiness = len($retained_releases) > 0
+	$primary_rollback_release_id str = if $has_rollback_readiness { $retained_releases[0] } else { "" }
 	$dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $active_release_id)
 	$dolt_admission_exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment_name, $active_release_id)
 	$http_status_admission_exec_name = fmt.printf("fishystuff-gitops-admit-http-status-%s-%s", $environment_name, $active_release_id)
@@ -574,6 +575,9 @@ class single_host($st) {
 		api_upstream => $api_upstream,
 		retained_release_ids_json => $retained_release_ids_json,
 		retained_dolt_status_paths_json => $retained_dolt_status_paths_json,
+		rollback_available => $served and $has_rollback_readiness,
+		rollback_primary_release_id => $primary_rollback_release_id,
+		rollback_retained_count => len($retained_releases),
 		transition_kind => $transition_kind,
 		rollback_from_release => $rollback_from_release,
 		rollback_to_release => if $transition_kind == "rollback" { $active_release_id } else { "" },
@@ -608,6 +612,9 @@ class single_host($st) {
 		dolt_release_ref => $active_dolt_release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
 		retained_dolt_status_paths_json => $retained_dolt_status_paths_json,
+		rollback_available => $served and $has_rollback_readiness,
+		rollback_primary_release_id => $primary_rollback_release_id,
+		rollback_retained_count => len($retained_releases),
 		transition_kind => $transition_kind,
 		rollback_from_release => $rollback_from_release,
 		rollback_to_release => if $transition_kind == "rollback" { $active_release_id } else { "" },
