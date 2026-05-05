@@ -119,7 +119,7 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 
 `gitops-served-caddy-handoff-vm` boots one local NixOS VM, runs Caddy against the VM-local served site/CDN symlink roots, and then changes the served desired state. It proves the future Caddy-facing handoff shape can serve the selected release and then observe the next selected release through stable symlink roots without restarting Caddy.
 
-`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the route selection, primary rollback readiness, and rollback-set documents.
+`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state with `transition.kind = "rollback"`. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the active/status transition fields, route selection, primary rollback readiness, and rollback-set documents.
 
 `gitops-failed-candidate-vm` boots a local NixOS VM with a failed admission fixture and `serve: false`. It proves candidate failure is status, not activation: instance/admission/status are published, but no active selection or served symlinks are created.
 
@@ -195,7 +195,12 @@ The minimal JSON shape is:
       "active_release": "example-release",
       "retained_releases": [],
       "serve": false,
-      "admission_fixture_state": ""
+      "admission_fixture_state": "",
+      "transition": {
+        "kind": "",
+        "from_release": "",
+        "reason": ""
+      }
     }
   }
 }
@@ -209,6 +214,8 @@ Supported modes:
 - `local-apply`: reserved for future host-local activation. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set, and the first milestone does not include fixtures that use it.
 
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
+
+`transition` is optional audit intent for the selected environment. Empty kind defaults to `candidate` when `serve: false` and `activate` when `serve: true`. `rollback` is accepted only when `serve: true`, `active_release` names the rollback target, and `from_release` is retained after rollback. Active/status documents record the transition kind and rollback fields so a rollback is visible as an intentional reconciled state transition instead of an ambiguous active-release edit.
 
 `main.mcl` traverses the desired-state `environments` map generically. Every enabled environment must use the `single_active` strategy, name an enabled host, and select a release by key. The checked-in fixtures still use readable names such as `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. This milestone supports generic single-host environments; richer placement strategies should be new modules with their own VM tests.
 

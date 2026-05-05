@@ -15,7 +15,7 @@ class single_host($st) {
 	$cluster str = $st->cluster || "local-test"
 	$desired_generation int = $st->desired_generation || 0
 	$environment_name str = $st->environment_name
-	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; query str; expected_scalar str}} = $st->environment
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; query str; expected_scalar str}; transition struct{kind str; from_release str; reason str}} = $st->environment
 	$host struct{enabled bool; role str; hostname str} = $st->host
 	$releases map{str: struct{
 		generation int;
@@ -58,6 +58,11 @@ class single_host($st) {
 		kind => "",
 		query => "",
 		expected_scalar => "",
+	}
+	$empty_transition struct{kind str; from_release str; reason str} = struct {
+		kind => "",
+		from_release => "",
+		reason => "",
 	}
 	$active_release_id str = $environment->active_release
 	$active_release struct{
@@ -112,6 +117,11 @@ class single_host($st) {
 	$admission_probe struct{kind str; query str; expected_scalar str} = $environment->admission_probe || $empty_admission_probe
 	$admission_probe_kind str = $admission_probe->kind || ""
 	$use_dolt_sql_admission_probe = $admission_probe_kind == "dolt_sql_scalar"
+	$transition struct{kind str; from_release str; reason str} = $environment->transition || $empty_transition
+	$requested_transition_kind str = $transition->kind || ""
+	$transition_kind str = if $requested_transition_kind != "" { $requested_transition_kind } else { if $environment->serve { "activate" } else { "candidate" } }
+	$rollback_from_release str = $transition->from_release || ""
+	$rollback_reason str = $transition->reason || ""
 	$admission_failed = $admission_state == "failed_fixture"
 	$served = $environment->serve and ($admission_state == "passed_fixture")
 	$instance_name = fmt.printf("%s-%s", $environment_name, $active_release_id)
@@ -140,6 +150,14 @@ class single_host($st) {
 	panic($use_dolt_sql_admission_probe and ($active_dolt_materialization != "fetch_pin"), fmt.printf("environment %s Dolt SQL admission probe requires fetch_pin materialization", $environment_name))
 	panic($use_dolt_sql_admission_probe and ($admission_state != "passed_fixture"), fmt.printf("environment %s Dolt SQL admission probe can only publish passed_fixture admission", $environment_name))
 	panic($use_dolt_sql_admission_probe and ($admission_probe->query == ""), fmt.printf("environment %s Dolt SQL admission probe requires query", $environment_name))
+	panic(($transition_kind != "candidate") and ($transition_kind != "activate") and ($transition_kind != "rollback"), fmt.printf("environment %s has unsupported transition kind %s", $environment_name, $transition_kind))
+	panic(($transition_kind == "candidate") and $environment->serve, fmt.printf("environment %s candidate transition must not request serve", $environment_name))
+	panic(($transition_kind == "activate") and (not $environment->serve), fmt.printf("environment %s activate transition requires serve", $environment_name))
+	panic(($transition_kind == "rollback") and (not $environment->serve), fmt.printf("environment %s rollback transition requires serve", $environment_name))
+	panic(($transition_kind == "rollback") and ($rollback_from_release == ""), fmt.printf("environment %s rollback transition requires from_release", $environment_name))
+	panic(($transition_kind == "rollback") and ($rollback_from_release == $active_release_id), fmt.printf("environment %s rollback transition from_release must differ from active_release", $environment_name))
+	panic(($transition_kind == "rollback") and (not ($rollback_from_release in $retained_releases)), fmt.printf("environment %s rollback transition from_release must be retained after rollback", $environment_name))
+	panic(($transition_kind != "rollback") and ($rollback_from_release != ""), fmt.printf("environment %s transition from_release is only valid for rollback", $environment_name))
 	panic($environment->host == "", fmt.printf("environment %s requires host", $environment_name))
 	panic(not $host->enabled, fmt.printf("environment %s references a disabled or unknown host %s", $environment_name, $environment->host))
 	panic($host->hostname == "", fmt.printf("environment %s host %s requires hostname", $environment_name, $environment->host))
@@ -415,6 +433,10 @@ class single_host($st) {
 		cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
 		retained_release_ids_json => $retained_release_ids_json,
 		retained_dolt_status_paths_json => $retained_dolt_status_paths_json,
+		transition_kind => $transition_kind,
+		rollback_from_release => $rollback_from_release,
+		rollback_to_release => if $transition_kind == "rollback" { $active_release_id } else { "" },
+		rollback_reason => $rollback_reason,
 		admission_state => $admission_state,
 		served => $served,
 	})
@@ -444,6 +466,10 @@ class single_host($st) {
 		dolt_release_ref => $active_dolt_release_ref,
 		retained_release_ids_json => $retained_release_ids_json,
 		retained_dolt_status_paths_json => $retained_dolt_status_paths_json,
+		transition_kind => $transition_kind,
+		rollback_from_release => $rollback_from_release,
+		rollback_to_release => if $transition_kind == "rollback" { $active_release_id } else { "" },
+		rollback_reason => $rollback_reason,
 		served => $served,
 		failure_reason => if $admission_failed { "admission_failed" } else { "" },
 	})
