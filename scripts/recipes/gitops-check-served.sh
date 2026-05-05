@@ -45,6 +45,7 @@ fi
 status_path="${state_dir%/}/status/${environment}.json"
 active_path="${state_dir%/}/active/${environment}.json"
 rollback_set_path="${state_dir%/}/rollback-set/${environment}.json"
+rollback_path="${state_dir%/}/rollback/${environment}.json"
 
 args=(
   gitops
@@ -52,6 +53,7 @@ args=(
   --status "$status_path"
   --active "$active_path"
   --rollback-set "$rollback_set_path"
+  --rollback "$rollback_path"
   --environment "$environment"
 )
 

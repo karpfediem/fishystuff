@@ -9,7 +9,7 @@ just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/
 cargo test -p fishystuff_deploy
 ```
 
-These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served` and `gitops-served-summary` are read-only checks for already-produced local GitOps status, active, and rollback-set documents.
+These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served` and `gitops-served-summary` are read-only checks for already-produced local GitOps status, active, rollback-set, and rollback readiness documents.
 
 Flake checks:
 

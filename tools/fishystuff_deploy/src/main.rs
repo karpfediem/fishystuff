@@ -118,6 +118,8 @@ enum GitopsCommands {
         #[arg(long)]
         rollback_set: PathBuf,
         #[arg(long)]
+        rollback: PathBuf,
+        #[arg(long)]
         environment: Option<String>,
         #[arg(long)]
         host: Option<String>,
@@ -131,6 +133,8 @@ enum GitopsCommands {
         active: PathBuf,
         #[arg(long)]
         rollback_set: PathBuf,
+        #[arg(long)]
+        rollback: PathBuf,
         #[arg(long)]
         environment: Option<String>,
         #[arg(long)]
@@ -204,6 +208,7 @@ fn main() -> Result<ExitCode> {
                 status,
                 active,
                 rollback_set,
+                rollback,
                 environment,
                 host,
                 release_id,
@@ -212,6 +217,7 @@ fn main() -> Result<ExitCode> {
                     &status,
                     &active,
                     &rollback_set,
+                    &rollback,
                     environment.as_deref(),
                     host.as_deref(),
                     release_id.as_deref(),
@@ -223,6 +229,7 @@ fn main() -> Result<ExitCode> {
                 status,
                 active,
                 rollback_set,
+                rollback,
                 environment,
                 host,
                 release_id,
@@ -231,6 +238,7 @@ fn main() -> Result<ExitCode> {
                     &status,
                     &active,
                     &rollback_set,
+                    &rollback,
                     environment.as_deref(),
                     host.as_deref(),
                     release_id.as_deref(),

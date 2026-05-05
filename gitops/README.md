@@ -292,10 +292,11 @@ fishystuff_deploy gitops check-served \
   --status /var/lib/fishystuff/gitops/status/local-test.json \
   --active /var/lib/fishystuff/gitops/active/local-test.json \
   --rollback-set /var/lib/fishystuff/gitops/rollback-set/local-test.json \
+  --rollback /var/lib/fishystuff/gitops/rollback/local-test.json \
   --environment local-test
 ```
 
-This only reads local GitOps documents. It verifies status, active selection, and rollback-set documents agree on the served generation/release and that rollback readiness is available with at least one retained release.
+This only reads local GitOps documents. It verifies status, active selection, rollback-set, and primary rollback readiness documents agree on the served generation/release and that rollback readiness is available with at least one retained release.
 
 The same local check is available through:
 

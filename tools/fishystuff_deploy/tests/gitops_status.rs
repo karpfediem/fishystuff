@@ -13,8 +13,9 @@ fn gitops_check_served_accepts_consistent_rollback_ready_documents() -> Result<(
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
 
     let output = run_helper_raw([
         "gitops",
@@ -25,6 +26,8 @@ fn gitops_check_served_accepts_consistent_rollback_ready_documents() -> Result<(
         path_str(&active)?,
         "--rollback-set",
         path_str(&rollback_set)?,
+        "--rollback",
+        path_str(&rollback)?,
         "--environment",
         "local-test",
         "--host",
@@ -49,8 +52,9 @@ fn gitops_summary_served_prints_active_and_retained_releases() -> Result<()> {
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
 
     let output = run_helper_raw([
         "gitops",
@@ -61,6 +65,8 @@ fn gitops_summary_served_prints_active_and_retained_releases() -> Result<()> {
         path_str(&active)?,
         "--rollback-set",
         path_str(&rollback_set)?,
+        "--rollback",
+        path_str(&rollback)?,
         "--environment",
         "local-test",
     ])?;
@@ -85,8 +91,9 @@ fn gitops_check_served_rejects_missing_rollback_readiness() -> Result<()> {
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
     let mut stale_status = read_json(&status)?;
     stale_status["rollback_available"] = Value::Bool(false);
     write_json(&status, stale_status)?;
@@ -101,6 +108,8 @@ fn gitops_check_served_rejects_missing_rollback_readiness() -> Result<()> {
             path_str(&active)?,
             "--rollback-set",
             path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
         ],
         "status rollback_available must be true",
     )
@@ -112,8 +121,9 @@ fn gitops_check_served_rejects_cross_document_release_mismatch() -> Result<()> {
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
     let mut stale_active = read_json(&active)?;
     stale_active["release_id"] = Value::String("other-release".to_string());
     write_json(&active, stale_active)?;
@@ -128,6 +138,8 @@ fn gitops_check_served_rejects_cross_document_release_mismatch() -> Result<()> {
             path_str(&active)?,
             "--rollback-set",
             path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
         ],
         "active release_id was other-release, expected active-release",
     )
@@ -139,8 +151,9 @@ fn gitops_check_served_rejects_stale_rollback_primary() -> Result<()> {
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
     let mut stale_status = read_json(&status)?;
     stale_status["rollback_primary_release_id"] = Value::String("older-release".to_string());
     write_json(&status, stale_status)?;
@@ -155,8 +168,40 @@ fn gitops_check_served_rejects_stale_rollback_primary() -> Result<()> {
             path_str(&active)?,
             "--rollback-set",
             path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
         ],
         "status rollback_primary_release_id was older-release, expected previous-release",
+    )
+}
+
+#[test]
+fn gitops_check_served_rejects_stale_rollback_readiness() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-stale-rollback-readiness")?;
+    let status = root.path().join("status.json");
+    let active = root.path().join("active.json");
+    let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
+
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
+    let mut stale_rollback = read_json(&rollback)?;
+    stale_rollback["rollback_release_id"] = Value::String("older-release".to_string());
+    write_json(&rollback, stale_rollback)?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "check-served",
+            "--status",
+            path_str(&status)?,
+            "--active",
+            path_str(&active)?,
+            "--rollback-set",
+            path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
+        ],
+        "rollback rollback_release_id was older-release, expected previous-release",
     )
 }
 
@@ -166,8 +211,9 @@ fn gitops_check_served_rejects_stale_active_retained_list() -> Result<()> {
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
     let mut stale_active = read_json(&active)?;
     stale_active["retained_release_ids"] = json!(["older-release"]);
     write_json(&active, stale_active)?;
@@ -182,6 +228,8 @@ fn gitops_check_served_rejects_stale_active_retained_list() -> Result<()> {
             path_str(&active)?,
             "--rollback-set",
             path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
         ],
         "active retained_release_ids was [\"older-release\"], expected [\"previous-release\"]",
     )
@@ -193,8 +241,9 @@ fn gitops_check_served_rejects_stale_rollback_set_retained_list() -> Result<()> 
     let status = root.path().join("status.json");
     let active = root.path().join("active.json");
     let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
 
-    write_served_documents(&status, &active, &rollback_set)?;
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
     let mut stale_rollback_set = read_json(&rollback_set)?;
     stale_rollback_set["retained_release_ids"] = json!(["older-release"]);
     write_json(&rollback_set, stale_rollback_set)?;
@@ -209,12 +258,19 @@ fn gitops_check_served_rejects_stale_rollback_set_retained_list() -> Result<()> 
             path_str(&active)?,
             "--rollback-set",
             path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
         ],
         "rollback-set retained_release_ids was [\"older-release\"], expected [\"previous-release\"]",
     )
 }
 
-fn write_served_documents(status: &Path, active: &Path, rollback_set: &Path) -> Result<()> {
+fn write_served_documents(
+    status: &Path,
+    active: &Path,
+    rollback_set: &Path,
+    rollback: &Path,
+) -> Result<()> {
     write_json(
         status,
         json!({
@@ -280,6 +336,28 @@ fn write_served_documents(status: &Path, active: &Path, rollback_set: &Path) -> 
             "retained_release_document_paths": ["/var/lib/fishystuff/gitops/rollback-set/local-test/previous-release.json"],
             "rollback_set_available": true,
             "rollback_set_state": "retained_hot_release_set",
+        }),
+    )?;
+    write_json(
+        rollback,
+        json!({
+            "desired_generation": 42,
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "current_release_id": "active-release",
+            "current_release_identity": "release=active-release;api=example",
+            "rollback_release_id": "previous-release",
+            "rollback_release_identity": "release=previous-release;api=example",
+            "rollback_api_bundle": "/nix/store/example-previous-api",
+            "rollback_dolt_service_bundle": "/nix/store/example-previous-dolt-service",
+            "rollback_site_content": "/nix/store/example-previous-site",
+            "rollback_cdn_runtime_content": "/nix/store/example-previous-cdn",
+            "rollback_dolt_commit": "example-previous",
+            "rollback_dolt_materialization": "metadata_only",
+            "rollback_dolt_cache_dir": "",
+            "rollback_dolt_release_ref": "",
+            "rollback_available": true,
+            "rollback_state": "retained_hot_release",
         }),
     )
 }

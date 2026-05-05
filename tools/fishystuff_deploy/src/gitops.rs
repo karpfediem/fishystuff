@@ -44,6 +44,18 @@ struct RollbackSetDocument {
     rollback_set_available: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct RollbackReadinessDocument {
+    desired_generation: u64,
+    environment: String,
+    host: String,
+    current_release_id: String,
+    current_release_identity: String,
+    rollback_release_id: String,
+    rollback_release_identity: String,
+    rollback_available: bool,
+}
+
 pub struct ServedSummary {
     desired_generation: u64,
     environment: String,
@@ -87,6 +99,7 @@ pub fn check_served(
     status_path: &Path,
     active_path: &Path,
     rollback_set_path: &Path,
+    rollback_path: &Path,
     expected_environment: Option<&str>,
     expected_host: Option<&str>,
     expected_release_id: Option<&str>,
@@ -94,6 +107,8 @@ pub fn check_served(
     let status: StatusDocument = read_json(status_path, "GitOps status")?;
     let active: ActiveDocument = read_json(active_path, "GitOps active selection")?;
     let rollback_set: RollbackSetDocument = read_json(rollback_set_path, "GitOps rollback set")?;
+    let rollback: RollbackReadinessDocument =
+        read_json(rollback_path, "GitOps rollback readiness")?;
 
     if let Some(expected) = expected_environment {
         require_eq("status environment", status.environment.as_str(), expected)?;
@@ -196,6 +211,37 @@ pub fn check_served(
         &rollback_set.retained_release_ids,
         &status.retained_release_ids,
     )?;
+
+    require_eq(
+        "rollback desired_generation",
+        rollback.desired_generation,
+        status.desired_generation,
+    )?;
+    require_eq(
+        "rollback environment",
+        &rollback.environment,
+        &status.environment,
+    )?;
+    require_eq("rollback host", &rollback.host, &status.host)?;
+    require_eq(
+        "rollback current_release_id",
+        &rollback.current_release_id,
+        &status.release_id,
+    )?;
+    require_eq(
+        "rollback current_release_identity",
+        &rollback.current_release_identity,
+        &status.release_identity,
+    )?;
+    require_eq(
+        "rollback rollback_release_id",
+        &rollback.rollback_release_id,
+        &status.rollback_primary_release_id,
+    )?;
+    if rollback.rollback_release_identity.is_empty() {
+        bail!("rollback rollback_release_identity must not be empty");
+    }
+    require_true("rollback rollback_available", rollback.rollback_available)?;
 
     Ok(ServedSummary {
         desired_generation: status.desired_generation,
