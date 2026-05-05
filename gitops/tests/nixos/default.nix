@@ -5,6 +5,7 @@
   fishystuffDeployPackage,
   gitopsSrc,
   generatedServeFixture,
+  productionServeFixture,
 }:
 {
   gitops-empty-unify = import ./empty-unify.nix {
@@ -58,6 +59,23 @@
   gitops-generated-served-candidate-vm = import ./generated-served-candidate.nix {
     inherit gitopsSrc mgmtPackage pkgs;
     inherit (generatedServeFixture)
+      apiArtifact
+      cdnRuntimeCurrentArtifact
+      cdnRuntimeArtifact
+      desiredState
+      doltServiceArtifact
+      previousApiArtifact
+      previousCdnRuntimeArtifact
+      previousCdnRuntimeCurrentArtifact
+      previousDoltServiceArtifact
+      previousSiteArtifact
+      siteArtifact
+      ;
+  };
+
+  gitops-production-vm-serve-fixture-vm = import ./production-vm-serve-fixture.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+    inherit (productionServeFixture)
       apiArtifact
       cdnRuntimeCurrentArtifact
       cdnRuntimeArtifact

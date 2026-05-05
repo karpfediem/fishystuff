@@ -35,6 +35,7 @@ just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
+just gitops-vm-test production-vm-serve-fixture
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
 just gitops-vm-test served-caddy-rollback-transition
@@ -74,6 +75,7 @@ nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
 nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
+nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
@@ -146,6 +148,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-unused-release-closure-noop-vm` boots a local NixOS VM in `vm-test-closures` mode with one selected release backed by real tiny store artifacts and one unselected release backed by bogus store paths. It proves the graph validates the release catalog but only realizes and roots releases requested by enabled environments as active or retained rollback releases.
 
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with that generated desired state. It verifies the graph can express a served candidate from generated JSON, checks the selected site/CDN runtime fixture, verifies the generated retained `previous-release` object, writes the VM-local route selection document, and confirms vm-test mode does not create real FishyStuff service state or gcroots.
+
+`gitops-production-vm-serve-fixture-vm` boots a local NixOS VM with the generated `.#gitops-desired-state-production-vm-serve-fixture` JSON. It uses production API/Dolt service bundles and production site content with fixture CDN serving roots, checks served state under the VM-local `production` environment, and asserts `/var/lib/fishystuff/gitops`, `/srv/fishystuff`, and real FishyStuff services remain untouched.
 
 `gitops-served-symlink-transition-vm` boots one local NixOS VM, serves one desired state, then serves a second desired state. It proves the VM-local active symlinks and route selection document move by reconciliation through desired state, not by an imperative deployment command.
 

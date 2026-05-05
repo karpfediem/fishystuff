@@ -28,6 +28,7 @@ nix build .#checks.x86_64-linux.gitops-served-closure-roots-vm
 nix build .#checks.x86_64-linux.gitops-json-status-escaping-vm
 nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
+nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
@@ -81,6 +82,7 @@ just gitops-vm-test served-closure-roots
 just gitops-vm-test json-status-escaping
 just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
+just gitops-vm-test production-vm-serve-fixture
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
 just gitops-vm-test served-caddy-rollback-transition
@@ -131,6 +133,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-served-candidate-vm` boots a local NixOS VM with `serve: true` in `vm-test` mode. It checks fixture admission, candidate state, served status, exact release identity, retained rollback release IDs, the VM-local active selection file under `/var/lib/fishystuff/gitops-test/active/local-test.json`, served symlinks under `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, and the route selection document under `/run/fishystuff/gitops-test/routes/local-test.json`. Its admission fixture reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact release store paths. Its CDN fixture uses the real `cdn-serving-root` derivation to prove current runtime files and retained source-map/runtime files can coexist in one Caddy-facing root. It still asserts that no real FishyStuff services or deployment directories are touched.
 
 `gitops-generated-served-candidate-vm` boots a local NixOS VM with the generated `.#gitops-desired-state-vm-serve-fixture` JSON. It checks the generated release ID, exact API/Dolt/site/CDN fixture paths, the retained `previous-release` object, the CDN serving manifest with retained runtime assets, VM-local served state, and that `vm-test` mode does not create real gcroots or FishyStuff service state.
+
+`gitops-production-vm-serve-fixture-vm` boots a local NixOS VM with the generated `.#gitops-desired-state-production-vm-serve-fixture` JSON. It uses production API/Dolt service bundles and production site content with fixture CDN serving roots, checks served state under the VM-local `production` environment, and asserts `/var/lib/fishystuff/gitops`, `/srv/fishystuff`, and real FishyStuff services remain untouched.
 
 `gitops-served-symlink-transition-vm` boots a local NixOS VM and runs two served desired states in sequence. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}` and the route selection document move from the previous release to the candidate release through mgmt reconciliation only.
 
