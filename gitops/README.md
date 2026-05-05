@@ -282,6 +282,18 @@ Dolt remote URLs must not embed credentials because desired state and status doc
 
 The Rust deployment helper is packaged as `.#fishystuff-deploy`. It is intentionally a narrow host-local helper, not a plan/apply deployment command: mgmt still owns desired-state reconciliation, while the helper only executes Dolt clone/fetch/ref-pin/status-file operations requested by the graph. The same helper owns the `needs-*` freshness checks used by mgmt `exec.ifcmd`, so rerun decisions compare the structured request/status tuple instead of partial shell/JQ snippets.
 
+The helper also provides a read-only local status validator:
+
+```bash
+fishystuff_deploy gitops check-served \
+  --status /var/lib/fishystuff/gitops/status/local-test.json \
+  --active /var/lib/fishystuff/gitops/active/local-test.json \
+  --rollback-set /var/lib/fishystuff/gitops/rollback-set/local-test.json \
+  --environment local-test
+```
+
+This only reads local GitOps documents. It verifies status, active selection, and rollback-set documents agree on the served generation/release and that rollback readiness is available with at least one retained release.
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.

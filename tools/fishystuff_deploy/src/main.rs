@@ -1,4 +1,5 @@
 mod dolt;
+mod gitops;
 mod http_probe;
 
 use std::path::PathBuf;
@@ -24,6 +25,10 @@ enum Commands {
     Http {
         #[command(subcommand)]
         command: HttpCommands,
+    },
+    Gitops {
+        #[command(subcommand)]
+        command: GitopsCommands,
     },
 }
 
@@ -103,6 +108,24 @@ enum HttpCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum GitopsCommands {
+    CheckServed {
+        #[arg(long)]
+        status: PathBuf,
+        #[arg(long)]
+        active: PathBuf,
+        #[arg(long)]
+        rollback_set: PathBuf,
+        #[arg(long)]
+        environment: Option<String>,
+        #[arg(long)]
+        host: Option<String>,
+        #[arg(long)]
+        release_id: Option<String>,
+    },
+}
+
 fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
 
@@ -161,6 +184,27 @@ fn main() -> Result<ExitCode> {
             HttpCommands::NeedsProbeJsonScalars { request, status } => Ok(needs_exit_code(
                 http_probe::needs_probe_json_scalars(&request, &status),
             )),
+        },
+        Commands::Gitops { command } => match command {
+            GitopsCommands::CheckServed {
+                status,
+                active,
+                rollback_set,
+                environment,
+                host,
+                release_id,
+            } => {
+                let summary = gitops::check_served(
+                    &status,
+                    &active,
+                    &rollback_set,
+                    environment.as_deref(),
+                    host.as_deref(),
+                    release_id.as_deref(),
+                )?;
+                println!("{}", summary.summary_line());
+                Ok(ExitCode::SUCCESS)
+            }
         },
     }
 }
