@@ -380,6 +380,7 @@
             gitRev = "http-admission-probe-fixture";
             doltCommit = "http-admission-probe-fixture";
             doltBranchContext = "local-test";
+            apiService = "fishystuff-gitops-candidate-api-local-test";
             apiUpstream = "http://127.0.0.1:18082";
             admissionProbe = {
               kind = "http_json_scalar";
@@ -458,11 +459,16 @@
           modularServiceRuntime = pkgs.callPackage ./nix/tests/modular-service-runtime.nix {
             inherit serviceModules;
           };
+          mgmtGitopsPackage = mgmt-fishystuff-beta.packages.${system}.minimal.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./nix/patches/mgmt-recwatch-bound-watch-path-index.patch
+            ];
+          });
           gitopsTests = import ./gitops/tests/nixos {
             inherit pkgs;
             gitopsSrc = ./gitops;
             fishystuffDeployPackage = fishystuffDeploy;
-            mgmtPackage = mgmt-fishystuff-beta.packages.${system}.minimal;
+            mgmtPackage = mgmtGitopsPackage;
             generatedServeFixture = {
               desiredState = gitopsDesiredStateVmServeFixture;
               apiArtifact = gitopsDesiredStateServeFixtureApi;
@@ -546,7 +552,7 @@
           '';
           gitopsDesiredStateBetaValidateCheck = pkgs.runCommand "gitops-desired-state-beta-validate-check" {
             nativeBuildInputs = [
-              mgmt-fishystuff-beta.packages.${system}.minimal
+              mgmtGitopsPackage
               pkgs.jq
             ];
           } ''
@@ -563,7 +569,7 @@
           '';
           gitopsDesiredStateVmServeFixtureCheck = pkgs.runCommand "gitops-desired-state-vm-serve-fixture-check" {
             nativeBuildInputs = [
-              mgmt-fishystuff-beta.packages.${system}.minimal
+              mgmtGitopsPackage
               pkgs.jq
             ];
           } ''
@@ -584,7 +590,7 @@
           '';
           gitopsDesiredStateRollbackTransitionCheck = pkgs.runCommand "gitops-desired-state-rollback-transition-check" {
             nativeBuildInputs = [
-              mgmt-fishystuff-beta.packages.${system}.minimal
+              mgmtGitopsPackage
               pkgs.jq
             ];
           } ''
@@ -611,7 +617,7 @@
           '';
           gitopsDesiredStateAdmissionProbeCheck = pkgs.runCommand "gitops-desired-state-admission-probe-check" {
             nativeBuildInputs = [
-              mgmt-fishystuff-beta.packages.${system}.minimal
+              mgmtGitopsPackage
               pkgs.jq
             ];
           } ''
@@ -636,7 +642,7 @@
           '';
           gitopsDesiredStateHttpAdmissionProbeCheck = pkgs.runCommand "gitops-desired-state-http-admission-probe-check" {
             nativeBuildInputs = [
-              mgmt-fishystuff-beta.packages.${system}.minimal
+              mgmtGitopsPackage
               pkgs.jq
             ];
           } ''
@@ -647,6 +653,7 @@
               .mode == "local-apply"
               and .environments."local-test".serve == false
               and .environments."local-test".api_upstream == "http://127.0.0.1:18082"
+              and .environments."local-test".api_service == "fishystuff-gitops-candidate-api-local-test"
               and .environments."local-test".admission_probe.kind == "http_json_scalar"
               and .environments."local-test".admission_probe.probe_name == "api-meta"
               and .environments."local-test".admission_probe.url == "http://127.0.0.1:18082/api/v1/meta"

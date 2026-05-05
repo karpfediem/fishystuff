@@ -47,7 +47,6 @@ class readiness($st) {
 		if $rollback_available {
 			file "${rollback_dir}/" {
 				state => "exists",
-				recurse => true,
 				mode => "0755",
 			}
 
@@ -107,7 +106,6 @@ class retained_release($st) {
 		if $served {
 			file "${rollback_set_release_dir}/" {
 				state => "exists",
-				recurse => true,
 				mode => "0755",
 			}
 
@@ -155,7 +153,6 @@ class retained_set($st) {
 		if $rollback_set_available {
 			file "${rollback_set_dir}/" {
 				state => "exists",
-				recurse => true,
 				mode => "0755",
 			}
 

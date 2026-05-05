@@ -148,7 +148,7 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 
 `gitops-local-apply-candidate-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` and a non-serving `local-apply` candidate. It proves local-apply writes candidate/status facts under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, not the VM-test directories, while still avoiding `/srv/fishystuff` and real service mutation.
 
-`gitops-local-apply-http-admission-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, starts a loopback-only candidate API endpoint, and serves a local-apply candidate only after `fishystuff_deploy http probe-json-scalar` verifies `/api/v1/meta` under the declared `api_upstream`. It verifies status, active symlinks, route selection, rollback-set state, and admission request/status files under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, while still avoiding VM-test paths, `/srv/fishystuff`, and real FishyStuff services.
+`gitops-local-apply-http-admission-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, defines a loopback-only candidate API fixture service, and serves a local-apply candidate only after mgmt starts the `api_service` and `fishystuff_deploy http probe-json-scalar` verifies `/api/v1/meta` under the declared `api_upstream`. It verifies status, active symlinks, route selection, rollback-set state, candidate API config, and admission request/status files under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, while still avoiding VM-test paths, `/srv/fishystuff`, and real FishyStuff services.
 
 `gitops-missing-active-artifact-refusal` proves graph-side serving checks require the active release to name the API, Dolt service, site, and CDN artifact paths even when desired state is hand-written.
 
@@ -221,6 +221,7 @@ The minimal JSON shape is:
       "retained_releases": [],
       "serve": false,
       "api_upstream": "",
+      "api_service": "",
       "admission_fixture_state": "",
       "admission_probe": {
         "kind": "",
@@ -256,6 +257,8 @@ Supported modes:
 The generated desired-state helper supports the same transition object and refuses to emit rollback desired state unless `transition.from_release` remains in the retained rollback set.
 
 `api_upstream` is the candidate API endpoint selected for a served environment. For the current local-only HTTP admission bridge it should be a loopback HTTP origin such as `http://127.0.0.1:18082` without a trailing slash. When set, HTTP admission probe URLs must equal that upstream or live below it; the generated desired-state helper enforces the same relationship.
+
+`api_service` is optional and local-writing-mode only. When set, it must be a mgmt `svc` name such as `fishystuff-gitops-candidate-api-local-test`, not a systemd unit filename ending in `.service`. The graph writes `/var/lib/fishystuff/gitops/api/<environment>.json`, starts that candidate service through `svc`, and only then runs HTTP admission. Real FishyStuff services are still not started by default; fixtures use an isolated test service name.
 
 `main.mcl` traverses the desired-state `environments` map generically. Every enabled environment must use the `single_active` strategy, name an enabled host, and select a release by key. The checked-in fixtures still use readable names such as `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. This milestone supports generic single-host environments; richer placement strategies should be new modules with their own VM tests.
 
@@ -331,6 +334,8 @@ This graph does not import Hetzner, Cloudflare, or SSH providers. It does not ca
 
 `gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `vm-test-closures` and future `local-apply` mode. In `validate` and plain `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
 
+The GitOps flake checks apply `nix/patches/mgmt-recwatch-bound-watch-path-index.patch` to that pinned mgmt package. The patch is a small local backport from the adjacent mgmt checkout that prevents a recursive watcher index panic while the graph creates nested local state directories. The MCL graph also creates explicit parent directories and avoids recursive directory management for GitOps status trees.
+
 The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM and set explicit VM memory because the pinned mgmt build can use several GiB while converging this graph. They do not connect to beta, production, Hetzner, Cloudflare, SSH, or operator SecretSpec profiles.
 
 `gitops-closure-roots-vm` generates desired state from tiny real Nix store artifacts inside the test derivation. It proves closure verification and gcroot creation without using fake enabled store paths or serving anything.
@@ -359,7 +364,7 @@ Fallbacks introduced: none to the old beta deployment graph. The validation no-o
 
 ## Admission
 
-Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture written under `/run/fishystuff/gitops-test/admission/`; by default it is `passed_fixture`, and tests may explicitly request `failed_fixture` through `admission_fixture_state`. A VM test environment may also request `admission_probe.kind = "dolt_sql_scalar"` to run a configured single-scalar SQL probe against the exact pinned Dolt cache/ref before admission is published. `local-apply` and VM modes may request `admission_probe.kind = "http_status"` or `admission_probe.kind = "http_json_scalar"` to run a loopback-only HTTP GET through the Rust helper before status/active/route files publish. For serving fixtures, local admission must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
+Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture written under `/run/fishystuff/gitops-test/admission/`; by default it is `passed_fixture`, and tests may explicitly request `failed_fixture` through `admission_fixture_state`. A VM test environment may also request `admission_probe.kind = "dolt_sql_scalar"` to run a configured single-scalar SQL probe against the exact pinned Dolt cache/ref before admission is published. `local-apply` and VM modes may request `admission_probe.kind = "http_status"` or `admission_probe.kind = "http_json_scalar"` to run a loopback-only HTTP GET through the Rust helper before status/active/route files publish. If `api_service` is set, HTTP admission depends on that candidate service being reconciled to `running`. For serving fixtures, local admission must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
 
 The Rust deployment helper also provides local HTTP admission probe building blocks:
 

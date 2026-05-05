@@ -1,0 +1,51 @@
+diff --git a/util/recwatch/recwatch.go b/util/recwatch/recwatch.go
+index 9b1007f0..7853dc40 100644
+--- a/util/recwatch/recwatch.go
++++ b/util/recwatch/recwatch.go
+@@ -35 +34,0 @@ import (
+-	"math"
+@@ -182,0 +182,3 @@ func (obj *RecWatcher) Watch() error {
++		if index < 1 || index > len(patharray) {
++			return fmt.Errorf("recwatch: invalid path index %d for %q", index, obj.safename)
++		}
+@@ -197,2 +199,3 @@ func (obj *RecWatcher) Watch() error {
+-				index-- // usually not found, move up one dir
+-				index = int(math.Max(1, float64(index)))
++				if index > 1 {
++					index-- // usually not found, move up one dir
++				}
+@@ -268,3 +271,5 @@ func (obj *RecWatcher) Watch() error {
+-					//obj.options.logf("removal!")
+-					obj.watcher.Remove(current)
+-					index--
++					if index > 1 {
++						//obj.options.logf("removal!")
++						obj.watcher.Remove(current)
++						index--
++					}
+@@ -282,3 +287,5 @@ func (obj *RecWatcher) Watch() error {
+-					// XXX: we can block here due to: https://github.com/fsnotify/fsnotify/issues/123
+-					obj.watcher.Remove(current)
+-					index++
++					if index < len(patharray) {
++						// XXX: we can block here due to: https://github.com/fsnotify/fsnotify/issues/123
++						obj.watcher.Remove(current)
++						index++
++					}
+@@ -292,3 +299,5 @@ func (obj *RecWatcher) Watch() error {
+-					//obj.options.logf("removal!")
+-					obj.watcher.Remove(current)
+-					index--
++					if index > 1 {
++						//obj.options.logf("removal!")
++						obj.watcher.Remove(current)
++						index--
++					}
+@@ -302,2 +311,5 @@ func (obj *RecWatcher) Watch() error {
+-					obj.watcher.Remove(current)
+-					index++
++					if index < len(patharray) {
++						// XXX: we can block here due to: https://github.com/fsnotify/fsnotify/issues/123
++						obj.watcher.Remove(current)
++						index++
++					}

@@ -31,7 +31,6 @@ class local($st) {
 		if $served {
 			file "${route_dir}/" {
 				state => "exists",
-				recurse => true,
 				mode => "0755",
 			}
 

@@ -37,6 +37,42 @@ let
     currentRoot = currentCdnRoot;
     previousRoots = [ previousCdnRoot ];
   };
+  candidateApiServer = pkgs.writeText "fishystuff-gitops-candidate-api-server.py" ''
+    import json
+    import sys
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    config_path = sys.argv[1]
+    port = int(sys.argv[2])
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != "/api/v1/meta":
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            with open(config_path, encoding="utf-8") as config_file:
+                config = json.load(config_file)
+
+            body = json.dumps({
+                "state": "ok",
+                "release_id": config["release_id"],
+                "release_identity": config["release_identity"],
+                "dolt_commit": config["dolt_commit"],
+                "api_upstream": config["api_upstream"],
+            }).encode("utf-8")
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format, *args):
+            return
+
+    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+  '';
   expectedReleaseIdentity = "release=local-apply-http-release;generation=62;git_rev=local-apply-http-admission;dolt_commit=local-apply-http-admission;dolt_repository=fishystuff/fishystuff;dolt_branch_context=local-test;dolt_mode=read_only;api=${apiArtifact};site=${siteArtifact};cdn_runtime=${cdnServingRoot};dolt_service=${doltServiceArtifact}";
   desiredState = pkgs.writeText "vm-local-apply-http-admission.desired.json" (builtins.toJSON {
     cluster = "local-test";
@@ -121,6 +157,7 @@ let
       retained_releases = [ "previous-release" ];
       serve = true;
       api_upstream = "http://127.0.0.1:18082";
+      api_service = "fishystuff-gitops-candidate-api-local-test";
       admission_probe = {
         kind = "http_json_scalar";
         probe_name = "api-meta";
@@ -161,20 +198,21 @@ pkgs.testers.runNixOSTest {
         pkgs.jq
         pkgs.python3
       ];
+      systemd.services.fishystuff-gitops-candidate-api-local-test = {
+        serviceConfig = {
+          ExecStart = "${pkgs.python3}/bin/python3 ${candidateApiServer} /var/lib/fishystuff/gitops/api/local-test.json 18082";
+          Restart = "always";
+          RestartSec = "1s";
+        };
+      };
     };
 
   testScript = ''
     start_all()
 
-    machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
-    machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
-    machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
-    machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".admission_probe.kind == \"http_json_scalar\"' ${desiredState}")
-    machine.succeed("mkdir -p /tmp/fishystuff-gitops-http-probe/api/v1 && printf '{\"release_id\":\"local-apply-http-release\",\"dolt_commit\":\"local-apply-http-admission\",\"state\":\"ok\"}\n' >/tmp/fishystuff-gitops-http-probe/api/v1/meta")
-    machine.succeed("python3 -m http.server 18082 --bind 127.0.0.1 --directory /tmp/fishystuff-gitops-http-probe >/tmp/fishystuff-gitops-http-probe.log 2>&1 & echo $! >/tmp/fishystuff-gitops-http-probe.pid")
-    machine.wait_until_succeeds("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\"'", timeout=30)
-    machine.succeed("env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >/tmp/fishystuff-gitops-local-apply-http-admission.log 2>&1 & echo $! >/tmp/fishystuff-gitops-local-apply-http-admission.pid")
-
+    mgmt_log = "/tmp/fishystuff-gitops-local-apply-http-admission.log"
+    mgmt_pid = "/tmp/fishystuff-gitops-local-apply-http-admission.pid"
+    api_config = "/var/lib/fishystuff/gitops/api/local-test.json"
     status = "/var/lib/fishystuff/gitops/status/local-test.json"
     active = "/var/lib/fishystuff/gitops/active/local-test.json"
     route = "/run/fishystuff/gitops/routes/local-test.json"
@@ -182,14 +220,44 @@ pkgs.testers.runNixOSTest {
     request = "/var/lib/fishystuff/gitops/admission/requests/local-test-local-apply-http-release-http-json-scalar.json"
     instance = "/var/lib/fishystuff/gitops/instances/local-test-local-apply-http-release.json"
     rollback_set = "/var/lib/fishystuff/gitops/rollback-set/local-test.json"
+    candidate_service = "fishystuff-gitops-candidate-api-local-test"
 
-    machine.wait_for_file(request)
-    machine.wait_for_file(admission)
-    machine.wait_for_file(status)
-    machine.wait_for_file(active)
-    machine.wait_for_file(route)
-    machine.wait_for_file(instance)
-    machine.wait_for_file(rollback_set)
+    def dump_gitops_debug():
+      _, output = machine.execute(f"echo '--- mgmt log head ---'; head -120 {mgmt_log} 2>/dev/null || true; echo '--- mgmt log tail ---'; tail -240 {mgmt_log} 2>/dev/null || true; echo '--- api config ---'; cat {api_config} 2>/dev/null || true; echo '--- admission request ---'; cat {request} 2>/dev/null || true; echo '--- candidate api status ---'; systemctl status {candidate_service} --no-pager 2>&1 || true; echo '--- candidate api journal ---'; journalctl -u {candidate_service} --no-pager -n 120 2>&1 || true; echo '--- probe curl ---'; curl -v http://127.0.0.1:18082/api/v1/meta 2>&1 || true; echo '--- gitops state tree ---'; find /var/lib/fishystuff/gitops /run/fishystuff/gitops -maxdepth 6 -ls 2>/dev/null || true; echo '--- mgmt process ---'; ps -ef | grep '[m]gmt' || true")
+      print(output)
+
+    def wait_for_gitops_file(path):
+      try:
+        machine.wait_for_file(path, timeout=180)
+      except Exception:
+        dump_gitops_debug()
+        raise
+
+    def wait_for_gitops_command(command, timeout=60):
+      try:
+        machine.wait_until_succeeds(command, timeout=timeout)
+      except Exception:
+        dump_gitops_debug()
+        raise
+
+    machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
+    machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
+    machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
+    machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\" and .environments.\"local-test\".admission_probe.kind == \"http_json_scalar\"' ${desiredState}")
+    machine.fail("systemctl is-active fishystuff-gitops-candidate-api-local-test")
+    machine.succeed(f"env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >{mgmt_log} 2>&1 & echo $! >{mgmt_pid}")
+
+    wait_for_gitops_file(api_config)
+    wait_for_gitops_command("systemctl is-active fishystuff-gitops-candidate-api-local-test")
+    wait_for_gitops_command("curl -fsS http://127.0.0.1:18082/api/v1/meta | jq -e '.release_id == \"local-apply-http-release\" and .api_upstream == \"http://127.0.0.1:18082\"'")
+    wait_for_gitops_file(request)
+    wait_for_gitops_file(admission)
+    wait_for_gitops_file(status)
+    wait_for_gitops_file(active)
+    wait_for_gitops_file(route)
+    wait_for_gitops_file(instance)
+    wait_for_gitops_file(rollback_set)
+    machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .api_bundle == \"${apiArtifact}\" and .api_upstream == \"http://127.0.0.1:18082\" and .service_name == \"fishystuff-gitops-candidate-api-local-test\" and .dolt_commit == \"local-apply-http-admission\" and .state == \"candidate_api_config\"' {api_config}")
     machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .timeout_ms == 2000 and .json_pointer == \"/release_id\" and .expected_scalar == \"local-apply-http-release\"' {request}")
     machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .observed_status == 200 and .json_pointer == \"/release_id\" and .scalar == \"local-apply-http-release\" and .expected_scalar == \"local-apply-http-release\" and .admission_state == \"passed_fixture\" and .probe == \"http-json-scalar\"' {admission}")
     machine.succeed(f"jq -e '.desired_generation == 62 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
@@ -202,7 +270,6 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test ! -e /run/fishystuff/gitops-test")
     machine.succeed("test ! -e /tmp/fishystuff-gitops-test")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-local-apply-http-admission.pid) || true")
-    machine.succeed("kill $(cat /tmp/fishystuff-gitops-http-probe.pid) || true")
 
     machine.fail("systemctl is-active fishystuff-api.service")
     machine.fail("systemctl is-active fishystuff-dolt.service")

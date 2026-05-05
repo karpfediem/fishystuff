@@ -83,13 +83,11 @@ class materialization($st) {
 	if $write_vm_state and ($materialization == "fetch_pin") {
 		file "${request_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
 		file "${status_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 

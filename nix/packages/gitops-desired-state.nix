@@ -3,6 +3,7 @@
   writeText,
   activeRelease ? null,
   admissionProbe ? null,
+  apiService ? "",
   apiUpstream ? "",
   apiClosure ? null,
   cdnRuntimeClosure ? null,
@@ -127,6 +128,8 @@ let
     inherit serve;
   } // lib.optionalAttrs (apiUpstream != "") {
     api_upstream = apiUpstream;
+  } // lib.optionalAttrs (apiService != "") {
+    api_service = apiService;
   } // lib.optionalAttrs (admissionProbe != null) {
     admission_probe = admissionProbe;
   } // lib.optionalAttrs (transition != null) {
@@ -151,6 +154,12 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   apiUpstream == "" || !remoteUrlContainsUserinfo apiUpstream
 ) "gitops apiUpstream must not contain embedded credentials";
+assert lib.assertMsg (
+  apiService == "" || apiUpstream != ""
+) "gitops apiService requires apiUpstream";
+assert lib.assertMsg (
+  apiService == "" || !(lib.hasSuffix ".service" apiService)
+) "gitops apiService expects a mgmt svc name, not a systemd unit filename";
 assert lib.assertMsg (activeRelease == null || activeRelease != "") "gitops desired state activeRelease override must not be empty";
 assert lib.assertMsg (generation > 0) "gitops desired state requires positive generation";
 assert lib.assertMsg (releaseGeneration > 0) "gitops desired state requires positive releaseGeneration";

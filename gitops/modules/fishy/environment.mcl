@@ -4,6 +4,7 @@ import "strings" as core_strings
 
 import "activation.mcl" as fishy_activation
 import "admission.mcl" as fishy_admission
+import "api.mcl" as fishy_api
 import "dolt.mcl" as fishy_dolt
 import "instance.mcl" as fishy_instance
 import "json.mcl" as fishy_json
@@ -17,7 +18,7 @@ class single_host($st) {
 	$cluster str = $st->cluster || "local-test"
 	$desired_generation int = $st->desired_generation || 0
 	$environment_name str = $st->environment_name
-	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; api_upstream str; admission_fixture_state str; admission_probe struct{kind str; probe_name str; url str; expected_status int; timeout_ms int; query str; expected_scalar str; json_pointer str}; transition struct{kind str; from_release str; reason str}} = $st->environment
+	$environment struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; api_upstream str; api_service str; admission_fixture_state str; admission_probe struct{kind str; probe_name str; url str; expected_status int; timeout_ms int; query str; expected_scalar str; json_pointer str}; transition struct{kind str; from_release str; reason str}} = $st->environment
 	$host struct{enabled bool; role str; hostname str} = $st->host
 	$releases map{str: struct{
 		generation int;
@@ -126,6 +127,8 @@ class single_host($st) {
 	$use_http_json_scalar_admission_probe = $admission_probe_kind == "http_json_scalar"
 	$use_http_admission_probe = $use_http_status_admission_probe or $use_http_json_scalar_admission_probe
 	$api_upstream str = $environment->api_upstream || ""
+	$api_service str = $environment->api_service || ""
+	$manage_api_service = $api_service != ""
 	$http_probe_targets_api_upstream = ($api_upstream != "") and (($admission_probe->url == $api_upstream) or core_strings.has_prefix($admission_probe->url, fmt.printf("%s/", $api_upstream)) or core_strings.has_prefix($admission_probe->url, fmt.printf("%s?", $api_upstream)))
 	$default_admission_state = if ($mode == "vm-test") or ($mode == "vm-test-closures") or $use_http_admission_probe { "passed_fixture" } else { "not_run" }
 	$admission_state = if $requested_admission_fixture_state != "" { $requested_admission_fixture_state } else { $default_admission_state }
@@ -173,6 +176,8 @@ class single_host($st) {
 	panic($environment->serve and $use_http_admission_probe and ($api_upstream == ""), fmt.printf("environment %s serving with HTTP admission requires api_upstream", $environment_name))
 	panic($use_http_admission_probe and ($api_upstream != "") and (not $http_probe_targets_api_upstream), fmt.printf("environment %s HTTP admission probe must target api_upstream", $environment_name))
 	panic($use_http_json_scalar_admission_probe and ($admission_probe->expected_scalar == ""), fmt.printf("environment %s HTTP JSON scalar admission probe requires expected_scalar", $environment_name))
+	panic($manage_api_service and (not $write_local_state), fmt.printf("environment %s api_service is only supported in local writing modes", $environment_name))
+	panic($manage_api_service and ($api_upstream == ""), fmt.printf("environment %s api_service requires api_upstream", $environment_name))
 	panic(($transition_kind != "candidate") and ($transition_kind != "activate") and ($transition_kind != "rollback"), fmt.printf("environment %s has unsupported transition kind %s", $environment_name, $transition_kind))
 	panic(($transition_kind == "candidate") and $environment->serve, fmt.printf("environment %s candidate transition must not request serve", $environment_name))
 	panic(($transition_kind == "activate") and (not $environment->serve), fmt.printf("environment %s activate transition requires serve", $environment_name))
@@ -192,6 +197,49 @@ class single_host($st) {
 	panic($environment->serve and ($active_site_artifact->store_path == ""), fmt.printf("environment %s serving active release requires site store_path", $environment_name))
 	panic($environment->serve and ($active_cdn_runtime_artifact->store_path == ""), fmt.printf("environment %s serving active release requires cdn_runtime store_path", $environment_name))
 	panic($environment->serve and ($active_dolt_service_artifact->store_path == ""), fmt.printf("environment %s serving active release requires dolt_service store_path", $environment_name))
+
+	if $write_local_state {
+		file "/var/lib/fishystuff/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${state_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${state_dir}/admission/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${state_dir}/dolt/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${state_dir}/served/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "/run/fishystuff/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${run_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		File["/var/lib/fishystuff/"] -> File["${state_dir}/"]
+		File["${state_dir}/"] -> File["${state_dir}/admission/"]
+		File["${state_dir}/"] -> File["${state_dir}/dolt/"]
+		File["${state_dir}/"] -> File["${state_dir}/served/"]
+		File["/run/fishystuff/"] -> File["${run_dir}/"]
+	}
 
 	for $index, $retained_release_id in $retained_releases {
 		if $retained_release_id == $active_release_id {
@@ -412,6 +460,19 @@ class single_host($st) {
 		serve => $environment->serve,
 	})
 
+	include fishy_api.candidate_service(struct {
+		mode => $mode,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		api_bundle => $active_api_artifact->store_path,
+		api_upstream => $api_upstream,
+		service_name => $api_service,
+		dolt_commit => $active_dolt->commit,
+	})
+
 	if $use_dolt_sql_admission_probe {
 		include fishy_admission.dolt_sql_scalar(struct {
 			mode => $mode,
@@ -557,6 +618,10 @@ class single_host($st) {
 	}
 
 	if $write_local_state and $use_http_admission_probe {
+		if $manage_api_service {
+			Svc["${api_service}"] -> Exec["${http_admission_exec_name}"]
+		}
+
 		Exec["${http_admission_exec_name}"] -> File["${status_path}"]
 
 		if $served {

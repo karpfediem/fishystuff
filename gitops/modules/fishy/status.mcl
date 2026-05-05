@@ -39,7 +39,6 @@ class publish($st) {
 	if $write_local_state {
 		file "${status_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 

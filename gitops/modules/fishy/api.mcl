@@ -1,0 +1,52 @@
+import "fmt"
+import "strings" as core_strings
+import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
+
+class candidate_service($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$api_bundle str = $st->api_bundle || ""
+	$api_upstream str = $st->api_upstream || ""
+	$service_name str = $st->service_name || ""
+	$dolt_commit str = $st->dolt_commit || ""
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$enabled = $service_name != ""
+	$state_dir = fishy_paths.state_dir($mode)
+	$config_dir = fmt.printf("%s/api", $state_dir)
+	$config_path = fmt.printf("%s/%s.json", $config_dir, $environment)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"api_bundle\": %s,\n  \"api_upstream\": %s,\n  \"service_name\": %s,\n  \"dolt_commit\": %s,\n  \"state\": \"candidate_api_config\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($api_bundle), fishy_json.quote($api_upstream), fishy_json.quote($service_name), fishy_json.quote($dolt_commit))
+
+	panic($enabled and (not $write_local_state), "candidate API service is only supported in local writing modes")
+	panic($enabled and ($environment == ""), "candidate API service requires environment")
+	panic($enabled and ($host == ""), "candidate API service requires host")
+	panic($enabled and ($release_id == ""), "candidate API service requires release_id")
+	panic($enabled and ($release_identity == ""), "candidate API service requires release_identity")
+	panic($enabled and ($api_upstream == ""), "candidate API service requires api_upstream")
+	panic($enabled and core_strings.has_suffix($service_name, ".service"), "candidate API service expects a mgmt svc name, not a systemd unit filename")
+	panic($enabled and (len(core_strings.split($service_name, "'")) > 1), "candidate API service name must not contain single quotes")
+
+	if $enabled and $write_local_state {
+		file "${config_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${config_path}" {
+			state => "exists",
+			content => $content,
+			mode => "0644",
+		}
+
+		svc "${service_name}" {
+			state => "running",
+		}
+
+		File["${config_dir}/"] -> File["${config_path}"]
+		File["${config_path}"] -> Svc["${service_name}"]
+	}
+}

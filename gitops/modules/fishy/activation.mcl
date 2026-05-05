@@ -47,7 +47,6 @@ class active($st) {
 		if $served {
 			file "${active_dir}/" {
 				state => "exists",
-				recurse => true,
 				mode => "0755",
 			}
 
@@ -59,7 +58,6 @@ class active($st) {
 
 			file "${served_dir}/" {
 				state => "exists",
-				recurse => true,
 				mode => "0755",
 			}
 

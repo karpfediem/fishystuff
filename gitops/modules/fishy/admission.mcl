@@ -111,7 +111,6 @@ class fixture($st) {
 	if $write_vm_state {
 		file "/run/fishystuff/gitops-test/admission/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
@@ -165,13 +164,11 @@ class dolt_sql_scalar($st) {
 	if $write_vm_state {
 		file "${request_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
 		file "${status_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
@@ -246,13 +243,11 @@ class http_status($st) {
 	if $write_local_state {
 		file "${request_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
 		file "${status_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
@@ -329,13 +324,11 @@ class http_json_scalar($st) {
 	if $write_local_state {
 		file "${request_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 
 		file "${status_dir}/" {
 			state => "exists",
-			recurse => true,
 			mode => "0755",
 		}
 

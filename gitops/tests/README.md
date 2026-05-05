@@ -140,7 +140,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-local-apply-candidate-vm` boots a local NixOS VM and runs a non-serving `local-apply` candidate with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. It checks that candidate/status facts are written under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, that VM-test paths are not used, and that `/srv/fishystuff` and real FishyStuff services remain untouched.
 
-`gitops-local-apply-http-admission-vm` boots a local NixOS VM, starts a loopback candidate API endpoint, and runs a serving `local-apply` candidate with `api_upstream` plus `admission_probe.kind = "http_json_scalar"`. It checks the `/api/v1/meta` probe request/status tuple, served status, active symlinks, route document, rollback-set state, and candidate instance document under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, and confirms VM-test paths, `/srv/fishystuff`, and real FishyStuff services remain untouched.
+`gitops-local-apply-http-admission-vm` boots a local NixOS VM, defines a loopback candidate API fixture service, and runs a serving `local-apply` candidate with `api_upstream`, `api_service`, and `admission_probe.kind = "http_json_scalar"`. It checks that mgmt writes candidate API config, starts the isolated `api_service`, probes `/api/v1/meta`, publishes served status, active symlinks, route document, rollback-set state, and candidate instance/admission documents under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, and confirms VM-test paths, `/srv/fishystuff`, and real FishyStuff services remain untouched.
 
 `gitops-missing-active-artifact-refusal` boots a local NixOS VM and checks that hand-written serving desired state cannot omit an active release artifact path.
 
@@ -181,3 +181,5 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 The VM test does not use real secrets, deploy scripts, remote SSH, Hetzner, Cloudflare, beta, or production hosts.
 
 GitOps VM tests set explicit VM memory because the pinned mgmt build can use more than the default 1 GiB NixOS test VM while converging this graph. Current checks use up to 12 GiB.
+
+The flake applies `nix/patches/mgmt-recwatch-bound-watch-path-index.patch` to the GitOps mgmt package used by these checks. Without that local backport, nested state directory creation can trip a mgmt `recwatch` index panic before later `svc` and admission resources reconcile.
