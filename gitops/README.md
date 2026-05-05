@@ -44,6 +44,7 @@ just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test no-retained-release-refusal
 just gitops-vm-test active-retained-release-refusal
+just gitops-vm-test rollback-transition-retention-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
@@ -84,6 +85,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-active-retained-release-refusal
+nix build .#checks.x86_64-linux.gitops-rollback-transition-retention-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
@@ -136,6 +138,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-no-retained-release-refusal` proves serving is refused when no rollback release is retained.
 
 `gitops-active-retained-release-refusal` proves a hand-written desired-state file that lists the active release as retained cannot publish candidate, status, active, route, or rollback state.
+
+`gitops-rollback-transition-retention-refusal` proves a rollback transition cannot publish state unless the release being rolled away from remains retained after rollback.
 
 `gitops-raw-cdn-serve-refusal` is a negative VM check. It proves a `serve: true` desired state cannot pass admission when `cdn_runtime` points at a raw runtime directory instead of a finalized CDN serving root with `cdn-serving-manifest.json`.
 

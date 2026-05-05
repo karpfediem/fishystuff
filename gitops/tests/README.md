@@ -42,6 +42,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-active-retained-release-refusal
+nix build .#checks.x86_64-linux.gitops-rollback-transition-retention-refusal
 nix build .#checks.x86_64-linux.gitops-raw-cdn-serve-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-runtime-file-refusal
 nix build .#checks.x86_64-linux.gitops-missing-cdn-serving-manifest-entry-refusal
@@ -77,6 +78,7 @@ just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
 just gitops-vm-test no-retained-release-refusal
 just gitops-vm-test active-retained-release-refusal
+just gitops-vm-test rollback-transition-retention-refusal
 just gitops-vm-test raw-cdn-serve-refusal
 just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
@@ -134,6 +136,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-no-retained-release-refusal` boots a local NixOS VM and checks that `serve: true` must include at least one retained rollback release before the graph can publish candidate, admission, status, or active state.
 
 `gitops-active-retained-release-refusal` checks that a hand-written desired-state file that lists the active release as retained cannot publish candidate, status, active, route, or rollback state.
+
+`gitops-rollback-transition-retention-refusal` checks that a rollback transition cannot publish candidate, status, active, route, rollback, or rollback-set state unless the release being rolled away from remains retained after rollback.
 
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 

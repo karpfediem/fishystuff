@@ -115,6 +115,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-rollback-transition-retention-refusal = import ./rollback-transition-retention-refusal.nix {
+    inherit gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-raw-cdn-serve-refusal = import ./raw-cdn-serve-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

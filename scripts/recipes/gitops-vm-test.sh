@@ -80,6 +80,9 @@ case "$test_name" in
   active-retained-release-refusal)
     check_attr="gitops-active-retained-release-refusal"
     ;;
+  rollback-transition-retention-refusal)
+    check_attr="gitops-rollback-transition-retention-refusal"
+    ;;
   raw-cdn-serve-refusal)
     check_attr="gitops-raw-cdn-serve-refusal"
     ;;
@@ -97,7 +100,7 @@ case "$test_name" in
     ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, dolt-fetch-pin, dolt-admission-pin, served-retained-dolt-fetch-pin, multi-environment-candidates, multi-environment-served, closure-roots, unused-release-closure-noop, served-closure-roots, json-status-escaping, served-candidate, generated-served-candidate, served-symlink-transition, served-caddy-handoff, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, local-apply-without-optin-refusal, missing-active-artifact-refusal, missing-retained-artifact-refusal, missing-retained-release-refusal, no-retained-release-refusal, active-retained-release-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, dolt-fetch-pin, dolt-admission-pin, served-retained-dolt-fetch-pin, multi-environment-candidates, multi-environment-served, closure-roots, unused-release-closure-noop, served-closure-roots, json-status-escaping, served-candidate, generated-served-candidate, served-symlink-transition, served-caddy-handoff, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, local-apply-without-optin-refusal, missing-active-artifact-refusal, missing-retained-artifact-refusal, missing-retained-release-refusal, no-retained-release-refusal, active-retained-release-refusal, rollback-transition-retention-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
     exit 2
     ;;
 esac
