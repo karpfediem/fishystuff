@@ -119,7 +119,7 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 
 `gitops-served-caddy-handoff-vm` boots one local NixOS VM, runs Caddy against the VM-local served site/CDN symlink roots, and then changes the served desired state. It proves the future Caddy-facing handoff shape can serve the selected release and then observe the next selected release through stable symlink roots without restarting Caddy.
 
-`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the route selection and rollback readiness documents.
+`gitops-served-rollback-transition-vm` boots one local NixOS VM, serves a candidate, then rolls back to the previous release by changing desired state. It proves rollback is represented as another reconciled active-release transition while retaining the candidate CDN root for stale clients and updating the route selection, primary rollback readiness, and rollback-set documents.
 
 `gitops-failed-candidate-vm` boots a local NixOS VM with a failed admission fixture and `serve: false`. It proves candidate failure is status, not activation: instance/admission/status are published, but no active selection or served symlinks are created.
 
@@ -272,6 +272,8 @@ The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can 
 
 `retained_releases` on an environment records the releases intentionally kept hot for rollback and for stale client HTML/runtime references. Each retained ID must reference a release object in desired state, retained IDs must be unique, and the active release must not be listed as retained. Serving requires at least one retained rollback release. Activation records this list and the retained Dolt materialization status paths in the local active/status documents so operators can tell which rollback set was selected with the active release and where each retained pin was verified.
 
+The rollback set is also published locally as an index document at `/var/lib/fishystuff/gitops-test/rollback-set/<environment>.json` in VM modes, plus one retained-member document under `/var/lib/fishystuff/gitops-test/rollback-set/<environment>/<release-id>.json`. The index records the selected retained release IDs and member document paths. Each member document records the retained release's exact API, Dolt service, site, CDN runtime, Dolt commit, Dolt materialization/cache/ref tuple, and Dolt status path when `fetch_pin` is used.
+
 For serving desired state, both the active release and each retained rollback release must include non-empty `store_path` values for `api`, `dolt_service`, `site`, and `cdn_runtime`. In plain `vm-test` mode these paths are not realized/rooted, but they still make the exact deployment tuple explicit. `vm-test-closures` and future local/production modes can add realization and gcroot guarantees on top of the same tuple.
 
 Source maps are public in production because the project is open source. They are emitted with content-hashed filenames and retained as immutable CDN assets, but generated HTML/runtime manifests do not eagerly reference them, so normal users do not fetch them.
@@ -367,7 +369,7 @@ The active selection document includes the desired generation that selected the 
 
 The route selection document is the local-only handoff shape for future Caddy integration. It records the selected release, the active selection document path, and the stable site/CDN symlink roots that Caddy would serve, without starting or reloading Caddy in VM tests. The route document is declared after the active selection so a future file-watching edge does not observe a selected route before the active symlinks and active JSON exist.
 
-The rollback readiness document records the primary retained rollback release, currently the first `retained_releases` entry, with its exact API, Dolt service, site, CDN runtime, Dolt commit, Dolt materialization/cache/ref tuple, and release identity. This keeps rollback availability explicit instead of inferring it from an operator's memory of the desired-state object.
+The rollback readiness document records the primary retained rollback release, currently the first `retained_releases` entry, with its exact API, Dolt service, site, CDN runtime, Dolt commit, Dolt materialization/cache/ref tuple, and release identity. The rollback-set index and member documents record the full retained set. This keeps rollback availability explicit instead of inferring it from an operator's memory of the desired-state object.
 
 KV publication can be added later when the status consumer is clear.
 

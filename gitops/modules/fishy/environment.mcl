@@ -118,6 +118,7 @@ class single_host($st) {
 	$retained_releases []str = $environment->retained_releases || $empty_list
 	$retained_release_ids_json = fishy_json.string_list($retained_releases)
 	$retained_dolt_status_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $retained_release_id) }))
+	$retained_release_document_paths_json = fishy_json.string_list(iter.map($retained_releases, func($retained_release_id) { fmt.printf("%s/rollback-set/%s/%s.json", $vm_state_dir, $environment_name, $retained_release_id) }))
 	$has_rollback_readiness = len($retained_releases) > 0
 	$dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $active_release_id)
 	$dolt_admission_exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment_name, $active_release_id)
@@ -126,6 +127,7 @@ class single_host($st) {
 	$status_path = fmt.printf("%s/status/%s.json", $vm_state_dir, $environment_name)
 	$active_path = fmt.printf("%s/active/%s.json", $vm_state_dir, $environment_name)
 	$rollback_path = fmt.printf("%s/rollback/%s.json", $vm_state_dir, $environment_name)
+	$rollback_set_path = fmt.printf("%s/rollback-set/%s.json", $vm_state_dir, $environment_name)
 	$route_path = fmt.printf("%s/routes/%s.json", $vm_run_dir, $environment_name)
 
 	panic($environment_name == "", "environment requires a name")
@@ -185,7 +187,13 @@ class single_host($st) {
 		} else {
 			$retained_dolt->release_ref
 		}
+		$retained_dolt_status_path str = if $retained_dolt_materialization == "fetch_pin" {
+			fmt.printf("%s/dolt/%s-%s.json", $vm_run_dir, $environment_name, $retained_release_id)
+		} else {
+			""
+		}
 		$retained_dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $retained_release_id)
+		$retained_rollback_set_release_path = fmt.printf("%s/rollback-set/%s/%s.json", $vm_state_dir, $environment_name, $retained_release_id)
 		$retained_release_identity str = if $retained_release->generation == 0 {
 			""
 		} else {
@@ -235,6 +243,26 @@ class single_host($st) {
 			release_ref => $retained_dolt_release_ref,
 		})
 
+		include fishy_rollback.retained_release(struct {
+			mode => $mode,
+			desired_generation => $desired_generation,
+			environment => $environment_name,
+			host => $host->hostname,
+			current_release_id => $active_release_id,
+			retained_release_id => $retained_release_id,
+			retained_release_identity => $retained_release_identity,
+			api_bundle => $retained_api_artifact->store_path,
+			dolt_service_bundle => $retained_dolt_service_artifact->store_path,
+			site_content => $retained_site_artifact->store_path,
+			cdn_runtime_content => $retained_cdn_runtime_artifact->store_path,
+			dolt_commit => $retained_dolt->commit,
+			dolt_materialization => $retained_dolt_materialization,
+			dolt_cache_dir => $retained_dolt_cache_dir,
+			dolt_release_ref => $retained_dolt_release_ref,
+			dolt_status_path => $retained_dolt_status_path,
+			served => $served,
+		})
+
 		if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
 			if $active_dolt_materialization == "fetch_pin" {
 				if $use_dolt_sql_admission_probe {
@@ -247,6 +275,12 @@ class single_host($st) {
 			Exec["${retained_dolt_exec_name}"] -> File["${status_path}"]
 			Exec["${retained_dolt_exec_name}"] -> File["${active_path}"]
 			Exec["${retained_dolt_exec_name}"] -> File["${route_path}"]
+			Exec["${retained_dolt_exec_name}"] -> File["${rollback_set_path}"]
+			Exec["${retained_dolt_exec_name}"] -> File["${retained_rollback_set_release_path}"]
+		}
+
+		if $write_vm_state and $served {
+			File["${retained_rollback_set_release_path}"] -> File["${rollback_set_path}"]
 		}
 
 		if $index == 0 {
@@ -273,6 +307,28 @@ class single_host($st) {
 			if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
 				Exec["${retained_dolt_exec_name}"] -> File["${rollback_path}"]
 			}
+		}
+	}
+
+	include fishy_rollback.retained_set(struct {
+		mode => $mode,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host => $host->hostname,
+		current_release_id => $active_release_id,
+		current_release_identity => $active_release_identity,
+		retained_release_count => len($retained_releases),
+		retained_release_ids_json => $retained_release_ids_json,
+		retained_release_document_paths_json => $retained_release_document_paths_json,
+		served => $served,
+	})
+
+	if $write_vm_state and $served {
+		File["${rollback_set_path}"] -> File["${status_path}"]
+		File["${rollback_set_path}"] -> File["${active_path}"]
+		File["${rollback_set_path}"] -> File["${route_path}"]
+		if $has_rollback_readiness {
+			File["${rollback_set_path}"] -> File["${rollback_path}"]
 		}
 	}
 

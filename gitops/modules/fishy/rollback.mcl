@@ -65,3 +65,113 @@ class readiness($st) {
 		}
 	}
 }
+
+class retained_release($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$environment str = $st->environment
+	$host str = $st->host
+	$current_release_id str = $st->current_release_id
+	$retained_release_id str = $st->retained_release_id
+	$retained_release_identity str = $st->retained_release_identity || ""
+	$api_bundle str = $st->api_bundle || ""
+	$dolt_service_bundle str = $st->dolt_service_bundle || ""
+	$site_content str = $st->site_content || ""
+	$cdn_runtime_content str = $st->cdn_runtime_content || ""
+	$dolt_commit str = $st->dolt_commit || ""
+	$dolt_materialization str = $st->dolt_materialization || "metadata_only"
+	$dolt_cache_dir str = $st->dolt_cache_dir || ""
+	$dolt_release_ref str = $st->dolt_release_ref || ""
+	$dolt_status_path str = $st->dolt_status_path || ""
+	$served bool = $st->served || false
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
+	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
+	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$rollback_set_release_dir = fmt.printf("%s/rollback-set/%s", $state_dir, $environment)
+	$rollback_set_release_path = fmt.printf("%s/%s.json", $rollback_set_release_dir, $retained_release_id)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"current_release_id\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"api_bundle\": %s,\n  \"dolt_service_bundle\": %s,\n  \"site_content\": %s,\n  \"cdn_runtime_content\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_materialization\": %s,\n  \"dolt_cache_dir\": %s,\n  \"dolt_release_ref\": %s,\n  \"dolt_status_path\": %s,\n  \"rollback_member_state\": \"retained_hot_release\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($current_release_id), fishy_json.quote($retained_release_id), fishy_json.quote($retained_release_identity), fishy_json.quote($api_bundle), fishy_json.quote($dolt_service_bundle), fishy_json.quote($site_content), fishy_json.quote($cdn_runtime_content), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_materialization), fishy_json.quote($dolt_cache_dir), fishy_json.quote($dolt_release_ref), fishy_json.quote($dolt_status_path))
+
+	panic($environment == "", "rollback set retained release requires environment")
+	panic($desired_generation == 0, "rollback set retained release requires desired_generation")
+	panic($host == "", "rollback set retained release requires host")
+	panic($current_release_id == "", "rollback set retained release requires current_release_id")
+	panic($served and ($retained_release_id == ""), "served rollback set retained release requires release_id")
+	panic($served and ($retained_release_identity == ""), "served rollback set retained release requires release_identity")
+	panic($served and ($api_bundle == ""), "served rollback set retained release requires api bundle")
+	panic($served and ($dolt_service_bundle == ""), "served rollback set retained release requires dolt service bundle")
+	panic($served and ($site_content == ""), "served rollback set retained release requires site content")
+	panic($served and ($cdn_runtime_content == ""), "served rollback set retained release requires CDN runtime content")
+	panic($served and ($dolt_commit == ""), "served rollback set retained release requires Dolt commit")
+	panic($served and ($dolt_materialization == "fetch_pin") and ($dolt_status_path == ""), "served fetch_pin rollback set retained release requires Dolt status path")
+
+	if $write_local_state {
+		if $served {
+			file "${rollback_set_release_dir}/" {
+				state => "exists",
+				recurse => true,
+				mode => "0755",
+			}
+
+			file "${rollback_set_release_path}" {
+				state => "exists",
+				content => $content,
+				mode => "0644",
+			}
+
+			File["${rollback_set_release_dir}/"] -> File["${rollback_set_release_path}"]
+		} else {
+			file "${rollback_set_release_path}" {
+				state => "absent",
+			}
+		}
+	}
+}
+
+class retained_set($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$environment str = $st->environment
+	$host str = $st->host
+	$current_release_id str = $st->current_release_id
+	$current_release_identity str = $st->current_release_identity || ""
+	$retained_release_count int = $st->retained_release_count || 0
+	$retained_release_ids_json str = $st->retained_release_ids_json || "[]"
+	$retained_release_document_paths_json str = $st->retained_release_document_paths_json || "[]"
+	$served bool = $st->served || false
+	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
+	$write_local_state = ($mode == "vm-test") or ($mode == "vm-test-closures") or ($mode == "local-apply")
+	$state_dir = if $write_vm_state { "/var/lib/fishystuff/gitops-test" } else { "/tmp/fishystuff-gitops-test" }
+	$rollback_set_dir = fmt.printf("%s/rollback-set", $state_dir)
+	$rollback_set_path = fmt.printf("%s/%s.json", $rollback_set_dir, $environment)
+	$rollback_set_available = $served and ($retained_release_count > 0)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"current_release_id\": %s,\n  \"current_release_identity\": %s,\n  \"retained_release_count\": %d,\n  \"retained_release_ids\": %s,\n  \"retained_release_document_paths\": %s,\n  \"rollback_set_available\": %t,\n  \"rollback_set_state\": \"retained_hot_release_set\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($current_release_id), fishy_json.quote($current_release_identity), $retained_release_count, $retained_release_ids_json, $retained_release_document_paths_json, $rollback_set_available)
+
+	panic($environment == "", "rollback set requires environment")
+	panic($desired_generation == 0, "rollback set requires desired_generation")
+	panic($host == "", "rollback set requires host")
+	panic($current_release_id == "", "rollback set requires current_release_id")
+	panic($current_release_identity == "", "rollback set requires current_release_identity")
+	panic($served and ($retained_release_count == 0), "served rollback set requires at least one retained release")
+
+	if $write_local_state {
+		if $rollback_set_available {
+			file "${rollback_set_dir}/" {
+				state => "exists",
+				recurse => true,
+				mode => "0755",
+			}
+
+			file "${rollback_set_path}" {
+				state => "exists",
+				content => $content,
+				mode => "0644",
+			}
+
+			File["${rollback_set_dir}/"] -> File["${rollback_set_path}"]
+		} else {
+			file "${rollback_set_path}" {
+				state => "absent",
+			}
+		}
+	}
+}
