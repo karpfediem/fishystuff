@@ -41,6 +41,7 @@ just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test local-apply-without-optin-refusal
 just gitops-vm-test local-apply-candidate
+just gitops-vm-test local-apply-http-admission
 just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
 just gitops-vm-test missing-retained-release-refusal
@@ -79,9 +80,11 @@ nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-candidate-vm
+nix build .#checks.x86_64-linux.gitops-local-apply-http-admission-vm
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
+nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
@@ -106,6 +109,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, a finalized CDN serving root, and one retained previous release object. The package generator refuses `serve: true` unless all four active release artifacts are present.
 
 `gitops-desired-state-admission-probe` proves the generated desired-state helper can emit `admission_probe.kind = "dolt_sql_scalar"` for a VM-only `fetch_pin` candidate and still unify through `gitops/main.mcl`. It does not run the probe or contact a remote.
+
+`gitops-desired-state-http-admission-probe` proves the generated desired-state helper can emit a `local-apply` loopback HTTP JSON scalar admission probe without requiring Dolt `fetch_pin` materialization.
 
 `gitops-desired-state-rollback-transition` proves the generated desired-state helper can emit an explicit rollback transition with the rolled-away release retained for rollback and stale CDN clients.
 
@@ -142,6 +147,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-local-apply-without-optin-refusal` proves `local-apply` desired state is refused unless the operator sets `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. This keeps the still-scaffolded host-local mode from mutating a machine because a fixture or operator file used the wrong mode.
 
 `gitops-local-apply-candidate-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` and a non-serving `local-apply` candidate. It proves local-apply writes candidate/status facts under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, not the VM-test directories, while still avoiding `/srv/fishystuff` and real service mutation.
+
+`gitops-local-apply-http-admission-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, starts a loopback-only HTTP readiness endpoint, and serves a local-apply candidate only after `fishystuff_deploy http probe-status` publishes admission. It verifies status, active symlinks, route selection, rollback-set state, and admission request/status files under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, while still avoiding VM-test paths, `/srv/fishystuff`, and real FishyStuff services.
 
 `gitops-missing-active-artifact-refusal` proves graph-side serving checks require the active release to name the API, Dolt service, site, and CDN artifact paths even when desired state is hand-written.
 
@@ -214,6 +221,16 @@ The minimal JSON shape is:
       "retained_releases": [],
       "serve": false,
       "admission_fixture_state": "",
+      "admission_probe": {
+        "kind": "",
+        "probe_name": "",
+        "url": "",
+        "expected_status": 0,
+        "timeout_ms": 0,
+        "query": "",
+        "expected_scalar": "",
+        "json_pointer": ""
+      },
       "transition": {
         "kind": "",
         "from_release": "",
@@ -229,7 +246,7 @@ Supported modes:
 - `validate`: decode, shape, and unify only. It does not write local state and does not run admission.
 - `vm-test`: create only VM-local files under `/var/lib/fishystuff/gitops-test` and `/run/fishystuff/gitops-test`.
 - `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
-- `local-apply`: opt-in host-local mode. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set. Non-serving candidate/status facts use `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`; serving still requires real admission work before it should be used outside tests.
+- `local-apply`: opt-in host-local mode. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set. Candidate/status facts, served symlinks, rollback documents, and route handoff files use `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`. Serving requires an explicit admission probe; current probe support is loopback-only.
 
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
@@ -339,7 +356,7 @@ Fallbacks introduced: none to the old beta deployment graph. The validation no-o
 
 ## Admission
 
-Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture written under `/run/fishystuff/gitops-test/admission/`; by default it is `passed_fixture`, and tests may explicitly request `failed_fixture` through `admission_fixture_state`. A VM test environment may also request `admission_probe.kind = "dolt_sql_scalar"` to run a configured single-scalar SQL probe against the exact pinned Dolt cache/ref before admission is published. For serving fixtures, this local probe must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
+Admission is modeled separately from graph acceptance. In `validate`, admission is `not_run` and must not be treated as success. In `vm-test`, admission is a deterministic local fixture written under `/run/fishystuff/gitops-test/admission/`; by default it is `passed_fixture`, and tests may explicitly request `failed_fixture` through `admission_fixture_state`. A VM test environment may also request `admission_probe.kind = "dolt_sql_scalar"` to run a configured single-scalar SQL probe against the exact pinned Dolt cache/ref before admission is published. `local-apply` and VM modes may request `admission_probe.kind = "http_status"` or `admission_probe.kind = "http_json_scalar"` to run a loopback-only HTTP GET through the Rust helper before status/active/route files publish. For serving fixtures, local admission must be able to read the selected `site/index.html`, `cdn_runtime/map/runtime-manifest.json`, the selected runtime JS/WASM files, and `cdn_runtime/cdn-serving-manifest.json`. The serving manifest must also account for `runtime-manifest.json` and the selected runtime JS/WASM asset paths.
 
 The Rust deployment helper also provides local HTTP admission probe building blocks:
 
@@ -349,6 +366,8 @@ The Rust deployment helper also provides local HTTP admission probe building blo
 - `fishystuff_deploy http needs-probe-json-scalar`
 
 These helpers intentionally support only HTTP GET against loopback targets (`localhost`, `127.0.0.1`, or `::1`). They reject credential-bearing URLs, cap response bodies, and write structured status documents with the exact request tuple. This is the intended bridge for future host-local API admission probes until mgmt has a dedicated HTTP client probe primitive.
+
+`http_status` requires `probe_name`, `url`, and `expected_status`; `timeout_ms` defaults to 2000 when omitted or zero. `http_json_scalar` adds `json_pointer` and a string `expected_scalar` for now. The desired-state generator allows HTTP admission in `local-apply`, `vm-test`, and `vm-test-closures`; Dolt SQL admission remains VM-only because it is still a local integration-test bridge.
 
 Future real admission should probe the exact candidate tuple:
 

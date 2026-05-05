@@ -123,7 +123,7 @@ exec "<name>" {
 }
 ```
 
-The first milestone does not use `exec` in the GitOps graph. It remains available for a future narrow local admission probe bridge if no better HTTP probe primitive exists.
+The GitOps graph uses `exec` only as narrow host-local bridges for behavior not yet covered by dedicated mgmt resources: Dolt `fetch_pin`/SQL admission in VM tests and loopback HTTP admission probes in local writing modes. These execs invoke the packaged `fishystuff_deploy` helper with structured request/status files and `needs-*` freshness checks; they are not deployment controllers.
 
 ## Services
 
@@ -183,7 +183,7 @@ Available HTTP server resources:
 - `http:server:ui:input`
 - `http:server:proxy`
 
-No dedicated HTTP client probe/status resource was found. Existing FishyStuff health checks use `exec` with `curl` in the old resident graph. The new graph does not run real admission in `validate` mode and uses a deterministic VM fixture in `vm-test`.
+No dedicated HTTP client probe/status resource was found. Existing FishyStuff health checks use `exec` with `curl` in the old resident graph. The new graph does not run real admission in `validate` mode, uses deterministic fixtures in plain VM tests, and uses the structured `fishystuff_deploy` HTTP helper for loopback-only admission in local writing modes.
 
 The local `fishystuff_deploy` helper now includes a narrow HTTP probe bridge:
 

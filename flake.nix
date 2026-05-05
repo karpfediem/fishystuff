@@ -371,6 +371,27 @@
             mode = "vm-test";
             serve = false;
           };
+          gitopsDesiredStateHttpAdmissionProbeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "local-test";
+            environment = "local-test";
+            hostKey = "vm-single-host";
+            generation = 11;
+            releaseGeneration = 11;
+            gitRev = "http-admission-probe-fixture";
+            doltCommit = "http-admission-probe-fixture";
+            doltBranchContext = "local-test";
+            admissionProbe = {
+              kind = "http_json_scalar";
+              probe_name = "api-meta";
+              url = "http://127.0.0.1:18082/api/v1/meta";
+              expected_status = 200;
+              timeout_ms = 2000;
+              json_pointer = "/state";
+              expected_scalar = "ok";
+            };
+            mode = "local-apply";
+            serve = false;
+          };
           edgeServiceBundleFor =
             deploymentEnvironment:
             mkServiceBundle {
@@ -549,7 +570,7 @@
 
             release_id="$(jq -r '.environments."local-test".active_release' ${gitopsDesiredStateVmServeFixture})"
             test "$release_id" != example-release
-            jq -e --arg release_id "$release_id" '
+            jq -e '
               .mode == "vm-test"
               and .environments."local-test".serve == true
               and .releases[$release_id].generation == 7
@@ -609,6 +630,33 @@
             ' ${gitopsDesiredStateAdmissionProbeFixture}
 
             export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateAdmissionProbeFixture}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
+          gitopsDesiredStateHttpAdmissionProbeCheck = pkgs.runCommand "gitops-desired-state-http-admission-probe-check" {
+            nativeBuildInputs = [
+              mgmt-fishystuff-beta.packages.${system}.minimal
+              pkgs.jq
+            ];
+          } ''
+            set -euo pipefail
+
+            release_id="$(jq -r '.environments."local-test".active_release' ${gitopsDesiredStateHttpAdmissionProbeFixture})"
+            jq -e --arg release_id "$release_id" '
+              .mode == "local-apply"
+              and .environments."local-test".serve == false
+              and .environments."local-test".admission_probe.kind == "http_json_scalar"
+              and .environments."local-test".admission_probe.probe_name == "api-meta"
+              and .environments."local-test".admission_probe.url == "http://127.0.0.1:18082/api/v1/meta"
+              and .environments."local-test".admission_probe.expected_status == 200
+              and .environments."local-test".admission_probe.timeout_ms == 2000
+              and .environments."local-test".admission_probe.json_pointer == "/state"
+              and .environments."local-test".admission_probe.expected_scalar == "ok"
+              and .releases[$release_id].dolt.materialization == "metadata_only"
+            ' ${gitopsDesiredStateHttpAdmissionProbeFixture}
+
+            export FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateHttpAdmissionProbeFixture}
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
@@ -750,6 +798,7 @@
             edge-service-bundle-production = edgeServiceBundleProduction;
             fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
+            gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;
             gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;
@@ -776,6 +825,7 @@
               cdn-required-files = cdnRequiredFilesCheck;
               fishystuff-deploy-tests = fishystuffDeployTests;
               gitops-desired-state-admission-probe = gitopsDesiredStateAdmissionProbeCheck;
+              gitops-desired-state-http-admission-probe = gitopsDesiredStateHttpAdmissionProbeCheck;
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
               gitops-desired-state-rollback-transition = gitopsDesiredStateRollbackTransitionCheck;

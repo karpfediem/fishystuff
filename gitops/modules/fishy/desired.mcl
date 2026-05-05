@@ -10,7 +10,7 @@ class model($st) {
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 		dolt struct{repository str; commit str; branch_context str; mode str}
 	}} = {}
-	$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; query str; expected_scalar str}; transition struct{kind str; from_release str; reason str}}} = {}
+	$empty_environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; probe_name str; url str; expected_status int; timeout_ms int; query str; expected_scalar str; json_pointer str}; transition struct{kind str; from_release str; reason str}}} = {}
 
 	$empty_host struct{enabled bool; role str; hostname str} = struct {
 		enabled => false,
@@ -48,7 +48,7 @@ class model($st) {
 		closures map{str: struct{enabled bool; store_path str; gcroot_path str}};
 		dolt struct{repository str; commit str; branch_context str; mode str}
 	}} = $st->releases || $empty_releases
-	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; query str; expected_scalar str}; transition struct{kind str; from_release str; reason str}}} = $st->environments || $empty_environments
+	$environments map{str: struct{enabled bool; strategy str; host str; active_release str; retained_releases []str; serve bool; admission_fixture_state str; admission_probe struct{kind str; probe_name str; url str; expected_status int; timeout_ms int; query str; expected_scalar str; json_pointer str}; transition struct{kind str; from_release str; reason str}}} = $st->environments || $empty_environments
 
 	panic(($mode != "validate") and ($mode != "vm-test") and ($mode != "vm-test-closures") and ($mode != "local-apply"), "unsupported gitops desired-state mode")
 	panic(($mode == "local-apply") and (not $local_apply_enabled), "local-apply requires FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1")

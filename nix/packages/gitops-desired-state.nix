@@ -50,6 +50,13 @@ let
   derivedRelease =
     "release-${builtins.substring 0 16 (builtins.hashString "sha256" (builtins.toJSON releaseMaterial))}";
   releaseId = if activeRelease == null then derivedRelease else activeRelease;
+  admissionProbeKind = if admissionProbe == null then "" else admissionProbe.kind or "";
+  admissionProbeTimeoutMs = if admissionProbe == null then 0 else admissionProbe.timeout_ms or 0;
+  admissionProbeExpectedStatus = if admissionProbe == null then 0 else admissionProbe.expected_status or 0;
+  admissionProbeIsDoltSql = admissionProbeKind == "dolt_sql_scalar";
+  admissionProbeIsHttpStatus = admissionProbeKind == "http_status";
+  admissionProbeIsHttpJsonScalar = admissionProbeKind == "http_json_scalar";
+  admissionProbeIsHttp = admissionProbeIsHttpStatus || admissionProbeIsHttpJsonScalar;
   closure =
     releaseKey: gcrootName: value:
     {
@@ -164,20 +171,53 @@ assert lib.assertMsg (
   admissionProbe == null || builtins.isAttrs admissionProbe
 ) "gitops admissionProbe must be an attribute set";
 assert lib.assertMsg (
-  admissionProbe == null || mode == "vm-test" || mode == "vm-test-closures"
-) "gitops admissionProbe is currently supported only in VM test modes";
+  admissionProbe == null || admissionProbe ? kind
+) "gitops admissionProbe requires kind";
 assert lib.assertMsg (
-  admissionProbe == null || doltMaterialization == "fetch_pin"
-) "gitops admissionProbe requires fetch_pin Dolt materialization";
+  admissionProbe == null || lib.elem admissionProbeKind [
+    "dolt_sql_scalar"
+    "http_status"
+    "http_json_scalar"
+  ]
+) "gitops admissionProbe kind must be dolt_sql_scalar, http_status, or http_json_scalar";
 assert lib.assertMsg (
-  admissionProbe == null || (admissionProbe.kind or "") == "dolt_sql_scalar"
-) "gitops admissionProbe supports only kind = dolt_sql_scalar";
+  admissionProbe == null
+  || (
+    admissionProbeIsDoltSql
+    && (mode == "vm-test" || mode == "vm-test-closures")
+  )
+  || (
+    admissionProbeIsHttp
+    && (mode == "vm-test" || mode == "vm-test-closures" || mode == "local-apply")
+  )
+) "gitops admissionProbe mode is unsupported for this probe kind";
 assert lib.assertMsg (
-  admissionProbe == null || (admissionProbe.query or "") != ""
-) "gitops admissionProbe requires query";
+  admissionProbe == null || !admissionProbeIsDoltSql || doltMaterialization == "fetch_pin"
+) "gitops Dolt SQL admissionProbe requires fetch_pin Dolt materialization";
 assert lib.assertMsg (
-  admissionProbe == null || admissionProbe ? expected_scalar
-) "gitops admissionProbe requires expected_scalar";
+  admissionProbe == null || !admissionProbeIsDoltSql || (admissionProbe.query or "") != ""
+) "gitops Dolt SQL admissionProbe requires query";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsDoltSql || admissionProbe ? expected_scalar
+) "gitops Dolt SQL admissionProbe requires expected_scalar";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttp || (admissionProbe.probe_name or "") != ""
+) "gitops HTTP admissionProbe requires probe_name";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttp || (admissionProbe.url or "") != ""
+) "gitops HTTP admissionProbe requires url";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttp || (admissionProbeExpectedStatus >= 100 && admissionProbeExpectedStatus <= 599)
+) "gitops HTTP admissionProbe expected_status must be between 100 and 599";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttp || admissionProbeTimeoutMs == 0 || (admissionProbeTimeoutMs >= 1 && admissionProbeTimeoutMs <= 30000)
+) "gitops HTTP admissionProbe timeout_ms must be between 1 and 30000";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttpJsonScalar || admissionProbe ? expected_scalar
+) "gitops HTTP JSON scalar admissionProbe requires expected_scalar";
+assert lib.assertMsg (
+  admissionProbe == null || !admissionProbeIsHttpJsonScalar || admissionProbe ? json_pointer
+) "gitops HTTP JSON scalar admissionProbe requires json_pointer";
 assert lib.assertMsg (
   lib.all (release: release ? releaseId && release.releaseId != "") retainedReleaseObjects
 ) "gitops retained release objects require releaseId";

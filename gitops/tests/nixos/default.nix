@@ -103,6 +103,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-local-apply-http-admission-vm = import ./local-apply-http-admission.nix {
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-missing-active-artifact-refusal = import ./missing-active-artifact-refusal.nix {
     inherit gitopsSrc mgmtPackage pkgs;
   };

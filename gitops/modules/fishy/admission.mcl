@@ -2,6 +2,7 @@ import "encoding"
 import "fmt"
 import "json.mcl" as fishy_json
 import "os"
+import "paths.mcl" as fishy_paths
 import "strings" as core_strings
 
 class fixture($st) {
@@ -198,6 +199,168 @@ class dolt_sql_scalar($st) {
 			ifcmd => $ifcmd,
 			ifshell => "/bin/sh",
 			timeout => 300,
+		}
+
+		File["${request_dir}/"] -> File["${request_path}"]
+		File["${status_dir}/"] -> Exec["${exec_name}"]
+		File["${request_path}"] -> Exec["${exec_name}"]
+	}
+}
+
+class http_status($st) {
+	$mode str = $st->mode || "validate"
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$probe_name str = $st->probe_name || ""
+	$url str = $st->url || ""
+	$expected_status int = $st->expected_status || 0
+	$requested_timeout_ms int = $st->timeout_ms || 0
+	$timeout_ms int = if $requested_timeout_ms == 0 { 2000 } else { $requested_timeout_ms }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
+	$request_dir = fmt.printf("%s/admission/requests", $state_dir)
+	$request_path = fmt.printf("%s/%s-%s-http-status.json", $request_dir, $environment, $release_id)
+	$status_dir = fmt.printf("%s/admission", $run_dir)
+	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
+	$exec_name = fmt.printf("fishystuff-gitops-admit-http-status-%s-%s", $environment, $release_id)
+	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
+	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"probe_name\": %s,\n  \"url\": %s,\n  \"expected_status\": %d,\n  \"timeout_ms\": %d\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($probe_name), fishy_json.quote($url), $expected_status, $timeout_ms)
+	$ifcmd = fmt.printf("%s http needs-probe-status --request '%s' --status '%s'", $helper_bin, $request_path, $status_path)
+
+	panic($environment == "", "HTTP status admission requires environment")
+	panic($host == "", "HTTP status admission requires host")
+	panic($release_id == "", "HTTP status admission requires release_id")
+	panic($release_identity == "", "HTTP status admission requires release_identity")
+	panic($probe_name == "", "HTTP status admission requires probe_name")
+	panic($url == "", "HTTP status admission requires url")
+	panic($expected_status == 0, "HTTP status admission requires expected_status")
+	panic(($expected_status < 100) or ($expected_status > 599), "HTTP status admission expected_status must be between 100 and 599")
+	panic(($timeout_ms < 1) or ($timeout_ms > 30000), "HTTP status admission timeout_ms must be between 1 and 30000")
+	panic(len(core_strings.split($environment, "'")) > 1, "HTTP status admission environment must not contain single quotes")
+	panic(len(core_strings.split($release_id, "'")) > 1, "HTTP status admission release_id must not contain single quotes")
+	panic(not $write_local_state, "HTTP status admission is only supported in local writing modes")
+
+	if $write_local_state {
+		file "${request_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${status_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${request_path}" {
+			state => "exists",
+			content => $request_content,
+			mode => "0644",
+		}
+
+		exec "${exec_name}" {
+			cmd => $helper_bin,
+			args => [
+				"http",
+				"probe-status",
+				"--request",
+				$request_path,
+				"--status",
+				$status_path,
+			],
+			env => {
+				"PATH" => "/run/current-system/sw/bin:/usr/bin:/bin",
+			},
+			ifcmd => $ifcmd,
+			ifshell => "/bin/sh",
+			timeout => 60,
+		}
+
+		File["${request_dir}/"] -> File["${request_path}"]
+		File["${status_dir}/"] -> Exec["${exec_name}"]
+		File["${request_path}"] -> Exec["${exec_name}"]
+	}
+}
+
+class http_json_scalar($st) {
+	$mode str = $st->mode || "validate"
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$probe_name str = $st->probe_name || ""
+	$url str = $st->url || ""
+	$expected_status int = $st->expected_status || 0
+	$requested_timeout_ms int = $st->timeout_ms || 0
+	$timeout_ms int = if $requested_timeout_ms == 0 { 2000 } else { $requested_timeout_ms }
+	$json_pointer str = $st->json_pointer || ""
+	$expected_scalar str = $st->expected_scalar || ""
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
+	$request_dir = fmt.printf("%s/admission/requests", $state_dir)
+	$request_path = fmt.printf("%s/%s-%s-http-json-scalar.json", $request_dir, $environment, $release_id)
+	$status_dir = fmt.printf("%s/admission", $run_dir)
+	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
+	$exec_name = fmt.printf("fishystuff-gitops-admit-http-json-scalar-%s-%s", $environment, $release_id)
+	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
+	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"probe_name\": %s,\n  \"url\": %s,\n  \"expected_status\": %d,\n  \"timeout_ms\": %d,\n  \"json_pointer\": %s,\n  \"expected_scalar\": %s\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($probe_name), fishy_json.quote($url), $expected_status, $timeout_ms, fishy_json.quote($json_pointer), fishy_json.quote($expected_scalar))
+	$ifcmd = fmt.printf("%s http needs-probe-json-scalar --request '%s' --status '%s'", $helper_bin, $request_path, $status_path)
+
+	panic($environment == "", "HTTP JSON scalar admission requires environment")
+	panic($host == "", "HTTP JSON scalar admission requires host")
+	panic($release_id == "", "HTTP JSON scalar admission requires release_id")
+	panic($release_identity == "", "HTTP JSON scalar admission requires release_identity")
+	panic($probe_name == "", "HTTP JSON scalar admission requires probe_name")
+	panic($url == "", "HTTP JSON scalar admission requires url")
+	panic($expected_status == 0, "HTTP JSON scalar admission requires expected_status")
+	panic(($expected_status < 100) or ($expected_status > 599), "HTTP JSON scalar admission expected_status must be between 100 and 599")
+	panic(($timeout_ms < 1) or ($timeout_ms > 30000), "HTTP JSON scalar admission timeout_ms must be between 1 and 30000")
+	panic($expected_scalar == "", "HTTP JSON scalar admission requires expected_scalar")
+	panic(($json_pointer != "") and (not core_strings.has_prefix($json_pointer, "/")), "HTTP JSON scalar admission json_pointer must be empty or start with /")
+	panic(len(core_strings.split($environment, "'")) > 1, "HTTP JSON scalar admission environment must not contain single quotes")
+	panic(len(core_strings.split($release_id, "'")) > 1, "HTTP JSON scalar admission release_id must not contain single quotes")
+	panic(not $write_local_state, "HTTP JSON scalar admission is only supported in local writing modes")
+
+	if $write_local_state {
+		file "${request_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${status_dir}/" {
+			state => "exists",
+			recurse => true,
+			mode => "0755",
+		}
+
+		file "${request_path}" {
+			state => "exists",
+			content => $request_content,
+			mode => "0644",
+		}
+
+		exec "${exec_name}" {
+			cmd => $helper_bin,
+			args => [
+				"http",
+				"probe-json-scalar",
+				"--request",
+				$request_path,
+				"--status",
+				$status_path,
+			],
+			env => {
+				"PATH" => "/run/current-system/sw/bin:/usr/bin:/bin",
+			},
+			ifcmd => $ifcmd,
+			ifshell => "/bin/sh",
+			timeout => 60,
 		}
 
 		File["${request_dir}/"] -> File["${request_path}"]
