@@ -848,6 +848,79 @@
               test "${if attempted.success then "success" else "failure"}" = "failure"
               touch "$out"
             '';
+          gitopsDesiredStateTransitionShapeCheck =
+            let
+              attemptDesiredState =
+                args:
+                builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix args) true);
+              base = {
+                cluster = "local-test";
+                environment = "local-test";
+                hostKey = "vm-single-host";
+                doltBranchContext = "local-test";
+                mode = "vm-test";
+              };
+              retainedPreviousRelease = {
+                releaseId = "previous-release";
+                generation = 12;
+                gitRev = "transition-shape-previous-fixture";
+                doltCommit = "transition-shape-previous-fixture";
+                apiClosure = gitopsDesiredStateServeFixturePreviousApi;
+                siteClosure = gitopsDesiredStateServeFixturePreviousSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
+              };
+              servingBase = base // {
+                apiClosure = gitopsDesiredStateServeFixtureApi;
+                siteClosure = gitopsDesiredStateServeFixtureSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+                retainedReleaseObjects = [ retainedPreviousRelease ];
+                serve = true;
+              };
+              candidateWhileServing = attemptDesiredState (servingBase // {
+                generation = 13;
+                releaseGeneration = 13;
+                gitRev = "candidate-while-serving-fixture";
+                doltCommit = "candidate-while-serving-fixture";
+                transition = {
+                  kind = "candidate";
+                  from_release = "";
+                  reason = "contradictory generated candidate fixture";
+                };
+              });
+              activateWithoutServing = attemptDesiredState (base // {
+                generation = 14;
+                releaseGeneration = 14;
+                gitRev = "activate-without-serving-fixture";
+                doltCommit = "activate-without-serving-fixture";
+                transition = {
+                  kind = "activate";
+                  from_release = "";
+                  reason = "contradictory generated activate fixture";
+                };
+                serve = false;
+              });
+              nonRollbackFromRelease = attemptDesiredState (servingBase // {
+                generation = 15;
+                releaseGeneration = 15;
+                gitRev = "activate-with-from-release-fixture";
+                doltCommit = "activate-with-from-release-fixture";
+                transition = {
+                  kind = "activate";
+                  from_release = "previous-release";
+                  reason = "from_release belongs only to rollback";
+                };
+              });
+            in
+            pkgs.runCommand "gitops-desired-state-transition-shape-check" { } ''
+              set -euo pipefail
+
+              test "${if candidateWhileServing.success then "success" else "failure"}" = "failure"
+              test "${if activateWithoutServing.success then "success" else "failure"}" = "failure"
+              test "${if nonRollbackFromRelease.success then "success" else "failure"}" = "failure"
+              touch "$out"
+            '';
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
             tag = "latest";
@@ -916,6 +989,7 @@
               gitops-desired-state-rollback-transition-retention-refusal =
                 gitopsDesiredStateRollbackTransitionRetainedCheck;
               gitops-desired-state-serve-without-retained-refusal = gitopsDesiredStateServeWithoutRetainedCheck;
+              gitops-desired-state-transition-shape-refusal = gitopsDesiredStateTransitionShapeCheck;
               gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;
               modular-service-runtime = modularServiceRuntime;
               site-asset-finalizer = siteAssetFinalizerCheck;

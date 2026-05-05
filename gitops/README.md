@@ -92,6 +92,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retenti
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
+nix build .#checks.x86_64-linux.gitops-desired-state-transition-shape-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-active-retained-release-refusal
@@ -122,6 +123,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-desired-state-serve-without-retained-refusal` proves the generated desired-state helper refuses `serve: true` without at least one retained rollback release.
 
 `gitops-desired-state-active-retained-refusal` proves the generated desired-state helper refuses a retained rollback set that includes the active release.
+
+`gitops-desired-state-transition-shape-refusal` proves the generated desired-state helper refuses contradictory explicit transition intent, such as a `candidate` transition with `serve: true`, an `activate` transition with `serve: false`, or `from_release` on a non-rollback transition.
 
 `gitops-dolt-fetch-pin-vm` boots one local NixOS VM, creates a local file-backed Dolt remote, and reconciles a `fetch_pin` desired state against it. The test first pins commit 1 in a persistent VM-local cache, then pushes commit 2 to the same local remote and changes desired state. It verifies the existing cache is fetched forward, the release ref points at the exact desired commit, and no `.dolt` snapshot/full closure path is used.
 

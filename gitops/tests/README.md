@@ -47,6 +47,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retenti
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
+nix build .#checks.x86_64-linux.gitops-desired-state-transition-shape-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-no-retained-release-refusal
 nix build .#checks.x86_64-linux.gitops-active-retained-release-refusal
@@ -173,6 +174,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-desired-state-serve-without-retained-refusal` checks that the generated desired-state helper refuses to emit serving JSON unless at least one retained rollback release is provided.
 
 `gitops-desired-state-active-retained-refusal` checks that the generated desired-state helper refuses to emit a rollback set that includes the active release.
+
+`gitops-desired-state-transition-shape-refusal` checks that the generated desired-state helper refuses contradictory explicit transition intent, including `candidate` while serving, `activate` while not serving, and `from_release` on non-rollback transitions.
 
 `gitops-raw-cdn-serve-refusal` boots a local NixOS VM and checks the negative path: a serving desired state with `cdn_runtime` pointed at a raw runtime directory must fail before activation because it lacks `cdn-serving-manifest.json`.
 

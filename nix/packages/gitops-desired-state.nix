@@ -302,16 +302,28 @@ assert lib.assertMsg (
   ]
 ) "gitops transition kind must be candidate, activate, or rollback";
 assert lib.assertMsg (
+  transition == null || (transition.kind or "") != "candidate" || !serve
+) "gitops candidate transition requires serve = false";
+assert lib.assertMsg (
+  transition == null || (transition.kind or "") != "activate" || serve
+) "gitops activate transition requires serve = true";
+assert lib.assertMsg (
   transition == null || (transition.kind or "") != "rollback" || serve
 ) "gitops rollback transition requires serve = true";
 assert lib.assertMsg (
   transition == null || (transition.kind or "") != "rollback" || (transition.from_release or "") != ""
 ) "gitops rollback transition requires from_release";
 assert lib.assertMsg (
+  transition == null || (transition.kind or "") != "rollback" || (transition.from_release or "") != releaseId
+) "gitops rollback transition from_release must differ from active release";
+assert lib.assertMsg (
   transition == null
   || (transition.kind or "") != "rollback"
   || lib.elem transition.from_release retainedReleaseIds
 ) "gitops rollback transition from_release must remain retained";
+assert lib.assertMsg (
+  transition == null || (transition.kind or "") == "rollback" || (transition.from_release or "") == ""
+) "gitops transition from_release is only valid for rollback";
 assert lib.assertMsg (!serve || mode != "validate") "validate-mode desired state must not request serve";
 assert lib.assertMsg (!serve || retainedReleaseIds != [ ]) "serving desired state requires at least one retained rollback release";
 assert lib.assertMsg (!serve || apiClosure != null) "serving desired state requires apiClosure";
