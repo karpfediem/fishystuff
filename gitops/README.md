@@ -294,6 +294,12 @@ fishystuff_deploy gitops check-served \
 
 This only reads local GitOps documents. It verifies status, active selection, and rollback-set documents agree on the served generation/release and that rollback readiness is available with at least one retained release.
 
+The same local check is available through:
+
+```bash
+just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
+```
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.
