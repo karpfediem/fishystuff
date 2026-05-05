@@ -383,13 +383,11 @@
             apiService = "fishystuff-gitops-candidate-api-local-test";
             apiUpstream = "http://127.0.0.1:18082";
             admissionProbe = {
-              kind = "http_json_scalar";
+              kind = "api_meta";
               probe_name = "api-meta";
               url = "http://127.0.0.1:18082/api/v1/meta";
               expected_status = 200;
               timeout_ms = 2000;
-              json_pointer = "/state";
-              expected_scalar = "ok";
             };
             mode = "local-apply";
             serve = false;
@@ -654,13 +652,11 @@
               and .environments."local-test".serve == false
               and .environments."local-test".api_upstream == "http://127.0.0.1:18082"
               and .environments."local-test".api_service == "fishystuff-gitops-candidate-api-local-test"
-              and .environments."local-test".admission_probe.kind == "http_json_scalar"
+              and .environments."local-test".admission_probe.kind == "api_meta"
               and .environments."local-test".admission_probe.probe_name == "api-meta"
               and .environments."local-test".admission_probe.url == "http://127.0.0.1:18082/api/v1/meta"
               and .environments."local-test".admission_probe.expected_status == 200
               and .environments."local-test".admission_probe.timeout_ms == 2000
-              and .environments."local-test".admission_probe.json_pointer == "/state"
-              and .environments."local-test".admission_probe.expected_scalar == "ok"
               and .releases[$release_id].dolt.materialization == "metadata_only"
             ' ${gitopsDesiredStateHttpAdmissionProbeFixture}
 

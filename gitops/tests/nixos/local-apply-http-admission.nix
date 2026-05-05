@@ -159,13 +159,11 @@ let
       api_upstream = "http://127.0.0.1:18082";
       api_service = "fishystuff-gitops-candidate-api-local-test";
       admission_probe = {
-        kind = "http_json_scalar";
+        kind = "api_meta";
         probe_name = "api-meta";
         url = "http://127.0.0.1:18082/api/v1/meta";
         expected_status = 200;
         timeout_ms = 2000;
-        json_pointer = "/release_id";
-        expected_scalar = "local-apply-http-release";
       };
     };
   });
@@ -217,7 +215,7 @@ pkgs.testers.runNixOSTest {
     active = "/var/lib/fishystuff/gitops/active/local-test.json"
     route = "/run/fishystuff/gitops/routes/local-test.json"
     admission = "/run/fishystuff/gitops/admission/local-test.json"
-    request = "/var/lib/fishystuff/gitops/admission/requests/local-test-local-apply-http-release-http-json-scalar.json"
+    request = "/var/lib/fishystuff/gitops/admission/requests/local-test-local-apply-http-release-http-api-meta.json"
     instance = "/var/lib/fishystuff/gitops/instances/local-test-local-apply-http-release.json"
     rollback_set = "/var/lib/fishystuff/gitops/rollback-set/local-test.json"
     candidate_service = "fishystuff-gitops-candidate-api-local-test"
@@ -243,7 +241,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
     machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
     machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
-    machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\" and .environments.\"local-test\".admission_probe.kind == \"http_json_scalar\"' ${desiredState}")
+    machine.succeed("jq -e '.mode == \"local-apply\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".api_upstream == \"http://127.0.0.1:18082\" and .environments.\"local-test\".api_service == \"fishystuff-gitops-candidate-api-local-test\" and .environments.\"local-test\".admission_probe.kind == \"api_meta\"' ${desiredState}")
     machine.fail("systemctl is-active fishystuff-gitops-candidate-api-local-test")
     machine.succeed(f"env FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_STATE_FILE=${desiredState} ${mgmtPackage}/bin/mgmt run --hostname vm-single-host --tmp-prefix --no-pgp --client-urls=http://127.0.0.1:2379 --server-urls=http://127.0.0.1:2380 --advertise-client-urls=http://127.0.0.1:2379 --advertise-server-urls=http://127.0.0.1:2380 --converged-timeout=-1 lang ${gitopsSrc}/main.mcl >{mgmt_log} 2>&1 & echo $! >{mgmt_pid}")
 
@@ -258,8 +256,8 @@ pkgs.testers.runNixOSTest {
     wait_for_gitops_file(instance)
     wait_for_gitops_file(rollback_set)
     machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .api_bundle == \"${apiArtifact}\" and .api_upstream == \"http://127.0.0.1:18082\" and .service_name == \"fishystuff-gitops-candidate-api-local-test\" and .dolt_commit == \"local-apply-http-admission\" and .state == \"candidate_api_config\"' {api_config}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .timeout_ms == 2000 and .json_pointer == \"/release_id\" and .expected_scalar == \"local-apply-http-release\"' {request}")
-    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .observed_status == 200 and .json_pointer == \"/release_id\" and .scalar == \"local-apply-http-release\" and .expected_scalar == \"local-apply-http-release\" and .admission_state == \"passed_fixture\" and .probe == \"http-json-scalar\"' {admission}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .timeout_ms == 2000 and .expected_scalars.\"/release_id\" == \"local-apply-http-release\" and .expected_scalars.\"/release_identity\" == \"${expectedReleaseIdentity}\" and .expected_scalars.\"/dolt_commit\" == \"local-apply-http-admission\"' {request}")
+    machine.succeed(f"jq -e '.environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .probe_name == \"api-meta\" and .url == \"http://127.0.0.1:18082/api/v1/meta\" and .expected_status == 200 and .observed_status == 200 and .expected_scalars.\"/release_id\" == \"local-apply-http-release\" and .expected_scalars.\"/release_identity\" == \"${expectedReleaseIdentity}\" and .expected_scalars.\"/dolt_commit\" == \"local-apply-http-admission\" and .scalars.\"/release_id\" == \"local-apply-http-release\" and .scalars.\"/release_identity\" == \"${expectedReleaseIdentity}\" and .scalars.\"/dolt_commit\" == \"local-apply-http-admission\" and .admission_state == \"passed_fixture\" and .probe == \"http-json-scalars\"' {admission}")
     machine.succeed(f"jq -e '.desired_generation == 62 and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"previous-release\"]' {status}")
     machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .api_upstream == \"http://127.0.0.1:18082\" and .site_link == \"/var/lib/fishystuff/gitops/served/local-test/site\" and .cdn_link == \"/var/lib/fishystuff/gitops/served/local-test/cdn\" and .admission_state == \"passed_fixture\" and .served == true and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed(f"jq -e '.desired_generation == 62 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"local-apply-http-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .api_upstream == \"http://127.0.0.1:18082\" and .active_path == \"/var/lib/fishystuff/gitops/active/local-test.json\" and .site_root == \"/var/lib/fishystuff/gitops/served/local-test/site\" and .cdn_root == \"/var/lib/fishystuff/gitops/served/local-test/cdn\" and .served == true and .state == \"selected_local_route\"' {route}")

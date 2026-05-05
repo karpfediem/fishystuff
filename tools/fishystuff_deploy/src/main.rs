@@ -89,6 +89,18 @@ enum HttpCommands {
         #[arg(long)]
         status: PathBuf,
     },
+    ProbeJsonScalars {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+    },
+    NeedsProbeJsonScalars {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+    },
 }
 
 fn main() -> Result<ExitCode> {
@@ -141,6 +153,13 @@ fn main() -> Result<ExitCode> {
             }
             HttpCommands::NeedsProbeJsonScalar { request, status } => Ok(needs_exit_code(
                 http_probe::needs_probe_json_scalar(&request, &status),
+            )),
+            HttpCommands::ProbeJsonScalars { request, status } => {
+                http_probe::probe_json_scalars(&request, &status)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            HttpCommands::NeedsProbeJsonScalars { request, status } => Ok(needs_exit_code(
+                http_probe::needs_probe_json_scalars(&request, &status),
             )),
         },
     }

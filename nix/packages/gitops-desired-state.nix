@@ -58,7 +58,8 @@ let
   admissionProbeIsDoltSql = admissionProbeKind == "dolt_sql_scalar";
   admissionProbeIsHttpStatus = admissionProbeKind == "http_status";
   admissionProbeIsHttpJsonScalar = admissionProbeKind == "http_json_scalar";
-  admissionProbeIsHttp = admissionProbeIsHttpStatus || admissionProbeIsHttpJsonScalar;
+  admissionProbeIsHttpApiMeta = admissionProbeKind == "api_meta";
+  admissionProbeIsHttp = admissionProbeIsHttpStatus || admissionProbeIsHttpJsonScalar || admissionProbeIsHttpApiMeta;
   closure =
     releaseKey: gcrootName: value:
     {
@@ -196,8 +197,9 @@ assert lib.assertMsg (
     "dolt_sql_scalar"
     "http_status"
     "http_json_scalar"
+    "api_meta"
   ]
-) "gitops admissionProbe kind must be dolt_sql_scalar, http_status, or http_json_scalar";
+) "gitops admissionProbe kind must be dolt_sql_scalar, http_status, http_json_scalar, or api_meta";
 assert lib.assertMsg (
   admissionProbe == null
   || (

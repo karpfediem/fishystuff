@@ -125,7 +125,8 @@ class single_host($st) {
 	$use_dolt_sql_admission_probe = $admission_probe_kind == "dolt_sql_scalar"
 	$use_http_status_admission_probe = $admission_probe_kind == "http_status"
 	$use_http_json_scalar_admission_probe = $admission_probe_kind == "http_json_scalar"
-	$use_http_admission_probe = $use_http_status_admission_probe or $use_http_json_scalar_admission_probe
+	$use_http_api_meta_admission_probe = $admission_probe_kind == "api_meta"
+	$use_http_admission_probe = $use_http_status_admission_probe or $use_http_json_scalar_admission_probe or $use_http_api_meta_admission_probe
 	$api_upstream str = $environment->api_upstream || ""
 	$api_service str = $environment->api_service || ""
 	$manage_api_service = $api_service != ""
@@ -149,7 +150,16 @@ class single_host($st) {
 	$dolt_admission_exec_name = fmt.printf("fishystuff-gitops-admit-dolt-sql-%s-%s", $environment_name, $active_release_id)
 	$http_status_admission_exec_name = fmt.printf("fishystuff-gitops-admit-http-status-%s-%s", $environment_name, $active_release_id)
 	$http_json_scalar_admission_exec_name = fmt.printf("fishystuff-gitops-admit-http-json-scalar-%s-%s", $environment_name, $active_release_id)
-	$http_admission_exec_name = if $use_http_status_admission_probe { $http_status_admission_exec_name } else { $http_json_scalar_admission_exec_name }
+	$http_api_meta_admission_exec_name = fmt.printf("fishystuff-gitops-admit-http-api-meta-%s-%s", $environment_name, $active_release_id)
+	$http_admission_exec_name = if $use_http_status_admission_probe {
+		$http_status_admission_exec_name
+	} else {
+		if $use_http_json_scalar_admission_probe {
+			$http_json_scalar_admission_exec_name
+		} else {
+			$http_api_meta_admission_exec_name
+		}
+	}
 	$admission_path = fmt.printf("%s/admission/%s.json", $run_dir, $environment_name)
 	$dolt_status_path = fmt.printf("%s/dolt/%s-%s.json", $run_dir, $environment_name, $active_release_id)
 	$status_path = fmt.printf("%s/status/%s.json", $state_dir, $environment_name)
@@ -164,7 +174,7 @@ class single_host($st) {
 	panic(($requested_admission_fixture_state != "") and (($mode != "vm-test") and ($mode != "vm-test-closures")), fmt.printf("environment %s admission_fixture_state is only supported in vm-test modes", $environment_name))
 	panic(($admission_state != "not_run") and ($admission_state != "passed_fixture") and ($admission_state != "failed_fixture"), fmt.printf("environment %s has unsupported admission state", $environment_name))
 	panic(($admission_probe_kind != "") and (not $write_local_state), fmt.printf("environment %s admission_probe is only supported in local writing modes", $environment_name))
-	panic(($admission_probe_kind != "") and ((not $use_dolt_sql_admission_probe) and (not $use_http_status_admission_probe) and (not $use_http_json_scalar_admission_probe)), fmt.printf("environment %s has unsupported admission_probe kind %s", $environment_name, $admission_probe_kind))
+	panic(($admission_probe_kind != "") and ((not $use_dolt_sql_admission_probe) and (not $use_http_status_admission_probe) and (not $use_http_json_scalar_admission_probe) and (not $use_http_api_meta_admission_probe)), fmt.printf("environment %s has unsupported admission_probe kind %s", $environment_name, $admission_probe_kind))
 	panic($use_dolt_sql_admission_probe and (not $write_vm_state), fmt.printf("environment %s Dolt SQL admission probe is only supported in VM test modes", $environment_name))
 	panic($use_dolt_sql_admission_probe and ($active_dolt_materialization != "fetch_pin"), fmt.printf("environment %s Dolt SQL admission probe requires fetch_pin materialization", $environment_name))
 	panic($use_dolt_sql_admission_probe and ($admission_state != "passed_fixture"), fmt.printf("environment %s Dolt SQL admission probe can only publish passed_fixture admission", $environment_name))
@@ -517,21 +527,36 @@ class single_host($st) {
 					expected_scalar => $admission_probe->expected_scalar,
 				})
 			} else {
-				include fishy_admission.fixture(struct {
-					mode => $mode,
-					environment => $environment_name,
-					host => $host->hostname,
-					release_id => $active_release_id,
-					release_identity => $active_release_identity,
-					site_content => $active_site_artifact->store_path,
-					cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
-					dolt_commit => $active_dolt->commit,
-					dolt_materialization => $active_dolt_materialization,
-					dolt_release_ref => $active_dolt_release_ref,
-					requires_serving_artifacts => $environment->serve,
-					retained_release_count => len($retained_releases),
-					state => $admission_state,
-				})
+				if $use_http_api_meta_admission_probe {
+					include fishy_admission.http_api_meta(struct {
+						mode => $mode,
+						environment => $environment_name,
+						host => $host->hostname,
+						release_id => $active_release_id,
+						release_identity => $active_release_identity,
+						dolt_commit => $active_dolt->commit,
+						probe_name => $admission_probe->probe_name,
+						url => $admission_probe->url,
+						expected_status => $admission_probe->expected_status,
+						timeout_ms => $admission_probe->timeout_ms,
+					})
+				} else {
+					include fishy_admission.fixture(struct {
+						mode => $mode,
+						environment => $environment_name,
+						host => $host->hostname,
+						release_id => $active_release_id,
+						release_identity => $active_release_identity,
+						site_content => $active_site_artifact->store_path,
+						cdn_runtime_content => $active_cdn_runtime_artifact->store_path,
+						dolt_commit => $active_dolt->commit,
+						dolt_materialization => $active_dolt_materialization,
+						dolt_release_ref => $active_dolt_release_ref,
+						requires_serving_artifacts => $environment->serve,
+						retained_release_count => len($retained_releases),
+						state => $admission_state,
+					})
+				}
 			}
 		}
 	}

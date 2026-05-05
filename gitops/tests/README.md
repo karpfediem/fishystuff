@@ -140,7 +140,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-local-apply-candidate-vm` boots a local NixOS VM and runs a non-serving `local-apply` candidate with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. It checks that candidate/status facts are written under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, that VM-test paths are not used, and that `/srv/fishystuff` and real FishyStuff services remain untouched.
 
-`gitops-local-apply-http-admission-vm` boots a local NixOS VM, defines a loopback candidate API fixture service, and runs a serving `local-apply` candidate with `api_upstream`, `api_service`, and `admission_probe.kind = "http_json_scalar"`. It checks that mgmt writes candidate API config, starts the isolated `api_service`, probes `/api/v1/meta`, publishes served status, active symlinks, route document, rollback-set state, and candidate instance/admission documents under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, and confirms VM-test paths, `/srv/fishystuff`, and real FishyStuff services remain untouched.
+`gitops-local-apply-http-admission-vm` boots a local NixOS VM, defines a loopback candidate API fixture service, and runs a serving `local-apply` candidate with `api_upstream`, `api_service`, and `admission_probe.kind = "api_meta"`. It checks that mgmt writes candidate API config, starts the isolated `api_service`, probes `/api/v1/meta` for the exact release ID, release identity, and Dolt commit, publishes served status, active symlinks, route document, rollback-set state, and candidate instance/admission documents under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, and confirms VM-test paths, `/srv/fishystuff`, and real FishyStuff services remain untouched.
 
 `gitops-missing-active-artifact-refusal` boots a local NixOS VM and checks that hand-written serving desired state cannot omit an active release artifact path.
 
@@ -158,7 +158,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-desired-state-vm-serve-fixture` type-checks a generated local `vm-test` serving desired-state package. It uses tiny local store artifacts and verifies the generator emits `serve: true` only with API, Dolt service, site, and finalized CDN runtime closures present.
 
-`gitops-desired-state-http-admission-probe` type-checks a generated `local-apply` desired-state package with `api_upstream` plus `admission_probe.kind = "http_json_scalar"`. It verifies HTTP admission does not require Dolt `fetch_pin` materialization, requires probe URLs to target the declared upstream when present, and still unifies with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`.
+`gitops-desired-state-http-admission-probe` type-checks a generated `local-apply` desired-state package with `api_upstream` plus `admission_probe.kind = "api_meta"`. It verifies HTTP admission does not require Dolt `fetch_pin` materialization, requires probe URLs to target the declared upstream when present, and still unifies with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`.
 
 `gitops-desired-state-rollback-transition` type-checks a generated local `vm-test` rollback desired-state package. It verifies the generated environment names the previous release as active, retains the rolled-away candidate release, and emits `transition.kind = "rollback"` with the retained `from_release`.
 

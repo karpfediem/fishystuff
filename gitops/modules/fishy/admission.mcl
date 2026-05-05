@@ -362,6 +362,85 @@ class http_json_scalar($st) {
 	}
 }
 
+class http_api_meta($st) {
+	$mode str = $st->mode || "validate"
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$dolt_commit str = $st->dolt_commit || ""
+	$probe_name str = $st->probe_name || ""
+	$url str = $st->url || ""
+	$expected_status int = $st->expected_status || 0
+	$requested_timeout_ms int = $st->timeout_ms || 0
+	$timeout_ms int = if $requested_timeout_ms == 0 { 2000 } else { $requested_timeout_ms }
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
+	$request_dir = fmt.printf("%s/admission/requests", $state_dir)
+	$request_path = fmt.printf("%s/%s-%s-http-api-meta.json", $request_dir, $environment, $release_id)
+	$status_dir = fmt.printf("%s/admission", $run_dir)
+	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
+	$exec_name = fmt.printf("fishystuff-gitops-admit-http-api-meta-%s-%s", $environment, $release_id)
+	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
+	$request_content = fmt.printf("{\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"probe_name\": %s,\n  \"url\": %s,\n  \"expected_status\": %d,\n  \"timeout_ms\": %d,\n  \"expected_scalars\": {\n    \"/release_id\": %s,\n    \"/release_identity\": %s,\n    \"/dolt_commit\": %s\n  }\n}\n", fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($probe_name), fishy_json.quote($url), $expected_status, $timeout_ms, fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($dolt_commit))
+	$ifcmd = fmt.printf("%s http needs-probe-json-scalars --request '%s' --status '%s'", $helper_bin, $request_path, $status_path)
+
+	panic($environment == "", "HTTP API meta admission requires environment")
+	panic($host == "", "HTTP API meta admission requires host")
+	panic($release_id == "", "HTTP API meta admission requires release_id")
+	panic($release_identity == "", "HTTP API meta admission requires release_identity")
+	panic($dolt_commit == "", "HTTP API meta admission requires dolt_commit")
+	panic($probe_name == "", "HTTP API meta admission requires probe_name")
+	panic($url == "", "HTTP API meta admission requires url")
+	panic($expected_status == 0, "HTTP API meta admission requires expected_status")
+	panic(($expected_status < 100) or ($expected_status > 599), "HTTP API meta admission expected_status must be between 100 and 599")
+	panic(($timeout_ms < 1) or ($timeout_ms > 30000), "HTTP API meta admission timeout_ms must be between 1 and 30000")
+	panic(len(core_strings.split($environment, "'")) > 1, "HTTP API meta admission environment must not contain single quotes")
+	panic(len(core_strings.split($release_id, "'")) > 1, "HTTP API meta admission release_id must not contain single quotes")
+	panic(not $write_local_state, "HTTP API meta admission is only supported in local writing modes")
+
+	if $write_local_state {
+		file "${request_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${status_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${request_path}" {
+			state => "exists",
+			content => $request_content,
+			mode => "0644",
+		}
+
+		exec "${exec_name}" {
+			cmd => $helper_bin,
+			args => [
+				"http",
+				"probe-json-scalars",
+				"--request",
+				$request_path,
+				"--status",
+				$status_path,
+			],
+			env => {
+				"PATH" => "/run/current-system/sw/bin:/usr/bin:/bin",
+			},
+			ifcmd => $ifcmd,
+			ifshell => "/bin/sh",
+			timeout => 60,
+		}
+
+		File["${request_dir}/"] -> File["${request_path}"]
+		File["${status_dir}/"] -> Exec["${exec_name}"]
+		File["${request_path}"] -> Exec["${exec_name}"]
+	}
+}
+
 class retained_cdn_root($st) {
 	$requires_serving_artifacts bool = $st->requires_serving_artifacts || false
 	$cdn_runtime_content str = $st->cdn_runtime_content || ""

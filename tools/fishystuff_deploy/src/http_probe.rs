@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -36,6 +37,13 @@ struct HttpJsonScalarRequest {
     common: HttpProbeCommonRequest,
     json_pointer: String,
     expected_scalar: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct HttpJsonScalarsRequest {
+    #[serde(flatten)]
+    common: HttpProbeCommonRequest,
+    expected_scalars: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,6 +91,22 @@ struct HttpJsonScalarStatusDocument {
     probe: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct HttpJsonScalarsStatusDocument {
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    probe_name: String,
+    url: String,
+    expected_status: u16,
+    observed_status: u16,
+    expected_scalars: BTreeMap<String, Value>,
+    scalars: BTreeMap<String, Value>,
+    admission_state: String,
+    probe: String,
+}
+
 #[derive(Debug, Serialize)]
 struct HttpJsonScalarStatus<'a> {
     environment: &'a str,
@@ -96,6 +120,22 @@ struct HttpJsonScalarStatus<'a> {
     json_pointer: &'a str,
     expected_scalar: &'a Value,
     scalar: &'a Value,
+    admission_state: &'static str,
+    probe: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct HttpJsonScalarsStatus<'a> {
+    environment: &'a str,
+    host: &'a str,
+    release_id: &'a str,
+    release_identity: &'a str,
+    probe_name: &'a str,
+    url: &'a str,
+    expected_status: u16,
+    observed_status: u16,
+    expected_scalars: &'a BTreeMap<String, Value>,
+    scalars: &'a BTreeMap<String, Value>,
     admission_state: &'static str,
     probe: &'static str,
 }
@@ -191,6 +231,60 @@ pub fn probe_json_scalar(request_path: &Path, status_path: &Path) -> Result<()> 
     write_http_json_scalar(status_path, &request, response.status, &scalar)
 }
 
+pub fn probe_json_scalars(request_path: &Path, status_path: &Path) -> Result<()> {
+    let request = read_http_json_scalars_request(request_path)?;
+    validate_common_request(&request.common)?;
+    validate_json_scalars_request(&request)?;
+
+    let response = get_loopback_url(&request.common)?;
+    if response.status != request.common.expected_status {
+        bail!(
+            "HTTP JSON scalars probe {} expected status {}, got {}",
+            request.common.probe_name,
+            request.common.expected_status,
+            response.status
+        );
+    }
+
+    let body: Value = serde_json::from_slice(&response.body).with_context(|| {
+        format!(
+            "HTTP JSON scalars probe {} response body was not JSON",
+            request.common.probe_name
+        )
+    })?;
+    let mut scalars = BTreeMap::new();
+    for (json_pointer, expected_scalar) in &request.expected_scalars {
+        let scalar = body
+            .pointer(json_pointer)
+            .with_context(|| {
+                format!(
+                    "HTTP JSON scalars probe {} did not find JSON pointer {}",
+                    request.common.probe_name, json_pointer
+                )
+            })?
+            .clone();
+        if !is_json_scalar(&scalar) {
+            bail!(
+                "HTTP JSON scalars probe {} JSON pointer {} resolved to a non-scalar value",
+                request.common.probe_name,
+                json_pointer
+            );
+        }
+        if &scalar != expected_scalar {
+            bail!(
+                "HTTP JSON scalars probe {} JSON pointer {} expected scalar {}, got {}",
+                request.common.probe_name,
+                json_pointer,
+                json_value_for_message(expected_scalar),
+                json_value_for_message(&scalar)
+            );
+        }
+        scalars.insert(json_pointer.clone(), scalar);
+    }
+
+    write_http_json_scalars(status_path, &request, response.status, &scalars)
+}
+
 pub fn needs_probe_json_scalar(request_path: &Path, status_path: &Path) -> bool {
     let Ok(request) = read_http_json_scalar_request(request_path).and_then(|request| {
         validate_common_request(&request.common)?;
@@ -203,6 +297,20 @@ pub fn needs_probe_json_scalar(request_path: &Path, status_path: &Path) -> bool 
         return true;
     };
     !http_json_scalar_matches_request(&request, &status)
+}
+
+pub fn needs_probe_json_scalars(request_path: &Path, status_path: &Path) -> bool {
+    let Ok(request) = read_http_json_scalars_request(request_path).and_then(|request| {
+        validate_common_request(&request.common)?;
+        validate_json_scalars_request(&request)?;
+        Ok(request)
+    }) else {
+        return true;
+    };
+    let Ok(status) = read_http_json_scalars_status(status_path) else {
+        return true;
+    };
+    !http_json_scalars_matches_request(&request, &status)
 }
 
 fn read_http_status_request(request_path: &Path) -> Result<HttpStatusRequest> {
@@ -235,6 +343,21 @@ fn read_http_json_scalar_request(request_path: &Path) -> Result<HttpJsonScalarRe
     })
 }
 
+fn read_http_json_scalars_request(request_path: &Path) -> Result<HttpJsonScalarsRequest> {
+    let file = File::open(request_path).with_context(|| {
+        format!(
+            "opening HTTP JSON scalars probe request {}",
+            request_path.display()
+        )
+    })?;
+    serde_json::from_reader(file).with_context(|| {
+        format!(
+            "decoding HTTP JSON scalars probe request {}",
+            request_path.display()
+        )
+    })
+}
+
 fn read_http_status_status(status_path: &Path) -> Result<HttpStatusStatusDocument> {
     let file = File::open(status_path)
         .with_context(|| format!("opening HTTP status probe status {}", status_path.display()))?;
@@ -256,6 +379,21 @@ fn read_http_json_scalar_status(status_path: &Path) -> Result<HttpJsonScalarStat
     serde_json::from_reader(file).with_context(|| {
         format!(
             "decoding HTTP JSON scalar probe status {}",
+            status_path.display()
+        )
+    })
+}
+
+fn read_http_json_scalars_status(status_path: &Path) -> Result<HttpJsonScalarsStatusDocument> {
+    let file = File::open(status_path).with_context(|| {
+        format!(
+            "opening HTTP JSON scalars probe status {}",
+            status_path.display()
+        )
+    })?;
+    serde_json::from_reader(file).with_context(|| {
+        format!(
+            "decoding HTTP JSON scalars probe status {}",
             status_path.display()
         )
     })
@@ -301,6 +439,31 @@ fn validate_json_scalar_request(request: &HttpJsonScalarRequest) -> Result<()> {
     Ok(())
 }
 
+fn validate_json_scalars_request(request: &HttpJsonScalarsRequest) -> Result<()> {
+    if request.expected_scalars.is_empty() {
+        bail!(
+            "HTTP JSON scalars probe {} expected_scalars must not be empty",
+            request.common.probe_name
+        );
+    }
+    for (json_pointer, expected_scalar) in &request.expected_scalars {
+        if !json_pointer.is_empty() && !json_pointer.starts_with('/') {
+            bail!(
+                "HTTP JSON scalars probe {} json_pointer must be empty or start with /",
+                request.common.probe_name
+            );
+        }
+        if !is_json_scalar(expected_scalar) {
+            bail!(
+                "HTTP JSON scalars probe {} expected scalar for {} must be a JSON scalar",
+                request.common.probe_name,
+                json_pointer
+            );
+        }
+    }
+    Ok(())
+}
+
 fn http_status_matches_request(
     request: &HttpStatusRequest,
     status: &HttpStatusStatusDocument,
@@ -334,6 +497,24 @@ fn http_json_scalar_matches_request(
         && status.scalar == request.expected_scalar
         && status.admission_state == "passed_fixture"
         && status.probe == "http-json-scalar"
+}
+
+fn http_json_scalars_matches_request(
+    request: &HttpJsonScalarsRequest,
+    status: &HttpJsonScalarsStatusDocument,
+) -> bool {
+    status.environment == request.common.environment
+        && status.host == request.common.host
+        && status.release_id == request.common.release_id
+        && status.release_identity == request.common.release_identity
+        && status.probe_name == request.common.probe_name
+        && status.url == request.common.url
+        && status.expected_status == request.common.expected_status
+        && status.observed_status == request.common.expected_status
+        && status.expected_scalars == request.expected_scalars
+        && status.scalars == request.expected_scalars
+        && status.admission_state == "passed_fixture"
+        && status.probe == "http-json-scalars"
 }
 
 fn write_http_status(
@@ -407,6 +588,47 @@ fn write_http_json_scalar(
     file.write_all(b"\n").with_context(|| {
         format!(
             "finalizing HTTP JSON scalar probe status {}",
+            status_path.display()
+        )
+    })
+}
+
+fn write_http_json_scalars(
+    status_path: &Path,
+    request: &HttpJsonScalarsRequest,
+    observed_status: u16,
+    scalars: &BTreeMap<String, Value>,
+) -> Result<()> {
+    ensure_parent_dir(status_path)?;
+    let status = HttpJsonScalarsStatus {
+        environment: &request.common.environment,
+        host: &request.common.host,
+        release_id: &request.common.release_id,
+        release_identity: &request.common.release_identity,
+        probe_name: &request.common.probe_name,
+        url: &request.common.url,
+        expected_status: request.common.expected_status,
+        observed_status,
+        expected_scalars: &request.expected_scalars,
+        scalars,
+        admission_state: "passed_fixture",
+        probe: "http-json-scalars",
+    };
+    let mut file = File::create(status_path).with_context(|| {
+        format!(
+            "creating HTTP JSON scalars probe status {}",
+            status_path.display()
+        )
+    })?;
+    serde_json::to_writer_pretty(&mut file, &status).with_context(|| {
+        format!(
+            "writing HTTP JSON scalars probe status {}",
+            status_path.display()
+        )
+    })?;
+    file.write_all(b"\n").with_context(|| {
+        format!(
+            "finalizing HTTP JSON scalars probe status {}",
             status_path.display()
         )
     })

@@ -194,9 +194,11 @@ fishystuff_deploy http probe-status --request <json> --status <json>
 fishystuff_deploy http needs-probe-status --request <json> --status <json>
 fishystuff_deploy http probe-json-scalar --request <json> --status <json>
 fishystuff_deploy http needs-probe-json-scalar --request <json> --status <json>
+fishystuff_deploy http probe-json-scalars --request <json> --status <json>
+fishystuff_deploy http needs-probe-json-scalars --request <json> --status <json>
 ```
 
-The request tuple includes environment, host, release ID, release identity, probe name, URL, expected status, and optional timeout. JSON scalar probes add `json_pointer` and `expected_scalar`. The helper only probes loopback HTTP targets and rejects credential-bearing URLs. This keeps the bridge host-local and reusable for API readiness/meta checks without becoming a deployment controller.
+The request tuple includes environment, host, release ID, release identity, probe name, URL, expected status, and optional timeout. JSON scalar probes add `json_pointer` and `expected_scalar`; JSON scalars probes add an `expected_scalars` object keyed by JSON pointer. The helper only probes loopback HTTP targets and rejects credential-bearing URLs. This keeps the bridge host-local and reusable for API readiness/meta checks without becoming a deployment controller.
 
 ## Git/Dolt Signals
 

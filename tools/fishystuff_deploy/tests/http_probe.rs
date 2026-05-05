@@ -127,6 +127,79 @@ fn http_json_scalar_probe_records_exact_value() -> Result<()> {
 }
 
 #[test]
+fn http_json_scalars_probe_records_exact_values() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-http-json-scalars")?;
+    let (url, server) = spawn_server(TestResponse::json(
+        200,
+        br#"{"release_id":"example-release","release_identity":"release=example-release;api=example","dolt_commit":"abc123","ready":true}"#,
+    ))?;
+    let request = root.path().join("requests/meta.json");
+    let status = root.path().join("status/meta.json");
+
+    write_json(
+        &request,
+        json!({
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": "example-release",
+            "release_identity": "release=example-release;api=example",
+            "probe_name": "api-meta",
+            "url": format!("{url}/api/v1/meta"),
+            "expected_status": 200,
+            "timeout_ms": 2000,
+            "expected_scalars": {
+                "/release_id": "example-release",
+                "/release_identity": "release=example-release;api=example",
+                "/dolt_commit": "abc123",
+                "/ready": true,
+            },
+        }),
+    )?;
+
+    run_helper([
+        "http",
+        "probe-json-scalars",
+        "--request",
+        request.to_str().context("request path is not UTF-8")?,
+        "--status",
+        status.to_str().context("status path is not UTF-8")?,
+    ])?;
+    server.join().expect("server thread panicked")?;
+
+    let document = read_json(&status)?;
+    assert_eq!(document["probe"], "http-json-scalars");
+    assert_eq!(document["probe_name"], "api-meta");
+    assert_eq!(document["observed_status"], 200);
+    assert_eq!(
+        document["expected_scalars"]["/release_id"],
+        "example-release"
+    );
+    assert_eq!(
+        document["expected_scalars"]["/release_identity"],
+        "release=example-release;api=example"
+    );
+    assert_eq!(document["expected_scalars"]["/dolt_commit"], "abc123");
+    assert_eq!(document["expected_scalars"]["/ready"], true);
+    assert_eq!(document["scalars"]["/release_id"], "example-release");
+    assert_eq!(
+        document["scalars"]["/release_identity"],
+        "release=example-release;api=example"
+    );
+    assert_eq!(document["scalars"]["/dolt_commit"], "abc123");
+    assert_eq!(document["scalars"]["/ready"], true);
+    assert_eq!(document["admission_state"], "passed_fixture");
+
+    assert_helper_current([
+        "http",
+        "needs-probe-json-scalars",
+        "--request",
+        request.to_str().context("request path is not UTF-8")?,
+        "--status",
+        status.to_str().context("status path is not UTF-8")?,
+    ])
+}
+
+#[test]
 fn http_json_scalar_probe_rejects_wrong_value() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-http-json-wrong")?;
     let (url, server) = spawn_server(TestResponse::json(200, br#"{"meta":{"git_rev":"actual"}}"#))?;
