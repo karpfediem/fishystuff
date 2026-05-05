@@ -4,10 +4,12 @@ Fast local checks:
 
 ```bash
 just gitops-helper-test
+just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
+just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
 cargo test -p fishystuff_deploy
 ```
 
-These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM.
+These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served` and `gitops-served-summary` are read-only checks for already-produced local GitOps status, active, and rollback-set documents.
 
 Flake checks:
 
@@ -60,6 +62,8 @@ Recipe wrappers:
 
 ```bash
 just gitops-helper-test
+just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
+just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test dolt-fetch-pin
