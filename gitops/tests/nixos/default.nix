@@ -85,7 +85,7 @@
   };
 
   gitops-served-rollback-transition-vm = import ./served-rollback-transition.nix {
-    inherit gitopsSrc mgmtPackage pkgs;
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
   };
 
   gitops-failed-candidate-vm = import ./failed-candidate.nix {

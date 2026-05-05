@@ -1,6 +1,7 @@
 {
   pkgs,
   mgmtPackage,
+  fishystuffDeployPackage,
   gitopsSrc,
 }:
 let
@@ -186,6 +187,7 @@ pkgs.testers.runNixOSTest {
         rollbackServedState
       ];
       environment.systemPackages = [
+        fishystuffDeployPackage
         mgmtPackage
         pkgs.jq
       ];
@@ -195,6 +197,7 @@ pkgs.testers.runNixOSTest {
     start_all()
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
+    machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
     machine.succeed("jq -e '.environments.\"local-test\".active_release == \"candidate-release\" and .environments.\"local-test\".retained_releases == [\"previous-release\"]' ${candidateServedState}")
     machine.succeed("jq -e '.environments.\"local-test\".active_release == \"previous-release\" and .environments.\"local-test\".retained_releases == [\"candidate-release\"]' ${rollbackServedState}")
     machine.succeed("jq -e '.retained_roots == [\"${previousCdnRoot}\"]' ${candidateCdnServingRoot}/cdn-serving-manifest.json")
@@ -222,6 +225,7 @@ pkgs.testers.runNixOSTest {
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 30 and .current_release_id == \"candidate-release\" and .retained_release_count == 1 and .retained_release_ids == [\"previous-release\"] and .retained_release_document_paths == [\"{previous_rollback_member}\"] and .rollback_set_available == true and .rollback_set_state == \"retained_hot_release_set\"' {rollback_set}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 30 and .current_release_id == \"candidate-release\" and .release_id == \"previous-release\" and .api_bundle == \"${previousApi}\" and .dolt_service_bundle == \"${previousDoltService}\" and .site_content == \"${previousSite}\" and .cdn_runtime_content == \"${previousCdnServingRoot}\" and .dolt_commit == \"previous-rollback\" and .dolt_materialization == \"metadata_only\" and .dolt_cache_dir == \"\" and .dolt_release_ref == \"\" and .dolt_status_path == \"\" and .rollback_member_state == \"retained_hot_release\"' {previous_rollback_member}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 30 and .release_id == \"candidate-release\" and .site_root == \"/var/lib/fishystuff/gitops-test/served/local-test/site\" and .cdn_root == \"/var/lib/fishystuff/gitops-test/served/local-test/cdn\" and .state == \"selected_local_route\"' {route}")
+    machine.wait_until_succeeds(f"${fishystuffDeployPackage}/bin/fishystuff_deploy gitops check-served --status {status} --active {active} --rollback-set {rollback_set} --environment local-test --host vm-single-host --release-id candidate-release")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/local-test/site)\" = \"${candidateSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/local-test/cdn)\" = \"${candidateCdnServingRoot}\"")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-rollback-candidate.pid) || true")
@@ -234,6 +238,7 @@ pkgs.testers.runNixOSTest {
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 31 and .current_release_id == \"previous-release\" and .retained_release_count == 1 and .retained_release_ids == [\"candidate-release\"] and .retained_release_document_paths == [\"{candidate_rollback_member}\"] and .rollback_set_available == true and .rollback_set_state == \"retained_hot_release_set\"' {rollback_set}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 31 and .current_release_id == \"previous-release\" and .release_id == \"candidate-release\" and .api_bundle == \"${candidateApi}\" and .dolt_service_bundle == \"${candidateDoltService}\" and .site_content == \"${candidateSite}\" and .cdn_runtime_content == \"${candidateCdnServingRoot}\" and .dolt_commit == \"candidate-rollback\" and .dolt_materialization == \"metadata_only\" and .dolt_cache_dir == \"\" and .dolt_release_ref == \"\" and .dolt_status_path == \"\" and .rollback_member_state == \"retained_hot_release\"' {candidate_rollback_member}")
     machine.wait_until_succeeds(f"jq -e '.desired_generation == 31 and .release_id == \"previous-release\" and .site_root == \"/var/lib/fishystuff/gitops-test/served/local-test/site\" and .cdn_root == \"/var/lib/fishystuff/gitops-test/served/local-test/cdn\" and .state == \"selected_local_route\"' {route}")
+    machine.wait_until_succeeds(f"${fishystuffDeployPackage}/bin/fishystuff_deploy gitops check-served --status {status} --active {active} --rollback-set {rollback_set} --environment local-test --host vm-single-host --release-id previous-release")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/local-test/site)\" = \"${previousSite}\"")
     machine.succeed("test \"$(readlink /var/lib/fishystuff/gitops-test/served/local-test/cdn)\" = \"${rollbackCdnServingRoot}\"")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-rollback-previous.pid) || true")
