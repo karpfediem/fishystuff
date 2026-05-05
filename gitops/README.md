@@ -2,6 +2,8 @@
 
 This directory is a clean-slate mgmt module repository for the next FishyStuff deployment substrate. It intentionally does not extend the old beta MCL graph under `mgmt/`.
 
+See `PRODUCTION.md` for the current production handoff boundary and the checks that separate today's live production setup from the future GitOps serving path.
+
 The first milestone is local-only:
 
 1. Decode a desired-state JSON file.
