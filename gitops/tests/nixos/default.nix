@@ -5,6 +5,7 @@
   fishystuffDeployPackage,
   gitopsSrc,
   generatedServeFixture,
+  productionRollbackFixture,
   productionServeFixture,
 }:
 {
@@ -87,6 +88,23 @@
       previousDoltServiceArtifact
       previousSiteArtifact
       siteArtifact
+      ;
+  };
+
+  gitops-production-rollback-transition-vm = import ./production-rollback-transition.nix {
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
+    inherit (productionRollbackFixture)
+      activeApiArtifact
+      activeCdnRuntimeArtifact
+      activeCdnRuntimeCurrentArtifact
+      activeDoltServiceArtifact
+      activeSiteArtifact
+      candidateApiArtifact
+      candidateCdnRuntimeArtifact
+      candidateCdnRuntimeCurrentArtifact
+      candidateDoltServiceArtifact
+      candidateSiteArtifact
+      desiredState
       ;
   };
 

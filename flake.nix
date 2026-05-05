@@ -673,6 +673,19 @@
               previousDoltServiceArtifact = doltServiceBundleProduction;
               previousSiteArtifact = siteContentStableMapRuntime;
             };
+            productionRollbackFixture = {
+              desiredState = gitopsDesiredStateProductionRollbackTransitionFixture;
+              activeApiArtifact = apiServiceBundleProduction;
+              activeSiteArtifact = siteContentStableMapRuntime;
+              activeCdnRuntimeArtifact = gitopsDesiredStateServeFixtureRollbackCdn;
+              activeCdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixturePreviousCdnCurrent;
+              activeDoltServiceArtifact = doltServiceBundleProduction;
+              candidateApiArtifact = apiServiceBundleProduction;
+              candidateSiteArtifact = siteContent;
+              candidateCdnRuntimeArtifact = gitopsDesiredStateServeFixtureCdn;
+              candidateCdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixtureCdnCurrent;
+              candidateDoltServiceArtifact = doltServiceBundleProduction;
+            };
           };
           cdnServingRootRetentionCheck =
             let
