@@ -37,6 +37,8 @@ nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
+nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
@@ -146,6 +148,10 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 
 `gitops-desired-state-vm-serve-fixture` type-checks a generated local `vm-test` serving desired-state package. It uses tiny local store artifacts and verifies the generator emits `serve: true` only with API, Dolt service, site, and finalized CDN runtime closures present.
+
+`gitops-desired-state-rollback-transition` type-checks a generated local `vm-test` rollback desired-state package. It verifies the generated environment names the previous release as active, retains the rolled-away candidate release, and emits `transition.kind = "rollback"` with the retained `from_release`.
+
+`gitops-desired-state-rollback-transition-retention-refusal` checks that the generated desired-state helper refuses rollback desired state when `transition.from_release` would not remain retained after rollback.
 
 `gitops-desired-state-serve-without-retained-refusal` checks that the generated desired-state helper refuses to emit serving JSON unless at least one retained rollback release is provided.
 

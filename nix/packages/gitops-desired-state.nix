@@ -27,6 +27,7 @@
   retainedReleases ? [ ],
   serve ? false,
   siteClosure ? null,
+  transition ? null,
 }:
 let
   storePathString = value: builtins.unsafeDiscardStringContext "${value}";
@@ -118,6 +119,8 @@ let
     inherit serve;
   } // lib.optionalAttrs (admissionProbe != null) {
     admission_probe = admissionProbe;
+  } // lib.optionalAttrs (transition != null) {
+    inherit transition;
   };
   payload = {
     inherit cluster generation mode;
@@ -208,6 +211,36 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   retainedReleaseIds == lib.unique retainedReleaseIds
 ) "gitops retained rollback releases must be unique";
+assert lib.assertMsg (
+  transition == null || builtins.isAttrs transition
+) "gitops transition must be an attribute set";
+assert lib.assertMsg (
+  transition == null || (transition ? kind && lib.isString transition.kind)
+) "gitops transition requires string kind";
+assert lib.assertMsg (
+  transition == null || (transition ? from_release && lib.isString transition.from_release)
+) "gitops transition requires string from_release";
+assert lib.assertMsg (
+  transition == null || (transition ? reason && lib.isString transition.reason)
+) "gitops transition requires string reason";
+assert lib.assertMsg (
+  transition == null || lib.elem (transition.kind or "") [
+    "candidate"
+    "activate"
+    "rollback"
+  ]
+) "gitops transition kind must be candidate, activate, or rollback";
+assert lib.assertMsg (
+  transition == null || (transition.kind or "") != "rollback" || serve
+) "gitops rollback transition requires serve = true";
+assert lib.assertMsg (
+  transition == null || (transition.kind or "") != "rollback" || (transition.from_release or "") != ""
+) "gitops rollback transition requires from_release";
+assert lib.assertMsg (
+  transition == null
+  || (transition.kind or "") != "rollback"
+  || lib.elem transition.from_release retainedReleaseIds
+) "gitops rollback transition from_release must remain retained";
 assert lib.assertMsg (!serve || mode != "validate") "validate-mode desired state must not request serve";
 assert lib.assertMsg (!serve || retainedReleaseIds != [ ]) "serving desired state requires at least one retained rollback release";
 assert lib.assertMsg (!serve || apiClosure != null) "serving desired state requires apiClosure";

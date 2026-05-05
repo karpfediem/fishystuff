@@ -284,6 +284,10 @@
             currentRoot = gitopsDesiredStateServeFixtureCdnCurrent;
             previousRoots = [ gitopsDesiredStateServeFixturePreviousCdnCurrent ];
           };
+          gitopsDesiredStateServeFixtureRollbackCdn = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
+            currentRoot = gitopsDesiredStateServeFixturePreviousCdnCurrent;
+            previousRoots = [ gitopsDesiredStateServeFixtureCdnCurrent ];
+          };
           gitopsDesiredStateVmServeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "local-test";
             environment = "local-test";
@@ -310,6 +314,41 @@
                 doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
               }
             ];
+            mode = "vm-test";
+            serve = true;
+          };
+          gitopsDesiredStateRollbackTransitionFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+            cluster = "local-test";
+            environment = "local-test";
+            hostKey = "vm-single-host";
+            activeRelease = "previous-release";
+            generation = 10;
+            releaseGeneration = 10;
+            gitRev = "previous-serve-fixture";
+            doltCommit = "previous-serve-fixture";
+            doltBranchContext = "local-test";
+            apiClosure = gitopsDesiredStateServeFixturePreviousApi;
+            siteClosure = gitopsDesiredStateServeFixturePreviousSite;
+            cdnRuntimeClosure = gitopsDesiredStateServeFixtureRollbackCdn;
+            doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
+            retainedReleaseObjects = [
+              {
+                releaseId = "candidate-release";
+                generation = 9;
+                gitRev = "serve-fixture";
+                doltCommit = "serve-fixture";
+                doltBranchContext = "local-test";
+                apiClosure = gitopsDesiredStateServeFixtureApi;
+                siteClosure = gitopsDesiredStateServeFixtureSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+              }
+            ];
+            transition = {
+              kind = "rollback";
+              from_release = "candidate-release";
+              reason = "generated rollback fixture";
+            };
             mode = "vm-test";
             serve = true;
           };
@@ -521,6 +560,33 @@
             mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
             touch "$out"
           '';
+          gitopsDesiredStateRollbackTransitionCheck = pkgs.runCommand "gitops-desired-state-rollback-transition-check" {
+            nativeBuildInputs = [
+              mgmt-fishystuff-beta.packages.${system}.minimal
+              pkgs.jq
+            ];
+          } ''
+            set -euo pipefail
+
+            jq -e '
+              .mode == "vm-test"
+              and .generation == 10
+              and .environments."local-test".serve == true
+              and .environments."local-test".active_release == "previous-release"
+              and .environments."local-test".retained_releases == ["candidate-release"]
+              and .environments."local-test".transition.kind == "rollback"
+              and .environments."local-test".transition.from_release == "candidate-release"
+              and .environments."local-test".transition.reason == "generated rollback fixture"
+              and .releases."previous-release".generation == 10
+              and .releases."candidate-release".generation == 9
+              and ([.releases."previous-release".closures[] | .enabled] | all)
+              and ([.releases."candidate-release".closures[] | .enabled] | all)
+            ' ${gitopsDesiredStateRollbackTransitionFixture}
+
+            export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateRollbackTransitionFixture}
+            mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+            touch "$out"
+          '';
           gitopsDesiredStateAdmissionProbeCheck = pkgs.runCommand "gitops-desired-state-admission-probe-check" {
             nativeBuildInputs = [
               mgmt-fishystuff-beta.packages.${system}.minimal
@@ -609,6 +675,49 @@
               test "${if attempted.success then "success" else "failure"}" = "failure"
               touch "$out"
             '';
+          gitopsDesiredStateRollbackTransitionRetainedCheck =
+            let
+              attempted = builtins.tryEval (builtins.deepSeq (pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+                cluster = "local-test";
+                environment = "local-test";
+                hostKey = "vm-single-host";
+                activeRelease = "previous-release";
+                generation = 11;
+                releaseGeneration = 11;
+                gitRev = "previous-rollback-retention-fixture";
+                doltCommit = "previous-rollback-retention-fixture";
+                doltBranchContext = "local-test";
+                apiClosure = gitopsDesiredStateServeFixturePreviousApi;
+                siteClosure = gitopsDesiredStateServeFixturePreviousSite;
+                cdnRuntimeClosure = gitopsDesiredStateServeFixtureRollbackCdn;
+                doltServiceClosure = gitopsDesiredStateServeFixturePreviousDoltService;
+                retainedReleaseObjects = [
+                  {
+                    releaseId = "older-release";
+                    generation = 8;
+                    gitRev = "older-rollback-retention-fixture";
+                    doltCommit = "older-rollback-retention-fixture";
+                    apiClosure = gitopsDesiredStateServeFixtureApi;
+                    siteClosure = gitopsDesiredStateServeFixtureSite;
+                    cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+                    doltServiceClosure = gitopsDesiredStateServeFixtureDoltService;
+                  }
+                ];
+                transition = {
+                  kind = "rollback";
+                  from_release = "candidate-release";
+                  reason = "unsafe generated rollback fixture";
+                };
+                mode = "vm-test";
+                serve = true;
+              }) true);
+            in
+            pkgs.runCommand "gitops-desired-state-rollback-transition-retention-check" { } ''
+              set -euo pipefail
+
+              test "${if attempted.success then "success" else "failure"}" = "failure"
+              touch "$out"
+            '';
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
             tag = "latest";
@@ -641,6 +750,7 @@
             edge-service-bundle-production = edgeServiceBundleProduction;
             fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
+            gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
             grafana-service-bundle = grafanaServiceBundle;
             jaeger-service-bundle = jaegerServiceBundle;
@@ -668,6 +778,9 @@
               gitops-desired-state-admission-probe = gitopsDesiredStateAdmissionProbeCheck;
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
+              gitops-desired-state-rollback-transition = gitopsDesiredStateRollbackTransitionCheck;
+              gitops-desired-state-rollback-transition-retention-refusal =
+                gitopsDesiredStateRollbackTransitionRetainedCheck;
               gitops-desired-state-serve-without-retained-refusal = gitopsDesiredStateServeWithoutRetainedCheck;
               gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixtureCheck;
               modular-service-runtime = modularServiceRuntime;

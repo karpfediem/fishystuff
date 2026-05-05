@@ -81,6 +81,8 @@ nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition
+nix build .#checks.x86_64-linux.gitops-desired-state-rollback-transition-retention-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-serve-without-retained-refusal
 nix build .#checks.x86_64-linux.gitops-desired-state-active-retained-refusal
@@ -102,6 +104,10 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `.#gitops-desired-state-vm-serve-fixture` emits a local `vm-test` desired-state file with tiny store artifacts for API, Dolt service, site, a finalized CDN serving root, and one retained previous release object. The package generator refuses `serve: true` unless all four active release artifacts are present.
 
 `gitops-desired-state-admission-probe` proves the generated desired-state helper can emit `admission_probe.kind = "dolt_sql_scalar"` for a VM-only `fetch_pin` candidate and still unify through `gitops/main.mcl`. It does not run the probe or contact a remote.
+
+`gitops-desired-state-rollback-transition` proves the generated desired-state helper can emit an explicit rollback transition with the rolled-away release retained for rollback and stale CDN clients.
+
+`gitops-desired-state-rollback-transition-retention-refusal` proves the generated desired-state helper refuses a rollback transition when `transition.from_release` is not retained.
 
 `gitops-desired-state-serve-without-retained-refusal` proves the generated desired-state helper refuses `serve: true` without at least one retained rollback release.
 
@@ -224,6 +230,8 @@ Supported modes:
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
 `transition` is optional audit intent for the selected environment. Empty kind defaults to `candidate` when `serve: false` and `activate` when `serve: true`. `rollback` is accepted only when `serve: true`, `active_release` names the rollback target, and `from_release` is retained after rollback. Active/status documents record the transition kind and rollback fields so a rollback is visible as an intentional reconciled state transition instead of an ambiguous active-release edit.
+
+The generated desired-state helper supports the same transition object and refuses to emit rollback desired state unless `transition.from_release` remains in the retained rollback set.
 
 `main.mcl` traverses the desired-state `environments` map generically. Every enabled environment must use the `single_active` strategy, name an enabled host, and select a release by key. The checked-in fixtures still use readable names such as `example-release`, while the generated beta validation package derives a different release key from exact inputs to prove the graph is not hardcoded to the fixture name. This milestone supports generic single-host environments; richer placement strategies should be new modules with their own VM tests.
 
