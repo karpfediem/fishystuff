@@ -146,7 +146,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-production-rollback-transition-vm` boots a local NixOS VM with the generated production rollback desired state. It checks the VM-local `production` served state after rollback, verifies the candidate release remains retained as the primary rollback target, and runs the read-only served-state helper against `environment=production`.
 
-`gitops-production-api-meta-vm` boots a local NixOS VM with the generated production `local-apply` API-meta desired state. It starts an isolated loopback candidate API service backed by a VM-local Dolt SQL fixture on `main`, checks `/api/v1/meta` for the exact release identity and Dolt commit, and verifies the served state remains local to the VM.
+`gitops-production-api-meta-vm` boots a local NixOS VM with the generated production `local-apply` API-meta desired-state shape, then writes an exact runtime desired state from a local file-backed Dolt remote. It pins active and retained rollback commits into `/var/lib/fishystuff/gitops/dolt-cache`, starts an isolated loopback candidate API service against the pinned active release ref, checks `/api/v1/meta` for the exact release identity and Dolt commit, and verifies the served state remains local to the VM.
 
 `gitops-served-symlink-transition-vm` boots a local NixOS VM and runs two served desired states in sequence. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}` and the route selection document move from the previous release to the candidate release through mgmt reconciliation only.
 

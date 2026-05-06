@@ -34,7 +34,7 @@ nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm --no-li
 nix build .#checks.x86_64-linux.gitops-production-api-meta-vm --no-link
 ```
 
-It uses production API/Dolt service bundles and production site content, but keeps real serving confined to local fixtures: `vm-test` for symlink/rollback shape and `local-apply` only inside the NixOS VM for loopback API admission. The rollback check proves the production-shaped transition back to `previous-production-release` retains the exact candidate release ID and its CDN root. The API-meta check proves `/api/v1/meta` must report the exact release identity and Dolt commit before served state publishes. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing. The VM checks prove the serve, rollback, and API admission shapes write only local VM state.
+It uses production API/Dolt service bundles and production site content, but keeps real serving confined to local fixtures: `vm-test` for symlink/rollback shape and `local-apply` only inside the NixOS VM for loopback API admission. The rollback check proves the production-shaped transition back to `previous-production-release` retains the exact candidate release ID and its CDN root. The API-meta check proves active and retained Dolt commits are pinned into a host-local cache, the candidate API reads the pinned active release ref, and `/api/v1/meta` must report the exact release identity and Dolt commit before served state publishes. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing. The VM checks prove the serve, rollback, and API admission shapes write only local VM state.
 
 `gitops-local-apply-fetch-pin-vm` separately proves that `fetch_pin` can run in local-apply mode against a warm host-local cache without using VM-test paths.
 
@@ -55,7 +55,7 @@ They assert production bundles carry production environment labels and productio
 
 The VM-only equivalents now exist for production-shaped generated serve, rollback, and loopback API-meta admission. Do not point the GitOps graph at real production host paths or services until the remaining real-host pieces exist:
 
-- A Dolt materialization path that fetches or replicates to an already-warm host-local cache and pins an exact commit before admission.
+- A real production Dolt remote or mirror policy for `fetch_pin`, with operator-selected exact active and retained commits.
 - A rollback set with rooted artifacts and retained CDN roots, validated before active symlink or route handoff.
 - A read-only served-state check that validates status, active, rollback-set, and primary rollback readiness documents.
 - A real-host desired-state package from exact API, Dolt service, site, finalized CDN serving root, and at least one retained rollback release.

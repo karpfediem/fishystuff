@@ -482,6 +482,7 @@ class single_host($st) {
 		api_upstream => $api_upstream,
 		service_name => $api_service,
 		dolt_commit => $active_dolt->commit,
+		dolt_release_ref => $active_dolt_release_ref,
 	})
 
 	if $use_dolt_sql_admission_probe {

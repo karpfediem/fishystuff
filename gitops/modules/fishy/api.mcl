@@ -14,14 +14,16 @@ class candidate_service($st) {
 	$api_upstream str = $st->api_upstream || ""
 	$service_name str = $st->service_name || ""
 	$dolt_commit str = $st->dolt_commit || ""
+	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$write_local_state = fishy_paths.writes_local_state($mode)
 	$enabled = $service_name != ""
 	$state_dir = fishy_paths.state_dir($mode)
 	$config_dir = fmt.printf("%s/api", $state_dir)
 	$config_path = fmt.printf("%s/%s.json", $config_dir, $environment)
 	$env_path = fmt.printf("%s/%s.env", $config_dir, $environment)
-	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"api_bundle\": %s,\n  \"api_upstream\": %s,\n  \"service_name\": %s,\n  \"dolt_commit\": %s,\n  \"state\": \"candidate_api_config\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($api_bundle), fishy_json.quote($api_upstream), fishy_json.quote($service_name), fishy_json.quote($dolt_commit))
-	$env_content = fmt.printf("FISHYSTUFF_RELEASE_ID='%s'\nFISHYSTUFF_RELEASE_IDENTITY='%s'\nFISHYSTUFF_DOLT_COMMIT='%s'\nFISHYSTUFF_DEPLOYMENT_ENVIRONMENT='%s'\n", $release_id, $release_identity, $dolt_commit, $environment)
+	$content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"api_bundle\": %s,\n  \"api_upstream\": %s,\n  \"service_name\": %s,\n  \"dolt_commit\": %s,\n  \"dolt_release_ref\": %s,\n  \"state\": \"candidate_api_config\"\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), fishy_json.quote($api_bundle), fishy_json.quote($api_upstream), fishy_json.quote($service_name), fishy_json.quote($dolt_commit), fishy_json.quote($dolt_release_ref))
+	$default_ref_env = if $dolt_release_ref == "" { "" } else { fmt.printf("FISHYSTUFF_DEFAULT_DOLT_REF='%s'\n", $dolt_release_ref) }
+	$env_content = fmt.printf("FISHYSTUFF_RELEASE_ID='%s'\nFISHYSTUFF_RELEASE_IDENTITY='%s'\nFISHYSTUFF_DOLT_COMMIT='%s'\nFISHYSTUFF_DEPLOYMENT_ENVIRONMENT='%s'\n%s", $release_id, $release_identity, $dolt_commit, $environment, $default_ref_env)
 
 	panic($enabled and (not $write_local_state), "candidate API service is only supported in local writing modes")
 	panic($enabled and ($environment == ""), "candidate API service requires environment")
@@ -34,6 +36,7 @@ class candidate_service($st) {
 	panic($enabled and (len(core_strings.split($release_id, "'")) > 1), "candidate API service release_id must not contain single quotes")
 	panic($enabled and (len(core_strings.split($release_identity, "'")) > 1), "candidate API service release_identity must not contain single quotes")
 	panic($enabled and (len(core_strings.split($dolt_commit, "'")) > 1), "candidate API service dolt_commit must not contain single quotes")
+	panic($enabled and (len(core_strings.split($dolt_release_ref, "'")) > 1), "candidate API service dolt_release_ref must not contain single quotes")
 	panic($enabled and (len(core_strings.split($service_name, "'")) > 1), "candidate API service name must not contain single quotes")
 
 	if $enabled and $write_local_state {

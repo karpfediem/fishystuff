@@ -428,6 +428,9 @@
               gitRev = "production-local-apply-api-meta";
               doltCommit = "production-local-apply-api-meta";
               doltBranchContext = "main";
+              doltMaterialization = "fetch_pin";
+              doltRemoteUrl = "file:///var/lib/fishystuff/gitops-production-dolt-remote";
+              doltCacheDir = "/var/lib/fishystuff/gitops/dolt-cache/fishystuff";
               apiClosure = apiServiceBundleProduction;
               siteClosure = siteContent;
               cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
@@ -439,6 +442,7 @@
                   gitRev = "previous-production-local-apply-api-meta";
                   doltCommit = "previous-production-local-apply-api-meta";
                   doltBranchContext = "main";
+                  doltReleaseRef = "fishystuff/gitops/previous-production-release";
                   apiClosure = apiServiceBundleProduction;
                   siteClosure = siteContentStableMapRuntime;
                   cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
@@ -933,8 +937,13 @@
                 and .environments.production.admission_probe.url == "http://127.0.0.1:18092/api/v1/meta"
                 and .releases[$release_id].generation == 4
                 and .releases[$release_id].dolt.branch_context == "main"
+                and .releases[$release_id].dolt.materialization == "fetch_pin"
+                and .releases[$release_id].dolt.remote_url == "file:///var/lib/fishystuff/gitops-production-dolt-remote"
+                and .releases[$release_id].dolt.cache_dir == "/var/lib/fishystuff/gitops/dolt-cache/fishystuff"
                 and .releases."previous-production-release".generation == 3
                 and .releases."previous-production-release".dolt.branch_context == "main"
+                and .releases."previous-production-release".dolt.materialization == "fetch_pin"
+                and .releases."previous-production-release".dolt.release_ref == "fishystuff/gitops/previous-production-release"
                 and ([.releases[$release_id].closures[] | .enabled] | all)
                 and ([.releases."previous-production-release".closures[] | .enabled] | all)
               ' ${gitopsDesiredStateProductionApiMetaFixture}
