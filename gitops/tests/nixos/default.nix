@@ -158,6 +158,10 @@
     inherit gitopsSrc mgmtPackage pkgs;
   };
 
+  gitops-local-apply-fetch-pin-vm = import ./local-apply-fetch-pin.nix {
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
+  };
+
   gitops-local-apply-http-admission-vm = import ./local-apply-http-admission.nix {
     inherit fishystuffDeployPackage fishystuffServerPackage gitopsSrc mgmtPackage pkgs;
   };

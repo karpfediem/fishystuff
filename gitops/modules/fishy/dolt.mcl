@@ -42,7 +42,7 @@ class materialization($st) {
 	$raw_materialization str = $st->materialization || ""
 	$materialization str = if $raw_materialization == "" { "metadata_only" } else { $raw_materialization }
 	$remote_url str = $st->remote_url || ""
-	$write_vm_state = fishy_paths.is_vm_state($mode)
+	$write_local_state = fishy_paths.writes_local_state($mode)
 	$state_dir = fishy_paths.state_dir($mode)
 	$run_dir = fishy_paths.run_dir($mode)
 	$cache_dir str = $st->cache_dir || fmt.printf("%s/dolt-cache/%s", $state_dir, $repository)
@@ -76,11 +76,11 @@ class materialization($st) {
 	panic(len(core_strings.split($release_id, "'")) > 1, "dolt materialization release_id must not contain single quotes")
 	panic(($materialization == "fetch_pin") and ($cache_dir == ""), fmt.printf("release %s fetch_pin dolt materialization requires cache_dir", $release_id))
 	panic(($materialization == "fetch_pin") and ($release_ref == ""), fmt.printf("release %s fetch_pin dolt materialization requires release_ref", $release_id))
-	panic(($materialization == "fetch_pin") and ($mode != "validate") and (not $write_vm_state), "fetch_pin dolt materialization is implemented only for validate and VM test modes")
+	panic(($materialization == "fetch_pin") and ($mode != "validate") and (not $write_local_state), "fetch_pin dolt materialization is implemented only for local writing modes")
 	panic(($materialization == "replica_pin") and ($mode != "validate"), fmt.printf("release %s replica_pin dolt materialization is validate-only until implemented", $release_id))
 	panic(($materialization == "snapshot") and ($mode != "validate"), fmt.printf("release %s snapshot dolt materialization is validate-only until implemented", $release_id))
 
-	if $write_vm_state and ($materialization == "fetch_pin") {
+	if $write_local_state and ($materialization == "fetch_pin") {
 		file "${request_dir}/" {
 			state => "exists",
 			mode => "0755",

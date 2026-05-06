@@ -39,6 +39,7 @@ nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-candidate-vm
+nix build .#checks.x86_64-linux.gitops-local-apply-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-local-apply-http-admission-vm
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
@@ -97,6 +98,7 @@ just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test local-apply-without-optin-refusal
 just gitops-vm-test local-apply-candidate
+just gitops-vm-test local-apply-fetch-pin
 just gitops-vm-test local-apply-http-admission
 just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
@@ -161,6 +163,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-local-apply-without-optin-refusal` boots a local NixOS VM and checks that `local-apply` mode is refused without `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, before any GitOps, service, or served state paths are written.
 
 `gitops-local-apply-candidate-vm` boots a local NixOS VM and runs a non-serving `local-apply` candidate with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. It checks that candidate/status facts are written under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, that VM-test paths are not used, and that `/srv/fishystuff` and real FishyStuff services remain untouched.
+
+`gitops-local-apply-fetch-pin-vm` boots a local NixOS VM and runs a non-serving `local-apply` candidate with `fetch_pin` Dolt materialization. It creates a local file-backed Dolt remote, pins one exact commit, then pushes and pins a second exact commit using the same local cache under `/var/lib/fishystuff/gitops/dolt-cache`.
 
 `gitops-local-apply-http-admission-vm` boots a local NixOS VM, defines a loopback candidate API service backed by a tiny VM-local Dolt SQL fixture, and runs a serving `local-apply` candidate with `api_upstream`, `api_service`, and `admission_probe.kind = "api_meta"`. It checks that mgmt writes candidate API JSON and env config, starts the isolated real `fishystuff_server` service, probes `/api/v1/meta` for the exact release ID, release identity, Dolt commit, and fixture-backed meta rows, switches desired state to a second release, then rolls back to the retained first release. It verifies the same candidate service is restarted before each new identity can pass admission, publishes served status, active symlinks, route document, rollback transition fields, rollback-set state, and candidate instance/admission documents under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, and confirms VM-test paths, `/srv/fishystuff`, and real FishyStuff service names remain untouched.
 

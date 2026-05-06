@@ -363,7 +363,7 @@ class single_host($st) {
 			served => $served,
 		})
 
-		if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
+		if $write_local_state and ($retained_dolt_materialization == "fetch_pin") {
 			if $active_dolt_materialization == "fetch_pin" {
 				if $use_dolt_sql_admission_probe {
 					Exec["${dolt_admission_exec_name}"] -> Exec["${retained_dolt_exec_name}"]
@@ -404,7 +404,7 @@ class single_host($st) {
 				served => $served,
 			})
 
-			if $write_vm_state and ($retained_dolt_materialization == "fetch_pin") {
+			if $write_local_state and ($retained_dolt_materialization == "fetch_pin") {
 				Exec["${retained_dolt_exec_name}"] -> File["${rollback_path}"]
 			}
 		}
@@ -623,7 +623,7 @@ class single_host($st) {
 		failure_reason => if $admission_failed { "admission_failed" } else { "" },
 	})
 
-	if $write_vm_state and ($active_dolt_materialization == "fetch_pin") {
+	if $write_local_state and ($active_dolt_materialization == "fetch_pin") {
 		if $use_dolt_sql_admission_probe {
 			Exec["${dolt_exec_name}"] -> Exec["${dolt_admission_exec_name}"]
 			Exec["${dolt_admission_exec_name}"] -> File["${status_path}"]

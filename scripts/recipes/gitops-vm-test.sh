@@ -80,6 +80,9 @@ case "$test_name" in
   local-apply-candidate)
     check_attr="gitops-local-apply-candidate-vm"
     ;;
+  local-apply-fetch-pin)
+    check_attr="gitops-local-apply-fetch-pin-vm"
+    ;;
   local-apply-http-admission)
     check_attr="gitops-local-apply-http-admission-vm"
     ;;
@@ -118,7 +121,7 @@ case "$test_name" in
     ;;
   *)
     echo "unknown gitops VM test: $test_name" >&2
-    echo "known tests: empty-unify, single-host-candidate, dolt-fetch-pin, dolt-admission-pin, served-retained-dolt-fetch-pin, multi-environment-candidates, multi-environment-served, closure-roots, unused-release-closure-noop, served-closure-roots, json-status-escaping, served-candidate, generated-served-candidate, production-vm-serve-fixture, production-rollback-transition, production-api-meta, served-symlink-transition, served-caddy-handoff, served-caddy-rollback-transition, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, local-apply-without-optin-refusal, local-apply-candidate, local-apply-http-admission, missing-active-artifact-refusal, missing-retained-artifact-refusal, missing-retained-release-refusal, no-retained-release-refusal, active-retained-release-refusal, rollback-transition-retention-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
+    echo "known tests: empty-unify, single-host-candidate, dolt-fetch-pin, dolt-admission-pin, served-retained-dolt-fetch-pin, multi-environment-candidates, multi-environment-served, closure-roots, unused-release-closure-noop, served-closure-roots, json-status-escaping, served-candidate, generated-served-candidate, production-vm-serve-fixture, production-rollback-transition, production-api-meta, served-symlink-transition, served-caddy-handoff, served-caddy-rollback-transition, served-rollback-transition, failed-candidate, failed-served-candidate-refusal, local-apply-without-optin-refusal, local-apply-candidate, local-apply-fetch-pin, local-apply-http-admission, missing-active-artifact-refusal, missing-retained-artifact-refusal, missing-retained-release-refusal, no-retained-release-refusal, active-retained-release-refusal, rollback-transition-retention-refusal, raw-cdn-serve-refusal, missing-cdn-runtime-file-refusal, missing-cdn-serving-manifest-entry-refusal, missing-cdn-retained-root-refusal, wrong-cdn-retained-root-refusal" >&2
     exit 2
     ;;
 esac

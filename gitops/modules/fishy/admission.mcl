@@ -19,8 +19,9 @@ class fixture($st) {
 	$requires_serving_artifacts bool = $st->requires_serving_artifacts || false
 	$retained_release_count int = $st->retained_release_count || 0
 	$state str = $st->state || "not_run"
-	$write_vm_state = ($mode == "vm-test") or ($mode == "vm-test-closures")
-	$path = fmt.printf("/run/fishystuff/gitops-test/admission/%s.json", $environment)
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$status_dir = fmt.printf("%s/admission", fishy_paths.run_dir($mode))
+	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
 	$site_index_path = fmt.printf("%s/index.html", $site_content)
 	$cdn_runtime_manifest_path = fmt.printf("%s/map/runtime-manifest.json", $cdn_runtime_content)
 	$cdn_serving_manifest_path = fmt.printf("%s/cdn-serving-manifest.json", $cdn_runtime_content)
@@ -108,19 +109,19 @@ class fixture($st) {
 	panic($requires_serving_artifacts and (not $cdn_serving_manifest_lists_runtime_manifest), "serving artifact admission requires CDN serving manifest to list runtime-manifest.json")
 	panic($requires_serving_artifacts and ((not $cdn_serving_manifest_lists_module) or (not $cdn_serving_manifest_lists_wasm)), "serving artifact admission requires CDN serving manifest to list selected runtime module and wasm")
 
-	if $write_vm_state {
-		file "/run/fishystuff/gitops-test/admission/" {
+	if $write_local_state {
+		file "${status_dir}/" {
 			state => "exists",
 			mode => "0755",
 		}
 
-		file "${path}" {
+		file "${status_path}" {
 			state => "exists",
 			content => $content,
 			mode => "0644",
 		}
 
-		File["/run/fishystuff/gitops-test/admission/"] -> File["${path}"]
+		File["${status_dir}/"] -> File["${status_path}"]
 	}
 }
 

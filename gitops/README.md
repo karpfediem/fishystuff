@@ -46,6 +46,7 @@ just gitops-vm-test failed-candidate
 just gitops-vm-test failed-served-candidate-refusal
 just gitops-vm-test local-apply-without-optin-refusal
 just gitops-vm-test local-apply-candidate
+just gitops-vm-test local-apply-fetch-pin
 just gitops-vm-test local-apply-http-admission
 just gitops-vm-test missing-active-artifact-refusal
 just gitops-vm-test missing-retained-artifact-refusal
@@ -88,6 +89,7 @@ nix build .#checks.x86_64-linux.gitops-failed-candidate-vm
 nix build .#checks.x86_64-linux.gitops-failed-served-candidate-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-without-optin-refusal
 nix build .#checks.x86_64-linux.gitops-local-apply-candidate-vm
+nix build .#checks.x86_64-linux.gitops-local-apply-fetch-pin-vm
 nix build .#checks.x86_64-linux.gitops-local-apply-http-admission-vm
 nix build .#checks.x86_64-linux.gitops-missing-active-artifact-refusal
 nix build .#checks.x86_64-linux.gitops-missing-retained-artifact-refusal
@@ -180,6 +182,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-local-apply-without-optin-refusal` proves `local-apply` desired state is refused unless the operator sets `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`. This keeps the still-scaffolded host-local mode from mutating a machine because a fixture or operator file used the wrong mode.
 
 `gitops-local-apply-candidate-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` and a non-serving `local-apply` candidate. It proves local-apply writes candidate/status facts under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, not the VM-test directories, while still avoiding `/srv/fishystuff` and real service mutation.
+
+`gitops-local-apply-fetch-pin-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, creates a local file-backed Dolt remote, and proves `fetch_pin` uses `/var/lib/fishystuff/gitops/dolt-cache` plus `/run/fishystuff/gitops/dolt` in local-apply mode. It fetches a second commit into the same cache to prove updates do not reclone from scratch.
 
 `gitops-local-apply-http-admission-vm` boots one local NixOS VM with `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, defines a loopback-only candidate API service backed by a tiny VM-local Dolt SQL fixture, and serves a local-apply candidate only after mgmt starts the `api_service` and `fishystuff_deploy http probe-json-scalars` verifies the real `fishystuff_server` `/api/v1/meta` reports the exact release ID, release identity, Dolt commit, and fixture-backed meta rows under the declared `api_upstream`. The candidate service reads the GitOps-written `/var/lib/fishystuff/gitops/api/<environment>.env` `EnvironmentFile`. The test switches desired state to a second release, then expresses rollback back to the retained first release, reusing the same service name and verifying mgmt restarts the candidate API before admission can pass for each new identity. It verifies status, active symlinks, route selection, rollback transition fields, rollback-set state, candidate API config, and admission request/status files under `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`, while still avoiding VM-test paths, `/srv/fishystuff`, and real FishyStuff services.
 

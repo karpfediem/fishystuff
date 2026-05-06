@@ -36,6 +36,8 @@ nix build .#checks.x86_64-linux.gitops-production-api-meta-vm --no-link
 
 It uses production API/Dolt service bundles and production site content, but keeps real serving confined to local fixtures: `vm-test` for symlink/rollback shape and `local-apply` only inside the NixOS VM for loopback API admission. The rollback check proves the production-shaped transition back to `previous-production-release` retains the exact candidate release ID and its CDN root. The API-meta check proves `/api/v1/meta` must report the exact release identity and Dolt commit before served state publishes. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing. The VM checks prove the serve, rollback, and API admission shapes write only local VM state.
 
+`gitops-local-apply-fetch-pin-vm` separately proves that `fetch_pin` can run in local-apply mode against a warm host-local cache without using VM-test paths.
+
 ## Static Separation Checks
 
 These checks guard common beta/prod mixups in service bundles:
