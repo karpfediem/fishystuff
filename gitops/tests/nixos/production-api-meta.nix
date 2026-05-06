@@ -230,10 +230,10 @@ pkgs.testers.runNixOSTest {
             "git_rev": "production-local-apply-api-meta",
             "dolt_commit": "$active_commit",
             "closures": {{
-              "api": {{"enabled": true, "store_path": "${apiArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{release_id}/api"}},
-              "site": {{"enabled": true, "store_path": "${siteArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{release_id}/site"}},
-              "cdn_runtime": {{"enabled": true, "store_path": "${cdnRuntimeArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{release_id}/cdn-runtime"}},
-              "dolt_service": {{"enabled": true, "store_path": "${doltServiceArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{release_id}/dolt-service"}}
+              "api": {{"enabled": true, "store_path": "${apiArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{release_id}/api"}},
+              "site": {{"enabled": true, "store_path": "${siteArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{release_id}/site"}},
+              "cdn_runtime": {{"enabled": true, "store_path": "${cdnRuntimeArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{release_id}/cdn-runtime"}},
+              "dolt_service": {{"enabled": true, "store_path": "${doltServiceArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{release_id}/dolt-service"}}
             }},
             "dolt": {{
               "repository": "fishystuff/fishystuff",
@@ -251,10 +251,10 @@ pkgs.testers.runNixOSTest {
             "git_rev": "previous-production-local-apply-api-meta",
             "dolt_commit": "$previous_commit",
             "closures": {{
-              "api": {{"enabled": true, "store_path": "${previousApiArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{previous_release_id}/api"}},
-              "site": {{"enabled": true, "store_path": "${previousSiteArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{previous_release_id}/site"}},
-              "cdn_runtime": {{"enabled": true, "store_path": "${previousCdnRuntimeArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{previous_release_id}/cdn-runtime"}},
-              "dolt_service": {{"enabled": true, "store_path": "${previousDoltServiceArtifact}", "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/{previous_release_id}/dolt-service"}}
+              "api": {{"enabled": true, "store_path": "${previousApiArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{previous_release_id}/api"}},
+              "site": {{"enabled": true, "store_path": "${previousSiteArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{previous_release_id}/site"}},
+              "cdn_runtime": {{"enabled": true, "store_path": "${previousCdnRuntimeArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{previous_release_id}/cdn-runtime"}},
+              "dolt_service": {{"enabled": true, "store_path": "${previousDoltServiceArtifact}", "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/{previous_release_id}/dolt-service"}}
             }},
             "dolt": {{
               "repository": "fishystuff/fishystuff",

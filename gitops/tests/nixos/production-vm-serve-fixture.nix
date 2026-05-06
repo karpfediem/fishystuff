@@ -96,6 +96,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test ! -e /var/lib/fishystuff/gitops")
     machine.succeed("test ! -e /var/lib/fishystuff/mgmt")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops/gcroots")
+    machine.succeed("test ! -e /nix/var/nix/gcroots/fishystuff/gitops")
     machine.succeed("! find /var/lib/fishystuff/gitops-test /run/fishystuff/gitops-test -type f -print0 | xargs -0 grep -E 'beta\\.fishystuff\\.fish|cloudflare|hcloud|ssh '")
   '';
 }

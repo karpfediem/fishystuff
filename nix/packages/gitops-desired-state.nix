@@ -66,7 +66,7 @@ let
       enabled = value != null;
       store_path = optionalStorePath value;
       gcroot_path =
-        if value == null then "" else "/var/lib/fishystuff/gitops/gcroots/${releaseKey}/${gcrootName}";
+        if value == null then "" else "/nix/var/nix/gcroots/fishystuff/gitops/${releaseKey}/${gcrootName}";
     };
   mkRelease =
     release:

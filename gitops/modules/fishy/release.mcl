@@ -58,6 +58,7 @@ class candidate($st) {
 	include fishy_nix.artifact(struct {
 		mode => $mode,
 		name => fmt.printf("%s-api", $release_id),
+		release_id => $release_id,
 		store_path => $api_artifact->store_path,
 		gcroot_path => $api_artifact->gcroot_path,
 		enabled => $api_artifact->enabled,
@@ -66,6 +67,7 @@ class candidate($st) {
 	include fishy_nix.artifact(struct {
 		mode => $mode,
 		name => fmt.printf("%s-site", $release_id),
+		release_id => $release_id,
 		store_path => $site_artifact->store_path,
 		gcroot_path => $site_artifact->gcroot_path,
 		enabled => $site_artifact->enabled,
@@ -74,6 +76,7 @@ class candidate($st) {
 	include fishy_nix.artifact(struct {
 		mode => $mode,
 		name => fmt.printf("%s-cdn-runtime", $release_id),
+		release_id => $release_id,
 		store_path => $cdn_runtime_artifact->store_path,
 		gcroot_path => $cdn_runtime_artifact->gcroot_path,
 		enabled => $cdn_runtime_artifact->enabled,
@@ -82,6 +85,7 @@ class candidate($st) {
 	include fishy_nix.artifact(struct {
 		mode => $mode,
 		name => fmt.printf("%s-dolt-service", $release_id),
+		release_id => $release_id,
 		store_path => $dolt_service_artifact->store_path,
 		gcroot_path => $dolt_service_artifact->gcroot_path,
 		enabled => $dolt_service_artifact->enabled,

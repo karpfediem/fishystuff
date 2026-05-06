@@ -18,22 +18,22 @@
         "api": {
           "enabled": true,
           "store_path": "/nix/store/example-api",
-          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/api"
+          "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/example-release/api"
         },
         "site": {
           "enabled": true,
           "store_path": "/nix/store/example-site",
-          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/site"
+          "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/example-release/site"
         },
         "cdn_runtime": {
           "enabled": true,
           "store_path": "/nix/store/example-cdn-runtime",
-          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/cdn-runtime"
+          "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/example-release/cdn-runtime"
         },
         "dolt_service": {
           "enabled": true,
           "store_path": "/nix/store/example-dolt-service",
-          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/dolt-service"
+          "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/example-release/dolt-service"
         }
       },
       "dolt": {

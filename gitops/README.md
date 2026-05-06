@@ -234,7 +234,7 @@ The minimal JSON shape is:
         "api": {
           "enabled": true,
           "store_path": "/nix/store/example-api",
-          "gcroot_path": "/var/lib/fishystuff/gitops/gcroots/example-release/api"
+          "gcroot_path": "/nix/var/nix/gcroots/fishystuff/gitops/example-release/api"
         }
       },
       "dolt": {
@@ -284,7 +284,7 @@ Supported modes:
 
 - `validate`: decode, shape, and unify only. It does not write local state and does not run admission.
 - `vm-test`: create only VM-local files under `/var/lib/fishystuff/gitops-test` and `/run/fishystuff/gitops-test`.
-- `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/var/lib/fishystuff/gitops-test/gcroots`.
+- `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/nix/var/nix/gcroots/fishystuff/gitops-test`.
 - `local-apply`: opt-in host-local mode. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set. Candidate/status facts, served symlinks, rollback documents, and route handoff files use `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`. Serving with HTTP admission requires `api_upstream`, and the admission URL must target that upstream. Current probe support is loopback-only.
 
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
@@ -363,7 +363,7 @@ desired state object
 
 The current `release_id` is the desired-state release key. Generated desired state derives that key from a content hash of the exact release tuple; fixture desired state may still use readable names such as `example-release`. The graph also emits `release_identity`, a deterministic string derived from the release key, generation, Git revision, Dolt identity/mode, and closure paths. The tuple is recorded directly in candidate, admission, active, and status documents so mismatched activation inputs are visible.
 
-All release objects are checked as catalog entries, but artifact realization is intentionally narrower: `nix:closure` and `nix:gcroot` are emitted only for releases selected by enabled environments as `active_release` or listed in `retained_releases`. This lets desired state carry preview, future, or stale release metadata without trying to root unused artifacts.
+All release objects are checked as catalog entries, but artifact realization is intentionally narrower: `nix:closure` verification and managed Nix GC-root symlinks are emitted only for releases selected by enabled environments as `active_release` or listed in `retained_releases`. This lets desired state carry preview, future, or stale release metadata without trying to root unused artifacts.
 
 ## Release Artifact Contract
 
@@ -386,7 +386,7 @@ The `cdn_runtime` closure is expected to be the CDN serving root that Caddy can 
 
 The rollback set is also published locally as an index document at `/var/lib/fishystuff/gitops-test/rollback-set/<environment>.json` in VM modes, plus one retained-member document under `/var/lib/fishystuff/gitops-test/rollback-set/<environment>/<release-id>.json`. The index records the selected retained release IDs and member document paths. Each member document records the retained release's exact API, Dolt service, site, CDN runtime, Dolt commit, Dolt materialization/cache/ref tuple, and Dolt status path when `fetch_pin` is used.
 
-For serving desired state, both the active release and each retained rollback release must include non-empty `store_path` values for `api`, `dolt_service`, `site`, and `cdn_runtime`. In plain `vm-test` mode these paths are not realized/rooted, but they still make the exact deployment tuple explicit. `vm-test-closures` and future local/production modes can add realization and gcroot guarantees on top of the same tuple.
+For serving desired state, both the active release and each retained rollback release must include non-empty `store_path` values for `api`, `dolt_service`, `site`, and `cdn_runtime`. In plain `vm-test` mode these paths are not realized/rooted, but they still make the exact deployment tuple explicit. `vm-test-closures` and future local/production modes add realization and GC-root guarantees on top of the same tuple. Serving modes that manage closure roots also require those active and retained artifacts to be explicitly enabled.
 
 Source maps are public in production because the project is open source. They are emitted with content-hashed filenames and retained as immutable CDN assets, but generated HTML/runtime manifests do not eagerly reference them, so normal users do not fetch them.
 
@@ -394,7 +394,7 @@ Source maps are public in production because the project is open source. They ar
 
 This graph does not import Hetzner, Cloudflare, or SSH providers. It does not call deploy scripts. It does not start FishyStuff system services. The VM fixture disables closure realization, so it never tries to realize fake `/nix/store` paths.
 
-`gitops/modules/fishy/nix.mcl` emits `nix:closure` and `nix:gcroot` only in `vm-test-closures` and future `local-apply` mode. In `validate` and plain `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix primitives needed to type-check this graph.
+`gitops/modules/fishy/nix.mcl` emits `nix:closure` verification and file-managed GC-root symlinks only in `vm-test-closures` and future `local-apply` mode. The symlinks live under `/nix/var/nix/gcroots/fishystuff/gitops-test/<release>/...` in closure VM tests and `/nix/var/nix/gcroots/fishystuff/gitops/<release>/...` in local-apply mode, so they are real Nix GC roots rather than ordinary state-file links. In `validate` and plain `vm-test`, enabled artifacts are validation no-ops. The flake checks and `gitops-unify` default to the pinned local `~/code/mgmt-fishystuff-beta/` commit recorded in `flake.lock`/`scripts/recipes/gitops-unify.sh` because it contains the integrated Nix closure primitive needed to type-check this graph.
 
 The GitOps flake checks apply `nix/patches/mgmt-recwatch-bound-watch-path-index.patch` to that pinned mgmt package. The patch is a small local backport from the adjacent mgmt checkout that prevents a recursive watcher index panic while the graph creates nested local state directories. The MCL graph also creates explicit parent directories and avoids recursive directory management for GitOps status trees.
 
@@ -406,9 +406,9 @@ The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM
 
 `gitops-multi-environment-served-vm` boots one local NixOS VM with two served preview-like environments on the same host. It proves active symlinks are environment-scoped under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}` so one served preview cannot overwrite another preview's selected site/CDN tuple.
 
-`gitops-served-closure-roots-vm` combines the served candidate shape with `vm-test-closures`. It verifies and roots active and retained rollback API, Dolt service, site, and CDN artifacts under `/var/lib/fishystuff/gitops-test/gcroots`, then checks the VM-local active symlinks and route selection. It still does not write `/srv/fishystuff` or start real FishyStuff services.
+`gitops-served-closure-roots-vm` combines the served candidate shape with `vm-test-closures`. It verifies and roots active and retained rollback API, Dolt service, site, and CDN artifacts under `/nix/var/nix/gcroots/fishystuff/gitops-test`, confirms Nix reports those paths as GC roots, then checks the VM-local active symlinks and route selection. It still does not write `/srv/fishystuff` or start real FishyStuff services.
 
-The closure and gcroot resources are both declared for each enabled artifact. A strict `nix:closure -> nix:gcroot` resource edge is intentionally deferred: the pinned mgmt build verified closures but did not progress the dependent gcroot behind that edge in the VM test. Reintroduce that edge only with a VM regression test proving the ordered behavior.
+The originally intended `nix:gcroot` resource is not used by the current graph. The pinned mgmt build created root symlinks but did not unblock dependent publication resources when status/active/route files were ordered behind either `nix:gcroot` or equivalent symlink resources. The current graph keeps the concrete retention guarantee by verifying each closure with `nix:closure` and managing direct symlinks under `/nix/var/nix/gcroots/fishystuff/...`; publication is not yet gated on those symlink resources. Reintroduce an explicit publication dependency only with a VM regression test proving the ordered behavior converges.
 
 `gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`, VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}`, and a route selection document under `/run/fishystuff/gitops-test/routes/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
 

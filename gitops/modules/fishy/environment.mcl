@@ -91,6 +91,7 @@ class single_host($st) {
 	$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
 	$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact
 	$active_dolt_service_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["dolt_service"] || $empty_artifact
+	$requires_managed_closure_roots = $write_local_state and (($mode == "local-apply") or ($mode == "vm-test-closures")) and $environment->serve
 	$active_release_identity str = if $active_release->generation == 0 {
 		""
 	} else {
@@ -208,6 +209,10 @@ class single_host($st) {
 	panic($environment->serve and ($active_site_artifact->store_path == ""), fmt.printf("environment %s serving active release requires site store_path", $environment_name))
 	panic($environment->serve and ($active_cdn_runtime_artifact->store_path == ""), fmt.printf("environment %s serving active release requires cdn_runtime store_path", $environment_name))
 	panic($environment->serve and ($active_dolt_service_artifact->store_path == ""), fmt.printf("environment %s serving active release requires dolt_service store_path", $environment_name))
+	panic($requires_managed_closure_roots and (not $active_api_artifact->enabled), fmt.printf("environment %s serving active release requires enabled api closure", $environment_name))
+	panic($requires_managed_closure_roots and (not $active_site_artifact->enabled), fmt.printf("environment %s serving active release requires enabled site closure", $environment_name))
+	panic($requires_managed_closure_roots and (not $active_cdn_runtime_artifact->enabled), fmt.printf("environment %s serving active release requires enabled cdn_runtime closure", $environment_name))
+	panic($requires_managed_closure_roots and (not $active_dolt_service_artifact->enabled), fmt.printf("environment %s serving active release requires enabled dolt_service closure", $environment_name))
 
 	if $write_local_state {
 		file "/var/lib/fishystuff/" {
@@ -319,6 +324,10 @@ class single_host($st) {
 		panic($environment->serve and ($retained_site_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires site store_path", $environment_name, $retained_release_id))
 		panic($environment->serve and ($retained_cdn_runtime_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires cdn_runtime store_path", $environment_name, $retained_release_id))
 		panic($environment->serve and ($retained_dolt_service_artifact->store_path == ""), fmt.printf("environment %s serving retained release %s requires dolt_service store_path", $environment_name, $retained_release_id))
+		panic($requires_managed_closure_roots and (not $retained_api_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled api closure", $environment_name, $retained_release_id))
+		panic($requires_managed_closure_roots and (not $retained_site_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled site closure", $environment_name, $retained_release_id))
+		panic($requires_managed_closure_roots and (not $retained_cdn_runtime_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled cdn_runtime closure", $environment_name, $retained_release_id))
+		panic($requires_managed_closure_roots and (not $retained_dolt_service_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled dolt_service closure", $environment_name, $retained_release_id))
 
 		include fishy_admission.retained_cdn_root(struct {
 			requires_serving_artifacts => $environment->serve,

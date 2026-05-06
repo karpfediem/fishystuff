@@ -71,7 +71,7 @@ nix:gcroot "<path>" {
 
 Defaults: `state = "exists"`, `gc_roots_dir = "/nix/var/nix/gcroots"`, `store_dir = "/nix/store"`.
 
-The new graph emits these in `vm-test-closures` and future `local-apply` mode. `validate` and plain `vm-test` intentionally no-op closure realization.
+The new graph currently emits `nix:closure` in `vm-test-closures` and future `local-apply` mode, then uses ordinary `file` symlink resources under `/nix/var/nix/gcroots/fishystuff/...` for GC roots. This is deliberate: VM testing showed the pinned mgmt build could create `nix:gcroot`/symlink roots but did not unblock dependent status/active/route publication when those resources were used as publication gates. `validate` and plain `vm-test` intentionally no-op closure realization.
 
 ## Local Files
 

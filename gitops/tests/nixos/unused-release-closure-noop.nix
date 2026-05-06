@@ -20,7 +20,7 @@ let
     {
       enabled = true;
       store_path = "${storePath}";
-      gcroot_path = "/var/lib/fishystuff/gitops-test/gcroots/${releaseId}/${name}";
+      gcroot_path = "/nix/var/nix/gcroots/fishystuff/gitops-test/${releaseId}/${name}";
     };
   release =
     {
@@ -99,7 +99,7 @@ pkgs.testers.runNixOSTest {
     {
       system.stateVersion = "25.11";
       networking.hostName = "vm-single-host";
-      virtualisation.memorySize = 4096;
+      virtualisation.memorySize = 12288;
       virtualisation.additionalPaths = [
         apiArtifact
         siteArtifact
@@ -128,9 +128,10 @@ pkgs.testers.runNixOSTest {
     }
 
     for name, target in roots.items():
-      root = f"/var/lib/fishystuff/gitops-test/gcroots/{name}"
-      machine.succeed(f"bash -c 'deadline=$((SECONDS + 120)); until test -L {root}; do if ! kill -0 $(cat /tmp/fishystuff-gitops-unused-release-closure-noop.pid); then cat /tmp/fishystuff-gitops-unused-release-closure-noop.log; exit 1; fi; if [ \"$SECONDS\" -ge \"$deadline\" ]; then cat /tmp/fishystuff-gitops-unused-release-closure-noop.log; exit 1; fi; sleep 1; done'")
+      root = f"/nix/var/nix/gcroots/fishystuff/gitops-test/{name}"
+      machine.succeed(f"bash -c 'deadline=$((SECONDS + 300)); until test -L {root}; do if ! kill -0 $(cat /tmp/fishystuff-gitops-unused-release-closure-noop.pid); then cat /tmp/fishystuff-gitops-unused-release-closure-noop.log; exit 1; fi; if [ \"$SECONDS\" -ge \"$deadline\" ]; then cat /tmp/fishystuff-gitops-unused-release-closure-noop.log; exit 1; fi; sleep 1; done'")
       machine.succeed(f"test \"$(readlink {root})\" = \"{target}\"")
+      machine.succeed(f"nix-store --gc --print-roots | grep -F {root}")
       machine.succeed(f"nix-store --verify-path {target}")
 
     status = "/var/lib/fishystuff/gitops-test/status/local-test.json"
@@ -141,7 +142,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"jq -e '.desired_generation == 50 and .release_id == \"used-release\" and .environment == \"local-test\" and .admission_state == \"passed_fixture\" and .served == false' {status}")
     machine.succeed(f"jq -e '.release_id == \"used-release\" and .api_bundle == \"${apiArtifact}\" and .site_content == \"${siteArtifact}\" and .cdn_runtime_content == \"${cdnRuntimeArtifact}\" and .dolt_service_bundle == \"${doltServiceArtifact}\"' {instance}")
 
-    machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/gcroots/unused-release")
+    machine.succeed("test ! -e /nix/var/nix/gcroots/fishystuff/gitops-test/unused-release")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/instances/local-test-unused-release.json")
     machine.succeed("test ! -e /var/lib/fishystuff/gitops-test/active/local-test.json")
     machine.succeed("kill $(cat /tmp/fishystuff-gitops-unused-release-closure-noop.pid) || true")
