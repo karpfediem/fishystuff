@@ -30,6 +30,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm
+nix build .#checks.x86_64-linux.gitops-production-api-meta-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
@@ -45,6 +46,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-production-api-meta
 nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-production-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal
@@ -86,6 +88,7 @@ just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test production-vm-serve-fixture
 just gitops-vm-test production-rollback-transition
+just gitops-vm-test production-api-meta
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
 just gitops-vm-test served-caddy-rollback-transition
@@ -141,6 +144,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-production-rollback-transition-vm` boots a local NixOS VM with the generated production rollback desired state. It checks the VM-local `production` served state after rollback, verifies the candidate release remains retained as the primary rollback target, and runs the read-only served-state helper against `environment=production`.
 
+`gitops-production-api-meta-vm` boots a local NixOS VM with the generated production `local-apply` API-meta desired state. It starts an isolated loopback candidate API service backed by a VM-local Dolt SQL fixture on `main`, checks `/api/v1/meta` for the exact release identity and Dolt commit, and verifies the served state remains local to the VM.
+
 `gitops-served-symlink-transition-vm` boots a local NixOS VM and runs two served desired states in sequence. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}` and the route selection document move from the previous release to the candidate release through mgmt reconciliation only.
 
 `gitops-served-caddy-handoff-vm` boots a local NixOS VM, runs Caddy against `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}`, and runs two served desired states in sequence. It checks that Caddy serves the previous release, retained previous CDN assets, the candidate release, and retained candidate CDN assets through stable symlink roots without restarting Caddy.
@@ -174,6 +179,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-desired-state-beta-validate` type-checks the validation-only generated desired-state package from `.#gitops-desired-state-beta-validate`. The generated JSON is built from exact local Nix closure outputs, keeps `cdn_runtime` disabled, keeps `serve: false`, and derives a non-fixture release key from those inputs so `gitops/main.mcl` must select the release named by the enabled environment's `active_release`.
 
 `gitops-desired-state-production-validate` type-checks the production-shaped validation-only generated desired-state package from `.#gitops-desired-state-production-validate`. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, keeps `serve: false`, and does not mutate production.
+
+`gitops-desired-state-production-api-meta` type-checks the generated production-shaped `local-apply` API-meta fixture. It requires `api_upstream`, an isolated candidate API service name, and an `api_meta` admission probe targeting that upstream.
 
 `gitops-desired-state-production-vm-serve-fixture` type-checks a production-shaped `vm-test` serving desired-state package. It uses production API/Dolt service bundles and production site content, but fixture CDN serving roots, and does not mutate production.
 

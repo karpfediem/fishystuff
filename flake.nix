@@ -418,6 +418,45 @@
               mode = "vm-test";
               serve = true;
             };
+          gitopsDesiredStateProductionApiMetaFixture =
+            pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
+              cluster = "production";
+              environment = "production";
+              hostKey = "production-single-host";
+              generation = 4;
+              releaseGeneration = 4;
+              gitRev = "production-local-apply-api-meta";
+              doltCommit = "production-local-apply-api-meta";
+              doltBranchContext = "main";
+              apiClosure = apiServiceBundleProduction;
+              siteClosure = siteContent;
+              cdnRuntimeClosure = gitopsDesiredStateServeFixtureCdn;
+              doltServiceClosure = doltServiceBundleProduction;
+              retainedReleaseObjects = [
+                {
+                  releaseId = "previous-production-release";
+                  generation = 3;
+                  gitRev = "previous-production-local-apply-api-meta";
+                  doltCommit = "previous-production-local-apply-api-meta";
+                  doltBranchContext = "main";
+                  apiClosure = apiServiceBundleProduction;
+                  siteClosure = siteContentStableMapRuntime;
+                  cdnRuntimeClosure = gitopsDesiredStateServeFixturePreviousCdn;
+                  doltServiceClosure = doltServiceBundleProduction;
+                }
+              ];
+              apiService = "fishystuff-gitops-candidate-api-production";
+              apiUpstream = "http://127.0.0.1:18092";
+              admissionProbe = {
+                kind = "api_meta";
+                probe_name = "api-meta";
+                url = "http://127.0.0.1:18092/api/v1/meta";
+                expected_status = 200;
+                timeout_ms = 2000;
+              };
+              mode = "local-apply";
+              serve = true;
+            };
           gitopsDesiredStateVmServeFixture = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "local-test";
             environment = "local-test";
@@ -686,6 +725,19 @@
               candidateCdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixtureCdnCurrent;
               candidateDoltServiceArtifact = doltServiceBundleProduction;
             };
+            productionApiMetaFixture = {
+              desiredState = gitopsDesiredStateProductionApiMetaFixture;
+              apiArtifact = apiServiceBundleProduction;
+              siteArtifact = siteContent;
+              cdnRuntimeArtifact = gitopsDesiredStateServeFixtureCdn;
+              cdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixtureCdnCurrent;
+              doltServiceArtifact = doltServiceBundleProduction;
+              previousApiArtifact = apiServiceBundleProduction;
+              previousCdnRuntimeArtifact = gitopsDesiredStateServeFixturePreviousCdn;
+              previousCdnRuntimeCurrentArtifact = gitopsDesiredStateServeFixturePreviousCdnCurrent;
+              previousDoltServiceArtifact = doltServiceBundleProduction;
+              previousSiteArtifact = siteContentStableMapRuntime;
+            };
           };
           cdnServingRootRetentionCheck =
             let
@@ -854,6 +906,41 @@
               ' ${gitopsDesiredStateProductionRollbackTransitionFixture}
 
               export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateProductionRollbackTransitionFixture}
+              mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
+              touch "$out"
+            '';
+          gitopsDesiredStateProductionApiMetaCheck =
+            pkgs.runCommand "gitops-desired-state-production-api-meta-check" {
+              nativeBuildInputs = [
+                mgmtGitopsPackage
+                pkgs.jq
+              ];
+            } ''
+              set -euo pipefail
+
+              release_id="$(jq -r '.environments.production.active_release' ${gitopsDesiredStateProductionApiMetaFixture})"
+              test "$release_id" != example-release
+              jq -e --arg release_id "$release_id" '
+                .cluster == "production"
+                and .mode == "local-apply"
+                and .generation == 4
+                and .environments.production.serve == true
+                and .environments.production.host == "production-single-host"
+                and .environments.production.retained_releases == ["previous-production-release"]
+                and .environments.production.api_upstream == "http://127.0.0.1:18092"
+                and .environments.production.api_service == "fishystuff-gitops-candidate-api-production"
+                and .environments.production.admission_probe.kind == "api_meta"
+                and .environments.production.admission_probe.url == "http://127.0.0.1:18092/api/v1/meta"
+                and .releases[$release_id].generation == 4
+                and .releases[$release_id].dolt.branch_context == "main"
+                and .releases."previous-production-release".generation == 3
+                and .releases."previous-production-release".dolt.branch_context == "main"
+                and ([.releases[$release_id].closures[] | .enabled] | all)
+                and ([.releases."previous-production-release".closures[] | .enabled] | all)
+              ' ${gitopsDesiredStateProductionApiMetaFixture}
+
+              export FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
+              export FISHYSTUFF_GITOPS_STATE_FILE=${gitopsDesiredStateProductionApiMetaFixture}
               mgmt run --tmp-prefix --no-network --no-pgp lang --only-unify ${./gitops}/main.mcl
               touch "$out"
             '';
@@ -1250,6 +1337,7 @@
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;
             gitops-desired-state-local-apply-rollback-fixture = gitopsDesiredStateLocalApplyRollbackFixture;
+            gitops-desired-state-production-api-meta-fixture = gitopsDesiredStateProductionApiMetaFixture;
             gitops-desired-state-production-rollback-transition-fixture =
               gitopsDesiredStateProductionRollbackTransitionFixture;
             gitops-desired-state-production-validate = gitopsDesiredStateProductionValidate;
@@ -1284,6 +1372,7 @@
               gitops-desired-state-local-apply-rollback = gitopsDesiredStateLocalApplyRollbackCheck;
               gitops-desired-state-active-retained-refusal = gitopsDesiredStateActiveRetainedCheck;
               gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidateCheck;
+              gitops-desired-state-production-api-meta = gitopsDesiredStateProductionApiMetaCheck;
               gitops-desired-state-production-serve-shape-refusal = gitopsDesiredStateProductionServeShapeCheck;
               gitops-desired-state-production-rollback-transition =
                 gitopsDesiredStateProductionRollbackTransitionCheck;

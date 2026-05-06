@@ -5,6 +5,7 @@
   fishystuffDeployPackage,
   gitopsSrc,
   generatedServeFixture,
+  productionApiMetaFixture,
   productionRollbackFixture,
   productionServeFixture,
 }:
@@ -105,6 +106,23 @@
       candidateDoltServiceArtifact
       candidateSiteArtifact
       desiredState
+      ;
+  };
+
+  gitops-production-api-meta-vm = import ./production-api-meta.nix {
+    inherit fishystuffDeployPackage fishystuffServerPackage gitopsSrc mgmtPackage pkgs;
+    inherit (productionApiMetaFixture)
+      apiArtifact
+      cdnRuntimeArtifact
+      cdnRuntimeCurrentArtifact
+      desiredState
+      doltServiceArtifact
+      previousApiArtifact
+      previousCdnRuntimeArtifact
+      previousCdnRuntimeCurrentArtifact
+      previousDoltServiceArtifact
+      previousSiteArtifact
+      siteArtifact
       ;
   };
 

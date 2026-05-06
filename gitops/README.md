@@ -37,6 +37,7 @@ just gitops-vm-test served-candidate
 just gitops-vm-test generated-served-candidate
 just gitops-vm-test production-vm-serve-fixture
 just gitops-vm-test production-rollback-transition
+just gitops-vm-test production-api-meta
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
 just gitops-vm-test served-caddy-rollback-transition
@@ -78,6 +79,7 @@ nix build .#checks.x86_64-linux.gitops-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm
+nix build .#checks.x86_64-linux.gitops-production-api-meta-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
@@ -93,6 +95,7 @@ nix build .#checks.x86_64-linux.gitops-desired-state-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-http-admission-probe
 nix build .#checks.x86_64-linux.gitops-desired-state-beta-validate
 nix build .#checks.x86_64-linux.gitops-desired-state-production-validate
+nix build .#checks.x86_64-linux.gitops-desired-state-production-api-meta
 nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture
 nix build .#checks.x86_64-linux.gitops-desired-state-production-rollback-transition
 nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal
@@ -121,6 +124,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 `.#gitops-desired-state-production-vm-serve-fixture` is a production-shaped VM fixture, not a production deployment. It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. `gitops-desired-state-production-serve-shape-refusal` proves production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 
 `.#gitops-desired-state-production-rollback-transition-fixture` is the production-shaped rollback companion. It serves `previous-production-release`, retains the exact candidate release ID derived from the production serve fixture, uses `dolt.branch_context = "main"` for both releases, and keeps the rolled-away candidate CDN root retained for stale clients.
+
+`.#gitops-desired-state-production-api-meta-fixture` is the production-shaped API admission companion. It is `local-apply`, targets a loopback API upstream, asks mgmt to manage only the isolated candidate API service name, and requires `/api/v1/meta` to report the exact release ID, release identity, and Dolt commit before served state can publish.
 
 Real deployment desired state should import `nix/packages/gitops-desired-state.nix` from an operator/deployment flake and pass exact `doltCommit`, service bundles, site content, and finalized CDN serving roots as Nix values. The generated GitOps validation package intentionally does not use ambient environment variables for those deployment-critical inputs.
 
@@ -157,6 +162,8 @@ Real deployment desired state should import `nix/packages/gitops-desired-state.n
 `gitops-production-vm-serve-fixture-vm` boots a local NixOS VM with the generated `.#gitops-desired-state-production-vm-serve-fixture` JSON. It uses production API/Dolt service bundles and production site content with fixture CDN serving roots, checks served state under the VM-local `production` environment, and asserts `/var/lib/fishystuff/gitops`, `/srv/fishystuff`, and real FishyStuff services remain untouched.
 
 `gitops-production-rollback-transition-vm` boots a local NixOS VM with the generated production rollback desired state. It checks the VM-local `production` served state after rollback, verifies the candidate release remains retained as the primary rollback target, and runs the read-only served-state helper against `environment=production`.
+
+`gitops-production-api-meta-vm` boots a local NixOS VM with the generated production `local-apply` API-meta desired state. It starts an isolated loopback candidate API service backed by a VM-local Dolt SQL fixture on `main`, checks `/api/v1/meta` for the exact release identity and Dolt commit, and verifies the served state remains local to the VM.
 
 `gitops-served-symlink-transition-vm` boots one local NixOS VM, serves one desired state, then serves a second desired state. It proves the VM-local active symlinks and route selection document move by reconciliation through desired state, not by an imperative deployment command.
 

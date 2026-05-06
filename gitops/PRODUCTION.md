@@ -27,12 +27,14 @@ The first production-shaped serving artifact is still VM-only:
 ```bash
 nix build .#checks.x86_64-linux.gitops-desired-state-production-vm-serve-fixture --no-link
 nix build .#checks.x86_64-linux.gitops-desired-state-production-rollback-transition --no-link
+nix build .#checks.x86_64-linux.gitops-desired-state-production-api-meta --no-link
 nix build .#checks.x86_64-linux.gitops-desired-state-production-serve-shape-refusal --no-link
 nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm --no-link
 nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm --no-link
+nix build .#checks.x86_64-linux.gitops-production-api-meta-vm --no-link
 ```
 
-It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. The rollback check proves the production-shaped transition back to `previous-production-release` retains the exact candidate release ID and its CDN root. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing. The VM checks prove the serve and rollback shapes write only VM-local state.
+It uses production API/Dolt service bundles and production site content, but keeps real serving confined to local fixtures: `vm-test` for symlink/rollback shape and `local-apply` only inside the NixOS VM for loopback API admission. The rollback check proves the production-shaped transition back to `previous-production-release` retains the exact candidate release ID and its CDN root. The API-meta check proves `/api/v1/meta` must report the exact release identity and Dolt commit before served state publishes. The refusal check proves production-shaped serving desired state is rejected when rollback retention or the CDN runtime closure is missing. The VM checks prove the serve, rollback, and API admission shapes write only local VM state.
 
 ## Static Separation Checks
 
@@ -47,16 +49,15 @@ nix build .#checks.x86_64-linux.vector-agent-service-bundle .#checks.x86_64-linu
 
 They assert production bundles carry production environment labels and production edge hostnames. The production edge check rejects `beta.fishystuff.fish` in the generated Caddyfile.
 
-## Before GitOps May Serve Production
+## Before GitOps May Serve Real Production
 
-Do not add a production `serve: true` path until all of these exist:
+The VM-only equivalents now exist for production-shaped generated serve, rollback, and loopback API-meta admission. Do not point the GitOps graph at real production host paths or services until the remaining real-host pieces exist:
 
-- A generated production serving desired-state package from exact API, Dolt service, site, finalized CDN serving root, and at least one retained rollback release.
-- A local NixOS VM test that uses the same production-shaped fields but VM-local paths.
-- A loopback admission test for the candidate API that verifies `/api/v1/meta` against the exact release ID, release identity, and Dolt commit.
 - A Dolt materialization path that fetches or replicates to an already-warm host-local cache and pins an exact commit before admission.
 - A rollback set with rooted artifacts and retained CDN roots, validated before active symlink or route handoff.
 - A read-only served-state check that validates status, active, rollback-set, and primary rollback readiness documents.
+- A real-host desired-state package from exact API, Dolt service, site, finalized CDN serving root, and at least one retained rollback release.
+- A real-host service/Caddy handoff that uses production-local paths and does not reuse beta service state.
 
 Activation should still be only the small reconciled switch:
 
