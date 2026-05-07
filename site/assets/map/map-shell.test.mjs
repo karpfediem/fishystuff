@@ -25,6 +25,19 @@ test("map layout stabilizes the full-bleed frame before runtime paint", () => {
   );
 });
 
+test("map layout discovers runtime assets before starting the map app", () => {
+  assert.match(mapLayoutHtml, /window\.__fishystuffMapRuntimePreload/);
+  assert.match(mapLayoutHtml, /runtime-manifest\./);
+  assert.match(mapLayoutHtml, /modulepreload/);
+  assert.match(mapLayoutHtml, /application\/wasm/);
+  assert.match(mapLayoutHtml, /data-fishymap-runtime-preload/);
+  assert.match(mapLayoutHtml, /fetchpriority/);
+  assert.ok(
+    mapLayoutHtml.indexOf("__fishystuffMapRuntimePreload")
+      < mapLayoutHtml.indexOf("map-app-live-entry.js"),
+  );
+});
+
 test("map shell windows are Datastar-driven for open and collapsed state", () => {
   assert.match(
     shellHtml,

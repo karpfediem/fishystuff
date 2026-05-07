@@ -1,7 +1,146 @@
 <extend template="with-nav.shtml">
   <title id="title" :text="$page.custom.getOr('document_title', $page.title)"></title>
   <head id="head">
-    <script>document.documentElement.dataset.mapPage = "true";</script>
+    <script>
+      document.documentElement.dataset.mapPage = "true";
+      (function () {
+        var state = {
+          manifestUrl: "",
+          moduleUrl: "",
+          status: "pending",
+          wasmUrl: "",
+        };
+        window.__fishystuffMapRuntimePreload = state;
+
+        function normalizeBaseUrl(value) {
+          return String(value || "").trim().replace(/\/+$/, "");
+        }
+
+        function isLoopbackHost(hostname) {
+          return hostname === "127.0.0.1" || hostname === "localhost";
+        }
+
+        function normalizeManifestCacheKey(cacheKey) {
+          return String(cacheKey || "")
+            .trim()
+            .replace(/[^A-Za-z0-9._-]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+        }
+
+        function resolveRuntimeBaseUrl() {
+          var runtimeConfig = window.__fishystuffRuntimeConfig || {};
+          var configuredBaseUrl = normalizeBaseUrl(
+            window.__fishystuffCdnBaseUrl || runtimeConfig.cdnBaseUrl,
+          );
+          if (configuredBaseUrl) {
+            return configuredBaseUrl + "/map/";
+          }
+          if (isLoopbackHost(window.location.hostname)) {
+            var protocol = window.location.protocol === "https:" ? "https:" : "http:";
+            return protocol + "//" + window.location.hostname + ":4040/map/";
+          }
+          return "https://cdn.fishystuff.fish/map/";
+        }
+
+        function shouldUseStableManifest(runtimeBaseUrl, cacheKey) {
+          if (!normalizeManifestCacheKey(cacheKey)) {
+            return false;
+          }
+          if (isLoopbackHost(window.location.hostname)) {
+            return true;
+          }
+          try {
+            return isLoopbackHost(new URL(runtimeBaseUrl, window.location.href).hostname);
+          } catch (_error) {
+            return false;
+          }
+        }
+
+        function runtimeManifestUrl(runtimeBaseUrl, cacheKey) {
+          var normalizedCacheKey = normalizeManifestCacheKey(cacheKey);
+          var manifestFileName =
+            normalizedCacheKey && !shouldUseStableManifest(runtimeBaseUrl, cacheKey)
+              ? "runtime-manifest." + normalizedCacheKey + ".json"
+              : "runtime-manifest.json";
+          return new URL(manifestFileName, runtimeBaseUrl).toString();
+        }
+
+        function hasRuntimePreload(href) {
+          var links = document.head.querySelectorAll("link[data-fishymap-runtime-preload]");
+          for (var index = 0; index < links.length; index += 1) {
+            if (links[index].href === href) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function appendRuntimePreload(rel, href, options) {
+          if (!document.head || !href || hasRuntimePreload(href)) {
+            return;
+          }
+          var link = document.createElement("link");
+          link.rel = rel;
+          link.href = href;
+          link.crossOrigin = "anonymous";
+          link.setAttribute("data-fishymap-runtime-preload", "");
+          if (options && options.as) {
+            link.as = options.as;
+          }
+          if (options && options.type) {
+            link.type = options.type;
+          }
+          if (options && options.fetchPriority) {
+            link.fetchPriority = options.fetchPriority;
+            link.setAttribute("fetchpriority", options.fetchPriority);
+          }
+          document.head.appendChild(link);
+        }
+
+        if (typeof window.fetch !== "function") {
+          state.status = "unsupported";
+          return;
+        }
+
+        var runtimeConfig = window.__fishystuffRuntimeConfig || {};
+        var cacheKey = runtimeConfig.mapAssetCacheKey || "";
+        var runtimeBaseUrl = resolveRuntimeBaseUrl();
+        var manifestUrl = runtimeManifestUrl(runtimeBaseUrl, cacheKey);
+        var stableManifest = shouldUseStableManifest(runtimeBaseUrl, cacheKey);
+        state.manifestUrl = manifestUrl;
+        state.status = "manifest-fetching";
+
+        window.fetch(manifestUrl, {
+          cache: normalizeManifestCacheKey(cacheKey) && !stableManifest ? "default" : "no-store",
+        })
+          .then(function (response) {
+            if (!response || !response.ok) {
+              throw new Error("manifest " + (response && response.status ? response.status : "unknown"));
+            }
+            return response.json();
+          })
+          .then(function (manifest) {
+            var modulePath = String(manifest && manifest.module || "").trim();
+            var wasmPath = String(manifest && manifest.wasm || "").trim();
+            if (!modulePath || !wasmPath) {
+              throw new Error("manifest missing runtime assets");
+            }
+            state.moduleUrl = new URL(modulePath, runtimeBaseUrl).toString();
+            state.wasmUrl = new URL(wasmPath, runtimeBaseUrl).toString();
+            appendRuntimePreload("modulepreload", state.moduleUrl, { fetchPriority: "high" });
+            appendRuntimePreload("preload", state.wasmUrl, {
+              as: "fetch",
+              fetchPriority: "high",
+              type: "application/wasm",
+            });
+            state.status = "preload-queued";
+          })
+          .catch(function (error) {
+            state.error = error && error.message ? error.message : String(error || "unknown");
+            state.status = "failed";
+          });
+      })();
+    </script>
     <link rel="stylesheet" href="$site.asset('map/map.css').link()">
     <style>
       #site-footer {
