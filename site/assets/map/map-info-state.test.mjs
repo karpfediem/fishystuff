@@ -727,6 +727,62 @@ test("buildInfoViewModel exposes hotspot detail sections as a dedicated pane", (
   );
 });
 
+test("buildInfoViewModel defaults hotspot-targeted overlap selections to the hotspot pane", () => {
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        detailsTarget: {
+          elementKind: "hotspot",
+          worldX: 50,
+          worldZ: 60,
+          pointKind: "waypoint",
+          pointLabel: "Porgy Hotspot #423",
+        },
+        pointKind: "waypoint",
+        pointLabel: "Porgy Hotspot #423",
+        pointSamples: [
+          {
+            fishId: 10,
+            sampleCount: 2,
+            lastTsUtc: 1_700_000_000,
+            zoneRgbs: [0x39e58d],
+            fullZoneRgbs: [0x39e58d],
+          },
+        ],
+        layerSamples: [
+          {
+            layerId: "hotspots",
+            layerName: "Hotspots",
+            kind: "hotspot",
+            targets: [{ key: "hotspot", label: "Porgy Hotspot #423", worldX: 50, worldZ: 60 }],
+            detailSections: [
+              {
+                id: "hotspot",
+                kind: "hotspot",
+                title: "Hotspot",
+                facts: [
+                  { key: "hotspot_id", label: "Hotspot", value: "423", icon: "map-pin" },
+                  { key: "primary_fish", label: "Fish", value: "Porgy", icon: "fish-fill" },
+                  { key: "primary_fish_item_id", label: "Fish Item", value: "8207", icon: "fish-fill" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      catalog: {
+        fish: [{ fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" }],
+        layers: [{ layerId: "hotspots", displayOrder: 42 }],
+      },
+    },
+  });
+
+  assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["samples", "hotspot"]);
+  assert.equal(viewModel.descriptor.title, "Porgy Hotspot #423");
+  assert.equal(viewModel.activePaneId, "hotspot");
+  assert.equal(viewModel.activePane.sections[0].kind, "hotspot");
+});
+
 test("buildInfoViewModel keeps hotspot contents-group branches and defaults open", () => {
   globalThis.window = globalThis.window || {};
   globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;

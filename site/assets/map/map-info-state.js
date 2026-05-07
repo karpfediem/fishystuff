@@ -185,6 +185,21 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
   return mapText("info.window_title");
 }
 
+function preferredPaneIdFromSelection(selection) {
+  switch (selectionTargetElementKind(selection)) {
+    case "hotspot":
+      return "hotspot";
+    case "point":
+      return "samples";
+    default:
+      return "";
+  }
+}
+
+function paneIdExists(panes, paneId) {
+  return Boolean(paneId) && panes.some((pane) => pane.id === paneId);
+}
+
 function zoneLootConditionKey(group, index) {
   const explicitKey = trimString(group?.conditionOptionKey);
   if (explicitKey) {
@@ -1076,10 +1091,14 @@ export function buildInfoViewModel(
   ].filter((pane) => pane && pane.sections.length > 0);
 
   const requestedPaneId = trimString(signals?._map_ui?.windowUi?.zoneInfo?.tab);
+  const preferredPaneId = preferredPaneIdFromSelection(selection);
+  const fallbackPaneId = paneIdExists(panes, preferredPaneId)
+    ? preferredPaneId
+    : panes[0]?.id || "";
   const activePaneId =
-    requestedPaneId && panes.some((pane) => pane.id === requestedPaneId)
+    paneIdExists(panes, requestedPaneId)
       ? requestedPaneId
-      : panes[0]?.id || "";
+      : fallbackPaneId;
   const pointKind = normalizePointKind(selection?.pointKind);
   const statusDescriptor = selectionStatusDescriptor(selection, layerSamples);
   const overviewRows = buildOverviewRowsForLayerSamples(layerSamples, {
