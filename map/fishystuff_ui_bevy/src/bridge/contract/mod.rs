@@ -576,6 +576,15 @@ mod tests {
     }
 
     #[test]
+    fn first_frame_event_serializes_browser_facing_kebab_case_tag() {
+        let json = serde_json::to_string(&FishyMapOutputEvent::FirstFrame { version: 1 })
+            .expect("serialize");
+
+        assert!(json.contains(r#""type":"first-frame""#));
+        assert!(json.contains(r#""version":1"#));
+    }
+
+    #[test]
     fn state_snapshot_serializes_zone_stats_in_selection() {
         let mut snapshot = FishyMapStateSnapshot::default();
         snapshot.selection.zone_stats = Some(FishyMapZoneStatsSnapshot {

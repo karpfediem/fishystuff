@@ -292,6 +292,47 @@ test("map loading overlay reports progress and waits for first paint before hidi
   }
 });
 
+test("map loading overlay completes ready snapshots without a pushed first-frame event", () => {
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalSetTimeout = globalThis.setTimeout;
+  const scheduledFrames = [];
+  const timers = [];
+  globalThis.requestAnimationFrame = (callback) => {
+    scheduledFrames.push(callback);
+    return scheduledFrames.length;
+  };
+  globalThis.setTimeout = (callback) => {
+    timers.push(callback);
+    return timers.length;
+  };
+
+  try {
+    const { shell, overlay, stage, progress } = createFakeLoadingShell();
+    const controller = createMapLoadingOverlayController(shell);
+
+    controller.updateFromSnapshot({
+      ready: true,
+      statuses: {
+        metaStatus: "meta: loaded",
+      },
+    });
+
+    assert.equal(stage.textContent, "Drawing first frame...");
+    assert.equal(progress.getAttribute("value"), "98");
+    assert.equal(scheduledFrames.length, 1);
+    scheduledFrames.shift()();
+    scheduledFrames.shift()();
+    assert.equal(stage.textContent, "Map ready");
+    assert.equal(progress.getAttribute("value"), "100");
+    timers.shift()();
+    assert.equal(shell.dataset.mapLoading, "hidden");
+    assert.equal(overlay.classList.contains("is-hidden"), true);
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
 test("apiFailureStatusLines selects retrying API statuses", () => {
   assert.deepEqual(apiFailureStatusLines({
     metaStatus: "meta: request failed; retrying in 2s (Failed to fetch)",

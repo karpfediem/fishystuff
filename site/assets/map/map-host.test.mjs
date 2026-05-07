@@ -2900,6 +2900,64 @@ test("loadMapRuntimeModule streams wasm progress separately from module import",
   );
 });
 
+test("bridge reports wasm startup progress before completing on first frame", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const progress = [];
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: ["zones"] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: ["restore"], layers: [], patches: [], fish: [] },
+        statuses: { metaStatus: "meta: loaded" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    container.addEventListener(FISHYMAP_EVENTS.loadProgress, (event) => {
+      progress.push(event.detail);
+    });
+    const firstFrameEvent = new Promise((resolve) => {
+      container.addEventListener(FISHYMAP_EVENTS.firstFrame, (event) => resolve(event.detail), {
+        once: true,
+      });
+    });
+
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    assert.ok(progress.some((entry) => entry.stage === "wasm-compile" && entry.progress === 0.82));
+    assert.ok(progress.some((entry) => entry.stage === "renderer-start" && entry.progress === 0.9));
+    assert.ok(
+      progress.some((entry) => entry.stage === "runtime-bootstrap" && entry.progress === 0.96),
+    );
+    assert.equal(progress.some((entry) => entry.stage === "first-paint"), false);
+
+    wasm.calls.sink(JSON.stringify({ type: "first-frame", version: 1 }));
+    const detail = await firstFrameEvent;
+    assert.equal(detail.type, "first-frame");
+    assert.equal(detail.state.ready, true);
+    assert.ok(progress.some((entry) => entry.stage === "first-paint" && entry.progress === 0.98));
+    assert.ok(bridge.getPerformanceSnapshot().counters["host.first_frame_elapsed_ms"] >= 0);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("performance snapshot merges host and wasm profiling summaries", async () => {
   const env = installDomGlobals();
   let bridge;

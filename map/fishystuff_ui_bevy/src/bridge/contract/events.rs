@@ -17,6 +17,9 @@ pub enum FishyMapOutputEvent {
         version: u8,
         capabilities: Vec<String>,
     },
+    FirstFrame {
+        version: u8,
+    },
     ViewChanged {
         version: u8,
         view_mode: FishyMapViewMode,

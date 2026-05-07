@@ -303,11 +303,7 @@ export function createMapLoadingOverlayController(shell) {
       return;
     }
     if (snapshot?.ready === true) {
-      update({
-        stage: "first-paint",
-        progress: 0.98,
-        statuses: snapshot?.statuses,
-      });
+      finishAfterFirstPaint();
       return;
     }
     update({
@@ -802,13 +798,14 @@ export async function start() {
     }
     patchSignalsFromBridge(snapshot);
     loadingOverlay.updateFromSnapshot(snapshot);
-    if (event?.type === "fishymap:ready" || snapshot?.ready === true) {
+    if (event?.type === "fishymap:first-frame" || snapshot?.ready === true) {
       recordRuntimeReady();
     }
     renderRuntimeStatusSurface(shell, snapshot?.statuses);
   }
 
   shell.addEventListener("fishymap:ready", handleBridgeStateEvent);
+  shell.addEventListener("fishymap:first-frame", handleBridgeStateEvent);
   shell.addEventListener("fishymap:state-changed", handleBridgeStateEvent);
   shell.addEventListener("fishymap:view-changed", handleBridgeStateEvent);
   shell.addEventListener("fishymap:selection-changed", handleBridgeStateEvent);
@@ -897,13 +894,14 @@ export async function start() {
   void otelMetricsReporter;
   actionState = app.consumeSignals(signals());
   lastBridgePatchJson = JSON.stringify(initialPatch);
-  patchSignalsFromBridge(currentBridgeState());
-  loadingOverlay.updateFromSnapshot(currentBridgeState());
+  const postMountSnapshot = currentBridgeState();
+  patchSignalsFromBridge(postMountSnapshot);
+  loadingOverlay.updateFromSnapshot(postMountSnapshot);
   renderRuntimeStatusSurface(
     shell,
-    currentBridgeState()?.statuses || signals()?._map_runtime?.statuses,
+    postMountSnapshot?.statuses || signals()?._map_runtime?.statuses,
   );
-  if (currentBridgeState()?.ready === true) {
+  if (postMountSnapshot?.ready === true) {
     recordRuntimeReady();
   }
   patchBridgeFromSignals();

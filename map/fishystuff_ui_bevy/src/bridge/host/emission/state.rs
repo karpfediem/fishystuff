@@ -22,6 +22,34 @@ pub(in crate::bridge::host) fn emit_ready_event() {
     });
 }
 
+pub(in crate::bridge::host) fn emit_first_frame_event() {
+    crate::perf_scope!("bridge.emit.first_frame");
+    CURRENT_SNAPSHOT.with(|snapshot| {
+        let snapshot = snapshot.borrow();
+        if !snapshot.ready {
+            return;
+        }
+        READY_FRAME_OBSERVED.with(|observed| {
+            let mut observed = observed.borrow_mut();
+            if !*observed {
+                *observed = true;
+                return;
+            }
+            FIRST_FRAME_EMITTED.with(|emitted| {
+                let mut emitted = emitted.borrow_mut();
+                if *emitted {
+                    return;
+                }
+                crate::perf_counter_add!("bridge.emit.first_frame.count", 1);
+                super::super::emit_event(&FishyMapOutputEvent::FirstFrame {
+                    version: snapshot.version,
+                });
+                *emitted = true;
+            });
+        });
+    });
+}
+
 pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<SelectionState>) {
     crate::perf_scope!("bridge.emit.selection");
     if !selection.is_changed() {

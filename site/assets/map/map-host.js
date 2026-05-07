@@ -23,6 +23,7 @@ export const FISHYMAP_EVENTS = Object.freeze({
   requestState: "fishymap:request-state",
   loadProgress: "fishymap:load-progress",
   ready: "fishymap:ready",
+  firstFrame: "fishymap:first-frame",
   stateChanged: "fishymap:state-changed",
   viewChanged: "fishymap:view-changed",
   selectionChanged: "fishymap:selection-changed",
@@ -2900,6 +2901,8 @@ class FishyMapBridgeImpl {
     this.canvas = null;
     this.wasmModule = null;
     this.wasmReady = false;
+    this.firstFrameReady = false;
+    this.loadProgressCallback = null;
     this.inputState = createEmptyInputState();
     this.currentState = createEmptySnapshot();
     this.stateSnapshotDirty = false;
@@ -2970,6 +2973,29 @@ class FishyMapBridgeImpl {
     setPerformanceLast(this.performanceCollector, name, value);
   }
 
+  reportLoadProgress(detail) {
+    notifyLoadProgress(this.loadProgressCallback, detail);
+    if (this.container?.dispatchEvent) {
+      this.container.dispatchEvent(createCustomEvent(FISHYMAP_EVENTS.loadProgress, detail));
+    }
+  }
+
+  reportFirstFrameReady(detail = {}) {
+    if (this.firstFrameReady) {
+      return;
+    }
+    this.firstFrameReady = true;
+    this.setPerformanceLast(
+      "host.first_frame_elapsed_ms",
+      performanceNowMs() - (this.performanceCollector?.startedAtMs || performanceNowMs()),
+    );
+    this.reportLoadProgress({
+      stage: "first-paint",
+      progress: 0.98,
+    });
+    this.emit(FISHYMAP_EVENTS.firstFrame, detail);
+  }
+
   syncWasmProfiling() {
     if (!this.wasmReady || !this.wasmModule?.fishymap_reset_profiling_json) {
       return;
@@ -2999,6 +3025,7 @@ class FishyMapBridgeImpl {
         captureFrames: false,
       });
       this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
+      this.firstFrameReady = false;
       this.patchDebounceMs =
         Number.isFinite(options.debounceMs) && options.debounceMs >= 0
           ? options.debounceMs
@@ -3015,28 +3042,31 @@ class FishyMapBridgeImpl {
       this.installCanvasSizeSync();
       this.installThemeSync();
 
-      const reportLoadProgress = (detail) => {
-        notifyLoadProgress(options.onLoadProgress, detail);
-        if (this.container?.dispatchEvent) {
-          this.container.dispatchEvent(createCustomEvent(FISHYMAP_EVENTS.loadProgress, detail));
-        }
-      };
+      this.loadProgressCallback = options.onLoadProgress;
       const runtimeModule = options.wasmModule
         ? {
             wasmModule: options.wasmModule,
             wasmInitInput: options.wasmInitInput,
           }
-        : await loadMapRuntimeModule({
-            ...options,
-            onLoadProgress: reportLoadProgress,
-          });
+        : await this.measurePerformanceSpanAsync("host.runtime_module_load", () =>
+            loadMapRuntimeModule({
+              ...options,
+              onLoadProgress: (detail) => this.reportLoadProgress(detail),
+            }),
+          );
       const wasmModule = runtimeModule.wasmModule || runtimeModule;
+      this.reportLoadProgress({
+        stage: "wasm-compile",
+        progress: 0.82,
+      });
       try {
         const initInput =
           runtimeModule.wasmInitInput === undefined
             ? undefined
             : { module_or_path: runtimeModule.wasmInitInput };
-        await wasmModule.default(initInput);
+        await this.measurePerformanceSpanAsync("host.wasm_init", () =>
+          wasmModule.default(initInput),
+        );
       } catch (error) {
         const message =
           error && typeof error === "object" && "message" in error
@@ -3046,7 +3076,7 @@ class FishyMapBridgeImpl {
           throw error;
         }
       }
-      reportLoadProgress({
+      this.reportLoadProgress({
         stage: "renderer-start",
         progress: 0.9,
       });
@@ -3055,7 +3085,9 @@ class FishyMapBridgeImpl {
         wasmModule.fishymap_set_event_sink(this.boundEventSink);
       }
       if (typeof wasmModule.fishymap_mount === "function") {
-        wasmModule.fishymap_mount();
+        this.measurePerformanceSpan("host.renderer_mount", () => {
+          wasmModule.fishymap_mount();
+        });
       }
       this.wasmReady = true;
       this.syncWasmProfiling();
@@ -3073,7 +3105,7 @@ class FishyMapBridgeImpl {
       this.flushPendingPatchNow();
       this.flushQueuedCommands();
       this.scheduleBootstrapStateSync();
-      reportLoadProgress({
+      this.reportLoadProgress({
         stage: "runtime-bootstrap",
         progress: 0.96,
       });
@@ -3100,6 +3132,8 @@ class FishyMapBridgeImpl {
 
       this.wasmModule = null;
       this.wasmReady = false;
+      this.firstFrameReady = false;
+      this.loadProgressCallback = null;
       this.container = null;
       this.canvas = null;
       this.pendingStatePatch = normalizeStatePatch({});
@@ -3663,6 +3697,10 @@ class FishyMapBridgeImpl {
       }
       if (type === "ready") {
         this.emit(FISHYMAP_EVENTS.ready, detail);
+        return;
+      }
+      if (type === "first-frame") {
+        this.reportFirstFrameReady(detail);
         return;
       }
       if (type === "diagnostic") {

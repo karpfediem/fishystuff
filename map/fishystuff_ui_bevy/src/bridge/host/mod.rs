@@ -41,6 +41,8 @@ thread_local! {
     static CURRENT_SNAPSHOT: RefCell<FishyMapStateSnapshot> =
         RefCell::new(snapshot::initial_snapshot());
     static READY_EMITTED: RefCell<bool> = const { RefCell::new(false) };
+    static READY_FRAME_OBSERVED: RefCell<bool> = const { RefCell::new(false) };
+    static FIRST_FRAME_EMITTED: RefCell<bool> = const { RefCell::new(false) };
     static LAST_VIEW_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
     static LAST_VIEW_EMIT_SECS: RefCell<f64> = const { RefCell::new(0.0) };
     static LAST_SELECTION_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
@@ -100,6 +102,8 @@ pub fn fishymap_set_event_sink(callback: js_sys::Function) {
     EVENT_SINK.with(|sink| {
         *sink.borrow_mut() = Some(callback);
     });
+    READY_FRAME_OBSERVED.with(|value| *value.borrow_mut() = false);
+    FIRST_FRAME_EMITTED.with(|value| *value.borrow_mut() = false);
 }
 
 #[wasm_bindgen]
@@ -253,6 +257,8 @@ pub fn fishymap_destroy() {
         *snapshot.borrow_mut() = snapshot::initial_snapshot();
     });
     READY_EMITTED.with(|value| *value.borrow_mut() = false);
+    READY_FRAME_OBSERVED.with(|value| *value.borrow_mut() = false);
+    FIRST_FRAME_EMITTED.with(|value| *value.borrow_mut() = false);
     LAST_VIEW_PAYLOAD.with(|value| *value.borrow_mut() = None);
     LAST_VIEW_EMIT_SECS.with(|value| *value.borrow_mut() = 0.0);
     LAST_SELECTION_PAYLOAD.with(|value| *value.borrow_mut() = None);
@@ -288,6 +294,7 @@ impl Plugin for BrowserBridgePlugin {
                 (
                     snapshot::sync_current_snapshot,
                     emission::emit_ready_event,
+                    emission::emit_first_frame_event,
                     emission::emit_view_changed_event,
                     emission::emit_selection_changed_event,
                     emission::emit_hover_changed_event,
@@ -325,6 +332,7 @@ pub(super) fn emit_event(event: &FishyMapOutputEvent) {
 fn event_counter_name(event: &FishyMapOutputEvent) -> &'static str {
     match event {
         FishyMapOutputEvent::Ready { .. } => "bridge.events.ready",
+        FishyMapOutputEvent::FirstFrame { .. } => "bridge.events.first_frame",
         FishyMapOutputEvent::ViewChanged { .. } => "bridge.events.view_changed",
         FishyMapOutputEvent::SelectionChanged { .. } => "bridge.events.selection_changed",
         FishyMapOutputEvent::HoverChanged { .. } => "bridge.events.hover_changed",
