@@ -176,6 +176,92 @@ struct RetainedReleaseJson {
     dolt_release_ref: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct DesiredStateDocument {
+    #[serde(default)]
+    cluster: String,
+    #[serde(default)]
+    generation: u64,
+    #[serde(default)]
+    mode: String,
+    #[serde(default)]
+    hosts: BTreeMap<String, DesiredHost>,
+    #[serde(default)]
+    releases: BTreeMap<String, DesiredRelease>,
+    #[serde(default)]
+    environments: BTreeMap<String, DesiredEnvironment>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DesiredHost {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default)]
+    role: String,
+    #[serde(default)]
+    hostname: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DesiredRelease {
+    #[serde(default)]
+    generation: u64,
+    #[serde(default)]
+    git_rev: String,
+    #[serde(default)]
+    dolt_commit: String,
+    #[serde(default)]
+    closures: BTreeMap<String, DesiredClosure>,
+    #[serde(default)]
+    dolt: DesiredDolt,
+}
+
+#[derive(Debug, Deserialize)]
+struct DesiredClosure {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default)]
+    store_path: String,
+    #[serde(default)]
+    gcroot_path: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DesiredDolt {
+    #[serde(default)]
+    repository: String,
+    #[serde(default)]
+    commit: String,
+    #[serde(default)]
+    branch_context: String,
+    #[serde(default)]
+    mode: String,
+    #[serde(default)]
+    materialization: String,
+    #[serde(default)]
+    remote_url: String,
+    #[serde(default)]
+    cache_dir: String,
+    #[serde(default)]
+    release_ref: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DesiredEnvironment {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default)]
+    strategy: String,
+    #[serde(default)]
+    host: String,
+    #[serde(default)]
+    active_release: String,
+    #[serde(default)]
+    retained_releases: Vec<String>,
+    #[serde(default)]
+    serve: bool,
+}
+
 pub struct ServedSummary {
     desired_generation: u64,
     environment: String,
@@ -193,6 +279,17 @@ pub struct ServedInspection {
     admission: Option<AdmissionDocument>,
     route: Option<RouteDocument>,
     roots: Vec<RootsReadyStatus>,
+}
+
+pub struct DesiredServingSummary {
+    cluster: String,
+    mode: String,
+    desired_generation: u64,
+    environment: String,
+    host: String,
+    active_release: String,
+    retained_release_count: usize,
+    serve_requested: bool,
 }
 
 impl ServedSummary {
@@ -220,6 +317,22 @@ impl ServedSummary {
             self.rollback_primary_release_identity,
             retained,
             self.rollback_retained_count
+        )
+    }
+}
+
+impl DesiredServingSummary {
+    pub fn summary_line(&self) -> String {
+        format!(
+            "desired serving-ready: cluster={} mode={} generation={} environment={} host={} active_release={} retained_count={} serve_requested={}",
+            self.cluster,
+            self.mode,
+            self.desired_generation,
+            self.environment,
+            self.host,
+            self.active_release,
+            self.retained_release_count,
+            self.serve_requested
         )
     }
 }
@@ -479,6 +592,92 @@ pub fn inspect_served(
         admission,
         route,
         roots,
+    })
+}
+
+pub fn check_desired_serving(
+    state_path: &Path,
+    environment_name: &str,
+) -> Result<DesiredServingSummary> {
+    require_non_empty("desired serving environment", environment_name)?;
+    let desired: DesiredStateDocument = read_json(state_path, "GitOps desired state")?;
+    validate_desired_mode(&desired.mode)?;
+    if desired.generation == 0 {
+        bail!("desired state generation must be non-zero");
+    }
+
+    let environment = desired
+        .environments
+        .get(environment_name)
+        .with_context(|| format!("desired state environment {environment_name} is missing"))?;
+    require_true("desired environment enabled", environment.enabled)?;
+    require_eq(
+        "desired environment strategy",
+        environment.strategy.as_str(),
+        "single_active",
+    )?;
+    require_non_empty("desired environment host", &environment.host)?;
+    require_non_empty(
+        "desired environment active_release",
+        &environment.active_release,
+    )?;
+
+    let host = desired
+        .hosts
+        .get(&environment.host)
+        .with_context(|| format!("desired environment host {} is missing", environment.host))?;
+    require_true("desired host enabled", host.enabled)?;
+    require_non_empty("desired host role", &host.role)?;
+    require_non_empty("desired host hostname", &host.hostname)?;
+
+    if environment.retained_releases.is_empty() {
+        bail!("desired environment retained_releases must not be empty for serving readiness");
+    }
+    let mut retained_ids = BTreeSet::new();
+    for retained_release_id in &environment.retained_releases {
+        require_non_empty(
+            "desired environment retained release ID",
+            retained_release_id,
+        )?;
+        if retained_release_id == &environment.active_release {
+            bail!("desired environment retained_releases must not include active_release");
+        }
+        if !retained_ids.insert(retained_release_id.clone()) {
+            bail!("desired environment retained_releases contains duplicate {retained_release_id}");
+        }
+    }
+
+    let production_shape = desired.cluster == "production" || environment_name == "production";
+    let active_release = desired_release(
+        &desired,
+        environment.active_release.as_str(),
+        "desired active release",
+    )?;
+    validate_desired_release(
+        &desired.cluster,
+        environment.active_release.as_str(),
+        active_release,
+        production_shape,
+    )?;
+    for retained_release_id in &environment.retained_releases {
+        let release = desired_release(&desired, retained_release_id, "desired retained release")?;
+        validate_desired_release(
+            &desired.cluster,
+            retained_release_id,
+            release,
+            production_shape,
+        )?;
+    }
+
+    Ok(DesiredServingSummary {
+        cluster: desired.cluster,
+        mode: desired.mode,
+        desired_generation: desired.generation,
+        environment: environment_name.to_string(),
+        host: environment.host.clone(),
+        active_release: environment.active_release.clone(),
+        retained_release_count: environment.retained_releases.len(),
+        serve_requested: environment.serve,
     })
 }
 
@@ -774,6 +973,141 @@ fn identity_field<'a>(identity: &'a BTreeMap<String, String>, name: &str) -> Res
         .get(name)
         .map(String::as_str)
         .with_context(|| format!("release identity is missing field {name}"))
+}
+
+fn validate_desired_mode(mode: &str) -> Result<()> {
+    match mode {
+        "validate" | "vm-test" | "vm-test-closures" | "local-apply" => Ok(()),
+        "" => bail!("desired state mode must not be empty"),
+        other => bail!("desired state mode {other} is unsupported"),
+    }
+}
+
+fn desired_release<'a>(
+    desired: &'a DesiredStateDocument,
+    release_id: &str,
+    label: &str,
+) -> Result<&'a DesiredRelease> {
+    desired
+        .releases
+        .get(release_id)
+        .with_context(|| format!("{label} {release_id} is missing from releases"))
+}
+
+fn validate_desired_release(
+    cluster: &str,
+    release_id: &str,
+    release: &DesiredRelease,
+    production_shape: bool,
+) -> Result<()> {
+    if release.generation == 0 {
+        bail!("desired release {release_id} generation must be non-zero");
+    }
+    require_non_empty(
+        &format!("desired release {release_id} git_rev"),
+        &release.git_rev,
+    )?;
+    require_non_empty(
+        &format!("desired release {release_id} dolt_commit"),
+        &release.dolt_commit,
+    )?;
+    validate_desired_closure(release_id, "api", &release.closures)?;
+    validate_desired_closure(release_id, "site", &release.closures)?;
+    validate_desired_closure(release_id, "cdn_runtime", &release.closures)?;
+    validate_desired_closure(release_id, "dolt_service", &release.closures)?;
+    validate_desired_dolt(cluster, release_id, release, production_shape)
+}
+
+fn validate_desired_closure(
+    release_id: &str,
+    closure_name: &str,
+    closures: &BTreeMap<String, DesiredClosure>,
+) -> Result<()> {
+    let closure = closures.get(closure_name).with_context(|| {
+        format!("desired release {release_id} closure {closure_name} is missing")
+    })?;
+    require_true(
+        &format!("desired release {release_id} closure {closure_name} enabled"),
+        closure.enabled,
+    )?;
+    require_store_path(
+        &format!("desired release {release_id} closure {closure_name} store_path"),
+        &closure.store_path,
+    )?;
+    require_gcroot_path(
+        &format!("desired release {release_id} closure {closure_name} gcroot_path"),
+        &closure.gcroot_path,
+    )
+}
+
+fn validate_desired_dolt(
+    cluster: &str,
+    release_id: &str,
+    release: &DesiredRelease,
+    production_shape: bool,
+) -> Result<()> {
+    require_eq(
+        &format!("desired release {release_id} dolt repository"),
+        release.dolt.repository.as_str(),
+        "fishystuff/fishystuff",
+    )?;
+    require_eq(
+        &format!("desired release {release_id} dolt commit"),
+        release.dolt.commit.as_str(),
+        release.dolt_commit.as_str(),
+    )?;
+    require_eq(
+        &format!("desired release {release_id} dolt mode"),
+        release.dolt.mode.as_str(),
+        "read_only",
+    )?;
+    if production_shape {
+        require_eq(
+            &format!("desired release {release_id} dolt branch_context"),
+            release.dolt.branch_context.as_str(),
+            "main",
+        )?;
+    } else {
+        require_non_empty(
+            &format!("desired release {release_id} dolt branch_context"),
+            &release.dolt.branch_context,
+        )?;
+    }
+
+    let materialization = if release.dolt.materialization.is_empty() {
+        "metadata_only"
+    } else {
+        release.dolt.materialization.as_str()
+    };
+    match materialization {
+        "fetch_pin" => {
+            require_non_empty(
+                &format!("desired release {release_id} dolt remote_url"),
+                &release.dolt.remote_url,
+            )?;
+            reject_url_userinfo(
+                &format!("desired release {release_id} dolt remote_url"),
+                &release.dolt.remote_url,
+            )?;
+            require_non_empty(
+                &format!("desired release {release_id} dolt cache_dir"),
+                &release.dolt.cache_dir,
+            )?;
+            require_non_empty(
+                &format!("desired release {release_id} dolt release_ref"),
+                &release.dolt.release_ref,
+            )?;
+        }
+        "metadata_only" => {
+            if production_shape || cluster == "production" {
+                bail!("desired release {release_id} dolt materialization must be fetch_pin for production serving readiness");
+            }
+        }
+        other => bail!(
+            "desired release {release_id} dolt materialization was {other}, expected fetch_pin"
+        ),
+    }
+    Ok(())
 }
 
 fn validate_admission(summary: &ServedSummary, admission: &AdmissionDocument) -> Result<()> {
@@ -1185,6 +1519,28 @@ fn require_store_path(label: &str, actual: &str) -> Result<()> {
     require_non_empty(label, actual)?;
     if !actual.starts_with("/nix/store/") {
         bail!("{label} must be under /nix/store");
+    }
+    Ok(())
+}
+
+fn require_gcroot_path(label: &str, actual: &str) -> Result<()> {
+    require_non_empty(label, actual)?;
+    if !actual.starts_with("/nix/var/nix/gcroots/fishystuff/gitops/") {
+        bail!("{label} must be under /nix/var/nix/gcroots/fishystuff/gitops");
+    }
+    Ok(())
+}
+
+fn reject_url_userinfo(label: &str, actual: &str) -> Result<()> {
+    if actual.starts_with("file://") {
+        return Ok(());
+    }
+    let Some(rest) = actual.split_once("://").map(|(_, rest)| rest) else {
+        return Ok(());
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if authority.contains('@') {
+        bail!("{label} must not contain embedded credentials");
     }
     Ok(())
 }

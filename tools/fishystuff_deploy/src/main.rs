@@ -164,6 +164,12 @@ enum GitopsCommands {
         #[arg(long)]
         release_id: Option<String>,
     },
+    CheckDesiredServing {
+        #[arg(long)]
+        state: PathBuf,
+        #[arg(long)]
+        environment: String,
+    },
     RootsReady {
         #[arg(long)]
         request: PathBuf,
@@ -311,6 +317,11 @@ fn main() -> Result<ExitCode> {
                     release_id.as_deref(),
                 )?;
                 print!("{}", inspection.operator_summary());
+                Ok(ExitCode::SUCCESS)
+            }
+            GitopsCommands::CheckDesiredServing { state, environment } => {
+                let summary = gitops::check_desired_serving(&state, &environment)?;
+                println!("{}", summary.summary_line());
                 Ok(ExitCode::SUCCESS)
             }
             GitopsCommands::RootsReady { request, status } => {

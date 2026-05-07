@@ -337,6 +337,16 @@ The same local check is available through:
 just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
 ```
 
+Before treating a desired-state snapshot as a serving candidate, run the desired-state preflight:
+
+```bash
+just gitops-check-desired-serving \
+  state_file=data/gitops/production-current.desired.json \
+  environment=production
+```
+
+This is read-only. It accepts validate-mode snapshots, but it still requires the selected environment to have an enabled host, an active release, at least one retained rollback release, no active/retained overlap, exact API/site/CDN/Dolt-service closure store paths for the active and retained releases, read-only Dolt identity, and `fetch_pin` materialization for production-shaped releases.
+
 For a human-readable summary of the served release, primary rollback identity, and retained rollback releases:
 
 ```bash

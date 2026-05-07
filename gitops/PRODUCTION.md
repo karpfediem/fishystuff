@@ -27,6 +27,7 @@ For the current local production tuple, generate an ignored operator handoff art
 ```bash
 just gitops-production-current-desired
 just gitops-unify auto data/gitops/production-current.desired.json
+just gitops-check-desired-serving state_file=data/gitops/production-current.desired.json environment=production
 ```
 
 That file records the local Dolt `main` commit, production API/Dolt service bundles, production site content, and finalized CDN serving root. It remains `mode: validate` and `serve: false`; it is a precise snapshot to inspect and review before a real retained rollback set and serving handoff exist.

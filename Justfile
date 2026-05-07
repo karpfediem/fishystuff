@@ -89,6 +89,10 @@ gitops-served-summary deploy_bin="auto" environment="local-test" state_dir="/var
 gitops-inspect-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" host="" release_id="":
   bash scripts/recipes/gitops-inspect-served.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{run_dir}}" "{{host}}" "{{release_id}}"
 
+# Check that a desired-state JSON environment has a serving-capable active/retained release tuple.
+gitops-check-desired-serving deploy_bin="auto" state_file="data/gitops/production-current.desired.json" environment="production":
+  bash scripts/recipes/gitops-check-desired-serving.sh "{{deploy_bin}}" "{{state_file}}" "{{environment}}"
+
 # Derive retained-release JSON from a local GitOps rollback-set index and its member documents.
 gitops-retained-releases-json deploy_bin="auto" environment="production" state_dir="/var/lib/fishystuff/gitops" rollback_set_path="":
   bash scripts/recipes/gitops-retained-releases-json.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{rollback_set_path}}"

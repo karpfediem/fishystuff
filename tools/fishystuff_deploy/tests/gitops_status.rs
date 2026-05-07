@@ -496,6 +496,98 @@ fn gitops_retained_releases_json_rejects_identity_path_mismatch() -> Result<()> 
 }
 
 #[test]
+fn gitops_check_desired_serving_accepts_retained_production_tuple() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-desired-serving")?;
+    let state = root.path().join("production.desired.json");
+    write_json(&state, production_desired_state())?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "check-desired-serving",
+        "--state",
+        path_str(&state)?,
+        "--environment",
+        "production",
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops check-desired-serving", output);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("desired serving-ready: cluster=production"));
+    assert!(stdout.contains("environment=production"));
+    assert!(stdout.contains("active_release=active-release"));
+    assert!(stdout.contains("retained_count=1"));
+    assert!(stdout.contains("serve_requested=false"));
+
+    Ok(())
+}
+
+#[test]
+fn gitops_check_desired_serving_rejects_missing_retained_release() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-desired-serving-no-retained")?;
+    let state = root.path().join("production.desired.json");
+    let mut desired = production_desired_state();
+    desired["environments"]["production"]["retained_releases"] = json!([]);
+    write_json(&state, desired)?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "check-desired-serving",
+            "--state",
+            path_str(&state)?,
+            "--environment",
+            "production",
+        ],
+        "desired environment retained_releases must not be empty for serving readiness",
+    )
+}
+
+#[test]
+fn gitops_check_desired_serving_rejects_incomplete_retained_artifact() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-desired-serving-missing-artifact")?;
+    let state = root.path().join("production.desired.json");
+    let mut desired = production_desired_state();
+    desired["releases"]["previous-release"]["closures"]["cdn_runtime"]["store_path"] =
+        Value::String(String::new());
+    write_json(&state, desired)?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "check-desired-serving",
+            "--state",
+            path_str(&state)?,
+            "--environment",
+            "production",
+        ],
+        "desired release previous-release closure cdn_runtime store_path must not be empty",
+    )
+}
+
+#[test]
+fn gitops_check_desired_serving_rejects_production_metadata_only_dolt() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-desired-serving-metadata-only")?;
+    let state = root.path().join("production.desired.json");
+    let mut desired = production_desired_state();
+    desired["releases"]["active-release"]["dolt"]["materialization"] =
+        Value::String("metadata_only".to_string());
+    write_json(&state, desired)?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "check-desired-serving",
+            "--state",
+            path_str(&state)?,
+            "--environment",
+            "production",
+        ],
+        "desired release active-release dolt materialization must be fetch_pin for production serving readiness",
+    )
+}
+
+#[test]
 fn gitops_roots_ready_writes_status_for_matching_symlinks() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-gitops-roots-ready")?;
     let request = root.path().join("request.json");
@@ -789,6 +881,82 @@ fn write_rollback_member_document(
             "rollback_member_state": "retained_hot_release",
         }),
     )
+}
+
+fn production_desired_state() -> Value {
+    json!({
+        "cluster": "production",
+        "generation": 9,
+        "mode": "validate",
+        "hosts": {
+            "production-single-host": {
+                "enabled": true,
+                "role": "single-site",
+                "hostname": "production-single-host"
+            }
+        },
+        "releases": {
+            "active-release": desired_release_json(
+                9,
+                "active-git",
+                "active-dolt",
+                "active-release"
+            ),
+            "previous-release": desired_release_json(
+                8,
+                "previous-git",
+                "previous-dolt",
+                "previous-release"
+            )
+        },
+        "environments": {
+            "production": {
+                "enabled": true,
+                "strategy": "single_active",
+                "host": "production-single-host",
+                "active_release": "active-release",
+                "retained_releases": ["previous-release"],
+                "serve": false
+            }
+        }
+    })
+}
+
+fn desired_release_json(
+    generation: u64,
+    git_rev: &str,
+    dolt_commit: &str,
+    release_id: &str,
+) -> Value {
+    json!({
+        "generation": generation,
+        "git_rev": git_rev,
+        "dolt_commit": dolt_commit,
+        "closures": {
+            "api": desired_closure_json(release_id, "api", "api"),
+            "site": desired_closure_json(release_id, "site", "site"),
+            "cdn_runtime": desired_closure_json(release_id, "cdn-runtime", "cdn_runtime"),
+            "dolt_service": desired_closure_json(release_id, "dolt-service", "dolt_service")
+        },
+        "dolt": {
+            "repository": "fishystuff/fishystuff",
+            "commit": dolt_commit,
+            "branch_context": "main",
+            "mode": "read_only",
+            "materialization": "fetch_pin",
+            "remote_url": "https://doltremoteapi.dolthub.com/fishystuff/fishystuff",
+            "cache_dir": "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
+            "release_ref": format!("fishystuff/gitops/{release_id}")
+        }
+    })
+}
+
+fn desired_closure_json(release_id: &str, gcroot_name: &str, store_suffix: &str) -> Value {
+    json!({
+        "enabled": true,
+        "store_path": format!("/nix/store/example-{release_id}-{store_suffix}"),
+        "gcroot_path": format!("/nix/var/nix/gcroots/fishystuff/gitops/{release_id}/{gcroot_name}")
+    })
 }
 
 fn write_route_document(route: &Path) -> Result<()> {
