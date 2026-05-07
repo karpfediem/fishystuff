@@ -90,7 +90,10 @@ To re-check a saved activation draft before a later apply path consumes it:
 
 ```bash
 just gitops-check-activation-draft admission_file=/tmp/fishystuff-production-admission.json
+just gitops-review-activation-draft admission_file=/tmp/fishystuff-production-admission.json
 ```
+
+The review command is read-only. It prints the exact release ID, release identity, Dolt commit, closure paths, API upstream, admission probe names, retained rollback set, and proof hashes that an operator would be about to apply.
 
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 

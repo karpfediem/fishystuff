@@ -280,6 +280,7 @@ run_fixture_handoff() {
   local site_cdn_probe_observation="$root/site-cdn-probe.json"
   local activation_draft="$root/production-activation.draft.desired.json"
   local stale_activation_draft="$root/stale-production-activation.draft.desired.json"
+  local activation_review="$root/activation-review.txt"
   local activation_api_upstream="http://127.0.0.1:19090"
   local activation_release_id=""
 
@@ -456,6 +457,25 @@ run_fixture_handoff() {
     "$deploy_bin" \
     >"$root/check-activation.stdout" \
     2>"$root/check-activation.stderr"
+
+  bash scripts/recipes/gitops-review-activation-draft.sh \
+    "$activation_draft" \
+    "$summary" \
+    "$admission_evidence" \
+    "$deploy_bin" \
+    >"$activation_review" \
+    2>"$root/review-activation.stderr"
+  grep -F "gitops_activation_review_ok=$activation_draft" "$activation_review" >/dev/null
+  grep -F "environment=production" "$activation_review" >/dev/null
+  grep -F "mode=local-apply" "$activation_review" >/dev/null
+  grep -F "serve=true" "$activation_review" >/dev/null
+  grep -F "transition_kind=activate" "$activation_review" >/dev/null
+  grep -F "release_id=$activation_release_id" "$activation_review" >/dev/null
+  grep -F "dolt_commit=active-dolt" "$activation_review" >/dev/null
+  grep -F "api_upstream=$activation_api_upstream" "$activation_review" >/dev/null
+  grep -F "api_meta_url=$activation_api_upstream/api/v1/meta" "$activation_review" >/dev/null
+  grep -F "remote_deploy_performed=false" "$activation_review" >/dev/null
+  grep -F "infrastructure_mutation_performed=false" "$activation_review" >/dev/null
 
   jq '.environments.production.api_upstream = "http://127.0.0.1:19999"' "$activation_draft" >"$stale_activation_draft"
   expect_fail_contains \
