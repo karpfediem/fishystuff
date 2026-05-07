@@ -114,6 +114,10 @@ gitops-check-handoff-summary summary_file="data/gitops/production-current.handof
 gitops-production-activation-draft output="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-activation-draft.sh "{{output}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}"
 
+# Verify a production activation draft still matches the verified handoff and admission evidence.
+gitops-check-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto":
+  bash scripts/recipes/gitops-check-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}"
+
 # Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
 gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"

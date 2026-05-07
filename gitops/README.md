@@ -431,7 +431,7 @@ Before using a handoff summary as input to any later activation work, verify it 
 just gitops-check-handoff-summary
 ```
 
-The next local-only bridge is `just gitops-production-activation-draft`. It reads the verified handoff summary plus an explicit admission evidence JSON file and writes `data/gitops/production-activation.draft.desired.json` by default. The draft changes the selected environment to `mode: local-apply`, `serve: true`, `transition.kind: activate`, and `admission_probe.kind: api_meta`; it does not run mgmt apply or mutate production. Admission evidence must use schema `fishystuff.gitops.activation-admission.v1` and match the exact handoff summary SHA-256, desired-state SHA-256, release ID, release identity, Dolt commit, API meta response, a representative DB-backed probe, and a site/CDN runtime probe.
+The next local-only bridge is `just gitops-production-activation-draft`. It reads the verified handoff summary plus an explicit admission evidence JSON file and writes `data/gitops/production-activation.draft.desired.json` by default. The draft changes the selected environment to `mode: local-apply`, `serve: true`, `transition.kind: activate`, and `admission_probe.kind: api_meta`; it does not run mgmt apply or mutate production. Admission evidence must use schema `fishystuff.gitops.activation-admission.v1` and match the exact handoff summary SHA-256, desired-state SHA-256, release ID, release identity, Dolt commit, API meta response, a representative DB-backed probe, and a site/CDN runtime probe. `just gitops-check-activation-draft` re-checks an existing draft against the same handoff and evidence before any later apply path may consume it.
 
 Backup/restore and replication are separate transport classes:
 

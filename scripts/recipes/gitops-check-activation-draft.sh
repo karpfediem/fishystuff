@@ -4,11 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-output="$(normalize_named_arg output "${1-data/gitops/production-activation.draft.desired.json}")"
+draft_file="$(normalize_named_arg draft_file "${1-data/gitops/production-activation.draft.desired.json}")"
 summary_file="$(normalize_named_arg summary_file "${2-data/gitops/production-current.handoff-summary.json}")"
 admission_file="$(normalize_named_arg admission_file "${3-}")"
-mgmt_bin="$(normalize_named_arg mgmt_bin "${4-auto}")"
-deploy_bin="$(normalize_named_arg deploy_bin "${5-auto}")"
+deploy_bin="$(normalize_named_arg deploy_bin "${4-auto}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -20,38 +19,28 @@ require_command() {
   fi
 }
 
-require_positive_int() {
-  local name="$1"
-  local value="$2"
-  if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
-    echo "$name must be a positive integer, got: ${value:-<empty>}" >&2
-    exit 2
-  fi
-}
-
 require_command jq
 require_command sha256sum
 
-if [[ "$output" == "-" ]]; then
-  echo "gitops-production-activation-draft requires a file output, not '-'" >&2
-  exit 2
+if [[ "$draft_file" != /* ]]; then
+  draft_file="${RECIPE_REPO_ROOT}/${draft_file}"
+fi
+if [[ "$summary_file" != /* ]]; then
+  summary_file="${RECIPE_REPO_ROOT}/${summary_file}"
 fi
 if [[ -z "$admission_file" ]]; then
   admission_file="${FISHYSTUFF_GITOPS_ADMISSION_EVIDENCE_FILE:-}"
 fi
 if [[ -z "$admission_file" ]]; then
-  echo "gitops-production-activation-draft requires admission_file or FISHYSTUFF_GITOPS_ADMISSION_EVIDENCE_FILE" >&2
+  echo "gitops-check-activation-draft requires admission_file or FISHYSTUFF_GITOPS_ADMISSION_EVIDENCE_FILE" >&2
   exit 2
-fi
-
-if [[ "$output" != /* ]]; then
-  output="${RECIPE_REPO_ROOT}/${output}"
-fi
-if [[ "$summary_file" != /* ]]; then
-  summary_file="${RECIPE_REPO_ROOT}/${summary_file}"
 fi
 if [[ "$admission_file" != /* ]]; then
   admission_file="${RECIPE_REPO_ROOT}/${admission_file}"
+fi
+if [[ ! -f "$draft_file" ]]; then
+  echo "activation draft does not exist: ${draft_file}" >&2
+  exit 2
 fi
 if [[ ! -f "$admission_file" ]]; then
   echo "admission evidence does not exist: ${admission_file}" >&2
@@ -100,72 +89,46 @@ if ! jq -e \
     and (.site_cdn_probe.name | type == "string" and length > 0)
     and .site_cdn_probe.passed == true
   ' "$admission_file" >/dev/null; then
-  echo "admission evidence does not match verified production handoff" >&2
+  echo "activation admission evidence does not match verified production handoff" >&2
   exit 2
 fi
 
 api_upstream="$(jq -er '.api_upstream' "$admission_file")"
 admission_url="$(jq -er '.api_meta.url' "$admission_file")"
 timeout_ms="$(jq -er '.api_meta.timeout_ms // 2000' "$admission_file")"
-require_positive_int "admission api_meta.timeout_ms" "$timeout_ms"
-if (( timeout_ms > 30000 )); then
-  echo "admission api_meta.timeout_ms must be <= 30000, got: ${timeout_ms}" >&2
-  exit 2
-fi
-if [[ "$api_upstream" == */ ]]; then
-  echo "admission api_upstream must not end with /" >&2
-  exit 2
-fi
-case "$admission_url" in
-  "${api_upstream}/"*) ;;
-  "${api_upstream}?"*) ;;
-  *)
-    echo "admission api_meta.url must target api_upstream" >&2
-    exit 2
-    ;;
-esac
-if [[ "$admission_url" != */api/v1/meta ]]; then
-  echo "admission api_meta.url must target /api/v1/meta" >&2
-  exit 2
-fi
 
-current_generation="$(jq -er '.generation | select(type == "number")' "$state_file")"
-activation_generation="${FISHYSTUFF_GITOPS_ACTIVATION_GENERATION:-$((current_generation + 1))}"
-require_positive_int FISHYSTUFF_GITOPS_ACTIVATION_GENERATION "$activation_generation"
-if (( activation_generation <= current_generation )); then
-  echo "activation generation must be greater than handoff generation ${current_generation}, got: ${activation_generation}" >&2
-  exit 2
-fi
-
-mkdir -p "$(dirname "$output")"
-tmp="$(mktemp "$(dirname "$output")/.${output##*/}.XXXXXX")"
-jq -S \
-  --argjson activation_generation "$activation_generation" \
+if ! jq -e \
+  --slurpfile handoff_state "$state_file" \
+  --arg active_release_id "$active_release_id" \
   --arg api_upstream "$api_upstream" \
   --arg admission_url "$admission_url" \
   --argjson timeout_ms "$timeout_ms" \
-  '.mode = "local-apply"
-  | .generation = $activation_generation
-  | .environments.production.serve = true
-  | .environments.production.api_upstream = $api_upstream
-  | .environments.production.admission_probe = {
-      kind: "api_meta",
-      probe_name: "api-meta",
-      url: $admission_url,
-      expected_status: 200,
-      timeout_ms: $timeout_ms
-    }
-  | .environments.production.transition = {
-      kind: "activate",
-      from_release: "",
-      reason: "verified production handoff admission"
-    }' \
-  "$state_file" >"$tmp"
-mv "$tmp" "$output"
+  '
+    $handoff_state[0] as $handoff
+    | .cluster == $handoff.cluster
+    and .mode == "local-apply"
+    and (.generation > $handoff.generation)
+    and .hosts == $handoff.hosts
+    and .releases == $handoff.releases
+    and .environments.production.enabled == true
+    and .environments.production.strategy == $handoff.environments.production.strategy
+    and .environments.production.host == $handoff.environments.production.host
+    and .environments.production.active_release == $active_release_id
+    and .environments.production.retained_releases == $handoff.environments.production.retained_releases
+    and .environments.production.serve == true
+    and .environments.production.api_upstream == $api_upstream
+    and .environments.production.admission_probe.kind == "api_meta"
+    and .environments.production.admission_probe.probe_name == "api-meta"
+    and .environments.production.admission_probe.url == $admission_url
+    and .environments.production.admission_probe.expected_status == 200
+    and .environments.production.admission_probe.timeout_ms == $timeout_ms
+    and .environments.production.transition.kind == "activate"
+    and .environments.production.transition.from_release == ""
+  ' "$draft_file" >/dev/null; then
+  echo "activation draft does not match verified handoff and admission evidence" >&2
+  exit 2
+fi
 
-bash scripts/recipes/gitops-check-activation-draft.sh "$output" "$summary_file" "$admission_file" "$deploy_bin"
-bash scripts/recipes/gitops-unify.sh "$mgmt_bin" "$output"
+bash scripts/recipes/gitops-check-desired-serving.sh "$deploy_bin" "$draft_file" production
 
-printf 'production_activation_draft=%s\n' "$output" >&2
-printf 'production_activation_release_id=%s\n' "$active_release_id" >&2
-printf 'production_activation_dolt_commit=%s\n' "$dolt_commit" >&2
+printf 'gitops_activation_draft_ok=%s\n' "$draft_file" >&2

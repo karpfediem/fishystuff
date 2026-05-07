@@ -79,6 +79,12 @@ just gitops-production-activation-draft admission_file=/tmp/fishystuff-productio
 
 This writes a local `local-apply` desired-state draft and verifies it with the same desired-serving preflight and mgmt unify path. It does not run mgmt apply, start services, reload Caddy, mutate DNS, or select a served release by itself.
 
+To re-check a saved activation draft before a later apply path consumes it:
+
+```bash
+just gitops-check-activation-draft admission_file=/tmp/fishystuff-production-admission.json
+```
+
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
 ```bash

@@ -293,6 +293,7 @@ run_fixture_handoff() {
   local admission_evidence="$root/admission-evidence.json"
   local bad_admission_evidence="$root/bad-admission-evidence.json"
   local activation_draft="$root/production-activation.draft.desired.json"
+  local stale_activation_draft="$root/stale-production-activation.draft.desired.json"
   local activation_api_upstream="http://127.0.0.1:19090"
   local activation_release_id=""
 
@@ -441,6 +442,23 @@ run_fixture_handoff() {
     printf '[gitops-production-current-handoff-test] fake mgmt saw wrong activation draft state file\n' >&2
     exit 1
   fi
+  bash scripts/recipes/gitops-check-activation-draft.sh \
+    "$activation_draft" \
+    "$summary" \
+    "$admission_evidence" \
+    "$deploy_bin" \
+    >"$root/check-activation.stdout" \
+    2>"$root/check-activation.stderr"
+
+  jq '.environments.production.api_upstream = "http://127.0.0.1:19999"' "$activation_draft" >"$stale_activation_draft"
+  expect_fail_contains \
+    "activation draft verifier rejects stale API upstream" \
+    "activation draft does not match verified handoff and admission evidence" \
+    bash scripts/recipes/gitops-check-activation-draft.sh \
+      "$stale_activation_draft" \
+      "$summary" \
+      "$admission_evidence" \
+      "$deploy_bin"
 
   stale_cdn_summary="$root/stale-cdn-retention.handoff-summary.json"
   jq '.cdn_retention.active_retained_roots = []' "$summary" >"$stale_cdn_summary"
