@@ -393,6 +393,15 @@ FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json 
   just gitops-production-current-desired
 ```
 
+The equivalent recipe can read the rollback-set index and pass every member document automatically:
+
+```bash
+just gitops-retained-releases-json \
+  environment=production \
+  state_dir=/var/lib/fishystuff/gitops \
+  > /tmp/fishystuff-retained-releases.json
+```
+
 The helper is read-only. It requires each rollback-set member identity to match the member's release ID, generation, Git revision, Dolt commit, and API/site/CDN/Dolt-service paths exactly before emitting production-current input.
 
 Backup/restore and replication are separate transport classes:

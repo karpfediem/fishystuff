@@ -44,6 +44,15 @@ FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json 
   just gitops-production-current-desired
 ```
 
+Or use the repo recipe to read the rollback-set index and pass each member document automatically:
+
+```bash
+just gitops-retained-releases-json \
+  environment=production \
+  state_dir=/var/lib/fishystuff/gitops \
+  > /tmp/fishystuff-retained-releases.json
+```
+
 This is read-only and refuses incomplete or inconsistent rollback member identities.
 
 The first production-shaped serving artifact is still VM-only:

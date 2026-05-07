@@ -89,6 +89,10 @@ gitops-served-summary deploy_bin="auto" environment="local-test" state_dir="/var
 gitops-inspect-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" host="" release_id="":
   bash scripts/recipes/gitops-inspect-served.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{run_dir}}" "{{host}}" "{{release_id}}"
 
+# Derive retained-release JSON from a local GitOps rollback-set index and its member documents.
+gitops-retained-releases-json deploy_bin="auto" environment="production" state_dir="/var/lib/fishystuff/gitops" rollback_set_path="":
+  bash scripts/recipes/gitops-retained-releases-json.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{rollback_set_path}}"
+
 # Generate a local validate-mode production desired-state snapshot from exact local outputs.
 gitops-production-current-desired output="data/gitops/production-current.desired.json" dolt_ref="main":
   bash scripts/recipes/gitops-production-current-desired.sh "{{output}}" "{{dolt_ref}}"
