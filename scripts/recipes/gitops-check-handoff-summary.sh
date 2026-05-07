@@ -55,15 +55,18 @@ if [[ "$actual_sha256" != "$expected_sha256" ]]; then
   exit 2
 fi
 
-jq -e '
-  .schema == "fishystuff.gitops.production-current-handoff.v1"
-  and .checks.production_current_desired_generated == true
-  and .checks.desired_serving_preflight_passed == true
-  and .checks.cdn_retained_roots_verified == true
-  and .checks.gitops_unify_passed == true
-  and .checks.remote_deploy_performed == false
-  and .checks.infrastructure_mutation_performed == false
-' "$summary_file" >/dev/null
+if ! jq -e '
+    .schema == "fishystuff.gitops.production-current-handoff.v1"
+    and .checks.production_current_desired_generated == true
+    and .checks.desired_serving_preflight_passed == true
+    and .checks.cdn_retained_roots_verified == true
+    and .checks.gitops_unify_passed == true
+    and .checks.remote_deploy_performed == false
+    and .checks.infrastructure_mutation_performed == false
+  ' "$summary_file" >/dev/null; then
+  echo "handoff summary does not record the required completed local checks" >&2
+  exit 2
+fi
 
 active_manifest="$(jq -er '.cdn_retention.active_manifest | select(type == "string" and length > 0)' "$summary_file")"
 if [[ ! -f "$active_manifest" ]]; then
@@ -80,13 +83,16 @@ if [[ "$active_retained_count" != "$declared_retained_count" ]]; then
   exit 2
 fi
 
-jq -e \
-  --arg active_current_root "$active_current_root" \
-  --argjson active_retained_roots "$active_retained_roots" \
-  '.cdn_retention.active_current_root == $active_current_root
-  and .cdn_retention.active_retained_roots == $active_retained_roots
-  and ([.cdn_retention.retained_releases[]? | .retained_by_active_cdn_serving_root] | all(. == true))' \
-  "$summary_file" >/dev/null
+if ! jq -e \
+    --arg active_current_root "$active_current_root" \
+    --argjson active_retained_roots "$active_retained_roots" \
+    '.cdn_retention.active_current_root == $active_current_root
+    and .cdn_retention.active_retained_roots == $active_retained_roots
+    and ([.cdn_retention.retained_releases[]? | .retained_by_active_cdn_serving_root] | all(. == true))' \
+    "$summary_file" >/dev/null; then
+  echo "handoff summary CDN retention data does not match the active CDN manifest" >&2
+  exit 2
+fi
 
 jq -r '.cdn_retention.retained_releases[]? | [.release_id, .expected_retained_cdn_root] | @tsv' "$summary_file" |
   while IFS=$'\t' read -r release_id expected_retained_cdn_root; do

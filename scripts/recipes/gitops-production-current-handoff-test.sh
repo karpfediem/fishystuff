@@ -194,6 +194,8 @@ run_fixture_handoff() {
   local active_cdn_serving=""
   local retained_roots_json=""
   local output_sha256=""
+  local stale_cdn_summary=""
+  local tampered_state=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-cdn-serving" "$previous_cdn_current" '[]')"
@@ -278,6 +280,21 @@ run_fixture_handoff() {
   ' "$summary" >/dev/null
 
   bash scripts/recipes/gitops-check-handoff-summary.sh "$summary" "$output" >"$root/check-summary.stdout" 2>"$root/check-summary.stderr"
+
+  stale_cdn_summary="$root/stale-cdn-retention.handoff-summary.json"
+  jq '.cdn_retention.active_retained_roots = []' "$summary" >"$stale_cdn_summary"
+  expect_fail_contains \
+    "handoff summary rejects stale CDN retention data" \
+    "handoff summary CDN retention data does not match the active CDN manifest" \
+    bash scripts/recipes/gitops-check-handoff-summary.sh "$stale_cdn_summary" "$output"
+
+  tampered_state="$root/tampered.desired.json"
+  jq '.generation = 999' "$output" >"$tampered_state"
+  mv "$tampered_state" "$output"
+  expect_fail_contains \
+    "handoff summary rejects desired hash mismatch" \
+    "handoff summary desired_state_sha256 does not match checked state file" \
+    bash scripts/recipes/gitops-check-handoff-summary.sh "$summary" "$output"
 }
 
 run_missing_cdn_retention_refusal() {
