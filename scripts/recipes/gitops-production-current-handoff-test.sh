@@ -274,6 +274,45 @@ run_fixture_handoff() {
   ' "$summary" >/dev/null
 }
 
+run_missing_cdn_retention_refusal() {
+  local deploy_bin="$1"
+  local root="$2"
+  local output="$root/missing-cdn-retention.desired.json"
+  local retained="$root/missing-cdn-retention.retained.json"
+  local summary="$root/missing-cdn-retention.handoff-summary.json"
+  local previous_cdn_current=""
+  local previous_cdn_serving=""
+  local active_cdn_current=""
+  local active_cdn_serving=""
+
+  previous_cdn_current="$(make_cdn_current_root "$root" "previous-missing-retention-cdn-current")"
+  previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-missing-retention-cdn-serving" "$previous_cdn_current" '[]')"
+  active_cdn_current="$(make_cdn_current_root "$root" "active-missing-retention-cdn-current")"
+  active_cdn_serving="$(make_cdn_serving_root "$root" "active-missing-retention-cdn-serving" "$active_cdn_current" '[]')"
+  write_retained_json "$retained" "$previous_cdn_serving"
+
+  expect_fail_contains \
+    "missing active CDN retained root is refused" \
+    "active CDN serving root does not retain previous-production-release CDN root" \
+    env \
+      FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE="$retained" \
+      FISHYSTUFF_GITOPS_GENERATION=25 \
+      FISHYSTUFF_GITOPS_RELEASE_GENERATION=7 \
+      FISHYSTUFF_GITOPS_GIT_REV="active-git-missing-retention" \
+      FISHYSTUFF_GITOPS_DOLT_COMMIT="active-dolt-missing-retention" \
+      FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
+      FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-active-missing-retention-api" \
+      FISHYSTUFF_GITOPS_SITE_CLOSURE="/nix/store/example-active-missing-retention-site" \
+      FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
+      FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="/nix/store/example-active-missing-retention-dolt-service" \
+      bash scripts/recipes/gitops-production-current-handoff.sh \
+        "$output" \
+        main \
+        /run/current-system/sw/bin/true \
+        "$deploy_bin" \
+        "$summary"
+}
+
 run_fixture_from_served() {
   local deploy_bin="$1"
   local root="$2"
@@ -370,6 +409,9 @@ expect_fail_contains \
 fixture_root="$(mktemp -d)"
 run_fixture_handoff "$deploy_bin" "$fixture_root"
 pass "fixture handoff runs generator preflight and fake mgmt unify"
+
+missing_cdn_retention_root="$(mktemp -d)"
+run_missing_cdn_retention_refusal "$deploy_bin" "$missing_cdn_retention_root"
 
 from_served_root="$(mktemp -d)"
 run_fixture_from_served "$deploy_bin" "$from_served_root"
