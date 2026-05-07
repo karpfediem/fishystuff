@@ -99,6 +99,7 @@ run_fixture_handoff() {
   local retained="$root/retained.json"
   local fake_mgmt="$root/fake-mgmt"
   local fake_mgmt_marker="$root/fake-mgmt-state-file"
+  local summary="$root/production-current.handoff-summary.json"
 
   write_retained_json "$retained"
   write_fake_mgmt "$fake_mgmt" "$fake_mgmt_marker"
@@ -118,6 +119,7 @@ run_fixture_handoff() {
       main \
       "$fake_mgmt" \
       "$deploy_bin" \
+      "$summary" \
       >"$root/stdout" \
       2>"$root/stderr"
 
@@ -136,6 +138,28 @@ run_fixture_handoff() {
     printf '[gitops-production-current-handoff-test] fake mgmt saw wrong state file\n' >&2
     exit 1
   fi
+
+  jq -e --arg output "$output" '
+    .schema == "fishystuff.gitops.production-current-handoff.v1"
+    and .desired_state_path == $output
+    and .cluster == "production"
+    and .mode == "validate"
+    and .desired_generation == 23
+    and .environment.name == "production"
+    and .environment.serve_requested == false
+    and (.active_release.release_id | startswith("release-"))
+    and .active_release.release_id == .environment.active_release
+    and .active_release.dolt_commit == "active-dolt"
+    and .active_release.closures.cdn_runtime == "/nix/store/example-active-cdn"
+    and .retained_release_count == 1
+    and .retained_releases[0].release_id == "previous-production-release"
+    and .retained_releases[0].dolt_commit == "previous-dolt"
+    and .checks.production_current_desired_generated == true
+    and .checks.desired_serving_preflight_passed == true
+    and .checks.gitops_unify_passed == true
+    and .checks.remote_deploy_performed == false
+    and .checks.infrastructure_mutation_performed == false
+  ' "$summary" >/dev/null
 }
 
 deploy_bin="$(require_deploy_bin)"

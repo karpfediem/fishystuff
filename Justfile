@@ -103,8 +103,8 @@ gitops-production-current-desired output="data/gitops/production-current.desired
   bash scripts/recipes/gitops-production-current-desired.sh "{{output}}" "{{dolt_ref}}"
 
 # Generate and validate a production-current handoff snapshot with retained rollback input.
-gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto":
-  bash scripts/recipes/gitops-production-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}"
+gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
+  bash scripts/recipes/gitops-production-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
 
 # Run fast local regression checks for the production-current handoff recipe.
 gitops-production-current-handoff-test:
