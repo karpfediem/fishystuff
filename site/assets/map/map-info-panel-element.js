@@ -335,23 +335,34 @@ function selectionTargetKey(target) {
   ].join(":");
 }
 
+function selectionTargetFallbackLabel(elementKind) {
+  switch (trimString(elementKind).toLowerCase()) {
+    case "bookmark":
+      return mapText("info.status.bookmark");
+    case "waypoint":
+      return mapText("info.status.waypoint");
+    case "npc":
+      return "NPC";
+    case "hotspot":
+      return "Hotspot";
+    case "sample":
+      return "Sample";
+    default:
+      return "";
+  }
+}
+
 function selectionHistoryLabel(selection, { zoneCatalog = [], runtimeLayers = [] } = {}) {
   const target = detailsTargetFromSelection(selection);
   const targetPointLabel = trimString(target?.pointLabel);
   const pointLabel = trimString(targetPointLabel || selection?.pointLabel);
   const elementKind = trimString(target?.elementKind);
-  if (
-    elementKind === "bookmark" ||
-    elementKind === "waypoint" ||
-    elementKind === "npc" ||
-    elementKind === "hotspot"
-  ) {
+  const targetFallbackLabel = selectionTargetFallbackLabel(elementKind);
+  if (targetFallbackLabel) {
     if (targetPointLabel) {
       return targetPointLabel;
     }
-    return elementKind === "bookmark"
-      ? mapText("info.status.bookmark")
-      : mapText("info.status.waypoint");
+    return targetFallbackLabel;
   }
   const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
   const layerLabel = preferredPointLabelForLayerSamples(layerSamples, {

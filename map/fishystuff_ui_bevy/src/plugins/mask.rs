@@ -29,7 +29,8 @@ use crate::plugins::hotspots::{
 };
 use crate::plugins::input::PanState;
 use crate::plugins::points::{
-    point_hover_samples_at_world_point, point_samples_at_world_point, PointsState,
+    point_hover_samples_at_world_point, point_selection_at_world_point, PointSelectionHit,
+    PointsState,
 };
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
@@ -82,6 +83,7 @@ struct PendingSelectionDetailsRequest {
     selected_world_point: WorldPoint,
     waypoint_sample: Option<WaypointLayerInteractionSample>,
     landmark_identity: Option<LandmarkSampleIdentity>,
+    transient_point_samples: Vec<PointSampleSummary>,
     point_kind: FishyMapSelectionPointKind,
     point_label: Option<String>,
     stage: PendingSelectionDetailsStage,
@@ -251,7 +253,15 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     else {
         return;
     };
+    let point_selection = point_selection_at_world_point(
+        world_point,
+        &context.points,
+        &context.snapshot,
+        &context.display_state,
+        &context.candidates.point_camera_q,
+    );
     let candidate = selection_candidate_at_world_point(&context.candidates, world_point);
+    let sample_target = sample_selection_target(&point_selection, &context.candidates.fish_catalog);
     let (element_kind, selected_world_point, point_kind, point_label) = candidate
         .as_ref()
         .map(|candidate| {
@@ -262,6 +272,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
                 candidate.point_label.clone(),
             )
         })
+        .or(sample_target)
         .unwrap_or((
             "point",
             world_point,
@@ -275,10 +286,21 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         point_label.clone(),
         FishyMapSelectionHistoryBehavior::Append,
     );
-    let quick_selected_info = candidate
-        .as_ref()
-        .map(quick_selected_info_for_candidate)
-        .unwrap_or_else(|| quick_selected_info(world_point, None, context.hover.info.as_ref()));
+    let quick_selected_info = if let Some(candidate) = candidate.as_ref() {
+        let mut selected_info = quick_selected_info_for_candidate(candidate);
+        selected_info.point_samples = point_selection.samples.clone();
+        selected_info
+    } else if !point_selection.samples.is_empty() {
+        point_selected_info(
+            selected_world_point,
+            point_kind,
+            point_label.as_deref(),
+            point_selection.samples.clone(),
+        )
+        .unwrap_or_else(|| quick_selected_info(world_point, None, context.hover.info.as_ref()))
+    } else {
+        quick_selected_info(world_point, None, context.hover.info.as_ref())
+    };
     apply_selection_without_zone_stats_request(
         &mut context.selection,
         &mut context.pending,
@@ -293,6 +315,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         landmark_identity: candidate
             .as_ref()
             .map(|candidate| candidate.landmark_identity.clone()),
+        transient_point_samples: point_selection.samples,
         point_kind,
         point_label,
         stage: PendingSelectionDetailsStage::ProbeWaypoint,
@@ -320,6 +343,7 @@ pub(crate) fn queue_selection_details(
         selected_world_point: world_point,
         waypoint_sample: None,
         landmark_identity: landmark_identity_for_request(element_kind.unwrap_or(""), world_point),
+        transient_point_samples: Vec::new(),
         point_kind,
         point_label,
         stage: PendingSelectionDetailsStage::ProbeWaypoint,
@@ -346,7 +370,7 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
 
     match request.stage {
         PendingSelectionDetailsStage::ProbeWaypoint => {
-            if !selection_details_should_probe_waypoint(request.point_kind) {
+            if !selection_details_should_probe_waypoint(&request) {
                 request.stage = PendingSelectionDetailsStage::BuildLayerSelection;
                 context.pending_selection_details.request = Some(request);
                 return;
@@ -395,8 +419,9 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
     }
 }
 
-fn selection_details_should_probe_waypoint(point_kind: FishyMapSelectionPointKind) -> bool {
-    !matches!(point_kind, FishyMapSelectionPointKind::Bookmark)
+fn selection_details_should_probe_waypoint(request: &PendingSelectionDetailsRequest) -> bool {
+    !matches!(request.point_kind, FishyMapSelectionPointKind::Bookmark)
+        && request.element_kind.trim() != "sample"
 }
 
 fn waypoint_probe_target_key(request: &PendingSelectionDetailsRequest) -> Option<&'static str> {
@@ -595,13 +620,7 @@ fn apply_pending_selection_point_samples(
     context: &mut SelectionDetailsContext<'_, '_>,
     request: &PendingSelectionDetailsRequest,
 ) {
-    let point_samples = point_samples_at_world_point(
-        request.selected_world_point,
-        &context.points,
-        &context.snapshot,
-        &context.display_state,
-        &context.point_camera_q,
-    );
+    let point_samples = request.transient_point_samples.clone();
     if point_samples.is_empty() {
         return;
     }
@@ -987,6 +1006,36 @@ fn layer_display_order(
         .unwrap_or_default()
 }
 
+fn sample_selection_target(
+    point_selection: &PointSelectionHit,
+    fish_catalog: &FishCatalog,
+) -> Option<(
+    &'static str,
+    WorldPoint,
+    FishyMapSelectionPointKind,
+    Option<String>,
+)> {
+    let sample = point_selection.primary_sample.as_ref()?;
+    let world_point = point_selection.world_point?;
+    Some((
+        "sample",
+        world_point,
+        FishyMapSelectionPointKind::Clicked,
+        Some(sample_selection_label(sample, fish_catalog)),
+    ))
+}
+
+fn sample_selection_label(sample: &PointSampleSummary, fish_catalog: &FishCatalog) -> String {
+    let sample_id = sample
+        .sample_id
+        .map(|sample_id| format!(" #{sample_id}"))
+        .unwrap_or_default();
+    fish_catalog
+        .entry_for_fish(sample.fish_id)
+        .map(|fish| format!("{} Sample{}", fish.name, sample_id))
+        .unwrap_or_else(|| format!("Sample{}", sample_id))
+}
+
 fn point_selected_info(
     world_point: WorldPoint,
     point_kind: FishyMapSelectionPointKind,
@@ -1225,6 +1274,9 @@ struct MaskClickContext<'w, 's> {
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Projection, &'static Transform), With<Map2dCamera>>,
+    points: Res<'w, PointsState>,
+    snapshot: Res<'w, EventsSnapshotState>,
+    display_state: Res<'w, MapDisplayState>,
     pending: ResMut<'w, PendingRequests>,
     pending_selection_details: ResMut<'w, PendingSelectionDetails>,
     selection: ResMut<'w, SelectionState>,
@@ -1253,9 +1305,6 @@ struct SelectionDetailsContext<'w, 's> {
     pending: ResMut<'w, PendingRequests>,
     pending_selection_details: ResMut<'w, PendingSelectionDetails>,
     selection: ResMut<'w, SelectionState>,
-    points: Res<'w, PointsState>,
-    snapshot: Res<'w, EventsSnapshotState>,
-    display_state: Res<'w, MapDisplayState>,
     bootstrap: Res<'w, ApiBootstrapState>,
     patch_filter: Res<'w, PatchFilterState>,
     hover: Res<'w, HoverState>,
@@ -1561,15 +1610,28 @@ mod tests {
 
     #[test]
     fn bookmark_details_do_not_probe_waypoint_layers() {
-        assert!(!selection_details_should_probe_waypoint(
-            FishyMapSelectionPointKind::Bookmark
-        ));
-        assert!(selection_details_should_probe_waypoint(
-            FishyMapSelectionPointKind::Clicked
-        ));
-        assert!(selection_details_should_probe_waypoint(
-            FishyMapSelectionPointKind::Waypoint
-        ));
+        let mut request = PendingSelectionDetailsRequest {
+            details_generation: 1,
+            element_kind: "waypoint".to_string(),
+            click_world_point: WorldPoint::new(1.0, 2.0),
+            selected_world_point: WorldPoint::new(1.0, 2.0),
+            waypoint_sample: None,
+            landmark_identity: None,
+            transient_point_samples: Vec::new(),
+            point_kind: FishyMapSelectionPointKind::Waypoint,
+            point_label: Some("Node".to_string()),
+            stage: PendingSelectionDetailsStage::ProbeWaypoint,
+            defer_frames: 0,
+        };
+
+        assert!(selection_details_should_probe_waypoint(&request));
+        request.point_kind = FishyMapSelectionPointKind::Clicked;
+        assert!(selection_details_should_probe_waypoint(&request));
+        request.point_kind = FishyMapSelectionPointKind::Bookmark;
+        assert!(!selection_details_should_probe_waypoint(&request));
+        request.point_kind = FishyMapSelectionPointKind::Clicked;
+        request.element_kind = "sample".to_string();
+        assert!(!selection_details_should_probe_waypoint(&request));
     }
 
     #[test]
@@ -1581,6 +1643,7 @@ mod tests {
             selected_world_point: WorldPoint::new(1.0, 2.0),
             waypoint_sample: None,
             landmark_identity: None,
+            transient_point_samples: Vec::new(),
             point_kind: FishyMapSelectionPointKind::Waypoint,
             point_label: Some("Node".to_string()),
             stage: PendingSelectionDetailsStage::ProbeWaypoint,

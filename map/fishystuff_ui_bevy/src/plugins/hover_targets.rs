@@ -86,6 +86,7 @@ const REGION_NODE_MARKER_COLOR: [u8; 3] = [244, 240, 232];
 const TRADE_NPC_MARKER_COLOR: [u8; 3] = [255, 196, 66];
 const HOTSPOT_MARKER_COLOR: [u8; 3] = [255, 179, 56];
 const BOOKMARK_MARKER_COLOR: [u8; 3] = [239, 92, 31];
+const EVENT_POINT_MARKER_COLOR: [u8; 3] = [88, 166, 255];
 const TERRITORY_DETAIL_PANE_ID: &str = "territory";
 const BOOKMARK_LAYER_KEY: &str = "bookmarks";
 const BOOKMARK_TARGET_KEY: &str = "bookmark";
@@ -1245,6 +1246,22 @@ fn details_selection_target_visual(target: &DetailsSelectionTarget) -> Option<Ho
                 icon_kind: UiSvgIconKind::MapPin,
             })
         }
+        ("sample", _) => Some(HoverTargetVisual {
+            world_x: target.world_x as f32,
+            world_z: target.world_z as f32,
+            label: target
+                .point_label
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Sample")
+                .to_string(),
+            offscreen: false,
+            marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+            label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+            color_rgb: EVENT_POINT_MARKER_COLOR,
+            icon_kind: UiSvgIconKind::Crosshair,
+        }),
         _ => None,
     }
 }

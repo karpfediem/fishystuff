@@ -64,6 +64,7 @@ const LANDMARK_STATUS_PRESENTATION_BY_KEY = Object.freeze({
   bookmark: { icon: "bookmark", labelKey: "info.status.bookmark" },
   hotspot: { icon: "map-pin", label: "Hotspot" },
   npc: { icon: "trade-origin", label: "NPC" },
+  sample: { icon: "date-confirmed", label: "Sample" },
   trade_npc: { icon: "trade-origin", label: "NPC" },
   waypoint: { icon: "map-pin", labelKey: "info.status.waypoint" },
 });
@@ -154,18 +155,12 @@ function selectionTargetPointLabel(selection) {
 function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers) {
   const elementKind = selectionTargetElementKind(selection);
   const targetPointLabel = selectionTargetPointLabel(selection);
-  if (
-    elementKind === "bookmark" ||
-    elementKind === "waypoint" ||
-    elementKind === "npc" ||
-    elementKind === "hotspot"
-  ) {
+  const landmarkPresentation = landmarkStatusPresentationFromKey(elementKind);
+  if (landmarkPresentation) {
     if (targetPointLabel) {
       return targetPointLabel;
     }
-    return elementKind === "bookmark"
-      ? mapText("info.status.bookmark")
-      : mapText("info.status.waypoint");
+    return landmarkStatusPresentationLabel(landmarkPresentation);
   }
   const pointLabel = trimString(selection?.pointLabel);
   const pointKind = normalizePointKind(selection?.pointKind);
@@ -189,6 +184,7 @@ function preferredPaneIdFromSelection(selection) {
   switch (selectionTargetElementKind(selection)) {
     case "hotspot":
       return "hotspot";
+    case "sample":
     case "point":
       return "samples";
     default:

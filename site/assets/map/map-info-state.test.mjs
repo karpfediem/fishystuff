@@ -422,6 +422,69 @@ test("buildInfoViewModel exposes clicked ranking samples as the first pane", () 
   );
 });
 
+test("buildInfoViewModel treats explicit sample selections as sample landmarks", () => {
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        detailsTarget: {
+          elementKind: "sample",
+          worldX: 10,
+          worldZ: 20,
+          pointKind: "clicked",
+          pointLabel: "Sea Eel Sample #41755",
+        },
+        pointKind: "clicked",
+        pointLabel: "Sea Eel Sample #41755",
+        layerSamples: [],
+        pointSamples: [
+          {
+            fishId: 10,
+            sampleCount: 1,
+            sampleId: 41755,
+            lastTsUtc: 1_700_000_000,
+            zoneRgbs: [0x39e58d],
+            fullZoneRgbs: [0x39e58d],
+          },
+        ],
+      },
+      catalog: {
+        fish: [{ fishId: 10, itemId: 900010, name: "Sea Eel", grade: "general" }],
+        layers: [],
+      },
+    },
+  });
+
+  assert.equal(viewModel.descriptor.title, "Sea Eel Sample #41755");
+  assert.equal(viewModel.descriptor.statusText, "Sample");
+  assert.equal(viewModel.descriptor.statusIcon, "date-confirmed");
+  assert.equal(viewModel.activePaneId, "samples");
+  assert.equal(viewModel.activePane.sections[0].kind, "point-samples");
+});
+
+test("buildInfoViewModel titles unlabeled sample targets from their landmark kind", () => {
+  const viewModel = buildInfoViewModel({
+    _map_runtime: {
+      selection: {
+        detailsTarget: {
+          elementKind: "sample",
+          worldX: 10,
+          worldZ: 20,
+          pointKind: "clicked",
+        },
+        pointKind: "clicked",
+        layerSamples: [],
+        pointSamples: [],
+      },
+      catalog: {
+        layers: [],
+      },
+    },
+  });
+
+  assert.equal(viewModel.descriptor.title, "Sample");
+  assert.equal(viewModel.descriptor.statusText, "Sample");
+});
+
 test("buildInfoViewModel lets zone loot condition selection switch branch rows", () => {
   const viewModel = buildInfoViewModel(
     {

@@ -22,14 +22,41 @@ pub fn point_samples_at_world_point(
     display_state: &MapDisplayState,
     camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
 ) -> Vec<PointSampleSummary> {
+    point_selection_at_world_point(world_point, points, snapshot, display_state, camera_q).samples
+}
+
+pub fn point_selection_at_world_point(
+    world_point: WorldPoint,
+    points: &PointsState,
+    snapshot: &EventsSnapshotState,
+    display_state: &MapDisplayState,
+    camera_q: &Query<'_, '_, &'static Projection, With<Map2dCamera>>,
+) -> PointSelectionHit {
     let hits = point_hits_at_world_point(world_point, points, display_state, camera_q);
+    point_selection_from_hits(&hits, snapshot)
+}
+
+fn point_selection_from_hits(
+    hits: &[PointHit<'_>],
+    snapshot: &EventsSnapshotState,
+) -> PointSelectionHit {
     let Some(best) = hits.first() else {
-        return Vec::new();
+        return PointSelectionHit::default();
     };
-    if best.point.aggregated {
-        return aggregated_point_samples(best.point, snapshot);
+    let samples = if best.point.aggregated {
+        aggregated_point_samples(best.point, snapshot)
+    } else {
+        exact_raw_point_samples(best.point, hits, snapshot)
+    };
+    let primary_sample = (!best.point.aggregated && samples.len() == 1)
+        .then(|| samples.first().cloned())
+        .flatten()
+        .filter(|sample| sample.sample_id.is_some());
+    PointSelectionHit {
+        world_point: Some(map_point_to_world(best.point)),
+        samples,
+        primary_sample,
     }
-    exact_raw_point_samples(best.point, &hits, snapshot)
 }
 
 pub fn point_hover_samples_at_world_point(
@@ -238,6 +265,13 @@ fn summarize_hover_samples(samples: &[PointSampleSummary]) -> Vec<PointSampleSum
     summaries
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PointSelectionHit {
+    pub world_point: Option<WorldPoint>,
+    pub samples: Vec<PointSampleSummary>,
+    pub primary_sample: Option<PointSampleSummary>,
+}
+
 fn merge_zone_rgbs(target: &mut Vec<u32>, source: &[u32]) {
     target.extend(source.iter().copied());
     target.sort_unstable();
@@ -249,8 +283,8 @@ mod tests {
     use fishystuff_api::models::events::EventPointCompact;
 
     use super::{
-        aggregated_point_samples, exact_raw_point_samples, summarize_hover_event_indices,
-        summarize_hover_samples, PointHit,
+        aggregated_point_samples, exact_raw_point_samples, point_selection_from_hits,
+        summarize_hover_event_indices, summarize_hover_samples, PointHit,
     };
     use crate::map::events::EventsSnapshotState;
     use crate::plugins::api::PointSampleSummary;
@@ -332,6 +366,59 @@ mod tests {
         assert_eq!(samples.len(), 2);
         assert_eq!(samples[0].sample_id, Some(41755));
         assert_eq!(samples[1].sample_id, Some(1674));
+    }
+
+    #[test]
+    fn point_selection_marks_single_raw_sample_as_primary_landmark() {
+        let point = raw_point(2418, 2740, sample(41755, 116, 1_629_098_858));
+        let hits = vec![PointHit {
+            point: &point,
+            distance_sq: 0.0,
+        }];
+
+        let selection = point_selection_from_hits(&hits, &EventsSnapshotState::default());
+
+        assert_eq!(
+            selection
+                .primary_sample
+                .as_ref()
+                .and_then(|sample| sample.sample_id),
+            Some(41755)
+        );
+        assert_eq!(selection.samples.len(), 1);
+        assert!(selection.world_point.is_some());
+    }
+
+    #[test]
+    fn point_selection_keeps_clusters_transient_without_primary_landmark() {
+        let point = RenderPoint {
+            map_px_x: 10,
+            map_px_y: 20,
+            world_x: None,
+            world_z: None,
+            fish_id: Some(10),
+            zone_rgb_u32: None,
+            sample_count: 2,
+            aggregated: true,
+            event_indices: vec![0, 1],
+            point_samples: Vec::new(),
+        };
+        let hits = vec![PointHit {
+            point: &point,
+            distance_sq: 0.0,
+        }];
+        let snapshot = EventsSnapshotState {
+            events: vec![
+                event(1, 10, 100, vec![0x39e58d], vec![0x39e58d]),
+                event(2, 20, 130, vec![0x123456], vec![0x123456]),
+            ],
+            ..Default::default()
+        };
+
+        let selection = point_selection_from_hits(&hits, &snapshot);
+
+        assert!(selection.primary_sample.is_none());
+        assert_eq!(selection.samples.len(), 2);
     }
 
     #[test]
