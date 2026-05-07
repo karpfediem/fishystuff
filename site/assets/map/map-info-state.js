@@ -60,6 +60,26 @@ const LANDMARK_LAYER_IDS = Object.freeze([
   "region_nodes",
   "bookmarks",
 ]);
+const LANDMARK_STATUS_PRESENTATION_BY_KEY = Object.freeze({
+  bookmark: { icon: "bookmark", labelKey: "info.status.bookmark" },
+  hotspot: { icon: "map-pin", label: "Hotspot" },
+  npc: { icon: "trade-origin", label: "NPC" },
+  trade_npc: { icon: "trade-origin", label: "NPC" },
+  waypoint: { icon: "map-pin", labelKey: "info.status.waypoint" },
+});
+const LANDMARK_STATUS_PRESENTATION_BY_LAYER = Object.freeze({
+  bookmarks: LANDMARK_STATUS_PRESENTATION_BY_KEY.bookmark,
+  hotspots: LANDMARK_STATUS_PRESENTATION_BY_KEY.hotspot,
+  trade_npcs: LANDMARK_STATUS_PRESENTATION_BY_KEY.trade_npc,
+});
+
+function landmarkStatusPresentationLabel(presentation) {
+  return trimString(presentation?.label) || mapText(presentation?.labelKey);
+}
+
+function landmarkStatusPresentationFromKey(key) {
+  return LANDMARK_STATUS_PRESENTATION_BY_KEY[trimString(key).toLowerCase()] || null;
+}
 
 function pointKindStatusText(pointKind, pointLabel) {
   const normalizedLabel = trimString(pointLabel);
@@ -73,6 +93,50 @@ function pointKindStatusText(pointKind, pointLabel) {
     default:
       return mapText("info.status.no_selection");
   }
+}
+
+function landmarkStatusPresentationFromSelection(selection, layerSamples) {
+  const elementKindPresentation = landmarkStatusPresentationFromKey(selectionTargetElementKind(selection));
+  if (elementKindPresentation) {
+    return elementKindPresentation;
+  }
+  for (const sample of layerSamples) {
+    for (const target of Array.isArray(sample?.targets) ? sample.targets : []) {
+      const targetPresentation = landmarkStatusPresentationFromKey(target?.key);
+      if (targetPresentation) {
+        return targetPresentation;
+      }
+    }
+  }
+  const hotspotSample = layerSamples.find(isHotspotSample);
+  if (hotspotSample) {
+    return LANDMARK_STATUS_PRESENTATION_BY_KEY.hotspot;
+  }
+  const landmarkSample = layerSamples.find(isLandmarkSample);
+  if (landmarkSample) {
+    return (
+      LANDMARK_STATUS_PRESENTATION_BY_LAYER[trimString(landmarkSample?.layerId)] ||
+      LANDMARK_STATUS_PRESENTATION_BY_KEY.waypoint
+    );
+  }
+  return null;
+}
+
+function selectionStatusDescriptor(selection, layerSamples) {
+  const landmarkPresentation = landmarkStatusPresentationFromSelection(selection, layerSamples);
+  const landmarkStatusText = landmarkStatusPresentationLabel(landmarkPresentation);
+  if (landmarkStatusText) {
+    return {
+      statusIcon: trimString(landmarkPresentation?.icon) || INFO_WINDOW_STATUS_ICON,
+      statusText: landmarkStatusText,
+    };
+  }
+  const pointKind = normalizePointKind(selection?.pointKind);
+  const targetPointLabel = selectionTargetPointLabel(selection);
+  return {
+    statusIcon: INFO_WINDOW_STATUS_ICON,
+    statusText: pointKindStatusText(pointKind, targetPointLabel || selection?.pointLabel),
+  };
 }
 
 function selectionDetailsTarget(selection) {
@@ -1017,7 +1081,7 @@ export function buildInfoViewModel(
       ? requestedPaneId
       : panes[0]?.id || "";
   const pointKind = normalizePointKind(selection?.pointKind);
-  const targetPointLabel = selectionTargetPointLabel(selection);
+  const statusDescriptor = selectionStatusDescriptor(selection, layerSamples);
   const overviewRows = buildOverviewRowsForLayerSamples(layerSamples, {
     zoneCatalog,
     runtimeLayers,
@@ -1026,8 +1090,8 @@ export function buildInfoViewModel(
     descriptor: {
       title: titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers),
       titleIcon: INFO_WINDOW_TITLE_ICON,
-      statusIcon: INFO_WINDOW_STATUS_ICON,
-      statusText: pointKindStatusText(pointKind, targetPointLabel || selection?.pointLabel),
+      statusIcon: statusDescriptor.statusIcon,
+      statusText: statusDescriptor.statusText,
       pointKind,
       overviewRows,
     },

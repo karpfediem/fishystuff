@@ -560,6 +560,8 @@ test("buildInfoViewModel exposes selected waypoint detail sections as a landmark
   });
 
   assert.equal(viewModel.descriptor.title, "Chunsu");
+  assert.equal(viewModel.descriptor.statusText, "NPC");
+  assert.equal(viewModel.descriptor.statusIcon, "trade-origin");
   assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["landmark", "zone"]);
   assert.equal(viewModel.activePaneId, "landmark");
   assert.equal(viewModel.activePane.sections[0].title, "Landmark");
@@ -676,6 +678,8 @@ test("buildInfoViewModel exposes hotspot detail sections as a dedicated pane", (
   });
 
   assert.equal(viewModel.descriptor.title, "Porgy Hotspot #423");
+  assert.equal(viewModel.descriptor.statusText, "Hotspot");
+  assert.equal(viewModel.descriptor.statusIcon, "map-pin");
   assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["hotspot"]);
   assert.equal(viewModel.activePane.sections[0].fishName, "Porgy");
   assert.equal(viewModel.activePane.sections[0].iconUrl, "/items/8207.webp");
@@ -859,7 +863,8 @@ test("buildInfoViewModel titles selected bookmarks from the details target ident
   });
 
   assert.equal(viewModel.descriptor.title, "Saved Hotspot");
-  assert.equal(viewModel.descriptor.statusText, "Saved Hotspot");
+  assert.equal(viewModel.descriptor.statusText, "Bookmark");
+  assert.equal(viewModel.descriptor.statusIcon, "bookmark");
 });
 
 test("patchTouchesInfoSignals stays narrow to selection, pane tab, rate display, and runtime layer inputs", () => {
