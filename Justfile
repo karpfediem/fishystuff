@@ -118,6 +118,10 @@ gitops-production-activation-draft output="data/gitops/production-activation.dra
 gitops-check-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto":
   bash scripts/recipes/gitops-check-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}"
 
+# Write activation admission evidence from observed API meta, DB-backed, and site/CDN probe outputs.
+gitops-write-activation-admission-evidence output="data/gitops/production-admission.evidence.json" summary_file="data/gitops/production-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
+  bash scripts/recipes/gitops-write-activation-admission-evidence.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{api_meta_source}}" "{{db_probe_file}}" "{{site_cdn_probe_file}}"
+
 # Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
 gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"

@@ -74,6 +74,13 @@ just gitops-check-handoff-summary
 To generate a serving draft, provide explicit admission evidence:
 
 ```bash
+just gitops-write-activation-admission-evidence \
+  output=/tmp/fishystuff-production-admission.json \
+  api_upstream=https://api.fishystuff.fish \
+  api_meta_source=/tmp/fishystuff-api-meta.json \
+  db_probe_file=/tmp/fishystuff-db-probe.json \
+  site_cdn_probe_file=/tmp/fishystuff-site-cdn-probe.json
+
 just gitops-production-activation-draft admission_file=/tmp/fishystuff-production-admission.json
 ```
 

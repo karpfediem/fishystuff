@@ -132,59 +132,41 @@ release_identity_from_state() {
     "$state_file"
 }
 
-write_admission_evidence() {
+write_admission_observations() {
   local summary="$1"
   local state_file="$2"
-  local path="$3"
-  local api_upstream="$4"
+  local api_meta_path="$3"
+  local db_probe_path="$4"
+  local site_cdn_probe_path="$5"
   local release_id=""
   local release_identity=""
   local dolt_commit=""
-  local desired_state_sha256=""
-  local handoff_summary_sha256=""
-  local api_meta_url=""
 
   release_id="$(jq -er '.environment.active_release' "$summary")"
   release_identity="$(release_identity_from_state "$state_file" "$release_id")"
   dolt_commit="$(jq -er '.active_release.dolt_commit' "$summary")"
-  desired_state_sha256="$(jq -er '.desired_state_sha256' "$summary")"
-  read -r handoff_summary_sha256 _ < <(sha256sum "$summary")
-  api_meta_url="${api_upstream}/api/v1/meta"
 
   jq -n \
-    --arg handoff_summary_sha256 "$handoff_summary_sha256" \
-    --arg desired_state_sha256 "$desired_state_sha256" \
     --arg release_id "$release_id" \
     --arg release_identity "$release_identity" \
     --arg dolt_commit "$dolt_commit" \
-    --arg api_upstream "$api_upstream" \
-    --arg api_meta_url "$api_meta_url" \
     '{
-      schema: "fishystuff.gitops.activation-admission.v1",
-      environment: "production",
-      handoff_summary_sha256: $handoff_summary_sha256,
-      desired_state_sha256: $desired_state_sha256,
       release_id: $release_id,
       release_identity: $release_identity,
-      dolt_commit: $dolt_commit,
-      api_upstream: $api_upstream,
-      api_meta: {
-        url: $api_meta_url,
-        observed_status: 200,
-        timeout_ms: 2000,
-        release_id: $release_id,
-        release_identity: $release_identity,
-        dolt_commit: $dolt_commit
-      },
-      db_backed_probe: {
-        name: "representative-db-backed-route",
-        passed: true
-      },
-      site_cdn_probe: {
-        name: "site-selected-cdn-runtime",
-        passed: true
-      }
-    }' >"$path"
+      dolt_commit: $dolt_commit
+    }' >"$api_meta_path"
+
+  jq -n \
+    '{
+      name: "representative-db-backed-route",
+      passed: true
+    }' >"$db_probe_path"
+
+  jq -n \
+    '{
+      name: "site-selected-cdn-runtime",
+      passed: true
+    }' >"$site_cdn_probe_path"
 }
 
 write_retained_json() {
@@ -292,6 +274,10 @@ run_fixture_handoff() {
   local tampered_state=""
   local admission_evidence="$root/admission-evidence.json"
   local bad_admission_evidence="$root/bad-admission-evidence.json"
+  local api_meta_observation="$root/api-meta.json"
+  local bad_api_meta_observation="$root/bad-api-meta.json"
+  local db_probe_observation="$root/db-probe.json"
+  local site_cdn_probe_observation="$root/site-cdn-probe.json"
   local activation_draft="$root/production-activation.draft.desired.json"
   local stale_activation_draft="$root/stale-production-activation.draft.desired.json"
   local activation_api_upstream="http://127.0.0.1:19090"
@@ -398,7 +384,28 @@ run_fixture_handoff() {
       "$fake_mgmt" \
       "$deploy_bin"
 
-  write_admission_evidence "$summary" "$output" "$admission_evidence" "$activation_api_upstream"
+  write_admission_observations "$summary" "$output" "$api_meta_observation" "$db_probe_observation" "$site_cdn_probe_observation"
+  jq '.dolt_commit = "wrong-dolt-commit"' "$api_meta_observation" >"$bad_api_meta_observation"
+  expect_fail_contains \
+    "admission evidence writer rejects mismatched API meta" \
+    "API meta observation does not match verified production handoff" \
+    bash scripts/recipes/gitops-write-activation-admission-evidence.sh \
+      "$root/bad-api-meta-admission.evidence.json" \
+      "$summary" \
+      "$activation_api_upstream" \
+      "$bad_api_meta_observation" \
+      "$db_probe_observation" \
+      "$site_cdn_probe_observation"
+
+  bash scripts/recipes/gitops-write-activation-admission-evidence.sh \
+    "$admission_evidence" \
+    "$summary" \
+    "$activation_api_upstream" \
+    "$api_meta_observation" \
+    "$db_probe_observation" \
+    "$site_cdn_probe_observation" \
+    >"$root/write-admission.stdout" \
+    2>"$root/write-admission.stderr"
   jq '.dolt_commit = "wrong-dolt-commit"' "$admission_evidence" >"$bad_admission_evidence"
   expect_fail_contains \
     "activation draft rejects mismatched admission evidence" \
