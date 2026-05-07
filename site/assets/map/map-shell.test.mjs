@@ -6,6 +6,24 @@ import { installMapTestI18n } from "./test-i18n.js";
 installMapTestI18n();
 
 const shellHtml = readFileSync(new URL("./map-shell.html", import.meta.url), "utf8");
+const mapLayoutHtml = readFileSync(new URL("../../layouts/map.shtml", import.meta.url), "utf8");
+const mapCss = readFileSync(new URL("./map.css", import.meta.url), "utf8");
+
+test("map layout stabilizes the full-bleed frame before runtime paint", () => {
+  assert.match(
+    mapLayoutHtml,
+    /document\.documentElement\.dataset\.mapPage = "true"/,
+  );
+  assert.match(mapCss, /html\[data-map-page="true"\]/);
+  assert.match(
+    mapCss,
+    /#content#content\.site-content-card\.site-content-clip/,
+  );
+  assert.match(
+    mapCss,
+    /#content#content\.site-content-card\.site-content-clip::before/,
+  );
+});
 
 test("map shell windows are Datastar-driven for open and collapsed state", () => {
   assert.match(

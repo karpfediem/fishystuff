@@ -1,18 +1,23 @@
+html[data-map-page="true"],
 html:has(#map-page-shell) {
   overflow: hidden;
   scrollbar-gutter: auto;
 }
 
+html[data-map-page="true"] body,
 body:has(#map-page-shell) {
   min-height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
 }
 
+html[data-map-page="true"] body #menu,
 body:has(#map-page-shell) #menu {
   margin-bottom: 0;
 }
 
+html[data-map-page="true"] body #content#content.site-content-card.site-content-clip,
+body:has(#map-page-shell) #content#content.site-content-card.site-content-clip,
 body:has(#map-page-shell) #content {
   position: fixed;
   inset: var(--site-nav-offset, 0px) 0 0;
@@ -28,11 +33,18 @@ body:has(#map-page-shell) #content {
   overflow: hidden;
 }
 
+html[data-map-page="true"] body #content#content.site-content-card.site-content-clip::before,
+html[data-map-page="true"] body #content#content.site-content-card.site-content-clip::after,
+body:has(#map-page-shell) #content#content.site-content-card.site-content-clip::before,
+body:has(#map-page-shell) #content#content.site-content-card.site-content-clip::after,
 body:has(#map-page-shell) #content::before,
 body:has(#map-page-shell) #content::after {
   content: none;
+  display: none;
 }
 
+html[data-map-page="true"] body #content#content.site-content-card.site-content-clip > .site-content-clip,
+body:has(#map-page-shell) #content#content.site-content-card.site-content-clip > .site-content-clip,
 body:has(#map-page-shell) #content > .site-content-clip {
   width: 100%;
   height: 100%;
@@ -163,8 +175,10 @@ body:has(#map-page-shell) #content > .site-content-clip {
 
 .fishymap-loading-percent {
   flex: none;
+  width: 4ch;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  text-align: right;
 }
 
 #map-page-shell[data-bookmark-placing="true"] #bevy {
