@@ -95,6 +95,17 @@ just gitops-review-activation-draft admission_file=/tmp/fishystuff-production-ad
 
 The review command is read-only. It prints the exact release ID, release identity, Dolt commit, closure paths, API upstream, admission probe names, retained rollback set, and proof hashes that an operator would be about to apply.
 
+The guarded local apply consumer is intentionally awkward to run:
+
+```bash
+FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 \
+FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
+FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=<activation_draft_sha256 from review output> \
+  just gitops-apply-activation-draft admission_file=/tmp/fishystuff-production-admission.json
+```
+
+It re-runs the activation review, requires the reviewed draft SHA-256 to match the file it is about to consume, then runs a local one-shot mgmt reconciliation of `gitops/main.mcl` with the activation draft. It does not SSH to remote hosts, call the old deploy script, mutate DNS, or run cloud provider commands. It is still not the recommended production path until the remaining real-host service/Caddy handoff and served-state inspection loop are in place.
+
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
 ```bash

@@ -71,6 +71,37 @@ EOF
   export FISHYSTUFF_FAKE_MGMT_MARKER="$marker"
 }
 
+write_fake_mgmt_apply() {
+  local path="$1"
+  local marker="$2"
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+marker="${FISHYSTUFF_FAKE_MGMT_MARKER:?}"
+if [[ "${FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY:-}" != "1" ]]; then
+  echo "FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY was not set for fake apply" >&2
+  exit 2
+fi
+if [[ "${FISHYSTUFF_GITOPS_STATE_FILE:-}" != /* ]]; then
+  echo "FISHYSTUFF_GITOPS_STATE_FILE must be absolute" >&2
+  exit 2
+fi
+if [[ ! -f "$FISHYSTUFF_GITOPS_STATE_FILE" ]]; then
+  echo "FISHYSTUFF_GITOPS_STATE_FILE does not exist: $FISHYSTUFF_GITOPS_STATE_FILE" >&2
+  exit 2
+fi
+expected=(run --tmp-prefix --no-pgp lang --no-watch --converged-timeout 45 main.mcl)
+if [[ "$*" != "${expected[*]}" ]]; then
+  echo "unexpected fake mgmt apply args: $*" >&2
+  exit 2
+fi
+printf '%s\n' "$FISHYSTUFF_GITOPS_STATE_FILE" > "$marker"
+EOF
+  chmod +x "$path"
+  export FISHYSTUFF_FAKE_MGMT_MARKER="$marker"
+}
+
 make_cdn_current_root() {
   local root="$1"
   local name="$2"
@@ -281,8 +312,11 @@ run_fixture_handoff() {
   local activation_draft="$root/production-activation.draft.desired.json"
   local stale_activation_draft="$root/stale-production-activation.draft.desired.json"
   local activation_review="$root/activation-review.txt"
+  local apply_fake_mgmt="$root/fake-mgmt-apply"
+  local apply_fake_mgmt_marker="$root/fake-mgmt-apply-state-file"
   local activation_api_upstream="http://127.0.0.1:19090"
   local activation_release_id=""
+  local activation_draft_sha256=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-cdn-serving" "$previous_cdn_current" '[]')"
@@ -476,6 +510,66 @@ run_fixture_handoff() {
   grep -F "api_meta_url=$activation_api_upstream/api/v1/meta" "$activation_review" >/dev/null
   grep -F "remote_deploy_performed=false" "$activation_review" >/dev/null
   grep -F "infrastructure_mutation_performed=false" "$activation_review" >/dev/null
+  activation_draft_sha256="$(awk -F= '$1 == "activation_draft_sha256" { print $2 }' "$activation_review")"
+  if [[ -z "$activation_draft_sha256" ]]; then
+    printf '[gitops-production-current-handoff-test] activation review did not print draft sha256\n' >&2
+    exit 1
+  fi
+
+  expect_fail_contains \
+    "activation apply refuses without opt-in" \
+    "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1" \
+    bash scripts/recipes/gitops-apply-activation-draft.sh \
+      "$activation_draft" \
+      "$summary" \
+      "$admission_evidence" \
+      auto \
+      "$deploy_bin"
+
+  expect_fail_contains \
+    "activation apply requires reviewed draft hash" \
+    "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256" \
+    env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
+      bash scripts/recipes/gitops-apply-activation-draft.sh \
+        "$activation_draft" \
+        "$summary" \
+        "$admission_evidence" \
+        auto \
+        "$deploy_bin"
+
+  expect_fail_contains \
+    "activation apply rejects stale reviewed draft hash" \
+    "FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256 does not match activation draft" \
+    env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      bash scripts/recipes/gitops-apply-activation-draft.sh \
+        "$activation_draft" \
+        "$summary" \
+        "$admission_evidence" \
+        auto \
+        "$deploy_bin"
+
+  write_fake_mgmt_apply "$apply_fake_mgmt" "$apply_fake_mgmt_marker"
+  env \
+    FISHYSTUFF_FAKE_MGMT_MARKER="$apply_fake_mgmt_marker" \
+    FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 \
+    FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
+    FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256="$activation_draft_sha256" \
+    bash scripts/recipes/gitops-apply-activation-draft.sh \
+      "$activation_draft" \
+      "$summary" \
+      "$admission_evidence" \
+      "$apply_fake_mgmt" \
+      "$deploy_bin" \
+      >"$root/apply-activation.stdout" \
+      2>"$root/apply-activation.stderr"
+  grep -F "gitops_activation_apply_ok=$activation_draft" "$root/apply-activation.stdout" >/dev/null
+  grep -F "gitops_activation_apply_draft_sha256=$activation_draft_sha256" "$root/apply-activation.stdout" >/dev/null
+  grep -F "remote_deploy_performed=false" "$root/apply-activation.stdout" >/dev/null
+  grep -F "infrastructure_mutation_performed=false" "$root/apply-activation.stdout" >/dev/null
+  if [[ "$(cat "$apply_fake_mgmt_marker")" != "$activation_draft" ]]; then
+    printf '[gitops-production-current-handoff-test] fake mgmt apply saw wrong activation draft state file\n' >&2
+    exit 1
+  fi
 
   jq '.environments.production.api_upstream = "http://127.0.0.1:19999"' "$activation_draft" >"$stale_activation_draft"
   expect_fail_contains \

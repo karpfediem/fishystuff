@@ -122,6 +122,10 @@ gitops-check-activation-draft draft_file="data/gitops/production-activation.draf
 gitops-review-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto":
   bash scripts/recipes/gitops-review-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}"
 
+# Apply a checked production activation draft through local mgmt only after explicit opt-ins and reviewed draft hash.
+gitops-apply-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto" converged_timeout="45":
+  bash scripts/recipes/gitops-apply-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{converged_timeout}}"
+
 # Write activation admission evidence from observed API meta, DB-backed, and site/CDN probe outputs.
 gitops-write-activation-admission-evidence output="data/gitops/production-admission.evidence.json" summary_file="data/gitops/production-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
   bash scripts/recipes/gitops-write-activation-admission-evidence.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{api_meta_source}}" "{{db_probe_file}}" "{{site_cdn_probe_file}}"
