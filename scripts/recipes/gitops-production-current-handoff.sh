@@ -124,6 +124,7 @@ write_handoff_summary() {
         checks: {
           production_current_desired_generated: true,
           desired_serving_preflight_passed: true,
+          closure_paths_verified: true,
           cdn_retained_roots_verified: true,
           gitops_unify_passed: true,
           remote_deploy_performed: false,
@@ -131,6 +132,28 @@ write_handoff_summary() {
         }
       }' "$desired_state" >"$tmp"
   mv "$tmp" "$summary"
+}
+
+verify_desired_closure_paths() {
+  local desired_state="$1"
+
+  jq -r \
+    '(.environments.production // error("production environment is missing")) as $env
+    | (
+        [$env.active_release] + $env.retained_releases
+      )[] as $release_id
+    | (.releases[$release_id] // error("release " + $release_id + " is missing")) as $release
+    | $release.closures
+    | to_entries[]
+    | [$release_id, .key, .value.store_path]
+    | @tsv' \
+    "$desired_state" |
+    while IFS=$'\t' read -r release_id closure_name store_path; do
+      if [[ -z "$store_path" || ! -e "$store_path" ]]; then
+        echo "handoff closure path does not exist for ${release_id} ${closure_name}: ${store_path}" >&2
+        exit 2
+      fi
+    done
 }
 
 write_cdn_retention_summary() {
@@ -230,6 +253,7 @@ write_cdn_retention_summary() {
 cdn_retention_summary="$(mktemp)"
 bash scripts/recipes/gitops-production-current-desired.sh "$output" "$dolt_ref"
 bash scripts/recipes/gitops-check-desired-serving.sh "$deploy_bin" "$state_file" production
+verify_desired_closure_paths "$state_file"
 write_cdn_retention_summary "$state_file" "$cdn_retention_summary"
 bash scripts/recipes/gitops-unify.sh "$mgmt_bin" "$state_file"
 write_handoff_summary "$state_file" "$summary_file" "$cdn_retention_summary"

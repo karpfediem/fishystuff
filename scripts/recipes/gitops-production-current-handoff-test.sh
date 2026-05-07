@@ -88,6 +88,16 @@ make_cdn_current_root() {
   nix-store --add "$dir"
 }
 
+make_store_fixture() {
+  local root="$1"
+  local name="$2"
+  local dir="$root/${name}"
+
+  mkdir -p "$dir"
+  printf '%s\n' "$name" >"$dir/fixture.txt"
+  nix-store --add "$dir"
+}
+
 make_cdn_serving_root() {
   local root="$1"
   local name="$2"
@@ -113,20 +123,26 @@ make_cdn_serving_root() {
 
 write_retained_json() {
   local path="$1"
-  local cdn_runtime_closure="$2"
+  local api_closure="$2"
+  local site_closure="$3"
+  local cdn_runtime_closure="$4"
+  local dolt_service_closure="$5"
 
   jq -n \
+    --arg api_closure "$api_closure" \
+    --arg site_closure "$site_closure" \
     --arg cdn_runtime_closure "$cdn_runtime_closure" \
+    --arg dolt_service_closure "$dolt_service_closure" \
     '[
       {
         release_id: "previous-production-release",
         generation: 1,
         git_rev: "previous-git",
         dolt_commit: "previous-dolt",
-        api_closure: "/nix/store/example-previous-api",
-        site_closure: "/nix/store/example-previous-site",
+        api_closure: $api_closure,
+        site_closure: $site_closure,
         cdn_runtime_closure: $cdn_runtime_closure,
-        dolt_service_closure: "/nix/store/example-previous-dolt-service",
+        dolt_service_closure: $dolt_service_closure,
         dolt_materialization: "fetch_pin",
         dolt_cache_dir: "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
         dolt_release_ref: "fishystuff/gitops/previous-production-release"
@@ -136,15 +152,21 @@ write_retained_json() {
 
 write_served_rollback_set_state() {
   local state_dir="$1"
-  local cdn_runtime_closure="$2"
+  local api_closure="$2"
+  local site_closure="$3"
+  local cdn_runtime_closure="$4"
+  local dolt_service_closure="$5"
   local member="$state_dir/rollback-set/production/previous-production-release.json"
   local index="$state_dir/rollback-set/production.json"
-  local identity="release=previous-production-release;generation=1;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=/nix/store/example-previous-api;site=/nix/store/example-previous-site;cdn_runtime=${cdn_runtime_closure};dolt_service=/nix/store/example-previous-dolt-service"
+  local identity="release=previous-production-release;generation=1;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=${api_closure};site=${site_closure};cdn_runtime=${cdn_runtime_closure};dolt_service=${dolt_service_closure}"
 
   mkdir -p "$(dirname "$member")"
   jq -n \
     --arg identity "$identity" \
+    --arg api_closure "$api_closure" \
+    --arg site_closure "$site_closure" \
     --arg cdn_runtime_closure "$cdn_runtime_closure" \
+    --arg dolt_service_closure "$dolt_service_closure" \
     '{
       desired_generation: 42,
       environment: "production",
@@ -152,9 +174,9 @@ write_served_rollback_set_state() {
       current_release_id: "currently-served-release",
       release_id: "previous-production-release",
       release_identity: $identity,
-      api_bundle: "/nix/store/example-previous-api",
-      dolt_service_bundle: "/nix/store/example-previous-dolt-service",
-      site_content: "/nix/store/example-previous-site",
+      api_bundle: $api_closure,
+      dolt_service_bundle: $dolt_service_closure,
+      site_content: $site_closure,
       cdn_runtime_content: $cdn_runtime_closure,
       dolt_commit: "previous-dolt",
       dolt_materialization: "fetch_pin",
@@ -190,8 +212,14 @@ run_fixture_handoff() {
   local summary="$root/production-current.handoff-summary.json"
   local previous_cdn_current=""
   local previous_cdn_serving=""
+  local previous_api=""
+  local previous_site=""
+  local previous_dolt_service=""
+  local active_api=""
+  local active_site=""
   local active_cdn_current=""
   local active_cdn_serving=""
+  local active_dolt_service=""
   local retained_roots_json=""
   local output_sha256=""
   local stale_cdn_summary=""
@@ -199,11 +227,17 @@ run_fixture_handoff() {
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-cdn-serving" "$previous_cdn_current" '[]')"
+  previous_api="$(make_store_fixture "$root" "previous-api")"
+  previous_site="$(make_store_fixture "$root" "previous-site")"
+  previous_dolt_service="$(make_store_fixture "$root" "previous-dolt-service")"
+  active_api="$(make_store_fixture "$root" "active-api")"
+  active_site="$(make_store_fixture "$root" "active-site")"
   active_cdn_current="$(make_cdn_current_root "$root" "active-cdn-current")"
   retained_roots_json="$(jq -cn --arg root "$previous_cdn_current" '[$root]')"
   active_cdn_serving="$(make_cdn_serving_root "$root" "active-cdn-serving" "$active_cdn_current" "$retained_roots_json")"
+  active_dolt_service="$(make_store_fixture "$root" "active-dolt-service")"
 
-  write_retained_json "$retained" "$previous_cdn_serving"
+  write_retained_json "$retained" "$previous_api" "$previous_site" "$previous_cdn_serving" "$previous_dolt_service"
   write_fake_mgmt "$fake_mgmt" "$fake_mgmt_marker"
 
   FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE="$retained" \
@@ -212,10 +246,10 @@ run_fixture_handoff() {
     FISHYSTUFF_GITOPS_GIT_REV="active-git" \
     FISHYSTUFF_GITOPS_DOLT_COMMIT="active-dolt" \
     FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
-    FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-active-api" \
-    FISHYSTUFF_GITOPS_SITE_CLOSURE="/nix/store/example-active-site" \
+    FISHYSTUFF_GITOPS_API_CLOSURE="$active_api" \
+    FISHYSTUFF_GITOPS_SITE_CLOSURE="$active_site" \
     FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
-    FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="/nix/store/example-active-dolt-service" \
+    FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="$active_dolt_service" \
     bash scripts/recipes/gitops-production-current-handoff.sh \
       "$output" \
       main \
@@ -273,6 +307,7 @@ run_fixture_handoff() {
     and .cdn_retention.retained_releases[0].retained_by_active_cdn_serving_root == true
     and .checks.production_current_desired_generated == true
     and .checks.desired_serving_preflight_passed == true
+    and .checks.closure_paths_verified == true
     and .checks.cdn_retained_roots_verified == true
     and .checks.gitops_unify_passed == true
     and .checks.remote_deploy_performed == false
@@ -305,14 +340,26 @@ run_missing_cdn_retention_refusal() {
   local summary="$root/missing-cdn-retention.handoff-summary.json"
   local previous_cdn_current=""
   local previous_cdn_serving=""
+  local previous_api=""
+  local previous_site=""
+  local previous_dolt_service=""
+  local active_api=""
+  local active_site=""
   local active_cdn_current=""
   local active_cdn_serving=""
+  local active_dolt_service=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-missing-retention-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-missing-retention-cdn-serving" "$previous_cdn_current" '[]')"
+  previous_api="$(make_store_fixture "$root" "previous-missing-retention-api")"
+  previous_site="$(make_store_fixture "$root" "previous-missing-retention-site")"
+  previous_dolt_service="$(make_store_fixture "$root" "previous-missing-retention-dolt-service")"
+  active_api="$(make_store_fixture "$root" "active-missing-retention-api")"
+  active_site="$(make_store_fixture "$root" "active-missing-retention-site")"
   active_cdn_current="$(make_cdn_current_root "$root" "active-missing-retention-cdn-current")"
   active_cdn_serving="$(make_cdn_serving_root "$root" "active-missing-retention-cdn-serving" "$active_cdn_current" '[]')"
-  write_retained_json "$retained" "$previous_cdn_serving"
+  active_dolt_service="$(make_store_fixture "$root" "active-missing-retention-dolt-service")"
+  write_retained_json "$retained" "$previous_api" "$previous_site" "$previous_cdn_serving" "$previous_dolt_service"
 
   expect_fail_contains \
     "missing active CDN retained root is refused" \
@@ -324,10 +371,61 @@ run_missing_cdn_retention_refusal() {
       FISHYSTUFF_GITOPS_GIT_REV="active-git-missing-retention" \
       FISHYSTUFF_GITOPS_DOLT_COMMIT="active-dolt-missing-retention" \
       FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
-      FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-active-missing-retention-api" \
-      FISHYSTUFF_GITOPS_SITE_CLOSURE="/nix/store/example-active-missing-retention-site" \
+      FISHYSTUFF_GITOPS_API_CLOSURE="$active_api" \
+      FISHYSTUFF_GITOPS_SITE_CLOSURE="$active_site" \
       FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
-      FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="/nix/store/example-active-missing-retention-dolt-service" \
+      FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="$active_dolt_service" \
+      bash scripts/recipes/gitops-production-current-handoff.sh \
+        "$output" \
+        main \
+        /run/current-system/sw/bin/true \
+        "$deploy_bin" \
+        "$summary"
+}
+
+run_missing_closure_path_refusal() {
+  local deploy_bin="$1"
+  local root="$2"
+  local output="$root/missing-closure.desired.json"
+  local retained="$root/missing-closure.retained.json"
+  local summary="$root/missing-closure.handoff-summary.json"
+  local previous_cdn_current=""
+  local previous_cdn_serving=""
+  local previous_api=""
+  local previous_site=""
+  local previous_dolt_service=""
+  local active_site=""
+  local active_cdn_current=""
+  local active_cdn_serving=""
+  local active_dolt_service=""
+  local retained_roots_json=""
+
+  previous_cdn_current="$(make_cdn_current_root "$root" "previous-missing-closure-cdn-current")"
+  previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-missing-closure-cdn-serving" "$previous_cdn_current" '[]')"
+  previous_api="$(make_store_fixture "$root" "previous-missing-closure-api")"
+  previous_site="$(make_store_fixture "$root" "previous-missing-closure-site")"
+  previous_dolt_service="$(make_store_fixture "$root" "previous-missing-closure-dolt-service")"
+  active_site="$(make_store_fixture "$root" "active-missing-closure-site")"
+  active_cdn_current="$(make_cdn_current_root "$root" "active-missing-closure-cdn-current")"
+  retained_roots_json="$(jq -cn --arg root "$previous_cdn_current" '[$root]')"
+  active_cdn_serving="$(make_cdn_serving_root "$root" "active-missing-closure-cdn-serving" "$active_cdn_current" "$retained_roots_json")"
+  active_dolt_service="$(make_store_fixture "$root" "active-missing-closure-dolt-service")"
+  write_retained_json "$retained" "$previous_api" "$previous_site" "$previous_cdn_serving" "$previous_dolt_service"
+
+  expect_fail_contains \
+    "missing active closure path is refused" \
+    "handoff closure path does not exist" \
+    env \
+      FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE="$retained" \
+      FISHYSTUFF_GITOPS_GENERATION=26 \
+      FISHYSTUFF_GITOPS_RELEASE_GENERATION=8 \
+      FISHYSTUFF_GITOPS_GIT_REV="active-git-missing-closure" \
+      FISHYSTUFF_GITOPS_DOLT_COMMIT="active-dolt-missing-closure" \
+      FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
+      FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-missing-active-api" \
+      FISHYSTUFF_GITOPS_SITE_CLOSURE="$active_site" \
+      FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
+      FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="$active_dolt_service" \
       bash scripts/recipes/gitops-production-current-handoff.sh \
         "$output" \
         main \
@@ -347,18 +445,30 @@ run_fixture_from_served() {
   local summary="$root/from-served.handoff-summary.json"
   local previous_cdn_current=""
   local previous_cdn_serving=""
+  local previous_api=""
+  local previous_site=""
+  local previous_dolt_service=""
+  local active_api=""
+  local active_site=""
   local active_cdn_current=""
   local active_cdn_serving=""
+  local active_dolt_service=""
   local retained_roots_json=""
   local output_sha256=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-from-served-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-from-served-cdn-serving" "$previous_cdn_current" '[]')"
+  previous_api="$(make_store_fixture "$root" "previous-from-served-api")"
+  previous_site="$(make_store_fixture "$root" "previous-from-served-site")"
+  previous_dolt_service="$(make_store_fixture "$root" "previous-from-served-dolt-service")"
+  active_api="$(make_store_fixture "$root" "active-from-served-api")"
+  active_site="$(make_store_fixture "$root" "active-from-served-site")"
   active_cdn_current="$(make_cdn_current_root "$root" "active-from-served-cdn-current")"
   retained_roots_json="$(jq -cn --arg root "$previous_cdn_current" '[$root]')"
   active_cdn_serving="$(make_cdn_serving_root "$root" "active-from-served-cdn-serving" "$active_cdn_current" "$retained_roots_json")"
+  active_dolt_service="$(make_store_fixture "$root" "active-from-served-dolt-service")"
 
-  write_served_rollback_set_state "$state_dir" "$previous_cdn_serving"
+  write_served_rollback_set_state "$state_dir" "$previous_api" "$previous_site" "$previous_cdn_serving" "$previous_dolt_service"
   write_fake_mgmt "$fake_mgmt" "$fake_mgmt_marker"
 
   FISHYSTUFF_GITOPS_GENERATION=24 \
@@ -366,10 +476,10 @@ run_fixture_from_served() {
     FISHYSTUFF_GITOPS_GIT_REV="active-git-from-served" \
     FISHYSTUFF_GITOPS_DOLT_COMMIT="active-dolt-from-served" \
     FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
-    FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-active-from-served-api" \
-    FISHYSTUFF_GITOPS_SITE_CLOSURE="/nix/store/example-active-from-served-site" \
+    FISHYSTUFF_GITOPS_API_CLOSURE="$active_api" \
+    FISHYSTUFF_GITOPS_SITE_CLOSURE="$active_site" \
     FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
-    FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="/nix/store/example-active-from-served-dolt-service" \
+    FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="$active_dolt_service" \
     bash scripts/recipes/gitops-production-current-from-served.sh \
       "$output" \
       "$state_dir" \
@@ -382,10 +492,13 @@ run_fixture_from_served() {
       >"$root/from-served.stdout" \
       2>"$root/from-served.stderr"
 
-  jq -e --arg previous_cdn_serving "$previous_cdn_serving" '
+  jq -e \
+    --arg previous_api "$previous_api" \
+    --arg previous_cdn_serving "$previous_cdn_serving" \
+    '
     .[0].release_id == "previous-production-release"
     and .[0].dolt_commit == "previous-dolt"
-    and .[0].api_closure == "/nix/store/example-previous-api"
+    and .[0].api_closure == $previous_api
     and .[0].cdn_runtime_closure == $previous_cdn_serving
   ' "$retained" >/dev/null
 
@@ -412,6 +525,7 @@ run_fixture_from_served() {
     and .active_release.closures.cdn_runtime == $active_cdn_serving
     and .cdn_retention.retained_releases[0].expected_retained_cdn_root == $previous_cdn_current
     and .checks.desired_serving_preflight_passed == true
+    and .checks.closure_paths_verified == true
     and .checks.cdn_retained_roots_verified == true
     and .checks.gitops_unify_passed == true
   ' "$summary" >/dev/null
@@ -441,6 +555,9 @@ pass "fixture handoff runs generator preflight and fake mgmt unify"
 
 missing_cdn_retention_root="$(mktemp -d)"
 run_missing_cdn_retention_refusal "$deploy_bin" "$missing_cdn_retention_root"
+
+missing_closure_root="$(mktemp -d)"
+run_missing_closure_path_refusal "$deploy_bin" "$missing_closure_root"
 
 from_served_root="$(mktemp -d)"
 run_fixture_from_served "$deploy_bin" "$from_served_root"

@@ -59,6 +59,7 @@ if ! jq -e '
     .schema == "fishystuff.gitops.production-current-handoff.v1"
     and .checks.production_current_desired_generated == true
     and .checks.desired_serving_preflight_passed == true
+    and .checks.closure_paths_verified == true
     and .checks.cdn_retained_roots_verified == true
     and .checks.gitops_unify_passed == true
     and .checks.remote_deploy_performed == false
@@ -67,6 +68,21 @@ if ! jq -e '
   echo "handoff summary does not record the required completed local checks" >&2
   exit 2
 fi
+
+jq -r \
+  '(.active_release.release_id // "active") as $active_release_id
+  | (
+      (.active_release.closures | to_entries[] | [$active_release_id, .key, .value]),
+      (.retained_releases[]? as $release | $release.closures | to_entries[] | [$release.release_id, .key, .value])
+    )
+  | @tsv' \
+  "$summary_file" |
+  while IFS=$'\t' read -r release_id closure_name store_path; do
+    if [[ -z "$store_path" || ! -e "$store_path" ]]; then
+      echo "handoff summary closure path does not exist for ${release_id} ${closure_name}: ${store_path}" >&2
+      exit 2
+    fi
+  done
 
 active_manifest="$(jq -er '.cdn_retention.active_manifest | select(type == "string" and length > 0)' "$summary_file")"
 if [[ ! -f "$active_manifest" ]]; then
