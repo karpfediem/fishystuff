@@ -406,9 +406,9 @@ The VM runtime tests bind mgmt's embedded etcd to `127.0.0.1` inside the test VM
 
 `gitops-multi-environment-served-vm` boots one local NixOS VM with two served preview-like environments on the same host. It proves active symlinks are environment-scoped under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}` so one served preview cannot overwrite another preview's selected site/CDN tuple.
 
-`gitops-served-closure-roots-vm` combines the served candidate shape with `vm-test-closures`. It verifies and roots active and retained rollback API, Dolt service, site, and CDN artifacts under `/nix/var/nix/gcroots/fishystuff/gitops-test`, confirms Nix reports those paths as GC roots, then checks the VM-local active symlinks and route selection. It still does not write `/srv/fishystuff` or start real FishyStuff services.
+`gitops-served-closure-roots-vm` combines the served candidate shape with `vm-test-closures`. It verifies and roots active and retained rollback API, Dolt service, site, and CDN artifacts under `/nix/var/nix/gcroots/fishystuff/gitops-test`, confirms Nix reports those paths as GC roots, waits for the `roots-ready` facts under `/run/fishystuff/gitops-test/roots`, then checks the VM-local active symlinks and route selection. It still does not write `/srv/fishystuff` or start real FishyStuff services.
 
-The originally intended `nix:gcroot` resource is not used by the current graph. The pinned mgmt build created root symlinks but did not unblock dependent publication resources when status/active/route files were ordered behind either `nix:gcroot` or equivalent symlink resources. The current graph keeps the concrete retention guarantee by verifying each closure with `nix:closure` and managing direct symlinks under `/nix/var/nix/gcroots/fishystuff/...`; publication is not yet gated on those symlink resources. Reintroduce an explicit publication dependency only with a VM regression test proving the ordered behavior converges.
+The originally intended `nix:gcroot` resource is not used by the current graph. The graph keeps the concrete retention guarantee by verifying each closure with `nix:closure`, managing direct symlinks under `/nix/var/nix/gcroots/fishystuff/...`, and publishing one `roots-ready` status file per active/retained release after `fishystuff_deploy gitops roots-ready` verifies the symlink targets, store paths, and `nix-store --gc --print-roots` output. Served status, active selection, route handoff, and rollback documents are ordered behind those `roots-ready` exec resources in modes that manage closure roots.
 
 `gitops-served-candidate-vm` keeps activation local and synthetic. When desired state requests `serve: true` in `vm-test` mode, fixture admission must be `passed_fixture`; the local admission fixture also reads the selected site root, CDN runtime manifest, runtime JS/WASM files, and CDN serving manifest from the exact store paths in the release tuple. The graph then writes an active selection document under `/var/lib/fishystuff/gitops-test/active/<environment>.json`, VM-local served symlinks under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}`, and a route selection document under `/run/fishystuff/gitops-test/routes/<environment>.json`. This is the first safe shape of the future route/symlink switch. It does not start FishyStuff services, write `/srv/fishystuff`, or touch real beta/prod state.
 
@@ -502,7 +502,7 @@ KV publication can be added later when the status consumer is clear.
 A release may become served only after expensive work is already complete:
 
 - closures realized
-- gcroots present
+- gcroots present and verified by `roots-ready` facts when closure roots are managed
 - Dolt data identity known/materialized
 - candidate admission either passed or intentionally not required in non-serving validate mode
 - previous rollback target retained

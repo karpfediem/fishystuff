@@ -71,7 +71,7 @@ nix:gcroot "<path>" {
 
 Defaults: `state = "exists"`, `gc_roots_dir = "/nix/var/nix/gcroots"`, `store_dir = "/nix/store"`.
 
-The new graph currently emits `nix:closure` in `vm-test-closures` and future `local-apply` mode, then uses ordinary `file` symlink resources under `/nix/var/nix/gcroots/fishystuff/...` for GC roots. This is deliberate: VM testing showed the pinned mgmt build could create `nix:gcroot`/symlink roots but did not unblock dependent status/active/route publication when those resources were used as publication gates. `validate` and plain `vm-test` intentionally no-op closure realization.
+The new graph currently emits `nix:closure` in `vm-test-closures` and future `local-apply` mode, then uses ordinary `file` symlink resources under `/nix/var/nix/gcroots/fishystuff/...` for GC roots. Served publication is gated by a separate helper-backed `roots-ready` exec/status fact for each active and retained release. The helper verifies the symlink target, store path existence, and `nix-store --gc --print-roots` output before status/active/route/rollback documents can publish. `validate` and plain `vm-test` intentionally no-op closure realization.
 
 ## Local Files
 
@@ -123,7 +123,7 @@ exec "<name>" {
 }
 ```
 
-The GitOps graph uses `exec` only as narrow host-local bridges for behavior not yet covered by dedicated mgmt resources: Dolt `fetch_pin`/SQL admission in VM tests and loopback HTTP admission probes in local writing modes. These execs invoke the packaged `fishystuff_deploy` helper with structured request/status files and `needs-*` freshness checks; they are not deployment controllers.
+The GitOps graph uses `exec` only as narrow host-local bridges for behavior not yet covered by dedicated mgmt resources: Dolt `fetch_pin`/SQL admission in VM tests, loopback HTTP admission probes in local writing modes, and release root-readiness facts for managed closure-root serving modes. These execs invoke the packaged `fishystuff_deploy` helper with structured request/status files and `needs-*` freshness checks; they are not deployment controllers.
 
 ## Services
 

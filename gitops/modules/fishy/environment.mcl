@@ -10,6 +10,7 @@ import "instance.mcl" as fishy_instance
 import "json.mcl" as fishy_json
 import "paths.mcl" as fishy_paths
 import "route.mcl" as fishy_route
+import "roots.mcl" as fishy_roots
 import "rollback.mcl" as fishy_rollback
 import "status.mcl" as fishy_status
 
@@ -162,6 +163,7 @@ class single_host($st) {
 			$http_api_meta_admission_exec_name
 		}
 	}
+	$roots_ready_exec_name = fmt.printf("fishystuff-gitops-roots-ready-%s-%s", $environment_name, $active_release_id)
 	$admission_path = fmt.printf("%s/admission/%s.json", $run_dir, $environment_name)
 	$dolt_status_path = fmt.printf("%s/dolt/%s-%s.json", $run_dir, $environment_name, $active_release_id)
 	$status_path = fmt.printf("%s/status/%s.json", $state_dir, $environment_name)
@@ -298,6 +300,7 @@ class single_host($st) {
 			""
 		}
 		$retained_dolt_exec_name = fmt.printf("fishystuff-gitops-dolt-fetch-pin-%s-%s", $environment_name, $retained_release_id)
+		$retained_roots_ready_exec_name = fmt.printf("fishystuff-gitops-roots-ready-%s-%s", $environment_name, $retained_release_id)
 		$retained_rollback_set_release_path = fmt.printf("%s/rollback-set/%s/%s.json", $state_dir, $environment_name, $retained_release_id)
 		$retained_release_identity str = if $retained_release->generation == 0 {
 			""
@@ -328,6 +331,24 @@ class single_host($st) {
 		panic($requires_managed_closure_roots and (not $retained_site_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled site closure", $environment_name, $retained_release_id))
 		panic($requires_managed_closure_roots and (not $retained_cdn_runtime_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled cdn_runtime closure", $environment_name, $retained_release_id))
 		panic($requires_managed_closure_roots and (not $retained_dolt_service_artifact->enabled), fmt.printf("environment %s serving retained release %s requires enabled dolt_service closure", $environment_name, $retained_release_id))
+
+		include fishy_roots.release_ready(struct {
+			mode => $mode,
+			desired_generation => $desired_generation,
+			environment => $environment_name,
+			host => $host->hostname,
+			release_id => $retained_release_id,
+			release_identity => $retained_release_identity,
+			required => $requires_managed_closure_roots,
+			api_store_path => $retained_api_artifact->store_path,
+			api_gcroot_path => $retained_api_artifact->gcroot_path,
+			site_store_path => $retained_site_artifact->store_path,
+			site_gcroot_path => $retained_site_artifact->gcroot_path,
+			cdn_runtime_store_path => $retained_cdn_runtime_artifact->store_path,
+			cdn_runtime_gcroot_path => $retained_cdn_runtime_artifact->gcroot_path,
+			dolt_service_store_path => $retained_dolt_service_artifact->store_path,
+			dolt_service_gcroot_path => $retained_dolt_service_artifact->gcroot_path,
+		})
 
 		include fishy_admission.retained_cdn_root(struct {
 			requires_serving_artifacts => $environment->serve,
@@ -388,6 +409,14 @@ class single_host($st) {
 			Exec["${retained_dolt_exec_name}"] -> File["${retained_rollback_set_release_path}"]
 		}
 
+		if $requires_managed_closure_roots {
+			Exec["${retained_roots_ready_exec_name}"] -> File["${status_path}"]
+			Exec["${retained_roots_ready_exec_name}"] -> File["${active_path}"]
+			Exec["${retained_roots_ready_exec_name}"] -> File["${route_path}"]
+			Exec["${retained_roots_ready_exec_name}"] -> File["${rollback_set_path}"]
+			Exec["${retained_roots_ready_exec_name}"] -> File["${retained_rollback_set_release_path}"]
+		}
+
 		if $write_local_state and $served {
 			File["${retained_rollback_set_release_path}"] -> File["${rollback_set_path}"]
 		}
@@ -415,6 +444,10 @@ class single_host($st) {
 
 			if $write_local_state and ($retained_dolt_materialization == "fetch_pin") {
 				Exec["${retained_dolt_exec_name}"] -> File["${rollback_path}"]
+			}
+
+			if $requires_managed_closure_roots {
+				Exec["${retained_roots_ready_exec_name}"] -> File["${rollback_path}"]
 			}
 		}
 	}
@@ -455,6 +488,24 @@ class single_host($st) {
 		remote_url => $active_dolt->remote_url,
 		cache_dir => $active_dolt_cache_dir,
 		release_ref => $active_dolt_release_ref,
+	})
+
+	include fishy_roots.release_ready(struct {
+		mode => $mode,
+		desired_generation => $desired_generation,
+		environment => $environment_name,
+		host => $host->hostname,
+		release_id => $active_release_id,
+		release_identity => $active_release_identity,
+		required => $requires_managed_closure_roots,
+		api_store_path => $active_api_artifact->store_path,
+		api_gcroot_path => $active_api_artifact->gcroot_path,
+		site_store_path => $active_site_artifact->store_path,
+		site_gcroot_path => $active_site_artifact->gcroot_path,
+		cdn_runtime_store_path => $active_cdn_runtime_artifact->store_path,
+		cdn_runtime_gcroot_path => $active_cdn_runtime_artifact->gcroot_path,
+		dolt_service_store_path => $active_dolt_service_artifact->store_path,
+		dolt_service_gcroot_path => $active_dolt_service_artifact->gcroot_path,
 	})
 
 	include fishy_instance.candidate(struct {
@@ -673,6 +724,17 @@ class single_host($st) {
 			if $has_rollback_readiness {
 				Exec["${http_admission_exec_name}"] -> File["${rollback_path}"]
 			}
+		}
+	}
+
+	if $requires_managed_closure_roots {
+		Exec["${roots_ready_exec_name}"] -> File["${status_path}"]
+		Exec["${roots_ready_exec_name}"] -> File["${active_path}"]
+		Exec["${roots_ready_exec_name}"] -> File["${route_path}"]
+		Exec["${roots_ready_exec_name}"] -> File["${rollback_set_path}"]
+
+		if $has_rollback_readiness {
+			Exec["${roots_ready_exec_name}"] -> File["${rollback_path}"]
 		}
 	}
 }

@@ -47,7 +47,7 @@
   };
 
   gitops-served-closure-roots-vm = import ./served-closure-roots.nix {
-    inherit gitopsSrc mgmtPackage pkgs;
+    inherit fishystuffDeployPackage gitopsSrc mgmtPackage pkgs;
   };
 
   gitops-json-status-escaping-vm = import ./json-status-escaping.nix {

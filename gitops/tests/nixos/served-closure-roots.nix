@@ -1,6 +1,7 @@
 {
   pkgs,
   mgmtPackage,
+  fishystuffDeployPackage,
   gitopsSrc,
 }:
 let
@@ -135,6 +136,7 @@ pkgs.testers.runNixOSTest {
         desiredState
       ];
       environment.systemPackages = [
+        fishystuffDeployPackage
         mgmtPackage
         pkgs.jq
       ];
@@ -144,6 +146,8 @@ pkgs.testers.runNixOSTest {
     start_all()
 
     machine.succeed("test -x ${mgmtPackage}/bin/mgmt")
+    machine.succeed("test -x ${fishystuffDeployPackage}/bin/fishystuff_deploy")
+    machine.succeed("test -x /run/current-system/sw/bin/fishystuff_deploy")
     machine.succeed("jq -e '.mode == \"vm-test-closures\" and .environments.\"local-test\".serve == true and .environments.\"local-test\".active_release == \"active-release\" and .environments.\"local-test\".retained_releases == [\"retained-release\"]' ${desiredState}")
     machine.succeed("jq -e '.retained_roots == [\"${retainedCdnCurrentRoot}\"]' ${activeCdnServingRoot}/cdn-serving-manifest.json")
     machine.succeed("jq -e '.current_root == \"${retainedCdnCurrentRoot}\"' ${retainedCdnServingRoot}/cdn-serving-manifest.json")
@@ -172,13 +176,25 @@ pkgs.testers.runNixOSTest {
     route = "/run/fishystuff/gitops-test/routes/local-test.json"
     instance = "/var/lib/fishystuff/gitops-test/instances/local-test-active-release.json"
     admission = "/run/fishystuff/gitops-test/admission/local-test.json"
+    active_roots_ready = "/run/fishystuff/gitops-test/roots/local-test-active-release.json"
+    retained_roots_ready = "/run/fishystuff/gitops-test/roots/local-test-retained-release.json"
 
-    machine.wait_for_file(status)
-    machine.wait_for_file(active)
-    machine.wait_for_file(route)
-    machine.wait_for_file(instance)
-    machine.wait_for_file(admission)
+    def wait_for_gitops_file(path):
+      machine.succeed(f"bash -c 'deadline=$((SECONDS + 180)); until test -e {path}; do if ! kill -0 $(cat /tmp/fishystuff-gitops-served-closure-roots.pid); then cat /tmp/fishystuff-gitops-served-closure-roots.log; exit 1; fi; if [ \"$SECONDS\" -ge \"$deadline\" ]; then find /var/lib/fishystuff/gitops-test /run/fishystuff/gitops-test -maxdepth 4 -print 2>/dev/null || true; cat /tmp/fishystuff-gitops-served-closure-roots.log; exit 1; fi; sleep 1; done'")
 
+    for path in [
+      active_roots_ready,
+      retained_roots_ready,
+      status,
+      active,
+      route,
+      instance,
+      admission,
+    ]:
+      wait_for_gitops_file(path)
+
+    machine.succeed(f"jq -e '.desired_generation == 40 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"active-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .root_count == 4 and .require_nix_gcroot == true and .roots_ready == true and .state == \"roots_ready\" and ([.roots[] | select(.name == \"api\" and .root_path == \"/nix/var/nix/gcroots/fishystuff/gitops-test/active-release/api\" and .store_path == \"${activeApiArtifact}\" and .symlink_ready == true and .nix_gcroot_ready == true)] | length) == 1 and ([.roots[] | select(.name == \"cdn_runtime\" and .root_path == \"/nix/var/nix/gcroots/fishystuff/gitops-test/active-release/cdn-runtime\" and .store_path == \"${activeCdnServingRoot}\" and .symlink_ready == true and .nix_gcroot_ready == true)] | length) == 1' {active_roots_ready}")
+    machine.succeed(f"jq -e '.desired_generation == 40 and .environment == \"local-test\" and .host == \"vm-single-host\" and .release_id == \"retained-release\" and .root_count == 4 and .require_nix_gcroot == true and .roots_ready == true and .state == \"roots_ready\" and ([.roots[] | select(.name == \"api\" and .root_path == \"/nix/var/nix/gcroots/fishystuff/gitops-test/retained-release/api\" and .store_path == \"${retainedApiArtifact}\" and .symlink_ready == true and .nix_gcroot_ready == true)] | length) == 1 and ([.roots[] | select(.name == \"cdn_runtime\" and .root_path == \"/nix/var/nix/gcroots/fishystuff/gitops-test/retained-release/cdn-runtime\" and .store_path == \"${retainedCdnServingRoot}\" and .symlink_ready == true and .nix_gcroot_ready == true)] | length) == 1' {retained_roots_ready}")
     machine.succeed(f"jq -e '.desired_generation == 40 and .release_id == \"active-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .environment == \"local-test\" and .host == \"vm-single-host\" and .phase == \"served\" and .admission_state == \"passed_fixture\" and .served == true and .retained_release_ids == [\"retained-release\"]' {status}")
     machine.succeed(f"jq -e '.desired_generation == 40 and .release_id == \"active-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .site_content == \"${activeSiteArtifact}\" and .cdn_runtime_content == \"${activeCdnServingRoot}\" and .retained_release_ids == [\"retained-release\"] and .route_state == \"selected_local_symlinks\"' {active}")
     machine.succeed(f"jq -e '.desired_generation == 40 and .release_id == \"active-release\" and .release_identity == \"${expectedReleaseIdentity}\" and .site_root == \"/var/lib/fishystuff/gitops-test/served/local-test/site\" and .cdn_root == \"/var/lib/fishystuff/gitops-test/served/local-test/cdn\" and .served == true and .state == \"selected_local_route\"' {route}")

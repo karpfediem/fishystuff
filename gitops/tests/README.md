@@ -134,7 +134,7 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 
 `gitops-multi-environment-served-vm` boots a local NixOS VM with two served arbitrary single-host environments on the same host. It checks that each environment gets separate active symlinks under `/var/lib/fishystuff/gitops-test/served/<environment>/{site,cdn}` and separate route documents.
 
-`gitops-served-closure-roots-vm` boots a local NixOS VM with `serve: true` in `vm-test-closures` mode. It checks all active and retained rollback release artifacts are rooted under `/nix/var/nix/gcroots/fishystuff/gitops-test` and reported by Nix as GC roots, then checks the selected active symlinks and route document.
+`gitops-served-closure-roots-vm` boots a local NixOS VM with `serve: true` in `vm-test-closures` mode. It checks all active and retained rollback release artifacts are rooted under `/nix/var/nix/gcroots/fishystuff/gitops-test` and reported by Nix as GC roots, verifies the per-release `roots-ready` status files under `/run/fishystuff/gitops-test/roots`, then checks the selected active symlinks and route document.
 
 `gitops-json-status-escaping-vm` boots a local NixOS VM with quote/backslash characters in the exact release identity inputs and checks that candidate, admission, and status JSON files remain parseable and preserve the decoded strings.
 

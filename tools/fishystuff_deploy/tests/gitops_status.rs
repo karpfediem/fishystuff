@@ -1,5 +1,6 @@
 use std::fs;
 use std::io::Write;
+use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -266,6 +267,149 @@ fn gitops_check_served_rejects_stale_rollback_set_retained_list() -> Result<()> 
     )
 }
 
+#[test]
+fn gitops_roots_ready_writes_status_for_matching_symlinks() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-roots-ready")?;
+    let request = root.path().join("request.json");
+    let status = root.path().join("status.json");
+    let store_dir = root.path().join("store");
+    let target = store_dir.join("api");
+    let gcroot_dir = root.path().join("gcroots");
+    let gcroot = gcroot_dir.join("api");
+
+    fs::create_dir_all(&store_dir)?;
+    fs::create_dir_all(&gcroot_dir)?;
+    fs::write(&target, b"api\n")?;
+    unix_fs::symlink(&target, &gcroot)?;
+    write_roots_request(&request, &gcroot, &target, false)?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "roots-ready",
+        "--request",
+        path_str(&request)?,
+        "--status",
+        path_str(&status)?,
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops roots-ready", output);
+    }
+
+    let status_json = read_json(&status)?;
+    assert_eq!(status_json["environment"], "local-test");
+    assert_eq!(status_json["host"], "vm-single-host");
+    assert_eq!(status_json["release_id"], "active-release");
+    assert_eq!(status_json["root_count"], 1);
+    assert_eq!(status_json["require_nix_gcroot"], false);
+    assert_eq!(status_json["roots_ready"], true);
+    assert_eq!(status_json["state"], "roots_ready");
+    assert_eq!(status_json["roots"][0]["name"], "api");
+    assert_eq!(status_json["roots"][0]["root_path"], path_str(&gcroot)?);
+    assert_eq!(status_json["roots"][0]["store_path"], path_str(&target)?);
+    assert_eq!(
+        status_json["roots"][0]["observed_target"],
+        path_str(&target)?
+    );
+    assert_eq!(status_json["roots"][0]["symlink_ready"], true);
+    assert_eq!(status_json["roots"][0]["nix_gcroot_ready"], false);
+
+    let output = run_helper_raw([
+        "gitops",
+        "needs-roots-ready",
+        "--request",
+        path_str(&request)?,
+        "--status",
+        path_str(&status)?,
+    ])?;
+    assert!(
+        !output.status.success(),
+        "needs-roots-ready should return 1 when status is current"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn gitops_roots_ready_rejects_wrong_symlink_target() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-roots-wrong")?;
+    let request = root.path().join("request.json");
+    let status = root.path().join("status.json");
+    let store_dir = root.path().join("store");
+    let expected = store_dir.join("api");
+    let observed = store_dir.join("other-api");
+    let gcroot_dir = root.path().join("gcroots");
+    let gcroot = gcroot_dir.join("api");
+
+    fs::create_dir_all(&store_dir)?;
+    fs::create_dir_all(&gcroot_dir)?;
+    fs::write(&expected, b"api\n")?;
+    fs::write(&observed, b"other api\n")?;
+    unix_fs::symlink(&observed, &gcroot)?;
+    write_roots_request(&request, &gcroot, &expected, false)?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "roots-ready",
+            "--request",
+            path_str(&request)?,
+            "--status",
+            path_str(&status)?,
+        ],
+        "points to",
+    )
+}
+
+#[test]
+fn gitops_needs_roots_ready_detects_stale_status() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-roots-stale")?;
+    let request = root.path().join("request.json");
+    let status = root.path().join("status.json");
+    let store_dir = root.path().join("store");
+    let first_target = store_dir.join("api");
+    let second_target = store_dir.join("second-api");
+    let gcroot_dir = root.path().join("gcroots");
+    let gcroot = gcroot_dir.join("api");
+
+    fs::create_dir_all(&store_dir)?;
+    fs::create_dir_all(&gcroot_dir)?;
+    fs::write(&first_target, b"api\n")?;
+    fs::write(&second_target, b"second api\n")?;
+    unix_fs::symlink(&first_target, &gcroot)?;
+    write_roots_request(&request, &gcroot, &first_target, false)?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "roots-ready",
+        "--request",
+        path_str(&request)?,
+        "--status",
+        path_str(&status)?,
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops roots-ready", output);
+    }
+
+    fs::remove_file(&gcroot)?;
+    unix_fs::symlink(&second_target, &gcroot)?;
+    write_roots_request(&request, &gcroot, &second_target, false)?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "needs-roots-ready",
+        "--request",
+        path_str(&request)?,
+        "--status",
+        path_str(&status)?,
+    ])?;
+    assert!(
+        output.status.success(),
+        "needs-roots-ready should return 0 when status is stale"
+    );
+
+    Ok(())
+}
+
 fn write_served_documents(
     status: &Path,
     active: &Path,
@@ -359,6 +503,33 @@ fn write_served_documents(
             "rollback_dolt_release_ref": "",
             "rollback_available": true,
             "rollback_state": "retained_hot_release",
+        }),
+    )
+}
+
+fn write_roots_request(
+    request: &Path,
+    gcroot: &Path,
+    store_path: &Path,
+    require_nix_gcroot: bool,
+) -> Result<()> {
+    write_json(
+        request,
+        json!({
+            "desired_generation": 42,
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": "active-release",
+            "release_identity": "release=active-release;api=example",
+            "timeout_ms": 100,
+            "require_nix_gcroot": require_nix_gcroot,
+            "roots": [
+                {
+                    "name": "api",
+                    "root_path": gcroot,
+                    "store_path": store_path,
+                }
+            ],
         }),
     )
 }

@@ -142,6 +142,18 @@ enum GitopsCommands {
         #[arg(long)]
         release_id: Option<String>,
     },
+    RootsReady {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+    },
+    NeedsRootsReady {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        status: PathBuf,
+    },
 }
 
 fn main() -> Result<ExitCode> {
@@ -246,6 +258,13 @@ fn main() -> Result<ExitCode> {
                 print!("{}", summary.operator_summary());
                 Ok(ExitCode::SUCCESS)
             }
+            GitopsCommands::RootsReady { request, status } => {
+                gitops::roots_ready(&request, &status)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            GitopsCommands::NeedsRootsReady { request, status } => Ok(needs_exit_code(
+                gitops::needs_roots_ready(&request, &status),
+            )),
         },
     }
 }

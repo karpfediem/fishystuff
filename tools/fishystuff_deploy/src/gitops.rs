@@ -1,8 +1,12 @@
 use std::fs::File;
-use std::path::Path;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 struct StatusDocument {
@@ -54,6 +58,51 @@ struct RollbackReadinessDocument {
     rollback_release_id: String,
     rollback_release_identity: String,
     rollback_available: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RootsReadyRequest {
+    desired_generation: u64,
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    roots: Vec<RootRequest>,
+    #[serde(default = "default_true")]
+    require_nix_gcroot: bool,
+    #[serde(default = "default_roots_timeout_ms")]
+    timeout_ms: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct RootRequest {
+    name: String,
+    root_path: PathBuf,
+    store_path: PathBuf,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct RootsReadyStatus {
+    desired_generation: u64,
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    root_count: usize,
+    require_nix_gcroot: bool,
+    roots_ready: bool,
+    state: String,
+    roots: Vec<RootStatus>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct RootStatus {
+    name: String,
+    root_path: String,
+    store_path: String,
+    observed_target: String,
+    symlink_ready: bool,
+    nix_gcroot_ready: bool,
 }
 
 pub struct ServedSummary {
@@ -258,12 +307,299 @@ pub fn check_served(
     })
 }
 
+pub fn roots_ready(request_path: &Path, status_path: &Path) -> Result<()> {
+    let request: RootsReadyRequest = read_json(request_path, "GitOps roots-ready request")?;
+    validate_roots_request(&request)?;
+
+    let timeout = Duration::from_millis(request.timeout_ms);
+    let started = Instant::now();
+    loop {
+        match inspect_roots(&request) {
+            Ok(roots) => {
+                let status = roots_status(&request, roots);
+                write_json(status_path, &status, "GitOps roots-ready status")?;
+                return Ok(());
+            }
+            Err(error) => {
+                if started.elapsed() >= timeout {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "waiting for roots for release {} in environment {}",
+                            request.release_id, request.environment
+                        )
+                    });
+                }
+                sleep(Duration::from_millis(250));
+            }
+        }
+    }
+}
+
+pub fn needs_roots_ready(request_path: &Path, status_path: &Path) -> bool {
+    let Ok(request) = read_json::<RootsReadyRequest>(request_path, "GitOps roots-ready request")
+    else {
+        return true;
+    };
+    if validate_roots_request(&request).is_err() {
+        return true;
+    }
+    let Ok(actual_roots) = inspect_roots(&request) else {
+        return true;
+    };
+    let Ok(status) = read_json::<RootsReadyStatus>(status_path, "GitOps roots-ready status") else {
+        return true;
+    };
+
+    status_matches_roots(&request, &actual_roots, &status).is_err()
+}
+
+fn validate_roots_request(request: &RootsReadyRequest) -> Result<()> {
+    if request.desired_generation == 0 {
+        bail!("roots-ready request desired_generation must be non-zero");
+    }
+    if request.environment.is_empty() {
+        bail!("roots-ready request environment must not be empty");
+    }
+    if request.host.is_empty() {
+        bail!("roots-ready request host must not be empty");
+    }
+    if request.release_id.is_empty() {
+        bail!("roots-ready request release_id must not be empty");
+    }
+    if request.release_identity.is_empty() {
+        bail!("roots-ready request release_identity must not be empty");
+    }
+    if request.roots.is_empty() {
+        bail!("roots-ready request roots must not be empty");
+    }
+    if request.timeout_ms == 0 || request.timeout_ms > 900_000 {
+        bail!("roots-ready request timeout_ms must be between 1 and 900000");
+    }
+    for root in &request.roots {
+        if root.name.is_empty() {
+            bail!("roots-ready request root name must not be empty");
+        }
+        if !root.root_path.is_absolute() {
+            bail!(
+                "roots-ready request root {} path must be absolute",
+                root.name
+            );
+        }
+        if !root.store_path.is_absolute() {
+            bail!(
+                "roots-ready request root {} store path must be absolute",
+                root.name
+            );
+        }
+        if request.require_nix_gcroot && !path_starts_with_str(&root.store_path, "/nix/store/") {
+            bail!(
+                "roots-ready request root {} store path must be under /nix/store",
+                root.name
+            );
+        }
+    }
+    Ok(())
+}
+
+fn inspect_roots(request: &RootsReadyRequest) -> Result<Vec<RootStatus>> {
+    let nix_roots = if request.require_nix_gcroot {
+        Some(nix_gc_roots()?)
+    } else {
+        None
+    };
+
+    request
+        .roots
+        .iter()
+        .map(|root| inspect_root(root, request.require_nix_gcroot, nix_roots.as_deref()))
+        .collect()
+}
+
+fn inspect_root(
+    root: &RootRequest,
+    require_nix_gcroot: bool,
+    nix_roots: Option<&str>,
+) -> Result<RootStatus> {
+    let metadata = std::fs::symlink_metadata(&root.root_path)
+        .with_context(|| format!("reading root {}", root.root_path.display()))?;
+    if !metadata.file_type().is_symlink() {
+        bail!("root {} is not a symlink", root.root_path.display());
+    }
+
+    let observed_target = std::fs::read_link(&root.root_path)
+        .with_context(|| format!("reading root target {}", root.root_path.display()))?;
+    if observed_target != root.store_path {
+        bail!(
+            "root {} points to {}, expected {}",
+            root.root_path.display(),
+            observed_target.display(),
+            root.store_path.display()
+        );
+    }
+    if !root.store_path.exists() {
+        bail!("store path {} does not exist", root.store_path.display());
+    }
+
+    let nix_gcroot_ready = if require_nix_gcroot {
+        let root_path = path_to_string(&root.root_path)?;
+        nix_roots
+            .context("missing nix roots output")?
+            .lines()
+            .any(|line| line.contains(&root_path))
+    } else {
+        false
+    };
+    if require_nix_gcroot && !nix_gcroot_ready {
+        bail!(
+            "root {} is not reported by nix-store --gc --print-roots",
+            root.root_path.display()
+        );
+    }
+
+    Ok(RootStatus {
+        name: root.name.clone(),
+        root_path: path_to_string(&root.root_path)?,
+        store_path: path_to_string(&root.store_path)?,
+        observed_target: path_to_string(&observed_target)?,
+        symlink_ready: true,
+        nix_gcroot_ready,
+    })
+}
+
+fn roots_status(request: &RootsReadyRequest, roots: Vec<RootStatus>) -> RootsReadyStatus {
+    RootsReadyStatus {
+        desired_generation: request.desired_generation,
+        environment: request.environment.clone(),
+        host: request.host.clone(),
+        release_id: request.release_id.clone(),
+        release_identity: request.release_identity.clone(),
+        root_count: roots.len(),
+        require_nix_gcroot: request.require_nix_gcroot,
+        roots_ready: true,
+        state: "roots_ready".to_string(),
+        roots,
+    }
+}
+
+fn status_matches_roots(
+    request: &RootsReadyRequest,
+    actual_roots: &[RootStatus],
+    status: &RootsReadyStatus,
+) -> Result<()> {
+    require_eq(
+        "roots status desired_generation",
+        status.desired_generation,
+        request.desired_generation,
+    )?;
+    require_eq(
+        "roots status environment",
+        status.environment.as_str(),
+        request.environment.as_str(),
+    )?;
+    require_eq(
+        "roots status host",
+        status.host.as_str(),
+        request.host.as_str(),
+    )?;
+    require_eq(
+        "roots status release_id",
+        status.release_id.as_str(),
+        request.release_id.as_str(),
+    )?;
+    require_eq(
+        "roots status release_identity",
+        status.release_identity.as_str(),
+        request.release_identity.as_str(),
+    )?;
+    require_eq(
+        "roots status require_nix_gcroot",
+        status.require_nix_gcroot,
+        request.require_nix_gcroot,
+    )?;
+    require_true("roots status roots_ready", status.roots_ready)?;
+    require_eq("roots status state", status.state.as_str(), "roots_ready")?;
+    require_eq(
+        "roots status root_count",
+        status.root_count,
+        request.roots.len(),
+    )?;
+    require_eq(
+        "roots status roots length",
+        status.roots.len(),
+        actual_roots.len(),
+    )?;
+    for (index, (status_root, actual_root)) in status.roots.iter().zip(actual_roots).enumerate() {
+        require_eq(
+            &format!("roots status root {index} name"),
+            status_root.name.as_str(),
+            actual_root.name.as_str(),
+        )?;
+        require_eq(
+            &format!("roots status root {index} root_path"),
+            status_root.root_path.as_str(),
+            actual_root.root_path.as_str(),
+        )?;
+        require_eq(
+            &format!("roots status root {index} store_path"),
+            status_root.store_path.as_str(),
+            actual_root.store_path.as_str(),
+        )?;
+        require_eq(
+            &format!("roots status root {index} observed_target"),
+            status_root.observed_target.as_str(),
+            actual_root.observed_target.as_str(),
+        )?;
+        require_true(
+            &format!("roots status root {index} symlink_ready"),
+            status_root.symlink_ready,
+        )?;
+        require_eq(
+            &format!("roots status root {index} nix_gcroot_ready"),
+            status_root.nix_gcroot_ready,
+            actual_root.nix_gcroot_ready,
+        )?;
+    }
+    Ok(())
+}
+
+fn nix_gc_roots() -> Result<String> {
+    let output = Command::new("nix-store")
+        .args(["--gc", "--print-roots"])
+        .output()
+        .context("running nix-store --gc --print-roots")?;
+    if !output.status.success() {
+        bail!(
+            "nix-store --gc --print-roots failed\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8(output.stdout).context("decoding nix-store --gc --print-roots output")
+}
+
 fn read_json<T>(path: &Path, label: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
     let file = File::open(path).with_context(|| format!("opening {label} {}", path.display()))?;
     serde_json::from_reader(file).with_context(|| format!("decoding {label} {}", path.display()))
+}
+
+fn write_json<T>(path: &Path, value: &T, label: &str) -> Result<()>
+where
+    T: Serialize,
+{
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {label} parent {}", parent.display()))?;
+    }
+    let mut file =
+        File::create(path).with_context(|| format!("creating {label} {}", path.display()))?;
+    serde_json::to_writer_pretty(&mut file, value)
+        .with_context(|| format!("writing {label} {}", path.display()))?;
+    file.write_all(b"\n")
+        .with_context(|| format!("finalizing {label} {}", path.display()))
 }
 
 fn require_true(label: &str, actual: bool) -> Result<()> {
@@ -288,4 +624,24 @@ fn require_same_list(label: &str, actual: &[String], expected: &[String]) -> Res
         bail!("{label} was {actual:?}, expected {expected:?}");
     }
     Ok(())
+}
+
+fn path_to_string(path: &Path) -> Result<String> {
+    path.to_str()
+        .map(ToOwned::to_owned)
+        .with_context(|| format!("path is not UTF-8: {}", path.display()))
+}
+
+fn path_starts_with_str(path: &Path, prefix: &str) -> bool {
+    path.to_str()
+        .map(|value| value.starts_with(prefix))
+        .unwrap_or(false)
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_roots_timeout_ms() -> u64 {
+    300_000
 }

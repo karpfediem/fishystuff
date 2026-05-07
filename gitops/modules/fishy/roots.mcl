@@ -1,0 +1,98 @@
+import "fmt"
+import "json.mcl" as fishy_json
+import "paths.mcl" as fishy_paths
+import "strings" as core_strings
+
+class release_ready($st) {
+	$mode str = $st->mode || "validate"
+	$desired_generation int = $st->desired_generation || 0
+	$environment str = $st->environment
+	$host str = $st->host
+	$release_id str = $st->release_id
+	$release_identity str = $st->release_identity || ""
+	$required bool = $st->required || false
+	$api_store_path str = $st->api_store_path || ""
+	$api_gcroot_path str = $st->api_gcroot_path || ""
+	$site_store_path str = $st->site_store_path || ""
+	$site_gcroot_path str = $st->site_gcroot_path || ""
+	$cdn_runtime_store_path str = $st->cdn_runtime_store_path || ""
+	$cdn_runtime_gcroot_path str = $st->cdn_runtime_gcroot_path || ""
+	$dolt_service_store_path str = $st->dolt_service_store_path || ""
+	$dolt_service_gcroot_path str = $st->dolt_service_gcroot_path || ""
+	$write_local_state = fishy_paths.writes_local_state($mode)
+	$state_dir = fishy_paths.state_dir($mode)
+	$run_dir = fishy_paths.run_dir($mode)
+	$request_root_dir = fmt.printf("%s/roots", $state_dir)
+	$request_dir = fmt.printf("%s/requests", $request_root_dir)
+	$status_dir = fmt.printf("%s/roots", $run_dir)
+	$request_path = fmt.printf("%s/%s-%s.json", $request_dir, $environment, $release_id)
+	$status_path = fmt.printf("%s/%s-%s.json", $status_dir, $environment, $release_id)
+	$exec_name = fmt.printf("fishystuff-gitops-roots-ready-%s-%s", $environment, $release_id)
+	$helper_bin = "/run/current-system/sw/bin/fishystuff_deploy"
+	$timeout_ms = 300000
+	$request_content = fmt.printf("{\n  \"desired_generation\": %d,\n  \"environment\": %s,\n  \"host\": %s,\n  \"release_id\": %s,\n  \"release_identity\": %s,\n  \"timeout_ms\": %d,\n  \"require_nix_gcroot\": true,\n  \"roots\": [\n    {\"name\": \"api\", \"root_path\": %s, \"store_path\": %s},\n    {\"name\": \"site\", \"root_path\": %s, \"store_path\": %s},\n    {\"name\": \"cdn_runtime\", \"root_path\": %s, \"store_path\": %s},\n    {\"name\": \"dolt_service\", \"root_path\": %s, \"store_path\": %s}\n  ]\n}\n", $desired_generation, fishy_json.quote($environment), fishy_json.quote($host), fishy_json.quote($release_id), fishy_json.quote($release_identity), $timeout_ms, fishy_json.quote($api_gcroot_path), fishy_json.quote($api_store_path), fishy_json.quote($site_gcroot_path), fishy_json.quote($site_store_path), fishy_json.quote($cdn_runtime_gcroot_path), fishy_json.quote($cdn_runtime_store_path), fishy_json.quote($dolt_service_gcroot_path), fishy_json.quote($dolt_service_store_path))
+	$ifcmd = fmt.printf("%s gitops needs-roots-ready --request '%s' --status '%s'", $helper_bin, $request_path, $status_path)
+
+	panic($required and (not $write_local_state), "root readiness is only supported in local writing modes")
+	panic($required and ($desired_generation == 0), "root readiness requires desired_generation")
+	panic($required and ($environment == ""), "root readiness requires environment")
+	panic($required and ($host == ""), "root readiness requires host")
+	panic($required and ($release_id == ""), "root readiness requires release_id")
+	panic($required and ($release_identity == ""), "root readiness requires release_identity")
+	panic($required and ($api_store_path == ""), "root readiness requires api store_path")
+	panic($required and ($api_gcroot_path == ""), "root readiness requires api gcroot_path")
+	panic($required and ($site_store_path == ""), "root readiness requires site store_path")
+	panic($required and ($site_gcroot_path == ""), "root readiness requires site gcroot_path")
+	panic($required and ($cdn_runtime_store_path == ""), "root readiness requires cdn_runtime store_path")
+	panic($required and ($cdn_runtime_gcroot_path == ""), "root readiness requires cdn_runtime gcroot_path")
+	panic($required and ($dolt_service_store_path == ""), "root readiness requires dolt_service store_path")
+	panic($required and ($dolt_service_gcroot_path == ""), "root readiness requires dolt_service gcroot_path")
+	panic($required and (len(core_strings.split($environment, "'")) > 1), "root readiness environment must not contain single quotes")
+	panic($required and (len(core_strings.split($release_id, "'")) > 1), "root readiness release_id must not contain single quotes")
+
+	if $required and $write_local_state {
+		file "${request_root_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${request_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${status_dir}/" {
+			state => "exists",
+			mode => "0755",
+		}
+
+		file "${request_path}" {
+			state => "exists",
+			content => $request_content,
+			mode => "0644",
+		}
+
+		exec "${exec_name}" {
+			cmd => $helper_bin,
+			args => [
+				"gitops",
+				"roots-ready",
+				"--request",
+				$request_path,
+				"--status",
+				$status_path,
+			],
+			env => {
+				"PATH" => "/run/current-system/sw/bin:/usr/bin:/bin",
+			},
+			ifcmd => $ifcmd,
+			ifshell => "/bin/sh",
+			timeout => 360,
+		}
+
+		File["${request_root_dir}/"] -> File["${request_dir}/"]
+		File["${request_dir}/"] -> File["${request_path}"]
+		File["${status_dir}/"] -> Exec["${exec_name}"]
+		File["${request_path}"] -> Exec["${exec_name}"]
+	}
+}
