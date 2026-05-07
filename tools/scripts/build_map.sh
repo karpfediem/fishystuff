@@ -30,16 +30,27 @@ resolve_map_runtime_manifest_cache_key() {
   printf '%s\n' "$cache_key"
 }
 
-PROFILE="${FISHYSTUFF_WASM_PROFILE:-release}"
+PROFILE="${FISHYSTUFF_WASM_PROFILE:-wasm-release}"
 MAP_RUNTIME_MANIFEST_CACHE_KEY="$(resolve_map_runtime_manifest_cache_key)"
 MAP_RUNTIME_MANIFEST_FILE="runtime-manifest.${MAP_RUNTIME_MANIFEST_CACHE_KEY}.json"
-if [ "$PROFILE" = "release" ]; then
-  RUSTFLAGS="$wasm_rustflags" cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown --release
-  WASM_INPUT="target/wasm32-unknown-unknown/release/fishystuff_ui_bevy.wasm"
-else
-  RUSTFLAGS="$wasm_rustflags" cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown
-  WASM_INPUT="target/wasm32-unknown-unknown/debug/fishystuff_ui_bevy.wasm"
-fi
+build_args=(
+  build
+  --manifest-path "$ROOT_DIR/Cargo.toml"
+  -p fishystuff_ui_bevy
+  --target wasm32-unknown-unknown
+)
+case "$PROFILE" in
+  debug)
+    ;;
+  release)
+    build_args+=(--release)
+    ;;
+  *)
+    build_args+=(--profile "$PROFILE")
+    ;;
+esac
+RUSTFLAGS="$wasm_rustflags" cargo "${build_args[@]}"
+WASM_INPUT="target/wasm32-unknown-unknown/${PROFILE}/fishystuff_ui_bevy.wasm"
 
 SITE_MAP_ASSET_DIR="$ROOT_DIR/site/assets/map"
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
@@ -76,6 +87,27 @@ wasm-bindgen --target web --no-typescript --out-dir "$WASM_BINDGEN_TMP_DIR" "$WA
 WASM_BUNDLE_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy_bg.wasm"
 JS_BUNDLE_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy.js"
 
+optimize_wasm_bundle() {
+  local wasm_path="$1"
+  local optimized_path="${wasm_path}.optimized"
+
+  if ! command -v wasm-opt >/dev/null 2>&1; then
+    echo "wasm-opt is required to build the map runtime; enter the devenv shell or install Binaryen" >&2
+    exit 1
+  fi
+
+  wasm-opt \
+    -Oz \
+    --enable-bulk-memory \
+    --enable-bulk-memory-opt \
+    --enable-nontrapping-float-to-int \
+    --strip-debug \
+    --strip-producers \
+    "$wasm_path" \
+    -o "$optimized_path"
+  mv -f "$optimized_path" "$wasm_path"
+}
+
 patch_wasm_bindgen_mouse_offsets() {
   local js_path="$1"
 
@@ -87,7 +119,7 @@ patch_wasm_bindgen_mouse_offsets() {
     echo "wasm-bindgen JS changed: missing __wbg_get_imports hook point" >&2
     exit 1
   fi
-  if ! grep -q 'const ret = arg0\.offsetX;' "$js_path" || ! grep -q 'const ret = arg0\.offsetY;' "$js_path"; then
+  if ! grep -q 'const ret = getObject(arg0)\.offsetX;' "$js_path" || ! grep -q 'const ret = getObject(arg0)\.offsetY;' "$js_path"; then
     echo "wasm-bindgen JS changed: missing mouse offset imports" >&2
     exit 1
   fi
@@ -139,15 +171,16 @@ function __wbg_get_imports() {
 JS
 )"
   FISHYMAP_POINTER_HELPER="$pointer_helper" perl -0pi -e 's/function __wbg_get_imports\(\) \{/$ENV{FISHYMAP_POINTER_HELPER}/s' "$js_path"
-  perl -0pi -e 's/const ret = arg0\.offsetX;\n\s*return ret;/return __fishymapPointerOffset(arg0, "x");/g' "$js_path"
-  perl -0pi -e 's/const ret = arg0\.offsetY;\n\s*return ret;/return __fishymapPointerOffset(arg0, "y");/g' "$js_path"
-  if grep -q 'const ret = arg0\.offsetX;' "$js_path" || grep -q 'const ret = arg0\.offsetY;' "$js_path"; then
+  perl -0pi -e 's/const ret = getObject\(arg0\)\.offsetX;\n\s*return ret;/return __fishymapPointerOffset(getObject(arg0), "x");/g' "$js_path"
+  perl -0pi -e 's/const ret = getObject\(arg0\)\.offsetY;\n\s*return ret;/return __fishymapPointerOffset(getObject(arg0), "y");/g' "$js_path"
+  if grep -q 'const ret = getObject(arg0)\.offsetX;' "$js_path" || grep -q 'const ret = getObject(arg0)\.offsetY;' "$js_path"; then
     echo "wasm-bindgen JS changed: failed to patch mouse offset imports" >&2
     exit 1
   fi
 }
 
 patch_wasm_bindgen_mouse_offsets "$JS_BUNDLE_INPUT"
+optimize_wasm_bundle "$WASM_BUNDLE_INPUT"
 
 WASM_BUNDLE_HASH="$(sha256sum "$WASM_BUNDLE_INPUT" | cut -c1-16)"
 WASM_BUNDLE_FILE="fishystuff_ui_bevy_bg.${WASM_BUNDLE_HASH}.wasm"

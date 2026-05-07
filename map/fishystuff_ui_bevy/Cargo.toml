@@ -70,7 +70,6 @@ bevy = { version = "0.18", default-features = false, features = [
   "bevy_ui_render",
   "bevy_window",
   "bevy_winit",
-  "debug",
   "http",
   "https",
   "png",

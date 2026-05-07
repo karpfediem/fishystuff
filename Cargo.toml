@@ -37,3 +37,11 @@ secretspec = { version = "0.8.2", default-features = false }
 inherits = "release"
 debug = 1
 strip = "none"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

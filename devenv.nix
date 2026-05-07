@@ -99,6 +99,7 @@ in {
       python3Packages.fonttools
       valgrind
       wasm-bindgen-cli_0_2_108
+      binaryen
       woff2
       imagemagick
       watchexec
