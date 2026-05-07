@@ -234,6 +234,7 @@ write_cdn_retention_summary "$state_file" "$cdn_retention_summary"
 bash scripts/recipes/gitops-unify.sh "$mgmt_bin" "$state_file"
 write_handoff_summary "$state_file" "$summary_file" "$cdn_retention_summary"
 rm -f "$cdn_retention_summary"
+bash scripts/recipes/gitops-check-handoff-summary.sh "$summary_file" "$state_file"
 
 printf 'production_current_handoff_ready=%s\n' "$state_file" >&2
 printf 'production_current_handoff_summary=%s\n' "$summary_file" >&2
