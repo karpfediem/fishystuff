@@ -7,6 +7,7 @@ just gitops-helper-test
 just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-inspect-served environment=local-test state_dir=/var/lib/fishystuff/gitops run_dir=/run/fishystuff/gitops
+just gitops-production-current-desired output=/tmp/fishystuff-production-current.desired.json
 cargo test -p fishystuff_deploy
 ```
 
@@ -76,6 +77,7 @@ just gitops-helper-test
 just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-inspect-served environment=local-test state_dir=/var/lib/fishystuff/gitops run_dir=/run/fishystuff/gitops
+just gitops-production-current-desired output=/tmp/fishystuff-production-current.desired.json
 just gitops-vm-test empty-unify
 just gitops-vm-test single-host-candidate
 just gitops-vm-test dolt-fetch-pin

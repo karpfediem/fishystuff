@@ -123,6 +123,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 
 `.#gitops-desired-state-production-validate` is the production-shaped equivalent. It uses production API/Dolt service bundles, production site content, `dolt.branch_context = "main"`, `serve: false`, and `mode: validate`, so it can type-check production inputs without mutating production or selecting a served release.
 
+`just gitops-production-current-desired` writes a local ignored desired-state snapshot to `data/gitops/production-current.desired.json`. It uses the local Dolt `main` commit, production API/Dolt service bundles, production site content, and the finalized CDN serving root. The snapshot is still `mode: validate` and `serve: false`; it is an operator handoff artifact for inspecting the exact current tuple, not a serving request and not a deployment command.
+
 `.#gitops-desired-state-production-vm-serve-fixture` is a production-shaped VM fixture, not a production deployment. It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. `gitops-desired-state-production-serve-shape-refusal` proves production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 
 `.#gitops-desired-state-production-rollback-transition-fixture` is the production-shaped rollback companion. It serves `previous-production-release`, retains the exact candidate release ID derived from the production serve fixture, uses `dolt.branch_context = "main"` for both releases, and keeps the rolled-away candidate CDN root retained for stale clients.
@@ -351,6 +353,15 @@ just gitops-inspect-served \
 ```
 
 This is still read-only. It first runs the served-state consistency check, then verifies the admission status, route selection, and `roots-ready` files under `run_dir` agree with the exact served release and every retained rollback release.
+
+To generate a local production-current desired-state snapshot:
+
+```bash
+just gitops-production-current-desired
+just gitops-unify auto data/gitops/production-current.desired.json
+```
+
+The recipe is local-only. It builds or reuses the production service/site/CDN outputs, reads the local Dolt `main` hash, and writes an ignored file under `data/gitops/`. It supports environment overrides such as `FISHYSTUFF_GITOPS_DOLT_COMMIT`, `FISHYSTUFF_GITOPS_GIT_REV`, and `FISHYSTUFF_GITOPS_*_CLOSURE` for exact operator-controlled snapshots or fast tests.
 
 Backup/restore and replication are separate transport classes:
 

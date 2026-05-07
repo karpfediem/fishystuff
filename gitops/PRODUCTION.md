@@ -22,6 +22,15 @@ That check proves the graph can decode and unify production-shaped desired state
 
 It does not write host state, start services, mutate DNS, or select a served release.
 
+For the current local production tuple, generate an ignored operator handoff artifact with:
+
+```bash
+just gitops-production-current-desired
+just gitops-unify auto data/gitops/production-current.desired.json
+```
+
+That file records the local Dolt `main` commit, production API/Dolt service bundles, production site content, and finalized CDN serving root. It remains `mode: validate` and `serve: false`; it is a precise snapshot to inspect and review before a real retained rollback set and serving handoff exist.
+
 The first production-shaped serving artifact is still VM-only:
 
 ```bash
