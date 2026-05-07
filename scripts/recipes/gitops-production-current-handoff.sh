@@ -21,6 +21,7 @@ require_command() {
 }
 
 require_command jq
+require_command sha256sum
 
 if [[ "$output" == "-" ]]; then
   echo "gitops-production-current-handoff requires a file output, not '-'" >&2
@@ -52,18 +53,22 @@ write_handoff_summary() {
   local desired_state="$1"
   local summary="$2"
   local cdn_retention="$3"
+  local desired_state_sha256=""
   local tmp=""
 
+  read -r desired_state_sha256 _ < <(sha256sum "$desired_state")
   mkdir -p "$(dirname "$summary")"
   tmp="$(mktemp "$(dirname "$summary")/.${summary##*/}.XXXXXX")"
   jq -S \
     --arg desired_state_path "$desired_state" \
+    --arg desired_state_sha256 "$desired_state_sha256" \
     --slurpfile cdn_retention "$cdn_retention" \
     '(.environments.production // error("production environment is missing")) as $env
     | (.releases[$env.active_release] // error("active release is missing")) as $active
     | {
         schema: "fishystuff.gitops.production-current-handoff.v1",
         desired_state_path: $desired_state_path,
+        desired_state_sha256: $desired_state_sha256,
         cluster,
         mode,
         desired_generation: .generation,

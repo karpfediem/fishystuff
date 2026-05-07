@@ -193,6 +193,7 @@ run_fixture_handoff() {
   local active_cdn_current=""
   local active_cdn_serving=""
   local retained_roots_json=""
+  local output_sha256=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-cdn-serving" "$previous_cdn_current" '[]')"
@@ -238,14 +239,17 @@ run_fixture_handoff() {
     exit 1
   fi
 
+  read -r output_sha256 _ < <(sha256sum "$output")
   jq -e \
     --arg output "$output" \
+    --arg output_sha256 "$output_sha256" \
     --arg active_cdn_serving "$active_cdn_serving" \
     --arg previous_cdn_serving "$previous_cdn_serving" \
     --arg previous_cdn_current "$previous_cdn_current" \
     '
     .schema == "fishystuff.gitops.production-current-handoff.v1"
     and .desired_state_path == $output
+    and .desired_state_sha256 == $output_sha256
     and .cluster == "production"
     and .mode == "validate"
     and .desired_generation == 23
@@ -327,6 +331,7 @@ run_fixture_from_served() {
   local active_cdn_current=""
   local active_cdn_serving=""
   local retained_roots_json=""
+  local output_sha256=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-from-served-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-from-served-cdn-serving" "$previous_cdn_current" '[]')"
@@ -373,12 +378,15 @@ run_fixture_from_served() {
     and .releases[.environments.production.active_release].dolt_commit == "active-dolt-from-served"
   ' "$output" >/dev/null
 
+  read -r output_sha256 _ < <(sha256sum "$output")
   jq -e \
     --arg output "$output" \
+    --arg output_sha256 "$output_sha256" \
     --arg active_cdn_serving "$active_cdn_serving" \
     --arg previous_cdn_current "$previous_cdn_current" \
     '
     .desired_state_path == $output
+    and .desired_state_sha256 == $output_sha256
     and .retained_release_count == 1
     and .retained_releases[0].release_id == "previous-production-release"
     and .active_release.dolt_commit == "active-dolt-from-served"

@@ -423,7 +423,7 @@ For the normal future cycle, derive retained input from the served rollback-set 
 just gitops-production-current-from-served state_dir=/var/lib/fishystuff/gitops
 ```
 
-This writes `production-current.retained-releases.json`, `production-current.desired.json`, and `production-current.handoff-summary.json` under `data/gitops/` by default. The summary includes `cdn_retention`, which records the active CDN serving root, its underlying `current_root`, retained roots, and the expected retained CDN root for each rollback release. It is still local-only; it reads served GitOps documents and writes operator artifacts, but does not mutate hosts.
+This writes `production-current.retained-releases.json`, `production-current.desired.json`, and `production-current.handoff-summary.json` under `data/gitops/` by default. The summary records `desired_state_sha256` for the exact checked JSON file and includes `cdn_retention`, which records the active CDN serving root, its underlying `current_root`, retained roots, and the expected retained CDN root for each rollback release. It is still local-only; it reads served GitOps documents and writes operator artifacts, but does not mutate hosts.
 
 Backup/restore and replication are separate transport classes:
 
