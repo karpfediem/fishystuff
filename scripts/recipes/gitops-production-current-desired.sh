@@ -48,6 +48,22 @@ reject_credential_url() {
   fi
 }
 
+read_retained_releases_source() {
+  if [[ -n "${FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE:-}" ]]; then
+    if [[ ! -f "$FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE" ]]; then
+      echo "FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE does not exist: $FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE" >&2
+      exit 2
+    fi
+    cat "$FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE"
+    return
+  fi
+  if [[ -n "${FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON:-}" ]]; then
+    printf '%s\n' "$FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON"
+    return
+  fi
+  printf '[]\n'
+}
+
 build_or_use_path() {
   local env_name="$1"
   local attr="$2"
@@ -169,6 +185,120 @@ release_material="$(
 release_hash="$(printf '%s' "$release_material" | sha256sum | awk '{ print $1 }')"
 release_id="release-${release_hash:0:16}"
 release_ref="fishystuff/gitops/${release_id}"
+retained_releases_source="$(read_retained_releases_source)"
+retained_releases="$(
+  jq -c \
+    --arg active_release_id "$release_id" \
+    --arg default_remote_url "$dolt_remote_url" \
+    --arg default_cache_dir "/var/lib/fishystuff/gitops/dolt-cache/fishystuff" \
+    '
+      def string_field($name):
+        if (.[$name] | type) == "string" and .[$name] != "" then
+          .[$name]
+        else
+          error("retained release requires non-empty string field " + $name)
+        end;
+      def optional_string_field($name; $default):
+        if has($name) then
+          if (.[$name] | type) == "string" then
+            .[$name]
+          else
+            error("retained release field " + $name + " must be a string")
+          end
+        else
+          $default
+        end;
+      def positive_int_field($name):
+        .[$name] as $value
+        | if ($value | type) == "number" and $value > 0 and $value == ($value | floor) then
+          $value
+        else
+          error("retained release requires positive integer field " + $name)
+        end;
+      def store_path_field($name):
+        string_field($name) as $path
+        | if $path | startswith("/nix/store/") then
+            $path
+          else
+            error("retained release field " + $name + " must be a /nix/store path")
+          end;
+      def release_id_ok($id):
+        if $id | test("^[A-Za-z0-9._-]+$") then
+          $id
+        else
+          error("retained release_id contains unsupported characters")
+        end;
+      def no_userinfo($name; $url):
+        if ($url | startswith("file://") | not) and ($url | test("^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@")) then
+          error($name + " must not contain embedded credentials")
+        else
+          $url
+        end;
+      def closure($release_id; $name; $path; $gcroot_name):
+        {
+          enabled: true,
+          store_path: $path,
+          gcroot_path: ("/nix/var/nix/gcroots/fishystuff/gitops/" + $release_id + "/" + $gcroot_name)
+        };
+
+      if type != "array" then
+        error("FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON must be an array")
+      else
+        [
+          .[] as $release
+          | ($release | string_field("release_id") | release_id_ok(.)) as $release_id
+          | ($release | positive_int_field("generation")) as $generation
+          | ($release | string_field("git_rev")) as $git_rev
+          | ($release | string_field("dolt_commit")) as $dolt_commit
+          | ($release | store_path_field("api_closure")) as $api
+          | ($release | store_path_field("site_closure")) as $site
+          | ($release | store_path_field("cdn_runtime_closure")) as $cdn_runtime
+          | ($release | store_path_field("dolt_service_closure")) as $dolt_service
+          | ($release | optional_string_field("dolt_materialization"; "fetch_pin")) as $dolt_materialization
+          | ($release | optional_string_field("dolt_remote_url"; $default_remote_url) | no_userinfo("retained release dolt_remote_url"; .)) as $dolt_remote_url
+          | ($release | optional_string_field("dolt_cache_dir"; $default_cache_dir)) as $dolt_cache_dir
+          | ($release | optional_string_field("dolt_release_ref"; "fishystuff/gitops/" + $release_id)) as $dolt_release_ref
+          | if $release_id == $active_release_id then
+              error("retained release must not equal active release_id")
+            elif $dolt_materialization != "fetch_pin" and $dolt_materialization != "metadata_only" then
+              error("retained release dolt_materialization must be fetch_pin or metadata_only")
+            else
+              {
+                release_id: $release_id,
+                document: {
+                  generation: $generation,
+                  git_rev: $git_rev,
+                  dolt_commit: $dolt_commit,
+                  closures: {
+                    api: closure($release_id; "api"; $api; "api"),
+                    site: closure($release_id; "site"; $site; "site"),
+                    cdn_runtime: closure($release_id; "cdn_runtime"; $cdn_runtime; "cdn-runtime"),
+                    dolt_service: closure($release_id; "dolt_service"; $dolt_service; "dolt-service")
+                  },
+                  dolt: {
+                    repository: "fishystuff/fishystuff",
+                    commit: $dolt_commit,
+                    branch_context: "main",
+                    mode: "read_only",
+                    materialization: $dolt_materialization,
+                    remote_url: $dolt_remote_url,
+                    cache_dir: $dolt_cache_dir,
+                    release_ref: $dolt_release_ref
+                  }
+                }
+              }
+            end
+        ] as $releases
+        | if ($releases | map(.release_id) | length) != ($releases | map(.release_id) | unique | length) then
+            error("retained release IDs must be unique")
+          else
+            $releases
+          end
+      end
+    ' <<< "$retained_releases_source"
+)"
+retained_release_ids="$(jq -c '[.[].release_id]' <<< "$retained_releases")"
+retained_release_documents="$(jq -c 'reduce .[] as $release ({}; .[$release.release_id] = $release.document)' <<< "$retained_releases")"
 
 json="$(
   jq -n \
@@ -183,6 +313,8 @@ json="$(
     --arg site "$site_closure" \
     --arg cdn_runtime "$cdn_runtime_closure" \
     --arg dolt_service "$dolt_service_closure" \
+    --argjson retained_release_ids "$retained_release_ids" \
+    --argjson retained_release_documents "$retained_release_documents" \
     '{
       cluster: "production",
       generation: $generation,
@@ -194,7 +326,7 @@ json="$(
           hostname: "production-single-host"
         }
       },
-      releases: {
+      releases: ({
         ($release_id): {
           generation: $release_generation,
           git_rev: $git_rev,
@@ -232,14 +364,14 @@ json="$(
             release_ref: $dolt_release_ref
           }
         }
-      },
+      } + $retained_release_documents),
       environments: {
         production: {
           enabled: true,
           strategy: "single_active",
           host: "production-single-host",
           active_release: $release_id,
-          retained_releases: [],
+          retained_releases: $retained_release_ids,
           serve: false
         }
       }
@@ -261,3 +393,4 @@ fi
 
 printf 'production_current_release_id=%s\n' "$release_id" >&2
 printf 'production_current_dolt_commit=%s\n' "$dolt_commit" >&2
+printf 'production_retained_release_count=%s\n' "$(jq 'length' <<< "$retained_release_ids")" >&2

@@ -31,6 +31,8 @@ just gitops-unify auto data/gitops/production-current.desired.json
 
 That file records the local Dolt `main` commit, production API/Dolt service bundles, production site content, and finalized CDN serving root. It remains `mode: validate` and `serve: false`; it is a precise snapshot to inspect and review before a real retained rollback set and serving handoff exist.
 
+When a previous production tuple is known exactly, add it with `FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON` or `FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE`. The retained object must name its release ID, generation, Git revision, Dolt commit, API bundle, Dolt service bundle, site content, and CDN runtime closure. The recipe refuses duplicate retained IDs, retained active release IDs, non-store closure paths, and credential-bearing Dolt remotes.
+
 The first production-shaped serving artifact is still VM-only:
 
 ```bash
