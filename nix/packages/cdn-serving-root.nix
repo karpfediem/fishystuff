@@ -54,10 +54,20 @@ runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
         return 1
         ;;
       map/runtime-manifest.*.json|\
+      map/runtime-manifest.*.json.br|\
+      map/runtime-manifest.*.json.gz|\
       map/fishystuff_ui_bevy.*.js|\
+      map/fishystuff_ui_bevy.*.js.br|\
+      map/fishystuff_ui_bevy.*.js.gz|\
       map/fishystuff_ui_bevy.*.js.map|\
+      map/fishystuff_ui_bevy.*.js.map.br|\
+      map/fishystuff_ui_bevy.*.js.map.gz|\
       map/fishystuff_ui_bevy_bg.*.wasm|\
+      map/fishystuff_ui_bevy_bg.*.wasm.br|\
+      map/fishystuff_ui_bevy_bg.*.wasm.gz|\
       map/fishystuff_ui_bevy_bg.*.wasm.map|\
+      map/fishystuff_ui_bevy_bg.*.wasm.map.br|\
+      map/fishystuff_ui_bevy_bg.*.wasm.map.gz|\
       images/items/*.webp|\
       images/pets/*.webp|\
       images/tiles/*|\

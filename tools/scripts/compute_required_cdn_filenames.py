@@ -19,6 +19,7 @@ TERRAIN_HEIGHT_SOURCE_HEIGHT = 27904
 TERRAIN_MANIFEST_URL = "/images/terrain/v1/manifest.json"
 TERRAIN_DRAPE_MANIFEST_URL = "/images/terrain_drape/minimap/v1/manifest.json"
 TERRAIN_HEIGHT_TILES_URL = "/images/terrain_height/v1"
+PRECOMPRESSED_SUFFIXES = (".br", ".gz")
 
 
 def parse_args() -> argparse.Namespace:
@@ -137,7 +138,18 @@ class Report:
         for rel_path in rel_paths:
             self.add(group, rel_path)
 
+    def add_existing_precompressed_sidecars(self) -> None:
+        for group, rel_paths in list(self.groups.items()):
+            for rel_path in list(rel_paths):
+                if rel_path.endswith(PRECOMPRESSED_SUFFIXES):
+                    continue
+                for suffix in PRECOMPRESSED_SUFFIXES:
+                    sidecar_path = f"{rel_path}{suffix}"
+                    if (self.cdn_root / sidecar_path).is_file():
+                        self.add(group, sidecar_path)
+
     def finalize(self) -> dict:
+        self.add_existing_precompressed_sidecars()
         ordered_groups = OrderedDict()
         required_paths: list[str] = []
         for group, rel_paths in self.groups.items():

@@ -78,6 +78,10 @@ rsync -a \
 
 rsync -a "$SITE_MAP_ASSETS_DIR/ui/fishystuff.css" "$CDN_ROOT/map/ui/"
 
+"$ROOT_DIR/tools/scripts/precompress_cdn_assets.sh" \
+  "$CDN_ROOT/map/map-host.js" \
+  "$CDN_ROOT/map/ui/fishystuff.css"
+
 cat > "$CDN_ROOT/.cdn-metadata.json" <<EOF
 {
   "base_url": "${FISHYSTUFF_RESOLVED_PUBLIC_CDN_BASE_URL}",

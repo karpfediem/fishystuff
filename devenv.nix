@@ -94,6 +94,7 @@ in {
       skopeo
       xlsx2csv
       clang
+      brotli
       chromium
       jaegerLocal
       mariadb
@@ -152,7 +153,7 @@ in {
         enable = true;
         name = "CDN map runtime";
         entry = "./tools/scripts/check_cdn_map_runtime_assets_pre_push.sh";
-        files = "^(Cargo\\.lock|Cargo\\.toml|devenv\\.nix|lib/fishystuff_(api|client|core)/|map/fishystuff_ui_bevy/|site/assets/map/|site/scripts/(finalize-assets|write-runtime-config)\\.mjs|site/scripts/build-public-release\\.sh|tools/scripts/(build_map|check_cdn_map_runtime_assets|check_cdn_map_runtime_assets_pre_push|resolve_map_runtime_cache_key|push_bunnycdn|stage_cdn_assets)\\.sh)";
+        files = "^(Cargo\\.lock|Cargo\\.toml|devenv\\.nix|lib/fishystuff_(api|client|core)/|map/fishystuff_ui_bevy/|site/assets/map/|site/scripts/(finalize-assets|write-runtime-config)\\.mjs|site/scripts/build-public-release\\.sh|tools/scripts/(build_map|check_cdn_map_runtime_assets|check_cdn_map_runtime_assets_pre_push|precompress_cdn_assets|resolve_map_runtime_cache_key|push_bunnycdn|stage_cdn_assets)\\.sh)";
         language = "system";
         pass_filenames = false;
         stages = [ "pre-push" ];
@@ -566,6 +567,7 @@ in {
             -w Cargo.toml \
             -w Cargo.lock \
             -w tools/scripts/build_map.sh \
+            -w tools/scripts/precompress_cdn_assets.sh \
             --exts rs,toml,css \
             -- just build-map
         '';
@@ -578,6 +580,7 @@ in {
           exec env LOG_TS_LABEL=cdn-stage LOG_TS_FILE=${config.devenv.root}/data/vector/process/cdn-stage.log ${logTimestampRunner} watchexec -r --postpone \
             -w site/assets/map \
             -w tools/scripts/stage_cdn_assets.sh \
+            -w tools/scripts/precompress_cdn_assets.sh \
             -w tools/scripts/build_item_icons_from_source.mjs \
             --exts js,mjs,css \
             -- just cdn-stage

@@ -218,7 +218,11 @@ printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
 printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/$MAP_RUNTIME_MANIFEST_FILE"
 
 find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
-  \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'runtime-manifest.*.json' \) \
+  \( \
+    -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy.*.js.br' -o -name 'fishystuff_ui_bevy.*.js.gz' -o \
+    -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'fishystuff_ui_bevy_bg.*.wasm.br' -o -name 'fishystuff_ui_bevy_bg.*.wasm.gz' -o \
+    -name 'runtime-manifest.*.json' -o -name 'runtime-manifest.*.json.br' -o -name 'runtime-manifest.*.json.gz' \
+  \) \
   ! -name "$JS_BUNDLE_FILE" \
   ! -name "$WASM_BUNDLE_FILE" \
   ! -name "$MAP_RUNTIME_MANIFEST_FILE" \
@@ -682,3 +686,5 @@ if [ -f "$float_fishing_point_xlsx_input" ] && [ -f "$float_fishing_xlsx_input" 
     "${hotspot_metadata_args[@]}" \
     --out "$hotspots_output"
 fi
+
+"$ROOT_DIR/tools/scripts/precompress_cdn_assets.sh"
