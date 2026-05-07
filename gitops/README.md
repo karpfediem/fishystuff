@@ -386,7 +386,7 @@ If rollback-set member documents already exist for the retained releases, derive
 
 ```bash
 fishystuff_deploy gitops retained-releases-json \
-  --rollback-member /var/lib/fishystuff/gitops/rollback-set/production/previous-production-release.json \
+  --rollback-set /var/lib/fishystuff/gitops/rollback-set/production.json \
   > /tmp/fishystuff-retained-releases.json
 
 FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json \
@@ -402,7 +402,7 @@ just gitops-retained-releases-json \
   > /tmp/fishystuff-retained-releases.json
 ```
 
-The helper is read-only. It requires each rollback-set member identity to match the member's release ID, generation, Git revision, Dolt commit, and API/site/CDN/Dolt-service paths exactly before emitting production-current input.
+The helper is read-only. It can also accept repeated `--rollback-member` arguments for explicitly selected member documents. In both modes it requires each rollback-set member identity to match the member's release ID, generation, Git revision, Dolt commit, and API/site/CDN/Dolt-service paths exactly before emitting production-current input.
 
 Backup/restore and replication are separate transport classes:
 

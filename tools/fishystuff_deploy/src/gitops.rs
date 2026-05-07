@@ -46,6 +46,7 @@ struct RollbackSetDocument {
     current_release_identity: String,
     retained_release_count: usize,
     retained_release_ids: Vec<String>,
+    retained_release_document_paths: Vec<String>,
     rollback_set_available: bool,
 }
 
@@ -380,6 +381,11 @@ pub fn check_served(
         &rollback_set.retained_release_ids,
         &status.retained_release_ids,
     )?;
+    require_eq(
+        "rollback-set retained_release_document_paths length",
+        rollback_set.retained_release_document_paths.len(),
+        status.rollback_retained_count,
+    )?;
 
     require_eq(
         "rollback desired_generation",
@@ -522,16 +528,38 @@ pub fn needs_roots_ready(request_path: &Path, status_path: &Path) -> bool {
     status_matches_roots(&request, &actual_roots, &status).is_err()
 }
 
-pub fn retained_releases_json(rollback_member_paths: &[PathBuf]) -> Result<String> {
-    if rollback_member_paths.is_empty() {
-        bail!("at least one --rollback-member is required");
-    }
+pub fn retained_releases_json(
+    rollback_set_path: Option<&Path>,
+    rollback_member_paths: &[PathBuf],
+) -> Result<String> {
+    let rollback_set = if let Some(path) = rollback_set_path {
+        if !rollback_member_paths.is_empty() {
+            bail!("pass either --rollback-set or --rollback-member, not both");
+        }
+        Some(read_json::<RollbackSetDocument>(
+            path,
+            "GitOps rollback-set index",
+        )?)
+    } else {
+        None
+    };
+    let member_paths = if let Some(rollback_set) = &rollback_set {
+        rollback_set_member_paths(rollback_set)?
+    } else {
+        if rollback_member_paths.is_empty() {
+            bail!("at least one --rollback-set or --rollback-member is required");
+        }
+        rollback_member_paths.to_vec()
+    };
 
     let mut seen_release_ids = BTreeSet::new();
-    let mut retained_releases = Vec::with_capacity(rollback_member_paths.len());
-    for path in rollback_member_paths {
+    let mut retained_releases = Vec::with_capacity(member_paths.len());
+    for (index, path) in member_paths.iter().enumerate() {
         let member: RollbackSetMemberDocument =
             read_json(path, "GitOps rollback-set member document")?;
+        if let Some(rollback_set) = &rollback_set {
+            validate_member_in_rollback_set(rollback_set, index, &member)?;
+        }
         let retained = retained_release_from_member(&member)
             .with_context(|| format!("converting rollback-set member {}", path.display()))?;
         if !seen_release_ids.insert(retained.release_id.clone()) {
@@ -544,6 +572,66 @@ pub fn retained_releases_json(rollback_member_paths: &[PathBuf]) -> Result<Strin
         serde_json::to_string_pretty(&retained_releases).context("encoding retained releases")?;
     output.push('\n');
     Ok(output)
+}
+
+fn rollback_set_member_paths(rollback_set: &RollbackSetDocument) -> Result<Vec<PathBuf>> {
+    require_true(
+        "rollback-set rollback_set_available",
+        rollback_set.rollback_set_available,
+    )?;
+    if rollback_set.retained_release_count == 0 {
+        bail!("rollback-set retained_release_count must be greater than zero");
+    }
+    require_eq(
+        "rollback-set retained_release_ids length",
+        rollback_set.retained_release_ids.len(),
+        rollback_set.retained_release_count,
+    )?;
+    require_eq(
+        "rollback-set retained_release_document_paths length",
+        rollback_set.retained_release_document_paths.len(),
+        rollback_set.retained_release_count,
+    )?;
+
+    let mut paths = Vec::with_capacity(rollback_set.retained_release_document_paths.len());
+    for path in &rollback_set.retained_release_document_paths {
+        require_non_empty("rollback-set retained_release_document_path", path)?;
+        paths.push(PathBuf::from(path));
+    }
+    Ok(paths)
+}
+
+fn validate_member_in_rollback_set(
+    rollback_set: &RollbackSetDocument,
+    index: usize,
+    member: &RollbackSetMemberDocument,
+) -> Result<()> {
+    require_eq(
+        "rollback-set member desired_generation",
+        member.desired_generation,
+        rollback_set.desired_generation,
+    )?;
+    require_eq(
+        "rollback-set member environment",
+        member.environment.as_str(),
+        rollback_set.environment.as_str(),
+    )?;
+    require_eq(
+        "rollback-set member host",
+        member.host.as_str(),
+        rollback_set.host.as_str(),
+    )?;
+    require_eq(
+        "rollback-set member current_release_id",
+        member.current_release_id.as_str(),
+        rollback_set.current_release_id.as_str(),
+    )?;
+    require_eq(
+        "rollback-set member release_id",
+        member.release_id.as_str(),
+        rollback_set.retained_release_ids[index].as_str(),
+    )?;
+    Ok(())
 }
 
 fn retained_release_from_member(member: &RollbackSetMemberDocument) -> Result<RetainedReleaseJson> {

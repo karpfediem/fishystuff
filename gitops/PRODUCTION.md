@@ -37,7 +37,7 @@ For already-published GitOps rollback-set members, derive the retained JSON from
 
 ```bash
 fishystuff_deploy gitops retained-releases-json \
-  --rollback-member /var/lib/fishystuff/gitops/rollback-set/production/previous-production-release.json \
+  --rollback-set /var/lib/fishystuff/gitops/rollback-set/production.json \
   > /tmp/fishystuff-retained-releases.json
 
 FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json \

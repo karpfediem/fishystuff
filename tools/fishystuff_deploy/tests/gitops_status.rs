@@ -426,6 +426,53 @@ fn gitops_retained_releases_json_converts_member_documents() -> Result<()> {
 }
 
 #[test]
+fn gitops_retained_releases_json_reads_rollback_set_index() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-retained-json-index")?;
+    let rollback_set = root.path().join("rollback-set/local-test.json");
+    let member = root
+        .path()
+        .join("rollback-set/local-test/previous-release.json");
+    write_rollback_member_document(
+        &member,
+        "previous-release",
+        "release=previous-release;generation=7;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=/nix/store/example-previous-api;site=/nix/store/example-previous-site;cdn_runtime=/nix/store/example-previous-cdn;dolt_service=/nix/store/example-previous-dolt-service",
+    )?;
+    write_json(
+        &rollback_set,
+        json!({
+            "desired_generation": 42,
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "current_release_id": "active-release",
+            "current_release_identity": "release=active-release;api=example",
+            "retained_release_count": 1,
+            "retained_release_ids": ["previous-release"],
+            "retained_release_document_paths": [path_str(&member)?],
+            "rollback_set_available": true,
+            "rollback_set_state": "retained_hot_release_set",
+        }),
+    )?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "retained-releases-json",
+        "--rollback-set",
+        path_str(&rollback_set)?,
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops retained-releases-json", output);
+    }
+
+    let retained: Value =
+        serde_json::from_slice(&output.stdout).context("decoding retained releases stdout")?;
+    assert_eq!(retained.as_array().map(Vec::len), Some(1));
+    assert_eq!(retained[0]["release_id"], "previous-release");
+    assert_eq!(retained[0]["generation"], 7);
+
+    Ok(())
+}
+
+#[test]
 fn gitops_retained_releases_json_rejects_identity_path_mismatch() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-gitops-retained-json-mismatch")?;
     let member = root
