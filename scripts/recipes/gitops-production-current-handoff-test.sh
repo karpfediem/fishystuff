@@ -71,36 +71,80 @@ EOF
   export FISHYSTUFF_FAKE_MGMT_MARKER="$marker"
 }
 
+make_cdn_current_root() {
+  local root="$1"
+  local name="$2"
+  local dir="$root/${name}"
+
+  mkdir -p "$dir/map"
+  printf 'fixture module\n' >"$dir/map/fishystuff_ui_bevy.fixture.js"
+  printf 'fixture wasm\n' >"$dir/map/fishystuff_ui_bevy_bg.fixture.wasm"
+  jq -n \
+    '{
+      module: "fishystuff_ui_bevy.fixture.js",
+      wasm: "fishystuff_ui_bevy_bg.fixture.wasm"
+    }' >"$dir/map/runtime-manifest.json"
+
+  nix-store --add "$dir"
+}
+
+make_cdn_serving_root() {
+  local root="$1"
+  local name="$2"
+  local current_root="$3"
+  local retained_roots_json="$4"
+  local dir="$root/${name}"
+
+  mkdir -p "$dir"
+  cp -R "${current_root}/." "$dir/"
+  jq -n \
+    --arg current_root "$current_root" \
+    --argjson retained_roots "$retained_roots_json" \
+    '{
+      schema_version: 1,
+      current_root: $current_root,
+      retained_roots: $retained_roots,
+      retained_root_count: ($retained_roots | length),
+      assets: []
+    }' >"$dir/cdn-serving-manifest.json"
+
+  nix-store --add "$dir"
+}
+
 write_retained_json() {
   local path="$1"
-  cat >"$path" <<'EOF'
-[
-  {
-    "release_id": "previous-production-release",
-    "generation": 1,
-    "git_rev": "previous-git",
-    "dolt_commit": "previous-dolt",
-    "api_closure": "/nix/store/example-previous-api",
-    "site_closure": "/nix/store/example-previous-site",
-    "cdn_runtime_closure": "/nix/store/example-previous-cdn",
-    "dolt_service_closure": "/nix/store/example-previous-dolt-service",
-    "dolt_materialization": "fetch_pin",
-    "dolt_cache_dir": "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
-    "dolt_release_ref": "fishystuff/gitops/previous-production-release"
-  }
-]
-EOF
+  local cdn_runtime_closure="$2"
+
+  jq -n \
+    --arg cdn_runtime_closure "$cdn_runtime_closure" \
+    '[
+      {
+        release_id: "previous-production-release",
+        generation: 1,
+        git_rev: "previous-git",
+        dolt_commit: "previous-dolt",
+        api_closure: "/nix/store/example-previous-api",
+        site_closure: "/nix/store/example-previous-site",
+        cdn_runtime_closure: $cdn_runtime_closure,
+        dolt_service_closure: "/nix/store/example-previous-dolt-service",
+        dolt_materialization: "fetch_pin",
+        dolt_cache_dir: "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
+        dolt_release_ref: "fishystuff/gitops/previous-production-release"
+      }
+    ]' >"$path"
 }
 
 write_served_rollback_set_state() {
   local state_dir="$1"
+  local cdn_runtime_closure="$2"
   local member="$state_dir/rollback-set/production/previous-production-release.json"
   local index="$state_dir/rollback-set/production.json"
-  local identity="release=previous-production-release;generation=1;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=/nix/store/example-previous-api;site=/nix/store/example-previous-site;cdn_runtime=/nix/store/example-previous-cdn;dolt_service=/nix/store/example-previous-dolt-service"
+  local identity="release=previous-production-release;generation=1;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=/nix/store/example-previous-api;site=/nix/store/example-previous-site;cdn_runtime=${cdn_runtime_closure};dolt_service=/nix/store/example-previous-dolt-service"
 
   mkdir -p "$(dirname "$member")"
   jq -n \
     --arg identity "$identity" \
+    --arg cdn_runtime_closure "$cdn_runtime_closure" \
     '{
       desired_generation: 42,
       environment: "production",
@@ -111,7 +155,7 @@ write_served_rollback_set_state() {
       api_bundle: "/nix/store/example-previous-api",
       dolt_service_bundle: "/nix/store/example-previous-dolt-service",
       site_content: "/nix/store/example-previous-site",
-      cdn_runtime_content: "/nix/store/example-previous-cdn",
+      cdn_runtime_content: $cdn_runtime_closure,
       dolt_commit: "previous-dolt",
       dolt_materialization: "fetch_pin",
       dolt_cache_dir: "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
@@ -144,8 +188,19 @@ run_fixture_handoff() {
   local fake_mgmt="$root/fake-mgmt"
   local fake_mgmt_marker="$root/fake-mgmt-state-file"
   local summary="$root/production-current.handoff-summary.json"
+  local previous_cdn_current=""
+  local previous_cdn_serving=""
+  local active_cdn_current=""
+  local active_cdn_serving=""
+  local retained_roots_json=""
 
-  write_retained_json "$retained"
+  previous_cdn_current="$(make_cdn_current_root "$root" "previous-cdn-current")"
+  previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-cdn-serving" "$previous_cdn_current" '[]')"
+  active_cdn_current="$(make_cdn_current_root "$root" "active-cdn-current")"
+  retained_roots_json="$(jq -cn --arg root "$previous_cdn_current" '[$root]')"
+  active_cdn_serving="$(make_cdn_serving_root "$root" "active-cdn-serving" "$active_cdn_current" "$retained_roots_json")"
+
+  write_retained_json "$retained" "$previous_cdn_serving"
   write_fake_mgmt "$fake_mgmt" "$fake_mgmt_marker"
 
   FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE="$retained" \
@@ -156,7 +211,7 @@ run_fixture_handoff() {
     FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
     FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-active-api" \
     FISHYSTUFF_GITOPS_SITE_CLOSURE="/nix/store/example-active-site" \
-    FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="/nix/store/example-active-cdn" \
+    FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
     FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="/nix/store/example-active-dolt-service" \
     bash scripts/recipes/gitops-production-current-handoff.sh \
       "$output" \
@@ -183,7 +238,12 @@ run_fixture_handoff() {
     exit 1
   fi
 
-  jq -e --arg output "$output" '
+  jq -e \
+    --arg output "$output" \
+    --arg active_cdn_serving "$active_cdn_serving" \
+    --arg previous_cdn_serving "$previous_cdn_serving" \
+    --arg previous_cdn_current "$previous_cdn_current" \
+    '
     .schema == "fishystuff.gitops.production-current-handoff.v1"
     and .desired_state_path == $output
     and .cluster == "production"
@@ -194,12 +254,20 @@ run_fixture_handoff() {
     and (.active_release.release_id | startswith("release-"))
     and .active_release.release_id == .environment.active_release
     and .active_release.dolt_commit == "active-dolt"
-    and .active_release.closures.cdn_runtime == "/nix/store/example-active-cdn"
+    and .active_release.closures.cdn_runtime == $active_cdn_serving
     and .retained_release_count == 1
     and .retained_releases[0].release_id == "previous-production-release"
     and .retained_releases[0].dolt_commit == "previous-dolt"
+    and .retained_releases[0].closures.cdn_runtime == $previous_cdn_serving
+    and .cdn_retention.active_cdn_runtime == $active_cdn_serving
+    and .cdn_retention.retained_releases[0].release_id == "previous-production-release"
+    and .cdn_retention.retained_releases[0].cdn_runtime == $previous_cdn_serving
+    and .cdn_retention.retained_releases[0].expected_retained_cdn_root == $previous_cdn_current
+    and .cdn_retention.retained_releases[0].retained_cdn_runtime_is_serving_root == true
+    and .cdn_retention.retained_releases[0].retained_by_active_cdn_serving_root == true
     and .checks.production_current_desired_generated == true
     and .checks.desired_serving_preflight_passed == true
+    and .checks.cdn_retained_roots_verified == true
     and .checks.gitops_unify_passed == true
     and .checks.remote_deploy_performed == false
     and .checks.infrastructure_mutation_performed == false
@@ -215,8 +283,19 @@ run_fixture_from_served() {
   local fake_mgmt="$root/fake-mgmt-from-served"
   local fake_mgmt_marker="$root/fake-mgmt-from-served-state-file"
   local summary="$root/from-served.handoff-summary.json"
+  local previous_cdn_current=""
+  local previous_cdn_serving=""
+  local active_cdn_current=""
+  local active_cdn_serving=""
+  local retained_roots_json=""
 
-  write_served_rollback_set_state "$state_dir"
+  previous_cdn_current="$(make_cdn_current_root "$root" "previous-from-served-cdn-current")"
+  previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-from-served-cdn-serving" "$previous_cdn_current" '[]')"
+  active_cdn_current="$(make_cdn_current_root "$root" "active-from-served-cdn-current")"
+  retained_roots_json="$(jq -cn --arg root "$previous_cdn_current" '[$root]')"
+  active_cdn_serving="$(make_cdn_serving_root "$root" "active-from-served-cdn-serving" "$active_cdn_current" "$retained_roots_json")"
+
+  write_served_rollback_set_state "$state_dir" "$previous_cdn_serving"
   write_fake_mgmt "$fake_mgmt" "$fake_mgmt_marker"
 
   FISHYSTUFF_GITOPS_GENERATION=24 \
@@ -226,7 +305,7 @@ run_fixture_from_served() {
     FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="https://doltremoteapi.dolthub.com/fishystuff/fishystuff" \
     FISHYSTUFF_GITOPS_API_CLOSURE="/nix/store/example-active-from-served-api" \
     FISHYSTUFF_GITOPS_SITE_CLOSURE="/nix/store/example-active-from-served-site" \
-    FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="/nix/store/example-active-from-served-cdn" \
+    FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE="$active_cdn_serving" \
     FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="/nix/store/example-active-from-served-dolt-service" \
     bash scripts/recipes/gitops-production-current-from-served.sh \
       "$output" \
@@ -240,10 +319,11 @@ run_fixture_from_served() {
       >"$root/from-served.stdout" \
       2>"$root/from-served.stderr"
 
-  jq -e '
+  jq -e --arg previous_cdn_serving "$previous_cdn_serving" '
     .[0].release_id == "previous-production-release"
     and .[0].dolt_commit == "previous-dolt"
     and .[0].api_closure == "/nix/store/example-previous-api"
+    and .[0].cdn_runtime_closure == $previous_cdn_serving
   ' "$retained" >/dev/null
 
   jq -e '
@@ -254,12 +334,19 @@ run_fixture_from_served() {
     and .releases[.environments.production.active_release].dolt_commit == "active-dolt-from-served"
   ' "$output" >/dev/null
 
-  jq -e --arg output "$output" '
+  jq -e \
+    --arg output "$output" \
+    --arg active_cdn_serving "$active_cdn_serving" \
+    --arg previous_cdn_current "$previous_cdn_current" \
+    '
     .desired_state_path == $output
     and .retained_release_count == 1
     and .retained_releases[0].release_id == "previous-production-release"
     and .active_release.dolt_commit == "active-dolt-from-served"
+    and .active_release.closures.cdn_runtime == $active_cdn_serving
+    and .cdn_retention.retained_releases[0].expected_retained_cdn_root == $previous_cdn_current
     and .checks.desired_serving_preflight_passed == true
+    and .checks.cdn_retained_roots_verified == true
     and .checks.gitops_unify_passed == true
   ' "$summary" >/dev/null
 

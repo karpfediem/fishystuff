@@ -125,7 +125,7 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 
 `just gitops-production-current-desired` writes a local ignored desired-state snapshot to `data/gitops/production-current.desired.json`. It uses the local Dolt `main` commit, production API/Dolt service bundles, production site content, and the finalized CDN serving root. The snapshot is still `mode: validate` and `serve: false`; it is an operator handoff artifact for inspecting the exact current tuple, not a serving request and not a deployment command. Retained rollback releases can be supplied with `FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON` or `FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE`; the recipe requires exact release IDs, Dolt commits, and all four closure paths for each retained release instead of inventing a previous target.
 
-`just gitops-production-current-handoff` is the checked version of that flow. It requires retained rollback input, generates the production-current desired file, runs `gitops-check-desired-serving`, and then runs `gitops-unify` against the same file. It is still local-only and does not serve production.
+`just gitops-production-current-handoff` is the checked version of that flow. It requires retained rollback input, generates the production-current desired file, runs `gitops-check-desired-serving`, verifies that the active CDN serving manifest retains each rollback CDN root, and then runs `gitops-unify` against the same file. It is still local-only and does not serve production.
 
 `.#gitops-desired-state-production-vm-serve-fixture` is a production-shaped VM fixture, not a production deployment. It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. `gitops-desired-state-production-serve-shape-refusal` proves production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 
@@ -423,7 +423,7 @@ For the normal future cycle, derive retained input from the served rollback-set 
 just gitops-production-current-from-served state_dir=/var/lib/fishystuff/gitops
 ```
 
-This writes `production-current.retained-releases.json`, `production-current.desired.json`, and `production-current.handoff-summary.json` under `data/gitops/` by default. It is still local-only; it reads served GitOps documents and writes operator artifacts, but does not mutate hosts.
+This writes `production-current.retained-releases.json`, `production-current.desired.json`, and `production-current.handoff-summary.json` under `data/gitops/` by default. The summary includes `cdn_retention`, which records the active CDN serving root, its underlying `current_root`, retained roots, and the expected retained CDN root for each rollback release. It is still local-only; it reads served GitOps documents and writes operator artifacts, but does not mutate hosts.
 
 Backup/restore and replication are separate transport classes:
 
