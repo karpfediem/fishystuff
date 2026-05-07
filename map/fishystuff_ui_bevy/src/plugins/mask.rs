@@ -11,7 +11,7 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
 use crate::map::layer_query::LayerQuerySample;
-use crate::map::layers::{LayerRegistry, LayerRuntime};
+use crate::map::layers::{LayerRegistry, LayerRuntime, HOTSPOTS_LAYER_KEY};
 use crate::map::raster::RasterTileCache;
 use crate::map::selection_query::{selected_info_at_world_point, selected_info_from_hover};
 use crate::map::spaces::world::MapToWorld;
@@ -24,8 +24,8 @@ use crate::plugins::api::{
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::hotspots::{
-    hotspot_layers_pending, hotspot_sample_at_world_point_with_options, HotspotLayerRuntime,
-    HOTSPOT_TARGET_KEY,
+    hotspot_layers_pending, hotspot_sample_at_world_point_with_options,
+    hotspot_samples_at_world_point_with_options, HotspotLayerRuntime, HOTSPOT_TARGET_KEY,
 };
 use crate::plugins::input::PanState;
 use crate::plugins::points::{
@@ -35,14 +35,15 @@ use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::plugins::waypoint_layers::{
     waypoint_layers_pending, waypoint_sample_at_world_point,
-    waypoint_sample_at_world_point_with_options, waypoint_samples_at_world_point_with_options,
-    WaypointLayerInteractionSample, WaypointLayerRuntime, WaypointSampleOptions,
+    waypoint_samples_at_world_point_with_options, WaypointLayerInteractionSample,
+    WaypointLayerRuntime, WaypointSampleOptions,
 };
 use crate::prelude::*;
 use fishystuff_api::Rgb;
 use fishystuff_core::field_metadata::{FieldHoverTarget, FIELD_HOVER_TARGET_KEY_TRADE_NPC};
 
 const BOOKMARK_HOVER_RADIUS_SCREEN_PX: f64 = 14.0;
+const LANDMARK_IDENTITY_EPSILON: f64 = 0.01;
 const BOOKMARK_LAYER_KEY: &str = "bookmarks";
 const BOOKMARK_TARGET_KEY: &str = "bookmark";
 const WAYPOINT_TARGET_KEY: &str = "waypoint";
@@ -80,6 +81,7 @@ struct PendingSelectionDetailsRequest {
     click_world_point: WorldPoint,
     selected_world_point: WorldPoint,
     waypoint_sample: Option<WaypointLayerInteractionSample>,
+    landmark_identity: Option<LandmarkSampleIdentity>,
     point_kind: FishyMapSelectionPointKind,
     point_label: Option<String>,
     stage: PendingSelectionDetailsStage,
@@ -94,6 +96,16 @@ struct SelectionCandidate {
     point_label: Option<String>,
     display_order: i32,
     layer_sample: LayerQuerySample,
+    landmark_identity: LandmarkSampleIdentity,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct LandmarkSampleIdentity {
+    layer_id: Option<String>,
+    kind: Option<String>,
+    field_id: Option<u32>,
+    target_key: Option<String>,
+    world_point: WorldPoint,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -278,6 +290,9 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         click_world_point: selected_world_point,
         selected_world_point,
         waypoint_sample: None,
+        landmark_identity: candidate
+            .as_ref()
+            .map(|candidate| candidate.landmark_identity.clone()),
         point_kind,
         point_label,
         stage: PendingSelectionDetailsStage::ProbeWaypoint,
@@ -304,6 +319,7 @@ pub(crate) fn queue_selection_details(
         click_world_point: world_point,
         selected_world_point: world_point,
         waypoint_sample: None,
+        landmark_identity: landmark_identity_for_request(element_kind.unwrap_or(""), world_point),
         point_kind,
         point_label,
         stage: PendingSelectionDetailsStage::ProbeWaypoint,
@@ -343,14 +359,14 @@ fn process_pending_selection_details(mut context: SelectionDetailsContext<'_, '_
                 ),
                 target_key: waypoint_probe_target_key(&request),
             };
-            let waypoint_sample = landmark_sample_at_world_point_with_options(
-                request.click_world_point,
-                &context,
-                waypoint_options,
-            )
-            .filter(|sample| {
-                waypoint_sample_matches_requested_label(sample, request.point_label.as_deref())
-            });
+            let waypoint_sample = matching_waypoint_sample(
+                landmark_samples_at_world_point_with_options(
+                    request.click_world_point,
+                    &context,
+                    waypoint_options,
+                ),
+                request.landmark_identity.as_ref(),
+            );
             if waypoint_sample.is_none()
                 && waypoint_options.include_hidden_layers
                 && landmark_layers_pending(&context, waypoint_options)
@@ -384,7 +400,11 @@ fn selection_details_should_probe_waypoint(point_kind: FishyMapSelectionPointKin
 }
 
 fn waypoint_probe_target_key(request: &PendingSelectionDetailsRequest) -> Option<&'static str> {
-    match request.element_kind.trim() {
+    landmark_target_key_for_element_kind(request.element_kind.as_str())
+}
+
+fn landmark_target_key_for_element_kind(element_kind: &str) -> Option<&'static str> {
+    match element_kind.trim() {
         "npc" => Some(FIELD_HOVER_TARGET_KEY_TRADE_NPC),
         "waypoint" => Some(WAYPOINT_TARGET_KEY),
         "hotspot" => Some(HOTSPOT_TARGET_KEY),
@@ -392,16 +412,35 @@ fn waypoint_probe_target_key(request: &PendingSelectionDetailsRequest) -> Option
     }
 }
 
-fn landmark_sample_at_world_point_with_options(
+fn landmark_identity_for_request(
+    element_kind: &str,
+    world_point: WorldPoint,
+) -> Option<LandmarkSampleIdentity> {
+    let target_key = landmark_target_key_for_element_kind(element_kind)?;
+    let element_kind = element_kind.trim();
+    Some(LandmarkSampleIdentity {
+        layer_id: (element_kind == "hotspot").then(|| HOTSPOTS_LAYER_KEY.to_string()),
+        kind: match element_kind {
+            "hotspot" => Some("hotspot".to_string()),
+            "npc" | "waypoint" => Some("waypoint".to_string()),
+            _ => None,
+        },
+        field_id: None,
+        target_key: Some(target_key.to_string()),
+        world_point,
+    })
+}
+
+fn landmark_samples_at_world_point_with_options(
     world_point: WorldPoint,
     context: &SelectionDetailsContext<'_, '_>,
     options: WaypointSampleOptions,
-) -> Option<WaypointLayerInteractionSample> {
+) -> Vec<WaypointLayerInteractionSample> {
     if options
         .target_key
         .is_some_and(|target_key| target_key == HOTSPOT_TARGET_KEY)
     {
-        return hotspot_sample_at_world_point_with_options(
+        return hotspot_samples_at_world_point_with_options(
             world_point,
             &context.hotspot_runtime,
             &context.layer_registry,
@@ -411,7 +450,7 @@ fn landmark_sample_at_world_point_with_options(
             options,
         );
     }
-    waypoint_sample_at_world_point_with_options(
+    waypoint_samples_at_world_point_with_options(
         world_point,
         &context.waypoint_runtime,
         &context.layer_registry,
@@ -448,19 +487,62 @@ fn landmark_layers_pending(
     )
 }
 
-fn waypoint_sample_matches_requested_label(
+fn matching_waypoint_sample(
+    samples: Vec<WaypointLayerInteractionSample>,
+    requested_identity: Option<&LandmarkSampleIdentity>,
+) -> Option<WaypointLayerInteractionSample> {
+    if let Some(identity) = requested_identity {
+        return samples
+            .into_iter()
+            .find(|sample| waypoint_sample_matches_identity(sample, identity));
+    }
+    samples.into_iter().next()
+}
+
+fn waypoint_sample_matches_identity(
     sample: &WaypointLayerInteractionSample,
-    requested_label: Option<&str>,
+    identity: &LandmarkSampleIdentity,
 ) -> bool {
-    let Some(requested_label) = normalized_point_label(requested_label) else {
-        return true;
-    };
-    normalized_point_label(sample.point_label.as_deref()).as_deref()
-        == Some(requested_label.as_str())
-        || sample.layer_sample.targets.iter().any(|target| {
-            normalized_point_label(Some(target.label.as_str())).as_deref()
-                == Some(requested_label.as_str())
+    if identity
+        .layer_id
+        .as_deref()
+        .is_some_and(|layer_id| sample.layer_sample.layer_id != layer_id)
+    {
+        return false;
+    }
+    if identity
+        .kind
+        .as_deref()
+        .is_some_and(|kind| sample.layer_sample.kind != kind)
+    {
+        return false;
+    }
+    if identity
+        .field_id
+        .is_some_and(|field_id| sample.layer_sample.field_id != Some(field_id))
+    {
+        return false;
+    }
+    if identity.target_key.as_deref().is_some_and(|target_key| {
+        !sample.layer_sample.targets.iter().any(|target| {
+            target.key == target_key
+                && same_landmark_world_point(
+                    WorldPoint::new(target.world_x, target.world_z),
+                    identity.world_point,
+                )
         })
+    }) {
+        return false;
+    }
+    same_landmark_world_point(
+        WorldPoint::new(sample.world_x, sample.world_z),
+        identity.world_point,
+    )
+}
+
+fn same_landmark_world_point(left: WorldPoint, right: WorldPoint) -> bool {
+    (left.x - right.x).abs() <= LANDMARK_IDENTITY_EPSILON
+        && (left.z - right.z).abs() <= LANDMARK_IDENTITY_EPSILON
 }
 
 fn apply_pending_selection_layer_details(
@@ -871,8 +953,22 @@ fn selection_candidate_from_layer_sample(
             point_label: normalized_point_label(Some(target.label.as_str())),
             display_order,
             layer_sample: layer_sample.clone(),
+            landmark_identity: landmark_identity_for_layer_sample(layer_sample, target),
         })
     })
+}
+
+fn landmark_identity_for_layer_sample(
+    layer_sample: &LayerQuerySample,
+    target: &FieldHoverTarget,
+) -> LandmarkSampleIdentity {
+    LandmarkSampleIdentity {
+        layer_id: Some(layer_sample.layer_id.clone()),
+        kind: Some(layer_sample.kind.clone()),
+        field_id: layer_sample.field_id,
+        target_key: Some(target.key.clone()),
+        world_point: WorldPoint::new(target.world_x, target.world_z),
+    }
 }
 
 fn layer_display_order(
@@ -1182,10 +1278,10 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
 mod tests {
     use super::{
         bookmark_layer_sample, hover_content_matches, hover_storage_update, hovered_zone_rgb,
-        landmark_hover_info, quick_selected_info, quick_selected_info_for_candidate,
-        selection_candidate_from_layer_sample, selection_details_should_probe_waypoint,
-        waypoint_probe_target_key, waypoint_sample_matches_requested_label, HoverStorageUpdate,
-        PendingSelectionDetailsRequest, PendingSelectionDetailsStage,
+        landmark_hover_info, matching_waypoint_sample, quick_selected_info,
+        quick_selected_info_for_candidate, selection_candidate_from_layer_sample,
+        selection_details_should_probe_waypoint, waypoint_probe_target_key, HoverStorageUpdate,
+        LandmarkSampleIdentity, PendingSelectionDetailsRequest, PendingSelectionDetailsStage,
     };
     use crate::bridge::contract::FishyMapSelectionPointKind;
     use crate::map::layer_query::LayerQuerySample;
@@ -1244,6 +1340,30 @@ mod tests {
             }],
             detail_pane: None,
             detail_sections: Vec::new(),
+        }
+    }
+
+    fn hotspot_interaction_sample_for_test(
+        field_id: u32,
+        label: &str,
+        world_x: f64,
+        world_z: f64,
+    ) -> WaypointLayerInteractionSample {
+        let mut layer_sample = landmark_sample(
+            "hotspots",
+            "Hotspots",
+            HOTSPOT_TARGET_KEY,
+            label,
+            world_x,
+            world_z,
+        );
+        layer_sample.kind = "hotspot".to_string();
+        layer_sample.field_id = Some(field_id);
+        WaypointLayerInteractionSample {
+            world_x,
+            world_z,
+            point_label: Some(label.to_string()),
+            layer_sample,
         }
     }
 
@@ -1460,6 +1580,7 @@ mod tests {
             click_world_point: WorldPoint::new(1.0, 2.0),
             selected_world_point: WorldPoint::new(1.0, 2.0),
             waypoint_sample: None,
+            landmark_identity: None,
             point_kind: FishyMapSelectionPointKind::Waypoint,
             point_label: Some("Node".to_string()),
             stage: PendingSelectionDetailsStage::ProbeWaypoint,
@@ -1488,37 +1609,37 @@ mod tests {
     }
 
     #[test]
-    fn waypoint_probe_ignores_neighbor_with_different_requested_label() {
-        let sample = WaypointLayerInteractionSample {
-            world_x: 10.0,
-            world_z: 20.0,
-            point_label: Some("Neighbor Node".to_string()),
-            layer_sample: LayerQuerySample {
-                layer_id: "region_nodes".to_string(),
-                layer_name: "Node Waypoints".to_string(),
-                kind: "waypoint".to_string(),
-                rgb: Rgb::from_u32(0x123456),
-                rgb_u32: 0x123456,
-                field_id: None,
-                targets: vec![FieldHoverTarget {
-                    key: "waypoint".to_string(),
-                    label: "Neighbor Node".to_string(),
-                    world_x: 10.0,
-                    world_z: 20.0,
-                }],
-                detail_pane: None,
-                detail_sections: Vec::new(),
-            },
+    fn waypoint_probe_uses_later_matching_identity() {
+        let neighbor = hotspot_interaction_sample_for_test(7, "Neighbor Hotspot", 10.0, 20.0);
+        let requested = hotspot_interaction_sample_for_test(8, "Requested Hotspot", 30.0, 40.0);
+        let identity = LandmarkSampleIdentity {
+            layer_id: Some("hotspots".to_string()),
+            kind: Some("hotspot".to_string()),
+            field_id: Some(8),
+            target_key: Some(HOTSPOT_TARGET_KEY.to_string()),
+            world_point: WorldPoint::new(30.0, 40.0),
         };
 
-        assert!(waypoint_sample_matches_requested_label(
-            &sample,
-            Some("Neighbor Node")
-        ));
-        assert!(!waypoint_sample_matches_requested_label(
-            &sample,
-            Some("Requested Node")
-        ));
-        assert!(waypoint_sample_matches_requested_label(&sample, None));
+        let selected =
+            matching_waypoint_sample(vec![neighbor.clone(), requested.clone()], Some(&identity))
+                .expect("matching sample");
+
+        assert_eq!(selected.point_label.as_deref(), Some("Requested Hotspot"));
+        assert_eq!(selected.layer_sample.field_id, Some(8));
+        assert_eq!(
+            matching_waypoint_sample(vec![neighbor.clone(), requested.clone()], None)
+                .and_then(|sample| sample.point_label)
+                .as_deref(),
+            Some("Neighbor Hotspot")
+        );
+
+        assert!(matching_waypoint_sample(
+            vec![neighbor, requested],
+            Some(&LandmarkSampleIdentity {
+                field_id: Some(9),
+                ..identity
+            }),
+        )
+        .is_none());
     }
 }
