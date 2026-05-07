@@ -65,6 +65,14 @@ FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json 
 
 That recipe generates `data/gitops/production-current.desired.json`, runs the desired-serving preflight, and then runs `gitops-unify` against the exact generated file. It still does not write host state, start services, mutate DNS, or select a served release.
 
+The handoff recipe has a fast local regression check:
+
+```bash
+just gitops-production-current-handoff-test
+```
+
+The test uses explicit closure/Dolt overrides and a fake mgmt binary, so it checks recipe composition without real Nix builds or host mutation.
+
 The first production-shaped serving artifact is still VM-only:
 
 ```bash

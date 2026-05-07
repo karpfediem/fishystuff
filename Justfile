@@ -76,6 +76,7 @@ gitops-unify mgmt_bin="auto" state_file="gitops/fixtures/empty.desired.json":
 # Run fast host-local GitOps deployment helper tests. No NixOS VM.
 gitops-helper-test:
   cargo test -p fishystuff_deploy
+  bash scripts/recipes/gitops-production-current-handoff-test.sh
 
 # Validate local GitOps served status, active selection, rollback set, and rollback readiness documents.
 gitops-check-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" host="" release_id="":
@@ -104,6 +105,10 @@ gitops-production-current-desired output="data/gitops/production-current.desired
 # Generate and validate a production-current handoff snapshot with retained rollback input.
 gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}"
+
+# Run fast local regression checks for the production-current handoff recipe.
+gitops-production-current-handoff-test:
+  bash scripts/recipes/gitops-production-current-handoff-test.sh
 
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
