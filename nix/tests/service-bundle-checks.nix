@@ -301,7 +301,7 @@ in
     expectedReloadMode = "command";
     expectedRuntimeOverlayCount = 2;
     requiredMaterializationHandle = "pkg/main";
-    requiredMaterializationAcquisition = "substitute";
+    requiredMaterializationAcquisition = "push";
     requiredConfigLines = [
       "https://beta.fishystuff.fish {"
       "https://api.beta.fishystuff.fish {"
@@ -312,6 +312,8 @@ in
       "/map/fishystuff_ui_bevy.*.js.map"
       "/map/fishystuff_ui_bevy_bg.*.wasm"
       "/map/fishystuff_ui_bevy_bg.*.wasm.map"
+      "br 1"
+      "precompressed br gzip"
       "header Cache-Control \"no-store\""
       "header Cache-Control \"public, max-age=31536000, immutable\""
     ];
@@ -336,7 +338,7 @@ in
     expectedReloadMode = "command";
     expectedRuntimeOverlayCount = 2;
     requiredMaterializationHandle = "pkg/main";
-    requiredMaterializationAcquisition = "substitute";
+    requiredMaterializationAcquisition = "push";
     requiredConfigLines = [
       "https://fishystuff.fish {"
       "https://api.fishystuff.fish {"
@@ -347,6 +349,8 @@ in
       "/map/fishystuff_ui_bevy.*.js.map"
       "/map/fishystuff_ui_bevy_bg.*.wasm"
       "/map/fishystuff_ui_bevy_bg.*.wasm.map"
+      "br 1"
+      "precompressed br gzip"
       "header Cache-Control \"no-store\""
       "header Cache-Control \"public, max-age=31536000, immutable\""
     ];

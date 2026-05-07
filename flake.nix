@@ -128,6 +128,7 @@
           apiEntrypoint = pkgs.callPackage ./nix/packages/api-entrypoint.nix {
             inherit api;
           };
+          fishystuffCaddy = pkgs.callPackage ./nix/packages/fishystuff-caddy.nix { };
           defaultDeploymentEnvironment = "beta";
           shortenFrontendSourceRevision =
             revision:
@@ -615,6 +616,7 @@
               name = "fishystuff-edge";
               serviceModule = serviceModules.edge;
               configuration.fishystuff.edge = {
+                package = fishystuffCaddy;
                 tlsEnable = true;
                 siteAddress = deploymentBaseUrl "" deploymentEnvironment;
                 apiAddress = deploymentBaseUrl "api" deploymentEnvironment;
@@ -1342,6 +1344,7 @@
             dolt-service-bundle-production = doltServiceBundleProduction;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
+            fishystuff-caddy = fishystuffCaddy;
             fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
             gitops-desired-state-http-admission-probe-fixture = gitopsDesiredStateHttpAdmissionProbeFixture;

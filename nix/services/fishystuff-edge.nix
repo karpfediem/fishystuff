@@ -48,7 +48,10 @@ let
       }
 
       root * ${cfg.siteRoot}
-      encode zstd gzip
+      encode {
+        br 1
+        gzip
+      }
 
       @site_runtime path /runtime-config.js /asset-manifest.json /build-info.json
       @site_immutable path_regexp ${siteImmutableFilePattern}
@@ -56,23 +59,31 @@ let
 
       handle @site_runtime {
         header Cache-Control "no-store"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @site_immutable {
         header Cache-Control "public, max-age=31536000, immutable"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @site_static {
         header Cache-Control "public, max-age=3600"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle {
         header Cache-Control "no-store"
         try_files {path} {path}.html {path}/index.html =404
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
     }
 
@@ -81,6 +92,11 @@ let
       log {
         output stdout
         format json
+      }
+
+      encode {
+        br 1
+        gzip
       }
 
       reverse_proxy ${cfg.apiUpstream}
@@ -94,6 +110,10 @@ let
       }
 
       root * ${cfg.cdnRoot}
+      encode {
+        br 1
+        gzip
+      }
 
       @runtime_manifest path /map/runtime-manifest.json
       @immutable path ${cdnImmutablePaths}
@@ -102,17 +122,23 @@ let
 
       handle @runtime_manifest {
         header Cache-Control "no-store"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @immutable {
         header Cache-Control "public, max-age=31536000, immutable"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle {
         header Cache-Control "public, max-age=3600"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
     }
 
@@ -128,6 +154,10 @@ let
       @telemetry_otlp path /v1/metrics /v1/traces
 
       header Vary Origin
+      encode {
+        br 1
+        gzip
+      }
 
       handle @telemetry_preflight {
         header Access-Control-Allow-Origin "*"
@@ -326,7 +356,7 @@ in
           handle = "pkg/main";
           path = cfg.package;
           class = "nixpkgs-generic";
-          acquisition = "substitute";
+          acquisition = "push";
         })
         (helpers.mkMaterializationRoot {
           handle = "config/base";

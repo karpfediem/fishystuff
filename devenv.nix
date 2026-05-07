@@ -58,6 +58,7 @@ let
   };
   jaegerLocal = pkgs.callPackage ./nix/packages/jaeger-local.nix { };
   prometheusLocal = pkgs.callPackage ./nix/packages/prometheus-local.nix { };
+  fishystuffCaddy = pkgs.callPackage ./nix/packages/fishystuff-caddy.nix { };
 in {
   name = "default";
 
@@ -98,6 +99,7 @@ in {
       mariadb
       python3Packages.fonttools
       valgrind
+      fishystuffCaddy
       wasm-bindgen-cli_0_2_108
       binaryen
       woff2
@@ -219,8 +221,13 @@ in {
 
   services.caddy = {
     enable = true;
+    package = fishystuffCaddy;
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
+      encode {
+        br 1
+        gzip
+      }
 
       @site_runtime path /runtime-config.js /asset-manifest.json /build-info.json
       @site_immutable path_regexp ${siteImmutableFilePattern}
@@ -228,27 +235,39 @@ in {
 
       handle @site_runtime {
         header Cache-Control "no-store"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @site_immutable {
         header Cache-Control "public, max-age=31536000, immutable"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @site_static {
         header Cache-Control "public, max-age=3600"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle {
         header Cache-Control "no-store"
         try_files {path} {path}.html {path}/index.html =404
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
     '';
     virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
+      encode {
+        br 1
+        gzip
+      }
 
       @site_runtime path /runtime-config.js /asset-manifest.json /build-info.json
       @site_immutable path_regexp ${siteImmutableFilePattern}
@@ -256,23 +275,31 @@ in {
 
       handle @site_runtime {
         header Cache-Control "no-store"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @site_immutable {
         header Cache-Control "public, max-age=31536000, immutable"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @site_static {
         header Cache-Control "public, max-age=3600"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle {
         header Cache-Control "no-store"
         try_files {path} {path}.html {path}/index.html =404
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
     '';
     # Local browser OTLP intentionally goes through a Caddy telemetry edge
@@ -286,6 +313,10 @@ in {
       @telemetry_otlp path /v1/metrics /v1/traces
 
       header Vary Origin
+      encode {
+        br 1
+        gzip
+      }
 
       handle @telemetry_preflight {
         header @telemetry_allowed_origin Access-Control-Allow-Origin "{http.request.header.Origin}"
@@ -311,6 +342,10 @@ in {
     '';
     virtualHosts."http://${cdnHost}:${toString cdnPort}".extraConfig = ''
       root * ${config.devenv.root}/data/cdn/public
+      encode {
+        br 1
+        gzip
+      }
 
       @runtime_manifest path /map/runtime-manifest.json
       @immutable path ${cdnImmutablePaths}
@@ -319,21 +354,31 @@ in {
 
       handle @runtime_manifest {
         header Cache-Control "no-store"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @immutable {
         header Cache-Control "public, max-age=31536000, immutable"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle {
         header Cache-Control "public, max-age=3600"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
     '';
     virtualHosts."http://localhost:${toString cdnPort}".extraConfig = ''
       root * ${config.devenv.root}/data/cdn/public
+      encode {
+        br 1
+        gzip
+      }
 
       @runtime_manifest path /map/runtime-manifest.json
       @immutable path ${cdnImmutablePaths}
@@ -342,17 +387,23 @@ in {
 
       handle @runtime_manifest {
         header Cache-Control "no-store"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle @immutable {
         header Cache-Control "public, max-age=31536000, immutable"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
 
       handle {
         header Cache-Control "public, max-age=3600"
-        file_server
+        file_server {
+          precompressed br gzip
+        }
       }
     '';
   };
