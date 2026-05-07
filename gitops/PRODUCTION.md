@@ -65,6 +65,12 @@ FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json 
 
 That recipe generates `data/gitops/production-current.desired.json`, runs the desired-serving preflight, verifies that the active CDN serving manifest retains each rollback CDN root, runs `gitops-unify` against the exact generated file, and writes `data/gitops/production-current.handoff-summary.json`. The summary records the desired-state SHA-256, active release, retained releases, Dolt commits, closure paths, CDN retention relationship, and the local checks that passed. It still does not write host state, start services, mutate DNS, or select a served release.
 
+To re-check a previously generated handoff before it is consumed by later activation work:
+
+```bash
+just gitops-check-handoff-summary
+```
+
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
 ```bash

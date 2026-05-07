@@ -106,6 +106,10 @@ gitops-production-current-desired output="data/gitops/production-current.desired
 gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
 
+# Verify a production-current handoff summary still matches its exact desired-state file and CDN retention manifest.
+gitops-check-handoff-summary summary_file="data/gitops/production-current.handoff-summary.json" state_file="":
+  bash scripts/recipes/gitops-check-handoff-summary.sh "{{summary_file}}" "{{state_file}}"
+
 # Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
 gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"

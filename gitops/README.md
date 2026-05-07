@@ -425,6 +425,12 @@ just gitops-production-current-from-served state_dir=/var/lib/fishystuff/gitops
 
 This writes `production-current.retained-releases.json`, `production-current.desired.json`, and `production-current.handoff-summary.json` under `data/gitops/` by default. The summary records `desired_state_sha256` for the exact checked JSON file and includes `cdn_retention`, which records the active CDN serving root, its underlying `current_root`, retained roots, and the expected retained CDN root for each rollback release. It is still local-only; it reads served GitOps documents and writes operator artifacts, but does not mutate hosts.
 
+Before using a handoff summary as input to any later activation work, verify it is still attached to the exact desired-state file and active CDN manifest it records:
+
+```bash
+just gitops-check-handoff-summary
+```
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.

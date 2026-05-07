@@ -276,6 +276,8 @@ run_fixture_handoff() {
     and .checks.remote_deploy_performed == false
     and .checks.infrastructure_mutation_performed == false
   ' "$summary" >/dev/null
+
+  bash scripts/recipes/gitops-check-handoff-summary.sh "$summary" "$output" >"$root/check-summary.stdout" 2>"$root/check-summary.stderr"
 }
 
 run_missing_cdn_retention_refusal() {
@@ -396,6 +398,8 @@ run_fixture_from_served() {
     and .checks.cdn_retained_roots_verified == true
     and .checks.gitops_unify_passed == true
   ' "$summary" >/dev/null
+
+  bash scripts/recipes/gitops-check-handoff-summary.sh "$summary" "$output" >"$root/from-served-check-summary.stdout" 2>"$root/from-served-check-summary.stderr"
 
   if [[ "$(cat "$fake_mgmt_marker")" != "$output" ]]; then
     printf '[gitops-production-current-handoff-test] fake mgmt from-served saw wrong state file\n' >&2
