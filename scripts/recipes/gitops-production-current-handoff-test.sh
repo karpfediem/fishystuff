@@ -121,6 +121,72 @@ make_cdn_serving_root() {
   nix-store --add "$dir"
 }
 
+release_identity_from_state() {
+  local state_file="$1"
+  local release_id="$2"
+
+  jq -er \
+    --arg release_id "$release_id" \
+    '(.releases[$release_id] // error("release is missing")) as $release
+    | "release=\($release_id);generation=\($release.generation);git_rev=\($release.git_rev);dolt_commit=\($release.dolt_commit);dolt_repository=\($release.dolt.repository);dolt_branch_context=\($release.dolt.branch_context);dolt_mode=\($release.dolt.mode);api=\($release.closures.api.store_path);site=\($release.closures.site.store_path);cdn_runtime=\($release.closures.cdn_runtime.store_path);dolt_service=\($release.closures.dolt_service.store_path)"' \
+    "$state_file"
+}
+
+write_admission_evidence() {
+  local summary="$1"
+  local state_file="$2"
+  local path="$3"
+  local api_upstream="$4"
+  local release_id=""
+  local release_identity=""
+  local dolt_commit=""
+  local desired_state_sha256=""
+  local handoff_summary_sha256=""
+  local api_meta_url=""
+
+  release_id="$(jq -er '.environment.active_release' "$summary")"
+  release_identity="$(release_identity_from_state "$state_file" "$release_id")"
+  dolt_commit="$(jq -er '.active_release.dolt_commit' "$summary")"
+  desired_state_sha256="$(jq -er '.desired_state_sha256' "$summary")"
+  read -r handoff_summary_sha256 _ < <(sha256sum "$summary")
+  api_meta_url="${api_upstream}/api/v1/meta"
+
+  jq -n \
+    --arg handoff_summary_sha256 "$handoff_summary_sha256" \
+    --arg desired_state_sha256 "$desired_state_sha256" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg dolt_commit "$dolt_commit" \
+    --arg api_upstream "$api_upstream" \
+    --arg api_meta_url "$api_meta_url" \
+    '{
+      schema: "fishystuff.gitops.activation-admission.v1",
+      environment: "production",
+      handoff_summary_sha256: $handoff_summary_sha256,
+      desired_state_sha256: $desired_state_sha256,
+      release_id: $release_id,
+      release_identity: $release_identity,
+      dolt_commit: $dolt_commit,
+      api_upstream: $api_upstream,
+      api_meta: {
+        url: $api_meta_url,
+        observed_status: 200,
+        timeout_ms: 2000,
+        release_id: $release_id,
+        release_identity: $release_identity,
+        dolt_commit: $dolt_commit
+      },
+      db_backed_probe: {
+        name: "representative-db-backed-route",
+        passed: true
+      },
+      site_cdn_probe: {
+        name: "site-selected-cdn-runtime",
+        passed: true
+      }
+    }' >"$path"
+}
+
 write_retained_json() {
   local path="$1"
   local api_closure="$2"
@@ -224,6 +290,11 @@ run_fixture_handoff() {
   local output_sha256=""
   local stale_cdn_summary=""
   local tampered_state=""
+  local admission_evidence="$root/admission-evidence.json"
+  local bad_admission_evidence="$root/bad-admission-evidence.json"
+  local activation_draft="$root/production-activation.draft.desired.json"
+  local activation_api_upstream="http://127.0.0.1:19090"
+  local activation_release_id=""
 
   previous_cdn_current="$(make_cdn_current_root "$root" "previous-cdn-current")"
   previous_cdn_serving="$(make_cdn_serving_root "$root" "previous-cdn-serving" "$previous_cdn_current" '[]')"
@@ -315,6 +386,61 @@ run_fixture_handoff() {
   ' "$summary" >/dev/null
 
   bash scripts/recipes/gitops-check-handoff-summary.sh "$summary" "$output" >"$root/check-summary.stdout" 2>"$root/check-summary.stderr"
+
+  expect_fail_contains \
+    "activation draft requires admission evidence" \
+    "gitops-production-activation-draft requires admission_file" \
+    bash scripts/recipes/gitops-production-activation-draft.sh \
+      "$root/no-admission.draft.desired.json" \
+      "$summary" \
+      "" \
+      "$fake_mgmt" \
+      "$deploy_bin"
+
+  write_admission_evidence "$summary" "$output" "$admission_evidence" "$activation_api_upstream"
+  jq '.dolt_commit = "wrong-dolt-commit"' "$admission_evidence" >"$bad_admission_evidence"
+  expect_fail_contains \
+    "activation draft rejects mismatched admission evidence" \
+    "admission evidence does not match verified production handoff" \
+    bash scripts/recipes/gitops-production-activation-draft.sh \
+      "$root/bad-admission.draft.desired.json" \
+      "$summary" \
+      "$bad_admission_evidence" \
+      "$fake_mgmt" \
+      "$deploy_bin"
+
+  bash scripts/recipes/gitops-production-activation-draft.sh \
+    "$activation_draft" \
+    "$summary" \
+    "$admission_evidence" \
+    "$fake_mgmt" \
+    "$deploy_bin" \
+    >"$root/activation.stdout" \
+    2>"$root/activation.stderr"
+  activation_release_id="$(jq -er '.environment.active_release' "$summary")"
+  jq -e \
+    --arg activation_api_upstream "$activation_api_upstream" \
+    --arg activation_release_id "$activation_release_id" \
+    '
+    .cluster == "production"
+    and .mode == "local-apply"
+    and .generation == 24
+    and .environments.production.serve == true
+    and .environments.production.active_release == $activation_release_id
+    and .environments.production.api_upstream == $activation_api_upstream
+    and .environments.production.admission_probe.kind == "api_meta"
+    and .environments.production.admission_probe.probe_name == "api-meta"
+    and .environments.production.admission_probe.url == ($activation_api_upstream + "/api/v1/meta")
+    and .environments.production.admission_probe.expected_status == 200
+    and .environments.production.transition.kind == "activate"
+    and .environments.production.transition.from_release == ""
+    and .environments.production.retained_releases == ["previous-production-release"]
+  ' "$activation_draft" >/dev/null
+
+  if [[ "$(cat "$fake_mgmt_marker")" != "$activation_draft" ]]; then
+    printf '[gitops-production-current-handoff-test] fake mgmt saw wrong activation draft state file\n' >&2
+    exit 1
+  fi
 
   stale_cdn_summary="$root/stale-cdn-retention.handoff-summary.json"
   jq '.cdn_retention.active_retained_roots = []' "$summary" >"$stale_cdn_summary"

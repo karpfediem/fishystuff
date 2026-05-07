@@ -71,6 +71,14 @@ To re-check a previously generated handoff before it is consumed by later activa
 just gitops-check-handoff-summary
 ```
 
+To generate a serving draft, provide explicit admission evidence:
+
+```bash
+just gitops-production-activation-draft admission_file=/tmp/fishystuff-production-admission.json
+```
+
+This writes a local `local-apply` desired-state draft and verifies it with the same desired-serving preflight and mgmt unify path. It does not run mgmt apply, start services, reload Caddy, mutate DNS, or select a served release by itself.
+
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
 ```bash
