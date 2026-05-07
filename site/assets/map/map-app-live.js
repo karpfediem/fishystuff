@@ -12,7 +12,7 @@ import {
   showMapPresetDiscardToast,
   showMapPresetSaveToast,
 } from "./map-presets.js";
-import { languageReady } from "./map-i18n.js";
+import { languageReady, mapText } from "./map-i18n.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
   DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE,
@@ -178,6 +178,210 @@ export function runtimeStatusLines(statuses) {
   return RUNTIME_STATUS_FIELDS.flatMap(([key, label]) => {
     const status = trimStatus(statuses[key]);
     return status ? [{ key, label, status }] : [];
+  });
+}
+
+const MAP_LOADING_STAGE_TEXT_KEYS = Object.freeze({
+  starting: "loading.starting",
+  manifest: "loading.manifest",
+  "module-import": "loading.module_import",
+  "wasm-fetch": "loading.wasm_fetch",
+  "wasm-compile": "loading.wasm_compile",
+  "renderer-start": "loading.renderer_start",
+  "runtime-bootstrap": "loading.runtime_bootstrap",
+  "first-paint": "loading.first_paint",
+  ready: "loading.ready",
+  error: "error.renderer_unavailable",
+});
+
+const ACTIVE_RUNTIME_STATUS_PATTERN =
+  /\b(?:pending|waiting|loading|retrying|request failed|request closed|failed to fetch|http\s+[45]\d{2})\b/i;
+
+export function formatMapLoadingBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let scaled = value;
+  let unitIndex = 0;
+  while (scaled >= 1024 && unitIndex < units.length - 1) {
+    scaled /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 || scaled >= 10 ? 0 : 1;
+  return `${scaled.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function loadingStageText(stage) {
+  return mapText(MAP_LOADING_STAGE_TEXT_KEYS[stage] || MAP_LOADING_STAGE_TEXT_KEYS.starting);
+}
+
+function runtimeStatusLoadingDetail(statuses) {
+  const statusLines = runtimeStatusLines(statuses);
+  const activeLine =
+    statusLines.find((line) => ACTIVE_RUNTIME_STATUS_PATTERN.test(line.status)) ||
+    statusLines.find((line) => line.status);
+  return activeLine ? `${activeLine.label}: ${activeLine.status}` : "";
+}
+
+function loadingDetailText(detail) {
+  const loadedBytes = Number(detail?.loadedBytes);
+  const totalBytes = Number(detail?.totalBytes);
+  if (Number.isFinite(loadedBytes) && loadedBytes > 0) {
+    const loaded = formatMapLoadingBytes(loadedBytes);
+    const total = formatMapLoadingBytes(totalBytes);
+    if (loaded && total) {
+      return mapText("loading.fetch_bytes", { loaded, total });
+    }
+    if (loaded) {
+      return mapText("loading.fetch_bytes_unknown", { loaded });
+    }
+  }
+  return runtimeStatusLoadingDetail(detail?.statuses) || mapText("loading.initial_detail");
+}
+
+export function createMapLoadingOverlayController(shell) {
+  const overlay = shell?.querySelector?.("#fishymap-loading-overlay") || null;
+  if (!overlay) {
+    return Object.freeze({
+      update() {},
+      updateFromSnapshot() {},
+      finishAfterFirstPaint() {},
+      fail() {},
+    });
+  }
+
+  const stageElement = overlay.querySelector("#fishymap-loading-stage");
+  const detailElement = overlay.querySelector("#fishymap-loading-detail");
+  const progressElement = overlay.querySelector("#fishymap-loading-progress");
+  const percentElement = overlay.querySelector("#fishymap-loading-percent");
+  let hidden = false;
+  let finished = false;
+  let lastProgress = 0;
+
+  function setProgress(progress) {
+    const normalized = Number(progress);
+    if (!Number.isFinite(normalized)) {
+      progressElement?.removeAttribute?.("value");
+      if (percentElement) {
+        percentElement.hidden = true;
+        percentElement.textContent = "";
+      }
+      return;
+    }
+    lastProgress = Math.max(lastProgress, Math.min(1, Math.max(0, normalized)));
+    const percent = Math.round(lastProgress * 100);
+    progressElement?.setAttribute?.("value", String(percent));
+    progressElement?.setAttribute?.("max", "100");
+    if (percentElement) {
+      percentElement.hidden = false;
+      percentElement.textContent = `${percent}%`;
+    }
+  }
+
+  function update(detail = {}) {
+    if (hidden) {
+      return;
+    }
+    shell.dataset.mapLoading = "loading";
+    overlay.hidden = false;
+    overlay.classList.remove("is-hidden");
+    const stage = String(detail?.stage || "starting");
+    overlay.dataset.stage = stage;
+    if (stageElement) {
+      stageElement.textContent = loadingStageText(stage);
+    }
+    if (detailElement) {
+      detailElement.textContent = loadingDetailText(detail);
+    }
+    setProgress(detail?.progress);
+  }
+
+  function updateFromSnapshot(snapshot) {
+    if (hidden || finished) {
+      return;
+    }
+    if (snapshot?.ready === true) {
+      update({
+        stage: "first-paint",
+        progress: 0.98,
+        statuses: snapshot?.statuses,
+      });
+      return;
+    }
+    update({
+      stage: "runtime-bootstrap",
+      progress: 0.96,
+      statuses: snapshot?.statuses,
+    });
+  }
+
+  function hide() {
+    hidden = true;
+    overlay.classList.add("is-hidden");
+    shell.dataset.mapLoading = "hidden";
+    globalThis.setTimeout?.(() => {
+      overlay.hidden = true;
+    }, 220);
+  }
+
+  function finishAfterFirstPaint() {
+    if (hidden || finished) {
+      return;
+    }
+    finished = true;
+    update({
+      stage: "first-paint",
+      progress: 0.98,
+    });
+    deferAfterAnimationFrames(
+      () => {
+        update({
+          stage: "ready",
+          progress: 1,
+        });
+        globalThis.setTimeout?.(hide, 120);
+      },
+      { frames: 2 },
+    );
+  }
+
+  function fail(error) {
+    hidden = false;
+    finished = true;
+    shell.dataset.mapLoading = "error";
+    overlay.hidden = false;
+    overlay.classList.remove("is-hidden");
+    overlay.dataset.stage = "error";
+    progressElement?.classList?.remove("progress-primary");
+    progressElement?.classList?.add("progress-error");
+    progressElement?.removeAttribute?.("value");
+    if (percentElement) {
+      percentElement.hidden = true;
+      percentElement.textContent = "";
+    }
+    if (stageElement) {
+      stageElement.textContent = loadingStageText("error");
+    }
+    if (detailElement) {
+      detailElement.textContent =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : mapText("error.renderer_start_failed");
+    }
+  }
+
+  update({
+    stage: "starting",
+    progress: null,
+  });
+
+  return Object.freeze({
+    update,
+    updateFromSnapshot,
+    finishAfterFirstPaint,
+    fail,
   });
 }
 
@@ -399,6 +603,7 @@ export async function start() {
   if (!(shell instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {
     return;
   }
+  const loadingOverlay = createMapLoadingOverlayController(shell);
 
   const page = createMapPageLive();
   page.start();
@@ -466,6 +671,7 @@ export async function start() {
   };
   const recordRuntimeReady = () => {
     lifecycleMetrics.recordRuntimeReady(Math.max(0, nowMs() - runtimeStartedAtMs));
+    loadingOverlay.finishAfterFirstPaint();
   };
 
   function signals() {
@@ -595,6 +801,7 @@ export async function start() {
       return;
     }
     patchSignalsFromBridge(snapshot);
+    loadingOverlay.updateFromSnapshot(snapshot);
     if (event?.type === "fishymap:ready" || snapshot?.ready === true) {
       recordRuntimeReady();
     }
@@ -652,6 +859,7 @@ export async function start() {
   await languageReady();
   await bridge.mount(shell, {
     canvas,
+    onLoadProgress: (detail) => loadingOverlay.update(detail),
     initialState: {
       ...cloneJson(initialPatch),
       ...(initialRestorePatch || {}),
@@ -690,6 +898,7 @@ export async function start() {
   actionState = app.consumeSignals(signals());
   lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());
+  loadingOverlay.updateFromSnapshot(currentBridgeState());
   renderRuntimeStatusSurface(
     shell,
     currentBridgeState()?.statuses || signals()?._map_runtime?.statuses,
@@ -710,6 +919,7 @@ export function startWhenDomReady() {
   const run = () => {
     start().catch((error) => {
       console.error("Fishy map app bootstrap failed", error);
+      createMapLoadingOverlayController(document.getElementById("map-page-shell"))?.fail?.(error);
     });
   };
 

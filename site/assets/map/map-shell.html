@@ -96,6 +96,40 @@
       <div hidden
            data-init="const shell = el.closest('#map-page-shell'); shell.__fishymapInitialSignals = $; shell.dispatchEvent(new CustomEvent('fishymap-live-init', { bubbles: true, detail: $ }))"></div>
       <canvas id="bevy"></canvas>
+      <div
+        id="fishymap-loading-overlay"
+        class="not-prose"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="fishymap-loading-panel">
+          <div class="fishymap-loading-heading">
+            <span class="loading loading-spinner loading-md text-primary" aria-hidden="true"></span>
+            <div class="min-w-0">
+              <p class="fishymap-loading-title" data-i18n-text="map.loading.title">Loading map</p>
+              <p
+                id="fishymap-loading-stage"
+                class="fishymap-loading-stage"
+                data-i18n-text="map.loading.starting"
+              >Preparing map...</p>
+            </div>
+          </div>
+          <progress
+            id="fishymap-loading-progress"
+            class="progress progress-primary fishymap-loading-progress"
+            max="100"
+          ></progress>
+          <div class="fishymap-loading-meta">
+            <span
+              id="fishymap-loading-detail"
+              class="fishymap-loading-detail"
+              data-i18n-text="map.loading.initial_detail"
+            >This can take a moment on the first visit.</span>
+            <span id="fishymap-loading-percent" class="fishymap-loading-percent" hidden></span>
+          </div>
+        </div>
+      </div>
       <div id="fishymap-toolbar" class="not-prose" aria-label="" data-i18n-attr-aria-label="map.toolbar.map_windows">
         <button
           class="fishymap-toolbar-button"

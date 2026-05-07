@@ -10,6 +10,7 @@ import {
   createSessionSnapshotFromState,
   extractThemeSnapshot,
   loadMapRuntimeManifest,
+  loadMapRuntimeModule,
   mergeStatePatch,
   normalizeStatePatch,
   parseQueryState,
@@ -2714,7 +2715,10 @@ test("loadMapRuntimeManifest uses the stable manifest directly on local loopback
         return {
           ok: true,
           status: 200,
-          json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+          json: async () => ({
+            module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+            wasm: "./fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm",
+          }),
         };
       }
       throw new Error(`unexpected request: ${input}`);
@@ -2726,6 +2730,10 @@ test("loadMapRuntimeManifest uses the stable manifest directly on local loopback
   assert.equal(
     manifest.moduleUrl,
     "http://localhost:4040/map/fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+  );
+  assert.equal(
+    manifest.wasmUrl,
+    "http://localhost:4040/map/fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm",
   );
 });
 
@@ -2739,7 +2747,10 @@ test("loadMapRuntimeManifest lets cache-keyed manifests use browser cache", asyn
       return {
         ok: true,
         status: 200,
-        json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+        json: async () => ({
+          module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+          wasm: "./fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm",
+        }),
       };
     },
   });
@@ -2754,6 +2765,10 @@ test("loadMapRuntimeManifest lets cache-keyed manifests use browser cache", asyn
     manifest.moduleUrl,
     "https://cdn.fishystuff.fish/map/fishystuff_ui_bevy.4951a379ce3c9cb8.js",
   );
+  assert.equal(
+    manifest.wasmUrl,
+    "https://cdn.fishystuff.fish/map/fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm",
+  );
 });
 
 test("loadMapRuntimeManifest bypasses browser cache for stable manifests", async () => {
@@ -2766,7 +2781,10 @@ test("loadMapRuntimeManifest bypasses browser cache for stable manifests", async
       return {
         ok: true,
         status: 200,
-        json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+        json: async () => ({
+          module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+          wasm: "./fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm",
+        }),
       };
     },
   });
@@ -2779,6 +2797,21 @@ test("loadMapRuntimeManifest bypasses browser cache for stable manifests", async
   ]);
 });
 
+test("loadMapRuntimeManifest requires an explicit wasm asset", async () => {
+  await assert.rejects(
+    loadMapRuntimeManifest({
+      locationLike: { hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" },
+      cdnBaseUrl: "http://127.0.0.1:4040/",
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+      }),
+    }),
+    /invalid map runtime manifest: missing wasm/,
+  );
+});
+
 test("loadMapRuntimeManifest does not fall back off loopback", async () => {
   await assert.rejects(
     loadMapRuntimeManifest({
@@ -2787,6 +2820,83 @@ test("loadMapRuntimeManifest does not fall back off loopback", async () => {
       fetchImpl: async () => ({ ok: false, status: 404 }),
     }),
     /failed to load map runtime manifest: https:\/\/cdn\.fishystuff\.fish\/map\/runtime-manifest\.deploy-456\.json \(404\)/,
+  );
+});
+
+test("loadMapRuntimeModule streams wasm progress separately from module import", async () => {
+  const requests = [];
+  const progress = [];
+  let importedUrl = "";
+  const runtime = await loadMapRuntimeModule({
+    locationLike: { hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" },
+    cdnBaseUrl: "http://127.0.0.1:4040/",
+    fetchImpl: async (input, init) => {
+      const url = String(input);
+      requests.push({ cache: init?.cache, url });
+      if (url.endsWith("/runtime-manifest.json")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+            wasm: "./fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm",
+          }),
+        };
+      }
+      if (url.endsWith("/fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm")) {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new Uint8Array([0, 1]));
+              controller.enqueue(new Uint8Array([2, 3, 4]));
+              controller.close();
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Length": "5",
+              "Content-Type": "application/wasm",
+            },
+          },
+        );
+      }
+      throw new Error(`unexpected request: ${url}`);
+    },
+    importModuleImpl: async (url) => {
+      importedUrl = url;
+      return { default: async () => {} };
+    },
+    onLoadProgress: (detail) => {
+      progress.push(detail);
+    },
+  });
+
+  const wasmResponse = await runtime.wasmInitInput;
+  assert.equal(importedUrl, "http://localhost:4040/map/fishystuff_ui_bevy.4951a379ce3c9cb8.js");
+  assert.equal(runtime.wasmUrl, "http://localhost:4040/map/fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm");
+  assert.equal((await wasmResponse.arrayBuffer()).byteLength, 5);
+  assert.deepEqual(requests, [
+    { cache: "no-store", url: "http://localhost:4040/map/runtime-manifest.json" },
+    { cache: "default", url: "http://localhost:4040/map/fishystuff_ui_bevy_bg.0917b5f70d6f2f0a.wasm" },
+  ]);
+  assert.ok(progress.some((entry) => entry.stage === "manifest" && entry.progress === 0.02));
+  assert.ok(progress.some((entry) => entry.stage === "module-import" && entry.progress === 0.1));
+  assert.ok(
+    progress.some((entry) =>
+      entry.stage === "wasm-fetch" &&
+      entry.loadedBytes === 2 &&
+      entry.totalBytes === 5 &&
+      entry.progress > 0.1
+    ),
+  );
+  assert.ok(
+    progress.some((entry) =>
+      entry.stage === "wasm-fetch" &&
+      entry.loadedBytes === 5 &&
+      entry.totalBytes === 5 &&
+      entry.progress === 0.75
+    ),
   );
 });
 

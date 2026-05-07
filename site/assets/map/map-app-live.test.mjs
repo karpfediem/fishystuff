@@ -1,11 +1,16 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
+import { installMapTestI18n } from "./test-i18n.js";
+
+installMapTestI18n();
 
 const {
+  createMapLoadingOverlayController,
   createDeferredBridgeStateRefresher,
   createBridgeInputPatchCoordinator,
   apiFailureStatusLines,
   deferAfterAnimationFrames,
+  formatMapLoadingBytes,
   bridgeSnapshotMatchesRestoreView,
   changedSignalPatch,
   runtimeStatusLines,
@@ -16,6 +21,70 @@ const {
   start,
 } = await import("./map-app-live.js");
 const { buildSearchProjectionPatchForSignalPatch } = await import("./map-page-derived.js");
+
+class FakeClassList {
+  constructor(initial = []) {
+    this.values = new Set(initial);
+  }
+
+  add(...tokens) {
+    for (const token of tokens) {
+      this.values.add(token);
+    }
+  }
+
+  remove(...tokens) {
+    for (const token of tokens) {
+      this.values.delete(token);
+    }
+  }
+
+  contains(token) {
+    return this.values.has(token);
+  }
+}
+
+class FakeDomElement {
+  constructor({ classNames = [] } = {}) {
+    this.dataset = {};
+    this.hidden = false;
+    this.textContent = "";
+    this.attributes = new Map();
+    this.classList = new FakeClassList(classNames);
+    this.childrenBySelector = new Map();
+  }
+
+  querySelector(selector) {
+    return this.childrenBySelector.get(selector) || null;
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+}
+
+function createFakeLoadingShell() {
+  const shell = new FakeDomElement();
+  const overlay = new FakeDomElement();
+  const stage = new FakeDomElement();
+  const detail = new FakeDomElement();
+  const progress = new FakeDomElement({ classNames: ["progress-primary"] });
+  const percent = new FakeDomElement();
+  shell.childrenBySelector.set("#fishymap-loading-overlay", overlay);
+  overlay.childrenBySelector.set("#fishymap-loading-stage", stage);
+  overlay.childrenBySelector.set("#fishymap-loading-detail", detail);
+  overlay.childrenBySelector.set("#fishymap-loading-progress", progress);
+  overlay.childrenBySelector.set("#fishymap-loading-percent", percent);
+  return { shell, overlay, stage, detail, progress, percent };
+}
 
 test("changedSignalPatch omits unchanged runtime branches", () => {
   const currentSignals = {
@@ -156,6 +225,71 @@ test("runtimeStatusLines returns stable labels for bridge statuses", () => {
     { key: "metaStatus", label: "Meta", status: "meta: loaded" },
     { key: "zonesStatus", label: "Zones", status: "zones: 287" },
   ]);
+});
+
+test("formatMapLoadingBytes keeps loading sizes compact", () => {
+  assert.equal(formatMapLoadingBytes(512), "512 B");
+  assert.equal(formatMapLoadingBytes(1536), "1.5 KB");
+  assert.equal(formatMapLoadingBytes(80 * 1024 * 1024), "80 MB");
+  assert.equal(formatMapLoadingBytes(null), "");
+});
+
+test("map loading overlay reports progress and waits for first paint before hiding", () => {
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalSetTimeout = globalThis.setTimeout;
+  const scheduledFrames = [];
+  const timers = [];
+  globalThis.requestAnimationFrame = (callback) => {
+    scheduledFrames.push(callback);
+    return scheduledFrames.length;
+  };
+  globalThis.setTimeout = (callback) => {
+    timers.push(callback);
+    return timers.length;
+  };
+
+  try {
+    const { shell, overlay, stage, detail, progress, percent } = createFakeLoadingShell();
+    const controller = createMapLoadingOverlayController(shell);
+
+    controller.update({
+      stage: "wasm-fetch",
+      progress: 0.5,
+      loadedBytes: 40 * 1024 * 1024,
+      totalBytes: 80 * 1024 * 1024,
+    });
+    assert.equal(shell.dataset.mapLoading, "loading");
+    assert.equal(overlay.hidden, false);
+    assert.equal(stage.textContent, "Downloading map runtime...");
+    assert.equal(detail.textContent, "40 MB of 80 MB");
+    assert.equal(progress.getAttribute("value"), "50");
+    assert.equal(percent.hidden, false);
+    assert.equal(percent.textContent, "50%");
+
+    controller.updateFromSnapshot({
+      ready: false,
+      statuses: {
+        metaStatus: "meta: pending",
+      },
+    });
+    assert.equal(stage.textContent, "Loading map data...");
+    assert.equal(detail.textContent, "Meta: meta: pending");
+    assert.equal(progress.getAttribute("value"), "96");
+
+    controller.finishAfterFirstPaint();
+    assert.equal(stage.textContent, "Drawing first frame...");
+    assert.equal(scheduledFrames.length, 1);
+    scheduledFrames.shift()();
+    scheduledFrames.shift()();
+    assert.equal(stage.textContent, "Map ready");
+    assert.equal(progress.getAttribute("value"), "100");
+    timers.shift()();
+    assert.equal(shell.dataset.mapLoading, "hidden");
+    assert.equal(overlay.classList.contains("is-hidden"), true);
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.setTimeout = originalSetTimeout;
+  }
 });
 
 test("apiFailureStatusLines selects retrying API statuses", () => {

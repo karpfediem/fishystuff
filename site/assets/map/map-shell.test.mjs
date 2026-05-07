@@ -33,6 +33,9 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
   assert.match(shellHtml, /id="fishymap-zone-info-history-forward"[\s\S]*#fishy-right-fill/);
   assert.match(shellHtml, /id="fishymap-layers-window"[\s\S]*data-show="\$_map_ui\.windowUi\.layers\.open"/);
   assert.match(shellHtml, /id="fishymap-panel"[\s\S]*data-show="\$_map_ui\.windowUi\.settings\.open"/);
+  assert.match(shellHtml, /id="fishymap-loading-overlay"[\s\S]*role="status"[\s\S]*aria-live="polite"/);
+  assert.match(shellHtml, /id="fishymap-loading-progress"[\s\S]*class="progress progress-primary fishymap-loading-progress"/);
+  assert.match(shellHtml, /id="fishymap-loading-stage"[\s\S]*data-i18n-text="map\.loading\.starting"/);
   assert.match(shellHtml, /<fishymap-hover-tooltip id="fishymap-hover-tooltip" class="card card-border bg-base-100 not-prose" hidden><\/fishymap-hover-tooltip>/);
   assert.match(
     shellHtml,

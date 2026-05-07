@@ -21,6 +21,7 @@ export const FISHYMAP_EVENTS = Object.freeze({
   setState: "fishymap:set-state",
   command: "fishymap:command",
   requestState: "fishymap:request-state",
+  loadProgress: "fishymap:load-progress",
   ready: "fishymap:ready",
   stateChanged: "fishymap:state-changed",
   viewChanged: "fishymap:view-changed",
@@ -2282,6 +2283,132 @@ function mapRuntimeManifestLoadError(manifestUrl, status, fallbackUrl = "", fall
   );
 }
 
+function mapRuntimeAssetLoadError(assetUrl, status) {
+  return new Error(`failed to load map runtime asset: ${assetUrl} (${status || "unknown"})`);
+}
+
+function normalizeByteCount(value) {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function notifyLoadProgress(callback, detail) {
+  if (typeof callback !== "function") {
+    return;
+  }
+  callback({
+    stage: String(detail?.stage || "loading"),
+    progress: Number.isFinite(detail?.progress) ? Math.min(1, Math.max(0, detail.progress)) : null,
+    loadedBytes: normalizeByteCount(detail?.loadedBytes),
+    totalBytes: normalizeByteCount(detail?.totalBytes),
+    url: String(detail?.url || ""),
+  });
+}
+
+function progressResponseHeaders(response) {
+  if (typeof Headers !== "function") {
+    return undefined;
+  }
+  const headers = new Headers(response?.headers || undefined);
+  headers.set("Content-Type", "application/wasm");
+  return headers;
+}
+
+function responseWithProgressStream(response, { onLoadProgress, totalBytes, url } = {}) {
+  if (typeof Response !== "function" || typeof ReadableStream !== "function") {
+    return response;
+  }
+  const headers = progressResponseHeaders(response);
+  const reader = response.body.getReader();
+  let loadedBytes = 0;
+  const stream = new ReadableStream({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        notifyLoadProgress(onLoadProgress, {
+          stage: "wasm-fetch",
+          progress: 0.75,
+          loadedBytes,
+          totalBytes: totalBytes || loadedBytes || null,
+          url,
+        });
+        notifyLoadProgress(onLoadProgress, {
+          stage: "wasm-compile",
+          progress: 0.82,
+          loadedBytes,
+          totalBytes: totalBytes || loadedBytes || null,
+          url,
+        });
+        controller.close();
+        return;
+      }
+      if (!value) {
+        return;
+      }
+      loadedBytes += value.byteLength || value.length || 0;
+      notifyLoadProgress(onLoadProgress, {
+        stage: "wasm-fetch",
+        progress: totalBytes ? 0.1 + (Math.min(loadedBytes, totalBytes) / totalBytes) * 0.65 : null,
+        loadedBytes,
+        totalBytes,
+        url,
+      });
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return new Response(stream, {
+    status: response?.status || 200,
+    statusText: response?.statusText || "OK",
+    headers,
+  });
+}
+
+export async function fetchMapRuntimeWasmWithProgress({
+  wasmUrl,
+  fetchImpl = globalThis.fetch?.bind(globalThis),
+  onLoadProgress,
+} = {}) {
+  const url = String(wasmUrl || "").trim();
+  if (!url) {
+    throw new Error("FishyMapBridge requires a wasm URL in the runtime manifest");
+  }
+  if (typeof fetchImpl !== "function") {
+    throw new Error("FishyMapBridge requires fetch() to load the runtime wasm");
+  }
+  notifyLoadProgress(onLoadProgress, {
+    stage: "wasm-fetch",
+    progress: 0.1,
+    loadedBytes: 0,
+    totalBytes: null,
+    url,
+  });
+  const response = await fetchImpl(url, { cache: "default" });
+  if (!response?.ok) {
+    throw mapRuntimeAssetLoadError(url, response?.status);
+  }
+
+  const totalBytes = normalizeByteCount(response.headers?.get?.("Content-Length"));
+  if (!response.body || typeof response.body.getReader !== "function") {
+    notifyLoadProgress(onLoadProgress, {
+      stage: "wasm-fetch",
+      progress: totalBytes ? 0.75 : null,
+      loadedBytes: totalBytes,
+      totalBytes,
+      url,
+    });
+    return response;
+  }
+
+  return responseWithProgressStream(response, {
+    onLoadProgress,
+    totalBytes,
+    url,
+  });
+}
+
 export async function loadMapRuntimeManifest({
   locationLike = globalThis.location,
   cdnBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
@@ -2320,21 +2447,60 @@ export async function loadMapRuntimeManifest({
   if (!modulePath) {
     throw new Error(`invalid map runtime manifest: missing module in ${manifestUrl}`);
   }
+  const wasmPath = String(manifest?.wasm || "").trim();
+  if (!wasmPath) {
+    throw new Error(`invalid map runtime manifest: missing wasm in ${manifestUrl}`);
+  }
   return {
     manifestUrl,
     moduleUrl: new URL(modulePath, manifestUrl).toString(),
+    wasmUrl: new URL(wasmPath, manifestUrl).toString(),
     manifest,
   };
 }
 
-async function loadMapRuntimeModule(options = {}) {
-  const { moduleUrl } = await loadMapRuntimeManifest({
+export async function loadMapRuntimeModule(options = {}) {
+  const onLoadProgress = options.onLoadProgress;
+  notifyLoadProgress(onLoadProgress, {
+    stage: "manifest",
+    progress: 0.02,
+  });
+  const { moduleUrl, wasmUrl } = await loadMapRuntimeManifest({
     locationLike: options.locationLike ?? globalThis.location,
     cdnBaseUrl: options.cdnBaseUrl,
     cacheKey: options.runtimeManifestCacheKey ?? runtimeConfigValue("mapAssetCacheKey"),
     fetchImpl: options.fetchImpl ?? globalThis.fetch?.bind(globalThis),
   });
-  return import(moduleUrl);
+  notifyLoadProgress(onLoadProgress, {
+    stage: "module-import",
+    progress: 0.08,
+    url: moduleUrl,
+  });
+  const importModuleImpl = options.importModuleImpl || ((url) => import(url));
+  const modulePromise = importModuleImpl(moduleUrl);
+  const wasmInitInput = fetchMapRuntimeWasmWithProgress({
+    wasmUrl,
+    fetchImpl: options.fetchImpl ?? globalThis.fetch?.bind(globalThis),
+    onLoadProgress,
+  });
+  let wasmModule;
+  try {
+    wasmModule = await modulePromise;
+  } catch (error) {
+    wasmInitInput.catch(() => {});
+    throw error;
+  }
+  notifyLoadProgress(onLoadProgress, {
+    stage: "module-import",
+    progress: 0.1,
+    url: moduleUrl,
+  });
+  return {
+    wasmModule,
+    wasmInitInput,
+    moduleUrl,
+    wasmUrl,
+  };
 }
 
 function ensureThemeProbe(doc) {
@@ -2849,9 +3015,28 @@ class FishyMapBridgeImpl {
       this.installCanvasSizeSync();
       this.installThemeSync();
 
-      const wasmModule = options.wasmModule || (await loadMapRuntimeModule(options));
+      const reportLoadProgress = (detail) => {
+        notifyLoadProgress(options.onLoadProgress, detail);
+        if (this.container?.dispatchEvent) {
+          this.container.dispatchEvent(createCustomEvent(FISHYMAP_EVENTS.loadProgress, detail));
+        }
+      };
+      const runtimeModule = options.wasmModule
+        ? {
+            wasmModule: options.wasmModule,
+            wasmInitInput: options.wasmInitInput,
+          }
+        : await loadMapRuntimeModule({
+            ...options,
+            onLoadProgress: reportLoadProgress,
+          });
+      const wasmModule = runtimeModule.wasmModule || runtimeModule;
       try {
-        await wasmModule.default();
+        const initInput =
+          runtimeModule.wasmInitInput === undefined
+            ? undefined
+            : { module_or_path: runtimeModule.wasmInitInput };
+        await wasmModule.default(initInput);
       } catch (error) {
         const message =
           error && typeof error === "object" && "message" in error
@@ -2861,6 +3046,10 @@ class FishyMapBridgeImpl {
           throw error;
         }
       }
+      reportLoadProgress({
+        stage: "renderer-start",
+        progress: 0.9,
+      });
       this.wasmModule = wasmModule;
       if (typeof wasmModule.fishymap_set_event_sink === "function") {
         wasmModule.fishymap_set_event_sink(this.boundEventSink);
@@ -2884,6 +3073,10 @@ class FishyMapBridgeImpl {
       this.flushPendingPatchNow();
       this.flushQueuedCommands();
       this.scheduleBootstrapStateSync();
+      reportLoadProgress({
+        stage: "runtime-bootstrap",
+        progress: 0.96,
+      });
       return this.getCurrentState();
     });
   }
