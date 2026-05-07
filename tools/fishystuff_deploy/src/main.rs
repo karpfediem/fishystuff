@@ -176,6 +176,10 @@ enum GitopsCommands {
         #[arg(long)]
         status: PathBuf,
     },
+    RetainedReleasesJson {
+        #[arg(long = "rollback-member", required = true)]
+        rollback_members: Vec<PathBuf>,
+    },
 }
 
 fn main() -> Result<ExitCode> {
@@ -314,6 +318,10 @@ fn main() -> Result<ExitCode> {
             GitopsCommands::NeedsRootsReady { request, status } => Ok(needs_exit_code(
                 gitops::needs_roots_ready(&request, &status),
             )),
+            GitopsCommands::RetainedReleasesJson { rollback_members } => {
+                print!("{}", gitops::retained_releases_json(&rollback_members)?);
+                Ok(ExitCode::SUCCESS)
+            }
         },
     }
 }

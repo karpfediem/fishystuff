@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -58,6 +59,29 @@ struct RollbackReadinessDocument {
     rollback_release_id: String,
     rollback_release_identity: String,
     rollback_available: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RollbackSetMemberDocument {
+    desired_generation: u64,
+    environment: String,
+    host: String,
+    current_release_id: String,
+    release_id: String,
+    release_identity: String,
+    api_bundle: String,
+    dolt_service_bundle: String,
+    site_content: String,
+    cdn_runtime_content: String,
+    dolt_commit: String,
+    dolt_materialization: String,
+    #[serde(default)]
+    dolt_cache_dir: String,
+    #[serde(default)]
+    dolt_release_ref: String,
+    #[serde(default)]
+    dolt_status_path: String,
+    rollback_member_state: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,6 +156,23 @@ struct RootStatus {
     observed_target: String,
     symlink_ready: bool,
     nix_gcroot_ready: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct RetainedReleaseJson {
+    release_id: String,
+    generation: u64,
+    git_rev: String,
+    dolt_commit: String,
+    api_closure: String,
+    site_closure: String,
+    cdn_runtime_closure: String,
+    dolt_service_closure: String,
+    dolt_materialization: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    dolt_cache_dir: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    dolt_release_ref: String,
 }
 
 pub struct ServedSummary {
@@ -479,6 +520,172 @@ pub fn needs_roots_ready(request_path: &Path, status_path: &Path) -> bool {
     };
 
     status_matches_roots(&request, &actual_roots, &status).is_err()
+}
+
+pub fn retained_releases_json(rollback_member_paths: &[PathBuf]) -> Result<String> {
+    if rollback_member_paths.is_empty() {
+        bail!("at least one --rollback-member is required");
+    }
+
+    let mut seen_release_ids = BTreeSet::new();
+    let mut retained_releases = Vec::with_capacity(rollback_member_paths.len());
+    for path in rollback_member_paths {
+        let member: RollbackSetMemberDocument =
+            read_json(path, "GitOps rollback-set member document")?;
+        let retained = retained_release_from_member(&member)
+            .with_context(|| format!("converting rollback-set member {}", path.display()))?;
+        if !seen_release_ids.insert(retained.release_id.clone()) {
+            bail!("duplicate retained release_id {}", retained.release_id);
+        }
+        retained_releases.push(retained);
+    }
+
+    let mut output =
+        serde_json::to_string_pretty(&retained_releases).context("encoding retained releases")?;
+    output.push('\n');
+    Ok(output)
+}
+
+fn retained_release_from_member(member: &RollbackSetMemberDocument) -> Result<RetainedReleaseJson> {
+    require_non_empty("rollback-set member environment", &member.environment)?;
+    require_non_empty("rollback-set member host", &member.host)?;
+    require_non_empty(
+        "rollback-set member current_release_id",
+        &member.current_release_id,
+    )?;
+    require_non_empty("rollback-set member release_id", &member.release_id)?;
+    require_non_empty(
+        "rollback-set member release_identity",
+        &member.release_identity,
+    )?;
+    require_eq(
+        "rollback-set member rollback_member_state",
+        member.rollback_member_state.as_str(),
+        "retained_hot_release",
+    )?;
+    if member.desired_generation == 0 {
+        bail!("rollback-set member desired_generation must be non-zero");
+    }
+    require_store_path("rollback-set member api_bundle", &member.api_bundle)?;
+    require_store_path(
+        "rollback-set member dolt_service_bundle",
+        &member.dolt_service_bundle,
+    )?;
+    require_store_path("rollback-set member site_content", &member.site_content)?;
+    require_store_path(
+        "rollback-set member cdn_runtime_content",
+        &member.cdn_runtime_content,
+    )?;
+    require_non_empty("rollback-set member dolt_commit", &member.dolt_commit)?;
+    match member.dolt_materialization.as_str() {
+        "fetch_pin" => {
+            require_non_empty("rollback-set member dolt_cache_dir", &member.dolt_cache_dir)?;
+            require_non_empty(
+                "rollback-set member dolt_release_ref",
+                &member.dolt_release_ref,
+            )?;
+            require_non_empty(
+                "rollback-set member dolt_status_path",
+                &member.dolt_status_path,
+            )?;
+        }
+        "metadata_only" => {}
+        other => bail!(
+            "rollback-set member dolt_materialization was {other}, expected fetch_pin or metadata_only"
+        ),
+    }
+
+    let identity = parse_release_identity(&member.release_identity)?;
+    require_eq(
+        "release identity release",
+        identity_field(&identity, "release")?,
+        member.release_id.as_str(),
+    )?;
+    let generation = identity_field(&identity, "generation")?
+        .parse::<u64>()
+        .with_context(|| {
+            format!(
+                "release identity generation is not a positive integer: {}",
+                identity_field(&identity, "generation").unwrap_or("")
+            )
+        })?;
+    if generation == 0 {
+        bail!("release identity generation must be non-zero");
+    }
+    let git_rev = identity_field(&identity, "git_rev")?.to_string();
+    require_non_empty("release identity git_rev", &git_rev)?;
+    require_eq(
+        "release identity dolt_commit",
+        identity_field(&identity, "dolt_commit")?,
+        member.dolt_commit.as_str(),
+    )?;
+    require_eq(
+        "release identity api",
+        identity_field(&identity, "api")?,
+        member.api_bundle.as_str(),
+    )?;
+    require_eq(
+        "release identity site",
+        identity_field(&identity, "site")?,
+        member.site_content.as_str(),
+    )?;
+    require_eq(
+        "release identity cdn_runtime",
+        identity_field(&identity, "cdn_runtime")?,
+        member.cdn_runtime_content.as_str(),
+    )?;
+    require_eq(
+        "release identity dolt_service",
+        identity_field(&identity, "dolt_service")?,
+        member.dolt_service_bundle.as_str(),
+    )?;
+    if let Some(dolt_mode) = identity.get("dolt_mode") {
+        require_eq(
+            "release identity dolt_mode",
+            dolt_mode.as_str(),
+            "read_only",
+        )?;
+    }
+
+    Ok(RetainedReleaseJson {
+        release_id: member.release_id.clone(),
+        generation,
+        git_rev,
+        dolt_commit: member.dolt_commit.clone(),
+        api_closure: member.api_bundle.clone(),
+        site_closure: member.site_content.clone(),
+        cdn_runtime_closure: member.cdn_runtime_content.clone(),
+        dolt_service_closure: member.dolt_service_bundle.clone(),
+        dolt_materialization: member.dolt_materialization.clone(),
+        dolt_cache_dir: member.dolt_cache_dir.clone(),
+        dolt_release_ref: member.dolt_release_ref.clone(),
+    })
+}
+
+fn parse_release_identity(identity: &str) -> Result<BTreeMap<String, String>> {
+    let mut fields = BTreeMap::new();
+    for part in identity.split(';') {
+        let (key, value) = part
+            .split_once('=')
+            .with_context(|| format!("release identity segment {part:?} does not contain '='"))?;
+        if key.is_empty() {
+            bail!("release identity contains an empty key");
+        }
+        if value.is_empty() {
+            bail!("release identity field {key} must not be empty");
+        }
+        if fields.insert(key.to_string(), value.to_string()).is_some() {
+            bail!("release identity field {key} is duplicated");
+        }
+    }
+    Ok(fields)
+}
+
+fn identity_field<'a>(identity: &'a BTreeMap<String, String>, name: &str) -> Result<&'a str> {
+    identity
+        .get(name)
+        .map(String::as_str)
+        .with_context(|| format!("release identity is missing field {name}"))
 }
 
 fn validate_admission(summary: &ServedSummary, admission: &AdmissionDocument) -> Result<()> {
@@ -875,6 +1082,21 @@ where
 fn require_true(label: &str, actual: bool) -> Result<()> {
     if !actual {
         bail!("{label} must be true");
+    }
+    Ok(())
+}
+
+fn require_non_empty(label: &str, actual: &str) -> Result<()> {
+    if actual.is_empty() {
+        bail!("{label} must not be empty");
+    }
+    Ok(())
+}
+
+fn require_store_path(label: &str, actual: &str) -> Result<()> {
+    require_non_empty(label, actual)?;
+    if !actual.starts_with("/nix/store/") {
+        bail!("{label} must be under /nix/store");
     }
     Ok(())
 }

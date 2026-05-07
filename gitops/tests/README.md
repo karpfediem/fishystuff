@@ -11,7 +11,7 @@ just gitops-production-current-desired output=/tmp/fishystuff-production-current
 cargo test -p fishystuff_deploy
 ```
 
-These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served`, `gitops-served-summary`, and `gitops-inspect-served` are read-only checks for already-produced local GitOps status, active, rollback-set, rollback readiness, route, admission, and root-readiness documents.
+These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served`, `gitops-served-summary`, and `gitops-inspect-served` are read-only checks for already-produced local GitOps status, active, rollback-set, rollback readiness, route, admission, and root-readiness documents. `fishystuff_deploy gitops retained-releases-json --rollback-member ...` is also read-only; it derives production-current retained-release JSON from exact rollback-set member documents and refuses inconsistent release identities.
 
 Flake checks:
 

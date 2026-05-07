@@ -33,6 +33,19 @@ That file records the local Dolt `main` commit, production API/Dolt service bund
 
 When a previous production tuple is known exactly, add it with `FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON` or `FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE`. The retained object must name its release ID, generation, Git revision, Dolt commit, API bundle, Dolt service bundle, site content, and CDN runtime closure. The recipe refuses duplicate retained IDs, retained active release IDs, non-store closure paths, and credential-bearing Dolt remotes.
 
+For already-published GitOps rollback-set members, derive the retained JSON from the member documents:
+
+```bash
+fishystuff_deploy gitops retained-releases-json \
+  --rollback-member /var/lib/fishystuff/gitops/rollback-set/production/previous-production-release.json \
+  > /tmp/fishystuff-retained-releases.json
+
+FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json \
+  just gitops-production-current-desired
+```
+
+This is read-only and refuses incomplete or inconsistent rollback member identities.
+
 The first production-shaped serving artifact is still VM-only:
 
 ```bash

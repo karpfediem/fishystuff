@@ -382,6 +382,19 @@ Retained rollback releases use this JSON shape:
 
 Optional retained fields are `dolt_materialization`, `dolt_remote_url`, `dolt_cache_dir`, and `dolt_release_ref`. The active release cannot appear in the retained set, and retained IDs must be unique.
 
+If rollback-set member documents already exist for the retained releases, derive this JSON from those documents instead of hand-typing the tuple:
+
+```bash
+fishystuff_deploy gitops retained-releases-json \
+  --rollback-member /var/lib/fishystuff/gitops/rollback-set/production/previous-production-release.json \
+  > /tmp/fishystuff-retained-releases.json
+
+FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json \
+  just gitops-production-current-desired
+```
+
+The helper is read-only. It requires each rollback-set member identity to match the member's release ID, generation, Git revision, Dolt commit, and API/site/CDN/Dolt-service paths exactly before emitting production-current input.
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.

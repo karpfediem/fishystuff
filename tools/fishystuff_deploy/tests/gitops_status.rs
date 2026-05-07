@@ -368,6 +368,87 @@ fn gitops_check_served_rejects_stale_rollback_set_retained_list() -> Result<()> 
 }
 
 #[test]
+fn gitops_retained_releases_json_converts_member_documents() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-retained-json")?;
+    let member = root
+        .path()
+        .join("rollback-set/local-test/previous-release.json");
+    write_rollback_member_document(
+        &member,
+        "previous-release",
+        "release=previous-release;generation=7;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=/nix/store/example-previous-api;site=/nix/store/example-previous-site;cdn_runtime=/nix/store/example-previous-cdn;dolt_service=/nix/store/example-previous-dolt-service",
+    )?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "retained-releases-json",
+        "--rollback-member",
+        path_str(&member)?,
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops retained-releases-json", output);
+    }
+
+    let retained: Value =
+        serde_json::from_slice(&output.stdout).context("decoding retained releases stdout")?;
+    assert_eq!(retained.as_array().map(Vec::len), Some(1));
+    assert_eq!(retained[0]["release_id"], "previous-release");
+    assert_eq!(retained[0]["generation"], 7);
+    assert_eq!(retained[0]["git_rev"], "previous-git");
+    assert_eq!(retained[0]["dolt_commit"], "previous-dolt");
+    assert_eq!(
+        retained[0]["api_closure"],
+        "/nix/store/example-previous-api"
+    );
+    assert_eq!(
+        retained[0]["site_closure"],
+        "/nix/store/example-previous-site"
+    );
+    assert_eq!(
+        retained[0]["cdn_runtime_closure"],
+        "/nix/store/example-previous-cdn"
+    );
+    assert_eq!(
+        retained[0]["dolt_service_closure"],
+        "/nix/store/example-previous-dolt-service"
+    );
+    assert_eq!(retained[0]["dolt_materialization"], "fetch_pin");
+    assert_eq!(
+        retained[0]["dolt_cache_dir"],
+        "/var/lib/fishystuff/gitops/dolt-cache/fishystuff"
+    );
+    assert_eq!(
+        retained[0]["dolt_release_ref"],
+        "fishystuff/gitops/previous-release"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn gitops_retained_releases_json_rejects_identity_path_mismatch() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-retained-json-mismatch")?;
+    let member = root
+        .path()
+        .join("rollback-set/local-test/previous-release.json");
+    write_rollback_member_document(
+        &member,
+        "previous-release",
+        "release=previous-release;generation=7;git_rev=previous-git;dolt_commit=previous-dolt;dolt_repository=fishystuff/fishystuff;dolt_branch_context=main;dolt_mode=read_only;api=/nix/store/example-previous-api;site=/nix/store/example-other-site;cdn_runtime=/nix/store/example-previous-cdn;dolt_service=/nix/store/example-previous-dolt-service",
+    )?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "retained-releases-json",
+            "--rollback-member",
+            path_str(&member)?,
+        ],
+        "release identity site was /nix/store/example-other-site, expected /nix/store/example-previous-site",
+    )
+}
+
+#[test]
 fn gitops_roots_ready_writes_status_for_matching_symlinks() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-gitops-roots-ready")?;
     let request = root.path().join("request.json");
@@ -631,6 +712,34 @@ fn write_admission_document(admission: &Path) -> Result<()> {
             "serving_artifacts_checked": true,
             "admission_state": "passed_fixture",
             "probe": "local-fixture",
+        }),
+    )
+}
+
+fn write_rollback_member_document(
+    path: &Path,
+    release_id: &str,
+    release_identity: &str,
+) -> Result<()> {
+    write_json(
+        path,
+        json!({
+            "desired_generation": 42,
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "current_release_id": "active-release",
+            "release_id": release_id,
+            "release_identity": release_identity,
+            "api_bundle": "/nix/store/example-previous-api",
+            "dolt_service_bundle": "/nix/store/example-previous-dolt-service",
+            "site_content": "/nix/store/example-previous-site",
+            "cdn_runtime_content": "/nix/store/example-previous-cdn",
+            "dolt_commit": "previous-dolt",
+            "dolt_materialization": "fetch_pin",
+            "dolt_cache_dir": "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
+            "dolt_release_ref": format!("fishystuff/gitops/{release_id}"),
+            "dolt_status_path": format!("/run/fishystuff/gitops/dolt/{release_id}.json"),
+            "rollback_member_state": "retained_hot_release",
         }),
     )
 }
