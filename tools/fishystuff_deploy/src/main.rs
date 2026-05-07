@@ -142,6 +142,28 @@ enum GitopsCommands {
         #[arg(long)]
         release_id: Option<String>,
     },
+    InspectServed {
+        #[arg(long)]
+        status: PathBuf,
+        #[arg(long)]
+        active: PathBuf,
+        #[arg(long)]
+        rollback_set: PathBuf,
+        #[arg(long)]
+        rollback: PathBuf,
+        #[arg(long)]
+        admission: Option<PathBuf>,
+        #[arg(long)]
+        route: Option<PathBuf>,
+        #[arg(long)]
+        roots_dir: Option<PathBuf>,
+        #[arg(long)]
+        environment: Option<String>,
+        #[arg(long)]
+        host: Option<String>,
+        #[arg(long)]
+        release_id: Option<String>,
+    },
     RootsReady {
         #[arg(long)]
         request: PathBuf,
@@ -256,6 +278,33 @@ fn main() -> Result<ExitCode> {
                     release_id.as_deref(),
                 )?;
                 print!("{}", summary.operator_summary());
+                Ok(ExitCode::SUCCESS)
+            }
+            GitopsCommands::InspectServed {
+                status,
+                active,
+                rollback_set,
+                rollback,
+                admission,
+                route,
+                roots_dir,
+                environment,
+                host,
+                release_id,
+            } => {
+                let inspection = gitops::inspect_served(
+                    &status,
+                    &active,
+                    &rollback_set,
+                    &rollback,
+                    admission.as_deref(),
+                    route.as_deref(),
+                    roots_dir.as_deref(),
+                    environment.as_deref(),
+                    host.as_deref(),
+                    release_id.as_deref(),
+                )?;
+                print!("{}", inspection.operator_summary());
                 Ok(ExitCode::SUCCESS)
             }
             GitopsCommands::RootsReady { request, status } => {

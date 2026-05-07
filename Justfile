@@ -85,6 +85,10 @@ gitops-check-served deploy_bin="auto" environment="local-test" state_dir="/var/l
 gitops-served-summary deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" host="" release_id="":
   bash scripts/recipes/gitops-check-served.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{host}}" "{{release_id}}" "summary-served"
 
+# Inspect local GitOps served state plus admission, route, and root-readiness documents.
+gitops-inspect-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" host="" release_id="":
+  bash scripts/recipes/gitops-inspect-served.sh "{{deploy_bin}}" "{{environment}}" "{{state_dir}}" "{{run_dir}}" "{{host}}" "{{release_id}}"
+
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
   bash scripts/recipes/gitops-vm-test.sh "{{test_name}}"

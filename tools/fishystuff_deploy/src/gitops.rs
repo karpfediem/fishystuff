@@ -61,6 +61,35 @@ struct RollbackReadinessDocument {
 }
 
 #[derive(Debug, Deserialize)]
+struct AdmissionDocument {
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    admission_state: String,
+    probe: String,
+    #[serde(default)]
+    probe_name: String,
+    #[serde(default)]
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RouteDocument {
+    desired_generation: u64,
+    environment: String,
+    host: String,
+    release_id: String,
+    release_identity: String,
+    site_root: String,
+    cdn_root: String,
+    #[serde(default)]
+    api_upstream: String,
+    served: bool,
+    state: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct RootsReadyRequest {
     desired_generation: u64,
     environment: String,
@@ -117,6 +146,13 @@ pub struct ServedSummary {
     retained_release_ids: Vec<String>,
 }
 
+pub struct ServedInspection {
+    summary: ServedSummary,
+    admission: Option<AdmissionDocument>,
+    route: Option<RouteDocument>,
+    roots: Vec<RootsReadyStatus>,
+}
+
 impl ServedSummary {
     pub fn summary_line(&self) -> String {
         format!(
@@ -143,6 +179,47 @@ impl ServedSummary {
             retained,
             self.rollback_retained_count
         )
+    }
+}
+
+impl ServedInspection {
+    pub fn operator_summary(&self) -> String {
+        let mut output = self.summary.operator_summary();
+        if let Some(admission) = &self.admission {
+            output.push_str(&format!(
+                "admission_state: {}\nadmission_probe: {}\n",
+                admission.admission_state, admission.probe
+            ));
+            if !admission.probe_name.is_empty() {
+                output.push_str(&format!("admission_probe_name: {}\n", admission.probe_name));
+            }
+            if !admission.url.is_empty() {
+                output.push_str(&format!("admission_url: {}\n", admission.url));
+            }
+        }
+        if let Some(route) = &self.route {
+            output.push_str(&format!(
+                "route_state: {}\nroute_site_root: {}\nroute_cdn_root: {}\n",
+                route.state, route.site_root, route.cdn_root
+            ));
+            if !route.api_upstream.is_empty() {
+                output.push_str(&format!("route_api_upstream: {}\n", route.api_upstream));
+            }
+        }
+        if !self.roots.is_empty() {
+            let releases = self
+                .roots
+                .iter()
+                .map(|status| status.release_id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            output.push_str(&format!(
+                "roots_ready_releases: {}\nroots_ready_count: {}\n",
+                releases,
+                self.roots.len()
+            ));
+        }
+        output
     }
 }
 
@@ -307,6 +384,57 @@ pub fn check_served(
     })
 }
 
+pub fn inspect_served(
+    status_path: &Path,
+    active_path: &Path,
+    rollback_set_path: &Path,
+    rollback_path: &Path,
+    admission_path: Option<&Path>,
+    route_path: Option<&Path>,
+    roots_dir: Option<&Path>,
+    expected_environment: Option<&str>,
+    expected_host: Option<&str>,
+    expected_release_id: Option<&str>,
+) -> Result<ServedInspection> {
+    let summary = check_served(
+        status_path,
+        active_path,
+        rollback_set_path,
+        rollback_path,
+        expected_environment,
+        expected_host,
+        expected_release_id,
+    )?;
+
+    let admission = if let Some(path) = admission_path {
+        let admission: AdmissionDocument = read_json(path, "GitOps admission status")?;
+        validate_admission(&summary, &admission)?;
+        Some(admission)
+    } else {
+        None
+    };
+
+    let route = if let Some(path) = route_path {
+        let route: RouteDocument = read_json(path, "GitOps route selection")?;
+        validate_route(&summary, &route)?;
+        Some(route)
+    } else {
+        None
+    };
+
+    let roots = roots_dir
+        .map(|dir| read_roots_statuses(dir, &summary))
+        .transpose()?
+        .unwrap_or_default();
+
+    Ok(ServedInspection {
+        summary,
+        admission,
+        route,
+        roots,
+    })
+}
+
 pub fn roots_ready(request_path: &Path, status_path: &Path) -> Result<()> {
     let request: RootsReadyRequest = read_json(request_path, "GitOps roots-ready request")?;
     validate_roots_request(&request)?;
@@ -351,6 +479,148 @@ pub fn needs_roots_ready(request_path: &Path, status_path: &Path) -> bool {
     };
 
     status_matches_roots(&request, &actual_roots, &status).is_err()
+}
+
+fn validate_admission(summary: &ServedSummary, admission: &AdmissionDocument) -> Result<()> {
+    require_eq(
+        "admission environment",
+        admission.environment.as_str(),
+        summary.environment.as_str(),
+    )?;
+    require_eq(
+        "admission host",
+        admission.host.as_str(),
+        summary.host.as_str(),
+    )?;
+    require_eq(
+        "admission release_id",
+        admission.release_id.as_str(),
+        summary.release_id.as_str(),
+    )?;
+    require_eq(
+        "admission release_identity",
+        admission.release_identity.as_str(),
+        summary.release_identity.as_str(),
+    )?;
+    require_eq(
+        "admission admission_state",
+        admission.admission_state.as_str(),
+        "passed_fixture",
+    )?;
+    if admission.probe.is_empty() {
+        bail!("admission probe must not be empty");
+    }
+    Ok(())
+}
+
+fn validate_route(summary: &ServedSummary, route: &RouteDocument) -> Result<()> {
+    require_eq(
+        "route desired_generation",
+        route.desired_generation,
+        summary.desired_generation,
+    )?;
+    require_eq(
+        "route environment",
+        route.environment.as_str(),
+        summary.environment.as_str(),
+    )?;
+    require_eq("route host", route.host.as_str(), summary.host.as_str())?;
+    require_eq(
+        "route release_id",
+        route.release_id.as_str(),
+        summary.release_id.as_str(),
+    )?;
+    require_eq(
+        "route release_identity",
+        route.release_identity.as_str(),
+        summary.release_identity.as_str(),
+    )?;
+    require_true("route served", route.served)?;
+    require_eq("route state", route.state.as_str(), "selected_local_route")?;
+    if route.site_root.is_empty() {
+        bail!("route site_root must not be empty");
+    }
+    if route.cdn_root.is_empty() {
+        bail!("route cdn_root must not be empty");
+    }
+    Ok(())
+}
+
+fn read_roots_statuses(roots_dir: &Path, summary: &ServedSummary) -> Result<Vec<RootsReadyStatus>> {
+    let mut release_ids = Vec::with_capacity(1 + summary.retained_release_ids.len());
+    release_ids.push(summary.release_id.clone());
+    release_ids.extend(summary.retained_release_ids.iter().cloned());
+
+    let mut statuses = Vec::with_capacity(release_ids.len());
+    for release_id in release_ids {
+        let path = roots_dir.join(format!("{}-{}.json", summary.environment, release_id));
+        let status: RootsReadyStatus = read_json(&path, "GitOps roots-ready status")?;
+        validate_roots_status_for_summary(summary, &status, &release_id)?;
+        statuses.push(status);
+    }
+    Ok(statuses)
+}
+
+fn validate_roots_status_for_summary(
+    summary: &ServedSummary,
+    status: &RootsReadyStatus,
+    release_id: &str,
+) -> Result<()> {
+    require_eq(
+        "roots status desired_generation",
+        status.desired_generation,
+        summary.desired_generation,
+    )?;
+    require_eq(
+        "roots status environment",
+        status.environment.as_str(),
+        summary.environment.as_str(),
+    )?;
+    require_eq(
+        "roots status host",
+        status.host.as_str(),
+        summary.host.as_str(),
+    )?;
+    require_eq(
+        "roots status release_id",
+        status.release_id.as_str(),
+        release_id,
+    )?;
+    if release_id == summary.release_id {
+        require_eq(
+            "roots status active release_identity",
+            status.release_identity.as_str(),
+            summary.release_identity.as_str(),
+        )?;
+    } else if status.release_identity.is_empty() {
+        bail!("roots status retained release_identity must not be empty");
+    }
+    require_true("roots status roots_ready", status.roots_ready)?;
+    require_eq("roots status state", status.state.as_str(), "roots_ready")?;
+    if status.root_count == 0 {
+        bail!("roots status root_count must be greater than zero");
+    }
+    require_eq(
+        "roots status root_count",
+        status.root_count,
+        status.roots.len(),
+    )?;
+    for root in &status.roots {
+        if root.name.is_empty() {
+            bail!("roots status root name must not be empty");
+        }
+        if root.root_path.is_empty() {
+            bail!("roots status root_path must not be empty");
+        }
+        if root.store_path.is_empty() {
+            bail!("roots status store_path must not be empty");
+        }
+        require_true("roots status root symlink_ready", root.symlink_ready)?;
+        if status.require_nix_gcroot {
+            require_true("roots status root nix_gcroot_ready", root.nix_gcroot_ready)?;
+        }
+    }
+    Ok(())
 }
 
 fn validate_roots_request(request: &RootsReadyRequest) -> Result<()> {

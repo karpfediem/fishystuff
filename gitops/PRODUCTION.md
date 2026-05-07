@@ -57,7 +57,7 @@ The VM-only equivalents now exist for production-shaped generated serve, rollbac
 
 - A real production Dolt remote or mirror policy for `fetch_pin`, with operator-selected exact active and retained commits.
 - A rollback set with rooted artifacts and retained CDN roots, validated before active symlink or route handoff.
-- A read-only served-state check that validates status, active, rollback-set, and primary rollback readiness documents.
+- A read-only served-state inspection command that validates status, active, rollback-set, primary rollback readiness, admission, route selection, and root-readiness documents before an operator treats a release as served.
 - A real-host desired-state package from exact API, Dolt service, site, finalized CDN serving root, and at least one retained rollback release.
 - A real-host service/Caddy handoff that uses production-local paths and does not reuse beta service state.
 

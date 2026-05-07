@@ -88,6 +88,106 @@ fn gitops_summary_served_prints_active_and_retained_releases() -> Result<()> {
 }
 
 #[test]
+fn gitops_inspect_served_prints_admission_route_and_roots() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-inspect")?;
+    let status = root.path().join("status.json");
+    let active = root.path().join("active.json");
+    let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
+    let admission = root.path().join("run/admission/local-test.json");
+    let route = root.path().join("run/routes/local-test.json");
+    let roots_dir = root.path().join("run/roots");
+
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
+    write_admission_document(&admission)?;
+    write_route_document(&route)?;
+    write_roots_status(
+        &roots_dir.join("local-test-active-release.json"),
+        "active-release",
+        "release=active-release;api=example",
+    )?;
+    write_roots_status(
+        &roots_dir.join("local-test-previous-release.json"),
+        "previous-release",
+        "release=previous-release;api=example",
+    )?;
+
+    let output = run_helper_raw([
+        "gitops",
+        "inspect-served",
+        "--status",
+        path_str(&status)?,
+        "--active",
+        path_str(&active)?,
+        "--rollback-set",
+        path_str(&rollback_set)?,
+        "--rollback",
+        path_str(&rollback)?,
+        "--admission",
+        path_str(&admission)?,
+        "--route",
+        path_str(&route)?,
+        "--roots-dir",
+        path_str(&roots_dir)?,
+        "--environment",
+        "local-test",
+        "--host",
+        "vm-single-host",
+        "--release-id",
+        "active-release",
+    ])?;
+    if !output.status.success() {
+        return bail_command("fishystuff_deploy gitops inspect-served", output);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("served_release: active-release"));
+    assert!(stdout.contains("admission_state: passed_fixture"));
+    assert!(stdout.contains("admission_probe: local-fixture"));
+    assert!(stdout.contains("route_state: selected_local_route"));
+    assert!(stdout.contains("route_site_root: /var/lib/fishystuff/gitops/served/local-test/site"));
+    assert!(stdout.contains("route_cdn_root: /var/lib/fishystuff/gitops/served/local-test/cdn"));
+    assert!(stdout.contains("roots_ready_releases: active-release, previous-release"));
+    assert!(stdout.contains("roots_ready_count: 2"));
+
+    Ok(())
+}
+
+#[test]
+fn gitops_inspect_served_rejects_missing_retained_roots() -> Result<()> {
+    let root = TestRoot::new("fishystuff-deploy-gitops-inspect-missing-roots")?;
+    let status = root.path().join("status.json");
+    let active = root.path().join("active.json");
+    let rollback_set = root.path().join("rollback-set.json");
+    let rollback = root.path().join("rollback.json");
+    let roots_dir = root.path().join("run/roots");
+
+    write_served_documents(&status, &active, &rollback_set, &rollback)?;
+    write_roots_status(
+        &roots_dir.join("local-test-active-release.json"),
+        "active-release",
+        "release=active-release;api=example",
+    )?;
+
+    assert_helper_failure_contains(
+        [
+            "gitops",
+            "inspect-served",
+            "--status",
+            path_str(&status)?,
+            "--active",
+            path_str(&active)?,
+            "--rollback-set",
+            path_str(&rollback_set)?,
+            "--rollback",
+            path_str(&rollback)?,
+            "--roots-dir",
+            path_str(&roots_dir)?,
+        ],
+        "local-test-previous-release.json",
+    )
+}
+
+#[test]
 fn gitops_check_served_rejects_missing_rollback_readiness() -> Result<()> {
     let root = TestRoot::new("fishystuff-deploy-gitops-not-ready")?;
     let status = root.path().join("status.json");
@@ -503,6 +603,80 @@ fn write_served_documents(
             "rollback_dolt_release_ref": "",
             "rollback_available": true,
             "rollback_state": "retained_hot_release",
+        }),
+    )
+}
+
+fn write_admission_document(admission: &Path) -> Result<()> {
+    write_json(
+        admission,
+        json!({
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": "active-release",
+            "release_identity": "release=active-release;api=example",
+            "site_content": "/nix/store/example-site",
+            "cdn_runtime_content": "/nix/store/example-cdn",
+            "dolt_commit": "example",
+            "dolt_materialization": "metadata_only",
+            "dolt_release_ref": "",
+            "cdn_runtime_module": "fishystuff_ui_bevy.example.js",
+            "cdn_runtime_wasm": "fishystuff_ui_bevy_bg.example.wasm",
+            "cdn_serving_current_root": "/nix/store/example-cdn/current",
+            "cdn_serving_retained_root_count": 1,
+            "retained_release_count": 1,
+            "cdn_serving_manifest_lists_runtime_manifest": true,
+            "cdn_serving_manifest_lists_module": true,
+            "cdn_serving_manifest_lists_wasm": true,
+            "serving_artifacts_checked": true,
+            "admission_state": "passed_fixture",
+            "probe": "local-fixture",
+        }),
+    )
+}
+
+fn write_route_document(route: &Path) -> Result<()> {
+    write_json(
+        route,
+        json!({
+            "desired_generation": 42,
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": "active-release",
+            "release_identity": "release=active-release;api=example",
+            "active_path": "/var/lib/fishystuff/gitops/active/local-test.json",
+            "site_root": "/var/lib/fishystuff/gitops/served/local-test/site",
+            "cdn_root": "/var/lib/fishystuff/gitops/served/local-test/cdn",
+            "api_upstream": "http://127.0.0.1:18082",
+            "served": true,
+            "state": "selected_local_route",
+        }),
+    )
+}
+
+fn write_roots_status(path: &Path, release_id: &str, release_identity: &str) -> Result<()> {
+    write_json(
+        path,
+        json!({
+            "desired_generation": 42,
+            "environment": "local-test",
+            "host": "vm-single-host",
+            "release_id": release_id,
+            "release_identity": release_identity,
+            "root_count": 1,
+            "require_nix_gcroot": true,
+            "roots_ready": true,
+            "state": "roots_ready",
+            "roots": [
+                {
+                    "name": "api",
+                    "root_path": format!("/nix/var/nix/gcroots/fishystuff/gitops/{release_id}/api"),
+                    "store_path": format!("/nix/store/{release_id}-api"),
+                    "observed_target": format!("/nix/store/{release_id}-api"),
+                    "symlink_ready": true,
+                    "nix_gcroot_ready": true,
+                }
+            ],
         }),
     )
 }

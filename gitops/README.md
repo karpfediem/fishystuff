@@ -341,6 +341,17 @@ For a human-readable summary of the served release, primary rollback identity, a
 just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
 ```
 
+For the stricter operator handoff view, include the local run-state documents as well:
+
+```bash
+just gitops-inspect-served \
+  environment=local-test \
+  state_dir=/var/lib/fishystuff/gitops \
+  run_dir=/run/fishystuff/gitops
+```
+
+This is still read-only. It first runs the served-state consistency check, then verifies the admission status, route selection, and `roots-ready` files under `run_dir` agree with the exact served release and every retained rollback release.
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.
