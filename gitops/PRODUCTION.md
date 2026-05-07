@@ -65,6 +65,14 @@ FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json 
 
 That recipe generates `data/gitops/production-current.desired.json`, runs the desired-serving preflight, runs `gitops-unify` against the exact generated file, and writes `data/gitops/production-current.handoff-summary.json`. The summary records the active release, retained releases, Dolt commits, closure paths, and the local checks that passed. It still does not write host state, start services, mutate DNS, or select a served release.
 
+Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
+
+```bash
+just gitops-production-current-from-served state_dir=/var/lib/fishystuff/gitops
+```
+
+That derives `data/gitops/production-current.retained-releases.json` from the served rollback-set members, then runs the checked handoff with that exact retained input. This keeps the next handoff tied to the previously published rollback set instead of an operator's memory.
+
 The handoff recipe has a fast local regression check:
 
 ```bash

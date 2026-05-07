@@ -417,6 +417,14 @@ just gitops-retained-releases-json \
 
 The helper is read-only. It can also accept repeated `--rollback-member` arguments for explicitly selected member documents. In both modes it requires each rollback-set member identity to match the member's release ID, generation, Git revision, Dolt commit, and API/site/CDN/Dolt-service paths exactly before emitting production-current input.
 
+For the normal future cycle, derive retained input from the served rollback-set and run the checked handoff in one step:
+
+```bash
+just gitops-production-current-from-served state_dir=/var/lib/fishystuff/gitops
+```
+
+This writes `production-current.retained-releases.json`, `production-current.desired.json`, and `production-current.handoff-summary.json` under `data/gitops/` by default. It is still local-only; it reads served GitOps documents and writes operator artifacts, but does not mutate hosts.
+
 Backup/restore and replication are separate transport classes:
 
 - Dolt backups are appropriate for bootstrap and disaster recovery, not routine deployment. They move a point-in-time repository state, which is still heavier and more disruptive than fetching into an already-warm cache and pinning a release ref.

@@ -106,6 +106,10 @@ gitops-production-current-desired output="data/gitops/production-current.desired
 gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
 
+# Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
+gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
+  bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
+
 # Run fast local regression checks for the production-current handoff recipe.
 gitops-production-current-handoff-test:
   bash scripts/recipes/gitops-production-current-handoff-test.sh
