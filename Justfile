@@ -101,6 +101,10 @@ gitops-retained-releases-json deploy_bin="auto" environment="production" state_d
 gitops-production-current-desired output="data/gitops/production-current.desired.json" dolt_ref="main":
   bash scripts/recipes/gitops-production-current-desired.sh "{{output}}" "{{dolt_ref}}"
 
+# Generate and validate a production-current handoff snapshot with retained rollback input.
+gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto":
+  bash scripts/recipes/gitops-production-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}"
+
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
   bash scripts/recipes/gitops-vm-test.sh "{{test_name}}"

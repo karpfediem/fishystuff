@@ -26,8 +26,8 @@ For the current local production tuple, generate an ignored operator handoff art
 
 ```bash
 just gitops-production-current-desired
-just gitops-unify auto data/gitops/production-current.desired.json
 just gitops-check-desired-serving state_file=data/gitops/production-current.desired.json environment=production
+just gitops-unify auto data/gitops/production-current.desired.json
 ```
 
 That file records the local Dolt `main` commit, production API/Dolt service bundles, production site content, and finalized CDN serving root. It remains `mode: validate` and `serve: false`; it is a precise snapshot to inspect and review before a real retained rollback set and serving handoff exist.
@@ -55,6 +55,15 @@ just gitops-retained-releases-json \
 ```
 
 This is read-only and refuses incomplete or inconsistent rollback member identities.
+
+With retained rollback input available, the checked local handoff sequence is:
+
+```bash
+FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json \
+  just gitops-production-current-handoff
+```
+
+That recipe generates `data/gitops/production-current.desired.json`, runs the desired-serving preflight, and then runs `gitops-unify` against the exact generated file. It still does not write host state, start services, mutate DNS, or select a served release.
 
 The first production-shaped serving artifact is still VM-only:
 

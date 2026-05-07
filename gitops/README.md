@@ -125,6 +125,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 
 `just gitops-production-current-desired` writes a local ignored desired-state snapshot to `data/gitops/production-current.desired.json`. It uses the local Dolt `main` commit, production API/Dolt service bundles, production site content, and the finalized CDN serving root. The snapshot is still `mode: validate` and `serve: false`; it is an operator handoff artifact for inspecting the exact current tuple, not a serving request and not a deployment command. Retained rollback releases can be supplied with `FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON` or `FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE`; the recipe requires exact release IDs, Dolt commits, and all four closure paths for each retained release instead of inventing a previous target.
 
+`just gitops-production-current-handoff` is the checked version of that flow. It requires retained rollback input, generates the production-current desired file, runs `gitops-check-desired-serving`, and then runs `gitops-unify` against the same file. It is still local-only and does not serve production.
+
 `.#gitops-desired-state-production-vm-serve-fixture` is a production-shaped VM fixture, not a production deployment. It uses production API/Dolt service bundles and production site content, but keeps `mode: vm-test` and uses fixture CDN serving roots. `gitops-desired-state-production-serve-shape-refusal` proves production-shaped serving desired state is refused when rollback retention or the CDN runtime closure is missing.
 
 `.#gitops-desired-state-production-rollback-transition-fixture` is the production-shaped rollback companion. It serves `previous-production-release`, retains the exact candidate release ID derived from the production serve fixture, uses `dolt.branch_context = "main"` for both releases, and keeps the rolled-away candidate CDN root retained for stale clients.
@@ -368,6 +370,7 @@ To generate a local production-current desired-state snapshot:
 
 ```bash
 just gitops-production-current-desired
+just gitops-check-desired-serving state_file=data/gitops/production-current.desired.json environment=production
 just gitops-unify auto data/gitops/production-current.desired.json
 ```
 
@@ -400,7 +403,7 @@ fishystuff_deploy gitops retained-releases-json \
   > /tmp/fishystuff-retained-releases.json
 
 FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json \
-  just gitops-production-current-desired
+  just gitops-production-current-handoff
 ```
 
 The equivalent recipe can read the rollback-set index and pass every member document automatically:

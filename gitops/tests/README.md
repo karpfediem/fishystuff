@@ -10,10 +10,11 @@ just gitops-inspect-served environment=local-test state_dir=/var/lib/fishystuff/
 just gitops-check-desired-serving state_file=data/gitops/production-current.desired.json environment=production
 just gitops-retained-releases-json environment=production state_dir=/var/lib/fishystuff/gitops > /tmp/fishystuff-retained-releases.json
 just gitops-production-current-desired output=/tmp/fishystuff-production-current.desired.json
+FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE=/tmp/fishystuff-retained-releases.json just gitops-production-current-handoff output=/tmp/fishystuff-production-current.desired.json
 cargo test -p fishystuff_deploy
 ```
 
-These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served`, `gitops-served-summary`, and `gitops-inspect-served` are read-only checks for already-produced local GitOps status, active, rollback-set, rollback readiness, route, admission, and root-readiness documents. `gitops-check-desired-serving` is a read-only JSON preflight for active/retained release tuples before serving. `gitops-retained-releases-json` is also read-only; it derives production-current retained-release JSON from the rollback-set index's exact member documents and refuses inconsistent release identities.
+These run host-local Rust tests for deployment helpers, including a real temporary Dolt repo/file-remote workflow. They do not boot a NixOS VM. `gitops-check-served`, `gitops-served-summary`, and `gitops-inspect-served` are read-only checks for already-produced local GitOps status, active, rollback-set, rollback readiness, route, admission, and root-readiness documents. `gitops-check-desired-serving` is a read-only JSON preflight for active/retained release tuples before serving. `gitops-retained-releases-json` is also read-only; it derives production-current retained-release JSON from the rollback-set index's exact member documents and refuses inconsistent release identities. `gitops-production-current-handoff` composes the local production-current generator, desired-serving preflight, and mgmt unify step for the exact generated file.
 
 Flake checks:
 
