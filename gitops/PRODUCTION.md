@@ -113,9 +113,10 @@ After a guarded local reconciliation, verify the local served documents against 
 ```bash
 just gitops-verify-activation-served admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-served-proof admission_file=/tmp/fishystuff-production-admission.json proof_file=<checked operator proof file>
+just gitops-production-proof-index
 ```
 
-The verifier re-checks the activation draft, then validates status, active selection, rollback-set, rollback readiness, admission, route, and root-readiness documents under the selected local state directories. It is read-only and ties the served state back to the activation draft's generation, release ID, host, API upstream, and admission URL. The served-proof command also re-checks the operator proof and writes a timestamped JSON artifact that records the operator proof hash plus the served verification output.
+The verifier re-checks the activation draft, then validates status, active selection, rollback-set, rollback readiness, admission, route, and root-readiness documents under the selected local state directories. It is read-only and ties the served state back to the activation draft's generation, release ID, host, API upstream, and admission URL. The served-proof command also re-checks the operator proof and writes a timestamped JSON artifact that records the operator proof hash plus the served verification output. The proof index prints the latest local operator/served proof chain and reports whether the served proof links back to the latest checked operator proof.
 
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
@@ -177,6 +178,7 @@ just gitops-production-preflight admission_file=/tmp/fishystuff-production-admis
 just gitops-production-operator-proof admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
 just gitops-check-production-operator-proof
 just gitops-production-served-proof admission_file=/tmp/fishystuff-production-admission.json proof_file=<checked operator proof file>
+just gitops-production-proof-index
 ```
 
 The bundle check builds or accepts a local `edge-service-bundle-production-gitops-handoff` path and verifies the Caddyfile uses GitOps-managed production served symlinks, loopback candidate API routing, credential-directory TLS files, CDN runtime cache headers, and no legacy `/srv/fishystuff`, fixed `/nix/store` serving root, or beta hostname. It also cross-checks `bundle.json`, the systemd unit, and the bundle artifact symlinks so the recorded Caddy executable/config, run/reload commands, TLS credentials, required served paths, and runtime overlays agree exactly. Finally, it runs `caddy validate` against the generated Caddyfile with temporary placeholder TLS credentials and isolated local state directories.
@@ -193,6 +195,8 @@ The operator proof checker validates an existing proof artifact before it is con
 
 The served proof command is the after-activation proof. It validates the checked operator proof, runs served-state verification, and writes a timestamped JSON artifact recording the exact operator proof hash and served verification result. It is read-only and does not install units, restart services, contact remote hosts, mutate DNS, or call cloud provider commands.
 
+The proof index command is read-only. It scans `data/gitops/` by default, reports the latest operator proof and served proof, verifies the operator proof with the same proof checker, and flags missing or stale served-proof links. Pass `require_complete=true` to make an incomplete chain fail.
+
 The dry-run host plan has a fast local regression check:
 
 ```bash
@@ -201,6 +205,7 @@ just gitops-production-host-inventory-test
 just gitops-production-operator-proof-test
 just gitops-check-production-operator-proof-test
 just gitops-production-served-proof-test
+just gitops-production-proof-index-test
 just gitops-production-preflight-test
 ```
 
