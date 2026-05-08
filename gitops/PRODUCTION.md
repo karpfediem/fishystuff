@@ -126,9 +126,10 @@ The handoff recipe has a fast local regression check:
 
 ```bash
 just gitops-production-current-handoff-test
+just gitops-production-edge-handoff-bundle-test
 ```
 
-The test uses explicit closure/Dolt overrides and a fake mgmt binary, so it checks recipe composition without real Nix builds or host mutation.
+The tests use explicit closure/Dolt overrides, fake mgmt, and fake Caddy bundles, so they check recipe and validator composition without real Nix builds or host mutation.
 
 The first production-shaped serving artifact is still VM-only:
 
@@ -161,6 +162,14 @@ nix build .#checks.x86_64-linux.vector-agent-service-bundle .#checks.x86_64-linu
 They assert production bundles carry production environment labels and production edge hostnames. The production edge check rejects `beta.fishystuff.fish` in the generated Caddyfile.
 
 The `edge-service-bundle-production-gitops-handoff` package is the first production edge shape for the future GitOps path. It points Caddy at `/var/lib/fishystuff/gitops/served/production/site` and `/var/lib/fishystuff/gitops/served/production/cdn`, uses a stable local candidate API upstream, and leaves those content roots out of activation-created directories so it cannot replace GitOps-managed symlinks with empty directories. This is a bundle/check shape only; it is not deployed by the GitOps scripts above.
+
+Before any operator deploys that edge handoff bundle, inspect the exact local package with:
+
+```bash
+just gitops-production-edge-handoff-bundle
+```
+
+This builds or accepts a local `edge-service-bundle-production-gitops-handoff` path and verifies the Caddyfile uses GitOps-managed production served symlinks, loopback candidate API routing, credential-directory TLS files, CDN runtime cache headers, and no legacy `/srv/fishystuff`, fixed `/nix/store` serving root, or beta hostname. It is a local read-only/build check and performs no remote deployment or infrastructure mutation.
 
 ## Before GitOps May Serve Real Production
 

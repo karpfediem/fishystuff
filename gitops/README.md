@@ -60,6 +60,8 @@ just gitops-vm-test missing-cdn-runtime-file-refusal
 just gitops-vm-test missing-cdn-serving-manifest-entry-refusal
 just gitops-vm-test missing-cdn-retained-root-refusal
 just gitops-vm-test wrong-cdn-retained-root-refusal
+just gitops-production-edge-handoff-bundle
+just gitops-production-edge-handoff-bundle-test
 ```
 
 The flake checks added by this milestone are:
@@ -512,7 +514,7 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 
 `gitops-served-caddy-rollback-transition-vm` applies the same Caddy consumer to rollback. It verifies the active site and runtime manifest switch back to the previous release over HTTP, and that the CDN serving root still serves the rolled-away candidate runtime asset after rollback.
 
-`edge-service-bundle-production-gitops-handoff` is the production edge bundle shape for that same handoff. It keeps the production public hostnames, points the site/CDN roots at `/var/lib/fishystuff/gitops/served/production/{site,cdn}`, uses a stable local candidate API upstream, and disables activation-created content roots so the service bundle cannot overwrite GitOps-managed symlinks. It is checked by `.#checks.x86_64-linux.edge-service-bundle-production-gitops-handoff`.
+`edge-service-bundle-production-gitops-handoff` is the production edge bundle shape for that same handoff. It keeps the production public hostnames, points the site/CDN roots at `/var/lib/fishystuff/gitops/served/production/{site,cdn}`, uses a stable local candidate API upstream, and disables activation-created content roots so the service bundle cannot overwrite GitOps-managed symlinks. It is checked by `.#checks.x86_64-linux.edge-service-bundle-production-gitops-handoff`; `just gitops-production-edge-handoff-bundle` builds or validates the exact local bundle and rejects legacy `/srv/fishystuff`, fixed `/nix/store` serving roots, beta hostnames, or a wrong candidate API upstream.
 
 `gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses the `fishystuff_deploy dolt fetch-pin` helper, backed by Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM, to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
 
