@@ -171,6 +171,7 @@ just gitops-production-host-inventory
 just gitops-production-host-handoff-plan admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-preflight admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-preflight admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
+just gitops-production-operator-proof admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
 ```
 
 The bundle check builds or accepts a local `edge-service-bundle-production-gitops-handoff` path and verifies the Caddyfile uses GitOps-managed production served symlinks, loopback candidate API routing, credential-directory TLS files, CDN runtime cache headers, and no legacy `/srv/fishystuff`, fixed `/nix/store` serving root, or beta hostname. It also cross-checks `bundle.json`, the systemd unit, and the bundle artifact symlinks so the recorded Caddy executable/config, run/reload commands, TLS credentials, required served paths, and runtime overlays agree exactly. Finally, it runs `caddy validate` against the generated Caddyfile with temporary placeholder TLS credentials and isolated local state directories.
@@ -181,11 +182,14 @@ The host inventory command is read-only. It prints current local served/status/r
 
 The production preflight is the aggregate local operator proof. It verifies the handoff summary, activation draft, admission evidence, edge handoff bundle, and dry-run host plan together, then runs the fast helper regressions unless `run_helper_tests=false` is passed. When `served_state_dir` or `rollback_set_path` is supplied, it also derives retained rollback releases from the served rollback-set documents and compares release IDs, commits, closure paths, and Dolt materialization against the handoff summary. It intentionally does not apply the draft, install units, restart services, contact remote hosts, mutate DNS, or call cloud provider commands.
 
+The operator proof command runs host inventory, production preflight, and host handoff plan together, then writes a timestamped JSON artifact under `data/gitops/` by default. The artifact records command stdout/stderr, parsed key-value outputs, exact input paths, and hashes of the activation draft, handoff summary, and admission evidence. It is still local-only and does not apply the draft, install units, restart services, contact remote hosts, mutate DNS, or call cloud provider commands.
+
 The dry-run host plan has a fast local regression check:
 
 ```bash
 just gitops-production-host-handoff-plan-test
 just gitops-production-host-inventory-test
+just gitops-production-operator-proof-test
 just gitops-production-preflight-test
 ```
 
