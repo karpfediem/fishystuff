@@ -35,7 +35,7 @@ let
     ++ optional (cfg.requestTimeoutSecs != null) (toString cfg.requestTimeoutSecs)
     ++ cfg.extraArgs;
   systemdUnit = systemdBackend.mkSystemdUnit {
-    unitName = "fishystuff-api.service";
+    unitName = cfg.unitName;
     description = "Fishystuff API service";
     argv = serviceArgv;
     environment = helpers.stringifyEnvironment staticEnvironment;
@@ -73,6 +73,18 @@ in
   imports = [ ./bundle-module.nix ];
 
   options.fishystuff.api = {
+    serviceId = mkOption {
+      type = types.str;
+      default = "fishystuff-api";
+      description = "Service bundle identity for the API service.";
+    };
+
+    unitName = mkOption {
+      type = types.str;
+      default = "fishystuff-api.service";
+      description = "Systemd unit name for the API service.";
+    };
+
     package = mkOption {
       type = types.package;
       description = "Package containing the `fishystuff_server` executable.";
@@ -188,7 +200,7 @@ in
     process.argv = serviceArgv;
 
     bundle = {
-      id = "fishystuff-api";
+      id = cfg.serviceId;
 
       roots.store = [
         cfg.package

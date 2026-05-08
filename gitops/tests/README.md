@@ -54,6 +54,8 @@ nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-production-api-meta-vm
 nix build .#checks.x86_64-linux.gitops-production-edge-handoff-vm
+nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff
+nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm

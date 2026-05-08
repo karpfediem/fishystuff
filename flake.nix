@@ -213,8 +213,10 @@
           };
           apiServiceBundleFor =
             deploymentEnvironment:
+            bundleName:
+            extraApiConfig:
             mkServiceBundle {
-              name = "fishystuff-api";
+              name = bundleName;
               serviceModule = serviceModules.api;
               configuration.fishystuff.api = {
                 package = api;
@@ -223,23 +225,43 @@
                 runtimeEnvFile = "/run/fishystuff/api/env";
                 environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
                 environment.FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
-              };
+              } // extraApiConfig;
             };
-          apiServiceBundle = apiServiceBundleFor defaultDeploymentEnvironment;
-          apiServiceBundleProduction = apiServiceBundleFor "production";
+          apiServiceBundle = apiServiceBundleFor defaultDeploymentEnvironment "fishystuff-api" { };
+          apiServiceBundleProduction = apiServiceBundleFor "production" "fishystuff-api" { };
+          apiServiceBundleBetaGitopsHandoff = apiServiceBundleFor "beta" "fishystuff-beta-api" {
+            serviceId = "fishystuff-beta-api";
+            unitName = "fishystuff-beta-api.service";
+            port = 18192;
+            runtimeEnvFile = "/var/lib/fishystuff/gitops-beta/api/beta.env";
+          };
           doltServiceBundleFor =
             deploymentEnvironment:
+            bundleName:
+            extraDoltConfig:
             mkServiceBundle {
-              name = "fishystuff-dolt";
+              name = bundleName;
               serviceModule = serviceModules.dolt;
               configuration.fishystuff.dolt = {
                 dynamicUser = false;
                 runtimeEnvFile = "/run/fishystuff/api/env";
                 environment.FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = deploymentEnvironment;
-              };
+              } // extraDoltConfig;
             };
-          doltServiceBundle = doltServiceBundleFor defaultDeploymentEnvironment;
-          doltServiceBundleProduction = doltServiceBundleFor "production";
+          doltServiceBundle = doltServiceBundleFor defaultDeploymentEnvironment "fishystuff-dolt" { };
+          doltServiceBundleProduction = doltServiceBundleFor "production" "fishystuff-dolt" { };
+          doltServiceBundleBetaGitopsHandoff = doltServiceBundleFor "beta" "fishystuff-beta-dolt" {
+            serviceId = "fishystuff-beta-dolt";
+            unitName = "fishystuff-beta-dolt.service";
+            stateDirectoryName = "fishystuff/beta-dolt";
+            dataDir = "/var/lib/fishystuff/beta-dolt";
+            cfgDir = "/var/lib/fishystuff/beta-dolt/.doltcfg";
+            homeDir = "/var/lib/fishystuff/beta-dolt/home";
+            runtimeEnvFile = "/var/lib/fishystuff/gitops-beta/dolt/beta.env";
+            user = "fishystuff-beta-dolt";
+            group = "fishystuff-beta-dolt";
+            port = 3316;
+          };
           gitopsDesiredStateBetaValidate = pkgs.callPackage ./nix/packages/gitops-desired-state.nix {
             cluster = "beta";
             environment = "beta";
@@ -692,8 +714,10 @@
           serviceBundleChecks = import ./nix/tests/service-bundle-checks.nix {
             inherit
               apiServiceBundle
+              apiServiceBundleBetaGitopsHandoff
               apiServiceBundleProduction
               doltServiceBundle
+              doltServiceBundleBetaGitopsHandoff
               doltServiceBundleProduction
               edgeServiceBundle
               edgeServiceBundleBetaGitopsHandoff
@@ -1367,11 +1391,13 @@
             default = api;
             api-service-base-config = apiServiceBaseConfig;
             api-service-bundle = apiServiceBundle;
+            api-service-bundle-beta-gitops-handoff = apiServiceBundleBetaGitopsHandoff;
             api-service-bundle-production = apiServiceBundleProduction;
             cdn-base-content = cdnBaseContent;
             cdn-content = cdnContent;
             cdn-serving-root = cdnServingRoot;
             dolt-service-bundle = doltServiceBundle;
+            dolt-service-bundle-beta-gitops-handoff = doltServiceBundleBetaGitopsHandoff;
             dolt-service-bundle-production = doltServiceBundleProduction;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-beta-gitops-handoff = edgeServiceBundleBetaGitopsHandoff;

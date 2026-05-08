@@ -2,8 +2,10 @@
   pkgs,
   lib ? pkgs.lib,
   apiServiceBundle,
+  apiServiceBundleBetaGitopsHandoff,
   apiServiceBundleProduction,
   doltServiceBundle,
+  doltServiceBundleBetaGitopsHandoff,
   doltServiceBundleProduction,
   edgeServiceBundle,
   edgeServiceBundleBetaGitopsHandoff,
@@ -28,12 +30,16 @@ let
       requiredConfigLines ? [ ],
       forbiddenConfigFragments ? [ ],
       requiredUnitLines ? [ ],
+      requiredUnitFragments ? [ ],
       forbiddenUnitLines ? [ ],
       requiredBundleJsonChecks ? [ ],
       expectedReloadMode ? "restart",
       expectedRuntimeOverlayCount ? 0,
       requiredMaterializationAcquisition ? null,
       requiredMaterializationHandle ? null,
+      hasDoltRefresh ? false,
+      doltDataDir ? "/var/lib/fishystuff/dolt",
+      doltCfgDir ? "${doltDataDir}/.doltcfg",
     }:
     pkgs.runCommand name
       {
@@ -48,11 +54,13 @@ let
         jq -e '.artifacts["exe/main"].kind == "binary"' "$bundle_json" >/dev/null
         jq -e '.artifacts["config/base"].kind == "config"' "$bundle_json" >/dev/null
         jq -e '.artifacts["config/base"].destination == "${configDestination}"' "$bundle_json" >/dev/null
-        jq -e 'if .id == "fishystuff-dolt" then .artifacts["script/refresh"].kind == "script" else true end' "$bundle_json" >/dev/null
+        ${lib.optionalString hasDoltRefresh ''
+          jq -e '.artifacts["script/refresh"].kind == "script"' "$bundle_json" >/dev/null
+        ''}
         jq -e '.artifacts["systemd/unit"].kind == "systemd-unit"' "$bundle_json" >/dev/null
         jq -e '.artifacts["systemd/unit"].destination == "${unitName}"' "$bundle_json" >/dev/null
         jq -e '.artifacts["systemd/unit"].bundle_path == "artifacts/systemd/unit"' "$bundle_json" >/dev/null
-        if jq -e '.id == "fishystuff-dolt"' "$bundle_json" >/dev/null; then
+        if ${if hasDoltRefresh then "true" else "false"}; then
           jq -e '.artifacts["script/refresh"].bundle_path == "artifacts/script/refresh"' "$bundle_json" >/dev/null
         fi
         jq -e '.bundle_files.bundle_json == "bundle.json"' "$bundle_json" >/dev/null
@@ -92,15 +100,15 @@ let
         grep -Fx "$unit_path" "$store_paths" >/dev/null
         test -L "${bundle}/artifacts/systemd/unit"
         test "$(readlink -f "${bundle}/artifacts/systemd/unit")" = "$unit_path"
-        if jq -e '.id == "fishystuff-dolt"' "$bundle_json" >/dev/null; then
+        if ${if hasDoltRefresh then "true" else "false"}; then
           refresh_path=$(jq -r '.artifacts["script/refresh"].storePath' "$bundle_json")
           refresh_root=$(printf '%s\n' "$refresh_path" | cut -d/ -f1-4)
           grep -Fx "$refresh_root" "$store_paths" >/dev/null
           test -L "${bundle}/artifacts/script/refresh"
           test "$(readlink -f "${bundle}/artifacts/script/refresh")" = "$refresh_path"
           grep -F "ExecReload=" "$unit_path" >/dev/null
-          grep -Fx "data_dir: /var/lib/fishystuff/dolt/fishystuff" "$config_path" >/dev/null
-          grep -Fx "cfg_dir: /var/lib/fishystuff/dolt/.doltcfg" "$config_path" >/dev/null
+          grep -Fx "data_dir: ${doltDataDir}/fishystuff" "$config_path" >/dev/null
+          grep -Fx "cfg_dir: ${doltCfgDir}" "$config_path" >/dev/null
           grep -F "cp -R --no-preserve=ownership,mode" "$exe_path" >/dev/null
           if grep -F "cp -a" "$exe_path" >/dev/null; then
             echo "dolt start script must not preserve snapshot ownership or mode" >&2
@@ -114,25 +122,26 @@ let
         grep -F "ExecStart=" "$unit_path" >/dev/null
         grep -F "Restart=on-failure" "$unit_path" >/dev/null
         grep -F "WantedBy=multi-user.target" "$unit_path" >/dev/null
-        ${lib.concatStringsSep "\n" (map (line: "grep -F ${lib.escapeShellArg line} \"$config_path\" >/dev/null") requiredConfigLines)}
+        ${lib.concatStringsSep "\n" (map (line: "grep -F -- ${lib.escapeShellArg line} \"$config_path\" >/dev/null") requiredConfigLines)}
         ${lib.concatStringsSep "\n" (
           map (
             fragment:
             ''
-              if grep -F ${lib.escapeShellArg fragment} "$config_path" >/dev/null; then
+              if grep -F -- ${lib.escapeShellArg fragment} "$config_path" >/dev/null; then
                 echo "unexpected config fragment present: ${fragment}" >&2
                 exit 1
               fi
             ''
           ) forbiddenConfigFragments
         )}
-        ${lib.concatStringsSep "\n" (map (line: "grep -Fx ${lib.escapeShellArg line} \"$unit_path\" >/dev/null") requiredUnitLines)}
+        ${lib.concatStringsSep "\n" (map (line: "grep -Fx -- ${lib.escapeShellArg line} \"$unit_path\" >/dev/null") requiredUnitLines)}
+        ${lib.concatStringsSep "\n" (map (fragment: "grep -F -- ${lib.escapeShellArg fragment} \"$unit_path\" >/dev/null") requiredUnitFragments)}
         ${lib.concatStringsSep "\n" (map (expr: "jq -e ${lib.escapeShellArg expr} \"$bundle_json\" >/dev/null") requiredBundleJsonChecks)}
         ${lib.concatStringsSep "\n" (
           map (
             line:
             ''
-              if grep -Fx ${lib.escapeShellArg line} "$unit_path" >/dev/null; then
+              if grep -Fx -- ${lib.escapeShellArg line} "$unit_path" >/dev/null; then
                 echo "unexpected unit line present: ${line}" >&2
                 exit 1
               fi
@@ -241,6 +250,38 @@ in
     requiredMaterializationAcquisition = "push";
   };
 
+  api-service-bundle-beta-gitops-handoff = mkBundleCheck {
+    name = "api-service-bundle-beta-gitops-handoff-check";
+    bundle = apiServiceBundleBetaGitopsHandoff;
+    serviceId = "fishystuff-beta-api";
+    configDestination = "config.toml";
+    runtimeEnvTarget = "/var/lib/fishystuff/gitops-beta/api/beta.env";
+    unitName = "fishystuff-beta-api.service";
+    minArgvLength = 3;
+    requireSecretSpecPath = true;
+    requiredEnvironment = {
+      FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = "beta";
+      FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT = "beta";
+    };
+    requiredUnitLines = [
+      "DynamicUser=true"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
+    requiredUnitFragments = [
+      "--bind 127.0.0.1:18192"
+    ];
+    forbiddenUnitLines = [
+      "EnvironmentFile=-/run/fishystuff/api/env"
+      "EnvironmentFile=/run/fishystuff/api/env"
+      "User=fishystuff-api"
+      "Group=fishystuff-api"
+    ];
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "push";
+  };
+
   dolt-service-bundle = mkBundleCheck {
     name = "dolt-service-bundle-check";
     bundle = doltServiceBundle;
@@ -261,10 +302,51 @@ in
     ];
     requiredMaterializationHandle = "pkg/main";
     requiredMaterializationAcquisition = "substitute";
+    hasDoltRefresh = true;
     forbiddenUnitLines = [
       "DynamicUser=true"
       "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"
     ];
+    expectedReloadMode = "command";
+  };
+
+  dolt-service-bundle-beta-gitops-handoff = mkBundleCheck {
+    name = "dolt-service-bundle-beta-gitops-handoff-check";
+    bundle = doltServiceBundleBetaGitopsHandoff;
+    serviceId = "fishystuff-beta-dolt";
+    configDestination = "sql-server.yaml";
+    runtimeEnvTarget = "/var/lib/fishystuff/gitops-beta/dolt/beta.env";
+    unitName = "fishystuff-beta-dolt.service";
+    workingDirectory = "/var/lib/fishystuff/beta-dolt";
+    requiredEnvironment = {
+      FISHYSTUFF_DEPLOYMENT_ENVIRONMENT = "beta";
+      HOME = "/var/lib/fishystuff/beta-dolt/home";
+    };
+    requiredUnitLines = [
+      "User=fishystuff-beta-dolt"
+      "Group=fishystuff-beta-dolt"
+      "StateDirectory=fishystuff/beta-dolt"
+      "StateDirectoryMode=0750"
+    ];
+    requiredConfigLines = [
+      "port: 3316"
+    ];
+    forbiddenConfigFragments = [
+      "/var/lib/fishystuff/dolt"
+    ];
+    forbiddenUnitLines = [
+      "EnvironmentFile=-/run/fishystuff/api/env"
+      "EnvironmentFile=/run/fishystuff/api/env"
+      "User=fishystuff-dolt"
+      "Group=fishystuff-dolt"
+      "StateDirectory=fishystuff/dolt"
+      "DynamicUser=true"
+    ];
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "substitute";
+    hasDoltRefresh = true;
+    doltDataDir = "/var/lib/fishystuff/beta-dolt";
+    doltCfgDir = "/var/lib/fishystuff/beta-dolt/.doltcfg";
     expectedReloadMode = "command";
   };
 
@@ -288,6 +370,7 @@ in
     ];
     requiredMaterializationHandle = "pkg/main";
     requiredMaterializationAcquisition = "substitute";
+    hasDoltRefresh = true;
     forbiddenUnitLines = [
       "DynamicUser=true"
       "ReadWritePaths=/var/lib/fishystuff/dolt /var/lib/fishystuff/dolt/.doltcfg"

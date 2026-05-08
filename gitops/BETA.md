@@ -11,15 +11,46 @@ Hard boundary for the beta path:
 - no production public hostnames
 - no Cloudflare or Hetzner mutation without an explicit separate confirmation
 
-The first concrete artifact is the beta edge handoff bundle:
+The first concrete artifacts are the beta GitOps handoff service bundles:
 
 ```bash
+just gitops-beta-service-bundles
+just gitops-beta-service-bundles-test
 just gitops-beta-edge-handoff-bundle
 just gitops-beta-edge-handoff-bundle-test
+nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
+nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
 ```
 
-It validates:
+The API bundle validates:
+
+- service ID `fishystuff-beta-api`
+- systemd unit `fishystuff-beta-api.service`
+- beta runtime env file:
+  - `/var/lib/fishystuff/gitops-beta/api/beta.env`
+- beta API listener:
+  - `127.0.0.1:18192`
+- beta deployment and OTEL environment labels
+- no shared `/run/fishystuff/api/env`
+- no production API user/group lines
+
+The Dolt bundle validates:
+
+- service ID `fishystuff-beta-dolt`
+- systemd unit `fishystuff-beta-dolt.service`
+- beta runtime env file:
+  - `/var/lib/fishystuff/gitops-beta/dolt/beta.env`
+- beta data directory:
+  - `/var/lib/fishystuff/beta-dolt`
+- beta SQL listener:
+  - `127.0.0.1:3316`
+- beta runtime user/group:
+  - `fishystuff-beta-dolt`
+- no shared `/run/fishystuff/api/env`
+- no production Dolt user/group/state-directory lines
+
+The edge bundle validates:
 
 - service ID `fishystuff-beta-edge`
 - systemd unit `fishystuff-beta-edge.service`
@@ -40,8 +71,7 @@ The validator refuses production hostnames, production served roots, production 
 
 Next pieces to add:
 
-1. beta API and Dolt service bundle identities
-2. beta desired-state generation under `data/gitops/beta-*`
-3. beta activation/admission/proof wrappers parameterized from the production path
-4. a local-only beta host handoff plan
-5. only then, a separate manually confirmed host bootstrap path
+1. beta desired-state generation under `data/gitops/beta-*`
+2. beta activation/admission/proof wrappers parameterized from the production path
+3. a local-only beta host handoff plan
+4. only then, a separate manually confirmed host bootstrap path

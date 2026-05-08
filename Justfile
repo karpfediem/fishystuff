@@ -175,6 +175,14 @@ gitops-beta-edge-handoff-bundle bundle="auto":
 gitops-beta-edge-handoff-bundle-test:
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
 
+# Build the distinct beta GitOps API and Dolt service bundles. No remote mutation.
+gitops-beta-service-bundles:
+  nix build --no-link ".#api-service-bundle-beta-gitops-handoff" ".#dolt-service-bundle-beta-gitops-handoff"
+
+# Run local Nix checks for the distinct beta GitOps API, Dolt, and edge service bundles.
+gitops-beta-service-bundles-test system="x86_64-linux":
+  nix build --no-link ".#checks.{{system}}.api-service-bundle-beta-gitops-handoff" ".#checks.{{system}}.dolt-service-bundle-beta-gitops-handoff" ".#checks.{{system}}.edge-service-bundle-beta-gitops-handoff"
+
 # Print the dry-run host-local production GitOps handoff plan. No remote mutation.
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"

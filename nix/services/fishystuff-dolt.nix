@@ -248,7 +248,7 @@ let
     ++ map toString cfg.environmentFiles;
   serviceArgv = [ (lib.getExe startScript) ];
   systemdUnit = systemdBackend.mkSystemdUnit {
-    unitName = "fishystuff-dolt.service";
+    unitName = cfg.unitName;
     description = "Fishystuff Dolt SQL service";
     argv = serviceArgv;
     environment = staticEnvironment;
@@ -287,6 +287,18 @@ in
   imports = [ ./bundle-module.nix ];
 
   options.fishystuff.dolt = {
+    serviceId = mkOption {
+      type = types.str;
+      default = "fishystuff-dolt";
+      description = "Service bundle identity for the Dolt SQL service.";
+    };
+
+    unitName = mkOption {
+      type = types.str;
+      default = "fishystuff-dolt.service";
+      description = "Systemd unit name for the Dolt SQL service.";
+    };
+
     package = mkOption {
       type = types.package;
       default = pkgs.dolt;
@@ -445,7 +457,7 @@ in
     process.argv = serviceArgv;
 
     bundle = {
-      id = "fishystuff-dolt";
+      id = cfg.serviceId;
 
       roots.store = [
         cfg.package
