@@ -3,6 +3,7 @@
   mgmtPackage ? pkgs.mgmt,
   fishystuffServerPackage,
   fishystuffDeployPackage,
+  edgeServiceBundleProductionGitopsHandoff,
   gitopsSrc,
   generatedServeFixture,
   productionApiMetaFixture,
@@ -123,6 +124,16 @@
       previousDoltServiceArtifact
       previousSiteArtifact
       siteArtifact
+      ;
+  };
+
+  gitops-production-edge-handoff-vm = import ./production-edge-handoff.nix {
+    inherit
+      edgeServiceBundleProductionGitopsHandoff
+      fishystuffDeployPackage
+      gitopsSrc
+      mgmtPackage
+      pkgs
       ;
   };
 

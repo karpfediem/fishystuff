@@ -44,6 +44,7 @@ nix build .#checks.x86_64-linux.gitops-generated-served-candidate-vm
 nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-production-api-meta-vm
+nix build .#checks.x86_64-linux.gitops-production-edge-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
@@ -105,6 +106,7 @@ just gitops-vm-test generated-served-candidate
 just gitops-vm-test production-vm-serve-fixture
 just gitops-vm-test production-rollback-transition
 just gitops-vm-test production-api-meta
+just gitops-vm-test production-edge-handoff
 just gitops-vm-test served-symlink-transition
 just gitops-vm-test served-caddy-handoff
 just gitops-vm-test served-caddy-rollback-transition
@@ -162,6 +164,8 @@ just gitops-vm-test wrong-cdn-retained-root-refusal
 `gitops-production-rollback-transition-vm` boots a local NixOS VM with the generated production rollback desired state. It checks the VM-local `production` served state after rollback, verifies the candidate release remains retained as the primary rollback target, and runs the read-only served-state helper against `environment=production`.
 
 `gitops-production-api-meta-vm` boots a local NixOS VM with the generated production `local-apply` API-meta desired-state shape, then writes an exact runtime desired state from a local file-backed Dolt remote. It pins active and retained rollback commits into `/var/lib/fishystuff/gitops/dolt-cache`, starts an isolated loopback candidate API service against the pinned active release ref, checks `/api/v1/meta` for the exact release identity and Dolt commit, and verifies the served state remains local to the VM.
+
+`gitops-production-edge-handoff-vm` boots a local NixOS VM with the actual `edge-service-bundle-production-gitops-handoff` Caddyfile. It serves GitOps-managed production symlinks under `/var/lib/fishystuff/gitops/served/production/{site,cdn}`, proxies `api.fishystuff.fish` to a loopback API-meta fixture, verifies cache headers for CDN runtime assets, and confirms the bundle does not use `/srv/fishystuff` or beta hostnames.
 
 `gitops-served-symlink-transition-vm` boots a local NixOS VM and runs two served desired states in sequence. It checks that `/var/lib/fishystuff/gitops-test/served/local-test/{site,cdn}` and the route selection document move from the previous release to the candidate release through mgmt reconciliation only.
 

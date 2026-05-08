@@ -699,6 +699,7 @@
             gitopsSrc = ./gitops;
             fishystuffServerPackage = api;
             fishystuffDeployPackage = fishystuffDeploy;
+            edgeServiceBundleProductionGitopsHandoff = edgeServiceBundleProductionGitopsHandoff;
             mgmtPackage = mgmtGitopsPackage;
             generatedServeFixture = {
               desiredState = gitopsDesiredStateVmServeFixture;
