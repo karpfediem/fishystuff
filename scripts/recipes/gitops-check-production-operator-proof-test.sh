@@ -75,12 +75,14 @@ bash scripts/recipes/gitops-production-operator-proof.sh \
 proof_file="$(awk -F= '$1 == "gitops_production_operator_proof_ok" { print $2 }' "${root}/proof.stdout")"
 test -n "$proof_file"
 test -f "$proof_file"
+read -r proof_sha256 _ < <(sha256sum "$proof_file")
 
 bash scripts/recipes/gitops-check-production-operator-proof.sh \
   "$proof_file" \
   86400 \
   "$proof_dir" >"${root}/check.stdout"
 grep -F "gitops_production_operator_proof_check_ok=${proof_file}" "${root}/check.stdout" >/dev/null
+grep -F "gitops_production_operator_proof_sha256=${proof_sha256}" "${root}/check.stdout" >/dev/null
 grep -F "gitops_production_operator_proof_environment=production" "${root}/check.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/check.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/check.stdout" >/dev/null

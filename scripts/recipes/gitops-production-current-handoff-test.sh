@@ -200,6 +200,80 @@ write_admission_observations() {
     }' >"$site_cdn_probe_path"
 }
 
+write_apply_operator_proof() {
+  local proof_file="$1"
+  local draft_file="$2"
+  local summary_file="$3"
+  local admission_file="$4"
+  local draft_sha256=""
+  local summary_sha256=""
+  local admission_sha256=""
+  local created_at=""
+
+  read -r draft_sha256 _ < <(sha256sum "$draft_file")
+  read -r summary_sha256 _ < <(sha256sum "$summary_file")
+  read -r admission_sha256 _ < <(sha256sum "$admission_file")
+  created_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+  jq -n \
+    --arg created_at "$created_at" \
+    --arg proof_file "$proof_file" \
+    --arg draft_file "$draft_file" \
+    --arg draft_sha256 "$draft_sha256" \
+    --arg summary_file "$summary_file" \
+    --arg summary_sha256 "$summary_sha256" \
+    --arg admission_file "$admission_file" \
+    --arg admission_sha256 "$admission_sha256" \
+    '{
+      schema: "fishystuff.gitops.production-operator-proof.v1",
+      created_at: $created_at,
+      environment: "production",
+      output_path: $proof_file,
+      inputs: {
+        draft_file: $draft_file,
+        draft_sha256: $draft_sha256,
+        summary_file: $summary_file,
+        summary_sha256: $summary_sha256,
+        admission_file: $admission_file,
+        admission_sha256: $admission_sha256
+      },
+      commands: {
+        inventory: {
+          success: true,
+          kv: {
+            gitops_production_host_inventory_ok: "production",
+            edge_bundle_check_ok: "true",
+            edge_caddy_validate: "true",
+            remote_deploy_performed: "false",
+            infrastructure_mutation_performed: "false"
+          }
+        },
+        preflight: {
+          success: true,
+          kv: {
+            gitops_production_preflight_ok: $draft_file,
+            handoff_summary: $summary_file,
+            admission_evidence: $admission_file,
+            remote_deploy_performed: "false",
+            infrastructure_mutation_performed: "false"
+          }
+        },
+        host_handoff_plan: {
+          success: true,
+          kv: {
+            gitops_production_host_handoff_plan_ok: $draft_file,
+            handoff_summary: $summary_file,
+            edge_caddy_validate: "true",
+            remote_deploy_performed: "false",
+            infrastructure_mutation_performed: "false"
+          }
+        }
+      },
+      remote_deploy_performed: false,
+      infrastructure_mutation_performed: false
+    }' >"$proof_file"
+}
+
 write_retained_json() {
   local path="$1"
   local api_closure="$2"
@@ -792,6 +866,9 @@ run_fixture_handoff() {
     printf '[gitops-production-current-handoff-test] activation review did not print draft sha256\n' >&2
     exit 1
   fi
+  operator_proof="$root/production-operator-proof.json"
+  write_apply_operator_proof "$operator_proof" "$activation_draft" "$summary" "$admission_evidence"
+  read -r operator_proof_sha256 _ < <(sha256sum "$operator_proof")
 
   expect_fail_contains \
     "activation apply refuses without opt-in" \
@@ -804,8 +881,8 @@ run_fixture_handoff() {
       "$deploy_bin"
 
   expect_fail_contains \
-    "activation apply requires reviewed draft hash" \
-    "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256" \
+    "activation apply requires operator proof file" \
+    "gitops-apply-activation-draft requires proof_file or FISHYSTUFF_GITOPS_OPERATOR_PROOF_FILE" \
     env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
       bash scripts/recipes/gitops-apply-activation-draft.sh \
         "$activation_draft" \
@@ -815,31 +892,68 @@ run_fixture_handoff() {
         "$deploy_bin"
 
   expect_fail_contains \
-    "activation apply rejects stale reviewed draft hash" \
-    "FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256 does not match activation draft" \
-    env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+    "activation apply requires reviewed operator proof hash" \
+    "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256" \
+    env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
       bash scripts/recipes/gitops-apply-activation-draft.sh \
         "$activation_draft" \
         "$summary" \
         "$admission_evidence" \
         auto \
-        "$deploy_bin"
+        "$deploy_bin" \
+        45 \
+        "$operator_proof"
+
+  expect_fail_contains \
+    "activation apply rejects stale operator proof hash" \
+    "FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256 does not match operator proof" \
+    env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      bash scripts/recipes/gitops-apply-activation-draft.sh \
+        "$activation_draft" \
+        "$summary" \
+        "$admission_evidence" \
+        auto \
+        "$deploy_bin" \
+        45 \
+        "$operator_proof"
+
+  proof_draft_copy="$root/proof-draft-copy.desired.json"
+  proof_path_mismatch="$root/proof-path-mismatch.json"
+  cp "$activation_draft" "$proof_draft_copy"
+  write_apply_operator_proof "$proof_path_mismatch" "$proof_draft_copy" "$summary" "$admission_evidence"
+  read -r proof_path_mismatch_sha256 _ < <(sha256sum "$proof_path_mismatch")
+  expect_fail_contains \
+    "activation apply rejects proof draft path mismatch" \
+    "operator proof draft_file does not match activation draft" \
+    env FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256="$proof_path_mismatch_sha256" \
+      bash scripts/recipes/gitops-apply-activation-draft.sh \
+        "$activation_draft" \
+        "$summary" \
+        "$admission_evidence" \
+        auto \
+        "$deploy_bin" \
+        45 \
+        "$proof_path_mismatch"
 
   write_fake_mgmt_apply "$apply_fake_mgmt" "$apply_fake_mgmt_marker"
   env \
     FISHYSTUFF_FAKE_MGMT_MARKER="$apply_fake_mgmt_marker" \
     FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 \
     FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
-    FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256="$activation_draft_sha256" \
+    FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256="$operator_proof_sha256" \
     bash scripts/recipes/gitops-apply-activation-draft.sh \
       "$activation_draft" \
       "$summary" \
       "$admission_evidence" \
       "$apply_fake_mgmt" \
       "$deploy_bin" \
+      45 \
+      "$operator_proof" \
       >"$root/apply-activation.stdout" \
       2>"$root/apply-activation.stderr"
   grep -F "gitops_activation_apply_ok=$activation_draft" "$root/apply-activation.stdout" >/dev/null
+  grep -F "gitops_activation_apply_operator_proof=$operator_proof" "$root/apply-activation.stdout" >/dev/null
+  grep -F "gitops_activation_apply_operator_proof_sha256=$operator_proof_sha256" "$root/apply-activation.stdout" >/dev/null
   grep -F "gitops_activation_apply_draft_sha256=$activation_draft_sha256" "$root/apply-activation.stdout" >/dev/null
   grep -F "remote_deploy_performed=false" "$root/apply-activation.stdout" >/dev/null
   grep -F "infrastructure_mutation_performed=false" "$root/apply-activation.stdout" >/dev/null

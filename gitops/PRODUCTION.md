@@ -98,13 +98,15 @@ The review command is read-only. It prints the exact release ID, release identit
 The guarded local apply consumer is intentionally awkward to run:
 
 ```bash
+just gitops-production-operator-proof admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
+just gitops-check-production-operator-proof proof_file=<operator proof file from previous command>
 FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 \
 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 \
-FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=<activation_draft_sha256 from review output> \
-  just gitops-apply-activation-draft admission_file=/tmp/fishystuff-production-admission.json
+FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<gitops_production_operator_proof_sha256 from proof check> \
+  just gitops-apply-activation-draft admission_file=/tmp/fishystuff-production-admission.json proof_file=<checked operator proof file>
 ```
 
-It re-runs the activation review, requires the reviewed draft SHA-256 to match the file it is about to consume, then runs a local one-shot mgmt reconciliation of `gitops/main.mcl` with the activation draft. It does not SSH to remote hosts, call the old deploy script, mutate DNS, or run cloud provider commands. It is still not the recommended production path until the remaining real-host service/Caddy handoff is in place.
+It re-runs the operator proof checker and activation review, requires the reviewed operator proof SHA-256 to match the proof artifact it is about to consume, requires that proof to name the same activation draft, handoff summary, and admission evidence, then runs a local one-shot mgmt reconciliation of `gitops/main.mcl` with the activation draft. It does not SSH to remote hosts, call the old deploy script, mutate DNS, or run cloud provider commands. It is still not the recommended production path until the remaining real-host service/Caddy handoff is in place.
 
 After a guarded local reconciliation, verify the local served documents against the same checked tuple:
 

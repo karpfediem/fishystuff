@@ -92,6 +92,7 @@ if [[ ! -f "$proof_file" ]]; then
   echo "production operator proof does not exist: ${proof_file}" >&2
   exit 2
 fi
+read -r proof_sha256 _ < <(sha256sum "$proof_file")
 
 if ! jq -e '
   .schema == "fishystuff.gitops.production-operator-proof.v1"
@@ -161,6 +162,7 @@ require_current_sha256 "summary" "$summary_file" "$summary_sha256"
 require_current_sha256 "admission" "$admission_file" "$admission_sha256"
 
 printf 'gitops_production_operator_proof_check_ok=%s\n' "$proof_file"
+printf 'gitops_production_operator_proof_sha256=%s\n' "$proof_sha256"
 printf 'gitops_production_operator_proof_environment=%s\n' "$(jq -er '.environment' "$proof_file")"
 printf 'gitops_production_operator_proof_created_at=%s\n' "$created_at"
 printf 'gitops_production_operator_proof_age_seconds=%s\n' "$age_seconds"

@@ -10,6 +10,8 @@ admission_file="$(normalize_named_arg admission_file "${3-}")"
 mgmt_bin="$(normalize_named_arg mgmt_bin "${4-auto}")"
 deploy_bin="$(normalize_named_arg deploy_bin "${5-auto}")"
 converged_timeout="$(normalize_named_arg converged_timeout "${6-45}")"
+operator_proof_file="$(normalize_named_arg proof_file "${7-}")"
+operator_proof_max_age_seconds="$(normalize_named_arg proof_max_age_seconds "${8-86400}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -34,21 +36,23 @@ require_command jq
 require_command sha256sum
 require_positive_int converged_timeout "$converged_timeout"
 
+absolute_path() {
+  local path="$1"
+  if [[ "$path" == /* ]]; then
+    printf '%s' "$path"
+    return
+  fi
+  printf '%s/%s' "$RECIPE_REPO_ROOT" "$path"
+}
+
 if [[ "$draft_file" != /* ]]; then
-  draft_file="${RECIPE_REPO_ROOT}/${draft_file}"
+  draft_file="$(absolute_path "$draft_file")"
 fi
 if [[ "$summary_file" != /* ]]; then
-  summary_file="${RECIPE_REPO_ROOT}/${summary_file}"
+  summary_file="$(absolute_path "$summary_file")"
 fi
 if [[ -z "$admission_file" ]]; then
   admission_file="${FISHYSTUFF_GITOPS_ADMISSION_EVIDENCE_FILE:-}"
-fi
-if [[ -z "$admission_file" ]]; then
-  echo "gitops-apply-activation-draft requires admission_file or FISHYSTUFF_GITOPS_ADMISSION_EVIDENCE_FILE" >&2
-  exit 2
-fi
-if [[ "$admission_file" != /* ]]; then
-  admission_file="${RECIPE_REPO_ROOT}/${admission_file}"
 fi
 
 if [[ "${FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY:-}" != "1" ]]; then
@@ -59,16 +63,85 @@ if [[ "${FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY:-}" != "1" ]]; then
   echo "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1" >&2
   exit 2
 fi
-if [[ -z "${FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256:-}" ]]; then
-  echo "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256 from gitops-review-activation-draft" >&2
+if [[ -z "$operator_proof_file" ]]; then
+  operator_proof_file="${FISHYSTUFF_GITOPS_OPERATOR_PROOF_FILE:-}"
+fi
+if [[ -z "$operator_proof_file" ]]; then
+  echo "gitops-apply-activation-draft requires proof_file or FISHYSTUFF_GITOPS_OPERATOR_PROOF_FILE" >&2
+  exit 2
+fi
+operator_proof_file="$(absolute_path "$operator_proof_file")"
+if [[ ! -f "$operator_proof_file" ]]; then
+  echo "production operator proof does not exist: ${operator_proof_file}" >&2
+  exit 2
+fi
+if [[ -z "${FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256:-}" ]]; then
+  echo "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256 from gitops-check-production-operator-proof" >&2
+  exit 2
+fi
+
+read -r operator_proof_sha256 _ < <(sha256sum "$operator_proof_file")
+if [[ "$FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256" != "$operator_proof_sha256" ]]; then
+  echo "FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256 does not match operator proof: expected ${operator_proof_sha256}" >&2
+  exit 2
+fi
+
+proof_check_output="$(mktemp)"
+cleanup() {
+  rm -f "$proof_check_output"
+}
+trap cleanup EXIT
+
+bash scripts/recipes/gitops-check-production-operator-proof.sh "$operator_proof_file" "$operator_proof_max_age_seconds" "" >"$proof_check_output"
+
+proof_draft_file="$(absolute_path "$(jq -er '.inputs.draft_file' "$operator_proof_file")")"
+proof_summary_file="$(absolute_path "$(jq -er '.inputs.summary_file' "$operator_proof_file")")"
+proof_admission_file="$(absolute_path "$(jq -er '.inputs.admission_file' "$operator_proof_file")")"
+proof_draft_sha256="$(jq -er '.inputs.draft_sha256' "$operator_proof_file")"
+proof_summary_sha256="$(jq -er '.inputs.summary_sha256' "$operator_proof_file")"
+proof_admission_sha256="$(jq -er '.inputs.admission_sha256' "$operator_proof_file")"
+
+if [[ -z "$admission_file" ]]; then
+  admission_file="$proof_admission_file"
+fi
+if [[ "$admission_file" != /* ]]; then
+  admission_file="$(absolute_path "$admission_file")"
+fi
+
+if [[ "$draft_file" != "$proof_draft_file" ]]; then
+  echo "operator proof draft_file does not match activation draft" >&2
+  echo "apply: ${draft_file}" >&2
+  echo "proof: ${proof_draft_file}" >&2
+  exit 2
+fi
+if [[ "$summary_file" != "$proof_summary_file" ]]; then
+  echo "operator proof summary_file does not match handoff summary" >&2
+  echo "apply: ${summary_file}" >&2
+  echo "proof: ${proof_summary_file}" >&2
+  exit 2
+fi
+if [[ "$admission_file" != "$proof_admission_file" ]]; then
+  echo "operator proof admission_file does not match admission evidence" >&2
+  echo "apply: ${admission_file}" >&2
+  echo "proof: ${proof_admission_file}" >&2
   exit 2
 fi
 
 bash scripts/recipes/gitops-review-activation-draft.sh "$draft_file" "$summary_file" "$admission_file" "$deploy_bin"
 
 read -r draft_sha256 _ < <(sha256sum "$draft_file")
-if [[ "$FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256" != "$draft_sha256" ]]; then
-  echo "FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256 does not match activation draft: expected ${draft_sha256}" >&2
+read -r summary_sha256 _ < <(sha256sum "$summary_file")
+read -r admission_sha256 _ < <(sha256sum "$admission_file")
+if [[ "$draft_sha256" != "$proof_draft_sha256" ]]; then
+  echo "operator proof draft_sha256 does not match activation draft: expected ${draft_sha256}" >&2
+  exit 2
+fi
+if [[ "$summary_sha256" != "$proof_summary_sha256" ]]; then
+  echo "operator proof summary_sha256 does not match handoff summary: expected ${summary_sha256}" >&2
+  exit 2
+fi
+if [[ "$admission_sha256" != "$proof_admission_sha256" ]]; then
+  echo "operator proof admission_sha256 does not match admission evidence: expected ${admission_sha256}" >&2
   exit 2
 fi
 
@@ -89,6 +162,8 @@ export FISHYSTUFF_GITOPS_STATE_FILE="$draft_file"
 "$mgmt_bin" run --tmp-prefix --no-pgp lang --no-watch --converged-timeout "$converged_timeout" main.mcl
 
 printf 'gitops_activation_apply_ok=%s\n' "$draft_file"
+printf 'gitops_activation_apply_operator_proof=%s\n' "$operator_proof_file"
+printf 'gitops_activation_apply_operator_proof_sha256=%s\n' "$operator_proof_sha256"
 printf 'gitops_activation_apply_draft_sha256=%s\n' "$draft_sha256"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
