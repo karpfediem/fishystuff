@@ -24,6 +24,7 @@ elif [[ "$bundle" != /* ]]; then
   bundle="${RECIPE_REPO_ROOT}/${bundle}"
 fi
 require_command jq
+require_command openssl
 
 if [[ ! -d "$bundle" ]]; then
   echo "production GitOps edge handoff bundle does not exist: ${bundle}" >&2
@@ -116,6 +117,55 @@ reject_caddy_line() {
   fi
 }
 
+reject_unit_line() {
+  local label="$1"
+  local needle="$2"
+  if grep -F "$needle" "$systemd_unit" >/dev/null; then
+    echo "production GitOps edge handoff systemd unit must not contain ${label}: ${needle}" >&2
+    exit 2
+  fi
+}
+
+validate_caddyfile_with_placeholder_tls() {
+  local tmp_dir=""
+  local credentials_dir=""
+  local caddy_validate_log=""
+
+  tmp_dir="$(mktemp -d)"
+  credentials_dir="${tmp_dir}/credentials"
+  caddy_validate_log="${tmp_dir}/caddy-validate.log"
+  mkdir -p "$credentials_dir" "${tmp_dir}/home" "${tmp_dir}/xdg-config" "${tmp_dir}/xdg-data"
+  if ! openssl req \
+    -x509 \
+    -newkey rsa:2048 \
+    -nodes \
+    -keyout "${credentials_dir}/privkey.pem" \
+    -out "${credentials_dir}/fullchain.pem" \
+    -days 1 \
+    -subj "/CN=fishystuff.fish" \
+    -addext "subjectAltName=DNS:fishystuff.fish,DNS:api.fishystuff.fish,DNS:cdn.fishystuff.fish,DNS:telemetry.fishystuff.fish" \
+    >"${tmp_dir}/openssl.log" 2>&1; then
+    echo "production GitOps edge handoff placeholder TLS generation failed" >&2
+    cat "${tmp_dir}/openssl.log" >&2
+    rm -rf "$tmp_dir"
+    exit 2
+  fi
+
+  if ! env \
+    CREDENTIALS_DIRECTORY="$credentials_dir" \
+    HOME="${tmp_dir}/home" \
+    XDG_CONFIG_HOME="${tmp_dir}/xdg-config" \
+    XDG_DATA_HOME="${tmp_dir}/xdg-data" \
+    "$caddy_bin_store" validate --config "$caddyfile_store" --adapter caddyfile \
+    >"$caddy_validate_log" 2>&1; then
+    echo "production GitOps edge handoff Caddyfile failed caddy validate" >&2
+    cat "$caddy_validate_log" >&2
+    rm -rf "$tmp_dir"
+    exit 2
+  fi
+  rm -rf "$tmp_dir"
+}
+
 require_caddy_line "manual TLS mode" "auto_https off"
 require_caddy_line "site vhost" "https://fishystuff.fish {"
 require_caddy_line "API vhost" "https://api.fishystuff.fish {"
@@ -141,6 +191,10 @@ require_unit_line "TLS private key credential" "LoadCredential=privkey.pem:/run/
 require_unit_line "bind service capability" "AmbientCapabilities=CAP_NET_BIND_SERVICE"
 require_unit_line "strict system protection" "ProtectSystem=strict"
 
+reject_unit_line "legacy serving root" "/srv/fishystuff"
+reject_unit_line "beta hostname" "beta.fishystuff.fish"
+reject_unit_line "GitOps served root in unit command" "/var/lib/fishystuff/gitops/served"
+
 require_bundle_metadata "fishystuff-edge service ID" '.id == "fishystuff-edge"'
 require_bundle_metadata "GitOps site required path" '.activation.requiredPaths | index("/var/lib/fishystuff/gitops/served/production/site") != null'
 require_bundle_metadata "GitOps CDN required path" '.activation.requiredPaths | index("/var/lib/fishystuff/gitops/served/production/cdn") != null'
@@ -155,6 +209,8 @@ require_bundle_metadata "supervision reload argv" '.supervision.reload.mode == "
 require_bundle_metadata "TLS fullchain runtime overlay" '.runtimeOverlays[]? | select(.targetPath == "/run/fishystuff/edge/tls/fullchain.pem" and .required == true and .secret == false and .onChange == "restart")'
 require_bundle_metadata "TLS private key runtime overlay" '.runtimeOverlays[]? | select(.targetPath == "/run/fishystuff/edge/tls/privkey.pem" and .required == true and .secret == true and .onChange == "restart")'
 
+validate_caddyfile_with_placeholder_tls
+
 printf 'gitops_edge_handoff_bundle_ok=%s\n' "$bundle"
 printf 'gitops_edge_handoff_caddyfile=%s\n' "$caddyfile"
 printf 'gitops_edge_handoff_executable=%s\n' "$caddy_bin"
@@ -162,6 +218,7 @@ printf 'gitops_edge_handoff_systemd_unit=%s\n' "$systemd_unit"
 printf 'gitops_edge_handoff_caddyfile_store=%s\n' "$caddyfile_store"
 printf 'gitops_edge_handoff_executable_store=%s\n' "$caddy_bin_store"
 printf 'gitops_edge_handoff_systemd_unit_store=%s\n' "$systemd_unit_store"
+printf 'gitops_edge_handoff_caddy_validate=%s\n' "true"
 printf 'gitops_edge_handoff_site_root=%s\n' "/var/lib/fishystuff/gitops/served/production/site"
 printf 'gitops_edge_handoff_cdn_root=%s\n' "/var/lib/fishystuff/gitops/served/production/cdn"
 printf 'gitops_edge_handoff_api_upstream=%s\n' "127.0.0.1:18092"

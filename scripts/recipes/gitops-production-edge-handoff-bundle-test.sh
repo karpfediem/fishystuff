@@ -23,6 +23,10 @@ make_bundle() {
   mkdir -p "${bundle}/artifacts/exe" "${bundle}/artifacts/config" "${bundle}/artifacts/systemd"
   cat >"${bundle}/artifacts/exe/main" <<'EOF'
 #!/usr/bin/env bash
+if [[ "${FISHYSTUFF_FAKE_CADDY_VALIDATE_FAIL:-}" == "1" && "${1:-}" == "validate" ]]; then
+  echo "fake caddy validate failure" >&2
+  exit 17
+fi
 exit 0
 EOF
   chmod +x "${bundle}/artifacts/exe/main"
@@ -180,6 +184,7 @@ grep -F "gitops_edge_handoff_bundle_ok=${valid}" "${root}/valid.stdout" >/dev/nu
 grep -F "gitops_edge_handoff_site_root=/var/lib/fishystuff/gitops/served/production/site" "${root}/valid.stdout" >/dev/null
 grep -F "gitops_edge_handoff_cdn_root=/var/lib/fishystuff/gitops/served/production/cdn" "${root}/valid.stdout" >/dev/null
 grep -F "gitops_edge_handoff_api_upstream=127.0.0.1:18092" "${root}/valid.stdout" >/dev/null
+grep -F "gitops_edge_handoff_caddy_validate=true" "${root}/valid.stdout" >/dev/null
 pass "valid bundle"
 
 beta="${root}/beta"
@@ -247,5 +252,13 @@ expect_fail_contains \
   "reject missing GitOps required paths" \
   "bundle metadata is missing GitOps site required path" \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_required_path"
+
+bad_caddy_validate="${root}/bad-caddy-validate"
+make_bundle "$bad_caddy_validate"
+expect_fail_contains \
+  "reject Caddy validation failure" \
+  "Caddyfile failed caddy validate" \
+  env FISHYSTUFF_FAKE_CADDY_VALIDATE_FAIL=1 \
+    bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_caddy_validate"
 
 printf '[gitops-production-edge-handoff-bundle-test] %s checks passed\n' "$pass_count"
