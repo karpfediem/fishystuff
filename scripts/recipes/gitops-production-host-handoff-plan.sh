@@ -167,19 +167,24 @@ printf 'refusal_condition_02=do not proceed unless activation review, admission 
 printf 'refusal_condition_03=do not proceed unless /api/v1/meta on %s reports the release identity above\n' "$api_upstream"
 printf 'refusal_condition_04=do not proceed unless GitOps served symlinks point at the site/CDN closure tuple above after local apply\n'
 printf 'refusal_condition_05=do not proceed unless %s and %s exist and are current production certificates\n' "/run/fishystuff/edge/tls/fullchain.pem" "/run/fishystuff/edge/tls/privkey.pem"
+printf 'refusal_condition_06=do not install or restart the edge service unless just gitops-production-proof-index proof_dir=data/gitops require_complete=true passes after served-proof generation\n'
 printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<checked operator proof sha256> just gitops-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
 printf 'guarded_host_action_02=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
 printf 'guarded_host_action_03=systemctl daemon-reload\n'
 printf 'guarded_host_action_04=systemctl restart fishystuff-edge.service\n'
 printf 'post_handoff_read_only_check_01=just gitops-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
-printf 'post_handoff_read_only_check_02=systemctl is-active --quiet fishystuff-edge.service\n'
-printf 'post_handoff_read_only_check_03=inspect public site/API/CDN/telemetry through production host routing before considering this handoff complete\n'
+printf 'post_handoff_audit_step_01=just gitops-production-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+printf 'post_handoff_read_only_check_02=just gitops-production-proof-index proof_dir=data/gitops require_complete=true\n'
+printf 'post_handoff_read_only_check_03=systemctl is-active --quiet fishystuff-edge.service\n'
+printf 'post_handoff_read_only_check_04=inspect public site/API/CDN/telemetry through production host routing before considering this handoff complete\n'
 printf 'planned_host_step_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<checked operator proof sha256> just gitops-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
 printf 'planned_host_step_02=just gitops-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
-printf 'planned_host_step_03=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
-printf 'planned_host_step_04=systemctl daemon-reload\n'
-printf 'planned_host_step_05=systemctl restart fishystuff-edge.service\n'
-printf 'planned_host_step_06=systemctl is-active --quiet fishystuff-edge.service\n'
-printf 'planned_host_step_07=inspect public site/API/CDN/telemetry through production host routing before considering this handoff complete\n'
+printf 'planned_host_step_03=just gitops-production-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+printf 'planned_host_step_04=just gitops-production-proof-index proof_dir=data/gitops require_complete=true\n'
+printf 'planned_host_step_05=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
+printf 'planned_host_step_06=systemctl daemon-reload\n'
+printf 'planned_host_step_07=systemctl restart fishystuff-edge.service\n'
+printf 'planned_host_step_08=systemctl is-active --quiet fishystuff-edge.service\n'
+printf 'planned_host_step_09=inspect public site/API/CDN/telemetry through production host routing before considering this handoff complete\n'
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

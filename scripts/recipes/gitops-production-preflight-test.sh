@@ -110,7 +110,8 @@ grep -F "helper_regressions_run=false" "${root}/preflight.stdout" >/dev/null
 grep -F "host_handoff_plan_begin" "${root}/preflight.stdout" >/dev/null
 grep -F "edge_caddy_validate=true" "${root}/preflight.stdout" >/dev/null
 grep -F "guarded_host_action_04=systemctl restart fishystuff-edge.service" "${root}/preflight.stdout" >/dev/null
-grep -F "planned_host_step_05=systemctl restart fishystuff-edge.service" "${root}/preflight.stdout" >/dev/null
+grep -F "planned_host_step_04=just gitops-production-proof-index proof_dir=data/gitops require_complete=true" "${root}/preflight.stdout" >/dev/null
+grep -F "planned_host_step_07=systemctl restart fishystuff-edge.service" "${root}/preflight.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/preflight.stdout" >/dev/null
 pass "valid production preflight"
 

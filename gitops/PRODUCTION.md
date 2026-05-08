@@ -113,10 +113,10 @@ After a guarded local reconciliation, verify the local served documents against 
 ```bash
 just gitops-verify-activation-served admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-served-proof admission_file=/tmp/fishystuff-production-admission.json proof_file=<checked operator proof file>
-just gitops-production-proof-index
+just gitops-production-proof-index require_complete=true
 ```
 
-The verifier re-checks the activation draft, then validates status, active selection, rollback-set, rollback readiness, admission, route, and root-readiness documents under the selected local state directories. It is read-only and ties the served state back to the activation draft's generation, release ID, host, API upstream, and admission URL. The served-proof command also re-checks the operator proof and writes a timestamped JSON artifact that records the operator proof hash plus the served verification output. The proof index prints the latest local operator/served proof chain and reports whether the served proof links back to the latest checked operator proof.
+The verifier re-checks the activation draft, then validates status, active selection, rollback-set, rollback readiness, admission, route, and root-readiness documents under the selected local state directories. It is read-only and ties the served state back to the activation draft's generation, release ID, host, API upstream, and admission URL. The served-proof command also re-checks the operator proof and writes a timestamped JSON artifact that records the operator proof hash plus the served verification output. The proof index prints the latest local operator/served proof chain and, with `require_complete=true`, fails unless the latest served proof links back to the latest checked operator proof.
 
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
@@ -178,12 +178,12 @@ just gitops-production-preflight admission_file=/tmp/fishystuff-production-admis
 just gitops-production-operator-proof admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
 just gitops-check-production-operator-proof
 just gitops-production-served-proof admission_file=/tmp/fishystuff-production-admission.json proof_file=<checked operator proof file>
-just gitops-production-proof-index
+just gitops-production-proof-index require_complete=true
 ```
 
 The bundle check builds or accepts a local `edge-service-bundle-production-gitops-handoff` path and verifies the Caddyfile uses GitOps-managed production served symlinks, loopback candidate API routing, credential-directory TLS files, CDN runtime cache headers, and no legacy `/srv/fishystuff`, fixed `/nix/store` serving root, or beta hostname. It also cross-checks `bundle.json`, the systemd unit, and the bundle artifact symlinks so the recorded Caddy executable/config, run/reload commands, TLS credentials, required served paths, and runtime overlays agree exactly. Finally, it runs `caddy validate` against the generated Caddyfile with temporary placeholder TLS credentials and isolated local state directories.
 
-The host handoff plan composes the reviewed activation draft, admission evidence, and verified edge bundle metadata into the exact host-local steps an operator would later run: guarded local GitOps apply, served-state verification, `fishystuff-edge.service` unit install, systemd daemon reload, edge restart, and final public smoke inspection. It prints the edge Caddy validation result, read-only readiness checks, guarded host actions, post-handoff read-only checks, and legacy `planned_host_step_*` lines for compatibility. It does not write host state, install the unit, restart Caddy, SSH to a host, mutate DNS, or call cloud provider commands.
+The host handoff plan composes the reviewed activation draft, admission evidence, and verified edge bundle metadata into the exact host-local steps an operator would later run: guarded local GitOps apply, served-state verification, served-proof generation, strict proof-index verification, `fishystuff-edge.service` unit install, systemd daemon reload, edge restart, and final public smoke inspection. It prints the edge Caddy validation result, read-only readiness checks, guarded host actions, post-handoff read-only checks, the post-handoff audit step, and legacy `planned_host_step_*` lines for compatibility. It does not write host state, install the unit, restart Caddy, SSH to a host, mutate DNS, or call cloud provider commands.
 
 The host inventory command is read-only. It prints current local served/status/rollback/admission/route paths, served site/CDN symlink targets, installed `fishystuff-edge.service` provenance, edge bundle validation proof when a bundle is supplied, and certificate/key metadata without printing private key material.
 

@@ -498,9 +498,13 @@ grep -F "read_only_readiness_check_04=just gitops-production-edge-handoff-bundle
 grep -F "guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<checked operator proof sha256> just gitops-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked operator proof file>" "${root}/plan.stdout" >/dev/null
 grep -F "guarded_host_action_04=systemctl restart fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "post_handoff_read_only_check_01=just gitops-verify-activation-served draft_file=${draft}" "${root}/plan.stdout" >/dev/null
+grep -F "post_handoff_audit_step_01=just gitops-production-served-proof draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked operator proof file>" "${root}/plan.stdout" >/dev/null
+grep -F "post_handoff_read_only_check_02=just gitops-production-proof-index proof_dir=data/gitops require_complete=true" "${root}/plan.stdout" >/dev/null
 grep -F "systemd_unit_install_path=/etc/systemd/system/fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "planned_host_step_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<checked operator proof sha256> just gitops-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked operator proof file>" "${root}/plan.stdout" >/dev/null
-grep -F "planned_host_step_05=systemctl restart fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
+grep -F "planned_host_step_03=just gitops-production-served-proof draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked operator proof file>" "${root}/plan.stdout" >/dev/null
+grep -F "planned_host_step_04=just gitops-production-proof-index proof_dir=data/gitops require_complete=true" "${root}/plan.stdout" >/dev/null
+grep -F "planned_host_step_07=systemctl restart fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/plan.stdout" >/dev/null
 pass "valid host handoff plan"
 
