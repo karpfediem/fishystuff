@@ -126,6 +126,10 @@ write_inventory_state() {
   }' >"${run_dir}/routes/production.json"
 }
 
+if [[ "${FISHYSTUFF_GITOPS_OPERATOR_PROOF_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 root="$(mktemp -d)"
 make_fixture "$root"
 make_edge_bundle "${root}/edge-bundle"

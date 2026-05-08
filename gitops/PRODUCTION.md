@@ -172,6 +172,7 @@ just gitops-production-host-handoff-plan admission_file=/tmp/fishystuff-producti
 just gitops-production-preflight admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-preflight admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
 just gitops-production-operator-proof admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
+just gitops-check-production-operator-proof
 ```
 
 The bundle check builds or accepts a local `edge-service-bundle-production-gitops-handoff` path and verifies the Caddyfile uses GitOps-managed production served symlinks, loopback candidate API routing, credential-directory TLS files, CDN runtime cache headers, and no legacy `/srv/fishystuff`, fixed `/nix/store` serving root, or beta hostname. It also cross-checks `bundle.json`, the systemd unit, and the bundle artifact symlinks so the recorded Caddy executable/config, run/reload commands, TLS credentials, required served paths, and runtime overlays agree exactly. Finally, it runs `caddy validate` against the generated Caddyfile with temporary placeholder TLS credentials and isolated local state directories.
@@ -184,12 +185,15 @@ The production preflight is the aggregate local operator proof. It verifies the 
 
 The operator proof command runs host inventory, production preflight, and host handoff plan together, then writes a timestamped JSON artifact under `data/gitops/` by default. The artifact records command stdout/stderr, parsed key-value outputs, exact input paths, and hashes of the activation draft, handoff summary, and admission evidence. It is still local-only and does not apply the draft, install units, restart services, contact remote hosts, mutate DNS, or call cloud provider commands.
 
+The operator proof checker validates an existing proof artifact before it is consumed. It requires the expected proof schema, fresh `created_at`, successful local inventory/preflight/handoff-plan outputs, explicit no-mutation flags, and matching current SHA-256 hashes for the activation draft, handoff summary, and admission evidence files.
+
 The dry-run host plan has a fast local regression check:
 
 ```bash
 just gitops-production-host-handoff-plan-test
 just gitops-production-host-inventory-test
 just gitops-production-operator-proof-test
+just gitops-check-production-operator-proof-test
 just gitops-production-preflight-test
 ```
 
