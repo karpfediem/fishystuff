@@ -471,6 +471,10 @@ make_fixture() {
   printf '%s\n' "$admission_file" >"${root}/admission.path"
 }
 
+if [[ "${FISHYSTUFF_GITOPS_HOST_HANDOFF_PLAN_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 root="$(mktemp -d)"
 make_fixture "$root"
 make_edge_bundle "${root}/edge-bundle"

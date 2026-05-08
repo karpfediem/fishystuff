@@ -79,6 +79,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+  bash scripts/recipes/gitops-production-preflight-test.sh
 
 # Validate local GitOps served status, active selection, rollback set, and rollback readiness documents.
 gitops-check-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" host="" release_id="":
@@ -156,9 +157,17 @@ gitops-production-edge-handoff-bundle-test:
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
 
+# Run the local-only production GitOps preflight over exact handoff, admission, and edge artifacts.
+gitops-production-preflight draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto" run_helper_tests="true":
+  bash scripts/recipes/gitops-production-preflight.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{run_helper_tests}}"
+
 # Run fast local regression checks for the dry-run production host handoff plan.
 gitops-production-host-handoff-plan-test:
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+
+# Run fast local regression checks for the production GitOps preflight wrapper.
+gitops-production-preflight-test:
+  bash scripts/recipes/gitops-production-preflight-test.sh
 
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
