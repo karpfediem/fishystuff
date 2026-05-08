@@ -62,6 +62,10 @@ EOF
 
 make_edge_bundle() {
   local bundle="$1"
+  local caddy_bin_real=""
+  local caddyfile_real=""
+  local systemd_unit_real=""
+
   mkdir -p "${bundle}/artifacts/exe" "${bundle}/artifacts/config" "${bundle}/artifacts/systemd"
   cat >"${bundle}/artifacts/exe/main" <<'EOF'
 #!/usr/bin/env bash
@@ -98,24 +102,66 @@ https://telemetry.fishystuff.fish {
   reverse_proxy 127.0.0.1:4820
 }
 EOF
-  cat >"${bundle}/artifacts/systemd/unit" <<'EOF'
+  caddy_bin_real="$(readlink -f "${bundle}/artifacts/exe/main")"
+  caddyfile_real="$(readlink -f "${bundle}/artifacts/config/base")"
+  systemd_unit_real="$(readlink -f "${bundle}/artifacts/systemd/unit")"
+  cat >"${bundle}/artifacts/systemd/unit" <<EOF
 [Unit]
 Description=Fishystuff public edge
+After=network-online.target
+Wants=network-online.target fishystuff-api.service fishystuff-vector.service
 [Service]
-ExecStart=/bundle/caddy run --config /bundle/Caddyfile --adapter caddyfile
+Type=simple
+DynamicUser=true
+ExecStart=${caddy_bin_real} run --config ${caddyfile_real} --adapter caddyfile
+ExecReload=${caddy_bin_real} reload --config ${caddyfile_real} --adapter caddyfile --address 127.0.0.1:2019 --force
+Restart=on-failure
+RestartSec=5s
+LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem
+LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+ProtectSystem=strict
 [Install]
 WantedBy=multi-user.target
 EOF
-  jq -n '{
+  jq -n \
+    --arg caddy_bin "$caddy_bin_real" \
+    --arg caddyfile "$caddyfile_real" \
+    --arg systemd_unit "$systemd_unit_real" \
+    '{
     id: "fishystuff-edge",
     activation: {
+      directories: [
+        {
+          path: "/run/fishystuff/edge/tls",
+          create: true
+        }
+      ],
       requiredPaths: [
         "/var/lib/fishystuff/gitops/served/production/site",
         "/var/lib/fishystuff/gitops/served/production/cdn"
-      ]
+      ],
+      writablePaths: [],
+      writable_paths: []
+    },
+    artifacts: {
+      "exe/main": {
+        storePath: $caddy_bin,
+        executable: true
+      },
+      "config/base": {
+        storePath: $caddyfile,
+        destination: "Caddyfile"
+      },
+      "systemd/unit": {
+        storePath: $systemd_unit,
+        destination: "fishystuff-edge.service"
+      }
     },
     backends: {
       systemd: {
+        daemon_reload: true,
         units: [
           {
             name: "fishystuff-edge.service",
@@ -129,13 +175,24 @@ EOF
     runtimeOverlays: [
       {
         targetPath: "/run/fishystuff/edge/tls/fullchain.pem",
-        required: true
+        required: true,
+        secret: false,
+        onChange: "restart"
       },
       {
         targetPath: "/run/fishystuff/edge/tls/privkey.pem",
-        required: true
+        required: true,
+        secret: true,
+        onChange: "restart"
       }
-    ]
+    ],
+    supervision: {
+      argv: [$caddy_bin, "run", "--config", $caddyfile, "--adapter", "caddyfile"],
+      reload: {
+        mode: "command",
+        argv: [$caddy_bin, "reload", "--config", $caddyfile, "--adapter", "caddyfile", "--address", "127.0.0.1:2019", "--force"]
+      }
+    }
   }' >"${bundle}/bundle.json"
 }
 
@@ -451,8 +508,9 @@ expect_fail_contains \
     "${root}/fishystuff_deploy"
 
 missing_bundle_metadata="${root}/missing-bundle-metadata"
-cp -R "${root}/edge-bundle" "$missing_bundle_metadata"
-jq 'del(.activation.requiredPaths)' "${root}/edge-bundle/bundle.json" >"${missing_bundle_metadata}/bundle.json"
+make_edge_bundle "$missing_bundle_metadata"
+jq 'del(.activation.requiredPaths)' "${missing_bundle_metadata}/bundle.json" >"${missing_bundle_metadata}/bundle.json.tmp"
+mv "${missing_bundle_metadata}/bundle.json.tmp" "${missing_bundle_metadata}/bundle.json"
 expect_fail_contains \
   "reject missing bundle required paths" \
   "bundle metadata is missing GitOps site required path" \

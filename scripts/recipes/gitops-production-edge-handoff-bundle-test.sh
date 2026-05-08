@@ -16,7 +16,11 @@ pass() {
 
 make_bundle() {
   local bundle="$1"
-  mkdir -p "${bundle}/artifacts/exe" "${bundle}/artifacts/config"
+  local caddy_bin_real=""
+  local caddyfile_real=""
+  local systemd_unit_real=""
+
+  mkdir -p "${bundle}/artifacts/exe" "${bundle}/artifacts/config" "${bundle}/artifacts/systemd"
   cat >"${bundle}/artifacts/exe/main" <<'EOF'
 #!/usr/bin/env bash
 exit 0
@@ -52,6 +56,98 @@ https://telemetry.fishystuff.fish {
   reverse_proxy 127.0.0.1:4820
 }
 EOF
+  caddy_bin_real="$(readlink -f "${bundle}/artifacts/exe/main")"
+  caddyfile_real="$(readlink -f "${bundle}/artifacts/config/base")"
+  systemd_unit_real="$(readlink -f "${bundle}/artifacts/systemd/unit")"
+  cat >"${bundle}/artifacts/systemd/unit" <<EOF
+[Unit]
+Description=Fishystuff public edge
+After=network-online.target
+Wants=network-online.target fishystuff-api.service fishystuff-vector.service
+[Service]
+Type=simple
+DynamicUser=true
+ExecStart=${caddy_bin_real} run --config ${caddyfile_real} --adapter caddyfile
+ExecReload=${caddy_bin_real} reload --config ${caddyfile_real} --adapter caddyfile --address 127.0.0.1:2019 --force
+Restart=on-failure
+RestartSec=5s
+LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem
+LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+ProtectSystem=strict
+[Install]
+WantedBy=multi-user.target
+EOF
+  jq -n \
+    --arg caddy_bin "$caddy_bin_real" \
+    --arg caddyfile "$caddyfile_real" \
+    --arg systemd_unit "$systemd_unit_real" \
+    '{
+      id: "fishystuff-edge",
+      activation: {
+        directories: [
+          {
+            path: "/run/fishystuff/edge/tls",
+            create: true
+          }
+        ],
+        requiredPaths: [
+          "/var/lib/fishystuff/gitops/served/production/site",
+          "/var/lib/fishystuff/gitops/served/production/cdn"
+        ],
+        writablePaths: [],
+        writable_paths: []
+      },
+      artifacts: {
+        "exe/main": {
+          storePath: $caddy_bin,
+          executable: true
+        },
+        "config/base": {
+          storePath: $caddyfile,
+          destination: "Caddyfile"
+        },
+        "systemd/unit": {
+          storePath: $systemd_unit,
+          destination: "fishystuff-edge.service"
+        }
+      },
+      backends: {
+        systemd: {
+          daemon_reload: true,
+          units: [
+            {
+              name: "fishystuff-edge.service",
+              install_path: "/etc/systemd/system/fishystuff-edge.service",
+              state: "running",
+              startup: "enabled"
+            }
+          ]
+        }
+      },
+      runtimeOverlays: [
+        {
+          targetPath: "/run/fishystuff/edge/tls/fullchain.pem",
+          required: true,
+          secret: false,
+          onChange: "restart"
+        },
+        {
+          targetPath: "/run/fishystuff/edge/tls/privkey.pem",
+          required: true,
+          secret: true,
+          onChange: "restart"
+        }
+      ],
+      supervision: {
+        argv: [$caddy_bin, "run", "--config", $caddyfile, "--adapter", "caddyfile"],
+        reload: {
+          mode: "command",
+          argv: [$caddy_bin, "reload", "--config", $caddyfile, "--adapter", "caddyfile", "--address", "127.0.0.1:2019", "--force"]
+        }
+      }
+    }' >"${bundle}/bundle.json"
 }
 
 expect_fail_contains() {
@@ -87,7 +183,7 @@ grep -F "gitops_edge_handoff_api_upstream=127.0.0.1:18092" "${root}/valid.stdout
 pass "valid bundle"
 
 beta="${root}/beta"
-cp -R "$valid" "$beta"
+make_bundle "$beta"
 printf '\n# beta.fishystuff.fish must never be present here\n' >>"${beta}/artifacts/config/base"
 expect_fail_contains \
   "reject beta hostname" \
@@ -95,7 +191,7 @@ expect_fail_contains \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$beta"
 
 legacy="${root}/legacy"
-cp -R "$valid" "$legacy"
+make_bundle "$legacy"
 printf '\n# /srv/fishystuff must never be present here\n' >>"${legacy}/artifacts/config/base"
 expect_fail_contains \
   "reject legacy serving root" \
@@ -103,7 +199,7 @@ expect_fail_contains \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$legacy"
 
 store_root="${root}/store-root"
-cp -R "$valid" "$store_root"
+make_bundle "$store_root"
 printf '\nroot * /nix/store/example-site\n' >>"${store_root}/artifacts/config/base"
 expect_fail_contains \
   "reject fixed store serving root" \
@@ -111,7 +207,7 @@ expect_fail_contains \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$store_root"
 
 wrong_api="${root}/wrong-api"
-cp -R "$valid" "$wrong_api"
+make_bundle "$wrong_api"
 perl -0pi -e 's/reverse_proxy 127\.0\.0\.1:18092/reverse_proxy 127.0.0.1:18091/' "${wrong_api}/artifacts/config/base"
 expect_fail_contains \
   "reject wrong API upstream" \
@@ -119,11 +215,37 @@ expect_fail_contains \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$wrong_api"
 
 missing_exe="${root}/missing-exe"
-cp -R "$valid" "$missing_exe"
+make_bundle "$missing_exe"
 rm -f "${missing_exe}/artifacts/exe/main"
 expect_fail_contains \
   "reject missing executable" \
   "Caddy executable is missing or not executable" \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$missing_exe"
+
+bad_metadata="${root}/bad-metadata"
+make_bundle "$bad_metadata"
+jq '.artifacts."exe/main".storePath = "/tmp/wrong-caddy"' "${bad_metadata}/bundle.json" >"${bad_metadata}/bundle.json.tmp"
+mv "${bad_metadata}/bundle.json.tmp" "${bad_metadata}/bundle.json"
+expect_fail_contains \
+  "reject artifact metadata mismatch" \
+  "Caddy executable artifact path mismatch" \
+  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_metadata"
+
+bad_reload="${root}/bad-reload"
+make_bundle "$bad_reload"
+perl -0pi -e 's/--address 127\.0\.0\.1:2019 --force/--address 127.0.0.1:2020 --force/' "${bad_reload}/artifacts/systemd/unit"
+expect_fail_contains \
+  "reject systemd reload mismatch" \
+  "systemd unit is missing Caddy ExecReload" \
+  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_reload"
+
+bad_required_path="${root}/bad-required-path"
+make_bundle "$bad_required_path"
+jq 'del(.activation.requiredPaths)' "${bad_required_path}/bundle.json" >"${bad_required_path}/bundle.json.tmp"
+mv "${bad_required_path}/bundle.json.tmp" "${bad_required_path}/bundle.json"
+expect_fail_contains \
+  "reject missing GitOps required paths" \
+  "bundle metadata is missing GitOps site required path" \
+  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_required_path"
 
 printf '[gitops-production-edge-handoff-bundle-test] %s checks passed\n' "$pass_count"
