@@ -1210,6 +1210,10 @@ run_fixture_from_served() {
   fi
 }
 
+if [[ "${FISHYSTUFF_GITOPS_CURRENT_HANDOFF_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 deploy_bin="$(require_deploy_bin)"
 
 expect_fail_contains \

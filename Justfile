@@ -82,6 +82,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-production-host-inventory-test.sh
   bash scripts/recipes/gitops-production-operator-proof-test.sh
   bash scripts/recipes/gitops-check-production-operator-proof-test.sh
+  bash scripts/recipes/gitops-production-served-proof-test.sh
   bash scripts/recipes/gitops-production-preflight-test.sh
 
 # Validate local GitOps served status, active selection, rollback set, and rollback readiness documents.
@@ -135,6 +136,10 @@ gitops-apply-activation-draft draft_file="data/gitops/production-activation.draf
 # Verify local served GitOps state still matches the checked production activation draft.
 gitops-verify-activation-served draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops":
   bash scripts/recipes/gitops-verify-activation-served.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}"
+
+# Write a timestamped proof that served state matches the checked activation and operator proof.
+gitops-production-served-proof output_dir="data/gitops" draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" proof_max_age_seconds="86400":
+  bash scripts/recipes/gitops-production-served-proof.sh "{{output_dir}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{proof_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}" "{{proof_max_age_seconds}}"
 
 # Write activation admission evidence from observed API meta, DB-backed, and site/CDN probe outputs.
 gitops-write-activation-admission-evidence output="data/gitops/production-admission.evidence.json" summary_file="data/gitops/production-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
@@ -191,6 +196,10 @@ gitops-production-operator-proof-test:
 # Run fast local regression checks for production GitOps operator proof checks.
 gitops-check-production-operator-proof-test:
   bash scripts/recipes/gitops-check-production-operator-proof-test.sh
+
+# Run fast local regression checks for production GitOps served proofs.
+gitops-production-served-proof-test:
+  bash scripts/recipes/gitops-production-served-proof-test.sh
 
 # Run fast local regression checks for the production GitOps preflight wrapper.
 gitops-production-preflight-test:
