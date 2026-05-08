@@ -167,6 +167,7 @@ Before any operator deploys that edge handoff bundle, inspect the exact local pa
 
 ```bash
 just gitops-production-edge-handoff-bundle
+just gitops-production-host-inventory
 just gitops-production-host-handoff-plan admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-preflight admission_file=/tmp/fishystuff-production-admission.json
 just gitops-production-preflight admission_file=/tmp/fishystuff-production-admission.json served_state_dir=/var/lib/fishystuff/gitops
@@ -176,12 +177,15 @@ The bundle check builds or accepts a local `edge-service-bundle-production-gitop
 
 The host handoff plan composes the reviewed activation draft, admission evidence, and verified edge bundle metadata into the exact host-local steps an operator would later run: guarded local GitOps apply, served-state verification, `fishystuff-edge.service` unit install, systemd daemon reload, edge restart, and final public smoke inspection. It prints the edge Caddy validation result, read-only readiness checks, guarded host actions, post-handoff read-only checks, and legacy `planned_host_step_*` lines for compatibility. It does not write host state, install the unit, restart Caddy, SSH to a host, mutate DNS, or call cloud provider commands.
 
+The host inventory command is read-only. It prints current local served/status/rollback/admission/route paths, served site/CDN symlink targets, installed `fishystuff-edge.service` provenance, edge bundle validation proof when a bundle is supplied, and certificate/key metadata without printing private key material.
+
 The production preflight is the aggregate local operator proof. It verifies the handoff summary, activation draft, admission evidence, edge handoff bundle, and dry-run host plan together, then runs the fast helper regressions unless `run_helper_tests=false` is passed. When `served_state_dir` or `rollback_set_path` is supplied, it also derives retained rollback releases from the served rollback-set documents and compares release IDs, commits, closure paths, and Dolt materialization against the handoff summary. It intentionally does not apply the draft, install units, restart services, contact remote hosts, mutate DNS, or call cloud provider commands.
 
 The dry-run host plan has a fast local regression check:
 
 ```bash
 just gitops-production-host-handoff-plan-test
+just gitops-production-host-inventory-test
 just gitops-production-preflight-test
 ```
 

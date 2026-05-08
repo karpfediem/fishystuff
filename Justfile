@@ -79,6 +79,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+  bash scripts/recipes/gitops-production-host-inventory-test.sh
   bash scripts/recipes/gitops-production-preflight-test.sh
 
 # Validate local GitOps served status, active selection, rollback set, and rollback readiness documents.
@@ -157,6 +158,10 @@ gitops-production-edge-handoff-bundle-test:
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
 
+# Print read-only local production GitOps host inventory. No remote mutation.
+gitops-production-host-inventory state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" edge_bundle="auto" systemd_unit_path="/etc/systemd/system/fishystuff-edge.service" tls_fullchain_path="/run/fishystuff/edge/tls/fullchain.pem" tls_privkey_path="/run/fishystuff/edge/tls/privkey.pem" environment="production":
+  bash scripts/recipes/gitops-production-host-inventory.sh "{{state_dir}}" "{{run_dir}}" "{{edge_bundle}}" "{{systemd_unit_path}}" "{{tls_fullchain_path}}" "{{tls_privkey_path}}" "{{environment}}"
+
 # Run the local-only production GitOps preflight over exact handoff, admission, edge, and optional served rollback artifacts.
 gitops-production-preflight draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto" run_helper_tests="true" served_state_dir="" rollback_set_path="":
   bash scripts/recipes/gitops-production-preflight.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{run_helper_tests}}" "{{served_state_dir}}" "{{rollback_set_path}}"
@@ -164,6 +169,10 @@ gitops-production-preflight draft_file="data/gitops/production-activation.draft.
 # Run fast local regression checks for the dry-run production host handoff plan.
 gitops-production-host-handoff-plan-test:
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+
+# Run fast local regression checks for production GitOps host inventory.
+gitops-production-host-inventory-test:
+  bash scripts/recipes/gitops-production-host-inventory-test.sh
 
 # Run fast local regression checks for the production GitOps preflight wrapper.
 gitops-production-preflight-test:
