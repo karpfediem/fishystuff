@@ -7,6 +7,7 @@
   doltServiceBundleProduction,
   edgeServiceBundle,
   edgeServiceBundleProduction,
+  edgeServiceBundleProductionGitopsHandoff,
   vectorAgentServiceBundle,
   vectorAgentServiceBundleProduction,
 }:
@@ -27,6 +28,7 @@ let
       forbiddenConfigFragments ? [ ],
       requiredUnitLines ? [ ],
       forbiddenUnitLines ? [ ],
+      requiredBundleJsonChecks ? [ ],
       expectedReloadMode ? "restart",
       expectedRuntimeOverlayCount ? 0,
       requiredMaterializationAcquisition ? null,
@@ -124,6 +126,7 @@ let
           ) forbiddenConfigFragments
         )}
         ${lib.concatStringsSep "\n" (map (line: "grep -Fx ${lib.escapeShellArg line} \"$unit_path\" >/dev/null") requiredUnitLines)}
+        ${lib.concatStringsSep "\n" (map (expr: "jq -e ${lib.escapeShellArg expr} \"$bundle_json\" >/dev/null") requiredBundleJsonChecks)}
         ${lib.concatStringsSep "\n" (
           map (
             line:
@@ -365,6 +368,52 @@ in
       "PrivateTmp=true"
       "ProtectSystem=strict"
       "NoNewPrivileges=true"
+    ];
+  };
+
+  edge-service-bundle-production-gitops-handoff = mkBundleCheck {
+    name = "edge-service-bundle-production-gitops-handoff-check";
+    bundle = edgeServiceBundleProductionGitopsHandoff;
+    serviceId = "fishystuff-edge";
+    configDestination = "Caddyfile";
+    unitName = "fishystuff-edge.service";
+    minArgvLength = 5;
+    expectedReloadMode = "command";
+    expectedRuntimeOverlayCount = 2;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "push";
+    requiredConfigLines = [
+      "https://fishystuff.fish {"
+      "https://api.fishystuff.fish {"
+      "https://cdn.fishystuff.fish {"
+      "https://telemetry.fishystuff.fish {"
+      "root * /var/lib/fishystuff/gitops/served/production/site"
+      "root * /var/lib/fishystuff/gitops/served/production/cdn"
+      "reverse_proxy 127.0.0.1:18092"
+      "@runtime_manifest path /map/runtime-manifest.json"
+      "/map/fishystuff_ui_bevy.*.js"
+      "/map/fishystuff_ui_bevy_bg.*.wasm"
+      "header Cache-Control \"no-store\""
+      "header Cache-Control \"public, max-age=31536000, immutable\""
+    ];
+    forbiddenConfigFragments = [
+      "beta.fishystuff.fish"
+      "/srv/fishystuff"
+    ];
+    requiredUnitLines = [
+      "LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem"
+      "LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem"
+      "AmbientCapabilities=CAP_NET_BIND_SERVICE"
+      "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
+    requiredBundleJsonChecks = [
+      ''(.activation.directories | map(.path) | index("/var/lib/fishystuff/gitops/served/production/site") | not)''
+      ''(.activation.directories | map(.path) | index("/var/lib/fishystuff/gitops/served/production/cdn") | not)''
+      ''(.activation.requiredPaths | index("/var/lib/fishystuff/gitops/served/production/site")) != null''
+      ''(.activation.requiredPaths | index("/var/lib/fishystuff/gitops/served/production/cdn")) != null''
     ];
   };
 

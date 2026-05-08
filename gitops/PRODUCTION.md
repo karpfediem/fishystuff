@@ -153,11 +153,13 @@ These checks guard common beta/prod mixups in service bundles:
 ```bash
 nix build .#checks.x86_64-linux.api-service-bundle .#checks.x86_64-linux.api-service-bundle-production --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle .#checks.x86_64-linux.dolt-service-bundle-production --no-link
-nix build .#checks.x86_64-linux.edge-service-bundle .#checks.x86_64-linux.edge-service-bundle-production --no-link
+nix build .#checks.x86_64-linux.edge-service-bundle .#checks.x86_64-linux.edge-service-bundle-production .#checks.x86_64-linux.edge-service-bundle-production-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.vector-agent-service-bundle .#checks.x86_64-linux.vector-agent-service-bundle-production --no-link
 ```
 
 They assert production bundles carry production environment labels and production edge hostnames. The production edge check rejects `beta.fishystuff.fish` in the generated Caddyfile.
+
+The `edge-service-bundle-production-gitops-handoff` package is the first production edge shape for the future GitOps path. It points Caddy at `/var/lib/fishystuff/gitops/served/production/site` and `/var/lib/fishystuff/gitops/served/production/cdn`, uses a stable local candidate API upstream, and leaves those content roots out of activation-created directories so it cannot replace GitOps-managed symlinks with empty directories. This is a bundle/check shape only; it is not deployed by the GitOps scripts above.
 
 ## Before GitOps May Serve Real Production
 
@@ -166,7 +168,7 @@ The VM-only equivalents now exist for production-shaped generated serve, rollbac
 - A real production Dolt remote or mirror policy for `fetch_pin`, with operator-selected exact active and retained commits.
 - A rollback set with rooted artifacts and retained CDN roots, validated before active symlink or route handoff.
 - A real-host desired-state package from exact API, Dolt service, site, finalized CDN serving root, and at least one retained rollback release.
-- A real-host service/Caddy handoff that uses production-local paths and does not reuse beta service state.
+- Real-host deployment wiring for the production GitOps Caddy handoff bundle.
 
 Activation should still be only the small reconciled switch:
 

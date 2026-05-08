@@ -266,6 +266,12 @@ in
       description = "Runtime CDN payload root served from the edge.";
     };
 
+    manageContentRoots = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether activation should create siteRoot and cdnRoot directories. Disable when these paths are GitOps-managed symlinks.";
+    };
+
     siteAddress = mkOption {
       type = types.str;
       default = "http://beta.fishystuff.fish";
@@ -385,29 +391,30 @@ in
       };
 
       activation = {
-        directories = [
-          (helpers.mkActivationDirectory {
-            purpose = "site-root";
-            path = "/srv/fishystuff";
-            owner = "root";
-            group = "root";
-            mode = "0755";
-          })
-          (helpers.mkActivationDirectory {
-            purpose = "site-root";
-            path = cfg.siteRoot;
-            owner = "root";
-            group = "root";
-            mode = "0755";
-          })
-          (helpers.mkActivationDirectory {
-            purpose = "cdn-root";
-            path = cfg.cdnRoot;
-            owner = "root";
-            group = "root";
-            mode = "0755";
-          })
-        ]
+        directories =
+          lib.optionals cfg.manageContentRoots [
+            (helpers.mkActivationDirectory {
+              purpose = "site-root";
+              path = "/srv/fishystuff";
+              owner = "root";
+              group = "root";
+              mode = "0755";
+            })
+            (helpers.mkActivationDirectory {
+              purpose = "site-root";
+              path = cfg.siteRoot;
+              owner = "root";
+              group = "root";
+              mode = "0755";
+            })
+            (helpers.mkActivationDirectory {
+              purpose = "cdn-root";
+              path = cfg.cdnRoot;
+              owner = "root";
+              group = "root";
+              mode = "0755";
+            })
+          ]
         ++ optional cfg.tlsEnable (
           helpers.mkActivationDirectory {
             purpose = "tls-root";

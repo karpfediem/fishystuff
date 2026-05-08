@@ -508,6 +508,8 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 
 `gitops-served-caddy-rollback-transition-vm` applies the same Caddy consumer to rollback. It verifies the active site and runtime manifest switch back to the previous release over HTTP, and that the CDN serving root still serves the rolled-away candidate runtime asset after rollback.
 
+`edge-service-bundle-production-gitops-handoff` is the production edge bundle shape for that same handoff. It keeps the production public hostnames, points the site/CDN roots at `/var/lib/fishystuff/gitops/served/production/{site,cdn}`, uses a stable local candidate API upstream, and disables activation-created content roots so the service bundle cannot overwrite GitOps-managed symlinks. It is checked by `.#checks.x86_64-linux.edge-service-bundle-production-gitops-handoff`.
+
 `gitops-dolt-fetch-pin-vm` keeps Dolt transfer local and synthetic. It uses the `fishystuff_deploy dolt fetch-pin` helper, backed by Dolt's own `clone`, `fetch`, and local branch pinning against a file remote inside the VM, to prove the GitOps graph can express "exact commit present locally" without sending a full `.dolt` closure per release or contacting DoltHub.
 
 `gitops-dolt-admission-pin-vm` keeps admission local and synthetic while making it DB-backed. The optional VM-only `admission_probe.kind = "dolt_sql_scalar"` path writes a probe request, waits for `fetch_pin`, verifies the pinned materialization status, and executes a one-row/one-column Dolt SQL query through `fishystuff_deploy dolt probe-sql-scalar` before writing the admission document.

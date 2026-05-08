@@ -612,6 +612,7 @@
           };
           edgeServiceBundleFor =
             deploymentEnvironment:
+            extraEdgeConfig:
             mkServiceBundle {
               name = "fishystuff-edge";
               serviceModule = serviceModules.edge;
@@ -622,10 +623,16 @@
                 apiAddress = deploymentBaseUrl "api" deploymentEnvironment;
                 cdnAddress = deploymentBaseUrl "cdn" deploymentEnvironment;
                 telemetryAddress = deploymentBaseUrl "telemetry" deploymentEnvironment;
-              };
+              } // extraEdgeConfig;
             };
-          edgeServiceBundle = edgeServiceBundleFor defaultDeploymentEnvironment;
-          edgeServiceBundleProduction = edgeServiceBundleFor "production";
+          edgeServiceBundle = edgeServiceBundleFor defaultDeploymentEnvironment { };
+          edgeServiceBundleProduction = edgeServiceBundleFor "production" { };
+          edgeServiceBundleProductionGitopsHandoff = edgeServiceBundleFor "production" {
+            siteRoot = "/var/lib/fishystuff/gitops/served/production/site";
+            cdnRoot = "/var/lib/fishystuff/gitops/served/production/cdn";
+            apiUpstream = "127.0.0.1:18092";
+            manageContentRoots = false;
+          };
           lokiServiceBundle = mkServiceBundle {
             name = "fishystuff-loki";
             serviceModule = serviceModules.loki;
@@ -673,6 +680,7 @@
               doltServiceBundleProduction
               edgeServiceBundle
               edgeServiceBundleProduction
+              edgeServiceBundleProductionGitopsHandoff
               pkgs
               vectorAgentServiceBundle
               vectorAgentServiceBundleProduction
@@ -1348,6 +1356,7 @@
             dolt-service-bundle-production = doltServiceBundleProduction;
             edge-service-bundle = edgeServiceBundle;
             edge-service-bundle-production = edgeServiceBundleProduction;
+            edge-service-bundle-production-gitops-handoff = edgeServiceBundleProductionGitopsHandoff;
             fishystuff-caddy = fishystuffCaddy;
             fishystuff-deploy = fishystuffDeploy;
             gitops-desired-state-beta-validate = gitopsDesiredStateBetaValidate;
