@@ -49,7 +49,7 @@ cleanup() {
 trap cleanup EXIT
 
 bash scripts/recipes/gitops-review-activation-draft.sh "$draft_file" "$summary_file" "$admission_file" "$deploy_bin" >"$review_output"
-bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$edge_bundle" >"$edge_output"
+bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle" >"$edge_output"
 
 edge_bundle_path="$(awk -F= '$1 == "gitops_edge_handoff_bundle_ok" { print $2 }' "$edge_output")"
 edge_caddyfile="$(awk -F= '$1 == "gitops_edge_handoff_caddyfile" { print $2 }' "$edge_output")"

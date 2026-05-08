@@ -33,7 +33,7 @@ let
   tlsDirective = optionalString cfg.tlsEnable ''
     tls {$CREDENTIALS_DIRECTORY}/fullchain.pem {$CREDENTIALS_DIRECTORY}/privkey.pem
   '';
-  adminAddress = "127.0.0.1:2019";
+  adminAddress = cfg.adminAddress;
   caddyfile = pkgs.writeText "fishystuff-edge.Caddyfile" ''
     {
       auto_https off
@@ -202,7 +202,7 @@ let
     "--force"
   ];
   systemdUnit = systemdBackend.mkSystemdUnit {
-    unitName = "fishystuff-edge.service";
+    unitName = cfg.unitName;
     description = "Fishystuff public edge";
     argv = serviceArgv;
     environment = { };
@@ -210,11 +210,7 @@ let
     dynamicUser = cfg.dynamicUser;
     supplementaryGroups = cfg.supplementaryGroups;
     after = [ "network-online.target" ];
-    wants = [
-      "network-online.target"
-      "fishystuff-api.service"
-      "fishystuff-vector.service"
-    ];
+    wants = [ "network-online.target" ] ++ cfg.serviceDependencyUnits;
     restartPolicy = "on-failure";
     restartDelaySeconds = 5;
     execReloadArgv = reloadArgv;
@@ -252,6 +248,27 @@ in
       default = pkgs.caddy;
       defaultText = lib.literalExpression "pkgs.caddy";
       description = "Package containing the `caddy` executable.";
+    };
+
+    serviceId = mkOption {
+      type = types.str;
+      default = "fishystuff-edge";
+      description = "Service bundle identity for the edge service.";
+    };
+
+    unitName = mkOption {
+      type = types.str;
+      default = "fishystuff-edge.service";
+      description = "Systemd unit name for the edge service.";
+    };
+
+    serviceDependencyUnits = mkOption {
+      type = types.listOf types.str;
+      default = [
+        "fishystuff-api.service"
+        "fishystuff-vector.service"
+      ];
+      description = "Runtime units the edge service wants alongside network-online.target.";
     };
 
     siteRoot = mkOption {
@@ -314,6 +331,18 @@ in
       description = "Runtime path containing the TLS private key for the public edge.";
     };
 
+    tlsDirectory = mkOption {
+      type = types.str;
+      default = "/run/fishystuff/edge/tls";
+      description = "Runtime directory containing host-provided edge TLS credentials.";
+    };
+
+    adminAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1:2019";
+      description = "Caddy admin listener used by ExecReload.";
+    };
+
     apiUpstream = mkOption {
       type = types.str;
       default = "127.0.0.1:8080";
@@ -349,7 +378,7 @@ in
     process.argv = serviceArgv;
 
     bundle = {
-      id = "fishystuff-edge";
+      id = cfg.serviceId;
 
       roots.store = [
         cfg.package
@@ -418,7 +447,7 @@ in
         ++ optional cfg.tlsEnable (
           helpers.mkActivationDirectory {
             purpose = "tls-root";
-            path = "/run/fishystuff/edge/tls";
+            path = cfg.tlsDirectory;
             owner = "root";
             group = "root";
             mode = "0755";

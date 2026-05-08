@@ -78,6 +78,7 @@ gitops-helper-test:
   cargo test -p fishystuff_deploy
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
+  bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-production-host-inventory-test.sh
   bash scripts/recipes/gitops-production-operator-proof-test.sh
@@ -160,11 +161,19 @@ gitops-production-current-handoff-test:
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "{{bundle}}"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "{{bundle}}" production
 
 # Run fast local regression checks for production GitOps edge handoff bundle validation.
 gitops-production-edge-handoff-bundle-test:
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
+
+# Build or validate the local beta GitOps edge handoff bundle. No remote mutation.
+gitops-beta-edge-handoff-bundle bundle="auto":
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "{{bundle}}" beta
+
+# Run fast local regression checks for beta GitOps edge handoff bundle validation.
+gitops-beta-edge-handoff-bundle-test:
+  bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
 
 # Print the dry-run host-local production GitOps handoff plan. No remote mutation.
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":

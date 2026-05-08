@@ -158,7 +158,7 @@ run_step activation_draft \
 run_step activation_review \
   bash scripts/recipes/gitops-review-activation-draft.sh "$draft_file" "$summary_file" "$admission_file" "$deploy_bin"
 run_step edge_handoff_bundle \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$edge_bundle"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle"
 run_step host_handoff_plan \
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "$draft_file" "$summary_file" "$admission_file" "$edge_bundle" "$deploy_bin"
 

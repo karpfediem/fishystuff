@@ -612,9 +612,10 @@
           };
           edgeServiceBundleFor =
             deploymentEnvironment:
+            bundleName:
             extraEdgeConfig:
             mkServiceBundle {
-              name = "fishystuff-edge";
+              name = bundleName;
               serviceModule = serviceModules.edge;
               configuration.fishystuff.edge = {
                 package = fishystuffCaddy;
@@ -625,13 +626,29 @@
                 telemetryAddress = deploymentBaseUrl "telemetry" deploymentEnvironment;
               } // extraEdgeConfig;
             };
-          edgeServiceBundle = edgeServiceBundleFor defaultDeploymentEnvironment { };
-          edgeServiceBundleProduction = edgeServiceBundleFor "production" { };
-          edgeServiceBundleProductionGitopsHandoff = edgeServiceBundleFor "production" {
+          edgeServiceBundle = edgeServiceBundleFor defaultDeploymentEnvironment "fishystuff-edge" { };
+          edgeServiceBundleProduction = edgeServiceBundleFor "production" "fishystuff-edge" { };
+          edgeServiceBundleProductionGitopsHandoff = edgeServiceBundleFor "production" "fishystuff-edge" {
             siteRoot = "/var/lib/fishystuff/gitops/served/production/site";
             cdnRoot = "/var/lib/fishystuff/gitops/served/production/cdn";
             apiUpstream = "127.0.0.1:18092";
             manageContentRoots = false;
+          };
+          edgeServiceBundleBetaGitopsHandoff = edgeServiceBundleFor "beta" "fishystuff-beta-edge" {
+            serviceId = "fishystuff-beta-edge";
+            unitName = "fishystuff-beta-edge.service";
+            serviceDependencyUnits = [
+              "fishystuff-beta-api.service"
+              "fishystuff-beta-vector.service"
+            ];
+            siteRoot = "/var/lib/fishystuff/gitops-beta/served/beta/site";
+            cdnRoot = "/var/lib/fishystuff/gitops-beta/served/beta/cdn";
+            apiUpstream = "127.0.0.1:18192";
+            manageContentRoots = false;
+            tlsCertificatePath = "/run/fishystuff/beta-edge/tls/fullchain.pem";
+            tlsPrivateKeyPath = "/run/fishystuff/beta-edge/tls/privkey.pem";
+            tlsDirectory = "/run/fishystuff/beta-edge/tls";
+            adminAddress = "127.0.0.1:2119";
           };
           lokiServiceBundle = mkServiceBundle {
             name = "fishystuff-loki";
@@ -679,6 +696,7 @@
               doltServiceBundle
               doltServiceBundleProduction
               edgeServiceBundle
+              edgeServiceBundleBetaGitopsHandoff
               edgeServiceBundleProduction
               edgeServiceBundleProductionGitopsHandoff
               pkgs
@@ -1356,6 +1374,7 @@
             dolt-service-bundle = doltServiceBundle;
             dolt-service-bundle-production = doltServiceBundleProduction;
             edge-service-bundle = edgeServiceBundle;
+            edge-service-bundle-beta-gitops-handoff = edgeServiceBundleBetaGitopsHandoff;
             edge-service-bundle-production = edgeServiceBundleProduction;
             edge-service-bundle-production-gitops-handoff = edgeServiceBundleProductionGitopsHandoff;
             fishystuff-caddy = fishystuffCaddy;

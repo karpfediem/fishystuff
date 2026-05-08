@@ -6,6 +6,7 @@
   doltServiceBundle,
   doltServiceBundleProduction,
   edgeServiceBundle,
+  edgeServiceBundleBetaGitopsHandoff,
   edgeServiceBundleProduction,
   edgeServiceBundleProductionGitopsHandoff,
   vectorAgentServiceBundle,
@@ -368,6 +369,65 @@ in
       "PrivateTmp=true"
       "ProtectSystem=strict"
       "NoNewPrivileges=true"
+    ];
+  };
+
+  edge-service-bundle-beta-gitops-handoff = mkBundleCheck {
+    name = "edge-service-bundle-beta-gitops-handoff-check";
+    bundle = edgeServiceBundleBetaGitopsHandoff;
+    serviceId = "fishystuff-beta-edge";
+    configDestination = "Caddyfile";
+    unitName = "fishystuff-beta-edge.service";
+    minArgvLength = 5;
+    expectedReloadMode = "command";
+    expectedRuntimeOverlayCount = 2;
+    requiredMaterializationHandle = "pkg/main";
+    requiredMaterializationAcquisition = "push";
+    requiredConfigLines = [
+      "https://beta.fishystuff.fish {"
+      "https://api.beta.fishystuff.fish {"
+      "https://cdn.beta.fishystuff.fish {"
+      "https://telemetry.beta.fishystuff.fish {"
+      "root * /var/lib/fishystuff/gitops-beta/served/beta/site"
+      "root * /var/lib/fishystuff/gitops-beta/served/beta/cdn"
+      "reverse_proxy 127.0.0.1:18192"
+      "admin 127.0.0.1:2119"
+      "@runtime_manifest path /map/runtime-manifest.json"
+      "/map/fishystuff_ui_bevy.*.js"
+      "/map/fishystuff_ui_bevy_bg.*.wasm"
+      "header Cache-Control \"no-store\""
+      "header Cache-Control \"public, max-age=31536000, immutable\""
+    ];
+    forbiddenConfigFragments = [
+      "https://fishystuff.fish"
+      "https://api.fishystuff.fish"
+      "https://cdn.fishystuff.fish"
+      "https://telemetry.fishystuff.fish"
+      "/var/lib/fishystuff/gitops/served/production"
+      "/srv/fishystuff"
+    ];
+    requiredUnitLines = [
+      "Wants=network-online.target fishystuff-beta-api.service fishystuff-beta-vector.service"
+      "LoadCredential=fullchain.pem:/run/fishystuff/beta-edge/tls/fullchain.pem"
+      "LoadCredential=privkey.pem:/run/fishystuff/beta-edge/tls/privkey.pem"
+      "AmbientCapabilities=CAP_NET_BIND_SERVICE"
+      "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+      "PrivateTmp=true"
+      "ProtectSystem=strict"
+      "NoNewPrivileges=true"
+    ];
+    forbiddenUnitLines = [
+      "Wants=network-online.target fishystuff-api.service fishystuff-vector.service"
+      "LoadCredential=fullchain.pem:/run/fishystuff/edge/tls/fullchain.pem"
+      "LoadCredential=privkey.pem:/run/fishystuff/edge/tls/privkey.pem"
+    ];
+    requiredBundleJsonChecks = [
+      ''(.activation.directories | map(.path) | index("/var/lib/fishystuff/gitops-beta/served/beta/site") | not)''
+      ''(.activation.directories | map(.path) | index("/var/lib/fishystuff/gitops-beta/served/beta/cdn") | not)''
+      ''(.activation.requiredPaths | index("/var/lib/fishystuff/gitops-beta/served/beta/site")) != null''
+      ''(.activation.requiredPaths | index("/var/lib/fishystuff/gitops-beta/served/beta/cdn")) != null''
+      ''(.activation.directories | map(.path) | index("/run/fishystuff/beta-edge/tls")) != null''
+      ''(.activation.directories | map(.path) | index("/run/fishystuff/edge/tls") | not)''
     ];
   };
 

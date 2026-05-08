@@ -179,7 +179,7 @@ root="$(mktemp -d)"
 valid="${root}/valid"
 make_bundle "$valid"
 
-bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$valid" >"${root}/valid.stdout"
+bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$valid" >"${root}/valid.stdout"
 grep -F "gitops_edge_handoff_bundle_ok=${valid}" "${root}/valid.stdout" >/dev/null
 grep -F "gitops_edge_handoff_site_root=/var/lib/fishystuff/gitops/served/production/site" "${root}/valid.stdout" >/dev/null
 grep -F "gitops_edge_handoff_cdn_root=/var/lib/fishystuff/gitops/served/production/cdn" "${root}/valid.stdout" >/dev/null
@@ -192,24 +192,24 @@ make_bundle "$beta"
 printf '\n# beta.fishystuff.fish must never be present here\n' >>"${beta}/artifacts/config/base"
 expect_fail_contains \
   "reject beta hostname" \
-  "must not contain beta hostname" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$beta"
+  "must not contain forbidden production Caddy fragment: beta.fishystuff.fish" \
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$beta"
 
 legacy="${root}/legacy"
 make_bundle "$legacy"
 printf '\n# /srv/fishystuff must never be present here\n' >>"${legacy}/artifacts/config/base"
 expect_fail_contains \
   "reject legacy serving root" \
-  "must not contain legacy serving root" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$legacy"
+  "must not contain forbidden production Caddy fragment: /srv/fishystuff" \
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$legacy"
 
 store_root="${root}/store-root"
 make_bundle "$store_root"
 printf '\nroot * /nix/store/example-site\n' >>"${store_root}/artifacts/config/base"
 expect_fail_contains \
   "reject fixed store serving root" \
-  "must not contain fixed store serving root" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$store_root"
+  "must not contain forbidden production Caddy fragment: root * /nix/store/" \
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$store_root"
 
 wrong_api="${root}/wrong-api"
 make_bundle "$wrong_api"
@@ -217,7 +217,7 @@ perl -0pi -e 's/reverse_proxy 127\.0\.0\.1:18092/reverse_proxy 127.0.0.1:18091/'
 expect_fail_contains \
   "reject wrong API upstream" \
   "missing loopback candidate API upstream" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$wrong_api"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$wrong_api"
 
 missing_exe="${root}/missing-exe"
 make_bundle "$missing_exe"
@@ -225,7 +225,7 @@ rm -f "${missing_exe}/artifacts/exe/main"
 expect_fail_contains \
   "reject missing executable" \
   "Caddy executable is missing or not executable" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$missing_exe"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$missing_exe"
 
 bad_metadata="${root}/bad-metadata"
 make_bundle "$bad_metadata"
@@ -234,7 +234,7 @@ mv "${bad_metadata}/bundle.json.tmp" "${bad_metadata}/bundle.json"
 expect_fail_contains \
   "reject artifact metadata mismatch" \
   "Caddy executable artifact path mismatch" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_metadata"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$bad_metadata"
 
 bad_reload="${root}/bad-reload"
 make_bundle "$bad_reload"
@@ -242,7 +242,7 @@ perl -0pi -e 's/--address 127\.0\.0\.1:2019 --force/--address 127.0.0.1:2020 --f
 expect_fail_contains \
   "reject systemd reload mismatch" \
   "systemd unit is missing Caddy ExecReload" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_reload"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$bad_reload"
 
 bad_required_path="${root}/bad-required-path"
 make_bundle "$bad_required_path"
@@ -251,7 +251,7 @@ mv "${bad_required_path}/bundle.json.tmp" "${bad_required_path}/bundle.json"
 expect_fail_contains \
   "reject missing GitOps required paths" \
   "bundle metadata is missing GitOps site required path" \
-  bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_required_path"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$bad_required_path"
 
 bad_caddy_validate="${root}/bad-caddy-validate"
 make_bundle "$bad_caddy_validate"
@@ -259,6 +259,6 @@ expect_fail_contains \
   "reject Caddy validation failure" \
   "Caddyfile failed caddy validate" \
   env FISHYSTUFF_FAKE_CADDY_VALIDATE_FAIL=1 \
-    bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$bad_caddy_validate"
+    bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$bad_caddy_validate"
 
 printf '[gitops-production-edge-handoff-bundle-test] %s checks passed\n' "$pass_count"

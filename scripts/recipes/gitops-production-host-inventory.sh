@@ -205,7 +205,7 @@ edge_systemd_unit_store=""
 edge_systemd_unit_artifact=""
 
 if [[ -n "$edge_bundle" && "$edge_bundle" != "skip" ]]; then
-  if bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$edge_bundle" >"$edge_output" 2>"$edge_error"; then
+  if bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle" >"$edge_output" 2>"$edge_error"; then
     edge_bundle_check_ok="true"
     edge_bundle_path="$(awk -F= '$1 == "gitops_edge_handoff_bundle_ok" { print $2 }' "$edge_output")"
     edge_caddy_validate="$(awk -F= '$1 == "gitops_edge_handoff_caddy_validate" { print $2 }' "$edge_output")"

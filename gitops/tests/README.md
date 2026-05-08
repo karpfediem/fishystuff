@@ -7,6 +7,8 @@ just gitops-helper-test
 just gitops-check-served environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-served-summary environment=local-test state_dir=/var/lib/fishystuff/gitops
 just gitops-inspect-served environment=local-test state_dir=/var/lib/fishystuff/gitops run_dir=/run/fishystuff/gitops
+just gitops-beta-edge-handoff-bundle
+just gitops-beta-edge-handoff-bundle-test
 just gitops-check-desired-serving state_file=data/gitops/production-current.desired.json environment=production
 just gitops-retained-releases-json environment=production state_dir=/var/lib/fishystuff/gitops > /tmp/fishystuff-retained-releases.json
 just gitops-production-current-desired output=/tmp/fishystuff-production-current.desired.json
@@ -52,6 +54,7 @@ nix build .#checks.x86_64-linux.gitops-production-vm-serve-fixture-vm
 nix build .#checks.x86_64-linux.gitops-production-rollback-transition-vm
 nix build .#checks.x86_64-linux.gitops-production-api-meta-vm
 nix build .#checks.x86_64-linux.gitops-production-edge-handoff-vm
+nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff
 nix build .#checks.x86_64-linux.gitops-served-symlink-transition-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-handoff-vm
 nix build .#checks.x86_64-linux.gitops-served-caddy-rollback-transition-vm
