@@ -698,6 +698,17 @@ run_fixture_handoff() {
       "$db_probe_observation" \
       "$site_cdn_probe_observation"
 
+  expect_fail_contains \
+    "admission evidence writer rejects public API upstream" \
+    "api_upstream must be a loopback HTTP URL" \
+    bash scripts/recipes/gitops-write-activation-admission-evidence.sh \
+      "$root/public-api-upstream-admission.evidence.json" \
+      "$summary" \
+      "https://api.fishystuff.fish" \
+      "$api_meta_observation" \
+      "$db_probe_observation" \
+      "$site_cdn_probe_observation"
+
   bash scripts/recipes/gitops-write-activation-admission-evidence.sh \
     "$admission_evidence" \
     "$summary" \

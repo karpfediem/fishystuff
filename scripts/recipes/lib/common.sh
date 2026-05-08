@@ -154,6 +154,16 @@ trim_trailing_slash() {
   printf '%s' "$value"
 }
 
+require_loopback_http_url() {
+  local name="$1"
+  local value="$2"
+  if [[ "$value" =~ ^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$ || "$value" =~ ^http://\[::1\](:[0-9]+)?$ ]]; then
+    return
+  fi
+  echo "$name must be a loopback HTTP URL like http://127.0.0.1:18092" >&2
+  exit 2
+}
+
 canonical_deploy_service_name() {
   local value="${1-}"
   value="$(canonical_public_service_name "$value")"

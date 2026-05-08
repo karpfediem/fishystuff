@@ -76,7 +76,7 @@ To generate a serving draft, provide explicit admission evidence:
 ```bash
 just gitops-write-activation-admission-evidence \
   output=/tmp/fishystuff-production-admission.json \
-  api_upstream=https://api.fishystuff.fish \
+  api_upstream=http://127.0.0.1:18092 \
   api_meta_source=/tmp/fishystuff-api-meta.json \
   db_probe_file=/tmp/fishystuff-db-probe.json \
   site_cdn_probe_file=/tmp/fishystuff-site-cdn-probe.json
@@ -84,7 +84,7 @@ just gitops-write-activation-admission-evidence \
 just gitops-production-activation-draft admission_file=/tmp/fishystuff-production-admission.json
 ```
 
-This writes a local `local-apply` desired-state draft and verifies it with the same desired-serving preflight and mgmt unify path. It does not run mgmt apply, start services, reload Caddy, mutate DNS, or select a served release by itself.
+This writes a local `local-apply` desired-state draft and verifies it with the same desired-serving preflight and mgmt unify path. The API upstream must be the host-local admitted candidate API, not the public API URL. It does not run mgmt apply, start services, reload Caddy, mutate DNS, or select a served release by itself.
 
 To re-check a saved activation draft before a later apply path consumes it:
 

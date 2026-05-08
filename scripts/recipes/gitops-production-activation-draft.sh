@@ -116,6 +116,7 @@ if [[ "$api_upstream" == */ ]]; then
   echo "admission api_upstream must not end with /" >&2
   exit 2
 fi
+require_loopback_http_url "admission api_upstream" "$api_upstream"
 case "$admission_url" in
   "${api_upstream}/"*) ;;
   "${api_upstream}?"*) ;;

@@ -96,6 +96,7 @@ fi
 api_upstream="$(jq -er '.api_upstream' "$admission_file")"
 admission_url="$(jq -er '.api_meta.url' "$admission_file")"
 timeout_ms="$(jq -er '.api_meta.timeout_ms // 2000' "$admission_file")"
+require_loopback_http_url "activation admission api_upstream" "$api_upstream"
 
 if ! jq -e \
   --slurpfile handoff_state "$state_file" \

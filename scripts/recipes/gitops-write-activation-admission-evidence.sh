@@ -40,6 +40,7 @@ if [[ "$api_upstream" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@ ]]; then
   echo "api_upstream must not contain embedded credentials" >&2
   exit 2
 fi
+require_loopback_http_url api_upstream "$api_upstream"
 if [[ -z "$api_meta_source" ]]; then
   echo "gitops-write-activation-admission-evidence requires api_meta_source" >&2
   exit 2
