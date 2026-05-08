@@ -137,6 +137,13 @@ function createContext(localStorageInitial = {}, options = {}) {
       this.replacedUrl = url;
     },
   };
+  const history = {
+    state: options.historyState ?? null,
+    replaceState(state, _title, url) {
+      this.state = state;
+      location.replacedUrl = url;
+    },
+  };
   const toastCalls = [];
   const document = {
     body: {
@@ -217,6 +224,9 @@ function createContext(localStorageInitial = {}, options = {}) {
       apply() {},
     },
   };
+  if (options.history !== false) {
+    window.history = history;
+  }
   const context = {
     window,
     document,
@@ -272,8 +282,10 @@ function createContext(localStorageInitial = {}, options = {}) {
   return {
     window,
     document,
+    location,
     localStorage,
     toastCalls,
+    history,
     flushTimers() {
       const pending = Array.from(timers.values());
       timers.clear();
@@ -1118,6 +1130,101 @@ test("calculator presets apply durable inputs without changing the layout preset
   });
   assert.equal(env.window.__fishystuffUserPresets.selectedPresetId("calculator-presets"), preset.id);
   assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets"), null);
+});
+
+test("calculator shared URL opens as an unsaved temporary preset", () => {
+  const initial = createContext();
+  const initialSignals = defaultSignals();
+  initial.window.__fishystuffCalculator.restore(initialSignals);
+  const saved = initial.window.__fishystuffUserPresets.createPreset("calculator-presets", {
+    name: "Saved setup",
+    payload: {
+      active: false,
+      fishingMode: "rod",
+      level: 4,
+      resources: 33,
+    },
+    select: true,
+  });
+  const presetStorage = initial.localStorage.getItem(initial.window.__fishystuffUserPresets.STORAGE_KEY);
+  const sharedPayload = {
+    active: true,
+    fishingMode: "harpoon",
+    level: 88,
+    resources: 55,
+    food: ["item:9359"],
+  };
+  const env = createContext({
+    [initial.window.__fishystuffUserPresets.STORAGE_KEY]: presetStorage,
+  }, {
+    search: `?preset=lz:${JSON.stringify(sharedPayload)}&keep=1`,
+  });
+  const signals = defaultSignals();
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  const helper = env.window.__fishystuffUserPresets;
+  const current = helper.current("calculator-presets");
+  assert.equal(signals.active, true);
+  assert.equal(signals.fishingMode, "harpoon");
+  assert.equal(signals.level, 88);
+  assert.equal(signals.resources, 55);
+  assert.deepEqual(Array.from(signals.food), ["item:9359"]);
+  assert.equal(helper.selectedPresetId("calculator-presets"), "");
+  assert.equal(helper.selectedFixedId("calculator-presets"), "");
+  assert.equal(current?.temporary, true);
+  assert.deepEqual(current?.source, { kind: "none", id: "" });
+  assert.equal(helper.currentActionState("calculator-presets").canSave, true);
+  assert.equal(helper.currentActionState("calculator-presets").canDiscard, false);
+  assert.equal(env.localStorage.getItem("fishystuff.calculator.data.v1"), null);
+  assert.equal(env.location.replacedUrl, "https://fishystuff.fish/calculator/?keep=1");
+
+  helper.activatePreset("calculator-presets", saved.id);
+
+  assert.equal(helper.selectedPresetId("calculator-presets"), saved.id);
+  assert.equal(helper.current("calculator-presets"), null);
+  assert.equal(
+    helper.workingCopies("calculator-presets", { includeClean: true })
+      .some((workingCopy) => workingCopy.id === current.id),
+    false,
+  );
+});
+
+test("calculator shared URL temporary preset survives late server defaults", () => {
+  const sharedPayload = {
+    active: true,
+    fishingMode: "harpoon",
+    level: 88,
+    resources: 55,
+    food: ["item:9359"],
+  };
+  const env = createContext({}, {
+    search: `?preset=lz:${JSON.stringify(sharedPayload)}`,
+  });
+  const signals = defaultSignals();
+  const initDefaults = cloneTestValue(signals._defaults);
+  delete signals._defaults;
+
+  env.window.__fishystuffCalculator.restore(signals);
+  assert.equal(signals.level, 88);
+  assert.equal(signals.resources, 55);
+
+  patchCalculatorSignals(env, {
+    ...cloneTestValue(initDefaults),
+    _loading: false,
+    _defaults: initDefaults,
+  });
+
+  assert.equal(signals.active, true);
+  assert.equal(signals.fishingMode, "harpoon");
+  assert.equal(signals.level, 88);
+  assert.equal(signals.resources, 55);
+  assert.deepEqual(Array.from(signals.food), ["item:9359"]);
+  assert.equal(env.window.__fishystuffUserPresets.current("calculator-presets")?.temporary, true);
+  assert.deepEqual(
+    env.window.__fishystuffUserPresets.current("calculator-presets")?.source,
+    { kind: "none", id: "" },
+  );
 });
 
 test("calculator preset activation publishes a merged Datastar signal patch", () => {

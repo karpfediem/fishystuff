@@ -1011,6 +1011,92 @@ test("user presets keep dirty working copies inactive when selecting a different
   );
 });
 
+test("user presets drop temporary current state when selecting a different source", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-presets", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
+    },
+  });
+  const saved = helper.createPreset("calculator-presets", {
+    name: "Saved",
+    payload: {
+      row: 1,
+    },
+    select: false,
+  });
+
+  const temporary = helper.activateTemporaryPreset("calculator-presets", {
+    row: 7,
+  });
+
+  assert.equal(currentPayload.row, 7);
+  assert.equal(temporary.temporary, true);
+  assert.deepEqual(temporary.source, { kind: "none", id: "" });
+  assert.equal(helper.selectedPresetId("calculator-presets"), "");
+  assert.equal(helper.selectedFixedId("calculator-presets"), "");
+  assert.equal(helper.currentActionState("calculator-presets").canSave, true);
+  assert.equal(helper.currentActionState("calculator-presets").canDiscard, false);
+  assert.deepEqual(helper.current("calculator-presets")?.payload, { row: 7 });
+
+  helper.activatePreset("calculator-presets", saved.id);
+
+  assert.equal(currentPayload.row, 1);
+  assert.equal(helper.selectedPresetId("calculator-presets"), saved.id);
+  assert.equal(helper.current("calculator-presets"), null);
+  assert.equal(
+    helper.workingCopies("calculator-presets", { includeClean: true })
+      .some((workingCopy) => workingCopy.id === temporary.id),
+    false,
+  );
+});
+
+test("user presets save temporary current state as a durable preset", () => {
+  const env = createEnv();
+  const helper = env.helper;
+  let currentPayload = {
+    row: 0,
+  };
+  helper.registerCollectionAdapter("calculator-presets", {
+    normalizePayload(payload) {
+      return {
+        row: Number.parseInt(payload?.row ?? 0, 10) || 0,
+      };
+    },
+    capture() {
+      return currentPayload;
+    },
+    apply(payload) {
+      currentPayload = payload;
+      return payload;
+    },
+  });
+  helper.activateTemporaryPreset("calculator-presets", {
+    row: 7,
+  });
+
+  const saved = helper.saveCurrent("calculator-presets");
+
+  assert.equal(saved.action, "created");
+  assert.equal(helper.selectedPresetId("calculator-presets"), saved.preset.id);
+  assert.equal(helper.current("calculator-presets"), null);
+  assert.equal(helper.activeWorkingCopy("calculator-presets")?.temporary, false);
+  assert.deepEqual(helper.preset("calculator-presets", saved.preset.id)?.payload, { row: 7 });
+});
+
 test("user presets clear current state when copying the current payload into a new selected preset", () => {
   const env = createEnv();
   const helper = env.helper;

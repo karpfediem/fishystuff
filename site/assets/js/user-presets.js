@@ -248,6 +248,7 @@
       id: trimString(value.id) || randomId(`work_${index + 1}_`),
       source,
       payload,
+      temporary: value.temporary === true,
       createdAt,
       updatedAt: trimString(value.updatedAt) || createdAt,
       events: normalizePresetEvents(collectionKey, value.events),
@@ -396,6 +397,7 @@
       id: trimString(options.id) || randomId("work_"),
       source: normalizedSource,
       payload: normalizedPayload,
+      temporary: options.temporary === true,
       createdAt,
       updatedAt: createdAt,
       events: [],
@@ -452,6 +454,7 @@
       source: cloneJson(workingCopy.source),
       origin: cloneJson(workingCopy.source),
       payload: cloneJson(payload),
+      temporary: workingCopy.temporary === true,
       updatedAt: workingCopy.updatedAt,
       events: cloneJson(workingCopy.events || []),
       undoneEvents: cloneJson(workingCopy.undoneEvents || []),
@@ -505,9 +508,10 @@
       ? normalizeSource(preferredSource)
       : firstFixedSource(collectionKey);
     const payload = sourcePayload(collectionKey, collection, source);
-    active = createWorkingCopy(collectionKey, source, payload, options.virtual === true
-      ? { id: virtualWorkingCopyId(collectionKey, source) }
-      : {});
+    active = createWorkingCopy(collectionKey, source, payload, {
+      ...(options.virtual === true ? { id: virtualWorkingCopyId(collectionKey, source) } : {}),
+      temporary: options.temporary === true,
+    });
     collection.workingCopies.push(active);
     collection.activeWorkingCopyId = active.id;
     return active;
@@ -516,7 +520,10 @@
   function pruneCleanInactiveWorkingCopies(collectionKey, collection) {
     const activeId = trimString(collection.activeWorkingCopyId);
     collection.workingCopies = collection.workingCopies.filter((workingCopy) => (
-      workingCopy.id === activeId || workingCopyModified(collectionKey, collection, workingCopy)
+      workingCopy.id === activeId || (
+        workingCopy.temporary !== true
+        && workingCopyModified(collectionKey, collection, workingCopy)
+      )
     ));
   }
 
@@ -827,7 +834,9 @@
   function createAndSelectWorkingCopy(collectionKey, source, payload, options = {}) {
     const key = normalizeCollectionKey(collectionKey);
     const normalizedSource = normalizeSource(source);
-    const workingCopy = createWorkingCopy(key, normalizedSource, payload);
+    const workingCopy = createWorkingCopy(key, normalizedSource, payload, {
+      temporary: options.temporary === true,
+    });
     updateSnapshot((draft) => {
       const collection = normalizeCollectionSnapshot(key, draft.collections[key]);
       collection.workingCopies.push(workingCopy);
@@ -884,6 +893,15 @@
       name: normalizedFixedId,
       payload: null,
     };
+  }
+
+  function activateTemporaryPreset(collectionKey, payload, options = {}) {
+    const key = normalizeCollectionKey(collectionKey);
+    const normalizedPayload = normalizePresetPayload(key, payload);
+    return createAndSelectWorkingCopy(key, { kind: "none", id: "" }, normalizedPayload, {
+      ...options,
+      temporary: true,
+    });
   }
 
   function refreshCurrentForAction(collectionKey, options = {}) {
@@ -1203,6 +1221,7 @@
       const nextActive = activeWorkingCopyFromCollection(nextCollection);
       if (nextActive && sourcesEqual(nextActive.source, presetSource(savedPreset.id))) {
         nextActive.payload = normalizePresetPayload(key, payload);
+        nextActive.temporary = false;
         nextActive.updatedAt = nowIso();
         nextActive.events = [];
         nextActive.undoneEvents = [];
@@ -1247,6 +1266,7 @@
         const nextActive = activeWorkingCopyFromCollection(nextCollection);
         if (nextActive) {
           nextActive.payload = normalizePresetPayload(key, payload);
+          nextActive.temporary = false;
           nextActive.updatedAt = nowIso();
           nextActive.events = [];
           nextActive.undoneEvents = [];
@@ -1274,6 +1294,7 @@
       if (nextActive) {
         nextActive.source = presetSource(preset.id);
         nextActive.payload = normalizePresetPayload(key, payload);
+        nextActive.temporary = false;
         nextActive.updatedAt = nowIso();
         nextActive.events = [];
         nextActive.undoneEvents = [];
@@ -1566,6 +1587,7 @@
     applyPayload,
     activatePreset,
     activateFixedPreset,
+    activateTemporaryPreset,
     activateWorkingCopy: selectWorkingCopy,
     discardCurrent,
     trackCurrentPayload,

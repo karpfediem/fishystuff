@@ -709,6 +709,39 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const presetQueryParam = urlParams.get("preset");
+  let sharedCalculatorPresetPayload = null;
+
+  function removeCalculatorPresetQueryParam() {
+    if (!presetQueryParam) {
+      return;
+    }
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("preset");
+    const newQueryString = nextParams.toString();
+    const newUrl =
+      window.location.origin
+      + window.location.pathname
+      + (newQueryString ? "?" + newQueryString : "");
+    try {
+      window.history?.replaceState?.(window.history.state ?? null, "", newUrl);
+    } catch (_error) {
+      // Leaving the URL untouched is safer than reloading and losing the in-memory payload.
+    }
+  }
+
+  if (presetQueryParam) {
+    try {
+      const jsonString = LZString.decompressFromEncodedURIComponent(presetQueryParam);
+      const parsed = JSON.parse(jsonString);
+      if (!isPlainObject(parsed)) {
+        throw new Error("Shared calculator preset payload must be an object.");
+      }
+      sharedCalculatorPresetPayload = parsed;
+      removeCalculatorPresetQueryParam();
+    } catch (error) {
+      console.error("Error importing preset:", error);
+    }
+  }
 
   const loadStoredJson = (storageKey, label) => {
     const raw = localStorage.getItem(storageKey);
@@ -724,8 +757,10 @@
     }
   };
 
-  const loadStoredSignals = () => {
-    const storedData = loadStoredJson(CALCULATOR_DATA_STORAGE_KEY, "calculator data");
+  const loadStoredSignals = (options = {}) => {
+    const storedData = options.includeData === false
+      ? null
+      : loadStoredJson(CALCULATOR_DATA_STORAGE_KEY, "calculator data");
     const storedUi = loadStoredJson(CALCULATOR_UI_STORAGE_KEY, "calculator UI state");
     if (!storedData && !storedUi) {
       return {
@@ -1733,24 +1768,6 @@
     );
   };
 
-  if (presetQueryParam) {
-    try {
-      const jsonString = LZString.decompressFromEncodedURIComponent(presetQueryParam);
-      JSON.parse(jsonString);
-      localStorage.setItem(CALCULATOR_DATA_STORAGE_KEY, jsonString);
-
-      urlParams.delete("preset");
-      const newQueryString = urlParams.toString();
-      const newUrl =
-        window.location.origin
-        + window.location.pathname
-        + (newQueryString ? "?" + newQueryString : "");
-      window.location.replace(newUrl);
-    } catch (error) {
-      console.error("Error importing preset:", error);
-    }
-  }
-
   const calculatorNumber = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -2180,7 +2197,12 @@
     bindActionListener();
     bindCalculatorPresetListener();
     bindLayoutPresetListener();
-    const storedState = loadStoredSignals();
+    const sharedPresetPayload = isPlainObject(sharedCalculatorPresetPayload)
+      ? cloneCalculatorSignals(sharedCalculatorPresetPayload)
+      : null;
+    const storedState = loadStoredSignals({
+      includeData: !sharedPresetPayload,
+    });
     const storedSignals = storedState.signals;
     let restoredUiState = null;
     if (storedSignals && typeof storedSignals === "object") {
@@ -2188,13 +2210,34 @@
       restoredUiState = normalizeCalculatorUiState(restoredSignals._calculator_ui);
       Object.assign(signals, restoredSignals);
     }
+    let sharedTemporaryPresetState = null;
+    if (sharedPresetPayload) {
+      Object.assign(signals, cloneCalculatorSignals(calculatorPresetPatch(signals, sharedPresetPayload)));
+    }
     syncSignalsFromSharedUserOverlays(signals);
-    const restoredCalculatorPresetState = applyStoredCalculatorPresetState(signals, {
-      hasStoredData: storedState.hasStoredData,
-    });
-    const pendingCalculatorDataState = storedState.hasStoredData && !restoredCalculatorPresetState
-      ? persistedCalculatorSignals(signals)
-      : null;
+    if (sharedPresetPayload) {
+      sharedTemporaryPresetState = sharedUserPresets()?.activateTemporaryPreset?.(
+        CALCULATOR_PRESET_COLLECTION_KEY,
+        calculatorPresetPayload(signals),
+        { apply: false },
+      ) || null;
+    }
+    const restoredCalculatorPresetState = sharedPresetPayload
+      ? sharedTemporaryPresetState
+      : applyStoredCalculatorPresetState(signals, {
+          hasStoredData: storedState.hasStoredData,
+        });
+    const pendingCalculatorDataState = sharedPresetPayload
+      ? (
+          calculatorPresetDefaultsReady(signals)
+            ? null
+            : persistedCalculatorSignals(signals)
+        )
+      : (
+          storedState.hasStoredData && !restoredCalculatorPresetState
+            ? persistedCalculatorSignals(signals)
+            : null
+        );
     const restoredLayoutPresetState = applyStoredCalculatorLayoutPresetState(signals);
     const trackedCalculatorPresetState = trackCalculatorPresetCurrent(signals);
     const trackedLayoutPresetState = trackCalculatorLayoutPresetCurrent(signals);
