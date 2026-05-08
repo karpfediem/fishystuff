@@ -126,6 +126,10 @@ gitops-review-activation-draft draft_file="data/gitops/production-activation.dra
 gitops-apply-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto" converged_timeout="45":
   bash scripts/recipes/gitops-apply-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{converged_timeout}}"
 
+# Verify local served GitOps state still matches the checked production activation draft.
+gitops-verify-activation-served draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops":
+  bash scripts/recipes/gitops-verify-activation-served.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}"
+
 # Write activation admission evidence from observed API meta, DB-backed, and site/CDN probe outputs.
 gitops-write-activation-admission-evidence output="data/gitops/production-admission.evidence.json" summary_file="data/gitops/production-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
   bash scripts/recipes/gitops-write-activation-admission-evidence.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{api_meta_source}}" "{{db_probe_file}}" "{{site_cdn_probe_file}}"

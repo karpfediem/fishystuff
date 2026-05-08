@@ -281,6 +281,270 @@ write_served_rollback_set_state() {
     }' >"$index"
 }
 
+write_activation_served_state() {
+  local state_dir="$1"
+  local run_dir="$2"
+  local draft_file="$3"
+  local release_id="$4"
+  local retained_release_id="previous-production-release"
+  local generation=""
+  local host=""
+  local api_upstream=""
+  local admission_url=""
+  local release_identity=""
+  local retained_release_identity=""
+  local active_api_closure=""
+  local active_site_closure=""
+  local active_cdn_closure=""
+  local active_dolt_service_closure=""
+  local retained_api_closure=""
+  local retained_site_closure=""
+  local retained_cdn_closure=""
+  local retained_dolt_service_closure=""
+  local rollback_member="$state_dir/rollback-set/production/${retained_release_id}.json"
+
+  generation="$(jq -er '.generation' "$draft_file")"
+  host="$(jq -er '.environments.production.host' "$draft_file")"
+  api_upstream="$(jq -er '.environments.production.api_upstream' "$draft_file")"
+  admission_url="$(jq -er '.environments.production.admission_probe.url' "$draft_file")"
+  release_identity="$(release_identity_from_state "$draft_file" "$release_id")"
+  retained_release_identity="$(release_identity_from_state "$draft_file" "$retained_release_id")"
+  active_api_closure="$(jq -er --arg release_id "$release_id" '.releases[$release_id].closures.api.store_path' "$draft_file")"
+  active_site_closure="$(jq -er --arg release_id "$release_id" '.releases[$release_id].closures.site.store_path' "$draft_file")"
+  active_cdn_closure="$(jq -er --arg release_id "$release_id" '.releases[$release_id].closures.cdn_runtime.store_path' "$draft_file")"
+  active_dolt_service_closure="$(jq -er --arg release_id "$release_id" '.releases[$release_id].closures.dolt_service.store_path' "$draft_file")"
+  retained_api_closure="$(jq -er --arg release_id "$retained_release_id" '.releases[$release_id].closures.api.store_path' "$draft_file")"
+  retained_site_closure="$(jq -er --arg release_id "$retained_release_id" '.releases[$release_id].closures.site.store_path' "$draft_file")"
+  retained_cdn_closure="$(jq -er --arg release_id "$retained_release_id" '.releases[$release_id].closures.cdn_runtime.store_path' "$draft_file")"
+  retained_dolt_service_closure="$(jq -er --arg release_id "$retained_release_id" '.releases[$release_id].closures.dolt_service.store_path' "$draft_file")"
+
+  mkdir -p \
+    "$state_dir/status" \
+    "$state_dir/active" \
+    "$state_dir/rollback" \
+    "$state_dir/rollback-set/production" \
+    "$run_dir/admission" \
+    "$run_dir/routes" \
+    "$run_dir/roots"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    '{
+      desired_generation: $generation,
+      release_id: $release_id,
+      release_identity: $release_identity,
+      environment: "production",
+      host: $host,
+      phase: "served",
+      transition_kind: "activate",
+      rollback_from_release: "",
+      rollback_to_release: "",
+      rollback_reason: "verified production handoff admission",
+      admission_state: "passed_fixture",
+      retained_release_ids: ["previous-production-release"],
+      retained_dolt_status_paths: [],
+      rollback_available: true,
+      rollback_primary_release_id: "previous-production-release",
+      rollback_retained_count: 1,
+      served: true,
+      failure_reason: ""
+    }' >"$state_dir/status/production.json"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg active_site_closure "$active_site_closure" \
+    --arg active_cdn_closure "$active_cdn_closure" \
+    --arg api_upstream "$api_upstream" \
+    --arg state_dir "$state_dir" \
+    '{
+      desired_generation: $generation,
+      environment: "production",
+      host: $host,
+      release_id: $release_id,
+      release_identity: $release_identity,
+      instance_name: ("production-" + $release_id),
+      site_content: $active_site_closure,
+      cdn_runtime_content: $active_cdn_closure,
+      api_upstream: $api_upstream,
+      site_link: ($state_dir + "/served/production/site"),
+      cdn_link: ($state_dir + "/served/production/cdn"),
+      retained_release_ids: ["previous-production-release"],
+      retained_dolt_status_paths: [],
+      transition_kind: "activate",
+      rollback_from_release: "",
+      rollback_to_release: "",
+      rollback_reason: "verified production handoff admission",
+      admission_state: "passed_fixture",
+      served: true,
+      route_state: "selected_local_symlinks"
+    }' >"$state_dir/active/production.json"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg rollback_member "$rollback_member" \
+    '{
+      desired_generation: $generation,
+      environment: "production",
+      host: $host,
+      current_release_id: $release_id,
+      current_release_identity: $release_identity,
+      retained_release_count: 1,
+      retained_release_ids: ["previous-production-release"],
+      retained_release_document_paths: [$rollback_member],
+      rollback_set_available: true,
+      rollback_set_state: "retained_hot_release_set"
+    }' >"$state_dir/rollback-set/production.json"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg retained_release_identity "$retained_release_identity" \
+    --arg retained_api_closure "$retained_api_closure" \
+    --arg retained_site_closure "$retained_site_closure" \
+    --arg retained_cdn_closure "$retained_cdn_closure" \
+    --arg retained_dolt_service_closure "$retained_dolt_service_closure" \
+    '{
+      desired_generation: $generation,
+      environment: "production",
+      host: $host,
+      current_release_id: $release_id,
+      current_release_identity: $release_identity,
+      rollback_release_id: "previous-production-release",
+      rollback_release_identity: $retained_release_identity,
+      rollback_api_bundle: $retained_api_closure,
+      rollback_dolt_service_bundle: $retained_dolt_service_closure,
+      rollback_site_content: $retained_site_closure,
+      rollback_cdn_runtime_content: $retained_cdn_closure,
+      rollback_dolt_commit: "previous-dolt",
+      rollback_dolt_materialization: "fetch_pin",
+      rollback_dolt_cache_dir: "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
+      rollback_dolt_release_ref: "fishystuff/gitops/previous-production-release",
+      rollback_available: true,
+      rollback_state: "retained_hot_release"
+    }' >"$state_dir/rollback/production.json"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg retained_release_identity "$retained_release_identity" \
+    --arg retained_api_closure "$retained_api_closure" \
+    --arg retained_site_closure "$retained_site_closure" \
+    --arg retained_cdn_closure "$retained_cdn_closure" \
+    --arg retained_dolt_service_closure "$retained_dolt_service_closure" \
+    '{
+      desired_generation: $generation,
+      environment: "production",
+      host: $host,
+      current_release_id: $release_id,
+      release_id: "previous-production-release",
+      release_identity: $retained_release_identity,
+      api_bundle: $retained_api_closure,
+      dolt_service_bundle: $retained_dolt_service_closure,
+      site_content: $retained_site_closure,
+      cdn_runtime_content: $retained_cdn_closure,
+      dolt_commit: "previous-dolt",
+      dolt_materialization: "fetch_pin",
+      dolt_cache_dir: "/var/lib/fishystuff/gitops/dolt-cache/fishystuff",
+      dolt_release_ref: "fishystuff/gitops/previous-production-release",
+      dolt_status_path: "/run/fishystuff/gitops/dolt/production-previous-production-release.json",
+      rollback_member_state: "retained_hot_release"
+    }' >"$rollback_member"
+
+  jq -n \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg active_site_closure "$active_site_closure" \
+    --arg active_cdn_closure "$active_cdn_closure" \
+    --arg admission_url "$admission_url" \
+    '{
+      environment: "production",
+      host: $host,
+      release_id: $release_id,
+      release_identity: $release_identity,
+      site_content: $active_site_closure,
+      cdn_runtime_content: $active_cdn_closure,
+      admission_state: "passed_fixture",
+      probe: "http-json-scalars",
+      probe_name: "api-meta",
+      url: $admission_url
+    }' >"$run_dir/admission/production.json"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg api_upstream "$api_upstream" \
+    --arg state_dir "$state_dir" \
+    '{
+      desired_generation: $generation,
+      environment: "production",
+      host: $host,
+      release_id: $release_id,
+      release_identity: $release_identity,
+      active_path: ($state_dir + "/active/production.json"),
+      site_root: ($state_dir + "/served/production/site"),
+      cdn_root: ($state_dir + "/served/production/cdn"),
+      api_upstream: $api_upstream,
+      served: true,
+      state: "selected_local_route"
+    }' >"$run_dir/routes/production.json"
+
+  write_roots_status_for_activation "$run_dir/roots/production-${release_id}.json" "$generation" "$host" "$release_id" "$release_identity" "$active_api_closure"
+  write_roots_status_for_activation "$run_dir/roots/production-${retained_release_id}.json" "$generation" "$host" "$retained_release_id" "$retained_release_identity" "$retained_api_closure"
+}
+
+write_roots_status_for_activation() {
+  local path="$1"
+  local generation="$2"
+  local host="$3"
+  local release_id="$4"
+  local release_identity="$5"
+  local api_closure="$6"
+
+  jq -n \
+    --argjson generation "$generation" \
+    --arg host "$host" \
+    --arg release_id "$release_id" \
+    --arg release_identity "$release_identity" \
+    --arg api_closure "$api_closure" \
+    '{
+      desired_generation: $generation,
+      environment: "production",
+      host: $host,
+      release_id: $release_id,
+      release_identity: $release_identity,
+      root_count: 1,
+      require_nix_gcroot: true,
+      roots_ready: true,
+      state: "roots_ready",
+      roots: [
+        {
+          name: "api",
+          root_path: ("/nix/var/nix/gcroots/fishystuff/gitops/" + $release_id + "/api"),
+          store_path: $api_closure,
+          observed_target: $api_closure,
+          symlink_ready: true,
+          nix_gcroot_ready: true
+        }
+      ]
+    }' >"$path"
+}
+
 run_fixture_handoff() {
   local deploy_bin="$1"
   local root="$2"
@@ -314,6 +578,8 @@ run_fixture_handoff() {
   local activation_review="$root/activation-review.txt"
   local apply_fake_mgmt="$root/fake-mgmt-apply"
   local apply_fake_mgmt_marker="$root/fake-mgmt-apply-state-file"
+  local applied_state_dir="$root/applied-state"
+  local applied_run_dir="$root/applied-run"
   local activation_api_upstream="http://127.0.0.1:19090"
   local activation_release_id=""
   local activation_draft_sha256=""
@@ -570,6 +836,22 @@ run_fixture_handoff() {
     printf '[gitops-production-current-handoff-test] fake mgmt apply saw wrong activation draft state file\n' >&2
     exit 1
   fi
+
+  write_activation_served_state "$applied_state_dir" "$applied_run_dir" "$activation_draft" "$activation_release_id"
+  bash scripts/recipes/gitops-verify-activation-served.sh \
+    "$activation_draft" \
+    "$summary" \
+    "$admission_evidence" \
+    "$deploy_bin" \
+    "$applied_state_dir" \
+    "$applied_run_dir" \
+    >"$root/verify-served.stdout" \
+    2>"$root/verify-served.stderr"
+  grep -F "gitops_activation_served_ok=$activation_release_id" "$root/verify-served.stdout" >/dev/null
+  grep -F "gitops_activation_served_state_dir=$applied_state_dir" "$root/verify-served.stdout" >/dev/null
+  grep -F "remote_deploy_performed=false" "$root/verify-served.stdout" >/dev/null
+  grep -F "infrastructure_mutation_performed=false" "$root/verify-served.stdout" >/dev/null
+  pass "activation served verifier accepts fixture state"
 
   jq '.environments.production.api_upstream = "http://127.0.0.1:19999"' "$activation_draft" >"$stale_activation_draft"
   expect_fail_contains \

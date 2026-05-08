@@ -104,7 +104,15 @@ FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=<activation_draft_sha256 from review output
   just gitops-apply-activation-draft admission_file=/tmp/fishystuff-production-admission.json
 ```
 
-It re-runs the activation review, requires the reviewed draft SHA-256 to match the file it is about to consume, then runs a local one-shot mgmt reconciliation of `gitops/main.mcl` with the activation draft. It does not SSH to remote hosts, call the old deploy script, mutate DNS, or run cloud provider commands. It is still not the recommended production path until the remaining real-host service/Caddy handoff and served-state inspection loop are in place.
+It re-runs the activation review, requires the reviewed draft SHA-256 to match the file it is about to consume, then runs a local one-shot mgmt reconciliation of `gitops/main.mcl` with the activation draft. It does not SSH to remote hosts, call the old deploy script, mutate DNS, or run cloud provider commands. It is still not the recommended production path until the remaining real-host service/Caddy handoff is in place.
+
+After a guarded local reconciliation, verify the local served documents against the same checked tuple:
+
+```bash
+just gitops-verify-activation-served admission_file=/tmp/fishystuff-production-admission.json
+```
+
+This re-checks the activation draft, then validates status, active selection, rollback-set, rollback readiness, admission, route, and root-readiness documents under the selected local state directories. It is read-only and ties the served state back to the activation draft's generation, release ID, host, API upstream, and admission URL.
 
 Once production GitOps has a served rollback-set document, the repeatable cycle is one command:
 
@@ -157,7 +165,6 @@ The VM-only equivalents now exist for production-shaped generated serve, rollbac
 
 - A real production Dolt remote or mirror policy for `fetch_pin`, with operator-selected exact active and retained commits.
 - A rollback set with rooted artifacts and retained CDN roots, validated before active symlink or route handoff.
-- A read-only served-state inspection command that validates status, active, rollback-set, primary rollback readiness, admission, route selection, and root-readiness documents before an operator treats a release as served.
 - A real-host desired-state package from exact API, Dolt service, site, finalized CDN serving root, and at least one retained rollback release.
 - A real-host service/Caddy handoff that uses production-local paths and does not reuse beta service state.
 
