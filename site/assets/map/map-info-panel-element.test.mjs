@@ -1191,6 +1191,7 @@ test("render shows condition labels for hotspot loot groups", () => {
   globalThis.window = globalThis.window || {};
   globalThis.window.__fishystuffResolveFishItemIconUrl = (itemId) => `/items/${itemId}.webp`;
   const element = new FishyMapInfoPanelElement();
+  const statusIconSlot = renderSlot();
   const panelSlot = renderSlot();
   element._shell = {
     __fishymapInitialSignals: {
@@ -1273,7 +1274,7 @@ test("render shows condition labels for hotspot loot groups", () => {
   element._elements = {
     title: renderSlot(),
     titleIcon: renderSlot(),
-    statusIcon: renderSlot(),
+    statusIcon: statusIconSlot,
     statusText: renderSlot(),
     tabs: renderSlot(),
     panel: panelSlot,
@@ -1282,6 +1283,7 @@ test("render shows condition labels for hotspot loot groups", () => {
   element.render();
 
   assert.doesNotMatch(panelSlot.innerHTML, /Zoom to Hotspot/);
+  assert.match(statusIconSlot.innerHTML, /#fishy-fish-fill/);
   assert.doesNotMatch(panelSlot.innerHTML, /alert alert-soft/);
   assert.doesNotMatch(panelSlot.innerHTML, /Metadata imported from bdolytics community snapshot/);
   assert.doesNotMatch(panelSlot.innerHTML, /FloatFishing_Table stat columns are 0/);

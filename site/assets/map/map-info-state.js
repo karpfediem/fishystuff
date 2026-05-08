@@ -54,6 +54,7 @@ const INFO_WINDOW_TITLE_ICON = "inspect-fill";
 const INFO_WINDOW_STATUS_ICON = "information-circle";
 const HOTSPOTS_LAYER_ID = "hotspots";
 const HOTSPOT_KIND = "hotspot";
+const HOTSPOT_INFO_ICON = "fish-fill";
 const HOTSPOT_UNSET_STAT_VALUE = "Not set";
 const LANDMARK_LAYER_IDS = Object.freeze([
   "trade_npcs",
@@ -62,7 +63,7 @@ const LANDMARK_LAYER_IDS = Object.freeze([
 ]);
 const LANDMARK_STATUS_PRESENTATION_BY_KEY = Object.freeze({
   bookmark: { icon: "bookmark", labelKey: "info.status.bookmark" },
-  hotspot: { icon: "map-pin", label: "Hotspot" },
+  hotspot: { icon: HOTSPOT_INFO_ICON, label: "Hotspot" },
   npc: { icon: "trade-origin", label: "NPC" },
   sample: { icon: "date-confirmed", label: "Sample" },
   trade_npc: { icon: "trade-origin", label: "NPC" },
@@ -1014,7 +1015,7 @@ export function buildInfoViewModel(
       ? paneDescriptor(
           "hotspot",
           "Hotspot",
-          "fish-fill",
+          HOTSPOT_INFO_ICON,
           hotspotSection.fishName || "",
           [hotspotSection],
         )

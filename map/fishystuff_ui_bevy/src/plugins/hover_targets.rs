@@ -1228,6 +1228,22 @@ fn details_selection_target_visual(target: &DetailsSelectionTarget) -> Option<Ho
             color_rgb: TRADE_NPC_MARKER_COLOR,
             icon_kind: UiSvgIconKind::TradeOrigin,
         }),
+        ("hotspot", _) => Some(HoverTargetVisual {
+            world_x: target.world_x as f32,
+            world_z: target.world_z as f32,
+            label: target
+                .point_label
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Hotspot")
+                .to_string(),
+            offscreen: false,
+            marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+            label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+            color_rgb: HOTSPOT_MARKER_COLOR,
+            icon_kind: UiSvgIconKind::FishFill,
+        }),
         ("waypoint", _) | (_, Some(FishyMapSelectionPointKind::Waypoint)) => {
             Some(HoverTargetVisual {
                 world_x: target.world_x as f32,
@@ -1305,7 +1321,7 @@ fn hover_target_visual(
                 REGION_NODE_MARKER_SIZE_SCREEN_PX,
                 REGION_NODE_LABEL_OFFSET_SCREEN_PX,
                 HOTSPOT_MARKER_COLOR,
-                UiSvgIconKind::MapPin,
+                UiSvgIconKind::FishFill,
             ),
             BOOKMARK_TARGET_KEY => (
                 REGION_NODE_MARKER_SIZE_SCREEN_PX,
@@ -1607,14 +1623,15 @@ mod tests {
         clamp_hover_target_to_viewport, effective_targets, hover_callout_size_px,
         hover_targets_from_info, parse_semantic_identity_label, selection_targets_from_info,
         HoverTargetVisual, Map2dViewportBounds, SemanticIdentityKind, BOOKMARK_MARKER_COLOR,
-        HOVER_CALLOUT_BORDER_SCREEN_PX, HOVER_CALLOUT_HEIGHT_SCREEN_PX,
-        HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX, HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX,
-        HOVER_CALLOUT_PADDING_RIGHT_SCREEN_PX, HOVER_LABEL_SIZE_PX, HOVER_PLAIN_TEXT_WIDTH_FACTOR,
-        HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
-        ORIGIN_NODE_MARKER_COLOR, ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
-        REGION_NODE_LABEL_OFFSET_SCREEN_PX, REGION_NODE_MARKER_COLOR,
-        REGION_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
-        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
+        HOTSPOT_MARKER_COLOR, HOTSPOT_TARGET_KEY, HOVER_CALLOUT_BORDER_SCREEN_PX,
+        HOVER_CALLOUT_HEIGHT_SCREEN_PX, HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX,
+        HOVER_CALLOUT_PADDING_LEFT_SCREEN_PX, HOVER_CALLOUT_PADDING_RIGHT_SCREEN_PX,
+        HOVER_LABEL_SIZE_PX, HOVER_PLAIN_TEXT_WIDTH_FACTOR, HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX,
+        ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX, ORIGIN_NODE_MARKER_COLOR,
+        ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+        REGION_NODE_MARKER_COLOR, REGION_NODE_MARKER_SIZE_SCREEN_PX,
+        RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX, RESOURCE_BAR_MARKER_COLOR,
+        RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
     };
     use crate::bridge::contract::FishyMapSelectionPointKind;
     use crate::map::camera::mode::ViewMode;
@@ -2195,6 +2212,40 @@ mod tests {
     }
 
     #[test]
+    fn hover_targets_use_fish_icon_for_hotspot_targets() {
+        let sample = crate::map::layer_query::LayerQuerySample {
+            layer_id: "hotspots".to_string(),
+            layer_name: "Hotspots".to_string(),
+            kind: "hotspot".to_string(),
+            rgb: fishystuff_api::Rgb { r: 0, g: 0, b: 0 },
+            rgb_u32: 0,
+            field_id: None,
+            detail_pane: None,
+            detail_sections: Vec::new(),
+            targets: vec![FieldHoverTarget {
+                key: HOTSPOT_TARGET_KEY.to_string(),
+                label: "Coelacanth Hotspot #1".to_string(),
+                world_x: 1.0,
+                world_z: 2.0,
+            }],
+        };
+
+        assert_eq!(
+            super::hover_targets_from_sample(&sample),
+            vec![HoverTargetVisual {
+                world_x: 1.0,
+                world_z: 2.0,
+                label: "Coelacanth Hotspot #1".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: super::HOTSPOT_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::FishFill,
+            }]
+        );
+    }
+
+    #[test]
     fn hover_targets_use_shared_outline_for_generic_waypoint_targets() {
         let sample = crate::map::layer_query::LayerQuerySample {
             layer_id: "region_nodes".to_string(),
@@ -2224,6 +2275,47 @@ mod tests {
                 label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
                 color_rgb: REGION_NODE_MARKER_COLOR,
                 icon_kind: UiSvgIconKind::MapPin,
+            }]
+        );
+    }
+
+    #[test]
+    fn selected_hotspot_details_target_uses_fish_icon() {
+        let selection = SelectionState {
+            details_generation: 1,
+            details_target: Some(DetailsSelectionTarget {
+                element_kind: "hotspot".to_string(),
+                world_x: 10.0,
+                world_z: 20.0,
+                point_kind: Some(FishyMapSelectionPointKind::Waypoint),
+                point_label: Some("Coelacanth Hotspot #1".to_string()),
+                history_behavior: Default::default(),
+            }),
+            info: None,
+            zone_stats: None,
+            zone_stats_status: String::new(),
+        };
+        let targets = effective_targets(
+            ViewMode::Map2D,
+            Some("landmark"),
+            None,
+            &selection,
+            &BookmarkState::default(),
+            &LayerRegistry::default(),
+            &LayerRuntime::default(),
+        );
+
+        assert_eq!(
+            targets,
+            vec![HoverTargetVisual {
+                world_x: 10.0,
+                world_z: 20.0,
+                label: "Coelacanth Hotspot #1".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: HOTSPOT_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::FishFill,
             }]
         );
     }

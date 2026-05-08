@@ -742,8 +742,9 @@ test("buildInfoViewModel exposes hotspot detail sections as a dedicated pane", (
 
   assert.equal(viewModel.descriptor.title, "Porgy Hotspot #423");
   assert.equal(viewModel.descriptor.statusText, "Hotspot");
-  assert.equal(viewModel.descriptor.statusIcon, "map-pin");
+  assert.equal(viewModel.descriptor.statusIcon, "fish-fill");
   assert.deepEqual(viewModel.panes.map((pane) => pane.id), ["hotspot"]);
+  assert.equal(viewModel.panes[0].icon, "fish-fill");
   assert.equal(viewModel.activePane.sections[0].fishName, "Porgy");
   assert.equal(viewModel.activePane.sections[0].iconUrl, "/items/8207.webp");
   assert.equal(viewModel.activePane.sections[0].metadataSource, "bdolytics community snapshot");
