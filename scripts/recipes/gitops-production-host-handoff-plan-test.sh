@@ -493,6 +493,10 @@ bash scripts/recipes/gitops-production-host-handoff-plan.sh \
 
 grep -F "gitops_production_host_handoff_plan_ok=${draft}" "${root}/plan.stdout" >/dev/null
 grep -F "edge_bundle=${root}/edge-bundle" "${root}/plan.stdout" >/dev/null
+grep -F "edge_caddy_validate=true" "${root}/plan.stdout" >/dev/null
+grep -F "read_only_readiness_check_04=just gitops-production-edge-handoff-bundle bundle=${root}/edge-bundle" "${root}/plan.stdout" >/dev/null
+grep -F "guarded_host_action_04=systemctl restart fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
+grep -F "post_handoff_read_only_check_01=just gitops-verify-activation-served draft_file=${draft}" "${root}/plan.stdout" >/dev/null
 grep -F "systemd_unit_install_path=/etc/systemd/system/fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "planned_host_step_05=systemctl restart fishystuff-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/plan.stdout" >/dev/null

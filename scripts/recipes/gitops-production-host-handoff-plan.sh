@@ -55,11 +55,24 @@ edge_bundle_path="$(awk -F= '$1 == "gitops_edge_handoff_bundle_ok" { print $2 }'
 edge_caddyfile="$(awk -F= '$1 == "gitops_edge_handoff_caddyfile" { print $2 }' "$edge_output")"
 edge_executable="$(awk -F= '$1 == "gitops_edge_handoff_executable" { print $2 }' "$edge_output")"
 edge_api_upstream="$(awk -F= '$1 == "gitops_edge_handoff_api_upstream" { print $2 }' "$edge_output")"
+edge_caddy_validate="$(awk -F= '$1 == "gitops_edge_handoff_caddy_validate" { print $2 }' "$edge_output")"
+edge_caddyfile_store="$(awk -F= '$1 == "gitops_edge_handoff_caddyfile_store" { print $2 }' "$edge_output")"
+edge_executable_store="$(awk -F= '$1 == "gitops_edge_handoff_executable_store" { print $2 }' "$edge_output")"
+edge_systemd_unit_store="$(awk -F= '$1 == "gitops_edge_handoff_systemd_unit_store" { print $2 }' "$edge_output")"
 
 require_value "$edge_bundle_path" "edge handoff bundle check did not report a bundle path"
 require_value "$edge_caddyfile" "edge handoff bundle check did not report a Caddyfile"
 require_value "$edge_executable" "edge handoff bundle check did not report an executable"
 require_value "$edge_api_upstream" "edge handoff bundle check did not report an API upstream"
+require_value "$edge_caddy_validate" "edge handoff bundle check did not report Caddy validation"
+require_value "$edge_caddyfile_store" "edge handoff bundle check did not report a Caddyfile store path"
+require_value "$edge_executable_store" "edge handoff bundle check did not report an executable store path"
+require_value "$edge_systemd_unit_store" "edge handoff bundle check did not report a systemd unit store path"
+
+if [[ "$edge_caddy_validate" != "true" ]]; then
+  echo "edge handoff bundle check did not validate the Caddyfile" >&2
+  exit 2
+fi
 
 bundle_json="${edge_bundle_path}/bundle.json"
 if [[ ! -f "$bundle_json" ]]; then
@@ -132,17 +145,35 @@ printf 'api_upstream=%s\n' "$api_upstream"
 printf 'edge_bundle=%s\n' "$edge_bundle_path"
 printf 'edge_caddyfile=%s\n' "$edge_caddyfile"
 printf 'edge_executable=%s\n' "$edge_executable"
+printf 'edge_caddyfile_store=%s\n' "$edge_caddyfile_store"
+printf 'edge_executable_store=%s\n' "$edge_executable_store"
+printf 'edge_systemd_unit_store=%s\n' "$edge_systemd_unit_store"
+printf 'edge_caddy_validate=%s\n' "$edge_caddy_validate"
 printf 'systemd_unit_source=%s\n' "$systemd_unit_source"
 printf 'systemd_unit_install_path=%s\n' "$systemd_unit_install_path"
 printf 'served_site_link=/var/lib/fishystuff/gitops/served/production/site\n'
 printf 'served_cdn_link=/var/lib/fishystuff/gitops/served/production/cdn\n'
 printf 'tls_fullchain=/run/fishystuff/edge/tls/fullchain.pem\n'
 printf 'tls_privkey=/run/fishystuff/edge/tls/privkey.pem\n'
+printf 'read_only_readiness_check_01=just gitops-check-handoff-summary summary_file=%s state_file=%s\n' "$summary_file" "$state_file"
+printf 'read_only_readiness_check_02=just gitops-check-activation-draft draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+printf 'read_only_readiness_check_03=just gitops-review-activation-draft draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+printf 'read_only_readiness_check_04=just gitops-production-edge-handoff-bundle bundle=%s\n' "$edge_bundle_path"
+printf 'read_only_readiness_check_05=verify edge_caddy_validate=true and edge bundle store paths above match the exact artifacts to install\n'
+printf 'read_only_readiness_check_06=verify /api/v1/meta on %s reports release_identity=%s before local apply\n' "$api_upstream" "$release_identity"
+printf 'read_only_readiness_check_07=verify %s and %s exist and are current production certificates before edge restart\n' "/run/fishystuff/edge/tls/fullchain.pem" "/run/fishystuff/edge/tls/privkey.pem"
 printf 'refusal_condition_01=do not run on a host that is not the intended production host\n'
 printf 'refusal_condition_02=do not proceed unless activation review, admission evidence, and edge bundle checks pass on the exact files above\n'
 printf 'refusal_condition_03=do not proceed unless /api/v1/meta on %s reports the release identity above\n' "$api_upstream"
 printf 'refusal_condition_04=do not proceed unless GitOps served symlinks point at the site/CDN closure tuple above after local apply\n'
 printf 'refusal_condition_05=do not proceed unless %s and %s exist and are current production certificates\n' "/run/fishystuff/edge/tls/fullchain.pem" "/run/fishystuff/edge/tls/privkey.pem"
+printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=%s just gitops-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s\n' "$draft_sha256" "$draft_file" "$summary_file" "$admission_file"
+printf 'guarded_host_action_02=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
+printf 'guarded_host_action_03=systemctl daemon-reload\n'
+printf 'guarded_host_action_04=systemctl restart fishystuff-edge.service\n'
+printf 'post_handoff_read_only_check_01=just gitops-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+printf 'post_handoff_read_only_check_02=systemctl is-active --quiet fishystuff-edge.service\n'
+printf 'post_handoff_read_only_check_03=inspect public site/API/CDN/telemetry through production host routing before considering this handoff complete\n'
 printf 'planned_host_step_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_DRAFT_SHA256=%s just gitops-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s\n' "$draft_sha256" "$draft_file" "$summary_file" "$admission_file"
 printf 'planned_host_step_02=just gitops-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
 printf 'planned_host_step_03=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
