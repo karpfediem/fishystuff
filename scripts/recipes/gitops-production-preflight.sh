@@ -11,6 +11,8 @@ admission_file="$(normalize_named_arg admission_file "${3-}")"
 edge_bundle="$(normalize_named_arg edge_bundle "${4-auto}")"
 deploy_bin="$(normalize_named_arg deploy_bin "${5-auto}")"
 run_helper_tests="$(normalize_named_arg run_helper_tests "${6-true}")"
+served_state_dir="$(normalize_named_arg served_state_dir "${7-}")"
+rollback_set_path="$(normalize_named_arg rollback_set_path "${8-}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -73,6 +75,51 @@ run_step() {
   exit 1
 }
 
+compare_served_retained_releases() {
+  local served_retained_json="$1"
+
+  if ! jq -e \
+    --slurpfile served_retained "$served_retained_json" \
+    '
+      def normalize_handoff:
+        (.retained_releases // [])
+        | map({
+            release_id,
+            generation,
+            git_rev,
+            dolt_commit,
+            api_closure: .closures.api,
+            site_closure: .closures.site,
+            cdn_runtime_closure: .closures.cdn_runtime,
+            dolt_service_closure: .closures.dolt_service,
+            dolt_materialization: .dolt.materialization,
+            dolt_cache_dir: (.dolt.cache_dir // ""),
+            dolt_release_ref: (.dolt.release_ref // "")
+          });
+      def normalize_served:
+        .
+        | map({
+            release_id,
+            generation,
+            git_rev,
+            dolt_commit,
+            api_closure,
+            site_closure,
+            cdn_runtime_closure,
+            dolt_service_closure,
+            dolt_materialization,
+            dolt_cache_dir: (.dolt_cache_dir // ""),
+            dolt_release_ref: (.dolt_release_ref // "")
+          });
+      normalize_handoff == ($served_retained[0] | normalize_served)
+    ' "$summary_file" >/dev/null; then
+    echo "served rollback-set retained releases do not match the handoff summary" >&2
+    echo "served retained JSON: ${served_retained_json}" >&2
+    echo "handoff summary:      ${summary_file}" >&2
+    exit 2
+  fi
+}
+
 require_command jq
 require_command sha256sum
 require_command sed
@@ -88,6 +135,15 @@ if [[ -z "$admission_file" ]]; then
 fi
 admission_file="$(absolute_path "$admission_file")"
 run_helper_tests="$(bool_arg run_helper_tests "$run_helper_tests")"
+if [[ -n "$served_state_dir" ]]; then
+  served_state_dir="$(absolute_path "$served_state_dir")"
+fi
+if [[ -n "$rollback_set_path" ]]; then
+  rollback_set_path="$(absolute_path "$rollback_set_path")"
+fi
+if [[ -z "$served_state_dir" && -n "$rollback_set_path" ]]; then
+  served_state_dir="/var/lib/fishystuff/gitops"
+fi
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -105,6 +161,20 @@ run_step edge_handoff_bundle \
   bash scripts/recipes/gitops-check-production-edge-handoff-bundle.sh "$edge_bundle"
 run_step host_handoff_plan \
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "$draft_file" "$summary_file" "$admission_file" "$edge_bundle" "$deploy_bin"
+
+served_rollback_checked="false"
+served_rollback_set_path=""
+if [[ -n "$served_state_dir" ]]; then
+  if [[ -n "$rollback_set_path" ]]; then
+    served_rollback_set_path="$rollback_set_path"
+  else
+    served_rollback_set_path="${served_state_dir%/}/rollback-set/production.json"
+  fi
+  run_step served_rollback_set \
+    bash scripts/recipes/gitops-retained-releases-json.sh "$deploy_bin" production "$served_state_dir" "$served_rollback_set_path"
+  compare_served_retained_releases "${tmp_dir}/served_rollback_set.stdout"
+  served_rollback_checked="true"
+fi
 
 if [[ "$run_helper_tests" == "true" ]]; then
   require_command cargo
@@ -137,6 +207,11 @@ printf 'release_id=%s\n' "$release_id"
 printf 'release_identity=%s\n' "$release_identity"
 printf 'api_upstream=%s\n' "$api_upstream"
 printf 'helper_regressions_run=%s\n' "$run_helper_tests"
+printf 'served_rollback_set_checked=%s\n' "$served_rollback_checked"
+if [[ "$served_rollback_checked" == "true" ]]; then
+  printf 'served_state_dir=%s\n' "$served_state_dir"
+  printf 'served_rollback_set=%s\n' "$served_rollback_set_path"
+fi
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
 printf 'host_handoff_plan_begin\n'

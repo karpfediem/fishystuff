@@ -157,9 +157,9 @@ gitops-production-edge-handoff-bundle-test:
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
 
-# Run the local-only production GitOps preflight over exact handoff, admission, and edge artifacts.
-gitops-production-preflight draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto" run_helper_tests="true":
-  bash scripts/recipes/gitops-production-preflight.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{run_helper_tests}}"
+# Run the local-only production GitOps preflight over exact handoff, admission, edge, and optional served rollback artifacts.
+gitops-production-preflight draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto" run_helper_tests="true" served_state_dir="" rollback_set_path="":
+  bash scripts/recipes/gitops-production-preflight.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{run_helper_tests}}" "{{served_state_dir}}" "{{rollback_set_path}}"
 
 # Run fast local regression checks for the dry-run production host handoff plan.
 gitops-production-host-handoff-plan-test:
