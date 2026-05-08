@@ -78,6 +78,7 @@ gitops-helper-test:
   cargo test -p fishystuff_deploy
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
+  bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
 
 # Validate local GitOps served status, active selection, rollback set, and rollback readiness documents.
 gitops-check-served deploy_bin="auto" environment="local-test" state_dir="/var/lib/fishystuff/gitops" host="" release_id="":
@@ -150,6 +151,14 @@ gitops-production-edge-handoff-bundle bundle="auto":
 # Run fast local regression checks for production GitOps edge handoff bundle validation.
 gitops-production-edge-handoff-bundle-test:
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
+
+# Print the dry-run host-local production GitOps handoff plan. No remote mutation.
+gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
+  bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
+
+# Run fast local regression checks for the dry-run production host handoff plan.
+gitops-production-host-handoff-plan-test:
+  bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
 
 # Run a local-only GitOps flake check or NixOS VM test.
 gitops-vm-test test_name="single-host-candidate":
