@@ -286,6 +286,7 @@ api_bundle="${root}/api-bundle"
 dolt_bundle="${root}/dolt-bundle"
 api_env="${root}/api/runtime.env"
 dolt_env="${root}/dolt/beta.env"
+summary="${root}/beta-current.handoff-summary.json"
 fake_install="${root}/install"
 fake_systemctl="${root}/systemctl"
 
@@ -295,6 +296,20 @@ write_fake_install "$fake_install"
 write_fake_systemctl "$fake_systemctl"
 read -r api_unit_sha256 _ < <(sha256sum "${api_bundle}/artifacts/systemd/unit")
 read -r dolt_unit_sha256 _ < <(sha256sum "${dolt_bundle}/artifacts/systemd/unit")
+jq -n \
+  --arg api_bundle "$api_bundle" \
+  --arg dolt_bundle "$dolt_bundle" \
+  '{
+    environment: {
+      name: "beta"
+    },
+    active_release: {
+      closures: {
+        api: $api_bundle,
+        dolt_service: $dolt_bundle
+      }
+    }
+  }' >"$summary"
 
 env \
   FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 \
@@ -374,6 +389,38 @@ sed -n '4p' "${root}/systemctl.log" | grep -Fx "daemon-reload" >/dev/null
 sed -n '5p' "${root}/systemctl.log" | grep -Fx "restart fishystuff-beta-api.service" >/dev/null
 sed -n '6p' "${root}/systemctl.log" | grep -Fx "is-active --quiet fishystuff-beta-api.service" >/dev/null
 pass "valid beta service start sequence"
+
+: >"${root}/install.log"
+: >"${root}/systemctl.log"
+env \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 \
+  FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256="$dolt_unit_sha256" \
+  FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256="$api_unit_sha256" \
+  FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
+  FISHYSTUFF_FAKE_INSTALL_ROOT="${root}/fs-auto" \
+  FISHYSTUFF_FAKE_INSTALL_LOG="${root}/install.log" \
+  FISHYSTUFF_FAKE_SYSTEMCTL_LOG="${root}/systemctl.log" \
+  bash scripts/recipes/gitops-beta-start-services.sh \
+    auto \
+    auto \
+    "$api_env" \
+    "$dolt_env" \
+    "$fake_install" \
+    "$fake_systemctl" \
+    "$summary" \
+  >"${root}/auto-start.stdout"
+
+grep -F "gitops_beta_service_start_ok=true" "${root}/auto-start.stdout" >/dev/null
+grep -F "gitops_beta_service_start_api_bundle=${api_bundle}" "${root}/auto-start.stdout" >/dev/null
+grep -F "gitops_beta_service_start_dolt_bundle=${dolt_bundle}" "${root}/auto-start.stdout" >/dev/null
+sed -n '1p' "${root}/systemctl.log" | grep -Fx "daemon-reload" >/dev/null
+sed -n '2p' "${root}/systemctl.log" | grep -Fx "restart fishystuff-beta-dolt.service" >/dev/null
+sed -n '5p' "${root}/systemctl.log" | grep -Fx "restart fishystuff-beta-api.service" >/dev/null
+pass "start services resolves auto bundles from handoff summary"
 
 if grep -E 'fishystuff-api\.service|fishystuff-dolt\.service|/run/fishystuff/api/env|https://api\.fishystuff\.fish|https://cdn\.fishystuff\.fish' "${root}/start.stdout" >/dev/null; then
   printf '[gitops-beta-start-services-test] beta service start leaked production/shared service material\n' >&2

@@ -308,12 +308,12 @@ gitops-beta-runtime-env-test:
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
 
 # Print the beta API/Dolt service start plan from checked env files and service bundles. No mutation.
-gitops-beta-service-start-plan api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env":
-  bash scripts/recipes/gitops-beta-service-start-plan.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}"
+gitops-beta-service-start-plan api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" summary_file="data/gitops/beta-current.handoff-summary.json":
+  bash scripts/recipes/gitops-beta-service-start-plan.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{summary_file}}"
 
 # Install/restart beta Dolt, then beta API, after explicit opt-ins and checked unit hashes.
-gitops-beta-start-services api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" install_bin="install" systemctl_bin="systemctl":
-  bash scripts/recipes/gitops-beta-start-services.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{install_bin}}" "{{systemctl_bin}}"
+gitops-beta-start-services api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" install_bin="install" systemctl_bin="systemctl" summary_file="data/gitops/beta-current.handoff-summary.json":
+  bash scripts/recipes/gitops-beta-start-services.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{install_bin}}" "{{systemctl_bin}}" "{{summary_file}}"
 
 # Run fast local regression checks for the beta service start plan.
 gitops-beta-service-start-plan-test:

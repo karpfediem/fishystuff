@@ -9,6 +9,7 @@ api_bundle="$(normalize_named_arg api_bundle "${1-auto}")"
 dolt_bundle="$(normalize_named_arg dolt_bundle "${2-auto}")"
 api_env_file="$(normalize_named_arg api_env_file "${3-/var/lib/fishystuff/gitops-beta/api/runtime.env}")"
 dolt_env_file="$(normalize_named_arg dolt_env_file "${4-/var/lib/fishystuff/gitops-beta/dolt/beta.env}")"
+summary_file="$(normalize_named_arg summary_file "${5-${FISHYSTUFF_GITOPS_BETA_HANDOFF_SUMMARY:-data/gitops/beta-current.handoff-summary.json}}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -18,6 +19,15 @@ require_command() {
     echo "missing required command: ${command_name}" >&2
     exit 127
   fi
+}
+
+absolute_path() {
+  local path="$1"
+  if [[ "$path" == /* ]]; then
+    printf '%s' "$path"
+    return
+  fi
+  printf '%s/%s' "$RECIPE_REPO_ROOT" "$path"
 }
 
 kv_value() {
@@ -48,6 +58,31 @@ require_kv_equals() {
     echo "${key} expected ${expected}, got: ${value}" >&2
     exit 2
   fi
+}
+
+derive_bundles_from_summary() {
+  local path="$1"
+
+  if [[ "$api_bundle" != "auto" && "$dolt_bundle" != "auto" ]]; then
+    bundle_source="provided"
+    return
+  fi
+  if [[ ! -f "$path" ]]; then
+    bundle_source="auto_package"
+    return
+  fi
+
+  if ! jq -e '.environment.name == "beta"' "$path" >/dev/null; then
+    echo "beta service start plan requires a beta handoff summary, got: ${path}" >&2
+    exit 2
+  fi
+  if [[ "$api_bundle" == "auto" ]]; then
+    api_bundle="$(jq -er '.active_release.closures.api | select(type == "string" and length > 0)' "$path")"
+  fi
+  if [[ "$dolt_bundle" == "auto" ]]; then
+    dolt_bundle="$(jq -er '.active_release.closures.dolt_service | select(type == "string" and length > 0)' "$path")"
+  fi
+  bundle_source="handoff_summary"
 }
 
 require_runtime_env_matches_bundle() {
@@ -82,7 +117,11 @@ run_check() {
 }
 
 require_command awk
+require_command jq
 require_command mktemp
+
+summary_file="$(absolute_path "$summary_file")"
+derive_bundles_from_summary "$summary_file"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -142,6 +181,10 @@ require_runtime_env_matches_bundle api "$api_runtime_env_ok" "$api_runtime_env_t
 require_runtime_env_matches_bundle dolt "$dolt_runtime_env_ok" "$dolt_runtime_env_target"
 
 printf 'gitops_beta_service_start_plan_ok=true\n'
+printf 'gitops_beta_service_start_plan_bundle_source=%s\n' "$bundle_source"
+if [[ "$bundle_source" == "handoff_summary" ]]; then
+  printf 'gitops_beta_service_start_plan_handoff_summary=%s\n' "$summary_file"
+fi
 printf 'gitops_beta_service_start_plan_api_runtime_env=%s\n' "$api_runtime_env_ok"
 printf 'gitops_beta_service_start_plan_dolt_runtime_env=%s\n' "$dolt_runtime_env_ok"
 printf 'gitops_beta_service_start_plan_api_bundle=%s\n' "$api_bundle_path"

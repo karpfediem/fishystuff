@@ -11,6 +11,7 @@ api_env_file="$(normalize_named_arg api_env_file "${3-/var/lib/fishystuff/gitops
 dolt_env_file="$(normalize_named_arg dolt_env_file "${4-/var/lib/fishystuff/gitops-beta/dolt/beta.env}")"
 install_bin="$(normalize_named_arg install_bin "${5-${FISHYSTUFF_GITOPS_INSTALL_BIN:-install}}")"
 systemctl_bin="$(normalize_named_arg systemctl_bin "${6-${FISHYSTUFF_GITOPS_SYSTEMCTL_BIN:-systemctl}}")"
+summary_file="$(normalize_named_arg summary_file "${7-${FISHYSTUFF_GITOPS_BETA_HANDOFF_SUMMARY:-data/gitops/beta-current.handoff-summary.json}}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -105,7 +106,7 @@ plan_output="${tmp_dir}/service-start-plan.out"
 dolt_install_output="${tmp_dir}/dolt-install.out"
 api_install_output="${tmp_dir}/api-install.out"
 
-if ! bash scripts/recipes/gitops-beta-service-start-plan.sh "$api_bundle" "$dolt_bundle" "$api_env_file" "$dolt_env_file" >"$plan_output"; then
+if ! bash scripts/recipes/gitops-beta-service-start-plan.sh "$api_bundle" "$dolt_bundle" "$api_env_file" "$dolt_env_file" "$summary_file" >"$plan_output"; then
   echo "beta service start plan check failed" >&2
   cat "$plan_output" >&2 || true
   exit 2

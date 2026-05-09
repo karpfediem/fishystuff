@@ -230,10 +230,25 @@ api_bundle="${root}/api-bundle"
 dolt_bundle="${root}/dolt-bundle"
 api_env="${root}/api/runtime.env"
 dolt_env="${root}/dolt/beta.env"
+summary="${root}/beta-current.handoff-summary.json"
 make_beta_service_bundle "$api_bundle" api
 make_beta_service_bundle "$dolt_bundle" dolt
 read -r api_unit_sha256 _ < <(sha256sum "${api_bundle}/artifacts/systemd/unit")
 read -r dolt_unit_sha256 _ < <(sha256sum "${dolt_bundle}/artifacts/systemd/unit")
+jq -n \
+  --arg api_bundle "$api_bundle" \
+  --arg dolt_bundle "$dolt_bundle" \
+  '{
+    environment: {
+      name: "beta"
+    },
+    active_release: {
+      closures: {
+        api: $api_bundle,
+        dolt_service: $dolt_bundle
+      }
+    }
+  }' >"$summary"
 
 env \
   FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 \
@@ -259,6 +274,7 @@ FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
     "$api_env" \
     "$dolt_env" >"${root}/plan.stdout"
 grep -F "gitops_beta_service_start_plan_ok=true" "${root}/plan.stdout" >/dev/null
+grep -F "gitops_beta_service_start_plan_bundle_source=provided" "${root}/plan.stdout" >/dev/null
 grep -F "gitops_beta_service_start_plan_api_unit_sha256=${api_unit_sha256}" "${root}/plan.stdout" >/dev/null
 grep -F "gitops_beta_service_start_plan_dolt_unit_sha256=${dolt_unit_sha256}" "${root}/plan.stdout" >/dev/null
 grep -F "gitops_beta_service_start_plan_api_runtime_env_target=/var/lib/fishystuff/gitops-beta/api/runtime.env" "${root}/plan.stdout" >/dev/null
@@ -268,6 +284,33 @@ grep -F "FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1" "${root}/plan.stdout" >/de
 grep -F "systemctl is-active --quiet fishystuff-beta-dolt.service" "${root}/plan.stdout" >/dev/null
 grep -F "systemctl is-active --quiet fishystuff-beta-api.service" "${root}/plan.stdout" >/dev/null
 pass "valid beta service start plan"
+
+FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
+  bash scripts/recipes/gitops-beta-service-start-plan.sh \
+    auto \
+    auto \
+    "$api_env" \
+    "$dolt_env" \
+    "$summary" >"${root}/summary-plan.stdout"
+grep -F "gitops_beta_service_start_plan_bundle_source=handoff_summary" "${root}/summary-plan.stdout" >/dev/null
+grep -F "gitops_beta_service_start_plan_handoff_summary=${summary}" "${root}/summary-plan.stdout" >/dev/null
+grep -F "gitops_beta_service_start_plan_api_bundle=${api_bundle}" "${root}/summary-plan.stdout" >/dev/null
+grep -F "gitops_beta_service_start_plan_dolt_bundle=${dolt_bundle}" "${root}/summary-plan.stdout" >/dev/null
+pass "derive beta service bundles from handoff summary"
+
+production_summary="${root}/production-current.handoff-summary.json"
+jq '.environment.name = "production"' "$summary" >"$production_summary"
+expect_fail_contains \
+  "reject production handoff summary" \
+  "requires a beta handoff summary" \
+  env \
+    FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
+    bash scripts/recipes/gitops-beta-service-start-plan.sh \
+      auto \
+      auto \
+      "$api_env" \
+      "$dolt_env" \
+      "$production_summary"
 
 if grep -E 'fishystuff-api\.service|fishystuff-dolt\.service|/run/fishystuff/api/env|https://api\.fishystuff\.fish|https://cdn\.fishystuff\.fish' "${root}/plan.stdout" >/dev/null; then
   printf '[gitops-beta-service-start-plan-test] beta start plan leaked production/shared service material\n' >&2
