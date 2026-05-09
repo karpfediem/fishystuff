@@ -45,6 +45,8 @@ require_beta_path "Dolt runtime env path" "$dolt_runtime_env_path" "/var/lib/fis
 
 resident_target="$(deployment_resident_target beta)"
 resident_hostname="$(deployment_resident_hostname beta)"
+current_hostname="$(deployment_current_hostname)"
+resident_hostname_match="$(deployment_hostname_match_status "$current_hostname" "$resident_hostname")"
 telemetry_target="$(deployment_telemetry_target beta)"
 telemetry_hostname="$(deployment_telemetry_hostname beta)"
 control_target="$(deployment_control_target beta)"
@@ -65,8 +67,10 @@ fi
 printf 'gitops_beta_host_bootstrap_plan_ok=true\n'
 printf 'deployment=beta\n'
 printf 'deployment_environment=beta\n'
+printf 'current_hostname=%s\n' "$current_hostname"
 printf 'resident_target=%s\n' "$resident_target"
 printf 'resident_expected_hostname=%s\n' "$resident_hostname"
+printf 'resident_expected_hostname_match=%s\n' "$resident_hostname_match"
 printf 'telemetry_target=%s\n' "$telemetry_target"
 printf 'telemetry_expected_hostname=%s\n' "$telemetry_hostname"
 printf 'control_target=%s\n' "$control_target"

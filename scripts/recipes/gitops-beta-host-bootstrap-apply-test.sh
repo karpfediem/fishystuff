@@ -145,6 +145,18 @@ EOF
   chmod +x "$path"
 }
 
+write_fake_hostname() {
+  local path="$1"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${FISHYSTUFF_FAKE_HOSTNAME:-site-nbg1-beta}"
+EOF
+  chmod +x "$path"
+}
+
 make_fake_commands() {
   local bin_dir="$1"
 
@@ -153,6 +165,7 @@ make_fake_commands() {
   write_fake_getent "${bin_dir}/getent"
   write_fake_groupadd "${bin_dir}/groupadd"
   write_fake_useradd "${bin_dir}/useradd"
+  write_fake_hostname "${bin_dir}/hostname"
 }
 
 expect_fail_contains \
@@ -165,6 +178,7 @@ make_fake_commands "${root}/bin"
 stdout="${root}/stdout"
 
 env \
+  PATH="${root}/bin:$PATH" \
   FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 \
@@ -181,6 +195,9 @@ env \
   >"$stdout"
 
 grep -F "gitops_beta_host_bootstrap_apply_ok=true" "$stdout" >/dev/null
+grep -F "gitops_beta_host_bootstrap_current_hostname=site-nbg1-beta" "$stdout" >/dev/null
+grep -F "gitops_beta_host_bootstrap_expected_hostname=site-nbg1-beta" "$stdout" >/dev/null
+grep -F "gitops_beta_host_bootstrap_expected_hostname_match=true" "$stdout" >/dev/null
 grep -F "gitops_beta_host_bootstrap_group_action=created" "$stdout" >/dev/null
 grep -F "gitops_beta_host_bootstrap_user_action=created" "$stdout" >/dev/null
 grep -F "gitops_beta_host_bootstrap_directory_01=0750:/var/lib/fishystuff/gitops-beta" "$stdout" >/dev/null
@@ -201,6 +218,7 @@ stdout_existing="${root_existing}/stdout"
 touch "${root_existing}/groupadd.log" "${root_existing}/useradd.log"
 
 env \
+  PATH="${root_existing}/bin:$PATH" \
   FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 \
@@ -226,12 +244,35 @@ if [[ -s "${root_existing}/groupadd.log" || -s "${root_existing}/useradd.log" ]]
 fi
 pass "skip existing beta user and group"
 
+root_wrong_host="$(mktemp -d)"
+make_fake_commands "${root_wrong_host}/bin"
+expect_fail_contains \
+  "reject bootstrap apply on wrong host" \
+  "resident_expected_hostname_match must be true" \
+  env \
+    PATH="${root_wrong_host}/bin:$PATH" \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 \
+    FISHYSTUFF_FAKE_HOSTNAME=operator-dev \
+    FISHYSTUFF_FAKE_INSTALL_ROOT="${root_wrong_host}/fs" \
+    FISHYSTUFF_FAKE_INSTALL_LOG="${root_wrong_host}/install.log" \
+    FISHYSTUFF_FAKE_GETENT_LOG="${root_wrong_host}/getent.log" \
+    FISHYSTUFF_FAKE_GROUPADD_LOG="${root_wrong_host}/groupadd.log" \
+    FISHYSTUFF_FAKE_USERADD_LOG="${root_wrong_host}/useradd.log" \
+    bash scripts/recipes/gitops-beta-host-bootstrap-apply.sh \
+      "${root_wrong_host}/bin/install" \
+      "${root_wrong_host}/bin/groupadd" \
+      "${root_wrong_host}/bin/useradd" \
+      "${root_wrong_host}/bin/getent"
+
 root_reject="$(mktemp -d)"
 make_fake_commands "${root_reject}/bin"
 expect_fail_contains \
   "reject production SecretSpec profile" \
   "must not run with production SecretSpec profile" \
   env \
+    PATH="${root_reject}/bin:$PATH" \
     FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 \

@@ -36,11 +36,22 @@ expect_fail_contains() {
 }
 
 root="$(mktemp -d)"
+fake_bin="${root}/bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+printf 'site-nbg1-beta\n'
+EOF
+chmod +x "${fake_bin}/hostname"
+PATH="${fake_bin}:${PATH}"
 plan_output="${root}/plan.out"
 
 bash scripts/recipes/gitops-beta-host-bootstrap-plan.sh >"$plan_output"
 grep -F "gitops_beta_host_bootstrap_plan_ok=true" "$plan_output" >/dev/null
+grep -F "current_hostname=site-nbg1-beta" "$plan_output" >/dev/null
 grep -F "resident_target=root@beta.fishystuff.fish" "$plan_output" >/dev/null
+grep -F "resident_expected_hostname=site-nbg1-beta" "$plan_output" >/dev/null
+grep -F "resident_expected_hostname_match=true" "$plan_output" >/dev/null
 grep -F "site_base_url=https://beta.fishystuff.fish/" "$plan_output" >/dev/null
 grep -F "api_base_url=https://api.beta.fishystuff.fish/" "$plan_output" >/dev/null
 grep -F "cdn_base_url=https://cdn.beta.fishystuff.fish/" "$plan_output" >/dev/null

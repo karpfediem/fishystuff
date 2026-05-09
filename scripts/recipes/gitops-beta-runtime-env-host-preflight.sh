@@ -85,39 +85,13 @@ print_env_path_preflight() {
   printf 'runtime_env_host_preflight_%s_file_writable=%s\n' "$label" "$file_writable"
 }
 
-hostname_value() {
-  local value=""
-
-  value="$(hostname -f 2>/dev/null || true)"
-  if [[ -z "$value" ]]; then
-    value="$(hostname 2>/dev/null || true)"
-  fi
-  if [[ -z "$value" ]]; then
-    value="unknown"
-  fi
-  printf '%s' "$value"
-}
-
-hostname_match_status() {
-  local current="$1"
-  local expected="$2"
-
-  if [[ "$current" == "unknown" || -z "$expected" ]]; then
-    printf 'unknown'
-  elif [[ "$current" == "$expected" || "$current" == "${expected}."* ]]; then
-    printf 'true'
-  else
-    printf 'false'
-  fi
-}
-
 require_safe_runtime_env_path api "$api_env_file"
 require_safe_runtime_env_path dolt "$dolt_env_file"
 assert_deployment_configuration_safe beta
 
-current_hostname="$(hostname_value)"
+current_hostname="$(deployment_current_hostname)"
 expected_hostname="$(deployment_resident_hostname beta)"
-expected_match="$(hostname_match_status "$current_hostname" "$expected_hostname")"
+expected_match="$(deployment_hostname_match_status "$current_hostname" "$expected_hostname")"
 api_parent="$(dirname "$api_env_file")"
 dolt_parent="$(dirname "$dolt_env_file")"
 path_ready="false"

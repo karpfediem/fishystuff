@@ -101,6 +101,7 @@ require_bootstrap_plan_safety() {
   require_plan_equals gitops_beta_host_bootstrap_plan_ok true "$plan_output"
   require_plan_equals deployment beta "$plan_output"
   require_plan_equals deployment_environment beta "$plan_output"
+  require_plan_equals resident_expected_hostname_match true "$plan_output"
   require_plan_equals api_runtime_env_path /var/lib/fishystuff/gitops-beta/api/runtime.env "$plan_output"
   require_plan_equals api_release_env_path /var/lib/fishystuff/gitops-beta/api/beta.env "$plan_output"
   require_plan_equals dolt_runtime_env_path /var/lib/fishystuff/gitops-beta/dolt/beta.env "$plan_output"
@@ -175,6 +176,9 @@ group_action="$(ensure_group "$group")"
 user_action="$(ensure_user "$user" "$group" /var/lib/fishystuff/beta-dolt/home)"
 
 printf 'gitops_beta_host_bootstrap_apply_ok=true\n'
+printf 'gitops_beta_host_bootstrap_current_hostname=%s\n' "$(require_plan_value current_hostname "$plan_output")"
+printf 'gitops_beta_host_bootstrap_expected_hostname=%s\n' "$(require_plan_value resident_expected_hostname "$plan_output")"
+printf 'gitops_beta_host_bootstrap_expected_hostname_match=%s\n' "$(require_plan_value resident_expected_hostname_match "$plan_output")"
 printf 'gitops_beta_host_bootstrap_group=%s\n' "$group"
 printf 'gitops_beta_host_bootstrap_group_action=%s\n' "$group_action"
 printf 'gitops_beta_host_bootstrap_user=%s\n' "$user"

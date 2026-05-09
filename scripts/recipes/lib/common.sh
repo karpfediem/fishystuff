@@ -520,6 +520,32 @@ ssh_target_host() {
   printf '%s' "$value"
 }
 
+deployment_current_hostname() {
+  local value=""
+
+  value="$(hostname -f 2>/dev/null || true)"
+  if [[ -z "$value" ]]; then
+    value="$(hostname 2>/dev/null || true)"
+  fi
+  if [[ -z "$value" ]]; then
+    value="unknown"
+  fi
+  printf '%s' "$value"
+}
+
+deployment_hostname_match_status() {
+  local current="$1"
+  local expected="$2"
+
+  if [[ "$current" == "unknown" || -z "$expected" ]]; then
+    printf 'unknown'
+  elif [[ "$current" == "$expected" || "$current" == "${expected}."* ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
 deployment_expected_public_host() {
   local deployment
   local service
