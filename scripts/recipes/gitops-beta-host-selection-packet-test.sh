@@ -56,8 +56,9 @@ grep -F "selection_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "host_public_ipv4=203.0.113.10" "${root}/ready.stdout" >/dev/null
 grep -F "resident_target=root@203.0.113.10" "${root}/ready.stdout" >/dev/null
 grep -F "operator_env_01=FISHYSTUFF_BETA_RESIDENT_TARGET=root@203.0.113.10" "${root}/ready.stdout" >/dev/null
-grep -F "read_only_next_command_01=FISHYSTUFF_BETA_RESIDENT_TARGET=root@203.0.113.10 just gitops-beta-runtime-env-host-preflight" "${root}/ready.stdout" >/dev/null
-grep -F "guarded_followup_command_01=FISHYSTUFF_BETA_RESIDENT_TARGET=root@203.0.113.10 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1" "${root}/ready.stdout" >/dev/null
+grep -F "read_only_next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-remote-host-preflight target=root@203.0.113.10" "${root}/ready.stdout" >/dev/null
+grep -F "guarded_followup_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1" "${root}/ready.stdout" >/dev/null
+grep -F "just gitops-beta-remote-host-bootstrap target=root@203.0.113.10" "${root}/ready.stdout" >/dev/null
 pass "ready beta host selection packet"
 
 bash scripts/recipes/gitops-beta-host-selection-packet.sh public_ipv4=203.0.113.20 host_name=site-nbg1-beta-v2 deployer >"${root}/custom.stdout"

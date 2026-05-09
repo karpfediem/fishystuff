@@ -23,6 +23,9 @@ just gitops-beta-host-provision-plan
 just gitops-beta-host-provision-plan-test
 just gitops-beta-host-selection-packet public_ipv4=<new-beta-public-ip>
 just gitops-beta-host-selection-packet-test
+FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-remote-host-preflight target=root@<new-beta-public-ip>
+FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=root@<new-beta-public-ip>
+just gitops-beta-remote-host-test
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-hetzner-inventory-packet
 just gitops-beta-host-replacement-plan
 just gitops-beta-host-replacement-plan-test
@@ -162,7 +165,9 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-host-provision-plan` is the read-only packet for selecting or provisioning the first clean beta resident host. It records the intended Hetzner shape (`site-nbg1-beta`, `nbg1`, `nbg1-dc3`, `cx33`, `debian-13`, beta deploy SSH key name), carries the beta deploy credential status, warns not to use public beta DNS for a new host until the operator confirms it points at that host, and emits only manual confirmation steps. It deliberately emits no `hcloud`, SSH, DNS, deploy, or local-host mutation command.
 
-`just gitops-beta-host-selection-packet public_ipv4=<new-beta-public-ip>` binds an operator-confirmed fresh beta host address to the next read-only and guarded commands. It prints `FISHYSTUFF_BETA_RESIDENT_TARGET=root@<ip>` command prefixes for the host preflight, first-service packet, and guarded host bootstrap without probing SSH, changing DNS, or mutating any host.
+`just gitops-beta-host-selection-packet public_ipv4=<new-beta-public-ip>` binds an operator-confirmed fresh beta host address to the next read-only and guarded commands. It prints `FISHYSTUFF_BETA_RESIDENT_TARGET=root@<ip>` command prefixes for remote host preflight, first-service packet review, and guarded remote bootstrap without probing SSH, changing DNS, or mutating any host.
+
+`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-remote-host-preflight target=root@<new-beta-public-ip>` is the read-only SSH preflight for a fresh beta host. It requires the beta deploy SSH key, refuses DNS targets and the previous beta host IP, checks the remote hostname, OS, systemd, Nix/Nix daemon presence, beta user/group, and beta directories, and reports no host mutation. `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=root@<new-beta-public-ip>` is the guarded remote bootstrap for only the beta Dolt user/group and beta directories. It does not install Nix, write runtime env files, install units, start services, deploy releases, mutate Hetzner, mutate Cloudflare, or touch DNS.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-hetzner-inventory-packet` is the read-only Hetzner inventory view for beta replacement. It checks the old beta server name and the replacement server name through the Hetzner API without creating, deleting, rebuilding, or rebooting anything. `just gitops-beta-host-replacement-plan` combines that inventory with the beta proof index and keeps the replacement lifecycle explicit: create/select the replacement host first, bootstrap and prove it, and only then retire the old beta host after manual confirmation. It emits no `hcloud`, SSH, DNS, deploy, or host-local mutation command.
 

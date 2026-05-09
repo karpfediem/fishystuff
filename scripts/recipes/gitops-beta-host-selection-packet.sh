@@ -61,9 +61,9 @@ printf 'host_reconfigure_performed=false\n'
 printf 'operator_env_01=FISHYSTUFF_BETA_RESIDENT_TARGET=%s\n' "$resident_target"
 printf 'operator_env_02=FISHYSTUFF_BETA_RESIDENT_HOSTNAME=%s\n' "$expected_hostname"
 printf 'operator_env_03=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy\n'
-printf 'read_only_next_command_01=FISHYSTUFF_BETA_RESIDENT_TARGET=%s just gitops-beta-runtime-env-host-preflight\n' "$resident_target"
+printf 'read_only_next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-remote-host-preflight target=%s\n' "$resident_target"
 printf 'read_only_next_command_02=FISHYSTUFF_BETA_RESIDENT_TARGET=%s just gitops-beta-first-service-set-packet\n' "$resident_target"
-printf 'guarded_followup_command_01=FISHYSTUFF_BETA_RESIDENT_TARGET=%s FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply\n' "$resident_target"
+printf 'guarded_followup_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=%s\n' "$resident_target"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
 printf 'local_host_mutation_performed=false\n'

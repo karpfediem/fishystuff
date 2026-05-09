@@ -364,6 +364,18 @@ gitops-beta-host-selection-packet public_ipv4="" host_name="site-nbg1-beta" ssh_
 gitops-beta-host-selection-packet-test:
   bash scripts/recipes/gitops-beta-host-selection-packet-test.sh
 
+# Probe a fresh beta host over SSH through beta-deploy credentials. Read-only.
+gitops-beta-remote-host-preflight target="" expected_hostname="site-nbg1-beta":
+  @bash scripts/recipes/gitops-beta-remote-host-preflight.sh "{{target}}" "{{expected_hostname}}"
+
+# Bootstrap beta-local users/directories on a fresh beta host after explicit opt-ins. Remote host mutation.
+gitops-beta-remote-host-bootstrap target="" expected_hostname="site-nbg1-beta":
+  bash scripts/recipes/gitops-beta-remote-host-bootstrap.sh "{{target}}" "{{expected_hostname}}"
+
+# Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
+gitops-beta-remote-host-test:
+  bash scripts/recipes/gitops-beta-remote-host-test.sh
+
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
   @bash scripts/recipes/gitops-beta-hetzner-inventory-packet.sh "{{old_server_name}}" "{{replacement_server_name}}"
