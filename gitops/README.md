@@ -81,6 +81,8 @@ just gitops-beta-copy-handoff-closures
 just gitops-beta-copy-handoff-closures-test
 just gitops-beta-copy-runtime-env
 just gitops-beta-copy-runtime-env-test
+just gitops-beta-remote-materialize-dolt-ref
+just gitops-beta-remote-materialize-dolt-ref-test
 just gitops-beta-remote-start-services
 just gitops-beta-remote-start-services-test
 just gitops-beta-service-start-plan
@@ -631,6 +633,8 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_BETA_REMOTE_CLOSURE_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-copy-handoff-closures target=root@<new-beta-public-ip>` copies the exact checked beta handoff closures to the host Nix store. It is still not a service deployment: it does not write env files, install units, start services, mutate DNS, or change cloud infrastructure.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1 FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-copy-runtime-env target=root@<new-beta-public-ip>` writes the checked beta API/Dolt runtime env files to the fresh host. API secrets come from the narrow `beta-runtime` profile, and service installation/start remains a later guarded step.
+
+`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_REF_MATERIALIZE=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_STOP_SERVICES=1 FISHYSTUFF_GITOPS_BETA_REMOTE_DOLT_REF_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-remote-materialize-dolt-ref target=root@<new-beta-public-ip>` fetches the checked beta Dolt branch into the fresh host's Dolt repo and pins the checked `fishystuff/gitops-beta/<release>` ref before the API is started against it. This keeps API admission tied to the exact handoff commit rather than to a mutable branch head.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_SERVICE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked-dolt-unit-sha256> FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked-api-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-services target=root@<new-beta-public-ip>` installs and starts only the checked beta Dolt/API service units on that fresh host. It starts Dolt before API and waits for loopback Dolt SQL plus API `/api/v1/meta` to report the selected release and Dolt commit; edge routing, DNS, Hetzner, Cloudflare, production, and old-beta retirement remain separate steps.
 

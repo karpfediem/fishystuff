@@ -384,6 +384,10 @@ gitops-beta-copy-handoff-closures target="" summary_file="data/gitops/beta-curre
 gitops-beta-copy-runtime-env target="" api_source="" dolt_source="" ssh_bin="ssh" scp_bin="scp" summary_file="data/gitops/beta-current.handoff-summary.json":
   bash scripts/recipes/gitops-beta-copy-runtime-env.sh "{{target}}" "{{api_source}}" "{{dolt_source}}" "{{ssh_bin}}" "{{scp_bin}}" "{{summary_file}}"
 
+# Fetch beta Dolt data and pin the checked GitOps release ref on the fresh beta host. Remote host mutation.
+gitops-beta-remote-materialize-dolt-ref target="" expected_hostname="site-nbg1-beta" summary_file="data/gitops/beta-current.handoff-summary.json" ssh_bin="ssh":
+  bash scripts/recipes/gitops-beta-remote-materialize-dolt-ref.sh "{{target}}" "{{expected_hostname}}" "{{summary_file}}" "{{ssh_bin}}"
+
 # Install and start the checked beta Dolt/API service units on the fresh beta host. Remote host mutation.
 gitops-beta-remote-start-services target="" expected_hostname="site-nbg1-beta" summary_file="data/gitops/beta-current.handoff-summary.json" ssh_bin="ssh":
   bash scripts/recipes/gitops-beta-remote-start-services.sh "{{target}}" "{{expected_hostname}}" "{{summary_file}}" "{{ssh_bin}}"
@@ -403,6 +407,10 @@ gitops-beta-copy-handoff-closures-test:
 # Run fast local regression checks for beta remote runtime env copying.
 gitops-beta-copy-runtime-env-test:
   bash scripts/recipes/gitops-beta-copy-runtime-env-test.sh
+
+# Run fast local regression checks for remote beta Dolt release ref materialization.
+gitops-beta-remote-materialize-dolt-ref-test:
+  bash scripts/recipes/gitops-beta-remote-materialize-dolt-ref-test.sh
 
 # Run fast local regression checks for remote beta service starting.
 gitops-beta-remote-start-services-test:
