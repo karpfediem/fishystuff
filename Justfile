@@ -436,6 +436,14 @@ gitops-beta-remote-install-edge-tls-test:
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
   @bash scripts/recipes/gitops-beta-hetzner-inventory-packet.sh "{{old_server_name}}" "{{replacement_server_name}}"
 
+# Move beta-only Cloudflare A records to the selected fresh beta IPv4. Cloudflare DNS mutation.
+gitops-beta-cloudflare-dns-cutover target_ipv4="" zone_name="fishystuff.fish" curl_bin="curl":
+  bash scripts/recipes/gitops-beta-cloudflare-dns-cutover.sh "{{target_ipv4}}" "{{zone_name}}" "{{curl_bin}}"
+
+# Run fast local regression checks for the beta-only Cloudflare DNS cutover helper.
+gitops-beta-cloudflare-dns-cutover-test:
+  bash scripts/recipes/gitops-beta-cloudflare-dns-cutover-test.sh
+
 # Plan the fresh beta host replacement sequence. No hcloud, SSH, or DNS mutation.
 gitops-beta-host-replacement-plan old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2" proof_dir="data/gitops":
   @bash scripts/recipes/gitops-beta-host-replacement-plan.sh "{{old_server_name}}" "{{replacement_server_name}}" "{{proof_dir}}"

@@ -25,6 +25,7 @@ FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_SERVICE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked-dolt-unit-sha256> FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked-api-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-services target=root@<new-beta-public-ip>
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_PLACEHOLDER_TLS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked-beta-edge-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-edge target=root@<new-beta-public-ip>
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_TLS_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_FULLCHAIN_SHA256=<checked-fullchain-sha256> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_PRIVKEY_SHA256=<checked-privkey-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-install-edge-tls target=root@<new-beta-public-ip> fullchain=<local-fullchain.pem> privkey=<local-privkey.pem>
+FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_DNS_CUTOVER=1 FISHYSTUFF_GITOPS_BETA_DNS_TARGET_IPV4=<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-cloudflare-dns-cutover target_ipv4=<new-beta-public-ip>
 just gitops-beta-remote-host-test
 just gitops-beta-remote-install-nix-test
 just gitops-beta-copy-handoff-closures-test
@@ -33,6 +34,7 @@ just gitops-beta-remote-materialize-dolt-ref-test
 just gitops-beta-remote-start-services-test
 just gitops-beta-remote-start-edge-test
 just gitops-beta-remote-install-edge-tls-test
+just gitops-beta-cloudflare-dns-cutover-test
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-hetzner-inventory-packet
 just gitops-beta-host-replacement-plan
 just gitops-beta-host-replacement-plan-test
