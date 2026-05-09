@@ -21,6 +21,8 @@ just gitops-beta-edge-handoff-bundle-test
 just gitops-beta-current-desired
 just gitops-beta-current-validate
 just gitops-beta-current-desired-test
+just gitops-beta-current-handoff
+just gitops-beta-current-handoff-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -75,6 +77,8 @@ The validator refuses production hostnames, production served roots, production 
 `just gitops-beta-current-desired` writes `data/gitops/beta-current.desired.json` as a validate-mode desired-state snapshot from exact local outputs. It is parameterized from the production-current generator but pins the beta service bundle attrs, `site-content-beta`, Dolt branch context `beta`, beta gcroot/cache roots, and the beta release-ref prefix `fishystuff/gitops-beta`. The default CDN runtime attr is `cdn-serving-root`, so the recipe requires `FISHYSTUFF_OPERATOR_ROOT` for operator-local CDN data unless `FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE` supplies an exact existing closure. It does not apply or serve anything.
 
 `just gitops-beta-current-validate` generates that same snapshot and type-checks it through `gitops/main.mcl`. It is still local-only: no SSH, no Hetzner, no Cloudflare, no systemd changes.
+
+`just gitops-beta-current-handoff` adds the first beta handoff proof around that snapshot. It generates the beta desired-state file, verifies local closure paths, verifies the active CDN serving manifest, runs GitOps unify, writes a handoff summary, and verifies that summary. Unlike production-current handoff it does not require retained rollback releases yet, because this is the first clean beta service-set candidate rather than a live production upgrade. It records that serving readiness was intentionally skipped.
 
 Next pieces to add:
 

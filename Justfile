@@ -78,6 +78,7 @@ gitops-helper-test:
   cargo test -p fishystuff_deploy
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-beta-current-desired-test.sh
+  bash scripts/recipes/gitops-beta-current-handoff-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -120,6 +121,10 @@ gitops-beta-current-desired output="data/gitops/beta-current.desired.json" dolt_
 gitops-beta-current-validate output="data/gitops/beta-current.desired.json" dolt_ref="beta" mgmt_bin="auto":
   bash scripts/recipes/gitops-beta-current-desired.sh "{{output}}" "{{dolt_ref}}"
   bash scripts/recipes/gitops-unify.sh "{{mgmt_bin}}" "{{output}}"
+
+# Generate and validate a local beta-current handoff snapshot. No remote mutation.
+gitops-beta-current-handoff output="data/gitops/beta-current.desired.json" dolt_ref="beta" mgmt_bin="auto" deploy_bin="auto" summary_output="":
+  bash scripts/recipes/gitops-beta-current-handoff.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
 
 # Generate and validate a production-current handoff snapshot with retained rollback input.
 gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
@@ -172,6 +177,10 @@ gitops-production-current-handoff-test:
 # Run fast local regression checks for beta current desired-state generation.
 gitops-beta-current-desired-test:
   bash scripts/recipes/gitops-beta-current-desired-test.sh
+
+# Run fast local regression checks for beta current handoff generation.
+gitops-beta-current-handoff-test:
+  bash scripts/recipes/gitops-beta-current-handoff-test.sh
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":

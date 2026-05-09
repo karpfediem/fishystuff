@@ -23,12 +23,63 @@ require_command() {
 require_command jq
 require_command sha256sum
 
+environment="${FISHYSTUFF_GITOPS_ENVIRONMENT:-production}"
+current_desired_script="${FISHYSTUFF_GITOPS_CURRENT_DESIRED_SCRIPT:-scripts/recipes/gitops-production-current-desired.sh}"
+handoff_schema="${FISHYSTUFF_GITOPS_HANDOFF_SCHEMA:-}"
+if [[ -z "$handoff_schema" ]]; then
+  if [[ "$environment" == "production" ]]; then
+    handoff_schema="fishystuff.gitops.production-current-handoff.v1"
+  else
+    handoff_schema="fishystuff.gitops.current-handoff.v1"
+  fi
+fi
+require_retained_releases="${FISHYSTUFF_GITOPS_HANDOFF_REQUIRE_RETAINED:-}"
+if [[ -z "$require_retained_releases" ]]; then
+  if [[ "$environment" == "production" ]]; then
+    require_retained_releases="true"
+  else
+    require_retained_releases="false"
+  fi
+fi
+check_desired_serving="${FISHYSTUFF_GITOPS_HANDOFF_CHECK_DESIRED_SERVING:-$require_retained_releases}"
+
+bool_arg() {
+  local name="$1"
+  local value="$2"
+  case "$value" in
+    true | yes | 1)
+      printf 'true'
+      ;;
+    false | no | 0)
+      printf 'false'
+      ;;
+    *)
+      echo "${name} must be true or false, got: ${value}" >&2
+      exit 2
+      ;;
+  esac
+}
+
+require_safe_name() {
+  local name="$1"
+  local value="$2"
+  require_value "$value" "$name must not be empty"
+  if [[ ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "$name contains unsupported characters: $value" >&2
+    exit 2
+  fi
+}
+
+require_safe_name FISHYSTUFF_GITOPS_ENVIRONMENT "$environment"
+require_retained_releases="$(bool_arg FISHYSTUFF_GITOPS_HANDOFF_REQUIRE_RETAINED "$require_retained_releases")"
+check_desired_serving="$(bool_arg FISHYSTUFF_GITOPS_HANDOFF_CHECK_DESIRED_SERVING "$check_desired_serving")"
+
 if [[ "$output" == "-" ]]; then
   echo "gitops-production-current-handoff requires a file output, not '-'" >&2
   exit 2
 fi
 
-if [[ -z "${FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE:-}" && -z "${FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON:-}" ]]; then
+if [[ "$require_retained_releases" == "true" && -z "${FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE:-}" && -z "${FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON:-}" ]]; then
   echo "gitops-production-current-handoff requires FISHYSTUFF_GITOPS_RETAINED_RELEASES_FILE or FISHYSTUFF_GITOPS_RETAINED_RELEASES_JSON" >&2
   echo "derive it with: just gitops-retained-releases-json > /tmp/fishystuff-retained-releases.json" >&2
   exit 2
@@ -62,18 +113,21 @@ write_handoff_summary() {
   jq -S \
     --arg desired_state_path "$desired_state" \
     --arg desired_state_sha256 "$desired_state_sha256" \
+    --arg environment "$environment" \
+    --arg handoff_schema "$handoff_schema" \
+    --argjson desired_serving_preflight_passed "$check_desired_serving" \
     --slurpfile cdn_retention "$cdn_retention" \
-    '(.environments.production // error("production environment is missing")) as $env
+    '(.environments[$environment] // error($environment + " environment is missing")) as $env
     | (.releases[$env.active_release] // error("active release is missing")) as $active
     | {
-        schema: "fishystuff.gitops.production-current-handoff.v1",
+        schema: $handoff_schema,
         desired_state_path: $desired_state_path,
         desired_state_sha256: $desired_state_sha256,
         cluster,
         mode,
         desired_generation: .generation,
         environment: {
-          name: "production",
+          name: $environment,
           host: $env.host,
           serve_requested: $env.serve,
           active_release: $env.active_release,
@@ -123,8 +177,11 @@ write_handoff_summary() {
         cdn_retention: $cdn_retention[0],
         checks: {
           production_current_desired_generated: true,
-          desired_serving_preflight_passed: true,
+          current_desired_generated: true,
+          desired_serving_preflight_passed: $desired_serving_preflight_passed,
+          desired_serving_preflight_skipped: ($desired_serving_preflight_passed | not),
           closure_paths_verified: true,
+          cdn_manifest_verified: true,
           cdn_retained_roots_verified: true,
           gitops_unify_passed: true,
           remote_deploy_performed: false,
@@ -138,7 +195,8 @@ verify_desired_closure_paths() {
   local desired_state="$1"
 
   jq -r \
-    '(.environments.production // error("production environment is missing")) as $env
+    --arg environment "$environment" \
+    '(.environments[$environment] // error($environment + " environment is missing")) as $env
     | (
         [$env.active_release] + $env.retained_releases
       )[] as $release_id
@@ -170,7 +228,8 @@ write_cdn_retention_summary() {
 
   active_cdn_runtime="$(
     jq -er \
-      '(.environments.production // error("production environment is missing")) as $env
+      --arg environment "$environment" \
+      '(.environments[$environment] // error($environment + " environment is missing")) as $env
       | (.releases[$env.active_release] // error("active release is missing")) as $active
       | $active.closures.cdn_runtime.store_path
       | select(type == "string" and length > 0)' \
@@ -178,7 +237,7 @@ write_cdn_retention_summary() {
   )"
   active_manifest="${active_cdn_runtime}/cdn-serving-manifest.json"
   if [[ ! -f "$active_manifest" ]]; then
-    echo "active production cdn_runtime does not contain cdn-serving-manifest.json: ${active_cdn_runtime}" >&2
+    echo "active ${environment} cdn_runtime does not contain cdn-serving-manifest.json: ${active_cdn_runtime}" >&2
     exit 2
   fi
 
@@ -193,7 +252,8 @@ write_cdn_retention_summary() {
 
   retained_entries="$(mktemp)"
   jq -r \
-    '(.environments.production // error("production environment is missing")) as $env
+    --arg environment "$environment" \
+    '(.environments[$environment] // error($environment + " environment is missing")) as $env
     | $env.retained_releases[] as $release_id
     | (.releases[$release_id] // error("retained release " + $release_id + " is missing")) as $release
     | [$release_id, $release.closures.cdn_runtime.store_path]
@@ -251,8 +311,10 @@ write_cdn_retention_summary() {
 }
 
 cdn_retention_summary="$(mktemp)"
-bash scripts/recipes/gitops-production-current-desired.sh "$output" "$dolt_ref"
-bash scripts/recipes/gitops-check-desired-serving.sh "$deploy_bin" "$state_file" production
+bash "$current_desired_script" "$output" "$dolt_ref"
+if [[ "$check_desired_serving" == "true" ]]; then
+  bash scripts/recipes/gitops-check-desired-serving.sh "$deploy_bin" "$state_file" "$environment"
+fi
 verify_desired_closure_paths "$state_file"
 write_cdn_retention_summary "$state_file" "$cdn_retention_summary"
 bash scripts/recipes/gitops-unify.sh "$mgmt_bin" "$state_file"
@@ -260,5 +322,13 @@ write_handoff_summary "$state_file" "$summary_file" "$cdn_retention_summary"
 rm -f "$cdn_retention_summary"
 bash scripts/recipes/gitops-check-handoff-summary.sh "$summary_file" "$state_file"
 
-printf 'production_current_handoff_ready=%s\n' "$state_file" >&2
-printf 'production_current_handoff_summary=%s\n' "$summary_file" >&2
+printf 'gitops_current_handoff_environment=%s\n' "$environment" >&2
+printf 'gitops_current_handoff_ready=%s\n' "$state_file" >&2
+printf 'gitops_current_handoff_summary=%s\n' "$summary_file" >&2
+if [[ "$environment" == "production" ]]; then
+  printf 'production_current_handoff_ready=%s\n' "$state_file" >&2
+  printf 'production_current_handoff_summary=%s\n' "$summary_file" >&2
+elif [[ "$environment" == "beta" ]]; then
+  printf 'beta_current_handoff_ready=%s\n' "$state_file" >&2
+  printf 'beta_current_handoff_summary=%s\n' "$summary_file" >&2
+fi

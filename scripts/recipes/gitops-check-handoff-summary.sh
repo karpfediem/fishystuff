@@ -56,14 +56,31 @@ if [[ "$actual_sha256" != "$expected_sha256" ]]; then
 fi
 
 if ! jq -e '
-    .schema == "fishystuff.gitops.production-current-handoff.v1"
-    and .checks.production_current_desired_generated == true
-    and .checks.desired_serving_preflight_passed == true
-    and .checks.closure_paths_verified == true
-    and .checks.cdn_retained_roots_verified == true
-    and .checks.gitops_unify_passed == true
-    and .checks.remote_deploy_performed == false
-    and .checks.infrastructure_mutation_performed == false
+    if .schema == "fishystuff.gitops.production-current-handoff.v1" then
+      .checks.production_current_desired_generated == true
+      and .checks.desired_serving_preflight_passed == true
+      and .checks.closure_paths_verified == true
+      and .checks.cdn_retained_roots_verified == true
+      and .checks.gitops_unify_passed == true
+      and .checks.remote_deploy_performed == false
+      and .checks.infrastructure_mutation_performed == false
+    elif .schema == "fishystuff.gitops.current-handoff.v1" then
+      (.environment.name | type) == "string"
+      and (.environment.name | length) > 0
+      and .checks.current_desired_generated == true
+      and (
+        .checks.desired_serving_preflight_passed == true
+        or .checks.desired_serving_preflight_skipped == true
+      )
+      and .checks.closure_paths_verified == true
+      and .checks.cdn_manifest_verified == true
+      and .checks.cdn_retained_roots_verified == true
+      and .checks.gitops_unify_passed == true
+      and .checks.remote_deploy_performed == false
+      and .checks.infrastructure_mutation_performed == false
+    else
+      false
+    end
   ' "$summary_file" >/dev/null; then
   echo "handoff summary does not record the required completed local checks" >&2
   exit 2
