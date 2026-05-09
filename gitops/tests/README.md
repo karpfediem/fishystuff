@@ -102,12 +102,12 @@ These run host-local Rust tests for deployment helpers, including a real tempora
 
 `gitops-beta-first-service-set-packet` filters the checked first-service-set plan down to only the current operator packet and no-mutation safety flags, including beta-runtime SecretSpec readiness and the embedded host-preflight decision when env files are the blocker.
 `gitops-beta-runtime-env-packet` reports runtime env readiness as an operator packet, treating missing files as pending commands, reporting narrow beta-runtime SecretSpec readiness, embedding the host preflight status/action before guarded writes, and treating invalid existing files as hard failures.
-`gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes and the guarded Dolt-before-API start command; if runtime env files are missing, it reports `pending_runtime_env` plus the host preflight status/action instead of failing.
+`gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes, current host context, and the guarded Dolt-before-API start command; if runtime env files are missing, it reports `pending_runtime_env` plus the host preflight status/action instead of failing.
 `gitops-beta-admission-packet` reports admission evidence readiness without probing or writing; existing evidence must still match the beta handoff summary and loopback upstream before it hands off to the activation-draft packet.
 `gitops-beta-activation-draft-packet` reports activation-draft readiness without generating or applying it; existing drafts must still match the beta handoff summary and admission evidence before it hands off to the operator-proof packet.
 `gitops-beta-operator-proof-packet` reports operator-proof readiness without writing proofs or applying; existing proofs must be fresh, hash-current, and match the selected activation tuple before it prints the guarded beta apply command.
 `gitops-beta-served-proof-packet` reports post-apply served proof readiness without writing proofs or restarting edge; it treats missing served state as pending apply and stale served documents as a hard failure.
-`gitops-beta-edge-install-packet` reports final beta edge install readiness without installing or restarting; it validates the complete proof index and beta edge bundle, then prints the exact served-proof and unit hashes required by `gitops-beta-install-edge`.
+`gitops-beta-edge-install-packet` reports final beta edge install readiness without installing or restarting; it validates the complete proof index and beta edge bundle, then prints current host context plus the exact served-proof and unit hashes required by `gitops-beta-install-edge`.
 
 Flake checks:
 

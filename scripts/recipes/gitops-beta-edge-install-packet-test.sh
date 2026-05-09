@@ -60,6 +60,16 @@ write_beta_placeholder_tls() {
 }
 
 root="$(mktemp -d)"
+fake_bin="${root}/fake-bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'operator-dev\n'
+EOF
+chmod +x "${fake_bin}/hostname"
+PATH="${fake_bin}:$PATH"
 deploy_bin="$(require_deploy_bin)"
 write_beta_activation_inputs "$root"
 make_beta_edge_bundle "${root}/edge-bundle"
@@ -147,6 +157,10 @@ bash scripts/recipes/gitops-beta-edge-install-packet.sh \
   "${root}/observations" >"${root}/ready.stdout"
 
 grep -F "edge_install_packet_status=ready" "${root}/ready.stdout" >/dev/null
+grep -F "edge_install_packet_current_hostname=operator-dev" "${root}/ready.stdout" >/dev/null
+grep -F "edge_install_packet_expected_hostname=site-nbg1-beta" "${root}/ready.stdout" >/dev/null
+grep -F "edge_install_packet_expected_hostname_match=false" "${root}/ready.stdout" >/dev/null
+grep -F "edge_install_packet_resident_target=root@beta.fishystuff.fish" "${root}/ready.stdout" >/dev/null
 grep -F "edge_install_packet_proof_index_complete=true" "${root}/ready.stdout" >/dev/null
 grep -F "edge_install_packet_served_proof=${served_proof}" "${root}/ready.stdout" >/dev/null
 grep -F "edge_install_packet_served_proof_sha256=${served_proof_sha256}" "${root}/ready.stdout" >/dev/null

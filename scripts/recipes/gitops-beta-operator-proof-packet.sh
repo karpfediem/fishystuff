@@ -87,6 +87,11 @@ if [[ "$api_upstream" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@ ]]; then
 fi
 require_loopback_http_url api_upstream "$api_upstream"
 
+current_hostname="$(deployment_current_hostname)"
+expected_hostname="$(deployment_resident_hostname beta)"
+expected_hostname_match="$(deployment_hostname_match_status "$current_hostname" "$expected_hostname")"
+resident_target="$(deployment_resident_target beta)"
+
 proof_file="$(absolute_path_or_empty "$proof_file")"
 proof_dir="$(absolute_path "$proof_dir")"
 draft_file="$(absolute_path "$draft_file")"
@@ -166,6 +171,10 @@ fi
 
 printf 'gitops_beta_operator_proof_packet_ok=true\n'
 printf 'operator_proof_packet_status=%s\n' "$status"
+printf 'operator_proof_packet_current_hostname=%s\n' "$current_hostname"
+printf 'operator_proof_packet_expected_hostname=%s\n' "$expected_hostname"
+printf 'operator_proof_packet_expected_hostname_match=%s\n' "$expected_hostname_match"
+printf 'operator_proof_packet_resident_target=%s\n' "$resident_target"
 printf 'operator_proof_packet_summary_file=%s\n' "$summary_file"
 printf 'operator_proof_packet_summary_sha256=%s\n' "$handoff_summary_sha256"
 printf 'operator_proof_packet_admission_file=%s\n' "$admission_file"

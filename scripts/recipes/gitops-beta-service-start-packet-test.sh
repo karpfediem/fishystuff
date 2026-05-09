@@ -91,6 +91,10 @@ FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
 
 grep -F "gitops_beta_service_start_packet_ok=true" "${root}/packet.stdout" >/dev/null
 grep -F "service_start_packet_status=ready" "${root}/packet.stdout" >/dev/null
+grep -F "service_start_packet_current_hostname=operator-dev" "${root}/packet.stdout" >/dev/null
+grep -F "service_start_packet_expected_hostname=site-nbg1-beta" "${root}/packet.stdout" >/dev/null
+grep -F "service_start_packet_expected_hostname_match=false" "${root}/packet.stdout" >/dev/null
+grep -F "service_start_packet_resident_target=root@beta.fishystuff.fish" "${root}/packet.stdout" >/dev/null
 grep -F "service_start_packet_bundle_source=handoff_summary" "${root}/packet.stdout" >/dev/null
 grep -F "service_start_packet_handoff_summary=${summary}" "${root}/packet.stdout" >/dev/null
 grep -F "service_start_packet_api_bundle=${api_bundle}" "${root}/packet.stdout" >/dev/null
@@ -120,6 +124,8 @@ FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
     "$summary" >"${root}/missing-runtime.stdout"
 grep -F "gitops_beta_service_start_packet_ok=true" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_status=pending_runtime_env" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_current_hostname=operator-dev" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_expected_hostname_match=false" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_api_status=missing" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_dolt_status=ready" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${root}/missing-api.env dolt_env_file=${dolt_env}" "${root}/missing-runtime.stdout" >/dev/null

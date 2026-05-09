@@ -91,6 +91,11 @@ if [[ "$api_upstream" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@ ]]; then
 fi
 require_loopback_http_url api_upstream "$api_upstream"
 
+current_hostname="$(deployment_current_hostname)"
+expected_hostname="$(deployment_resident_hostname beta)"
+expected_hostname_match="$(deployment_hostname_match_status "$current_hostname" "$expected_hostname")"
+resident_target="$(deployment_resident_target beta)"
+
 edge_bundle="$(absolute_path_or_auto "$edge_bundle")"
 proof_dir="$(absolute_path "$proof_dir")"
 draft_file="$(absolute_path "$draft_file")"
@@ -211,6 +216,10 @@ proof_index_command="just gitops-beta-proof-index proof_dir=${proof_dir} max_age
 
 printf 'gitops_beta_edge_install_packet_ok=true\n'
 printf 'edge_install_packet_status=%s\n' "$status"
+printf 'edge_install_packet_current_hostname=%s\n' "$current_hostname"
+printf 'edge_install_packet_expected_hostname=%s\n' "$expected_hostname"
+printf 'edge_install_packet_expected_hostname_match=%s\n' "$expected_hostname_match"
+printf 'edge_install_packet_resident_target=%s\n' "$resident_target"
 printf 'edge_install_packet_proof_dir=%s\n' "$proof_dir"
 printf 'edge_install_packet_proof_index_status=%s\n' "$proof_index_status"
 printf 'edge_install_packet_proof_index_complete=%s\n' "$proof_index_complete"

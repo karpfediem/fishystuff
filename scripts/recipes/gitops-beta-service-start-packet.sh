@@ -49,6 +49,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+current_hostname="$(deployment_current_hostname)"
+expected_hostname="$(deployment_resident_hostname beta)"
+expected_hostname_match="$(deployment_hostname_match_status "$current_hostname" "$expected_hostname")"
+resident_target="$(deployment_resident_target beta)"
+
 runtime_packet_output="${tmp_dir}/runtime-env-packet.out"
 if ! bash scripts/recipes/gitops-beta-runtime-env-packet.sh \
   "$api_env_file" \
@@ -64,6 +69,10 @@ runtime_packet_status="$(require_kv_value runtime_env_packet_status "$runtime_pa
 if [[ "$runtime_packet_status" != "ready" ]]; then
   printf 'gitops_beta_service_start_packet_ok=true\n'
   printf 'service_start_packet_status=%s\n' "$runtime_packet_status"
+  printf 'service_start_packet_current_hostname=%s\n' "$current_hostname"
+  printf 'service_start_packet_expected_hostname=%s\n' "$expected_hostname"
+  printf 'service_start_packet_expected_hostname_match=%s\n' "$expected_hostname_match"
+  printf 'service_start_packet_resident_target=%s\n' "$resident_target"
   printf 'service_start_packet_api_env_file=%s\n' "$api_env_file"
   printf 'service_start_packet_dolt_env_file=%s\n' "$dolt_env_file"
   printf 'service_start_packet_api_status=%s\n' "$(kv_value runtime_env_packet_api_status "$runtime_packet_output")"
@@ -138,6 +147,10 @@ admission_packet_command="just gitops-beta-admission-packet summary_file=${resol
 
 printf 'gitops_beta_service_start_packet_ok=true\n'
 printf 'service_start_packet_status=ready\n'
+printf 'service_start_packet_current_hostname=%s\n' "$current_hostname"
+printf 'service_start_packet_expected_hostname=%s\n' "$expected_hostname"
+printf 'service_start_packet_expected_hostname_match=%s\n' "$expected_hostname_match"
+printf 'service_start_packet_resident_target=%s\n' "$resident_target"
 printf 'service_start_packet_bundle_source=%s\n' "$bundle_source"
 printf 'service_start_packet_handoff_summary=%s\n' "$resolved_summary"
 printf 'service_start_packet_api_bundle=%s\n' "$resolved_api_bundle"

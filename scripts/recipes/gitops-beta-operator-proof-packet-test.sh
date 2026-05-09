@@ -56,6 +56,16 @@ write_beta_placeholder_tls() {
 }
 
 root="$(mktemp -d)"
+fake_bin="${root}/fake-bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'operator-dev\n'
+EOF
+chmod +x "${fake_bin}/hostname"
+PATH="${fake_bin}:$PATH"
 write_beta_activation_inputs "$root"
 make_beta_edge_bundle "${root}/edge-bundle"
 write_beta_placeholder_tls "${root}/tls"
@@ -138,6 +148,10 @@ bash scripts/recipes/gitops-beta-operator-proof-packet.sh \
   "${root}/observations" >"${root}/ready.stdout"
 
 grep -F "operator_proof_packet_status=ready" "${root}/ready.stdout" >/dev/null
+grep -F "operator_proof_packet_current_hostname=operator-dev" "${root}/ready.stdout" >/dev/null
+grep -F "operator_proof_packet_expected_hostname=site-nbg1-beta" "${root}/ready.stdout" >/dev/null
+grep -F "operator_proof_packet_expected_hostname_match=false" "${root}/ready.stdout" >/dev/null
+grep -F "operator_proof_packet_resident_target=root@beta.fishystuff.fish" "${root}/ready.stdout" >/dev/null
 grep -F "operator_proof_packet_proof_file=${proof_file}" "${root}/ready.stdout" >/dev/null
 grep -F "operator_proof_packet_proof_sha256=${proof_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "operator_proof_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=${proof_sha256} just gitops-beta-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} deploy_bin=${root}/fishystuff_deploy proof_file=${proof_file} proof_max_age_seconds=86400" "${root}/ready.stdout" >/dev/null
