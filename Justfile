@@ -86,6 +86,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-first-service-set-plan-test.sh
   bash scripts/recipes/gitops-beta-first-service-set-packet-test.sh
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
+  bash scripts/recipes/gitops-beta-operator-proof-packet-test.sh
   bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
   bash scripts/recipes/gitops-beta-operator-proof-test.sh
@@ -192,6 +193,10 @@ gitops-beta-verify-activation-served draft_file="data/gitops/beta-activation.dra
 gitops-beta-operator-proof output_dir="data/gitops" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto" run_helper_tests="true" served_state_dir="" rollback_set_path="" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta" systemd_unit_path="/etc/systemd/system/fishystuff-beta-edge.service" tls_fullchain_path="/run/fishystuff/beta-edge/tls/fullchain.pem" tls_privkey_path="/run/fishystuff/beta-edge/tls/privkey.pem":
   bash scripts/recipes/gitops-beta-operator-proof.sh "{{output_dir}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{run_helper_tests}}" "{{served_state_dir}}" "{{rollback_set_path}}" "{{state_dir}}" "{{run_dir}}" "{{systemd_unit_path}}" "{{tls_fullchain_path}}" "{{tls_privkey_path}}"
 
+# Print beta operator-proof readiness and next command. No mutation.
+gitops-beta-operator-proof-packet proof_file="" proof_dir="data/gitops" max_age_seconds="86400" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="data/gitops/beta-admission.evidence.json" edge_bundle="auto" deploy_bin="auto" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations":
+  @bash scripts/recipes/gitops-beta-operator-proof-packet.sh "{{proof_file}}" "{{proof_dir}}" "{{max_age_seconds}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{api_upstream}}" "{{observation_dir}}"
+
 # Check a stored beta GitOps operator proof artifact is fresh and still matches current inputs.
 gitops-check-beta-operator-proof proof_file="" max_age_seconds="86400" proof_dir="data/gitops":
   bash scripts/recipes/gitops-check-beta-operator-proof.sh "{{proof_file}}" "{{max_age_seconds}}" "{{proof_dir}}"
@@ -291,6 +296,10 @@ gitops-beta-first-service-set-packet-test:
 # Run fast local regression checks for beta activation/admission draft generation.
 gitops-beta-activation-draft-test:
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
+
+# Run fast local regression checks for beta operator-proof packet readiness.
+gitops-beta-operator-proof-packet-test:
+  bash scripts/recipes/gitops-beta-operator-proof-packet-test.sh
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":

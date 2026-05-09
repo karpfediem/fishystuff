@@ -58,7 +58,9 @@ just gitops-beta-host-handoff-plan-test
 just gitops-beta-verify-activation-served draft_file=/tmp/fishystuff-beta-activation.draft.desired.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json
 just gitops-beta-verify-activation-served-test
 just gitops-beta-operator-proof draft_file=/tmp/fishystuff-beta-activation.draft.desired.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json
+just gitops-beta-operator-proof-packet draft_file=/tmp/fishystuff-beta-activation.draft.desired.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json
 just gitops-check-beta-operator-proof
+just gitops-beta-operator-proof-packet-test
 just gitops-beta-operator-proof-test
 just gitops-beta-served-proof draft_file=/tmp/fishystuff-beta-activation.draft.desired.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json proof_file=<checked beta proof file>
 just gitops-beta-served-proof-test
@@ -97,6 +99,7 @@ These run host-local Rust tests for deployment helpers, including a real tempora
 `gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes and the guarded Dolt-before-API start command.
 `gitops-beta-admission-packet` reports admission evidence readiness without probing or writing; existing evidence must still match the beta handoff summary and loopback upstream.
 `gitops-beta-activation-draft-packet` reports activation-draft readiness without generating or applying it; existing drafts must still match the beta handoff summary and admission evidence.
+`gitops-beta-operator-proof-packet` reports operator-proof readiness without writing proofs or applying; existing proofs must be fresh, hash-current, and match the selected activation tuple before it prints the guarded beta apply command.
 
 Flake checks:
 
