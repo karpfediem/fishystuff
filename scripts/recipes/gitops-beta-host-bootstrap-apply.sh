@@ -86,7 +86,7 @@ require_beta_directory_path() {
     /var/lib/fishystuff/beta-dolt | \
     /run/fishystuff/gitops-beta | \
     /run/fishystuff/gitops-beta/* | \
-    /run/fishystuff/beta-edge/tls)
+    /var/lib/fishystuff/gitops-beta/tls/live)
       ;;
     *)
       echo "refusing to bootstrap non-beta directory: ${path}" >&2

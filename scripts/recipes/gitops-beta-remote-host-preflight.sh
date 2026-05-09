@@ -213,7 +213,7 @@ printf 'beta_directory_03_exists=%s\n' "$(bool_dir /var/lib/fishystuff/gitops-be
 printf 'beta_directory_04_exists=%s\n' "$(bool_dir /var/lib/fishystuff/gitops-beta/dolt-cache/fishystuff)"
 printf 'beta_directory_05_exists=%s\n' "$(bool_dir /var/lib/fishystuff/gitops-beta/served/beta)"
 printf 'beta_directory_06_exists=%s\n' "$(bool_dir /run/fishystuff/gitops-beta)"
-printf 'beta_directory_07_exists=%s\n' "$(bool_dir /run/fishystuff/beta-edge/tls)"
+printf 'beta_directory_07_exists=%s\n' "$(bool_dir /var/lib/fishystuff/gitops-beta/tls/live)"
 printf 'beta_directory_08_exists=%s\n' "$(bool_dir /var/lib/fishystuff/beta-dolt)"
 REMOTE
 

@@ -493,8 +493,8 @@ in
     ];
     requiredUnitLines = [
       "Wants=network-online.target fishystuff-beta-api.service fishystuff-beta-vector.service"
-      "LoadCredential=fullchain.pem:/run/fishystuff/beta-edge/tls/fullchain.pem"
-      "LoadCredential=privkey.pem:/run/fishystuff/beta-edge/tls/privkey.pem"
+      "LoadCredential=fullchain.pem:/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem"
+      "LoadCredential=privkey.pem:/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem"
       "AmbientCapabilities=CAP_NET_BIND_SERVICE"
       "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
       "PrivateTmp=true"
@@ -511,7 +511,7 @@ in
       ''(.activation.directories | map(.path) | index("/var/lib/fishystuff/gitops-beta/served/beta/cdn") | not)''
       ''(.activation.requiredPaths | index("/var/lib/fishystuff/gitops-beta/served/beta/site")) != null''
       ''(.activation.requiredPaths | index("/var/lib/fishystuff/gitops-beta/served/beta/cdn")) != null''
-      ''(.activation.directories | map(.path) | index("/run/fishystuff/beta-edge/tls")) != null''
+      ''(.activation.directories | map(.path) | index("/var/lib/fishystuff/gitops-beta/tls/live")) != null''
       ''(.activation.directories | map(.path) | index("/run/fishystuff/edge/tls") | not)''
     ];
   };

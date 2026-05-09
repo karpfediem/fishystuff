@@ -153,7 +153,7 @@ if [[ "$edge_cdn_root" != "/var/lib/fishystuff/gitops-beta/served/beta/cdn" ]]; 
   echo "edge handoff bundle CDN root is not beta GitOps state: ${edge_cdn_root}" >&2
   exit 2
 fi
-if [[ "$edge_tls_dir" != "/run/fishystuff/beta-edge/tls" ]]; then
+if [[ "$edge_tls_dir" != "/var/lib/fishystuff/gitops-beta/tls/live" ]]; then
   echo "edge handoff bundle TLS dir is not beta-only: ${edge_tls_dir}" >&2
   exit 2
 fi

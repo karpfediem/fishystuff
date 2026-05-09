@@ -296,7 +296,7 @@ fi
 if [[ "$edge_cdn_root" != "/var/lib/fishystuff/gitops-beta/served/beta/cdn" ]]; then
   fail "edge bundle reported an unexpected beta CDN root: ${edge_cdn_root}"
 fi
-if [[ "$edge_tls_dir" != "/run/fishystuff/beta-edge/tls" ]]; then
+if [[ "$edge_tls_dir" != "/var/lib/fishystuff/gitops-beta/tls/live" ]]; then
   fail "edge bundle reported an unexpected beta TLS dir: ${edge_tls_dir}"
 fi
 if [[ "$edge_unit_sha256" != "$FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256" ]]; then
@@ -491,8 +491,8 @@ fi
 if [[ "$edge_cdn_root" != "/var/lib/fishystuff/gitops-beta/served/beta/cdn" ]]; then
   fail "edge CDN root must be /var/lib/fishystuff/gitops-beta/served/beta/cdn, got: ${edge_cdn_root}"
 fi
-if [[ "$edge_tls_dir" != "/run/fishystuff/beta-edge/tls" ]]; then
-  fail "edge TLS dir must be /run/fishystuff/beta-edge/tls, got: ${edge_tls_dir}"
+if [[ "$edge_tls_dir" != "/var/lib/fishystuff/gitops-beta/tls/live" ]]; then
+  fail "edge TLS dir must be /var/lib/fishystuff/gitops-beta/tls/live, got: ${edge_tls_dir}"
 fi
 
 prepare_edge_serving_paths

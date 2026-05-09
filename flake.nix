@@ -690,9 +690,9 @@
             cdnRoot = "/var/lib/fishystuff/gitops-beta/served/beta/cdn";
             apiUpstream = "127.0.0.1:18192";
             manageContentRoots = false;
-            tlsCertificatePath = "/run/fishystuff/beta-edge/tls/fullchain.pem";
-            tlsPrivateKeyPath = "/run/fishystuff/beta-edge/tls/privkey.pem";
-            tlsDirectory = "/run/fishystuff/beta-edge/tls";
+            tlsCertificatePath = "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem";
+            tlsPrivateKeyPath = "/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem";
+            tlsDirectory = "/var/lib/fishystuff/gitops-beta/tls/live";
             adminAddress = "127.0.0.1:2119";
           };
           lokiServiceBundle = mkServiceBundle {

@@ -57,7 +57,7 @@ case "$target_path" in
   /var/lib/fishystuff/beta-dolt | \
   /run/fishystuff/gitops-beta | \
   /run/fishystuff/gitops-beta/* | \
-  /run/fishystuff/beta-edge/tls)
+  /var/lib/fishystuff/gitops-beta/tls/live)
     ;;
   *)
     echo "fake install saw non-beta bootstrap directory: ${target_path}" >&2
@@ -209,7 +209,7 @@ grep -F -- "--system fishystuff-beta-dolt" "${root}/groupadd.log" >/dev/null
 grep -F -- "--system --gid fishystuff-beta-dolt --home-dir /var/lib/fishystuff/beta-dolt/home --no-create-home fishystuff-beta-dolt" "${root}/useradd.log" >/dev/null
 test -d "${root}/fs/var/lib/fishystuff/gitops-beta/api"
 test -d "${root}/fs/var/lib/fishystuff/gitops-beta/dolt-cache/fishystuff"
-test -d "${root}/fs/run/fishystuff/beta-edge/tls"
+test -d "${root}/fs/var/lib/fishystuff/gitops-beta/tls/live"
 pass "create beta bootstrap scaffolding through fake commands"
 
 root_existing="$(mktemp -d)"

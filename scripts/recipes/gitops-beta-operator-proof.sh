@@ -16,8 +16,8 @@ rollback_set_path="$(normalize_named_arg rollback_set_path "${9-}")"
 state_dir="$(normalize_named_arg state_dir "${10-/var/lib/fishystuff/gitops-beta}")"
 run_dir="$(normalize_named_arg run_dir "${11-/run/fishystuff/gitops-beta}")"
 systemd_unit_path="$(normalize_named_arg systemd_unit_path "${12-/etc/systemd/system/fishystuff-beta-edge.service}")"
-tls_fullchain_path="$(normalize_named_arg tls_fullchain_path "${13-/run/fishystuff/beta-edge/tls/fullchain.pem}")"
-tls_privkey_path="$(normalize_named_arg tls_privkey_path "${14-/run/fishystuff/beta-edge/tls/privkey.pem}")"
+tls_fullchain_path="$(normalize_named_arg tls_fullchain_path "${13-/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem}")"
+tls_privkey_path="$(normalize_named_arg tls_privkey_path "${14-/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem}")"
 
 cd "$RECIPE_REPO_ROOT"
 

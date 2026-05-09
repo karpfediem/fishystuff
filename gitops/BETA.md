@@ -163,7 +163,7 @@ The edge bundle validates:
   - `/var/lib/fishystuff/gitops-beta/served/beta/site`
   - `/var/lib/fishystuff/gitops-beta/served/beta/cdn`
 - beta TLS credential directory:
-  - `/run/fishystuff/beta-edge/tls`
+  - `/var/lib/fishystuff/gitops-beta/tls/live`
 - beta loopback API upstream:
   - `127.0.0.1:18192`
 

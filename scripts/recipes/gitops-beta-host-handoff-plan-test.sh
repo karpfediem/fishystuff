@@ -97,8 +97,8 @@ ExecStart=${caddy_bin_real} run --config ${caddyfile_real} --adapter caddyfile
 ExecReload=${caddy_bin_real} reload --config ${caddyfile_real} --adapter caddyfile --address 127.0.0.1:2119 --force
 Restart=on-failure
 RestartSec=5s
-LoadCredential=fullchain.pem:/run/fishystuff/beta-edge/tls/fullchain.pem
-LoadCredential=privkey.pem:/run/fishystuff/beta-edge/tls/privkey.pem
+LoadCredential=fullchain.pem:/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem
+LoadCredential=privkey.pem:/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ProtectSystem=strict
@@ -114,7 +114,7 @@ EOF
       activation: {
         directories: [
           {
-            path: "/run/fishystuff/beta-edge/tls",
+            path: "/var/lib/fishystuff/gitops-beta/tls/live",
             create: true
           }
         ],
@@ -154,13 +154,13 @@ EOF
       },
       runtimeOverlays: [
         {
-          targetPath: "/run/fishystuff/beta-edge/tls/fullchain.pem",
+          targetPath: "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem",
           required: true,
           secret: false,
           onChange: "restart"
         },
         {
-          targetPath: "/run/fishystuff/beta-edge/tls/privkey.pem",
+          targetPath: "/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem",
           required: true,
           secret: true,
           onChange: "restart"
@@ -256,7 +256,7 @@ grep -F "edge_bundle=${root}/edge-bundle" "${root}/plan.stdout" >/dev/null
 grep -F "edge_caddy_validate=true" "${root}/plan.stdout" >/dev/null
 grep -F "served_site_link=/var/lib/fishystuff/gitops-beta/served/beta/site" "${root}/plan.stdout" >/dev/null
 grep -F "served_cdn_link=/var/lib/fishystuff/gitops-beta/served/beta/cdn" "${root}/plan.stdout" >/dev/null
-grep -F "tls_fullchain=/run/fishystuff/beta-edge/tls/fullchain.pem" "${root}/plan.stdout" >/dev/null
+grep -F "tls_fullchain=/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem" "${root}/plan.stdout" >/dev/null
 grep -F "systemd_unit_install_path=/etc/systemd/system/fishystuff-beta-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "systemd_unit_sha256=${unit_sha256}" "${root}/plan.stdout" >/dev/null
 grep -F "read_only_readiness_check_04=just gitops-beta-edge-handoff-bundle bundle=${root}/edge-bundle" "${root}/plan.stdout" >/dev/null

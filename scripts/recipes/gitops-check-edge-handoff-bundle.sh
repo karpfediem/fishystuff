@@ -62,7 +62,7 @@ case "$environment" in
     site_root="/var/lib/fishystuff/gitops-beta/served/beta/site"
     cdn_root="/var/lib/fishystuff/gitops-beta/served/beta/cdn"
     api_upstream="127.0.0.1:18192"
-    tls_dir="/run/fishystuff/beta-edge/tls"
+    tls_dir="/var/lib/fishystuff/gitops-beta/tls/live"
     tls_fullchain_path="${tls_dir}/fullchain.pem"
     tls_privkey_path="${tls_dir}/privkey.pem"
     admin_address="127.0.0.1:2119"

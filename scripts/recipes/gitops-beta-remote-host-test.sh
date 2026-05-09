@@ -101,7 +101,7 @@ case "${FISHYSTUFF_FAKE_SSH_MODE:?}" in
     printf 'beta_directory_04=0750:/var/lib/fishystuff/gitops-beta/dolt-cache/fishystuff\n'
     printf 'beta_directory_05=0755:/var/lib/fishystuff/gitops-beta/served/beta\n'
     printf 'beta_directory_06=0750:/run/fishystuff/gitops-beta\n'
-    printf 'beta_directory_07=0700:/run/fishystuff/beta-edge/tls\n'
+    printf 'beta_directory_07=0700:/var/lib/fishystuff/gitops-beta/tls/live\n'
     printf 'beta_directory_08=0750:/var/lib/fishystuff/beta-dolt\n'
     ;;
   *)

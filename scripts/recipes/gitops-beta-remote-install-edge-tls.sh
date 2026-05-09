@@ -216,7 +216,7 @@ remote_fullchain="$2"
 remote_privkey="$3"
 fullchain_sha256="$4"
 privkey_sha256="$5"
-edge_tls_dir="/run/fishystuff/beta-edge/tls"
+edge_tls_dir="/var/lib/fishystuff/gitops-beta/tls/live"
 
 fail() {
   echo "$1" >&2
