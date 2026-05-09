@@ -80,6 +80,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-current-desired-test.sh
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
   bash scripts/recipes/gitops-beta-observe-admission-test.sh
+  bash scripts/recipes/gitops-beta-first-service-set-plan-test.sh
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
   bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
@@ -221,6 +222,10 @@ gitops-beta-write-activation-admission-evidence output="data/gitops/beta-admissi
 gitops-beta-observe-admission output="data/gitops/beta-admission.evidence.json" summary_file="data/gitops/beta-current.handoff-summary.json" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations" curl_bin="curl" expected_cdn_base_url="https://cdn.beta.fishystuff.fish/":
   bash scripts/recipes/gitops-beta-observe-admission.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{observation_dir}}" "{{curl_bin}}" "{{expected_cdn_base_url}}"
 
+# Print the read-only first beta service-set runbook and current artifact readiness.
+gitops-beta-first-service-set-plan summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="data/gitops/beta-admission.evidence.json" draft_file="data/gitops/beta-activation.draft.desired.json" proof_dir="data/gitops" api_bundle="auto" dolt_bundle="auto" edge_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations":
+  bash scripts/recipes/gitops-beta-first-service-set-plan.sh "{{summary_file}}" "{{admission_file}}" "{{draft_file}}" "{{proof_dir}}" "{{api_bundle}}" "{{dolt_bundle}}" "{{edge_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{api_upstream}}" "{{observation_dir}}"
+
 # Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
 gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
@@ -240,6 +245,10 @@ gitops-beta-current-handoff-test:
 # Run fast local regression checks for beta admission observation.
 gitops-beta-observe-admission-test:
   bash scripts/recipes/gitops-beta-observe-admission-test.sh
+
+# Run fast local regression checks for the first beta service-set plan.
+gitops-beta-first-service-set-plan-test:
+  bash scripts/recipes/gitops-beta-first-service-set-plan-test.sh
 
 # Run fast local regression checks for beta activation/admission draft generation.
 gitops-beta-activation-draft-test:

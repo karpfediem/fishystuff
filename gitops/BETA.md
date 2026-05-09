@@ -44,6 +44,8 @@ just gitops-beta-current-handoff-test
 just gitops-beta-write-activation-admission-evidence
 just gitops-beta-observe-admission
 just gitops-beta-observe-admission-test
+just gitops-beta-first-service-set-plan
+just gitops-beta-first-service-set-plan-test
 just gitops-beta-activation-draft
 just gitops-beta-activation-draft-test
 just gitops-beta-host-handoff-plan
@@ -136,6 +138,8 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-observe-admission` captures the practical beta admission inputs from a running host-local beta candidate. It only accepts a loopback API upstream, fetches `/api/v1/meta`, probes `/api/v1/fish?lang=en` as a DB-backed route that exercises localized Dolt data, checks the active site closure's `runtime-config.js` points at the beta CDN base, checks the active CDN runtime manifest and referenced JS/WASM files exist, then writes checked activation evidence through `just gitops-beta-write-activation-admission-evidence`. It writes local evidence files only; it does not apply, install, restart, SSH, or mutate DNS/cloud state.
 
+`just gitops-beta-first-service-set-plan` is the lightweight runbook view for the first clean beta service set. It refuses non-loopback API admission targets, checks any present beta handoff/admission/draft artifacts are beta-shaped, reports proof-index completeness if proofs exist, and prints the exact guarded sequence from host bootstrap through beta edge install. It does not invoke mgmt, install units, restart services, SSH, mutate DNS, or provision hosts.
+
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are the beta-shaped admission and activation wrappers. They require a beta handoff summary and refuse production summaries. The shared activation checker now reads the environment from the handoff summary, so the same invariant applies to beta: a serving draft must include explicit admission evidence and a retained rollback release. The current `gitops-beta-current-handoff` output is therefore candidate-only until a retained beta release is added.
 
 `just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, beta API upstream, guarded beta apply command, and guarded beta edge install command. It reports `beta_apply_gate_available=true`, but still does not apply, install, or restart anything by itself.
@@ -153,5 +157,5 @@ The validator refuses production hostnames, production served roots, production 
 Next pieces to add:
 
 1. first real beta apply on the new service set, followed by served proof/index capture and edge install
-2. fold the new beta service set into a minimal repeated-deploy runbook after the first successful start
+2. fold the first-service-set runbook into a minimal repeated-deploy runbook after the first successful start
 3. add stronger DB-backed admission routes once the exact production incident class has a cheap stable endpoint
