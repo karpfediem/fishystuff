@@ -92,6 +92,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-service-start-plan-test.sh
   bash scripts/recipes/gitops-beta-host-bootstrap-plan-test.sh
   bash scripts/recipes/gitops-beta-host-bootstrap-apply-test.sh
+  bash scripts/recipes/gitops-beta-start-services-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -283,6 +284,10 @@ gitops-beta-runtime-env-test:
 gitops-beta-service-start-plan api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env":
   bash scripts/recipes/gitops-beta-service-start-plan.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}"
 
+# Install/restart beta Dolt, then beta API, after explicit opt-ins and checked unit hashes.
+gitops-beta-start-services api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" install_bin="install" systemctl_bin="systemctl":
+  bash scripts/recipes/gitops-beta-start-services.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{install_bin}}" "{{systemctl_bin}}"
+
 # Run fast local regression checks for the beta service start plan.
 gitops-beta-service-start-plan-test:
   bash scripts/recipes/gitops-beta-service-start-plan-test.sh
@@ -374,6 +379,10 @@ gitops-beta-install-edge-test:
 # Run fast local regression checks for beta API/Dolt service install gates.
 gitops-beta-install-service-test:
   bash scripts/recipes/gitops-beta-install-service-test.sh
+
+# Run fast local regression checks for the guarded beta API/Dolt start sequence.
+gitops-beta-start-services-test:
+  bash scripts/recipes/gitops-beta-start-services-test.sh
 
 # Run fast local regression checks for the guarded beta host bootstrap apply gate.
 gitops-beta-host-bootstrap-apply-test:
