@@ -79,6 +79,8 @@ just gitops-beta-remote-install-nix
 just gitops-beta-remote-install-nix-test
 just gitops-beta-copy-handoff-closures
 just gitops-beta-copy-handoff-closures-test
+just gitops-beta-copy-runtime-env
+just gitops-beta-copy-runtime-env-test
 just gitops-beta-service-start-plan
 just gitops-beta-service-start-plan-test
 just gitops-beta-service-start-packet
@@ -625,6 +627,8 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-remote-host-preflight target=root@<new-beta-public-ip>` is the read-only SSH preflight for that selected host. It refuses DNS targets and the previous beta host IP, checks hostname/OS/systemd/Nix presence plus beta user/group/directory state, and reports no mutation. `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=root@<new-beta-public-ip>` is the guarded SSH mutation for only the beta-local user/group and directory scaffold. `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_APT_PREREQS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-install-nix target=root@<new-beta-public-ip>` installs multi-user Nix on that beta host when preflight reports Nix is missing; closure transfer, env writes, unit installs, service starts, DNS, and cloud mutation remain separate steps.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_BETA_REMOTE_CLOSURE_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-copy-handoff-closures target=root@<new-beta-public-ip>` copies the exact checked beta handoff closures to the host Nix store. It is still not a service deployment: it does not write env files, install units, start services, mutate DNS, or change cloud infrastructure.
+
+`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1 FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-copy-runtime-env target=root@<new-beta-public-ip>` writes the checked beta API/Dolt runtime env files to the fresh host. API secrets come from the narrow `beta-runtime` profile, and service installation/start remains a later guarded step.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-hetzner-inventory-packet` reads the current beta Hetzner server inventory without mutation. `just gitops-beta-host-replacement-plan` combines that inventory with the beta proof index and makes the allowed replacement lifecycle explicit: the replacement server may be created/selected first, the old beta host may remain during bootstrap/admission, and old-host retirement remains blocked until the replacement beta proof chain is complete and manually confirmed. The current implementation emits no `hcloud`, SSH, DNS, deploy, or host-local mutation command.
 

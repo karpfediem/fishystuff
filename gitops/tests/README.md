@@ -20,9 +20,11 @@ FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=root@<new-beta-public-ip>
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_APT_PREREQS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-install-nix target=root@<new-beta-public-ip>
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_BETA_REMOTE_CLOSURE_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-copy-handoff-closures target=root@<new-beta-public-ip>
+FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1 FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-copy-runtime-env target=root@<new-beta-public-ip>
 just gitops-beta-remote-host-test
 just gitops-beta-remote-install-nix-test
 just gitops-beta-copy-handoff-closures-test
+just gitops-beta-copy-runtime-env-test
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-hetzner-inventory-packet
 just gitops-beta-host-replacement-plan
 just gitops-beta-host-replacement-plan-test

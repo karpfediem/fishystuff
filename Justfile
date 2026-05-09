@@ -380,6 +380,10 @@ gitops-beta-remote-install-nix target="" expected_hostname="site-nbg1-beta":
 gitops-beta-copy-handoff-closures target="" summary_file="data/gitops/beta-current.handoff-summary.json" push_bin="scripts/recipes/push-closure.sh":
   bash scripts/recipes/gitops-beta-copy-handoff-closures.sh "{{target}}" "{{summary_file}}" "{{push_bin}}"
 
+# Copy checked beta API/Dolt runtime env files to the fresh beta host. Remote host mutation.
+gitops-beta-copy-runtime-env target="" api_source="" dolt_source="" ssh_bin="ssh" scp_bin="scp":
+  bash scripts/recipes/gitops-beta-copy-runtime-env.sh "{{target}}" "{{api_source}}" "{{dolt_source}}" "{{ssh_bin}}" "{{scp_bin}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
@@ -391,6 +395,10 @@ gitops-beta-remote-install-nix-test:
 # Run fast local regression checks for beta handoff closure copying.
 gitops-beta-copy-handoff-closures-test:
   bash scripts/recipes/gitops-beta-copy-handoff-closures-test.sh
+
+# Run fast local regression checks for beta remote runtime env copying.
+gitops-beta-copy-runtime-env-test:
+  bash scripts/recipes/gitops-beta-copy-runtime-env-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
