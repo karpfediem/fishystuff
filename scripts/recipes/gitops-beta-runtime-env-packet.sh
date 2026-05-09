@@ -52,6 +52,25 @@ run_env_check() {
   exit 2
 }
 
+api_secretspec_status() {
+  if ! command -v secretspec >/dev/null 2>&1; then
+    printf 'unavailable'
+    return
+  fi
+
+  if secretspec check --profile beta-runtime >"${tmp_dir}/secretspec.out" 2>"${tmp_dir}/secretspec.err"; then
+    printf 'ready'
+    return
+  fi
+
+  if grep -E 'DBus error|secure storage|Operation not permitted|permission denied' "${tmp_dir}/secretspec.err" >/dev/null; then
+    printf 'unavailable'
+    return
+  fi
+
+  printf 'missing'
+}
+
 tmp_dir="$(mktemp -d)"
 cleanup() {
   rm -rf "$tmp_dir"
@@ -65,6 +84,7 @@ dolt_stderr="${tmp_dir}/dolt.err"
 
 api_status="$(run_env_check api "$api_env_file" "$api_output" "$api_stderr")"
 dolt_status="$(run_env_check dolt "$dolt_env_file" "$dolt_output" "$dolt_stderr")"
+api_secret_status="$(api_secretspec_status)"
 
 if [[ "$api_status" == "ready" ]]; then
   require_kv_equals remote_deploy_performed "$api_output" false
@@ -90,6 +110,7 @@ printf 'runtime_env_packet_api_env_file=%s\n' "$api_env_file"
 printf 'runtime_env_packet_dolt_env_file=%s\n' "$dolt_env_file"
 printf 'runtime_env_packet_api_status=%s\n' "$api_status"
 printf 'runtime_env_packet_dolt_status=%s\n' "$dolt_status"
+printf 'runtime_env_packet_api_secretspec_status=%s\n' "$api_secret_status"
 if [[ "$api_status" == "ready" ]]; then
   printf 'runtime_env_packet_api_database=%s\n' "$(kv_value gitops_beta_runtime_env_database "$api_output")"
   printf 'runtime_env_packet_api_public_site_base_url=%s\n' "$(kv_value gitops_beta_runtime_env_public_site_base_url "$api_output")"
@@ -99,9 +120,19 @@ if [[ "$dolt_status" == "missing" ]]; then
   printf 'runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=%s\n' "$dolt_env_file"
   if [[ "$api_status" == "missing" ]]; then
     printf 'runtime_env_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=%s profile=beta-runtime\n' "$api_env_file"
+    if [[ "$api_secret_status" == "missing" ]]; then
+      printf 'runtime_env_packet_missing_secret_01=FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL\n'
+    elif [[ "$api_secret_status" == "unavailable" ]]; then
+      printf 'runtime_env_packet_secret_check_unavailable=true\n'
+    fi
   fi
 elif [[ "$api_status" == "missing" ]]; then
   printf 'runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=%s profile=beta-runtime\n' "$api_env_file"
+  if [[ "$api_secret_status" == "missing" ]]; then
+    printf 'runtime_env_packet_missing_secret_01=FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL\n'
+  elif [[ "$api_secret_status" == "unavailable" ]]; then
+    printf 'runtime_env_packet_secret_check_unavailable=true\n'
+  fi
 fi
 if [[ "$packet_status" == "ready" ]]; then
   printf 'runtime_env_packet_next_command_01=%s\n' "$service_start_packet_command"

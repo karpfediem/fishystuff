@@ -36,6 +36,19 @@ expect_fail_contains() {
 }
 
 root="$(mktemp -d)"
+fake_bin="${root}/bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/secretspec" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1-}" == "check" && "${2-}" == "--profile" && "${3-}" == "beta-runtime" ]]; then
+  exit 0
+fi
+exit 2
+EOF
+chmod +x "${fake_bin}/secretspec"
+PATH="${fake_bin}:${PATH}"
+
 api_env="${root}/api/runtime.env"
 dolt_env="${root}/dolt/beta.env"
 
@@ -48,6 +61,7 @@ bash scripts/recipes/gitops-beta-runtime-env-packet.sh \
 grep -F "runtime_env_packet_status=pending_runtime_env" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_api_status=missing" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_dolt_status=missing" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_api_secretspec_status=ready" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${dolt_env}" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env} profile=beta-runtime" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_after_success_command=just gitops-beta-service-start-packet api_bundle=auto dolt_bundle=auto api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/missing.stdout" >/dev/null
@@ -73,9 +87,34 @@ bash scripts/recipes/gitops-beta-runtime-env-packet.sh \
 grep -F "runtime_env_packet_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_api_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_dolt_status=ready" "${root}/ready.stdout" >/dev/null
+grep -F "runtime_env_packet_api_secretspec_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_api_database=loopback-dolt-beta" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_01=just gitops-beta-service-start-packet api_bundle=/tmp/api-bundle dolt_bundle=/tmp/dolt-bundle api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/ready.stdout" >/dev/null
 pass "ready runtime env packet"
+
+cat >"${fake_bin}/secretspec" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'DBus error: Operation not permitted\n' >&2
+exit 1
+EOF
+chmod +x "${fake_bin}/secretspec"
+
+unavailable_api_env="${root}/unavailable/api/runtime.env"
+unavailable_dolt_env="${root}/unavailable/dolt/beta.env"
+bash scripts/recipes/gitops-beta-runtime-env-packet.sh \
+  "$unavailable_api_env" \
+  "$unavailable_dolt_env" \
+  auto \
+  auto \
+  "${root}/summary.json" >"${root}/unavailable.stdout"
+grep -F "runtime_env_packet_api_secretspec_status=unavailable" "${root}/unavailable.stdout" >/dev/null
+grep -F "runtime_env_packet_secret_check_unavailable=true" "${root}/unavailable.stdout" >/dev/null
+if grep -F "runtime_env_packet_missing_secret_01=" "${root}/unavailable.stdout" >/dev/null; then
+  printf '[gitops-beta-runtime-env-packet-test] unavailable secret check must not claim the secret is missing\n' >&2
+  exit 1
+fi
+pass "unavailable SecretSpec runtime env packet"
 
 bad_api_env="${root}/bad-api.env"
 cat >"$bad_api_env" <<'EOF'
