@@ -44,6 +44,19 @@ expect_fail_contains() {
 }
 
 root="$(mktemp -d)"
+fake_bin="${root}/bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/secretspec" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1-}" == "check" && "${2-}" == "--profile" && "${3-}" == "beta-runtime" ]]; then
+  exit 0
+fi
+exit 2
+EOF
+chmod +x "${fake_bin}/secretspec"
+PATH="${fake_bin}:${PATH}"
+
 pending_summary="${root}/missing-summary.json"
 pending_admission="${root}/missing-admission.json"
 pending_draft="${root}/missing-draft.json"
@@ -148,6 +161,7 @@ grep -F "activation_draft_status=ready" "${fixture_root}/ready.stdout" >/dev/nul
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "next_required_action=write_beta_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_status=write_beta_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_api_secretspec_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${fixture_root}/api/runtime.env profile=beta-runtime" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_after_success_command=just gitops-beta-service-start-packet api_bundle=${fixture_root}/active-api dolt_bundle=${fixture_root}/active-dolt-service api_env_file=${fixture_root}/api/runtime.env dolt_env_file=${fixture_root}/dolt/beta.env summary_file=${summary}" "${fixture_root}/ready.stdout" >/dev/null
