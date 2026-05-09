@@ -43,6 +43,8 @@
           };
           craneLib = crane.mkLib pkgs;
           apiWorkspaceCargoToml = pkgs.callPackage ./nix/packages/api-workspace-cargo-toml.nix { };
+          apiConfigToml = builtins.fromTOML (builtins.readFile ./api/config.toml);
+          cdnMapVersion = apiConfigToml.defaults.map_version or "v1";
           tilegenWorkspaceCargoToml = pkgs.callPackage ./nix/packages/tilegen-workspace-cargo-toml.nix { };
           apiWorkspaceSrc = pkgs.callPackage ./nix/packages/api-workspace-src.nix {
             inherit apiWorkspaceCargoToml;
@@ -177,9 +179,28 @@
           cdnContent = pkgs.callPackage ./nix/packages/cdn-content.nix {
             inherit cdnBaseContent cdnMinimapVisual;
           };
+          cdnServingRootRequiredCurrentPaths = [
+            ".cdn-metadata.json"
+            "map/runtime-manifest.json"
+            "map/map-host.js"
+            "map/ui/fishystuff.css"
+            "fields/zone_mask.${cdnMapVersion}.bin"
+            "fields/zone_mask.${cdnMapVersion}.meta.json"
+            "fields/regions.${cdnMapVersion}.bin"
+            "fields/regions.${cdnMapVersion}.meta.json"
+            "fields/region_groups.${cdnMapVersion}.bin"
+            "fields/region_groups.${cdnMapVersion}.meta.json"
+            "waypoints/region_nodes.${cdnMapVersion}.geojson"
+            "hotspots/hotspots.${cdnMapVersion}.json"
+            "images/tiles/minimap_visual/${cdnMapVersion}/tileset.json"
+          ];
           cdnServingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
             currentRoot = cdnContent;
             runtimeManifestCacheKeys = [ siteMapRuntimeCacheKey ];
+            requiredCurrentPaths = cdnServingRootRequiredCurrentPaths;
+            requiredServingPaths =
+              cdnServingRootRequiredCurrentPaths
+              ++ [ "map/runtime-manifest.${siteMapRuntimeCacheKey}.json" ];
           };
           siteContentFor =
             deploymentEnvironment: mapAssetCacheKey:
@@ -825,6 +846,18 @@
                 currentRoot = currentFixture;
                 previousRoots = [ previousFixture ];
                 runtimeManifestCacheKeys = [ "new-cache-key" ];
+                requiredCurrentPaths = [
+                  ".cdn-metadata.json"
+                  "hotspots/hotspots.v1.json"
+                  "map/fishystuff_ui_bevy.new.js"
+                  "map/runtime-manifest.json"
+                ];
+                requiredServingPaths = [
+                  ".cdn-metadata.json"
+                  "hotspots/hotspots.v1.json"
+                  "map/fishystuff_ui_bevy.old.js"
+                  "map/runtime-manifest.new-cache-key.json"
+                ];
               };
             in
             pkgs.runCommand "cdn-serving-root-retention-check" { nativeBuildInputs = [ pkgs.jq ]; } ''

@@ -5,11 +5,17 @@
   currentRoot,
   previousRoots ? [ ],
   runtimeManifestCacheKeys ? [ ],
+  requiredCurrentPaths ? [ ],
+  requiredServingPaths ? [ ],
 }:
 let
   previousRootArgs = lib.concatMapStringsSep " " (root: lib.escapeShellArg "${root}") previousRoots;
   runtimeManifestCacheKeyArgs =
     lib.concatMapStringsSep " " (key: lib.escapeShellArg key) runtimeManifestCacheKeys;
+  requiredCurrentPathArgs =
+    lib.concatMapStringsSep " " (path: lib.escapeShellArg path) requiredCurrentPaths;
+  requiredServingPathArgs =
+    lib.concatMapStringsSep " " (path: lib.escapeShellArg path) requiredServingPaths;
 in
 runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
   set -euo pipefail
@@ -17,11 +23,32 @@ runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
   current_root=${lib.escapeShellArg "${currentRoot}"}
   previous_roots=(${previousRootArgs})
   runtime_manifest_cache_keys=(${runtimeManifestCacheKeyArgs})
+  required_current_paths=(${requiredCurrentPathArgs})
+  required_serving_paths=(${requiredServingPathArgs})
 
   if [[ ! -d "$current_root" ]]; then
     echo "current CDN root does not exist: $current_root" >&2
     exit 1
   fi
+
+  validate_required_rel_path() {
+    local rel="$1"
+    case "$rel" in
+      ""|/*|*..*|*\?*|*\#*)
+        echo "unsafe required CDN relative path: $rel" >&2
+        exit 1
+        ;;
+    esac
+  }
+
+  for required_rel in "''${required_current_paths[@]}"; do
+    validate_required_rel_path "$required_rel"
+    if [[ ! -f "$current_root/$required_rel" ]]; then
+      echo "required current CDN path is missing: /$required_rel" >&2
+      echo "current root: $current_root" >&2
+      exit 1
+    fi
+  done
 
   runtime_manifest="$current_root/map/runtime-manifest.json"
   if [[ -f "$runtime_manifest" ]]; then
@@ -195,6 +222,15 @@ runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
       fi
       link_asset_json "$file" "$rel" "retained"
     done < <(find -L "$previous_root" -type f -print0 | sort -z)
+  done
+
+  for required_rel in "''${required_serving_paths[@]}"; do
+    validate_required_rel_path "$required_rel"
+    if [[ ! -f "$out/$required_rel" ]]; then
+      echo "required serving CDN path is missing: /$required_rel" >&2
+      echo "serving root: $out" >&2
+      exit 1
+    fi
   done
 
   {
