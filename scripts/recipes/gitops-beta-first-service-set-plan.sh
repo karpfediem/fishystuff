@@ -121,6 +121,21 @@ require_beta_draft() {
   fi
 }
 
+derive_bundles_from_summary() {
+  local path="$1"
+
+  if [[ ! -f "$path" ]]; then
+    return
+  fi
+
+  if [[ "$api_bundle" == "auto" ]]; then
+    api_bundle="$(jq -er '.active_release.closures.api | select(type == "string" and length > 0)' "$path")"
+  fi
+  if [[ "$dolt_bundle" == "auto" ]]; then
+    dolt_bundle="$(jq -er '.active_release.closures.dolt_service | select(type == "string" and length > 0)' "$path")"
+  fi
+}
+
 run_service_start_plan_if_ready() {
   local output="$1"
 
@@ -166,6 +181,7 @@ fi
 if [[ "$dolt_env_file" != /* ]]; then
   dolt_env_file="$(absolute_path "$dolt_env_file")"
 fi
+derive_bundles_from_summary "$summary_file"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {

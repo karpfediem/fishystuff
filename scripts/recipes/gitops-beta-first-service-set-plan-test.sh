@@ -131,6 +131,9 @@ bash scripts/recipes/gitops-beta-first-service-set-plan.sh \
   >"${fixture_root}/ready.stdout"
 
 grep -F "handoff_summary_status=ready" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "api_bundle=${fixture_root}/active-api" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "dolt_bundle=${fixture_root}/active-dolt-service" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "service_start_plan_status=pending_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "admission_evidence_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "activation_draft_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${fixture_root}/ready.stdout" >/dev/null
