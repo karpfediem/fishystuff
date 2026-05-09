@@ -232,6 +232,7 @@ elif [[ "$scaffold_present" != "true" ]]; then
   printf 'next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=%s\n' "$target"
 elif [[ "$nix_available" != "true" || "$nix_daemon_available" != "true" ]]; then
   printf 'next_required_action=install_remote_nix\n'
+  printf 'next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_APT_PREREQS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-install-nix target=%s\n' "$target"
   printf 'next_note_01=Nix and nix-daemon must exist before beta closure transfer can use nix copy\n'
 else
   printf 'next_required_action=prepare_beta_release_materialization\n'

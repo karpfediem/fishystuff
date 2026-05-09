@@ -18,7 +18,9 @@ just gitops-beta-host-selection-packet public_ipv4=<new-beta-public-ip>
 just gitops-beta-host-selection-packet-test
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-remote-host-preflight target=root@<new-beta-public-ip>
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=root@<new-beta-public-ip>
+FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_APT_PREREQS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-install-nix target=root@<new-beta-public-ip>
 just gitops-beta-remote-host-test
+just gitops-beta-remote-install-nix-test
 FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy secretspec run --profile beta-deploy -- just gitops-beta-hetzner-inventory-packet
 just gitops-beta-host-replacement-plan
 just gitops-beta-host-replacement-plan-test

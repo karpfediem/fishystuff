@@ -139,6 +139,7 @@ env \
   FISHYSTUFF_FAKE_SSH_STDIN="${root}/preflight-no-nix-remote.sh" \
   bash scripts/recipes/gitops-beta-remote-host-preflight.sh root@203.0.113.23 site-nbg1-beta "$fake_ssh" >"${root}/preflight-no-nix.out"
 grep -F "next_required_action=install_remote_nix" "${root}/preflight-no-nix.out" >/dev/null
+grep -F "just gitops-beta-remote-install-nix target=root@203.0.113.23" "${root}/preflight-no-nix.out" >/dev/null
 grep -F "next_note_01=Nix and nix-daemon must exist before beta closure transfer can use nix copy" "${root}/preflight-no-nix.out" >/dev/null
 grep -F "remote_host_mutation_performed=false" "${root}/preflight-no-nix.out" >/dev/null
 pass "remote host preflight distinguishes missing Nix after scaffold"

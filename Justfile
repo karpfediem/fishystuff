@@ -372,9 +372,17 @@ gitops-beta-remote-host-preflight target="" expected_hostname="site-nbg1-beta":
 gitops-beta-remote-host-bootstrap target="" expected_hostname="site-nbg1-beta":
   bash scripts/recipes/gitops-beta-remote-host-bootstrap.sh "{{target}}" "{{expected_hostname}}"
 
+# Install multi-user Nix on a fresh beta host after explicit opt-ins. Remote host mutation.
+gitops-beta-remote-install-nix target="" expected_hostname="site-nbg1-beta":
+  bash scripts/recipes/gitops-beta-remote-install-nix.sh "{{target}}" "{{expected_hostname}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
+
+# Run fast local regression checks for the beta remote Nix installer helper.
+gitops-beta-remote-install-nix-test:
+  bash scripts/recipes/gitops-beta-remote-install-nix-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
