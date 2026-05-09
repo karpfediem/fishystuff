@@ -114,6 +114,55 @@ grep -F "cdn_runtime_closure_status=provided_existing" "${root}/ready.stdout" >/
 grep -F "dolt_service_closure_status=provided_existing" "${root}/ready.stdout" >/dev/null
 pass "accept exact local closure inputs"
 
+state_closure_file="${root}/state-closures.desired.json"
+jq -n \
+  --arg api "$api_closure" \
+  --arg site "$site_closure" \
+  --arg cdn_runtime "$cdn_runtime_closure" \
+  --arg dolt_service "$dolt_service_closure" \
+  '{
+    environments: {
+      beta: {
+        active_release: "state-release"
+      }
+    },
+    releases: {
+      "state-release": {
+        closures: {
+          api: { store_path: $api },
+          site: { store_path: $site },
+          cdn_runtime: { store_path: $cdn_runtime },
+          dolt_service: { store_path: $dolt_service }
+        }
+      }
+    }
+  }' >"$state_closure_file"
+env \
+  -u FISHYSTUFF_OPERATOR_ROOT \
+  -u FISHYSTUFF_GITOPS_API_CLOSURE \
+  -u FISHYSTUFF_GITOPS_SITE_CLOSURE \
+  -u FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE \
+  -u FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE \
+  FISHYSTUFF_GITOPS_GIT_REV=beta-plan-git \
+  FISHYSTUFF_GITOPS_DOLT_COMMIT=beta-plan-dolt \
+  FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="file://${root}/dolt-origin" \
+  bash scripts/recipes/gitops-beta-current-handoff-plan.sh \
+    "$state_closure_file" \
+    beta \
+    "$fake_mgmt" \
+    auto \
+    "${root}/state-closures.handoff-summary.json" \
+  >"${root}/state-closures.stdout"
+
+grep -F "existing_desired_state_status=present" "${root}/state-closures.stdout" >/dev/null
+grep -F "existing_desired_state_active_release=state-release" "${root}/state-closures.stdout" >/dev/null
+grep -F "existing_desired_state_closure_source=active_release" "${root}/state-closures.stdout" >/dev/null
+grep -F "api_closure_status=provided_existing" "${root}/state-closures.stdout" >/dev/null
+grep -F "cdn_runtime_closure_status=provided_existing" "${root}/state-closures.stdout" >/dev/null
+grep -F "closure_build_required=false" "${root}/state-closures.stdout" >/dev/null
+grep -F "handoff_plan_status=ready" "${root}/state-closures.stdout" >/dev/null
+pass "reuse existing desired state closure inputs"
+
 missing_closure="/nix/store/00000000000000000000000000000000-missing-fishystuff"
 env \
   -u FISHYSTUFF_OPERATOR_ROOT \

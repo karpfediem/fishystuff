@@ -231,8 +231,63 @@ print_mgmt_status() {
   printf 'mgmt_bin=%s\n' "$mgmt_bin"
 }
 
+load_closure_from_existing_state() {
+  local env_name="$1"
+  local release_id="$2"
+  local closure_name="$3"
+  local value="${!env_name:-}"
+  local state_value=""
+
+  if [[ -n "$value" ]]; then
+    return
+  fi
+
+  state_value="$(
+    jq -er \
+      --arg release_id "$release_id" \
+      --arg closure_name "$closure_name" \
+      '.releases[$release_id].closures[$closure_name].store_path | select(type == "string" and length > 0)' \
+      "$state_file" 2>/dev/null || true
+  )"
+  if [[ -n "$state_value" ]]; then
+    if [[ "$state_value" == /nix/store/* ]]; then
+      printf -v "$env_name" '%s' "$state_value"
+      existing_desired_state_closure_source="active_release"
+    elif [[ "$existing_desired_state_closure_source" == "none" ]]; then
+      existing_desired_state_closure_source="ignored_non_store_path"
+    fi
+  fi
+}
+
+load_existing_desired_state_closures() {
+  local active_release=""
+
+  existing_desired_state_status="missing"
+  existing_desired_state_closure_source="none"
+  if [[ ! -f "$state_file" ]]; then
+    return
+  fi
+
+  existing_desired_state_status="present"
+  active_release="$(
+    jq -er '.environments.beta.active_release | select(type == "string" and length > 0)' \
+      "$state_file" 2>/dev/null || true
+  )"
+  if [[ -z "$active_release" ]]; then
+    existing_desired_state_closure_source="missing_active_release"
+    return
+  fi
+
+  existing_desired_state_active_release="$active_release"
+  load_closure_from_existing_state FISHYSTUFF_GITOPS_API_CLOSURE "$active_release" api
+  load_closure_from_existing_state FISHYSTUFF_GITOPS_SITE_CLOSURE "$active_release" site
+  load_closure_from_existing_state FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE "$active_release" cdn_runtime
+  load_closure_from_existing_state FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE "$active_release" dolt_service
+}
+
 require_command awk
 require_command git
+require_command jq
 
 environment="${FISHYSTUFF_GITOPS_ENVIRONMENT:-beta}"
 cluster="${FISHYSTUFF_GITOPS_CLUSTER:-beta}"
@@ -269,11 +324,20 @@ fi
 blocked="false"
 closure_build_required="false"
 mgmt_build_required="false"
+existing_desired_state_status="missing"
+existing_desired_state_active_release=""
+existing_desired_state_closure_source="none"
+load_existing_desired_state_closures
 
 printf 'gitops_beta_current_handoff_plan_ok=true\n'
 printf 'environment=beta\n'
 printf 'cluster=beta\n'
 printf 'desired_state_path=%s\n' "$state_file"
+printf 'existing_desired_state_status=%s\n' "$existing_desired_state_status"
+if [[ -n "$existing_desired_state_active_release" ]]; then
+  printf 'existing_desired_state_active_release=%s\n' "$existing_desired_state_active_release"
+fi
+printf 'existing_desired_state_closure_source=%s\n' "$existing_desired_state_closure_source"
 printf 'handoff_summary_path=%s\n' "$summary_file"
 printf 'dolt_ref=%s\n' "$dolt_ref"
 printf 'deploy_bin=%s\n' "$deploy_bin"
