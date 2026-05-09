@@ -40,6 +40,8 @@ api_env="${root}/api.env"
 dolt_env="${root}/dolt.env"
 fake_ssh="${root}/ssh"
 fake_scp="${root}/scp"
+summary="${root}/summary.json"
+desired="${root}/desired.json"
 
 cat >"$api_env" <<'EOF'
 FISHYSTUFF_DATABASE_URL='mysql://fishy:secret@127.0.0.1:3316/fishystuff'
@@ -51,6 +53,37 @@ EOF
 cat >"$dolt_env" <<'EOF'
 # FishyStuff beta Dolt runtime configuration.
 EOF
+
+jq -n \
+  --arg desired "$desired" \
+  '{
+    desired_state_path: $desired,
+    active_release: {
+      release_id: "release-test",
+      dolt_commit: "dolt-test"
+    }
+  }' >"$summary"
+jq -n '{
+  releases: {
+    "release-test": {
+      generation: 1,
+      git_rev: "git-test",
+      dolt_commit: "dolt-test",
+      closures: {
+        api: { store_path: "/nix/store/api" },
+        site: { store_path: "/nix/store/site" },
+        cdn_runtime: { store_path: "/nix/store/cdn" },
+        dolt_service: { store_path: "/nix/store/dolt" }
+      },
+      dolt: {
+        repository: "fishystuff/fishystuff",
+        branch_context: "beta",
+        mode: "read_only",
+        release_ref: "fishystuff/gitops-beta/release-test"
+      }
+    }
+  }
+}' >"$desired"
 
 cat >"$fake_ssh" <<'SSH'
 #!/usr/bin/env bash
@@ -72,20 +105,22 @@ env \
   FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@203.0.113.20 \
   HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
   FISHYSTUFF_FAKE_REMOTE_LOG="${root}/remote.log" \
-  bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp" >"${root}/copy.out"
+  bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp" "$summary" >"${root}/copy.out"
 grep -F "gitops_beta_copy_runtime_env_ok=true" "${root}/copy.out" >/dev/null
 grep -F "resident_target=root@203.0.113.20" "${root}/copy.out" >/dev/null
 grep -F "api_runtime_env_path=/var/lib/fishystuff/gitops-beta/api/runtime.env" "${root}/copy.out" >/dev/null
+grep -F "api_release_env_path=/var/lib/fishystuff/gitops-beta/api/beta.env" "${root}/copy.out" >/dev/null
 grep -F "remote_host_mutation_performed=true" "${root}/copy.out" >/dev/null
 grep -F "root@203.0.113.20" "${root}/remote.log" >/dev/null
 grep -F "/var/lib/fishystuff/gitops-beta/api/runtime.env" "${root}/remote.log" >/dev/null
+grep -F "/var/lib/fishystuff/gitops-beta/api/beta.env" "${root}/remote.log" >/dev/null
 pass "copies checked beta runtime env files to remote paths"
 
 expect_fail_contains \
   "requires opt-in" \
   "gitops-beta-copy-runtime-env requires FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1" \
   env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
-    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp" "$summary"
 
 expect_fail_contains \
   "requires target acknowledgement" \
@@ -95,7 +130,7 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1 \
     FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@203.0.113.21 \
     HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
-    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp" "$summary"
 
 expect_fail_contains \
   "rejects production profile" \
@@ -105,7 +140,7 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1 \
     FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@203.0.113.20 \
     HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
-    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@203.0.113.20 "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp" "$summary"
 
 expect_fail_contains \
   "rejects dns target" \
@@ -115,6 +150,6 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_RUNTIME_ENV_COPY=1 \
     FISHYSTUFF_GITOPS_BETA_REMOTE_RUNTIME_ENV_TARGET=root@beta.fishystuff.fish \
     HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
-    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@beta.fishystuff.fish "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-copy-runtime-env.sh root@beta.fishystuff.fish "$api_env" "$dolt_env" "$fake_ssh" "$fake_scp" "$summary"
 
 printf '[gitops-beta-copy-runtime-env-test] %s checks passed\n' "$pass_count"

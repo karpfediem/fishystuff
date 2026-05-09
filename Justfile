@@ -381,8 +381,8 @@ gitops-beta-copy-handoff-closures target="" summary_file="data/gitops/beta-curre
   bash scripts/recipes/gitops-beta-copy-handoff-closures.sh "{{target}}" "{{summary_file}}" "{{push_bin}}"
 
 # Copy checked beta API/Dolt runtime env files to the fresh beta host. Remote host mutation.
-gitops-beta-copy-runtime-env target="" api_source="" dolt_source="" ssh_bin="ssh" scp_bin="scp":
-  bash scripts/recipes/gitops-beta-copy-runtime-env.sh "{{target}}" "{{api_source}}" "{{dolt_source}}" "{{ssh_bin}}" "{{scp_bin}}"
+gitops-beta-copy-runtime-env target="" api_source="" dolt_source="" ssh_bin="ssh" scp_bin="scp" summary_file="data/gitops/beta-current.handoff-summary.json":
+  bash scripts/recipes/gitops-beta-copy-runtime-env.sh "{{target}}" "{{api_source}}" "{{dolt_source}}" "{{ssh_bin}}" "{{scp_bin}}" "{{summary_file}}"
 
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
