@@ -315,6 +315,7 @@ printf 'read_only_step_06=just gitops-beta-operator-proof output_dir=%s draft_fi
 printf 'read_only_step_07=just gitops-beta-proof-index proof_dir=%s require_complete=true\n' "$proof_dir"
 printf 'read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=%s\n' "$dolt_env_file"
 printf 'read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=%s\n' "$api_env_file"
+printf 'read_only_runtime_env_check_03=just secrets-check profile=beta-runtime\n'
 printf 'guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=%s\n' "$dolt_env_file"
 printf 'guarded_runtime_env_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=%s\n' "$api_env_file"
 printf 'guarded_runtime_env_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=%s profile=beta-runtime\n' "$api_env_file"
