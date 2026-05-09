@@ -321,8 +321,8 @@ require_store_path edge_unit_source "$edge_unit_source"
 
 placeholder_fullchain="${tmp_dir}/fullchain.pem"
 placeholder_privkey="${tmp_dir}/privkey.pem"
-remote_fullchain=""
-remote_privkey=""
+remote_fullchain="existing-tls-fullchain-not-uploaded"
+remote_privkey="existing-tls-privkey-not-uploaded"
 if [[ "$tls_mode" == "placeholder" ]]; then
   generate_placeholder_tls "$placeholder_fullchain" "$placeholder_privkey" "${tmp_dir}/openssl.log"
   remote_fullchain="/tmp/fishystuff-beta-edge-fullchain.pem"

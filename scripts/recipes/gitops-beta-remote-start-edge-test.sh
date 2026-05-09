@@ -322,6 +322,8 @@ grep -F "gitops_beta_remote_start_edge_ok=true" "${root}/edge-existing.out" >/de
 grep -F "tls_mode=existing_remote" "${root}/edge-existing.out" >/dev/null
 grep -F "remote_edge_existing_tls_preserved=true" "${root}/edge-existing.out" >/dev/null
 grep -F "root@203.0.113.20 ${edge_bundle}" "${root}/push-existing.log" >/dev/null
+grep -F "existing-tls-fullchain-not-uploaded" "${root}/remote-existing.log" >/dev/null
+grep -F "existing-tls-privkey-not-uploaded" "${root}/remote-existing.log" >/dev/null
 if [[ -s "${root}/scp-existing.log" ]]; then
   printf '[gitops-beta-remote-start-edge-test] existing TLS mode must not copy placeholder TLS\n' >&2
   cat "${root}/scp-existing.log" >&2
