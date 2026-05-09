@@ -62,6 +62,7 @@ grep -F "runtime_env_packet_status=pending_runtime_env" "${root}/missing.stdout"
 grep -F "runtime_env_packet_api_status=missing" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_dolt_status=missing" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_api_secretspec_status=ready" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${api_env} dolt_env_file=${dolt_env}" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${dolt_env}" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env} profile=beta-runtime" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_after_success_command=just gitops-beta-service-start-packet api_bundle=auto dolt_bundle=auto api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/missing.stdout" >/dev/null
@@ -90,6 +91,10 @@ grep -F "runtime_env_packet_dolt_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_api_secretspec_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_api_database=loopback-dolt-beta" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_01=just gitops-beta-service-start-packet api_bundle=/tmp/api-bundle dolt_bundle=/tmp/dolt-bundle api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/ready.stdout" >/dev/null
+if grep -F "runtime_env_packet_before_write_command=" "${root}/ready.stdout" >/dev/null; then
+  printf '[gitops-beta-runtime-env-packet-test] ready packet must not print a before-write command\n' >&2
+  exit 1
+fi
 pass "ready runtime env packet"
 
 cat >"${fake_bin}/secretspec" <<'EOF'

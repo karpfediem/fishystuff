@@ -113,6 +113,7 @@ grep -F "gitops_beta_service_start_packet_ok=true" "${root}/missing-runtime.stdo
 grep -F "service_start_packet_status=pending_runtime_env" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_api_status=missing" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_dolt_status=ready" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${root}/missing-api.env dolt_env_file=${dolt_env}" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${root}/missing-api.env profile=beta-runtime" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/missing-runtime.stdout" >/dev/null

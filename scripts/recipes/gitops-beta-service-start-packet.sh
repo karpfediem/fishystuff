@@ -68,6 +68,9 @@ if [[ "$runtime_packet_status" != "ready" ]]; then
   printf 'service_start_packet_dolt_env_file=%s\n' "$dolt_env_file"
   printf 'service_start_packet_api_status=%s\n' "$(kv_value runtime_env_packet_api_status "$runtime_packet_output")"
   printf 'service_start_packet_dolt_status=%s\n' "$(kv_value runtime_env_packet_dolt_status "$runtime_packet_output")"
+  if [[ -n "$(kv_value runtime_env_packet_before_write_command "$runtime_packet_output")" ]]; then
+    printf 'service_start_packet_before_write_command=%s\n' "$(kv_value runtime_env_packet_before_write_command "$runtime_packet_output")"
+  fi
   if [[ -n "$(kv_value runtime_env_packet_next_command_01 "$runtime_packet_output")" ]]; then
     printf 'service_start_packet_next_command_01=%s\n' "$(kv_value runtime_env_packet_next_command_01 "$runtime_packet_output")"
   fi

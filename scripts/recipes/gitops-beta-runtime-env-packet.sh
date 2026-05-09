@@ -102,6 +102,7 @@ if [[ "$api_status" == "ready" && "$dolt_status" == "ready" ]]; then
   packet_status="ready"
 fi
 
+runtime_env_host_preflight_command="just gitops-beta-runtime-env-host-preflight api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 service_start_packet_command="just gitops-beta-service-start-packet api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file} summary_file=${summary_file}"
 
 printf 'gitops_beta_runtime_env_packet_ok=true\n'
@@ -111,6 +112,9 @@ printf 'runtime_env_packet_dolt_env_file=%s\n' "$dolt_env_file"
 printf 'runtime_env_packet_api_status=%s\n' "$api_status"
 printf 'runtime_env_packet_dolt_status=%s\n' "$dolt_status"
 printf 'runtime_env_packet_api_secretspec_status=%s\n' "$api_secret_status"
+if [[ "$packet_status" != "ready" ]]; then
+  printf 'runtime_env_packet_before_write_command=%s\n' "$runtime_env_host_preflight_command"
+fi
 if [[ "$api_status" == "ready" ]]; then
   printf 'runtime_env_packet_api_database=%s\n' "$(kv_value gitops_beta_runtime_env_database "$api_output")"
   printf 'runtime_env_packet_api_public_site_base_url=%s\n' "$(kv_value gitops_beta_runtime_env_public_site_base_url "$api_output")"
