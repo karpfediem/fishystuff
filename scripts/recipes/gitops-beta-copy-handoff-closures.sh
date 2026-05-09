@@ -42,6 +42,17 @@ require_command_or_executable() {
   fi
 }
 
+resolve_push_command() {
+  local command_name="$1"
+
+  if [[ "$command_name" == */* && "$command_name" == *.sh && -f "$command_name" ]]; then
+    printf 'bash\0%s\0' "$command_name"
+    return
+  fi
+  require_command_or_executable "$command_name" push_bin
+  printf '%s\0' "$command_name"
+}
+
 require_beta_deploy_profile() {
   local active_profile="${FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE:-}"
 
@@ -117,7 +128,10 @@ assert_deployment_configuration_safe beta
 assert_beta_infra_cluster_dns_scope_safe
 require_safe_target "$target"
 require_command_or_executable jq jq
-require_command_or_executable "$push_bin" push_bin
+push_command=()
+while IFS= read -r -d '' part; do
+  push_command+=("$part")
+done < <(resolve_push_command "$push_bin")
 
 if [[ ! -f "$summary_file" ]]; then
   fail "handoff summary does not exist: ${summary_file}"
@@ -157,7 +171,7 @@ printf 'closure_02_site=%s\n' "$site_closure"
 printf 'closure_03_cdn_runtime=%s\n' "$cdn_runtime_closure"
 printf 'closure_04_dolt_service=%s\n' "$dolt_service_closure"
 
-"$push_bin" \
+"${push_command[@]}" \
   "$target" \
   "$api_closure" \
   "$site_closure" \
