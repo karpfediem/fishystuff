@@ -99,6 +99,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-install-service-test.sh
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
   bash scripts/recipes/gitops-beta-runtime-env-packet-test.sh
+  bash scripts/recipes/gitops-beta-runtime-env-host-preflight-test.sh
   bash scripts/recipes/gitops-beta-service-start-plan-test.sh
   bash scripts/recipes/gitops-beta-service-start-packet-test.sh
   bash scripts/recipes/gitops-beta-host-bootstrap-plan-test.sh
@@ -367,6 +368,10 @@ gitops-beta-check-runtime-env service="api" env_file="":
 gitops-beta-runtime-env-packet api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" api_bundle="auto" dolt_bundle="auto" summary_file="data/gitops/beta-current.handoff-summary.json":
   @bash scripts/recipes/gitops-beta-runtime-env-packet.sh "{{api_env_file}}" "{{dolt_env_file}}" "{{api_bundle}}" "{{dolt_bundle}}" "{{summary_file}}"
 
+# Print the beta runtime env host-context preflight. No mutation.
+gitops-beta-runtime-env-host-preflight api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env":
+  @bash scripts/recipes/gitops-beta-runtime-env-host-preflight.sh "{{api_env_file}}" "{{dolt_env_file}}"
+
 # Run fast local regression checks for beta runtime env writers/checkers.
 gitops-beta-runtime-env-test:
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
@@ -374,6 +379,10 @@ gitops-beta-runtime-env-test:
 # Run fast local regression checks for the beta runtime env readiness packet.
 gitops-beta-runtime-env-packet-test:
   bash scripts/recipes/gitops-beta-runtime-env-packet-test.sh
+
+# Run fast local regression checks for the beta runtime env host-context preflight.
+gitops-beta-runtime-env-host-preflight-test:
+  bash scripts/recipes/gitops-beta-runtime-env-host-preflight-test.sh
 
 # Print the beta API/Dolt service start plan from checked env files and service bundles. No mutation.
 gitops-beta-service-start-plan api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" summary_file="data/gitops/beta-current.handoff-summary.json":

@@ -317,6 +317,7 @@ service_start_packet_command="just gitops-beta-service-start-packet api_bundle=$
 runtime_env_dolt_command="FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${dolt_env_file}"
 runtime_env_api_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${api_env_file}"
 runtime_env_api_secretspec_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env_file} profile=beta-runtime"
+runtime_env_host_preflight_command="just gitops-beta-runtime-env-host-preflight api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 start_services_command="FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${dolt_unit_sha256} FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${api_unit_sha256} just gitops-beta-start-services api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 admission_packet_command="just gitops-beta-admission-packet admission_file=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir} draft_file=${draft_file}"
 activation_draft_packet_command="just gitops-beta-activation-draft-packet draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_dir=${proof_dir} edge_bundle=${edge_bundle} api_upstream=${api_upstream} observation_dir=${observation_dir}"
@@ -361,6 +362,7 @@ case "$next_required_action" in
     printf 'operator_packet_next_command_01=%s\n' "$service_start_review_command"
     ;;
   write_beta_runtime_env)
+    printf 'operator_packet_before_write_command=%s\n' "$runtime_env_host_preflight_command"
     printf 'operator_packet_next_command_01=%s\n' "$runtime_env_dolt_command"
     printf 'operator_packet_next_command_02=%s\n' "$runtime_env_api_secretspec_command"
     printf 'operator_packet_manual_secret_command=%s\n' "$runtime_env_api_command"
@@ -405,6 +407,7 @@ printf 'read_only_step_09=%s\n' "$proof_index_command"
 printf 'read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=%s\n' "$dolt_env_file"
 printf 'read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=%s\n' "$api_env_file"
 printf 'read_only_runtime_env_check_03=just secrets-check profile=beta-runtime\n'
+printf 'read_only_runtime_env_check_04=%s\n' "$runtime_env_host_preflight_command"
 printf 'guarded_runtime_env_action_01=%s\n' "$runtime_env_dolt_command"
 printf 'guarded_runtime_env_action_02=%s\n' "$runtime_env_api_command"
 printf 'guarded_runtime_env_action_03=%s\n' "$runtime_env_api_secretspec_command"
