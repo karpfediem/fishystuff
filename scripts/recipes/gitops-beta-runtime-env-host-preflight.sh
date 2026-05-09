@@ -104,7 +104,7 @@ hostname_match_status() {
 
   if [[ "$current" == "unknown" || -z "$expected" ]]; then
     printf 'unknown'
-  elif [[ "$current" == "$expected" ]]; then
+  elif [[ "$current" == "$expected" || "$current" == "${expected}."* ]]; then
     printf 'true'
   else
     printf 'false'
@@ -120,8 +120,12 @@ expected_hostname="$(deployment_resident_hostname beta)"
 expected_match="$(hostname_match_status "$current_hostname" "$expected_hostname")"
 api_parent="$(dirname "$api_env_file")"
 dolt_parent="$(dirname "$dolt_env_file")"
+path_ready="false"
 ready="false"
 if [[ -d "$api_parent" && -w "$api_parent" && -d "$dolt_parent" && -w "$dolt_parent" ]]; then
+  path_ready="true"
+fi
+if [[ "$path_ready" == "true" && "$expected_match" == "true" ]]; then
   ready="true"
 fi
 
@@ -134,6 +138,7 @@ printf 'runtime_env_host_preflight_resident_target=%s\n' "$(deployment_resident_
 printf 'runtime_env_host_preflight_operator_secretspec_profile=%s\n' "${FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE:-unset}"
 print_env_path_preflight api "$api_env_file"
 print_env_path_preflight dolt "$dolt_env_file"
+printf 'runtime_env_host_preflight_path_ready=%s\n' "$path_ready"
 printf 'runtime_env_host_preflight_ready=%s\n' "$ready"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

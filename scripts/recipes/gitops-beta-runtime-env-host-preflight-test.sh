@@ -46,6 +46,7 @@ grep -F "gitops_beta_runtime_env_host_preflight_ok=true" "${root}/blocked.stdout
 grep -F "runtime_env_host_preflight_status=blocked" "${root}/blocked.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_api_parent_exists=false" "${root}/blocked.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_dolt_parent_exists=false" "${root}/blocked.stdout" >/dev/null
+grep -F "runtime_env_host_preflight_path_ready=false" "${root}/blocked.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_ready=false" "${root}/blocked.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/blocked.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/blocked.stdout" >/dev/null
@@ -56,13 +57,12 @@ mkdir -p "${root}/api" "${root}/dolt"
 bash scripts/recipes/gitops-beta-runtime-env-host-preflight.sh \
   "$api_env" \
   "$dolt_env" >"${root}/ready.stdout"
-grep -F "runtime_env_host_preflight_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_api_parent_exists=true" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_api_parent_writable=true" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_dolt_parent_exists=true" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_host_preflight_dolt_parent_writable=true" "${root}/ready.stdout" >/dev/null
-grep -F "runtime_env_host_preflight_ready=true" "${root}/ready.stdout" >/dev/null
-pass "ready host preflight"
+grep -F "runtime_env_host_preflight_path_ready=true" "${root}/ready.stdout" >/dev/null
+pass "writable path host preflight"
 
 expect_fail_contains \
   "reject production runtime env path" \
