@@ -51,6 +51,7 @@ probe_site_contract() {
 
   smoke_fetch "site runtime config" "$site_base_url/runtime-config.js" || return 1
   smoke_assert_runtime_config_contract "$deployment" "$SMOKE_LAST_BODY" || return 1
+  SMOKE_LAST_RUNTIME_MAP_ASSET_CACHE_KEY="$(smoke_runtime_config_map_asset_cache_key "$SMOKE_LAST_BODY")"
   if [[ "$deployment" != "local" ]]; then
     smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "runtime config cache policy" || return 1
   fi
@@ -66,7 +67,10 @@ probe_site_contract() {
 }
 
 probe_cdn_runtime_contract() {
+  local cache_key="${SMOKE_LAST_RUNTIME_MAP_ASSET_CACHE_KEY:-}"
   local manifest_body=""
+  local keyed_manifest_body=""
+  local keyed_manifest_url=""
   local module_path=""
   local wasm_path=""
   local module_url=""
@@ -80,6 +84,23 @@ probe_cdn_runtime_contract() {
   }
   if [[ "$deployment" != "local" ]]; then
     smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*no-store' "cdn runtime manifest cache policy" || return 1
+  fi
+
+  if [[ -n "$cache_key" ]]; then
+    keyed_manifest_url="$(smoke_join_url "$cdn_base_url/map" "runtime-manifest.$cache_key.json")"
+    smoke_fetch "cdn cache-keyed runtime manifest" "$keyed_manifest_url" || return 1
+    keyed_manifest_body="$SMOKE_LAST_BODY"
+    smoke_assert_cdn_runtime_manifest_contract "$keyed_manifest_body" || {
+      echo "[smoke] cdn cache-keyed runtime manifest failed module/wasm contract" >&2
+      return 1
+    }
+    if [[ "$deployment" != "local" ]]; then
+      smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn cache-keyed runtime manifest cache policy" || return 1
+    fi
+    if ! cmp -s "$manifest_body" "$keyed_manifest_body"; then
+      echo "[smoke] cdn stable and cache-keyed runtime manifests differ for key: $cache_key" >&2
+      return 1
+    fi
   fi
 
   module_path="$(jq -er '.module' "$manifest_body")"

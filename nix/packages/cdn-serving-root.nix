@@ -4,15 +4,19 @@
   runCommand,
   currentRoot,
   previousRoots ? [ ],
+  runtimeManifestCacheKeys ? [ ],
 }:
 let
   previousRootArgs = lib.concatMapStringsSep " " (root: lib.escapeShellArg "${root}") previousRoots;
+  runtimeManifestCacheKeyArgs =
+    lib.concatMapStringsSep " " (key: lib.escapeShellArg key) runtimeManifestCacheKeys;
 in
 runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
   set -euo pipefail
 
   current_root=${lib.escapeShellArg "${currentRoot}"}
   previous_roots=(${previousRootArgs})
+  runtime_manifest_cache_keys=(${runtimeManifestCacheKeyArgs})
 
   if [[ ! -d "$current_root" ]]; then
     echo "current CDN root does not exist: $current_root" >&2
@@ -119,10 +123,52 @@ runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
     } >> "$manifest_assets"
   }
 
+  should_skip_current_path() {
+    local rel="$1"
+    case "$rel" in
+      map/runtime-manifest.*.json|\
+      map/runtime-manifest.*.json.br|\
+      map/runtime-manifest.*.json.gz)
+        return 0
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  }
+
   while IFS= read -r -d "" file; do
     rel="''${file#"$current_root"/}"
+    if should_skip_current_path "$rel"; then
+      continue
+    fi
     link_asset_json "$file" "$rel" "current"
   done < <(find -L "$current_root" -type f -print0 | sort -z)
+
+  for runtime_manifest_cache_key in "''${runtime_manifest_cache_keys[@]}"; do
+    if [[ -z "$runtime_manifest_cache_key" ]]; then
+      continue
+    fi
+    if [[ ! "$runtime_manifest_cache_key" =~ ^[A-Za-z0-9._-]+$ || "$runtime_manifest_cache_key" == *..* ]]; then
+      echo "unsafe CDN runtime manifest cache key: $runtime_manifest_cache_key" >&2
+      exit 1
+    fi
+    if [[ ! -f "$runtime_manifest" ]]; then
+      echo "cannot publish cache-keyed runtime manifest without stable manifest: $runtime_manifest_cache_key" >&2
+      exit 1
+    fi
+
+    keyed_runtime_manifest_rel="map/runtime-manifest.$runtime_manifest_cache_key.json"
+    keyed_runtime_manifest_target="$out/$keyed_runtime_manifest_rel"
+    if [[ -e "$keyed_runtime_manifest_target" || -L "$keyed_runtime_manifest_target" ]]; then
+      if ! cmp -s "$runtime_manifest" "$keyed_runtime_manifest_target"; then
+        echo "cache-keyed CDN runtime manifest does not match stable manifest: /$keyed_runtime_manifest_rel" >&2
+        exit 1
+      fi
+      continue
+    fi
+    link_asset_json "$runtime_manifest" "$keyed_runtime_manifest_rel" "current"
+  done
 
   retained_count=0
   for previous_root in "''${previous_roots[@]}"; do

@@ -179,6 +179,7 @@
           };
           cdnServingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
             currentRoot = cdnContent;
+            runtimeManifestCacheKeys = [ siteMapRuntimeCacheKey ];
           };
           siteContentFor =
             deploymentEnvironment: mapAssetCacheKey:
@@ -802,6 +803,7 @@
               currentFixture = pkgs.runCommand "cdn-serving-current-fixture" { } ''
                 mkdir -p "$out/map"
                 printf '{"module":"fishystuff_ui_bevy.new.js","wasm":"fishystuff_ui_bevy_bg.new.wasm"}\n' > "$out/map/runtime-manifest.json"
+                printf '{"module":"fishystuff_ui_bevy.stale.js","wasm":"fishystuff_ui_bevy_bg.stale.wasm"}\n' > "$out/map/runtime-manifest.stale.json"
                 printf 'current-metadata' > "$out/.cdn-metadata.json"
                 printf 'new-runtime' > "$out/map/fishystuff_ui_bevy.new.js"
                 printf 'new-runtime-br' > "$out/map/fishystuff_ui_bevy.new.js.br"
@@ -821,6 +823,7 @@
               servingRoot = pkgs.callPackage ./nix/packages/cdn-serving-root.nix {
                 currentRoot = currentFixture;
                 previousRoots = [ previousFixture ];
+                runtimeManifestCacheKeys = [ "new-cache-key" ];
               };
             in
             pkgs.runCommand "cdn-serving-root-retention-check" { nativeBuildInputs = [ pkgs.jq ]; } ''
@@ -828,6 +831,9 @@
 
               test "$(jq -r '.module' ${servingRoot}/map/runtime-manifest.json)" = "fishystuff_ui_bevy.new.js"
               test "$(jq -r '.wasm' ${servingRoot}/map/runtime-manifest.json)" = "fishystuff_ui_bevy_bg.new.wasm"
+              test "$(jq -r '.module' ${servingRoot}/map/runtime-manifest.new-cache-key.json)" = "fishystuff_ui_bevy.new.js"
+              test "$(jq -r '.wasm' ${servingRoot}/map/runtime-manifest.new-cache-key.json)" = "fishystuff_ui_bevy_bg.new.wasm"
+              test ! -e ${servingRoot}/map/runtime-manifest.stale.json
               test "$(cat ${servingRoot}/.cdn-metadata.json)" = "current-metadata"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js)" = "new-runtime"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js.br)" = "new-runtime-br"
@@ -840,6 +846,7 @@
 
               test "$(jq -r '.retained_root_count' ${servingRoot}/cdn-serving-manifest.json)" = "1"
               test "$(jq -r '[.assets[] | select(.source == "retained")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "3"
+              test "$(jq -r '[.assets[] | select(.path == "/map/runtime-manifest.new-cache-key.json" and .source == "current")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "1"
               test "$(jq -r '[.assets[] | select(.path == "/map/fishystuff_ui_bevy.shared.js")] | length' ${servingRoot}/cdn-serving-manifest.json)" = "1"
               test "$(jq -r '.assets[] | select(.path == "/map/fishystuff_ui_bevy.shared.js") | .source' ${servingRoot}/cdn-serving-manifest.json)" = "current"
               touch "$out"

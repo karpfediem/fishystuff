@@ -6,6 +6,7 @@ SMOKE_LAST_BODY=""
 SMOKE_LAST_HEADERS=""
 SMOKE_LAST_ERROR=""
 SMOKE_LAST_HTTP_CODE=""
+SMOKE_LAST_RUNTIME_MAP_ASSET_CACHE_KEY=""
 
 smoke_cleanup_temp_files() {
   if (( ${#RECIPE_SMOKE_TEMP_FILES[@]} > 0 )); then
@@ -204,6 +205,11 @@ smoke_assert_runtime_config_contract() {
   smoke_body_contains "$file" "\"exporterEndpoint\": \"$telemetry_base_url/v1/traces\"" "runtime config telemetry URL" || return 1
   smoke_body_contains "$file" "\"mapAssetCacheKey\": \"" "runtime config map cache key" || return 1
   smoke_opposite_public_hosts_absent "$deployment" "$file" "runtime config" || return 1
+}
+
+smoke_runtime_config_map_asset_cache_key() {
+  local file="$1"
+  node "$RECIPE_REPO_ROOT/tools/scripts/print_runtime_map_asset_cache_key.mjs" --allow-empty "$file"
 }
 
 smoke_assert_asset_manifest_contract() {
