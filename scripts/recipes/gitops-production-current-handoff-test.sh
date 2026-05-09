@@ -241,6 +241,7 @@ write_apply_operator_proof() {
         inventory: {
           success: true,
           kv: {
+            gitops_host_inventory_ok: "production",
             gitops_production_host_inventory_ok: "production",
             edge_bundle_check_ok: "true",
             edge_caddy_validate: "true",
@@ -251,6 +252,7 @@ write_apply_operator_proof() {
         preflight: {
           success: true,
           kv: {
+            gitops_preflight_ok: $draft_file,
             gitops_production_preflight_ok: $draft_file,
             handoff_summary: $summary_file,
             admission_evidence: $admission_file,
@@ -261,6 +263,7 @@ write_apply_operator_proof() {
         host_handoff_plan: {
           success: true,
           kv: {
+            gitops_host_handoff_plan_ok: $draft_file,
             gitops_production_host_handoff_plan_ok: $draft_file,
             handoff_summary: $summary_file,
             edge_caddy_validate: "true",

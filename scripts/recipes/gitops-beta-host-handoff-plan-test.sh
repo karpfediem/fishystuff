@@ -229,6 +229,10 @@ write_beta_activation_inputs() {
   printf '%s\n' "$state" >"${root}/state.path"
 }
 
+if [[ "${FISHYSTUFF_GITOPS_BETA_HOST_HANDOFF_PLAN_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 root="$(mktemp -d)"
 write_beta_activation_inputs "$root"
 make_beta_edge_bundle "${root}/edge-bundle"

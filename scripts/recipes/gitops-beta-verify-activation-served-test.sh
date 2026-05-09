@@ -334,6 +334,10 @@ write_beta_served_state() {
   write_roots_status "$run_dir/roots/beta-${retained_release_id}.json" "$generation" "$host" "$retained_release_id" "$retained_release_identity" "$retained_api_closure"
 }
 
+if [[ "${FISHYSTUFF_GITOPS_BETA_VERIFY_ACTIVATION_SERVED_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 root="$(mktemp -d)"
 deploy_bin="$(require_deploy_bin)"
 make_fixture "$root"

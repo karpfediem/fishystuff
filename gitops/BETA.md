@@ -30,6 +30,13 @@ just gitops-beta-host-handoff-plan
 just gitops-beta-host-handoff-plan-test
 just gitops-beta-verify-activation-served
 just gitops-beta-verify-activation-served-test
+just gitops-beta-operator-proof
+just gitops-check-beta-operator-proof
+just gitops-beta-operator-proof-test
+just gitops-beta-served-proof
+just gitops-beta-served-proof-test
+just gitops-beta-proof-index
+just gitops-beta-proof-index-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -93,8 +100,12 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-verify-activation-served` is the read-only served-state check for the beta path. It refuses non-beta handoff summaries, then verifies that the local beta served documents under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta` still match the checked beta activation draft, admission evidence, selected host, selected release, route, admission, and roots-ready state.
 
+`just gitops-beta-operator-proof` and `just gitops-check-beta-operator-proof` are the beta operator-proof wrappers. They use beta defaults for state, run, unit, TLS, and edge bundle paths, refuse non-beta summaries, and write/check `fishystuff.gitops.beta-operator-proof.v1` artifacts. The proof is still local-only: it records inventory, preflight, and host-handoff-plan evidence, but it does not apply the activation draft or restart services.
+
+`just gitops-beta-served-proof` and `just gitops-beta-proof-index` are the beta post-reconciliation audit wrappers. They link served-state verification back to a checked beta operator proof and require the latest beta served proof to point at the latest beta operator proof. They remain read-only and are only meaningful after a beta apply gate has reconciled local served state.
+
 Next pieces to add:
 
-1. beta operator-proof and local apply gate wrappers parameterized from the production path
-2. beta served proof/proof-index wrappers around the served verifier
-3. only then, a separate manually confirmed host bootstrap path
+1. beta local apply gate consuming a checked beta operator proof
+2. beta host bootstrap/install path with separate manually confirmed infrastructure steps
+3. beta edge install/restart only after a complete beta proof chain exists

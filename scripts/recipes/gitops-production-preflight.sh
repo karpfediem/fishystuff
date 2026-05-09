@@ -57,16 +57,16 @@ run_step() {
   local stdout="${tmp_dir}/${step}.stdout"
   local stderr="${tmp_dir}/${step}.stderr"
 
-  printf 'gitops_production_preflight_step_start=%s\n' "$step" >&2
+  printf '%s_step_start=%s\n' "$preflight_key_prefix" "$step" >&2
   if "$@" >"$stdout" 2>"$stderr"; then
     if [[ -s "$stderr" ]]; then
       sed "s/^/[${step}] /" "$stderr" >&2
     fi
-    printf 'gitops_production_preflight_step_pass=%s\n' "$step" >&2
+    printf '%s_step_pass=%s\n' "$preflight_key_prefix" "$step" >&2
     return
   fi
 
-  printf 'gitops_production_preflight_step_fail=%s\n' "$step" >&2
+  printf '%s_step_fail=%s\n' "$preflight_key_prefix" "$step" >&2
   if [[ -s "$stdout" ]]; then
     sed "s/^/[${step}:stdout] /" "$stdout" >&2
   fi
@@ -137,6 +137,7 @@ case "$environment" in
     exit 2
     ;;
 esac
+preflight_key_prefix="gitops_${environment}_preflight"
 
 draft_file="$(absolute_path "$draft_file")"
 summary_file="$(absolute_path "$summary_file")"

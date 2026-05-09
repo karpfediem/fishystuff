@@ -82,6 +82,9 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
   bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
+  bash scripts/recipes/gitops-beta-operator-proof-test.sh
+  bash scripts/recipes/gitops-beta-served-proof-test.sh
+  bash scripts/recipes/gitops-beta-proof-index-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -164,6 +167,22 @@ gitops-verify-activation-served draft_file="data/gitops/production-activation.dr
 # Verify local served beta GitOps state still matches the checked beta activation draft.
 gitops-beta-verify-activation-served draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta":
   bash scripts/recipes/gitops-beta-verify-activation-served.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}"
+
+# Write a timestamped local beta GitOps operator proof artifact. No remote mutation.
+gitops-beta-operator-proof output_dir="data/gitops" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto" run_helper_tests="true" served_state_dir="" rollback_set_path="" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta" systemd_unit_path="/etc/systemd/system/fishystuff-beta-edge.service" tls_fullchain_path="/run/fishystuff/beta-edge/tls/fullchain.pem" tls_privkey_path="/run/fishystuff/beta-edge/tls/privkey.pem":
+  bash scripts/recipes/gitops-beta-operator-proof.sh "{{output_dir}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{run_helper_tests}}" "{{served_state_dir}}" "{{rollback_set_path}}" "{{state_dir}}" "{{run_dir}}" "{{systemd_unit_path}}" "{{tls_fullchain_path}}" "{{tls_privkey_path}}"
+
+# Check a stored beta GitOps operator proof artifact is fresh and still matches current inputs.
+gitops-check-beta-operator-proof proof_file="" max_age_seconds="86400" proof_dir="data/gitops":
+  bash scripts/recipes/gitops-check-beta-operator-proof.sh "{{proof_file}}" "{{max_age_seconds}}" "{{proof_dir}}"
+
+# Write a timestamped proof that beta served state matches the checked beta activation and operator proof.
+gitops-beta-served-proof output_dir="data/gitops" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta" proof_max_age_seconds="86400":
+  bash scripts/recipes/gitops-beta-served-proof.sh "{{output_dir}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{proof_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}" "{{proof_max_age_seconds}}"
+
+# Print the latest local beta GitOps proof chain. No remote mutation.
+gitops-beta-proof-index proof_dir="data/gitops" max_age_seconds="86400" require_complete="false":
+  bash scripts/recipes/gitops-beta-proof-index.sh "{{proof_dir}}" "{{max_age_seconds}}" "{{require_complete}}"
 
 # Write a timestamped proof that served state matches the checked activation and operator proof.
 gitops-production-served-proof output_dir="data/gitops" draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" proof_max_age_seconds="86400":
@@ -276,6 +295,18 @@ gitops-production-served-proof-test:
 # Run fast local regression checks for beta GitOps served verification.
 gitops-beta-verify-activation-served-test:
   bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
+
+# Run fast local regression checks for beta GitOps operator proofs.
+gitops-beta-operator-proof-test:
+  bash scripts/recipes/gitops-beta-operator-proof-test.sh
+
+# Run fast local regression checks for beta GitOps served proofs.
+gitops-beta-served-proof-test:
+  bash scripts/recipes/gitops-beta-served-proof-test.sh
+
+# Run fast local regression checks for beta GitOps proof indexing.
+gitops-beta-proof-index-test:
+  bash scripts/recipes/gitops-beta-proof-index-test.sh
 
 # Run fast local regression checks for production GitOps proof indexing.
 gitops-production-proof-index-test:
