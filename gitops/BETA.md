@@ -39,6 +39,8 @@ just gitops-beta-proof-index
 just gitops-beta-proof-index-test
 just gitops-beta-apply-activation-draft
 just gitops-beta-apply-activation-draft-test
+just gitops-beta-install-edge
+just gitops-beta-install-edge-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -98,7 +100,7 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are the beta-shaped admission and activation wrappers. They require a beta handoff summary and refuse production summaries. The shared activation checker now reads the environment from the handoff summary, so the same invariant applies to beta: a serving draft must include explicit admission evidence and a retained rollback release. The current `gitops-beta-current-handoff` output is therefore candidate-only until a retained beta release is added.
 
-`just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, beta API upstream, and the guarded beta apply command. It reports `beta_apply_gate_available=true`, but still does not apply, install, or restart anything by itself.
+`just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, beta API upstream, guarded beta apply command, and guarded beta edge install command. It reports `beta_apply_gate_available=true`, but still does not apply, install, or restart anything by itself.
 
 `just gitops-beta-verify-activation-served` is the read-only served-state check for the beta path. It refuses non-beta handoff summaries, then verifies that the local beta served documents under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta` still match the checked beta activation draft, admission evidence, selected host, selected release, route, admission, and roots-ready state.
 
@@ -108,8 +110,10 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-apply-activation-draft` is the guarded beta local apply gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1`, `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, and `FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash>`. It checks a beta operator proof, refuses production summaries/proofs, and runs mgmt only against the beta activation draft. In `local-apply` mode, the clean graph publishes beta state under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta`.
 
+`just gitops-beta-install-edge` is the beta-only edge install/restart gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1`, `FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof hash>`, and `FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked beta edge unit hash>`. It re-checks that `just gitops-beta-proof-index require_complete=true` is complete, re-validates the beta edge bundle, installs only `/etc/systemd/system/fishystuff-beta-edge.service`, reloads systemd, restarts `fishystuff-beta-edge.service`, and checks it is active. The regression intercepts `install` and `systemctl` with fake commands so this guard remains testable without mutating the developer machine.
+
 Next pieces to add:
 
 1. beta host bootstrap/install path with separate manually confirmed infrastructure steps
-2. beta edge install/restart only after a complete beta proof chain exists
-3. served proof/index capture after the first beta apply on the new service set
+2. first real beta apply on the new service set, followed by served proof/index capture
+3. beta API/Dolt service install gates with the same proof-hash and unit-hash discipline as the edge gate

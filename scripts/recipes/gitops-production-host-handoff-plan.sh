@@ -167,6 +167,7 @@ if [[ ! -f "$systemd_unit_source" ]]; then
   echo "${environment} GitOps edge handoff bundle systemd unit artifact is missing: ${systemd_unit_source}" >&2
   exit 2
 fi
+read -r systemd_unit_sha256 _ < <(sha256sum "$systemd_unit_source")
 
 printf 'gitops_host_handoff_plan_ok=%s\n' "$draft_file"
 printf 'gitops_host_handoff_environment=%s\n' "$environment"
@@ -200,6 +201,7 @@ printf 'edge_systemd_unit_store=%s\n' "$edge_systemd_unit_store"
 printf 'edge_caddy_validate=%s\n' "$edge_caddy_validate"
 printf 'systemd_unit_source=%s\n' "$systemd_unit_source"
 printf 'systemd_unit_install_path=%s\n' "$systemd_unit_install_path"
+printf 'systemd_unit_sha256=%s\n' "$systemd_unit_sha256"
 printf 'served_site_link=%s\n' "$site_root"
 printf 'served_cdn_link=%s\n' "$cdn_root"
 printf 'tls_fullchain=%s\n' "$tls_fullchain_path"
@@ -223,13 +225,14 @@ printf 'refusal_condition_05=do not proceed unless %s and %s exist and are curre
 if [[ "$environment" == "production" ]]; then
   printf 'refusal_condition_06=do not install or restart the edge service unless just gitops-production-proof-index proof_dir=data/gitops require_complete=true passes after served-proof generation\n'
   printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<checked operator proof sha256> just gitops-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'guarded_host_action_02=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
+  printf 'guarded_host_action_03=systemctl daemon-reload\n'
+  printf 'guarded_host_action_04=systemctl restart %s\n' "$unit_name"
 else
   printf 'refusal_condition_06=do not install or restart the edge service unless just gitops-beta-proof-index proof_dir=data/gitops require_complete=true passes after served-proof generation\n'
   printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'guarded_host_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof sha256> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=%s just gitops-beta-install-edge edge_bundle=%s proof_dir=data/gitops\n' "$systemd_unit_sha256" "$edge_bundle_path"
 fi
-printf 'guarded_host_action_02=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
-printf 'guarded_host_action_03=systemctl daemon-reload\n'
-printf 'guarded_host_action_04=systemctl restart %s\n' "$unit_name"
 if [[ "$environment" == "production" ]]; then
   printf 'post_handoff_read_only_check_01=just gitops-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'post_handoff_audit_step_01=just gitops-production-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
@@ -238,6 +241,11 @@ if [[ "$environment" == "production" ]]; then
   printf 'planned_host_step_02=just gitops-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'planned_host_step_03=just gitops-production-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'planned_host_step_04=just gitops-production-proof-index proof_dir=data/gitops require_complete=true\n'
+  printf 'planned_host_step_05=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
+  printf 'planned_host_step_06=systemctl daemon-reload\n'
+  printf 'planned_host_step_07=systemctl restart %s\n' "$unit_name"
+  printf 'planned_host_step_08=systemctl is-active --quiet %s\n' "$unit_name"
+  printf 'planned_host_step_09=inspect public site/API/CDN/telemetry through %s host routing before considering this handoff complete\n' "$host_label"
 else
   printf 'post_handoff_read_only_check_01=just gitops-beta-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'post_handoff_audit_step_01=just gitops-beta-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
@@ -246,13 +254,11 @@ else
   printf 'planned_host_step_02=just gitops-beta-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'planned_host_step_03=just gitops-beta-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'planned_host_step_04=just gitops-beta-proof-index proof_dir=data/gitops require_complete=true\n'
+  printf 'planned_host_step_05=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof sha256> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=%s just gitops-beta-install-edge edge_bundle=%s proof_dir=data/gitops\n' "$systemd_unit_sha256" "$edge_bundle_path"
+  printf 'planned_host_step_06=systemctl is-active --quiet %s\n' "$unit_name"
+  printf 'planned_host_step_07=inspect public site/API/CDN/telemetry through %s host routing before considering this handoff complete\n' "$host_label"
 fi
 printf 'post_handoff_read_only_check_03=systemctl is-active --quiet %s\n' "$unit_name"
 printf 'post_handoff_read_only_check_04=inspect public site/API/CDN/telemetry through %s host routing before considering this handoff complete\n' "$host_label"
-printf 'planned_host_step_05=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
-printf 'planned_host_step_06=systemctl daemon-reload\n'
-printf 'planned_host_step_07=systemctl restart %s\n' "$unit_name"
-printf 'planned_host_step_08=systemctl is-active --quiet %s\n' "$unit_name"
-printf 'planned_host_step_09=inspect public site/API/CDN/telemetry through %s host routing before considering this handoff complete\n' "$host_label"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

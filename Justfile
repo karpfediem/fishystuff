@@ -86,6 +86,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-served-proof-test.sh
   bash scripts/recipes/gitops-beta-proof-index-test.sh
   bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
+  bash scripts/recipes/gitops-beta-install-edge-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -188,6 +189,10 @@ gitops-beta-served-proof output_dir="data/gitops" draft_file="data/gitops/beta-a
 # Print the latest local beta GitOps proof chain. No remote mutation.
 gitops-beta-proof-index proof_dir="data/gitops" max_age_seconds="86400" require_complete="false":
   bash scripts/recipes/gitops-beta-proof-index.sh "{{proof_dir}}" "{{max_age_seconds}}" "{{require_complete}}"
+
+# Install/restart the beta edge unit only after explicit opt-ins and checked beta proof hashes.
+gitops-beta-install-edge edge_bundle="auto" proof_dir="data/gitops" max_age_seconds="86400" install_bin="install" systemctl_bin="systemctl":
+  bash scripts/recipes/gitops-beta-install-edge.sh "{{edge_bundle}}" "{{proof_dir}}" "{{max_age_seconds}}" "{{install_bin}}" "{{systemctl_bin}}"
 
 # Write a timestamped proof that served state matches the checked activation and operator proof.
 gitops-production-served-proof output_dir="data/gitops" draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" proof_max_age_seconds="86400":
@@ -316,6 +321,10 @@ gitops-beta-proof-index-test:
 # Run fast local regression checks for the beta GitOps apply gate.
 gitops-beta-apply-activation-draft-test:
   bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
+
+# Run fast local regression checks for the beta edge install/restart gate.
+gitops-beta-install-edge-test:
+  bash scripts/recipes/gitops-beta-install-edge-test.sh
 
 # Run fast local regression checks for production GitOps proof indexing.
 gitops-production-proof-index-test:

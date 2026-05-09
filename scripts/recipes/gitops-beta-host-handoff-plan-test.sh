@@ -247,6 +247,7 @@ bash scripts/recipes/gitops-beta-host-handoff-plan.sh \
   "$admission" \
   "${root}/edge-bundle" \
   "${root}/fishystuff_deploy" >"${root}/plan.stdout"
+read -r unit_sha256 _ < <(sha256sum "${root}/edge-bundle/artifacts/systemd/unit")
 
 grep -F "gitops_host_handoff_plan_ok=${draft}" "${root}/plan.stdout" >/dev/null
 grep -F "gitops_beta_host_handoff_plan_ok=${draft}" "${root}/plan.stdout" >/dev/null
@@ -257,15 +258,24 @@ grep -F "served_site_link=/var/lib/fishystuff/gitops-beta/served/beta/site" "${r
 grep -F "served_cdn_link=/var/lib/fishystuff/gitops-beta/served/beta/cdn" "${root}/plan.stdout" >/dev/null
 grep -F "tls_fullchain=/run/fishystuff/beta-edge/tls/fullchain.pem" "${root}/plan.stdout" >/dev/null
 grep -F "systemd_unit_install_path=/etc/systemd/system/fishystuff-beta-edge.service" "${root}/plan.stdout" >/dev/null
+grep -F "systemd_unit_sha256=${unit_sha256}" "${root}/plan.stdout" >/dev/null
 grep -F "read_only_readiness_check_04=just gitops-beta-edge-handoff-bundle bundle=${root}/edge-bundle" "${root}/plan.stdout" >/dev/null
 grep -F "beta_apply_gate_available=true" "${root}/plan.stdout" >/dev/null
 grep -F "guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked beta operator proof file>" "${root}/plan.stdout" >/dev/null
-grep -F "guarded_host_action_04=systemctl restart fishystuff-beta-edge.service" "${root}/plan.stdout" >/dev/null
+grep -F "guarded_host_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof sha256> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=${unit_sha256} just gitops-beta-install-edge edge_bundle=${root}/edge-bundle proof_dir=data/gitops" "${root}/plan.stdout" >/dev/null
 grep -F "planned_host_step_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked beta operator proof file>" "${root}/plan.stdout" >/dev/null
 grep -F "planned_host_step_04=just gitops-beta-proof-index proof_dir=data/gitops require_complete=true" "${root}/plan.stdout" >/dev/null
+grep -F "planned_host_step_05=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof sha256> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=${unit_sha256} just gitops-beta-install-edge edge_bundle=${root}/edge-bundle proof_dir=data/gitops" "${root}/plan.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/plan.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/plan.stdout" >/dev/null
 pass "valid beta host handoff plan"
+
+if grep -F "systemctl restart fishystuff-beta-edge.service" "${root}/plan.stdout" >/dev/null; then
+  printf '[gitops-beta-host-handoff-plan-test] beta host plan unexpectedly prints raw edge restart\n' >&2
+  cat "${root}/plan.stdout" >&2
+  exit 1
+fi
+pass "beta host handoff plan uses guarded edge install"
 
 if grep -F "production" "${root}/plan.stdout" >/dev/null; then
   printf '[gitops-beta-host-handoff-plan-test] beta host plan unexpectedly mentions production\n' >&2
