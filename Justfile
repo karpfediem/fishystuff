@@ -90,6 +90,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
   bash scripts/recipes/gitops-beta-operator-proof-test.sh
+  bash scripts/recipes/gitops-beta-served-proof-packet-test.sh
   bash scripts/recipes/gitops-beta-served-proof-test.sh
   bash scripts/recipes/gitops-beta-proof-index-test.sh
   bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
@@ -205,6 +206,10 @@ gitops-check-beta-operator-proof proof_file="" max_age_seconds="86400" proof_dir
 gitops-beta-served-proof output_dir="data/gitops" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta" proof_max_age_seconds="86400":
   bash scripts/recipes/gitops-beta-served-proof.sh "{{output_dir}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{proof_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}" "{{proof_max_age_seconds}}"
 
+# Print beta served-proof readiness and next command. No mutation.
+gitops-beta-served-proof-packet proof_dir="data/gitops" max_age_seconds="86400" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="data/gitops/beta-admission.evidence.json" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta" edge_bundle="auto" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations":
+  @bash scripts/recipes/gitops-beta-served-proof-packet.sh "{{proof_dir}}" "{{max_age_seconds}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{proof_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}" "{{edge_bundle}}" "{{api_upstream}}" "{{observation_dir}}"
+
 # Print the latest local beta GitOps proof chain. No remote mutation.
 gitops-beta-proof-index proof_dir="data/gitops" max_age_seconds="86400" require_complete="false":
   bash scripts/recipes/gitops-beta-proof-index.sh "{{proof_dir}}" "{{max_age_seconds}}" "{{require_complete}}"
@@ -300,6 +305,10 @@ gitops-beta-activation-draft-test:
 # Run fast local regression checks for beta operator-proof packet readiness.
 gitops-beta-operator-proof-packet-test:
   bash scripts/recipes/gitops-beta-operator-proof-packet-test.sh
+
+# Run fast local regression checks for beta served-proof packet readiness.
+gitops-beta-served-proof-packet-test:
+  bash scripts/recipes/gitops-beta-served-proof-packet-test.sh
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":

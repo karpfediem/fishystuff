@@ -72,6 +72,8 @@ just gitops-check-beta-operator-proof
 just gitops-beta-operator-proof-packet-test
 just gitops-beta-operator-proof-test
 just gitops-beta-served-proof
+just gitops-beta-served-proof-packet
+just gitops-beta-served-proof-packet-test
 just gitops-beta-served-proof-test
 just gitops-beta-proof-index
 just gitops-beta-proof-index-test
@@ -166,7 +168,7 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-operator-proof` and `just gitops-check-beta-operator-proof` are the beta operator-proof wrappers. They use beta defaults for state, run, unit, TLS, and edge bundle paths, refuse non-beta summaries, and write/check `fishystuff.gitops.beta-operator-proof.v1` artifacts. `just gitops-beta-operator-proof-packet` is the read-only short form: it requires a checked activation draft, checks the latest or selected beta proof, and prints the guarded beta apply command with the exact proof hash only when the proof is current. The proof is still local-only: it records inventory, preflight, and host-handoff-plan evidence, but it does not apply the activation draft or restart services.
 
-`just gitops-beta-served-proof` and `just gitops-beta-proof-index` are the beta post-reconciliation audit wrappers. They link served-state verification back to a checked beta operator proof and require the latest beta served proof to point at the latest beta operator proof. They remain read-only and are only meaningful after a beta apply gate has reconciled local served state.
+`just gitops-beta-served-proof` and `just gitops-beta-proof-index` are the beta post-reconciliation audit wrappers. They link served-state verification back to a checked beta operator proof and require the latest beta served proof to point at the latest beta operator proof. `just gitops-beta-served-proof-packet` is the read-only short form: it reports whether the operator proof is ready, whether beta served state has appeared after apply, whether a served proof must be written, or whether the complete proof index can be checked before edge install. They remain read-only and are only meaningful after a beta apply gate has reconciled local served state.
 
 `just gitops-beta-apply-activation-draft` is the guarded beta local apply gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1`, `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, and `FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash>`. It checks a beta operator proof, refuses production summaries/proofs, and runs mgmt only against the beta activation draft. In `local-apply` mode, the clean graph publishes beta state under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta`.
 
