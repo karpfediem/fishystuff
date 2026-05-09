@@ -225,6 +225,10 @@ EOF
   } >"${bundle}/store-paths"
 }
 
+if [[ "${FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 root="$(mktemp -d)"
 api_bundle="${root}/api-bundle"
 dolt_bundle="${root}/dolt-bundle"

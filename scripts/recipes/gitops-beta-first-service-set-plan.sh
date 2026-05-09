@@ -280,7 +280,7 @@ elif [[ "$service_start_plan_status" == "pending_runtime_env" ]]; then
 elif [[ "$service_start_plan_status" != "ready" ]]; then
   next_required_action="fix_service_start_plan"
 elif [[ "$admission_status" != "ready" ]]; then
-  next_required_action="observe_beta_admission"
+  next_required_action="start_or_verify_beta_services"
 elif [[ "$draft_status" != "ready" ]]; then
   next_required_action="write_activation_draft"
 elif [[ "$proof_index_complete" != "true" ]]; then
@@ -299,6 +299,66 @@ if [[ -z "$dolt_unit_sha256" ]]; then
   dolt_unit_sha256="<checked beta Dolt unit hash>"
 fi
 
+service_start_review_command="just gitops-beta-service-start-plan api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
+runtime_env_dolt_command="FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${dolt_env_file}"
+runtime_env_api_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${api_env_file}"
+runtime_env_api_secretspec_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env_file} profile=beta-runtime"
+start_services_command="FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${dolt_unit_sha256} FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${api_unit_sha256} just gitops-beta-start-services api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
+observe_admission_command="just gitops-beta-observe-admission output=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir}"
+activation_draft_command="just gitops-beta-activation-draft output=${draft_file} summary_file=${summary_file} admission_file=${admission_file}"
+operator_proof_command="just gitops-beta-operator-proof output_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle}"
+proof_index_command="just gitops-beta-proof-index proof_dir=${proof_dir} require_complete=true"
+apply_activation_command="FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash> just gitops-beta-apply-activation-draft draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_file=<checked beta operator proof file>"
+install_edge_command="FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof hash> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked beta edge unit hash> just gitops-beta-install-edge edge_bundle=${edge_bundle} proof_dir=${proof_dir}"
+
+printf 'operator_packet_status=%s\n' "$next_required_action"
+printf 'operator_packet_summary_file=%s\n' "$summary_file"
+printf 'operator_packet_admission_file=%s\n' "$admission_file"
+printf 'operator_packet_draft_file=%s\n' "$draft_file"
+printf 'operator_packet_proof_dir=%s\n' "$proof_dir"
+printf 'operator_packet_api_bundle=%s\n' "$api_bundle"
+printf 'operator_packet_dolt_bundle=%s\n' "$dolt_bundle"
+printf 'operator_packet_api_env_file=%s\n' "$api_env_file"
+printf 'operator_packet_dolt_env_file=%s\n' "$dolt_env_file"
+printf 'operator_packet_api_unit_sha256=%s\n' "$api_unit_sha256"
+printf 'operator_packet_dolt_unit_sha256=%s\n' "$dolt_unit_sha256"
+printf 'operator_packet_note_01=run guarded commands only on the intended beta host\n'
+case "$next_required_action" in
+  generate_current_handoff)
+    printf 'operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=%s just gitops-beta-current-handoff summary_output=%s\n' "$RECIPE_REPO_ROOT" "$summary_file"
+    ;;
+  provide_service_bundle_paths | fix_service_start_plan)
+    printf 'operator_packet_next_command_01=%s\n' "$service_start_review_command"
+    ;;
+  write_beta_runtime_env)
+    printf 'operator_packet_next_command_01=%s\n' "$runtime_env_dolt_command"
+    printf 'operator_packet_next_command_02=%s\n' "$runtime_env_api_secretspec_command"
+    printf 'operator_packet_manual_secret_command=%s\n' "$runtime_env_api_command"
+    printf 'operator_packet_after_success_command=%s\n' "$service_start_review_command"
+    ;;
+  start_or_verify_beta_services)
+    printf 'operator_packet_next_command_01=%s\n' "$start_services_command"
+    printf 'operator_packet_after_success_command=%s\n' "$observe_admission_command"
+    ;;
+  write_activation_draft)
+    printf 'operator_packet_next_command_01=%s\n' "$activation_draft_command"
+    ;;
+  publish_beta_operator_and_served_proofs)
+    printf 'operator_packet_next_command_01=%s\n' "$operator_proof_command"
+    printf 'operator_packet_next_command_02=%s\n' "$apply_activation_command"
+    printf 'operator_packet_next_command_03=just gitops-beta-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+    printf 'operator_packet_next_command_04=just gitops-beta-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+    printf 'operator_packet_after_success_command=%s\n' "$proof_index_command"
+    ;;
+  review_edge_install)
+    printf 'operator_packet_next_command_01=just gitops-beta-host-handoff-plan draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+    printf 'operator_packet_after_success_command=%s\n' "$install_edge_command"
+    ;;
+  *)
+    printf 'operator_packet_next_command_01=inspect gitops-beta-first-service-set-plan output\n'
+    ;;
+esac
+
 printf 'phase_01=bootstrap host-local beta directories and beta Dolt user/group\n'
 printf 'phase_02=write beta runtime env files and start beta Dolt before beta API\n'
 printf 'phase_03=generate beta current desired state and handoff summary\n'
@@ -307,22 +367,22 @@ printf 'phase_05=write activation draft and beta operator proof\n'
 printf 'phase_06=apply activation draft through mgmt and publish served proof/index\n'
 printf 'phase_07=install beta edge only after complete served proof chain\n'
 printf 'read_only_step_01=just gitops-beta-host-bootstrap-plan\n'
-printf 'read_only_step_02=just gitops-beta-service-start-plan api_bundle=%s dolt_bundle=%s api_env_file=%s dolt_env_file=%s\n' "$api_bundle" "$dolt_bundle" "$api_env_file" "$dolt_env_file"
+printf 'read_only_step_02=%s\n' "$service_start_review_command"
 printf 'read_only_step_03=just gitops-beta-current-handoff summary_output=%s\n' "$summary_file"
-printf 'read_only_step_04=just gitops-beta-observe-admission output=%s summary_file=%s api_upstream=%s observation_dir=%s\n' "$admission_file" "$summary_file" "$api_upstream" "$observation_dir"
-printf 'read_only_step_05=just gitops-beta-activation-draft output=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
-printf 'read_only_step_06=just gitops-beta-operator-proof output_dir=%s draft_file=%s summary_file=%s admission_file=%s edge_bundle=%s\n' "$proof_dir" "$draft_file" "$summary_file" "$admission_file" "$edge_bundle"
-printf 'read_only_step_07=just gitops-beta-proof-index proof_dir=%s require_complete=true\n' "$proof_dir"
+printf 'read_only_step_04=%s\n' "$observe_admission_command"
+printf 'read_only_step_05=%s\n' "$activation_draft_command"
+printf 'read_only_step_06=%s\n' "$operator_proof_command"
+printf 'read_only_step_07=%s\n' "$proof_index_command"
 printf 'read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=%s\n' "$dolt_env_file"
 printf 'read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=%s\n' "$api_env_file"
 printf 'read_only_runtime_env_check_03=just secrets-check profile=beta-runtime\n'
-printf 'guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=%s\n' "$dolt_env_file"
-printf 'guarded_runtime_env_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=%s\n' "$api_env_file"
-printf 'guarded_runtime_env_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=%s profile=beta-runtime\n' "$api_env_file"
+printf 'guarded_runtime_env_action_01=%s\n' "$runtime_env_dolt_command"
+printf 'guarded_runtime_env_action_02=%s\n' "$runtime_env_api_command"
+printf 'guarded_runtime_env_action_03=%s\n' "$runtime_env_api_secretspec_command"
 printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply\n'
-printf 'guarded_host_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=%s FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=%s just gitops-beta-start-services api_bundle=%s dolt_bundle=%s api_env_file=%s dolt_env_file=%s\n' "$dolt_unit_sha256" "$api_unit_sha256" "$api_bundle" "$dolt_bundle" "$api_env_file" "$dolt_env_file"
-printf 'guarded_host_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash> just gitops-beta-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
-printf 'guarded_host_action_04=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof hash> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked beta edge unit hash> just gitops-beta-install-edge edge_bundle=%s proof_dir=%s\n' "$edge_bundle" "$proof_dir"
+printf 'guarded_host_action_02=%s\n' "$start_services_command"
+printf 'guarded_host_action_03=%s\n' "$apply_activation_command"
+printf 'guarded_host_action_04=%s\n' "$install_edge_command"
 printf 'post_apply_read_only_step_01=just gitops-beta-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
 printf 'post_apply_read_only_step_02=just gitops-beta-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
 printf 'post_apply_read_only_step_03=just gitops-beta-proof-index proof_dir=%s require_complete=true\n' "$proof_dir"

@@ -11,6 +11,10 @@ FISHYSTUFF_GITOPS_BETA_ACTIVATION_DRAFT_TEST_SOURCE_ONLY=1
 source scripts/recipes/gitops-beta-activation-draft-test.sh
 unset FISHYSTUFF_GITOPS_BETA_ACTIVATION_DRAFT_TEST_SOURCE_ONLY
 
+FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_TEST_SOURCE_ONLY=1
+source scripts/recipes/gitops-beta-service-start-plan-test.sh
+unset FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_TEST_SOURCE_ONLY
+
 pass_count=0
 
 pass() {
@@ -63,6 +67,8 @@ grep -F "gitops_beta_first_service_set_plan_ok=true" "${root}/pending.stdout" >/
 grep -F "service_start_plan_status=pending_explicit_bundles" "${root}/pending.stdout" >/dev/null
 grep -F "handoff_summary_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "next_required_action=generate_current_handoff" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_status=generate_current_handoff" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=${RECIPE_REPO_ROOT} just gitops-beta-current-handoff summary_output=${pending_summary}" "${root}/pending.stdout" >/dev/null
 grep -F "admission_evidence_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "activation_draft_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${root}/pending.stdout" >/dev/null
@@ -141,6 +147,10 @@ grep -F "admission_evidence_status=ready" "${fixture_root}/ready.stdout" >/dev/n
 grep -F "activation_draft_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "next_required_action=write_beta_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_status=write_beta_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${fixture_root}/api/runtime.env profile=beta-runtime" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_after_success_command=just gitops-beta-service-start-plan api_bundle=${fixture_root}/active-api dolt_bundle=${fixture_root}/active-dolt-service api_env_file=${fixture_root}/api/runtime.env dolt_env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_03=just secrets-check profile=beta-runtime" "${fixture_root}/ready.stdout" >/dev/null
@@ -150,6 +160,50 @@ grep -F "guarded_runtime_env_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME
 grep -F "guarded_host_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_host_action_04=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1" "${fixture_root}/ready.stdout" >/dev/null
 pass "ready artifact first service set plan"
+
+service_ready_root="${root}/service-ready"
+mkdir -p "$service_ready_root"
+make_fixture "$service_ready_root"
+make_beta_service_bundle "${service_ready_root}/active-api" api
+make_beta_service_bundle "${service_ready_root}/active-dolt-service" dolt
+service_ready_summary="$(cat "${service_ready_root}/summary.path")"
+service_ready_api_env="${service_ready_root}/api/runtime.env"
+service_ready_dolt_env="${service_ready_root}/dolt/beta.env"
+env \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 \
+  FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL="mysql://fishy:secret@127.0.0.1:3316/fishystuff" \
+  bash scripts/recipes/gitops-beta-write-runtime-env.sh api "$service_ready_api_env" >/dev/null
+env \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 \
+  bash scripts/recipes/gitops-beta-write-runtime-env.sh dolt "$service_ready_dolt_env" >/dev/null
+read -r service_ready_api_unit_sha256 _ < <(sha256sum "${service_ready_root}/active-api/artifacts/systemd/unit")
+read -r service_ready_dolt_unit_sha256 _ < <(sha256sum "${service_ready_root}/active-dolt-service/artifacts/systemd/unit")
+
+FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
+  bash scripts/recipes/gitops-beta-first-service-set-plan.sh \
+    "$service_ready_summary" \
+    "${service_ready_root}/missing-admission.json" \
+    "${service_ready_root}/missing-draft.json" \
+    "${service_ready_root}/proofs" \
+    auto \
+    auto \
+    auto \
+    "$service_ready_api_env" \
+    "$service_ready_dolt_env" \
+    "http://127.0.0.1:18192" \
+    "${service_ready_root}/observations" \
+    >"${service_ready_root}/service-ready.stdout"
+
+grep -F "service_start_plan_status=ready" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "next_required_action=start_or_verify_beta_services" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "operator_packet_status=start_or_verify_beta_services" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "operator_packet_api_unit_sha256=${service_ready_api_unit_sha256}" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "operator_packet_dolt_unit_sha256=${service_ready_dolt_unit_sha256}" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "operator_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${service_ready_dolt_unit_sha256}" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${service_ready_api_unit_sha256}" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "operator_packet_after_success_command=just gitops-beta-observe-admission output=${service_ready_root}/missing-admission.json summary_file=${service_ready_summary} api_upstream=http://127.0.0.1:18192 observation_dir=${service_ready_root}/observations" "${service_ready_root}/service-ready.stdout" >/dev/null
+pass "service-ready first service set packet"
 
 production_summary="${root}/production-summary.json"
 jq '.environment.name = "production"' "$summary" >"$production_summary"
