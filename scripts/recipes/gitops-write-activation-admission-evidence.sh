@@ -76,6 +76,7 @@ bash scripts/recipes/gitops-check-handoff-summary.sh "$summary_file"
 state_file="$(jq -er '.desired_state_path | select(type == "string" and length > 0)' "$summary_file")"
 desired_state_sha256="$(jq -er '.desired_state_sha256 | select(type == "string" and test("^[0-9a-f]{64}$"))' "$summary_file")"
 read -r handoff_summary_sha256 _ < <(sha256sum "$summary_file")
+environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
 active_release_id="$(jq -er '.environment.active_release | select(type == "string" and length > 0)' "$summary_file")"
 dolt_commit="$(jq -er '.active_release.dolt_commit | select(type == "string" and length > 0)' "$summary_file")"
 release_identity="$(
@@ -123,7 +124,7 @@ if ! jq -e \
   and .release_identity == $release_identity
   and .dolt_commit == $dolt_commit' \
   "$api_meta_tmp" >/dev/null; then
-  echo "API meta observation does not match verified production handoff" >&2
+  echo "API meta observation does not match verified ${environment} handoff" >&2
   exit 2
 fi
 
@@ -139,6 +140,7 @@ fi
 mkdir -p "$(dirname "$output")"
 tmp="$(mktemp "$(dirname "$output")/.${output##*/}.XXXXXX")"
 jq -n -S \
+  --arg environment "$environment" \
   --arg handoff_summary_sha256 "$handoff_summary_sha256" \
   --arg desired_state_sha256 "$desired_state_sha256" \
   --arg release_id "$active_release_id" \
@@ -150,7 +152,7 @@ jq -n -S \
   --slurpfile site_cdn_probe "$site_cdn_probe_file" \
   '{
     schema: "fishystuff.gitops.activation-admission.v1",
-    environment: "production",
+    environment: $environment,
     handoff_summary_sha256: $handoff_summary_sha256,
     desired_state_sha256: $desired_state_sha256,
     release_id: $release_id,
@@ -171,4 +173,7 @@ jq -n -S \
 mv "$tmp" "$output"
 rm -f "$api_meta_tmp"
 
-printf 'production_admission_evidence=%s\n' "$output" >&2
+printf 'activation_admission_evidence=%s\n' "$output" >&2
+if [[ "$environment" == "production" ]]; then
+  printf 'production_admission_evidence=%s\n' "$output" >&2
+fi

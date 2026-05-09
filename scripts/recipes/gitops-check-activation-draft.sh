@@ -52,6 +52,7 @@ bash scripts/recipes/gitops-check-handoff-summary.sh "$summary_file"
 state_file="$(jq -er '.desired_state_path | select(type == "string" and length > 0)' "$summary_file")"
 desired_state_sha256="$(jq -er '.desired_state_sha256 | select(type == "string" and test("^[0-9a-f]{64}$"))' "$summary_file")"
 read -r handoff_summary_sha256 _ < <(sha256sum "$summary_file")
+environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
 active_release_id="$(jq -er '.environment.active_release | select(type == "string" and length > 0)' "$summary_file")"
 dolt_commit="$(jq -er '.active_release.dolt_commit | select(type == "string" and length > 0)' "$summary_file")"
 release_identity="$(
@@ -63,6 +64,7 @@ release_identity="$(
 )"
 
 if ! jq -e \
+  --arg environment "$environment" \
   --arg handoff_summary_sha256 "$handoff_summary_sha256" \
   --arg desired_state_sha256 "$desired_state_sha256" \
   --arg release_id "$active_release_id" \
@@ -70,7 +72,7 @@ if ! jq -e \
   --arg dolt_commit "$dolt_commit" \
   '
     .schema == "fishystuff.gitops.activation-admission.v1"
-    and .environment == "production"
+    and .environment == $environment
     and .handoff_summary_sha256 == $handoff_summary_sha256
     and .desired_state_sha256 == $desired_state_sha256
     and .release_id == $release_id
@@ -89,7 +91,7 @@ if ! jq -e \
     and (.site_cdn_probe.name | type == "string" and length > 0)
     and .site_cdn_probe.passed == true
   ' "$admission_file" >/dev/null; then
-  echo "activation admission evidence does not match verified production handoff" >&2
+  echo "activation admission evidence does not match verified ${environment} handoff" >&2
   exit 2
 fi
 
@@ -100,6 +102,7 @@ require_loopback_http_url "activation admission api_upstream" "$api_upstream"
 
 if ! jq -e \
   --slurpfile handoff_state "$state_file" \
+  --arg environment "$environment" \
   --arg active_release_id "$active_release_id" \
   --arg api_upstream "$api_upstream" \
   --arg admission_url "$admission_url" \
@@ -111,25 +114,25 @@ if ! jq -e \
     and (.generation > $handoff.generation)
     and .hosts == $handoff.hosts
     and .releases == $handoff.releases
-    and .environments.production.enabled == true
-    and .environments.production.strategy == $handoff.environments.production.strategy
-    and .environments.production.host == $handoff.environments.production.host
-    and .environments.production.active_release == $active_release_id
-    and .environments.production.retained_releases == $handoff.environments.production.retained_releases
-    and .environments.production.serve == true
-    and .environments.production.api_upstream == $api_upstream
-    and .environments.production.admission_probe.kind == "api_meta"
-    and .environments.production.admission_probe.probe_name == "api-meta"
-    and .environments.production.admission_probe.url == $admission_url
-    and .environments.production.admission_probe.expected_status == 200
-    and .environments.production.admission_probe.timeout_ms == $timeout_ms
-    and .environments.production.transition.kind == "activate"
-    and .environments.production.transition.from_release == ""
+    and .environments[$environment].enabled == true
+    and .environments[$environment].strategy == $handoff.environments[$environment].strategy
+    and .environments[$environment].host == $handoff.environments[$environment].host
+    and .environments[$environment].active_release == $active_release_id
+    and .environments[$environment].retained_releases == $handoff.environments[$environment].retained_releases
+    and .environments[$environment].serve == true
+    and .environments[$environment].api_upstream == $api_upstream
+    and .environments[$environment].admission_probe.kind == "api_meta"
+    and .environments[$environment].admission_probe.probe_name == "api-meta"
+    and .environments[$environment].admission_probe.url == $admission_url
+    and .environments[$environment].admission_probe.expected_status == 200
+    and .environments[$environment].admission_probe.timeout_ms == $timeout_ms
+    and .environments[$environment].transition.kind == "activate"
+    and .environments[$environment].transition.from_release == ""
   ' "$draft_file" >/dev/null; then
   echo "activation draft does not match verified handoff and admission evidence" >&2
   exit 2
 fi
 
-bash scripts/recipes/gitops-check-desired-serving.sh "$deploy_bin" "$draft_file" production
+bash scripts/recipes/gitops-check-desired-serving.sh "$deploy_bin" "$draft_file" "$environment"
 
 printf 'gitops_activation_draft_ok=%s\n' "$draft_file" >&2

@@ -45,6 +45,7 @@ state_file="$(jq -er '.desired_state_path | select(type == "string" and length >
 read -r summary_sha256 _ < <(sha256sum "$summary_file")
 read -r draft_sha256 _ < <(sha256sum "$draft_file")
 desired_state_sha256="$(jq -er '.desired_state_sha256' "$summary_file")"
+environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
 release_id="$(jq -er '.environment.active_release' "$summary_file")"
 retained_release_ids="$(jq -cer '.environment.retained_releases' "$summary_file")"
 retained_release_count="$(jq -er '.retained_release_count' "$summary_file")"
@@ -56,6 +57,7 @@ jq -r \
   --arg summary_sha256 "$summary_sha256" \
   --arg state_file "$state_file" \
   --arg desired_state_sha256 "$desired_state_sha256" \
+  --arg environment "$environment" \
   --arg release_id "$release_id" \
   --arg retained_release_ids "$retained_release_ids" \
   --arg retained_release_count "$retained_release_count" \
@@ -70,10 +72,10 @@ jq -r \
         "handoff_summary_sha256=" + $summary_sha256,
         "handoff_desired_state=" + $state_file,
         "handoff_desired_state_sha256=" + $desired_state_sha256,
-        "environment=production",
+        "environment=" + $environment,
         "mode=" + .mode,
-        "serve=" + (.environments.production.serve | tostring),
-        "transition_kind=" + .environments.production.transition.kind,
+        "serve=" + (.environments[$environment].serve | tostring),
+        "transition_kind=" + .environments[$environment].transition.kind,
         "release_id=" + $release_id,
         "release_identity=" + $evidence.release_identity,
         "git_rev=" + $release.git_rev,
@@ -82,8 +84,8 @@ jq -r \
         "site_closure=" + $release.closures.site.store_path,
         "cdn_runtime_closure=" + $release.closures.cdn_runtime.store_path,
         "dolt_service_closure=" + $release.closures.dolt_service.store_path,
-        "api_upstream=" + .environments.production.api_upstream,
-        "api_meta_url=" + .environments.production.admission_probe.url,
+        "api_upstream=" + .environments[$environment].api_upstream,
+        "api_meta_url=" + .environments[$environment].admission_probe.url,
         "db_backed_probe=" + $evidence.db_backed_probe.name,
         "site_cdn_probe=" + $evidence.site_cdn_probe.name,
         "retained_release_count=" + $retained_release_count,

@@ -63,6 +63,7 @@ bash scripts/recipes/gitops-check-handoff-summary.sh "$summary_file"
 state_file="$(jq -er '.desired_state_path | select(type == "string" and length > 0)' "$summary_file")"
 desired_state_sha256="$(jq -er '.desired_state_sha256 | select(type == "string" and test("^[0-9a-f]{64}$"))' "$summary_file")"
 read -r handoff_summary_sha256 _ < <(sha256sum "$summary_file")
+environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
 active_release_id="$(jq -er '.environment.active_release | select(type == "string" and length > 0)' "$summary_file")"
 dolt_commit="$(jq -er '.active_release.dolt_commit | select(type == "string" and length > 0)' "$summary_file")"
 release_identity="$(
@@ -74,6 +75,7 @@ release_identity="$(
 )"
 
 if ! jq -e \
+  --arg environment "$environment" \
   --arg handoff_summary_sha256 "$handoff_summary_sha256" \
   --arg desired_state_sha256 "$desired_state_sha256" \
   --arg release_id "$active_release_id" \
@@ -81,7 +83,7 @@ if ! jq -e \
   --arg dolt_commit "$dolt_commit" \
   '
     .schema == "fishystuff.gitops.activation-admission.v1"
-    and .environment == "production"
+    and .environment == $environment
     and .handoff_summary_sha256 == $handoff_summary_sha256
     and .desired_state_sha256 == $desired_state_sha256
     and .release_id == $release_id
@@ -100,7 +102,7 @@ if ! jq -e \
     and (.site_cdn_probe.name | type == "string" and length > 0)
     and .site_cdn_probe.passed == true
   ' "$admission_file" >/dev/null; then
-  echo "admission evidence does not match verified production handoff" >&2
+  echo "admission evidence does not match verified ${environment} handoff" >&2
   exit 2
 fi
 
@@ -142,24 +144,26 @@ mkdir -p "$(dirname "$output")"
 tmp="$(mktemp "$(dirname "$output")/.${output##*/}.XXXXXX")"
 jq -S \
   --argjson activation_generation "$activation_generation" \
+  --arg environment "$environment" \
   --arg api_upstream "$api_upstream" \
   --arg admission_url "$admission_url" \
   --argjson timeout_ms "$timeout_ms" \
+  --arg transition_reason "verified ${environment} handoff admission" \
   '.mode = "local-apply"
   | .generation = $activation_generation
-  | .environments.production.serve = true
-  | .environments.production.api_upstream = $api_upstream
-  | .environments.production.admission_probe = {
+  | .environments[$environment].serve = true
+  | .environments[$environment].api_upstream = $api_upstream
+  | .environments[$environment].admission_probe = {
       kind: "api_meta",
       probe_name: "api-meta",
       url: $admission_url,
       expected_status: 200,
       timeout_ms: $timeout_ms
     }
-  | .environments.production.transition = {
+  | .environments[$environment].transition = {
       kind: "activate",
       from_release: "",
-      reason: "verified production handoff admission"
+      reason: $transition_reason
     }' \
   "$state_file" >"$tmp"
 mv "$tmp" "$output"
@@ -167,6 +171,12 @@ mv "$tmp" "$output"
 bash scripts/recipes/gitops-check-activation-draft.sh "$output" "$summary_file" "$admission_file" "$deploy_bin"
 bash scripts/recipes/gitops-unify.sh "$mgmt_bin" "$output"
 
-printf 'production_activation_draft=%s\n' "$output" >&2
-printf 'production_activation_release_id=%s\n' "$active_release_id" >&2
-printf 'production_activation_dolt_commit=%s\n' "$dolt_commit" >&2
+printf 'gitops_activation_draft=%s\n' "$output" >&2
+printf 'gitops_activation_environment=%s\n' "$environment" >&2
+printf 'gitops_activation_release_id=%s\n' "$active_release_id" >&2
+printf 'gitops_activation_dolt_commit=%s\n' "$dolt_commit" >&2
+if [[ "$environment" == "production" ]]; then
+  printf 'production_activation_draft=%s\n' "$output" >&2
+  printf 'production_activation_release_id=%s\n' "$active_release_id" >&2
+  printf 'production_activation_dolt_commit=%s\n' "$dolt_commit" >&2
+fi

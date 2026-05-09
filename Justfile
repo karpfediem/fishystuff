@@ -79,6 +79,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-beta-current-desired-test.sh
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
+  bash scripts/recipes/gitops-beta-activation-draft-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -138,6 +139,10 @@ gitops-check-handoff-summary summary_file="data/gitops/production-current.handof
 gitops-production-activation-draft output="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-activation-draft.sh "{{output}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}"
 
+# Generate a checked local-apply beta activation draft from a verified beta handoff and explicit admission evidence.
+gitops-beta-activation-draft output="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto":
+  bash scripts/recipes/gitops-beta-activation-draft.sh "{{output}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}"
+
 # Verify a production activation draft still matches the verified handoff and admission evidence.
 gitops-check-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto":
   bash scripts/recipes/gitops-check-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}"
@@ -166,6 +171,10 @@ gitops-production-proof-index proof_dir="data/gitops" max_age_seconds="86400" re
 gitops-write-activation-admission-evidence output="data/gitops/production-admission.evidence.json" summary_file="data/gitops/production-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
   bash scripts/recipes/gitops-write-activation-admission-evidence.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{api_meta_source}}" "{{db_probe_file}}" "{{site_cdn_probe_file}}"
 
+# Write beta activation admission evidence from observed API meta, DB-backed, and site/CDN probe outputs.
+gitops-beta-write-activation-admission-evidence output="data/gitops/beta-admission.evidence.json" summary_file="data/gitops/beta-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
+  bash scripts/recipes/gitops-beta-write-activation-admission-evidence.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{api_meta_source}}" "{{db_probe_file}}" "{{site_cdn_probe_file}}"
+
 # Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
 gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
@@ -181,6 +190,10 @@ gitops-beta-current-desired-test:
 # Run fast local regression checks for beta current handoff generation.
 gitops-beta-current-handoff-test:
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
+
+# Run fast local regression checks for beta activation/admission draft generation.
+gitops-beta-activation-draft-test:
+  bash scripts/recipes/gitops-beta-activation-draft-test.sh
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":
