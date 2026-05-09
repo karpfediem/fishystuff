@@ -174,6 +174,7 @@ cleanup() {
 trap cleanup EXIT
 
 bootstrap_plan="${tmp_dir}/bootstrap-plan.out"
+current_handoff_plan="${tmp_dir}/current-handoff-plan.out"
 service_start_plan="${tmp_dir}/service-start-plan.out"
 proof_index="${tmp_dir}/proof-index.out"
 : >"$service_start_plan"
@@ -182,6 +183,19 @@ bash scripts/recipes/gitops-beta-host-bootstrap-plan.sh >"$bootstrap_plan"
 require_kv_equals remote_deploy_performed "$bootstrap_plan" false
 require_kv_equals infrastructure_mutation_performed "$bootstrap_plan" false
 require_kv_equals local_host_mutation_performed "$bootstrap_plan" false
+
+current_desired_file="${summary_file%.handoff-summary.json}.desired.json"
+if [[ "$current_desired_file" == "$summary_file" ]]; then
+  current_desired_file="${summary_file}.desired.json"
+fi
+FISHYSTUFF_GITOPS_ENVIRONMENT=beta \
+  FISHYSTUFF_GITOPS_CLUSTER=beta \
+  bash scripts/recipes/gitops-beta-current-handoff-plan.sh \
+    "$current_desired_file" \
+    beta \
+    auto \
+    auto \
+    "$summary_file" >"$current_handoff_plan"
 
 printf 'gitops_beta_first_service_set_plan_ok=true\n'
 printf 'environment=beta\n'
@@ -193,6 +207,7 @@ printf 'api_env_file=%s\n' "$api_env_file"
 printf 'dolt_env_file=%s\n' "$dolt_env_file"
 
 printf 'host_bootstrap_plan_status=ready\n'
+awk -F= '$1 ~ /^(gitops_beta_current_handoff_plan_ok|handoff_plan_status|handoff_can_run|closure_build_required|mgmt_build_required|cdn_runtime_closure_status|cdn_runtime_operator_root_status|dolt_commit_status|dolt_remote_status)$/ { print }' "$current_handoff_plan"
 run_service_start_plan_if_ready "$service_start_plan"
 
 summary_status="missing"

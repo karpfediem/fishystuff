@@ -39,6 +39,8 @@ just gitops-beta-edge-handoff-bundle-test
 just gitops-beta-current-desired
 just gitops-beta-current-validate
 just gitops-beta-current-desired-test
+just gitops-beta-current-handoff-plan
+just gitops-beta-current-handoff-plan-test
 just gitops-beta-current-handoff
 just gitops-beta-current-handoff-test
 just gitops-beta-write-activation-admission-evidence
@@ -119,6 +121,8 @@ The validator refuses production hostnames, production served roots, production 
 `just gitops-beta-current-desired` writes `data/gitops/beta-current.desired.json` as a validate-mode desired-state snapshot from exact local outputs. It is parameterized from the production-current generator but pins the beta service bundle attrs, `site-content-beta`, Dolt branch context `beta`, beta gcroot/cache roots, and the beta release-ref prefix `fishystuff/gitops-beta`. The default CDN runtime attr is `cdn-serving-root`, so the recipe requires `FISHYSTUFF_OPERATOR_ROOT` for operator-local CDN data unless `FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE` supplies an exact existing closure. It does not apply or serve anything.
 
 `just gitops-beta-current-validate` generates that same snapshot and type-checks it through `gitops/main.mcl`. It is still local-only: no SSH, no Hetzner, no Cloudflare, no systemd changes.
+
+`just gitops-beta-current-handoff-plan` is the read-only input check for `just gitops-beta-current-handoff`. It reports whether exact closure paths are already provided, which attrs would be built, whether the CDN runtime build is blocked by missing `FISHYSTUFF_OPERATOR_ROOT`, whether Dolt commit/remote discovery is available, and whether mgmt would be built from the pinned local mgmt flake. It does not run Nix builds or write handoff artifacts.
 
 `just gitops-beta-check-service-bundle` validates one beta API or Dolt service bundle outside Nix test derivations. It accepts `service=api` or `service=dolt`, builds the matching beta handoff bundle by default, and checks the beta service ID, beta systemd unit name, beta runtime env path, beta loopback listener or Dolt state directory, and absence of production unit names or production state paths.
 

@@ -77,6 +77,8 @@ just gitops-beta-edge-handoff-bundle-test
 just gitops-beta-current-desired
 just gitops-beta-current-validate
 just gitops-beta-current-desired-test
+just gitops-beta-current-handoff-plan
+just gitops-beta-current-handoff-plan-test
 just gitops-beta-current-handoff
 just gitops-beta-current-handoff-test
 just gitops-beta-write-activation-admission-evidence
@@ -187,6 +189,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 `just gitops-beta-current-desired` writes the beta-shaped equivalent to `data/gitops/beta-current.desired.json`. It uses beta API/Dolt handoff service bundles, `site-content-beta`, the finalized CDN serving root, Dolt branch context `beta`, beta gcroot/cache paths, and release refs under `fishystuff/gitops-beta`. The finalized CDN serving root needs `FISHYSTUFF_OPERATOR_ROOT` unless `FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE` points at an exact existing CDN runtime closure. `just gitops-beta-current-validate` also runs the clean GitOps graph unify step against that generated file. Both commands are local-only and keep `mode: validate` plus `serve: false`.
 
 `just gitops-beta-current-handoff` wraps the beta current desired state in a local handoff proof. It verifies the exact closure paths, active CDN serving manifest, GitOps unify result, and handoff summary without requiring a retained rollback release for the first clean beta service-set candidate. The summary records `desired_serving_preflight_skipped: true` so it cannot be mistaken for a production-style serving-ready handoff.
+
+`just gitops-beta-current-handoff-plan` is the read-only input readiness check for that handoff. It reports exact closure inputs, build-required attrs, missing CDN operator-root state, Dolt commit/remote discovery, and mgmt binary readiness without starting Nix builds or writing artifacts.
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are beta defaults over the shared admission and activation-draft checks. They refuse non-beta handoff summaries. A beta activation draft still requires explicit admission evidence and a retained rollback release; the current no-retained beta handoff is intentionally candidate-only.
 
