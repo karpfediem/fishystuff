@@ -129,8 +129,19 @@ if [[ "$path_ready" == "true" && "$expected_match" == "true" ]]; then
   ready="true"
 fi
 
+next_required_action="write_beta_runtime_env"
+if [[ "$expected_match" != "true" ]]; then
+  next_required_action="run_on_expected_beta_host"
+elif [[ "$path_ready" != "true" ]]; then
+  next_required_action="bootstrap_beta_host"
+fi
+
+bootstrap_command="FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply"
+runtime_env_packet_command="just gitops-beta-runtime-env-packet api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
+
 printf 'gitops_beta_runtime_env_host_preflight_ok=true\n'
 printf 'runtime_env_host_preflight_status=%s\n' "$([[ "$ready" == "true" ]] && printf 'ready' || printf 'blocked')"
+printf 'runtime_env_host_preflight_next_required_action=%s\n' "$next_required_action"
 printf 'runtime_env_host_preflight_current_hostname=%s\n' "$current_hostname"
 printf 'runtime_env_host_preflight_expected_hostname=%s\n' "$expected_hostname"
 printf 'runtime_env_host_preflight_expected_hostname_match=%s\n' "$expected_match"
@@ -140,6 +151,17 @@ print_env_path_preflight api "$api_env_file"
 print_env_path_preflight dolt "$dolt_env_file"
 printf 'runtime_env_host_preflight_path_ready=%s\n' "$path_ready"
 printf 'runtime_env_host_preflight_ready=%s\n' "$ready"
+case "$next_required_action" in
+  run_on_expected_beta_host)
+    printf 'runtime_env_host_preflight_next_command_01=run this preflight on %s before writing beta runtime env\n' "$expected_hostname"
+    ;;
+  bootstrap_beta_host)
+    printf 'runtime_env_host_preflight_next_command_01=%s\n' "$bootstrap_command"
+    ;;
+  write_beta_runtime_env)
+    printf 'runtime_env_host_preflight_next_command_01=%s\n' "$runtime_env_packet_command"
+    ;;
+esac
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
 printf 'local_host_mutation_performed=false\n'
