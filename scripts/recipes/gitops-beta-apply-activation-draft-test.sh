@@ -74,6 +74,18 @@ EOF
   chmod +x "$path"
 }
 
+write_fake_hostname() {
+  local path="$1"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${FISHYSTUFF_FAKE_HOSTNAME:-site-nbg1-beta}"
+EOF
+  chmod +x "$path"
+}
+
 write_beta_placeholder_tls() {
   local credentials_dir="$1"
 
@@ -102,7 +114,11 @@ admission="$(cat "${root}/admission.path")"
 proof_dir="${root}/proofs"
 apply_fake_mgmt="${root}/mgmt-apply"
 apply_fake_mgmt_marker="${root}/fake-mgmt-apply-state"
+fake_bin="${root}/fake-bin"
+mkdir -p "$fake_bin"
 write_fake_mgmt_apply "$apply_fake_mgmt" "$apply_fake_mgmt_marker"
+write_fake_hostname "${fake_bin}/hostname"
+PATH="${fake_bin}:$PATH"
 
 bash scripts/recipes/gitops-beta-operator-proof.sh \
   "$proof_dir" \
@@ -163,6 +179,19 @@ expect_fail_contains \
   "beta apply rejects stale operator proof hash" \
   "FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256 does not match operator proof" \
   env FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+    bash scripts/recipes/gitops-beta-apply-activation-draft.sh \
+      "$draft" \
+      "$summary" \
+      "$admission" \
+      "$apply_fake_mgmt" \
+      "${root}/fishystuff_deploy" \
+      45 \
+      "$operator_proof"
+
+expect_fail_contains \
+  "beta apply rejects wrong host" \
+  "gitops-beta-apply-activation-draft requires current hostname to match beta resident hostname" \
+  env FISHYSTUFF_FAKE_HOSTNAME=operator-dev FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256="$operator_proof_sha256" \
     bash scripts/recipes/gitops-beta-apply-activation-draft.sh \
       "$draft" \
       "$summary" \

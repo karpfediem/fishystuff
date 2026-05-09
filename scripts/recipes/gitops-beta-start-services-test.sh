@@ -91,6 +91,18 @@ EOF
   chmod +x "$path"
 }
 
+write_fake_hostname() {
+  local path="$1"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${FISHYSTUFF_FAKE_HOSTNAME:-site-nbg1-beta}"
+EOF
+  chmod +x "$path"
+}
+
 make_beta_service_bundle() {
   local bundle="$1"
   local service="$2"
@@ -289,11 +301,14 @@ dolt_env="${root}/dolt/beta.env"
 summary="${root}/beta-current.handoff-summary.json"
 fake_install="${root}/install"
 fake_systemctl="${root}/systemctl"
+fake_bin="${root}/fake-bin"
+mkdir -p "$fake_bin"
 
 make_beta_service_bundle "$api_bundle" api
 make_beta_service_bundle "$dolt_bundle" dolt
 write_fake_install "$fake_install"
 write_fake_systemctl "$fake_systemctl"
+write_fake_hostname "${fake_bin}/hostname"
 read -r api_unit_sha256 _ < <(sha256sum "${api_bundle}/artifacts/systemd/unit")
 read -r dolt_unit_sha256 _ < <(sha256sum "${dolt_bundle}/artifacts/systemd/unit")
 jq -n \
@@ -328,6 +343,7 @@ expect_fail_contains \
   "reject stale reviewed API hash" \
   "FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256 does not match beta API unit hash from start plan" \
   env \
+    PATH="${fake_bin}:$PATH" \
     FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 \
@@ -344,7 +360,30 @@ expect_fail_contains \
       "$fake_install" \
       "$fake_systemctl"
 
+expect_fail_contains \
+  "reject service start on wrong host" \
+  "gitops-beta-start-services requires current hostname to match beta resident hostname" \
+  env \
+    PATH="${fake_bin}:$PATH" \
+    FISHYSTUFF_FAKE_HOSTNAME=operator-dev \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 \
+    FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256="$dolt_unit_sha256" \
+    FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256="$api_unit_sha256" \
+    FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
+    bash scripts/recipes/gitops-beta-start-services.sh \
+      "$api_bundle" \
+      "$dolt_bundle" \
+      "$api_env" \
+      "$dolt_env" \
+      "$fake_install" \
+      "$fake_systemctl"
+
 env \
+  PATH="${fake_bin}:$PATH" \
   FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 \
@@ -393,6 +432,7 @@ pass "valid beta service start sequence"
 : >"${root}/install.log"
 : >"${root}/systemctl.log"
 env \
+  PATH="${fake_bin}:$PATH" \
   FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 \

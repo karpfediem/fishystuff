@@ -108,6 +108,18 @@ EOF
   chmod +x "$path"
 }
 
+write_fake_hostname() {
+  local path="$1"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${FISHYSTUFF_FAKE_HOSTNAME:-site-nbg1-beta}"
+EOF
+  chmod +x "$path"
+}
+
 root="$(mktemp -d)"
 deploy_bin="$(require_deploy_bin)"
 write_beta_activation_inputs "$root"
@@ -118,11 +130,15 @@ cp "${root}/edge-bundle/artifacts/systemd/unit" "${root}/fishystuff-beta-edge.se
 
 fake_install="${root}/install"
 fake_systemctl="${root}/systemctl"
+fake_bin="${root}/fake-bin"
 fake_install_root="${root}/fake-install-root"
 fake_install_log="${root}/fake-install.log"
 fake_systemctl_log="${root}/fake-systemctl.log"
+mkdir -p "$fake_bin"
 write_fake_install "$fake_install"
 write_fake_systemctl "$fake_systemctl"
+write_fake_hostname "${fake_bin}/hostname"
+PATH="${fake_bin}:$PATH"
 touch "$fake_install_log" "$fake_systemctl_log"
 
 draft="$(cat "${root}/draft.path")"
@@ -232,6 +248,17 @@ expect_fail_contains \
   "refuse stale unit hash" \
   "FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256 does not match beta edge systemd unit" \
   env FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256="$served_proof_sha256" FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=0000000000000000000000000000000000000000000000000000000000000000 FISHYSTUFF_FAKE_INSTALL_ROOT="$fake_install_root" FISHYSTUFF_FAKE_INSTALL_LOG="$fake_install_log" FISHYSTUFF_FAKE_SYSTEMCTL_LOG="$fake_systemctl_log" \
+    bash scripts/recipes/gitops-beta-install-edge.sh \
+      "${root}/edge-bundle" \
+      "$proof_dir" \
+      86400 \
+      "$fake_install" \
+      "$fake_systemctl"
+
+expect_fail_contains \
+  "refuse edge install on wrong host" \
+  "gitops-beta-install-edge requires current hostname to match beta resident hostname" \
+  env FISHYSTUFF_FAKE_HOSTNAME=operator-dev FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256="$served_proof_sha256" FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256="$unit_sha256" FISHYSTUFF_FAKE_INSTALL_ROOT="$fake_install_root" FISHYSTUFF_FAKE_INSTALL_LOG="$fake_install_log" FISHYSTUFF_FAKE_SYSTEMCTL_LOG="$fake_systemctl_log" \
     bash scripts/recipes/gitops-beta-install-edge.sh \
       "${root}/edge-bundle" \
       "$proof_dir" \

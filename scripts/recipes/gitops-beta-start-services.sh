@@ -93,6 +93,7 @@ require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART 1
 require_env_nonempty FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256
 require_env_nonempty FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256
+deployment_require_current_hostname_match beta gitops-beta-start-services
 require_command awk
 require_command mktemp
 

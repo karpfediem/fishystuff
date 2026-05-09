@@ -83,6 +83,9 @@ if [[ "${FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY:-}" != "1" ]]; then
   echo "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1" >&2
   exit 2
 fi
+if [[ "$environment" == "beta" ]]; then
+  deployment_require_current_hostname_match beta gitops-beta-apply-activation-draft
+fi
 if [[ -z "$operator_proof_file" ]]; then
   operator_proof_file="${!operator_proof_file_env:-}"
 fi

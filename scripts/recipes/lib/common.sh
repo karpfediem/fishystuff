@@ -546,6 +546,23 @@ deployment_hostname_match_status() {
   fi
 }
 
+deployment_require_current_hostname_match() {
+  local deployment="$1"
+  local command_name="$2"
+  local current=""
+  local expected=""
+  local match=""
+
+  deployment="$(canonical_deployment_name "$deployment")"
+  current="$(deployment_current_hostname)"
+  expected="$(deployment_resident_hostname "$deployment")"
+  match="$(deployment_hostname_match_status "$current" "$expected")"
+  if [[ "$match" != "true" ]]; then
+    echo "${command_name} requires current hostname to match ${deployment} resident hostname: current=${current} expected=${expected} match=${match}" >&2
+    exit 2
+  fi
+}
+
 deployment_expected_public_host() {
   local deployment
   local service

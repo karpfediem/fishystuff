@@ -165,6 +165,13 @@ EOF
 
 require_env_value "$enable_var" 1
 require_safe_output_path "$service" "$output"
+case "$output" in
+  /tmp/*)
+    ;;
+  *)
+    deployment_require_current_hostname_match beta gitops-beta-write-runtime-env
+    ;;
+esac
 
 output_dir="$(dirname "$output")"
 output_base="$(basename "$output")"

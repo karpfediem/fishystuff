@@ -88,6 +88,7 @@ require_executable_or_command "$systemctl_bin" systemctl_bin
 require_env_value "$install_flag" 1
 require_env_value "$restart_flag" 1
 require_env_nonempty "$unit_hash_var"
+deployment_require_current_hostname_match beta gitops-beta-install-service
 
 bundle_output="$(mktemp)"
 cleanup() {

@@ -91,6 +91,18 @@ EOF
   chmod +x "$path"
 }
 
+write_fake_hostname() {
+  local path="$1"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${FISHYSTUFF_FAKE_HOSTNAME:-site-nbg1-beta}"
+EOF
+  chmod +x "$path"
+}
+
 make_beta_service_bundle() {
   local bundle="$1"
   local service="$2"
@@ -286,18 +298,22 @@ api_bundle="${root}/api-bundle"
 dolt_bundle="${root}/dolt-bundle"
 fake_install="${root}/install"
 fake_systemctl="${root}/systemctl"
+fake_bin="${root}/fake-bin"
 fake_install_root="${root}/fake-install-root"
 fake_install_log="${root}/fake-install.log"
 fake_systemctl_log="${root}/fake-systemctl.log"
+mkdir -p "$fake_bin"
 make_beta_service_bundle "$api_bundle" api
 make_beta_service_bundle "$dolt_bundle" dolt
 write_fake_install "$fake_install"
 write_fake_systemctl "$fake_systemctl"
+write_fake_hostname "${fake_bin}/hostname"
 touch "$fake_install_log" "$fake_systemctl_log"
 read -r api_unit_sha256 _ < <(sha256sum "${api_bundle}/artifacts/systemd/unit")
 read -r dolt_unit_sha256 _ < <(sha256sum "${dolt_bundle}/artifacts/systemd/unit")
 base_install_env=(
   env
+  PATH="${fake_bin}:$PATH"
   FISHYSTUFF_FAKE_INSTALL_ROOT="$fake_install_root"
   FISHYSTUFF_FAKE_INSTALL_LOG="$fake_install_log"
   FISHYSTUFF_FAKE_SYSTEMCTL_LOG="$fake_systemctl_log"
@@ -387,6 +403,20 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-install-service.sh \
       dolt \
       "$dolt_bundle" \
+      "$fake_install" \
+      "$fake_systemctl"
+
+expect_fail_contains \
+  "refuse service install on wrong host" \
+  "gitops-beta-install-service requires current hostname to match beta resident hostname" \
+  "${base_install_env[@]}" \
+    FISHYSTUFF_FAKE_HOSTNAME=operator-dev \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 \
+    FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256="$api_unit_sha256" \
+    bash scripts/recipes/gitops-beta-install-service.sh \
+      api \
+      "$api_bundle" \
       "$fake_install" \
       "$fake_systemctl"
 

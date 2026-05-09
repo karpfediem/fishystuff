@@ -38,6 +38,15 @@ expect_fail_contains() {
 root="$(mktemp -d)"
 api_env="${root}/api/runtime.env"
 dolt_env="${root}/dolt/beta.env"
+wrong_host_bin="${root}/wrong-host-bin"
+mkdir -p "$wrong_host_bin"
+cat >"${wrong_host_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'operator-dev\n'
+EOF
+chmod +x "${wrong_host_bin}/hostname"
 
 expect_fail_contains \
   "refuse API runtime env write without opt-in" \
@@ -69,6 +78,15 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL="mysql://fishy:secret@127.0.0.1:3316/fishystuff" \
     FISHYSTUFF_GITOPS_BETA_PUBLIC_SITE_BASE_URL="https://fishystuff.fish" \
     bash scripts/recipes/gitops-beta-write-runtime-env.sh api "$api_env"
+
+expect_fail_contains \
+  "refuse real runtime env write on wrong host" \
+  "gitops-beta-write-runtime-env requires current hostname to match beta resident hostname" \
+  env \
+    PATH="${wrong_host_bin}:$PATH" \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 \
+    FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL="mysql://fishy:secret@127.0.0.1:3316/fishystuff" \
+    bash scripts/recipes/gitops-beta-write-runtime-env.sh api
 
 env \
   FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 \

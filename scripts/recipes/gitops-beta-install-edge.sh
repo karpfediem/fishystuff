@@ -80,6 +80,7 @@ require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART 1
 require_env_nonempty FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256
 require_env_nonempty FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256
+deployment_require_current_hostname_match beta gitops-beta-install-edge
 
 proof_index_output="$(mktemp)"
 edge_output="$(mktemp)"
