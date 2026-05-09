@@ -66,6 +66,28 @@ case "${FISHYSTUFF_FAKE_SSH_MODE:?}" in
     printf 'beta_directory_07_exists=false\n'
     printf 'beta_directory_08_exists=false\n'
     ;;
+  preflight-no-nix-scaffolded)
+    printf 'remote_hostname=site-nbg1-beta\n'
+    printf 'expected_hostname_match=true\n'
+    printf 'os_id=debian\n'
+    printf 'os_version_id=13\n'
+    printf 'systemd_available=true\n'
+    printf 'systemd_state=running\n'
+    printf 'nix_available=false\n'
+    printf 'nix_path=\n'
+    printf 'nix_daemon_available=false\n'
+    printf 'nix_daemon_path=\n'
+    printf 'beta_group_exists=true\n'
+    printf 'beta_user_exists=true\n'
+    printf 'beta_directory_01_exists=true\n'
+    printf 'beta_directory_02_exists=true\n'
+    printf 'beta_directory_03_exists=true\n'
+    printf 'beta_directory_04_exists=true\n'
+    printf 'beta_directory_05_exists=true\n'
+    printf 'beta_directory_06_exists=true\n'
+    printf 'beta_directory_07_exists=true\n'
+    printf 'beta_directory_08_exists=true\n'
+    ;;
   bootstrap)
     printf 'remote_hostname=site-nbg1-beta\n'
     printf 'expected_hostname_match=true\n'
@@ -102,11 +124,24 @@ grep -F "resident_target=root@203.0.113.20" "${root}/preflight.out" >/dev/null
 grep -F "remote_hostname=site-nbg1-beta" "${root}/preflight.out" >/dev/null
 grep -F "nix_available=false" "${root}/preflight.out" >/dev/null
 grep -F "remote_host_mutation_performed=false" "${root}/preflight.out" >/dev/null
+grep -F "next_required_action=bootstrap_remote_beta_host" "${root}/preflight.out" >/dev/null
 grep -F "next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1" "${root}/preflight.out" >/dev/null
 grep -F "just gitops-beta-remote-host-bootstrap target=root@203.0.113.20" "${root}/preflight.out" >/dev/null
 grep -F "root@203.0.113.20" "${root}/preflight-ssh.log" >/dev/null
 grep -F "/var/lib/fishystuff/gitops-beta" "${root}/preflight-remote.sh" >/dev/null
 pass "remote host preflight uses beta target and reports no mutation"
+
+env \
+  FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
+  HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
+  FISHYSTUFF_FAKE_SSH_MODE=preflight-no-nix-scaffolded \
+  FISHYSTUFF_FAKE_SSH_LOG="${root}/preflight-no-nix-ssh.log" \
+  FISHYSTUFF_FAKE_SSH_STDIN="${root}/preflight-no-nix-remote.sh" \
+  bash scripts/recipes/gitops-beta-remote-host-preflight.sh root@203.0.113.23 site-nbg1-beta "$fake_ssh" >"${root}/preflight-no-nix.out"
+grep -F "next_required_action=install_remote_nix" "${root}/preflight-no-nix.out" >/dev/null
+grep -F "next_note_01=Nix and nix-daemon must exist before beta closure transfer can use nix copy" "${root}/preflight-no-nix.out" >/dev/null
+grep -F "remote_host_mutation_performed=false" "${root}/preflight-no-nix.out" >/dev/null
+pass "remote host preflight distinguishes missing Nix after scaffold"
 
 env \
   FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \

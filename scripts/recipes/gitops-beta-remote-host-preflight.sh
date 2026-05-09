@@ -79,6 +79,33 @@ require_safe_expected_hostname() {
   fi
 }
 
+remote_value() {
+  local key="$1"
+  local file="$2"
+  awk -F= -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$file"
+}
+
+all_beta_scaffold_present() {
+  local file="$1"
+  local number=""
+
+  if [[ "$(remote_value beta_group_exists "$file")" != "true" ]]; then
+    printf 'false'
+    return
+  fi
+  if [[ "$(remote_value beta_user_exists "$file")" != "true" ]]; then
+    printf 'false'
+    return
+  fi
+  for number in 01 02 03 04 05 06 07 08; do
+    if [[ "$(remote_value "beta_directory_${number}_exists" "$file")" != "true" ]]; then
+      printf 'false'
+      return
+    fi
+  done
+  printf 'true'
+}
+
 require_beta_deploy_profile
 assert_deployment_configuration_safe beta
 assert_beta_infra_cluster_dns_scope_safe
@@ -88,8 +115,9 @@ require_command_or_executable "$ssh_bin" ssh_bin
 
 tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-beta-remote-preflight-key.XXXXXX)"
 known_hosts="$(mktemp /tmp/fishystuff-beta-remote-preflight-known-hosts.XXXXXX)"
+remote_output="$(mktemp /tmp/fishystuff-beta-remote-preflight-output.XXXXXX)"
 cleanup() {
-  rm -f "$tmp_key" "$known_hosts"
+  rm -f "$tmp_key" "$known_hosts" "$remote_output"
 }
 trap cleanup EXIT
 
@@ -105,7 +133,7 @@ printf 'ssh_probe_performed=true\n'
   -o StrictHostKeyChecking=accept-new \
   -o UserKnownHostsFile="$known_hosts" \
   "$target" \
-  "EXPECTED_HOSTNAME=$expected_hostname sh -s" <<'REMOTE'
+  "EXPECTED_HOSTNAME=$expected_hostname sh -s" >"$remote_output" <<'REMOTE'
 set -eu
 
 bool_command() {
@@ -189,8 +217,26 @@ printf 'beta_directory_07_exists=%s\n' "$(bool_dir /run/fishystuff/beta-edge/tls
 printf 'beta_directory_08_exists=%s\n' "$(bool_dir /var/lib/fishystuff/beta-dolt)"
 REMOTE
 
-printf 'next_required_action=bootstrap_remote_beta_host\n'
-printf 'next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=%s\n' "$target"
+cat "$remote_output"
+
+expected_match="$(remote_value expected_hostname_match "$remote_output")"
+scaffold_present="$(all_beta_scaffold_present "$remote_output")"
+nix_available="$(remote_value nix_available "$remote_output")"
+nix_daemon_available="$(remote_value nix_daemon_available "$remote_output")"
+
+if [[ "$expected_match" != "true" ]]; then
+  printf 'next_required_action=fix_remote_hostname_before_bootstrap\n'
+  printf 'next_note_01=remote hostname must match %s before beta bootstrap continues\n' "$expected_hostname"
+elif [[ "$scaffold_present" != "true" ]]; then
+  printf 'next_required_action=bootstrap_remote_beta_host\n'
+  printf 'next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 secretspec run --profile beta-deploy -- just gitops-beta-remote-host-bootstrap target=%s\n' "$target"
+elif [[ "$nix_available" != "true" || "$nix_daemon_available" != "true" ]]; then
+  printf 'next_required_action=install_remote_nix\n'
+  printf 'next_note_01=Nix and nix-daemon must exist before beta closure transfer can use nix copy\n'
+else
+  printf 'next_required_action=prepare_beta_release_materialization\n'
+  printf 'next_note_01=host scaffold and Nix are present; continue with exact beta handoff closures and runtime env\n'
+fi
 printf 'remote_deploy_performed=false\n'
 printf 'remote_host_mutation_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
