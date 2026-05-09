@@ -82,6 +82,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-current-handoff-plan-test.sh
   bash scripts/recipes/gitops-beta-observe-admission-test.sh
   bash scripts/recipes/gitops-beta-admission-packet-test.sh
+  bash scripts/recipes/gitops-beta-activation-draft-packet-test.sh
   bash scripts/recipes/gitops-beta-first-service-set-plan-test.sh
   bash scripts/recipes/gitops-beta-first-service-set-packet-test.sh
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
@@ -231,6 +232,10 @@ gitops-beta-observe-admission output="data/gitops/beta-admission.evidence.json" 
 gitops-beta-admission-packet admission_file="data/gitops/beta-admission.evidence.json" summary_file="data/gitops/beta-current.handoff-summary.json" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations" draft_file="data/gitops/beta-activation.draft.desired.json":
   @bash scripts/recipes/gitops-beta-admission-packet.sh "{{admission_file}}" "{{summary_file}}" "{{api_upstream}}" "{{observation_dir}}" "{{draft_file}}"
 
+# Print beta activation-draft readiness and next command. No mutation.
+gitops-beta-activation-draft-packet draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="data/gitops/beta-admission.evidence.json" proof_dir="data/gitops" edge_bundle="auto" deploy_bin="auto" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations":
+  @bash scripts/recipes/gitops-beta-activation-draft-packet.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{proof_dir}}" "{{edge_bundle}}" "{{deploy_bin}}" "{{api_upstream}}" "{{observation_dir}}"
+
 # Print read-only readiness for generating beta current desired state and handoff summary.
 gitops-beta-current-handoff-plan output="data/gitops/beta-current.desired.json" dolt_ref="beta" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-beta-current-handoff-plan.sh "{{output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
@@ -266,6 +271,10 @@ gitops-beta-observe-admission-test:
 # Run fast local regression checks for beta admission packet readiness.
 gitops-beta-admission-packet-test:
   bash scripts/recipes/gitops-beta-admission-packet-test.sh
+
+# Run fast local regression checks for beta activation-draft packet readiness.
+gitops-beta-activation-draft-packet-test:
+  bash scripts/recipes/gitops-beta-activation-draft-packet-test.sh
 
 # Run fast local regression checks for beta current handoff input planning.
 gitops-beta-current-handoff-plan-test:

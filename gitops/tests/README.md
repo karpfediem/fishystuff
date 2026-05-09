@@ -45,6 +45,8 @@ just gitops-beta-observe-admission output=/tmp/fishystuff-beta-admission.json su
 just gitops-beta-observe-admission-test
 just gitops-beta-admission-packet admission_file=/tmp/fishystuff-beta-admission.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json api_upstream=http://127.0.0.1:18192
 just gitops-beta-admission-packet-test
+just gitops-beta-activation-draft-packet draft_file=/tmp/fishystuff-beta-activation.draft.desired.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json
+just gitops-beta-activation-draft-packet-test
 just gitops-beta-first-service-set-plan summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json draft_file=/tmp/fishystuff-beta-activation.draft.desired.json
 just gitops-beta-first-service-set-plan-test
 just gitops-beta-first-service-set-packet
@@ -94,6 +96,7 @@ These run host-local Rust tests for deployment helpers, including a real tempora
 `gitops-beta-runtime-env-packet` reports runtime env readiness as an operator packet, treating missing files as pending commands and invalid existing files as hard failures.
 `gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes and the guarded Dolt-before-API start command.
 `gitops-beta-admission-packet` reports admission evidence readiness without probing or writing; existing evidence must still match the beta handoff summary and loopback upstream.
+`gitops-beta-activation-draft-packet` reports activation-draft readiness without generating or applying it; existing drafts must still match the beta handoff summary and admission evidence.
 
 Flake checks:
 
