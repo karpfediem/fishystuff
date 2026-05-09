@@ -100,7 +100,7 @@ These run host-local Rust tests for deployment helpers, including a real tempora
 
 `gitops-beta-first-service-set-packet` filters the checked first-service-set plan down to only the current operator packet and no-mutation safety flags.
 `gitops-beta-runtime-env-packet` reports runtime env readiness as an operator packet, treating missing files as pending commands and invalid existing files as hard failures.
-`gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes and the guarded Dolt-before-API start command.
+`gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes and the guarded Dolt-before-API start command; if runtime env files are missing, it reports `pending_runtime_env` instead of failing.
 `gitops-beta-admission-packet` reports admission evidence readiness without probing or writing; existing evidence must still match the beta handoff summary and loopback upstream.
 `gitops-beta-activation-draft-packet` reports activation-draft readiness without generating or applying it; existing drafts must still match the beta handoff summary and admission evidence.
 `gitops-beta-operator-proof-packet` reports operator-proof readiness without writing proofs or applying; existing proofs must be fresh, hash-current, and match the selected activation tuple before it prints the guarded beta apply command.

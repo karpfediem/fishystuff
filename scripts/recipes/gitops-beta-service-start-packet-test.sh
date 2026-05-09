@@ -102,17 +102,22 @@ grep -F "infrastructure_mutation_performed=false" "${root}/packet.stdout" >/dev/
 grep -F "local_host_mutation_performed=false" "${root}/packet.stdout" >/dev/null
 pass "ready service start packet"
 
-expect_fail_contains \
-  "reject missing runtime env" \
-  "beta service start plan api-runtime-env check failed" \
-  env \
-    FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
-    bash scripts/recipes/gitops-beta-service-start-packet.sh \
-      "$api_bundle" \
-      "$dolt_bundle" \
-      "${root}/missing-api.env" \
-      "$dolt_env" \
-      "$summary"
+FISHYSTUFF_GITOPS_BETA_SERVICE_START_PLAN_ALLOW_ENV_FILE_FIXTURE=1 \
+  bash scripts/recipes/gitops-beta-service-start-packet.sh \
+    "$api_bundle" \
+    "$dolt_bundle" \
+    "${root}/missing-api.env" \
+    "$dolt_env" \
+    "$summary" >"${root}/missing-runtime.stdout"
+grep -F "gitops_beta_service_start_packet_ok=true" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_status=pending_runtime_env" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_api_status=missing" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_dolt_status=ready" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${root}/missing-api.env profile=beta-runtime" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "remote_deploy_performed=false" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "infrastructure_mutation_performed=false" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "local_host_mutation_performed=false" "${root}/missing-runtime.stdout" >/dev/null
+pass "pending missing runtime env"
 
 if grep -E 'fishystuff-api\.service|fishystuff-dolt\.service|/run/fishystuff/api/env|https://api\.fishystuff\.fish|https://cdn\.fishystuff\.fish' "${root}/packet.stdout" >/dev/null; then
   printf '[gitops-beta-service-start-packet-test] beta service start packet leaked production/shared service material\n' >&2

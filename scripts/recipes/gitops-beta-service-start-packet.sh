@@ -49,6 +49,40 @@ cleanup() {
 }
 trap cleanup EXIT
 
+runtime_packet_output="${tmp_dir}/runtime-env-packet.out"
+if ! bash scripts/recipes/gitops-beta-runtime-env-packet.sh \
+  "$api_env_file" \
+  "$dolt_env_file" \
+  "$api_bundle" \
+  "$dolt_bundle" \
+  "$summary_file" >"$runtime_packet_output" 2>"${tmp_dir}/runtime-env-packet.err"; then
+  cat "${tmp_dir}/runtime-env-packet.err" >&2 || true
+  exit 2
+fi
+
+runtime_packet_status="$(require_kv_value runtime_env_packet_status "$runtime_packet_output" "runtime env packet did not report status")"
+if [[ "$runtime_packet_status" != "ready" ]]; then
+  printf 'gitops_beta_service_start_packet_ok=true\n'
+  printf 'service_start_packet_status=%s\n' "$runtime_packet_status"
+  printf 'service_start_packet_api_env_file=%s\n' "$api_env_file"
+  printf 'service_start_packet_dolt_env_file=%s\n' "$dolt_env_file"
+  printf 'service_start_packet_api_status=%s\n' "$(kv_value runtime_env_packet_api_status "$runtime_packet_output")"
+  printf 'service_start_packet_dolt_status=%s\n' "$(kv_value runtime_env_packet_dolt_status "$runtime_packet_output")"
+  if [[ -n "$(kv_value runtime_env_packet_next_command_01 "$runtime_packet_output")" ]]; then
+    printf 'service_start_packet_next_command_01=%s\n' "$(kv_value runtime_env_packet_next_command_01 "$runtime_packet_output")"
+  fi
+  if [[ -n "$(kv_value runtime_env_packet_next_command_02 "$runtime_packet_output")" ]]; then
+    printf 'service_start_packet_next_command_02=%s\n' "$(kv_value runtime_env_packet_next_command_02 "$runtime_packet_output")"
+  fi
+  if [[ -n "$(kv_value runtime_env_packet_after_success_command "$runtime_packet_output")" ]]; then
+    printf 'service_start_packet_after_success_command=%s\n' "$(kv_value runtime_env_packet_after_success_command "$runtime_packet_output")"
+  fi
+  printf 'remote_deploy_performed=false\n'
+  printf 'infrastructure_mutation_performed=false\n'
+  printf 'local_host_mutation_performed=false\n'
+  exit 0
+fi
+
 plan_output="${tmp_dir}/service-start-plan.out"
 if ! bash scripts/recipes/gitops-beta-service-start-plan.sh \
   "$api_bundle" \
