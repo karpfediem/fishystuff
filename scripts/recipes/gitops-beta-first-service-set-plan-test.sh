@@ -72,7 +72,7 @@ grep -F "operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=${RECIPE_REPO_
 grep -F "admission_evidence_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "activation_draft_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${root}/pending.stdout" >/dev/null
-grep -F "just gitops-beta-observe-admission output=${pending_admission}" "${root}/pending.stdout" >/dev/null
+grep -F "just gitops-beta-admission-packet admission_file=${pending_admission}" "${root}/pending.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1" "${root}/pending.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/pending.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/pending.stdout" >/dev/null
@@ -206,7 +206,7 @@ grep -F "operator_packet_dolt_unit_sha256=${service_ready_dolt_unit_sha256}" "${
 grep -F "operator_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1" "${service_ready_root}/service-ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${service_ready_dolt_unit_sha256}" "${service_ready_root}/service-ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${service_ready_api_unit_sha256}" "${service_ready_root}/service-ready.stdout" >/dev/null
-grep -F "operator_packet_after_success_command=just gitops-beta-observe-admission output=${service_ready_root}/missing-admission.json summary_file=${service_ready_summary} api_upstream=http://127.0.0.1:18192 observation_dir=${service_ready_root}/observations" "${service_ready_root}/service-ready.stdout" >/dev/null
+grep -F "operator_packet_after_success_command=just gitops-beta-admission-packet admission_file=${service_ready_root}/missing-admission.json summary_file=${service_ready_summary} api_upstream=http://127.0.0.1:18192 observation_dir=${service_ready_root}/observations draft_file=${service_ready_root}/missing-draft.json" "${service_ready_root}/service-ready.stdout" >/dev/null
 pass "service-ready first service set packet"
 
 production_summary="${root}/production-summary.json"

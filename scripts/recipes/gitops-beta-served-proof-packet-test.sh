@@ -163,8 +163,7 @@ bash scripts/recipes/gitops-beta-served-proof-packet.sh \
 grep -F "served_proof_packet_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "served_proof_packet_served_proof_file=${served_proof}" "${root}/ready.stdout" >/dev/null
 grep -F "served_proof_packet_served_proof_sha256=${served_proof_sha256}" "${root}/ready.stdout" >/dev/null
-grep -F "served_proof_packet_next_command_01=just gitops-beta-proof-index proof_dir=${proof_dir} max_age_seconds=86400 require_complete=true" "${root}/ready.stdout" >/dev/null
-grep -F "served_proof_packet_after_success_command=just gitops-beta-install-edge edge_bundle=${root}/edge-bundle proof_dir=${proof_dir} max_age_seconds=86400" "${root}/ready.stdout" >/dev/null
+grep -F "served_proof_packet_next_command_01=just gitops-beta-edge-install-packet edge_bundle=${root}/edge-bundle proof_dir=${proof_dir} max_age_seconds=86400 draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=${operator_proof} deploy_bin=${root}/fishystuff_deploy_served state_dir=${root}/state run_dir=${root}/run api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/ready.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/ready.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/ready.stdout" >/dev/null
 grep -F "local_host_mutation_performed=false" "${root}/ready.stdout" >/dev/null

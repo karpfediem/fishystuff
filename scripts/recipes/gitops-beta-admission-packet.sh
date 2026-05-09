@@ -85,7 +85,7 @@ if [[ -f "$admission_file" ]]; then
 fi
 
 observe_command="just gitops-beta-observe-admission output=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir}"
-activation_draft_command="just gitops-beta-activation-draft output=${draft_file} summary_file=${summary_file} admission_file=${admission_file}"
+activation_draft_packet_command="just gitops-beta-activation-draft-packet draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} api_upstream=${api_upstream} observation_dir=${observation_dir}"
 
 printf 'gitops_beta_admission_packet_ok=true\n'
 printf 'admission_packet_status=%s\n' "$status"
@@ -99,10 +99,10 @@ printf 'admission_packet_dolt_commit=%s\n' "$dolt_commit"
 if [[ "$status" == "ready" ]]; then
   printf 'admission_packet_db_probe=%s\n' "$(jq -er '.db_backed_probe.name' "$admission_file")"
   printf 'admission_packet_site_cdn_probe=%s\n' "$(jq -er '.site_cdn_probe.name' "$admission_file")"
-  printf 'admission_packet_next_command_01=%s\n' "$activation_draft_command"
+  printf 'admission_packet_next_command_01=%s\n' "$activation_draft_packet_command"
 else
   printf 'admission_packet_next_command_01=%s\n' "$observe_command"
-  printf 'admission_packet_after_success_command=%s\n' "$activation_draft_command"
+  printf 'admission_packet_after_success_command=%s\n' "$activation_draft_packet_command"
 fi
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

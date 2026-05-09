@@ -71,7 +71,7 @@ grep -F "activation_draft_packet_summary_file=${summary}" "${root}/missing-admis
 grep -F "activation_draft_packet_admission_file=${admission}" "${root}/missing-admission.stdout" >/dev/null
 grep -F "activation_draft_packet_draft_file=${draft}" "${root}/missing-admission.stdout" >/dev/null
 grep -F "activation_draft_packet_next_command_01=just gitops-beta-admission-packet admission_file=${admission} summary_file=${summary} api_upstream=${api_upstream} observation_dir=${root}/observations draft_file=${draft}" "${root}/missing-admission.stdout" >/dev/null
-grep -F "activation_draft_packet_after_success_command=just gitops-beta-activation-draft output=${draft} summary_file=${summary} admission_file=${admission} deploy_bin=${root}/fishystuff_deploy" "${root}/missing-admission.stdout" >/dev/null
+grep -F "activation_draft_packet_after_success_command=just gitops-beta-activation-draft-packet draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_dir=${proof_dir} edge_bundle=auto deploy_bin=${root}/fishystuff_deploy api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/missing-admission.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/missing-admission.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/missing-admission.stdout" >/dev/null
 grep -F "local_host_mutation_performed=false" "${root}/missing-admission.stdout" >/dev/null
@@ -98,7 +98,7 @@ bash scripts/recipes/gitops-beta-activation-draft-packet.sh \
 grep -F "activation_draft_packet_status=missing_draft" "${root}/missing-draft.stdout" >/dev/null
 grep -F "activation_draft_packet_release_id=beta-release" "${root}/missing-draft.stdout" >/dev/null
 grep -F "activation_draft_packet_next_command_01=just gitops-beta-activation-draft output=${draft} summary_file=${summary} admission_file=${admission} deploy_bin=${root}/fishystuff_deploy" "${root}/missing-draft.stdout" >/dev/null
-grep -F "activation_draft_packet_after_success_command=just gitops-beta-operator-proof output_dir=${proof_dir} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto deploy_bin=${root}/fishystuff_deploy" "${root}/missing-draft.stdout" >/dev/null
+grep -F "activation_draft_packet_after_success_command=just gitops-beta-operator-proof-packet proof_dir=${proof_dir} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto deploy_bin=${root}/fishystuff_deploy api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/missing-draft.stdout" >/dev/null
 pass "missing draft activation draft packet"
 
 bash scripts/recipes/gitops-beta-activation-draft.sh \
@@ -119,7 +119,7 @@ bash scripts/recipes/gitops-beta-activation-draft-packet.sh \
   "${root}/observations" >"${root}/ready.stdout"
 
 grep -F "activation_draft_packet_status=ready" "${root}/ready.stdout" >/dev/null
-grep -F "activation_draft_packet_next_command_01=just gitops-beta-operator-proof output_dir=${proof_dir} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto deploy_bin=${root}/fishystuff_deploy" "${root}/ready.stdout" >/dev/null
+grep -F "activation_draft_packet_next_command_01=just gitops-beta-operator-proof-packet proof_dir=${proof_dir} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto deploy_bin=${root}/fishystuff_deploy api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/ready.stdout" >/dev/null
 pass "ready activation draft packet"
 
 bad_draft="${root}/bad-beta-activation.draft.desired.json"

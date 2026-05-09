@@ -62,7 +62,7 @@ grep -F "admission_packet_summary_file=${summary}" "${root}/missing.stdout" >/de
 grep -F "admission_packet_admission_file=${admission}" "${root}/missing.stdout" >/dev/null
 grep -F "admission_packet_api_upstream=${api_upstream}" "${root}/missing.stdout" >/dev/null
 grep -F "admission_packet_next_command_01=just gitops-beta-observe-admission output=${admission} summary_file=${summary} api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/missing.stdout" >/dev/null
-grep -F "admission_packet_after_success_command=just gitops-beta-activation-draft output=${draft} summary_file=${summary} admission_file=${admission}" "${root}/missing.stdout" >/dev/null
+grep -F "admission_packet_after_success_command=just gitops-beta-activation-draft-packet draft_file=${draft} summary_file=${summary} admission_file=${admission} api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/missing.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/missing.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/missing.stdout" >/dev/null
 grep -F "local_host_mutation_performed=false" "${root}/missing.stdout" >/dev/null
@@ -87,7 +87,7 @@ grep -F "admission_packet_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "admission_packet_release_id=beta-release" "${root}/ready.stdout" >/dev/null
 grep -F "admission_packet_db_probe=beta-db-fixture" "${root}/ready.stdout" >/dev/null
 grep -F "admission_packet_site_cdn_probe=beta-site-cdn-fixture" "${root}/ready.stdout" >/dev/null
-grep -F "admission_packet_next_command_01=just gitops-beta-activation-draft output=${draft} summary_file=${summary} admission_file=${admission}" "${root}/ready.stdout" >/dev/null
+grep -F "admission_packet_next_command_01=just gitops-beta-activation-draft-packet draft_file=${draft} summary_file=${summary} admission_file=${admission} api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/ready.stdout" >/dev/null
 pass "ready admission packet"
 
 bad_admission="${root}/bad-admission.evidence.json"

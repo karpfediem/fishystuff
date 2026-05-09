@@ -176,9 +176,9 @@ if [[ "$status" == "missing_served_proof" ]]; then
 fi
 
 operator_packet_command="just gitops-beta-operator-proof-packet proof_file=${operator_proof_file} proof_dir=${proof_dir} max_age_seconds=${max_age_seconds} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle} deploy_bin=${deploy_bin} api_upstream=${api_upstream} observation_dir=${observation_dir}"
+served_proof_packet_command="just gitops-beta-served-proof-packet proof_dir=${proof_dir} max_age_seconds=${max_age_seconds} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_file=${operator_proof_file} deploy_bin=${deploy_bin} state_dir=${state_dir} run_dir=${run_dir} edge_bundle=${edge_bundle} api_upstream=${api_upstream} observation_dir=${observation_dir}"
 served_proof_command="just gitops-beta-served-proof output_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_file=${operator_proof_file} deploy_bin=${deploy_bin} state_dir=${state_dir} run_dir=${run_dir} proof_max_age_seconds=${max_age_seconds}"
-proof_index_command="just gitops-beta-proof-index proof_dir=${proof_dir} max_age_seconds=${max_age_seconds} require_complete=true"
-edge_install_command="just gitops-beta-install-edge edge_bundle=${edge_bundle} proof_dir=${proof_dir} max_age_seconds=${max_age_seconds}"
+edge_install_packet_command="just gitops-beta-edge-install-packet edge_bundle=${edge_bundle} proof_dir=${proof_dir} max_age_seconds=${max_age_seconds} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_file=${operator_proof_file} deploy_bin=${deploy_bin} state_dir=${state_dir} run_dir=${run_dir} api_upstream=${api_upstream} observation_dir=${observation_dir}"
 
 printf 'gitops_beta_served_proof_packet_ok=true\n'
 printf 'served_proof_packet_status=%s\n' "$status"
@@ -212,18 +212,18 @@ case "$status" in
     if [[ -n "$operator_next_command" ]]; then
       printf 'served_proof_packet_operator_next_command=%s\n' "$operator_next_command"
     fi
+    printf 'served_proof_packet_after_success_command=%s\n' "$served_proof_packet_command"
     ;;
   missing_served_state)
     printf 'served_proof_packet_next_command_01=%s\n' "$operator_next_command"
-    printf 'served_proof_packet_after_success_command=%s\n' "$served_proof_command"
+    printf 'served_proof_packet_after_success_command=%s\n' "$served_proof_packet_command"
     ;;
   missing_served_proof)
     printf 'served_proof_packet_next_command_01=%s\n' "$served_proof_command"
-    printf 'served_proof_packet_after_success_command=%s\n' "$proof_index_command"
+    printf 'served_proof_packet_after_success_command=%s\n' "$edge_install_packet_command"
     ;;
   ready)
-    printf 'served_proof_packet_next_command_01=%s\n' "$proof_index_command"
-    printf 'served_proof_packet_after_success_command=%s\n' "$edge_install_command"
+    printf 'served_proof_packet_next_command_01=%s\n' "$edge_install_packet_command"
     ;;
 esac
 printf 'remote_deploy_performed=false\n'

@@ -96,7 +96,7 @@ grep -F "service_start_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_SERV
 grep -F "FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${dolt_unit_sha256}" "${root}/packet.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${api_unit_sha256}" "${root}/packet.stdout" >/dev/null
 grep -F "just gitops-beta-start-services api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${summary}" "${root}/packet.stdout" >/dev/null
-grep -F "service_start_packet_after_success_command=just gitops-beta-observe-admission summary_file=${summary} api_upstream=http://127.0.0.1:18192" "${root}/packet.stdout" >/dev/null
+grep -F "service_start_packet_after_success_command=just gitops-beta-admission-packet summary_file=${summary} api_upstream=http://127.0.0.1:18192" "${root}/packet.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/packet.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/packet.stdout" >/dev/null
 grep -F "local_host_mutation_performed=false" "${root}/packet.stdout" >/dev/null

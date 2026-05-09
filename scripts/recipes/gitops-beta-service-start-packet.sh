@@ -117,6 +117,7 @@ if [[ -z "$resolved_summary" ]]; then
 fi
 
 start_command="FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${dolt_unit_sha256} FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${api_unit_sha256} just gitops-beta-start-services api_bundle=${resolved_api_bundle} dolt_bundle=${resolved_dolt_bundle} api_env_file=${resolved_api_env} dolt_env_file=${resolved_dolt_env} summary_file=${resolved_summary}"
+admission_packet_command="just gitops-beta-admission-packet summary_file=${resolved_summary} api_upstream=http://127.0.0.1:18192"
 
 printf 'gitops_beta_service_start_packet_ok=true\n'
 printf 'service_start_packet_status=ready\n'
@@ -137,7 +138,7 @@ printf 'service_start_packet_order_01=dolt\n'
 printf 'service_start_packet_order_02=api\n'
 printf 'service_start_packet_note_01=run only on the intended beta host after reviewing the unit hashes\n'
 printf 'service_start_packet_next_command_01=%s\n' "$start_command"
-printf 'service_start_packet_after_success_command=just gitops-beta-observe-admission summary_file=%s api_upstream=http://127.0.0.1:18192\n' "$resolved_summary"
+printf 'service_start_packet_after_success_command=%s\n' "$admission_packet_command"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
 printf 'local_host_mutation_performed=false\n'

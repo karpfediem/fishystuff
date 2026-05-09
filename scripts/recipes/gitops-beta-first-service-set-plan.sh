@@ -305,10 +305,8 @@ runtime_env_dolt_command="FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1
 runtime_env_api_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${api_env_file}"
 runtime_env_api_secretspec_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env_file} profile=beta-runtime"
 start_services_command="FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${dolt_unit_sha256} FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${api_unit_sha256} just gitops-beta-start-services api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
-observe_admission_command="just gitops-beta-observe-admission output=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir}"
-activation_draft_command="just gitops-beta-activation-draft output=${draft_file} summary_file=${summary_file} admission_file=${admission_file}"
+admission_packet_command="just gitops-beta-admission-packet admission_file=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir} draft_file=${draft_file}"
 activation_draft_packet_command="just gitops-beta-activation-draft-packet draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_dir=${proof_dir} edge_bundle=${edge_bundle} api_upstream=${api_upstream} observation_dir=${observation_dir}"
-operator_proof_command="just gitops-beta-operator-proof output_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle}"
 operator_proof_packet_command="just gitops-beta-operator-proof-packet proof_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle} api_upstream=${api_upstream} observation_dir=${observation_dir}"
 served_proof_packet_command="just gitops-beta-served-proof-packet proof_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle} api_upstream=${api_upstream} observation_dir=${observation_dir}"
 proof_index_command="just gitops-beta-proof-index proof_dir=${proof_dir} require_complete=true"
@@ -343,7 +341,7 @@ case "$next_required_action" in
     ;;
   start_or_verify_beta_services)
     printf 'operator_packet_next_command_01=%s\n' "$start_services_command"
-    printf 'operator_packet_after_success_command=%s\n' "$observe_admission_command"
+    printf 'operator_packet_after_success_command=%s\n' "$admission_packet_command"
     ;;
   write_activation_draft)
     printf 'operator_packet_next_command_01=%s\n' "$activation_draft_packet_command"
@@ -371,7 +369,7 @@ printf 'phase_07=install beta edge only after complete served proof chain\n'
 printf 'read_only_step_01=just gitops-beta-host-bootstrap-plan\n'
 printf 'read_only_step_02=%s\n' "$service_start_review_command"
 printf 'read_only_step_03=just gitops-beta-current-handoff summary_output=%s\n' "$summary_file"
-printf 'read_only_step_04=%s\n' "$observe_admission_command"
+printf 'read_only_step_04=%s\n' "$admission_packet_command"
 printf 'read_only_step_05=%s\n' "$activation_draft_packet_command"
 printf 'read_only_step_06=%s\n' "$operator_proof_packet_command"
 printf 'read_only_step_07=%s\n' "$served_proof_packet_command"

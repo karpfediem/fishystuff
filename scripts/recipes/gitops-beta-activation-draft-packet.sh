@@ -101,7 +101,8 @@ trap cleanup EXIT
 
 admission_packet_command="just gitops-beta-admission-packet admission_file=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir} draft_file=${draft_file}"
 activation_draft_command="just gitops-beta-activation-draft output=${draft_file} summary_file=${summary_file} admission_file=${admission_file} deploy_bin=${deploy_bin}"
-operator_proof_command="just gitops-beta-operator-proof output_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle} deploy_bin=${deploy_bin}"
+activation_draft_packet_command="just gitops-beta-activation-draft-packet draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_dir=${proof_dir} edge_bundle=${edge_bundle} deploy_bin=${deploy_bin} api_upstream=${api_upstream} observation_dir=${observation_dir}"
+operator_proof_packet_command="just gitops-beta-operator-proof-packet proof_dir=${proof_dir} draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} edge_bundle=${edge_bundle} deploy_bin=${deploy_bin} api_upstream=${api_upstream} observation_dir=${observation_dir}"
 
 status="missing_admission"
 if [[ -f "$admission_file" ]]; then
@@ -136,14 +137,14 @@ printf 'activation_draft_packet_release_id=%s\n' "$active_release_id"
 case "$status" in
   missing_admission)
     printf 'activation_draft_packet_next_command_01=%s\n' "$admission_packet_command"
-    printf 'activation_draft_packet_after_success_command=%s\n' "$activation_draft_command"
+    printf 'activation_draft_packet_after_success_command=%s\n' "$activation_draft_packet_command"
     ;;
   missing_draft)
     printf 'activation_draft_packet_next_command_01=%s\n' "$activation_draft_command"
-    printf 'activation_draft_packet_after_success_command=%s\n' "$operator_proof_command"
+    printf 'activation_draft_packet_after_success_command=%s\n' "$operator_proof_packet_command"
     ;;
   ready)
-    printf 'activation_draft_packet_next_command_01=%s\n' "$operator_proof_command"
+    printf 'activation_draft_packet_next_command_01=%s\n' "$operator_proof_packet_command"
     ;;
 esac
 printf 'remote_deploy_performed=false\n'

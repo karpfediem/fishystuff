@@ -83,7 +83,7 @@ bash scripts/recipes/gitops-beta-operator-proof-packet.sh \
 grep -F "gitops_beta_operator_proof_packet_ok=true" "${root}/missing-activation.stdout" >/dev/null
 grep -F "operator_proof_packet_status=missing_activation_draft" "${root}/missing-activation.stdout" >/dev/null
 grep -F "operator_proof_packet_next_command_01=just gitops-beta-activation-draft-packet draft_file=${missing_draft} summary_file=${summary} admission_file=${admission} proof_dir=${proof_dir} edge_bundle=${root}/edge-bundle deploy_bin=${root}/fishystuff_deploy api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/missing-activation.stdout" >/dev/null
-grep -F "operator_proof_packet_after_success_command=just gitops-beta-operator-proof output_dir=${proof_dir} draft_file=${missing_draft} summary_file=${summary} admission_file=${admission} edge_bundle=${root}/edge-bundle deploy_bin=${root}/fishystuff_deploy" "${root}/missing-activation.stdout" >/dev/null
+grep -F "operator_proof_packet_after_success_command=just gitops-beta-operator-proof-packet proof_file= proof_dir=${proof_dir} max_age_seconds=86400 draft_file=${missing_draft} summary_file=${summary} admission_file=${admission} edge_bundle=${root}/edge-bundle deploy_bin=${root}/fishystuff_deploy api_upstream=${api_upstream} observation_dir=${root}/observations" "${root}/missing-activation.stdout" >/dev/null
 pass "missing activation draft operator proof packet"
 
 bash scripts/recipes/gitops-beta-operator-proof-packet.sh \
