@@ -94,6 +94,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-served-proof-test.sh
   bash scripts/recipes/gitops-beta-proof-index-test.sh
   bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
+  bash scripts/recipes/gitops-beta-edge-install-packet-test.sh
   bash scripts/recipes/gitops-beta-install-edge-test.sh
   bash scripts/recipes/gitops-beta-install-service-test.sh
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
@@ -214,6 +215,10 @@ gitops-beta-served-proof-packet proof_dir="data/gitops" max_age_seconds="86400" 
 gitops-beta-proof-index proof_dir="data/gitops" max_age_seconds="86400" require_complete="false":
   bash scripts/recipes/gitops-beta-proof-index.sh "{{proof_dir}}" "{{max_age_seconds}}" "{{require_complete}}"
 
+# Print beta edge install readiness and reviewed hashes. No mutation.
+gitops-beta-edge-install-packet edge_bundle="auto" proof_dir="data/gitops" max_age_seconds="86400" draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="data/gitops/beta-admission.evidence.json" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations":
+  @bash scripts/recipes/gitops-beta-edge-install-packet.sh "{{edge_bundle}}" "{{proof_dir}}" "{{max_age_seconds}}" "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{proof_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}" "{{api_upstream}}" "{{observation_dir}}"
+
 # Install/restart the beta edge unit only after explicit opt-ins and checked beta proof hashes.
 gitops-beta-install-edge edge_bundle="auto" proof_dir="data/gitops" max_age_seconds="86400" install_bin="install" systemctl_bin="systemctl":
   bash scripts/recipes/gitops-beta-install-edge.sh "{{edge_bundle}}" "{{proof_dir}}" "{{max_age_seconds}}" "{{install_bin}}" "{{systemctl_bin}}"
@@ -309,6 +314,10 @@ gitops-beta-operator-proof-packet-test:
 # Run fast local regression checks for beta served-proof packet readiness.
 gitops-beta-served-proof-packet-test:
   bash scripts/recipes/gitops-beta-served-proof-packet-test.sh
+
+# Run fast local regression checks for beta edge-install packet readiness.
+gitops-beta-edge-install-packet-test:
+  bash scripts/recipes/gitops-beta-edge-install-packet-test.sh
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":

@@ -68,6 +68,8 @@ just gitops-beta-served-proof-packet-test
 just gitops-beta-served-proof-test
 just gitops-beta-proof-index require_complete=true
 just gitops-beta-proof-index-test
+just gitops-beta-edge-install-packet proof_dir=/tmp/fishystuff-gitops-proofs edge_bundle=/tmp/fishystuff-beta-edge-bundle
+just gitops-beta-edge-install-packet-test
 FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash> just gitops-beta-apply-activation-draft draft_file=/tmp/fishystuff-beta-activation.draft.desired.json summary_file=/tmp/fishystuff-beta-current.handoff-summary.json admission_file=/tmp/fishystuff-beta-admission.json proof_file=<checked beta proof file>
 just gitops-beta-apply-activation-draft-test
 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof hash> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked beta edge unit hash> just gitops-beta-install-edge edge_bundle=<checked beta edge bundle> proof_dir=data/gitops
@@ -103,6 +105,7 @@ These run host-local Rust tests for deployment helpers, including a real tempora
 `gitops-beta-activation-draft-packet` reports activation-draft readiness without generating or applying it; existing drafts must still match the beta handoff summary and admission evidence.
 `gitops-beta-operator-proof-packet` reports operator-proof readiness without writing proofs or applying; existing proofs must be fresh, hash-current, and match the selected activation tuple before it prints the guarded beta apply command.
 `gitops-beta-served-proof-packet` reports post-apply served proof readiness without writing proofs or restarting edge; it treats missing served state as pending apply and stale served documents as a hard failure.
+`gitops-beta-edge-install-packet` reports final beta edge install readiness without installing or restarting; it validates the complete proof index and beta edge bundle, then prints the exact served-proof and unit hashes required by `gitops-beta-install-edge`.
 
 Flake checks:
 

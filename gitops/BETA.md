@@ -79,6 +79,8 @@ just gitops-beta-proof-index
 just gitops-beta-proof-index-test
 just gitops-beta-apply-activation-draft
 just gitops-beta-apply-activation-draft-test
+just gitops-beta-edge-install-packet
+just gitops-beta-edge-install-packet-test
 just gitops-beta-install-edge
 just gitops-beta-install-edge-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
@@ -172,7 +174,7 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-apply-activation-draft` is the guarded beta local apply gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1`, `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, and `FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash>`. It checks a beta operator proof, refuses production summaries/proofs, and runs mgmt only against the beta activation draft. In `local-apply` mode, the clean graph publishes beta state under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta`.
 
-`just gitops-beta-install-edge` is the beta-only edge install/restart gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1`, `FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof hash>`, and `FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked beta edge unit hash>`. It re-checks that `just gitops-beta-proof-index require_complete=true` is complete, re-validates the beta edge bundle, installs only `/etc/systemd/system/fishystuff-beta-edge.service`, reloads systemd, restarts `fishystuff-beta-edge.service`, and checks it is active. The regression intercepts `install` and `systemctl` with fake commands so this guard remains testable without mutating the developer machine.
+`just gitops-beta-edge-install-packet` is the read-only edge handoff packet. It requires a complete beta proof index before checking the beta edge bundle, then prints the exact `FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256` and `FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256` values needed by the guarded install. `just gitops-beta-install-edge` is the beta-only edge install/restart gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_RESTART=1`, `FISHYSTUFF_GITOPS_BETA_EDGE_SERVED_PROOF_SHA256=<checked beta served proof hash>`, and `FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked beta edge unit hash>`. It re-checks that `just gitops-beta-proof-index require_complete=true` is complete, re-validates the beta edge bundle, installs only `/etc/systemd/system/fishystuff-beta-edge.service`, reloads systemd, restarts `fishystuff-beta-edge.service`, and checks it is active. The regression intercepts `install` and `systemctl` with fake commands so this guard remains testable without mutating the developer machine.
 
 Next pieces to add:
 
