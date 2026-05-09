@@ -95,6 +95,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
   bash scripts/recipes/gitops-beta-runtime-env-packet-test.sh
   bash scripts/recipes/gitops-beta-service-start-plan-test.sh
+  bash scripts/recipes/gitops-beta-service-start-packet-test.sh
   bash scripts/recipes/gitops-beta-host-bootstrap-plan-test.sh
   bash scripts/recipes/gitops-beta-host-bootstrap-apply-test.sh
   bash scripts/recipes/gitops-beta-start-services-test.sh
@@ -333,6 +334,10 @@ gitops-beta-runtime-env-packet-test:
 gitops-beta-service-start-plan api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" summary_file="data/gitops/beta-current.handoff-summary.json":
   bash scripts/recipes/gitops-beta-service-start-plan.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{summary_file}}"
 
+# Print the compact beta API/Dolt service start packet from checked env files and service bundles. No mutation.
+gitops-beta-service-start-packet api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" summary_file="data/gitops/beta-current.handoff-summary.json":
+  @bash scripts/recipes/gitops-beta-service-start-packet.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{summary_file}}"
+
 # Install/restart beta Dolt, then beta API, after explicit opt-ins and checked unit hashes.
 gitops-beta-start-services api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env" install_bin="install" systemctl_bin="systemctl" summary_file="data/gitops/beta-current.handoff-summary.json":
   bash scripts/recipes/gitops-beta-start-services.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}" "{{install_bin}}" "{{systemctl_bin}}" "{{summary_file}}"
@@ -340,6 +345,10 @@ gitops-beta-start-services api_bundle="auto" dolt_bundle="auto" api_env_file="/v
 # Run fast local regression checks for the beta service start plan.
 gitops-beta-service-start-plan-test:
   bash scripts/recipes/gitops-beta-service-start-plan-test.sh
+
+# Run fast local regression checks for the beta service start packet.
+gitops-beta-service-start-packet-test:
+  bash scripts/recipes/gitops-beta-service-start-packet-test.sh
 
 # Print the fresh beta host bootstrap/readiness plan. No mutation.
 gitops-beta-host-bootstrap-plan api_runtime_env_path="/var/lib/fishystuff/gitops-beta/api/runtime.env" api_release_env_path="/var/lib/fishystuff/gitops-beta/api/beta.env" dolt_runtime_env_path="/var/lib/fishystuff/gitops-beta/dolt/beta.env":

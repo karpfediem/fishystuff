@@ -26,6 +26,8 @@ FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOS
 just gitops-beta-host-bootstrap-apply-test
 just gitops-beta-service-start-plan api_bundle=<checked beta API bundle> dolt_bundle=<checked beta Dolt bundle>
 just gitops-beta-service-start-plan-test
+just gitops-beta-service-start-packet api_bundle=<checked beta API bundle> dolt_bundle=<checked beta Dolt bundle>
+just gitops-beta-service-start-packet-test
 FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked beta Dolt unit hash> FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked beta API unit hash> just gitops-beta-start-services
 just gitops-beta-start-services-test
 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked beta API unit hash> just gitops-beta-install-service service=api
@@ -88,6 +90,7 @@ These run host-local Rust tests for deployment helpers, including a real tempora
 
 `gitops-beta-first-service-set-packet` filters the checked first-service-set plan down to only the current operator packet and no-mutation safety flags.
 `gitops-beta-runtime-env-packet` reports runtime env readiness as an operator packet, treating missing files as pending commands and invalid existing files as hard failures.
+`gitops-beta-service-start-packet` filters the checked service start plan down to the reviewed API/Dolt unit hashes and the guarded Dolt-before-API start command.
 
 Flake checks:
 
