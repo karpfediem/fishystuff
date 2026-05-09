@@ -50,7 +50,7 @@ grep -F "runtime_env_packet_api_status=missing" "${root}/missing.stdout" >/dev/n
 grep -F "runtime_env_packet_dolt_status=missing" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${dolt_env}" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env} profile=beta-runtime" "${root}/missing.stdout" >/dev/null
-grep -F "runtime_env_packet_after_success_command=just gitops-beta-service-start-plan api_bundle=auto dolt_bundle=auto api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_after_success_command=just gitops-beta-service-start-packet api_bundle=auto dolt_bundle=auto api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/missing.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/missing.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/missing.stdout" >/dev/null
 grep -F "local_host_mutation_performed=false" "${root}/missing.stdout" >/dev/null
@@ -74,7 +74,7 @@ grep -F "runtime_env_packet_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_api_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_dolt_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "runtime_env_packet_api_database=loopback-dolt-beta" "${root}/ready.stdout" >/dev/null
-grep -F "runtime_env_packet_next_command_01=just gitops-beta-service-start-plan api_bundle=/tmp/api-bundle dolt_bundle=/tmp/dolt-bundle api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/ready.stdout" >/dev/null
+grep -F "runtime_env_packet_next_command_01=just gitops-beta-service-start-packet api_bundle=/tmp/api-bundle dolt_bundle=/tmp/dolt-bundle api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/ready.stdout" >/dev/null
 pass "ready runtime env packet"
 
 bad_api_env="${root}/bad-api.env"

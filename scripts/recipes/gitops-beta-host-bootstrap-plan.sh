@@ -118,16 +118,16 @@ printf 'manual_bootstrap_step_03=materialize/copy beta API, Dolt, and edge servi
 printf 'manual_bootstrap_step_04=generate the beta current desired state and handoff summary with just gitops-beta-current-handoff\n'
 printf 'manual_bootstrap_step_05=materialize/copy the exact release closures named by the beta handoff summary\n'
 printf 'manual_bootstrap_step_06=write checked beta runtime env files with just gitops-beta-write-runtime-env service=dolt and service=api\n'
-printf 'manual_bootstrap_step_07=review just gitops-beta-service-start-plan before installing or restarting API/Dolt units\n'
-printf 'manual_bootstrap_step_08=start fishystuff-beta-dolt.service before fishystuff-beta-api.service through the guarded install-service commands from the start plan\n'
+printf 'manual_bootstrap_step_07=review just gitops-beta-service-start-packet before installing or restarting API/Dolt units\n'
+printf 'manual_bootstrap_step_08=start fishystuff-beta-dolt.service before fishystuff-beta-api.service through the guarded start-services command from the packet\n'
 printf 'manual_bootstrap_step_09=collect admission evidence against http://127.0.0.1:18192 before any beta local apply claims serving readiness\n'
-printf 'handoff_to_service_start_plan=just gitops-beta-service-start-plan api_bundle=auto dolt_bundle=auto api_env_file=%s dolt_env_file=%s\n' "$api_runtime_env_path" "$dolt_runtime_env_path"
-printf 'handoff_to_activation_plan=just gitops-beta-host-handoff-plan draft_file=data/gitops/beta-activation.draft.desired.json summary_file=data/gitops/beta-current.handoff-summary.json admission_file=data/gitops/beta-admission.evidence.json\n'
+printf 'handoff_to_service_start_packet=just gitops-beta-service-start-packet api_bundle=auto dolt_bundle=auto api_env_file=%s dolt_env_file=%s\n' "$api_runtime_env_path" "$dolt_runtime_env_path"
+printf 'handoff_to_admission_packet=just gitops-beta-admission-packet admission_file=data/gitops/beta-admission.evidence.json summary_file=data/gitops/beta-current.handoff-summary.json api_upstream=http://127.0.0.1:18192 observation_dir=data/gitops/beta-admission-observations draft_file=data/gitops/beta-activation.draft.desired.json\n'
 printf 'refusal_condition_01=refuse if any checked URL or target resolves to production hostnames or production service names\n'
 printf 'refusal_condition_02=refuse if production SecretSpec profile or production SSH key is active for beta bootstrap\n'
 printf 'refusal_condition_03=refuse if API runtime env is not %s or API release env is not %s\n' "$api_runtime_env_path" "$api_release_env_path"
 printf 'refusal_condition_04=refuse if Dolt runtime env is not %s\n' "$dolt_runtime_env_path"
-printf 'refusal_condition_05=refuse if beta service-start plan has not been reviewed immediately before API/Dolt install\n'
+printf 'refusal_condition_05=refuse if beta service-start packet has not been reviewed immediately before API/Dolt install\n'
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
 printf 'local_host_mutation_performed=false\n'

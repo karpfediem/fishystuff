@@ -82,7 +82,7 @@ if [[ "$api_status" == "ready" && "$dolt_status" == "ready" ]]; then
   packet_status="ready"
 fi
 
-service_start_plan_command="just gitops-beta-service-start-plan api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file} summary_file=${summary_file}"
+service_start_packet_command="just gitops-beta-service-start-packet api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file} summary_file=${summary_file}"
 
 printf 'gitops_beta_runtime_env_packet_ok=true\n'
 printf 'runtime_env_packet_status=%s\n' "$packet_status"
@@ -104,9 +104,9 @@ elif [[ "$api_status" == "missing" ]]; then
   printf 'runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=%s profile=beta-runtime\n' "$api_env_file"
 fi
 if [[ "$packet_status" == "ready" ]]; then
-  printf 'runtime_env_packet_next_command_01=%s\n' "$service_start_plan_command"
+  printf 'runtime_env_packet_next_command_01=%s\n' "$service_start_packet_command"
 else
-  printf 'runtime_env_packet_after_success_command=%s\n' "$service_start_plan_command"
+  printf 'runtime_env_packet_after_success_command=%s\n' "$service_start_packet_command"
 fi
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
