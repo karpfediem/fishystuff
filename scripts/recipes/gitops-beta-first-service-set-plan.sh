@@ -153,6 +153,17 @@ run_service_start_plan_if_ready() {
     if [[ ! -f "$api_env_file" ]]; then
       printf 'service_start_plan_missing_api_runtime_env=%s\n' "$api_env_file"
     fi
+    if [[ -n "${runtime_env_packet:-}" ]]; then
+      bash scripts/recipes/gitops-beta-runtime-env-packet.sh \
+        "$api_env_file" \
+        "$dolt_env_file" \
+        "$api_bundle" \
+        "$dolt_bundle" \
+        "$summary_file" >"$runtime_env_packet"
+      require_kv_equals remote_deploy_performed "$runtime_env_packet" false
+      require_kv_equals infrastructure_mutation_performed "$runtime_env_packet" false
+      require_kv_equals local_host_mutation_performed "$runtime_env_packet" false
+    fi
     return
   fi
 
@@ -201,8 +212,10 @@ trap cleanup EXIT
 bootstrap_plan="${tmp_dir}/bootstrap-plan.out"
 current_handoff_plan="${tmp_dir}/current-handoff-plan.out"
 service_start_plan="${tmp_dir}/service-start-plan.out"
+runtime_env_packet="${tmp_dir}/runtime-env-packet.out"
 proof_index="${tmp_dir}/proof-index.out"
 : >"$service_start_plan"
+: >"$runtime_env_packet"
 service_start_plan_status="unknown"
 
 bash scripts/recipes/gitops-beta-host-bootstrap-plan.sh >"$bootstrap_plan"
@@ -326,6 +339,20 @@ printf 'operator_packet_dolt_env_file=%s\n' "$dolt_env_file"
 printf 'operator_packet_api_unit_sha256=%s\n' "$api_unit_sha256"
 printf 'operator_packet_dolt_unit_sha256=%s\n' "$dolt_unit_sha256"
 printf 'operator_packet_note_01=run guarded commands only on the intended beta host\n'
+if [[ "$next_required_action" == "write_beta_runtime_env" && -s "$runtime_env_packet" ]]; then
+  api_secret_status="$(kv_value runtime_env_packet_api_secretspec_status "$runtime_env_packet")"
+  missing_secret="$(kv_value runtime_env_packet_missing_secret_01 "$runtime_env_packet")"
+  secret_check_unavailable="$(kv_value runtime_env_packet_secret_check_unavailable "$runtime_env_packet")"
+  if [[ -n "$api_secret_status" ]]; then
+    printf 'operator_packet_api_secretspec_status=%s\n' "$api_secret_status"
+  fi
+  if [[ -n "$missing_secret" ]]; then
+    printf 'operator_packet_missing_secret_01=%s\n' "$missing_secret"
+  fi
+  if [[ -n "$secret_check_unavailable" ]]; then
+    printf 'operator_packet_secret_check_unavailable=%s\n' "$secret_check_unavailable"
+  fi
+fi
 case "$next_required_action" in
   generate_current_handoff)
     printf 'operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=%s just gitops-beta-current-handoff summary_output=%s\n' "$RECIPE_REPO_ROOT" "$summary_file"
