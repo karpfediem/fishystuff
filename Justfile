@@ -79,6 +79,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-production-current-handoff-test.sh
   bash scripts/recipes/gitops-beta-current-desired-test.sh
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
+  bash scripts/recipes/gitops-beta-observe-admission-test.sh
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
   bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
@@ -216,6 +217,10 @@ gitops-write-activation-admission-evidence output="data/gitops/production-admiss
 gitops-beta-write-activation-admission-evidence output="data/gitops/beta-admission.evidence.json" summary_file="data/gitops/beta-current.handoff-summary.json" api_upstream="" api_meta_source="" db_probe_file="" site_cdn_probe_file="":
   bash scripts/recipes/gitops-beta-write-activation-admission-evidence.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{api_meta_source}}" "{{db_probe_file}}" "{{site_cdn_probe_file}}"
 
+# Observe beta loopback admission probes and write checked activation evidence. No remote mutation.
+gitops-beta-observe-admission output="data/gitops/beta-admission.evidence.json" summary_file="data/gitops/beta-current.handoff-summary.json" api_upstream="http://127.0.0.1:18192" observation_dir="data/gitops/beta-admission-observations" curl_bin="curl" expected_cdn_base_url="https://cdn.beta.fishystuff.fish/":
+  bash scripts/recipes/gitops-beta-observe-admission.sh "{{output}}" "{{summary_file}}" "{{api_upstream}}" "{{observation_dir}}" "{{curl_bin}}" "{{expected_cdn_base_url}}"
+
 # Derive retained releases from served GitOps state, then generate and validate production-current handoff artifacts.
 gitops-production-current-from-served output="data/gitops/production-current.desired.json" state_dir="/var/lib/fishystuff/gitops" environment="production" retained_output="" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
   bash scripts/recipes/gitops-production-current-from-served.sh "{{output}}" "{{state_dir}}" "{{environment}}" "{{retained_output}}" "{{dolt_ref}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{summary_output}}"
@@ -231,6 +236,10 @@ gitops-beta-current-desired-test:
 # Run fast local regression checks for beta current handoff generation.
 gitops-beta-current-handoff-test:
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
+
+# Run fast local regression checks for beta admission observation.
+gitops-beta-observe-admission-test:
+  bash scripts/recipes/gitops-beta-observe-admission-test.sh
 
 # Run fast local regression checks for beta activation/admission draft generation.
 gitops-beta-activation-draft-test:
