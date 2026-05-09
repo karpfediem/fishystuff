@@ -129,6 +129,8 @@ if [[ "$packet_status" != "ready" ]]; then
   printf 'runtime_env_packet_host_preflight_next_required_action=%s\n' "$(kv_value runtime_env_host_preflight_next_required_action "$host_preflight_output")"
   printf 'runtime_env_packet_host_preflight_current_hostname=%s\n' "$(kv_value runtime_env_host_preflight_current_hostname "$host_preflight_output")"
   printf 'runtime_env_packet_host_preflight_expected_hostname=%s\n' "$(kv_value runtime_env_host_preflight_expected_hostname "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_expected_hostname_match=%s\n' "$(kv_value runtime_env_host_preflight_expected_hostname_match "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_resident_target=%s\n' "$(kv_value runtime_env_host_preflight_resident_target "$host_preflight_output")"
   printf 'runtime_env_packet_host_preflight_path_ready=%s\n' "$(kv_value runtime_env_host_preflight_path_ready "$host_preflight_output")"
   printf 'runtime_env_packet_host_preflight_ready=%s\n' "$(kv_value runtime_env_host_preflight_ready "$host_preflight_output")"
   if [[ -n "$(kv_value runtime_env_host_preflight_next_command_01 "$host_preflight_output")" ]]; then

@@ -74,6 +74,10 @@ if [[ "$runtime_packet_status" != "ready" ]]; then
   if [[ -n "$(kv_value runtime_env_packet_host_preflight_next_required_action "$runtime_packet_output")" ]]; then
     printf 'service_start_packet_host_preflight_status=%s\n' "$(kv_value runtime_env_packet_host_preflight_status "$runtime_packet_output")"
     printf 'service_start_packet_host_preflight_next_required_action=%s\n' "$(kv_value runtime_env_packet_host_preflight_next_required_action "$runtime_packet_output")"
+    printf 'service_start_packet_host_preflight_current_hostname=%s\n' "$(kv_value runtime_env_packet_host_preflight_current_hostname "$runtime_packet_output")"
+    printf 'service_start_packet_host_preflight_expected_hostname=%s\n' "$(kv_value runtime_env_packet_host_preflight_expected_hostname "$runtime_packet_output")"
+    printf 'service_start_packet_host_preflight_expected_hostname_match=%s\n' "$(kv_value runtime_env_packet_host_preflight_expected_hostname_match "$runtime_packet_output")"
+    printf 'service_start_packet_host_preflight_resident_target=%s\n' "$(kv_value runtime_env_packet_host_preflight_resident_target "$runtime_packet_output")"
     printf 'service_start_packet_host_preflight_path_ready=%s\n' "$(kv_value runtime_env_packet_host_preflight_path_ready "$runtime_packet_output")"
     printf 'service_start_packet_host_preflight_ready=%s\n' "$(kv_value runtime_env_packet_host_preflight_ready "$runtime_packet_output")"
     printf 'service_start_packet_host_preflight_next_command_01=%s\n' "$(kv_value runtime_env_packet_host_preflight_next_command_01 "$runtime_packet_output")"

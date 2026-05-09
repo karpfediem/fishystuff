@@ -125,6 +125,10 @@ grep -F "service_start_packet_dolt_status=ready" "${root}/missing-runtime.stdout
 grep -F "service_start_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${root}/missing-api.env dolt_env_file=${dolt_env}" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_status=blocked" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_next_required_action=run_on_expected_beta_host" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_current_hostname=operator-dev" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_expected_hostname=site-nbg1-beta" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_expected_hostname_match=false" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_resident_target=root@beta.fishystuff.fish" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_path_ready=true" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_ready=false" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_next_command_01=just gitops-beta-runtime-env-host-preflight api_env_file=${root}/missing-api.env dolt_env_file=${dolt_env}" "${root}/missing-runtime.stdout" >/dev/null

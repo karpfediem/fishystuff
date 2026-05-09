@@ -362,6 +362,10 @@ if [[ "$service_start_plan_status" == "pending_runtime_env" && -s "$runtime_env_
   secret_check_unavailable="$(kv_value runtime_env_packet_secret_check_unavailable "$runtime_env_packet")"
   host_preflight_status="$(kv_value runtime_env_packet_host_preflight_status "$runtime_env_packet")"
   host_preflight_action="$(kv_value runtime_env_packet_host_preflight_next_required_action "$runtime_env_packet")"
+  host_preflight_current_hostname="$(kv_value runtime_env_packet_host_preflight_current_hostname "$runtime_env_packet")"
+  host_preflight_expected_hostname="$(kv_value runtime_env_packet_host_preflight_expected_hostname "$runtime_env_packet")"
+  host_preflight_expected_match="$(kv_value runtime_env_packet_host_preflight_expected_hostname_match "$runtime_env_packet")"
+  host_preflight_resident_target="$(kv_value runtime_env_packet_host_preflight_resident_target "$runtime_env_packet")"
   host_preflight_path_ready="$(kv_value runtime_env_packet_host_preflight_path_ready "$runtime_env_packet")"
   host_preflight_ready="$(kv_value runtime_env_packet_host_preflight_ready "$runtime_env_packet")"
   host_preflight_next_command="$(kv_value runtime_env_packet_host_preflight_next_command_01 "$runtime_env_packet")"
@@ -372,6 +376,10 @@ if [[ "$service_start_plan_status" == "pending_runtime_env" && -s "$runtime_env_
   if [[ -n "$host_preflight_status" ]]; then
     printf 'operator_packet_runtime_env_host_preflight_status=%s\n' "$host_preflight_status"
     printf 'operator_packet_runtime_env_host_preflight_next_required_action=%s\n' "$host_preflight_action"
+    printf 'operator_packet_runtime_env_host_preflight_current_hostname=%s\n' "$host_preflight_current_hostname"
+    printf 'operator_packet_runtime_env_host_preflight_expected_hostname=%s\n' "$host_preflight_expected_hostname"
+    printf 'operator_packet_runtime_env_host_preflight_expected_hostname_match=%s\n' "$host_preflight_expected_match"
+    printf 'operator_packet_runtime_env_host_preflight_resident_target=%s\n' "$host_preflight_resident_target"
     printf 'operator_packet_runtime_env_host_preflight_path_ready=%s\n' "$host_preflight_path_ready"
     printf 'operator_packet_runtime_env_host_preflight_ready=%s\n' "$host_preflight_ready"
   fi

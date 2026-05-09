@@ -169,6 +169,10 @@ grep -F "operator_packet_status=run_runtime_env_preflight_on_beta_host" "${fixtu
 grep -F "operator_packet_api_secretspec_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_status=blocked" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_next_required_action=run_on_expected_beta_host" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_current_hostname=operator-dev" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_expected_hostname=site-nbg1-beta" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_expected_hostname_match=false" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_resident_target=root@beta.fishystuff.fish" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_path_ready=false" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_ready=false" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_next_command_01=just gitops-beta-runtime-env-host-preflight api_env_file=${fixture_root}/api/runtime.env dolt_env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
