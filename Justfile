@@ -348,6 +348,14 @@ gitops-beta-check-service-bundle service="api" bundle="auto":
 gitops-beta-deploy-credentials-packet:
   @bash scripts/recipes/gitops-beta-deploy-credentials-packet.sh
 
+# Print the reviewed beta resident host provision shape. No hcloud, SSH, or DNS mutation.
+gitops-beta-host-provision-plan host_name="site-nbg1-beta" server_type="cx33" image="debian-13" location="nbg1" datacenter="nbg1-dc3":
+  @bash scripts/recipes/gitops-beta-host-provision-plan.sh "{{host_name}}" "{{server_type}}" "{{image}}" "{{location}}" "{{datacenter}}"
+
+# Run fast local regression checks for the beta host provision packet.
+gitops-beta-host-provision-plan-test:
+  bash scripts/recipes/gitops-beta-host-provision-plan-test.sh
+
 # Generate and store a missing beta deploy SSH key after explicit opt-in. No upload or remote mutation.
 gitops-beta-deploy-key-ensure key_comment="fishystuff-beta-deploy" key_name="fishystuff-beta-deploy":
   bash scripts/recipes/gitops-beta-deploy-key-ensure.sh "{{key_comment}}" "{{key_name}}"
