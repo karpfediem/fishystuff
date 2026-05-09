@@ -432,6 +432,13 @@ publish_symlink() {
   printf '%s_symlink=%s->%s\n' "$label" "$link_path" "$target_path"
 }
 
+prepare_edge_serving_paths() {
+  install -d -m 0711 /var/lib/fishystuff/gitops-beta
+  install -d -m 0755 /var/lib/fishystuff/gitops-beta/served
+  install -d -m 0755 /var/lib/fishystuff/gitops-beta/served/beta
+  printf 'beta_gitops_root_mode=0711:/var/lib/fishystuff/gitops-beta\n'
+}
+
 wait_edge_url() {
   local label="$1"
   local host="$2"
@@ -488,6 +495,7 @@ if [[ "$edge_tls_dir" != "/run/fishystuff/beta-edge/tls" ]]; then
   fail "edge TLS dir must be /run/fishystuff/beta-edge/tls, got: ${edge_tls_dir}"
 fi
 
+prepare_edge_serving_paths
 publish_symlink beta_site "$site_closure" "$edge_site_root"
 publish_symlink beta_cdn "$cdn_runtime_closure" "$edge_cdn_root"
 install -d -m 0700 "$edge_tls_dir"

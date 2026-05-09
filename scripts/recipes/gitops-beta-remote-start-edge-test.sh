@@ -273,6 +273,7 @@ grep -F "remote_edge_service_restart_ok=fishystuff-beta-edge.service" "${root}/e
 grep -F "root@203.0.113.20 ${edge_bundle}" "${root}/push.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-edge-fullchain.pem" "${root}/scp.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-edge-privkey.pem" "${root}/scp.log" >/dev/null
+grep -F "install -d -m 0711 /var/lib/fishystuff/gitops-beta" "${root}/remote.sh" >/dev/null
 grep -F "ln -sfn \"\$target_path\" \"\${link_path}.next\"" "${root}/remote.sh" >/dev/null
 grep -F "systemctl restart fishystuff-beta-edge.service" "${root}/remote.sh" >/dev/null
 grep -F -- "--resolve \"\${host}:443:127.0.0.1\"" "${root}/remote.sh" >/dev/null
