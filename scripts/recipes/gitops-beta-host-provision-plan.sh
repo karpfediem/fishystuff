@@ -132,11 +132,13 @@ fi
 printf 'read_only_check_01=just gitops-beta-deploy-credentials-packet\n'
 printf 'read_only_check_02=just deploy-key-boundary-check\n'
 printf 'read_only_check_03=just gitops-beta-host-bootstrap-plan\n'
-printf 'read_only_check_04=just gitops-beta-first-service-set-packet\n'
+printf 'read_only_check_04=just gitops-beta-host-selection-packet public_ipv4=<new-beta-public-ip>\n'
+printf 'read_only_check_05=just gitops-beta-first-service-set-packet\n'
 printf 'manual_confirmation_step_01=confirm no existing active Hetzner server already owns host_name=%s\n' "$host_name"
 printf 'manual_confirmation_step_02=confirm the beta deploy SSH key is uploaded to Hetzner under host_ssh_key_name=%s\n' "$ssh_key_name"
 printf 'manual_confirmation_step_03=after explicit operator confirmation, provision/select exactly one beta resident host with the fields in this packet\n'
 printf 'manual_confirmation_step_04=use bootstrap_target_recommendation with the new host public IPv4 until beta DNS is intentionally updated\n'
+printf 'manual_confirmation_step_05=feed the confirmed IPv4 into just gitops-beta-host-selection-packet before host-local bootstrap\n'
 printf 'after_host_exists_read_only_step_01=just gitops-beta-runtime-env-host-preflight\n'
 printf 'after_host_exists_guarded_step_01=FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply\n'
 printf 'hcloud_command_emitted=false\n'

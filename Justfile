@@ -356,6 +356,14 @@ gitops-beta-host-provision-plan host_name="site-nbg1-beta" server_type="cx33" im
 gitops-beta-host-provision-plan-test:
   bash scripts/recipes/gitops-beta-host-provision-plan-test.sh
 
+# Bind an operator-confirmed beta host IPv4 to follow-up packet commands. No SSH or DNS mutation.
+gitops-beta-host-selection-packet public_ipv4="" host_name="site-nbg1-beta" ssh_user="root":
+  @bash scripts/recipes/gitops-beta-host-selection-packet.sh "{{public_ipv4}}" "{{host_name}}" "{{ssh_user}}"
+
+# Run fast local regression checks for the beta host selection packet.
+gitops-beta-host-selection-packet-test:
+  bash scripts/recipes/gitops-beta-host-selection-packet-test.sh
+
 # Generate and store a missing beta deploy SSH key after explicit opt-in. No upload or remote mutation.
 gitops-beta-deploy-key-ensure key_comment="fishystuff-beta-deploy" key_name="fishystuff-beta-deploy":
   bash scripts/recipes/gitops-beta-deploy-key-ensure.sh "{{key_comment}}" "{{key_name}}"
