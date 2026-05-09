@@ -12,6 +12,7 @@ summary_file="$(normalize_named_arg summary_file "${4:-data/gitops/beta-current.
 push_bin="$(normalize_named_arg push_bin "${5:-scripts/recipes/push-closure.sh}")"
 ssh_bin="$(normalize_named_arg ssh_bin "${6:-${FISHYSTUFF_GITOPS_SSH_BIN:-ssh}}")"
 scp_bin="$(normalize_named_arg scp_bin "${7:-${FISHYSTUFF_GITOPS_SCP_BIN:-scp}}")"
+tls_mode="${FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE:-placeholder}"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -219,11 +220,21 @@ generate_placeholder_tls() {
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS 1
-require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_PLACEHOLDER_TLS 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART 1
 require_env_value FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET "$target"
 require_env_nonempty FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256
+case "$tls_mode" in
+  placeholder)
+    require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_PLACEHOLDER_TLS 1
+    ;;
+  existing)
+    require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_EXISTING_TLS 1
+    ;;
+  *)
+    fail "FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE must be placeholder or existing, got: ${tls_mode}"
+    ;;
+esac
 require_beta_deploy_profile
 assert_deployment_configuration_safe beta
 assert_beta_infra_cluster_dns_scope_safe
@@ -231,7 +242,9 @@ require_safe_target "$target"
 require_expected_hostname "$expected_hostname"
 require_command_or_executable jq jq
 require_command_or_executable awk awk
-require_command_or_executable openssl openssl
+if [[ "$tls_mode" == "placeholder" ]]; then
+  require_command_or_executable openssl openssl
+fi
 require_command_or_executable "$ssh_bin" ssh_bin
 require_command_or_executable "$scp_bin" scp_bin
 push_command=()
@@ -308,7 +321,13 @@ require_store_path edge_unit_source "$edge_unit_source"
 
 placeholder_fullchain="${tmp_dir}/fullchain.pem"
 placeholder_privkey="${tmp_dir}/privkey.pem"
-generate_placeholder_tls "$placeholder_fullchain" "$placeholder_privkey" "${tmp_dir}/openssl.log"
+remote_fullchain=""
+remote_privkey=""
+if [[ "$tls_mode" == "placeholder" ]]; then
+  generate_placeholder_tls "$placeholder_fullchain" "$placeholder_privkey" "${tmp_dir}/openssl.log"
+  remote_fullchain="/tmp/fishystuff-beta-edge-fullchain.pem"
+  remote_privkey="/tmp/fishystuff-beta-edge-privkey.pem"
+fi
 
 printf 'gitops_beta_remote_start_edge_checked=true\n'
 printf 'deployment=beta\n'
@@ -322,7 +341,10 @@ printf 'edge_unit_source=%s\n' "$edge_unit_source"
 printf 'edge_unit_sha256=%s\n' "$edge_unit_sha256"
 printf 'site_closure=%s\n' "$site_closure"
 printf 'cdn_runtime_closure=%s\n' "$cdn_runtime_closure"
-printf 'tls_mode=placeholder_self_signed\n'
+case "$tls_mode" in
+  placeholder) printf 'tls_mode=placeholder_self_signed\n' ;;
+  existing) printf 'tls_mode=existing_remote\n' ;;
+esac
 
 "${push_command[@]}" "$target" "$edge_bundle_resolved"
 
@@ -333,10 +355,10 @@ ssh_common=(
   -o UserKnownHostsFile="$known_hosts"
 )
 
-remote_fullchain="/tmp/fishystuff-beta-edge-fullchain.pem"
-remote_privkey="/tmp/fishystuff-beta-edge-privkey.pem"
-"$scp_bin" "${ssh_common[@]}" "$placeholder_fullchain" "${target}:${remote_fullchain}"
-"$scp_bin" "${ssh_common[@]}" "$placeholder_privkey" "${target}:${remote_privkey}"
+if [[ "$tls_mode" == "placeholder" ]]; then
+  "$scp_bin" "${ssh_common[@]}" "$placeholder_fullchain" "${target}:${remote_fullchain}"
+  "$scp_bin" "${ssh_common[@]}" "$placeholder_privkey" "${target}:${remote_privkey}"
+fi
 
 "$ssh_bin" "${ssh_common[@]}" "$target" bash -s -- \
   "$expected_hostname" \
@@ -352,7 +374,8 @@ remote_privkey="/tmp/fishystuff-beta-edge-privkey.pem"
   "$remote_fullchain" \
   "$remote_privkey" \
   "$release_id" \
-  "$dolt_commit" <<'REMOTE'
+  "$dolt_commit" \
+  "$tls_mode" <<'REMOTE'
 set -euo pipefail
 
 expected_hostname="$1"
@@ -369,6 +392,7 @@ remote_fullchain="${11}"
 remote_privkey="${12}"
 release_id="${13}"
 dolt_commit="${14}"
+tls_mode="${15}"
 
 fail() {
   echo "$1" >&2
@@ -417,6 +441,49 @@ require_sha256() {
   if [[ "$actual" != "$expected" ]]; then
     fail "${label} sha256 mismatch: expected ${expected}, got ${actual}"
   fi
+}
+
+require_cert_san() {
+  local cert_text="$1"
+  local hostname="$2"
+
+  if ! grep -F "DNS:${hostname}" <<<"$cert_text" >/dev/null; then
+    fail "beta edge TLS certificate is missing SAN DNS:${hostname}"
+  fi
+}
+
+require_matching_cert_key() {
+  local fullchain="$1"
+  local privkey="$2"
+  local cert_pub_hash=""
+  local key_pub_hash=""
+
+  cert_pub_hash="$(openssl x509 -in "$fullchain" -pubkey -noout | openssl sha256)"
+  key_pub_hash="$(openssl pkey -in "$privkey" -pubout | openssl sha256)"
+  if [[ "$cert_pub_hash" != "$key_pub_hash" ]]; then
+    fail "beta edge TLS private key does not match certificate public key"
+  fi
+}
+
+validate_existing_tls() {
+  local fullchain="$1"
+  local privkey="$2"
+  local cert_text=""
+
+  if ! command -v openssl >/dev/null 2>&1; then
+    fail "openssl is required for beta edge existing TLS validation"
+  fi
+  require_file "existing TLS fullchain" "$fullchain"
+  require_file "existing TLS private key" "$privkey"
+  if ! openssl x509 -checkend 604800 -noout -in "$fullchain" >/dev/null; then
+    fail "beta edge TLS certificate expires within 7 days"
+  fi
+  cert_text="$(openssl x509 -in "$fullchain" -noout -text)"
+  require_cert_san "$cert_text" beta.fishystuff.fish
+  require_cert_san "$cert_text" api.beta.fishystuff.fish
+  require_cert_san "$cert_text" cdn.beta.fishystuff.fish
+  require_cert_san "$cert_text" telemetry.beta.fishystuff.fish
+  require_matching_cert_key "$fullchain" "$privkey"
 }
 
 publish_symlink() {
@@ -478,9 +545,18 @@ require_store_path "edge bundle" "$edge_bundle"
 require_store_path "edge unit source" "$edge_unit_source"
 require_store_path "site closure" "$site_closure"
 require_store_path "CDN runtime closure" "$cdn_runtime_closure"
-require_file "placeholder TLS fullchain" "$remote_fullchain"
-require_file "placeholder TLS private key" "$remote_privkey"
 require_sha256 "edge unit source" "$edge_unit_source" "$edge_unit_sha256"
+case "$tls_mode" in
+  placeholder)
+    require_file "placeholder TLS fullchain" "$remote_fullchain"
+    require_file "placeholder TLS private key" "$remote_privkey"
+    ;;
+  existing)
+    ;;
+  *)
+    fail "beta edge TLS mode must be placeholder or existing, got: ${tls_mode}"
+    ;;
+esac
 
 if [[ "$edge_unit_install_path" != "/etc/systemd/system/fishystuff-beta-edge.service" ]]; then
   fail "edge unit install path must be /etc/systemd/system/fishystuff-beta-edge.service, got: ${edge_unit_install_path}"
@@ -499,9 +575,18 @@ prepare_edge_serving_paths
 publish_symlink beta_site "$site_closure" "$edge_site_root"
 publish_symlink beta_cdn "$cdn_runtime_closure" "$edge_cdn_root"
 install -d -m 0700 "$edge_tls_dir"
-install -m 0644 "$remote_fullchain" "${edge_tls_dir}/fullchain.pem"
-install -m 0600 "$remote_privkey" "${edge_tls_dir}/privkey.pem"
-rm -f "$remote_fullchain" "$remote_privkey"
+case "$tls_mode" in
+  placeholder)
+    install -m 0644 "$remote_fullchain" "${edge_tls_dir}/fullchain.pem"
+    install -m 0600 "$remote_privkey" "${edge_tls_dir}/privkey.pem"
+    rm -f "$remote_fullchain" "$remote_privkey"
+    ;;
+  existing)
+    validate_existing_tls "${edge_tls_dir}/fullchain.pem" "${edge_tls_dir}/privkey.pem"
+    chmod 0644 "${edge_tls_dir}/fullchain.pem"
+    chmod 0600 "${edge_tls_dir}/privkey.pem"
+    ;;
+esac
 install -D -m 0644 "$edge_unit_source" "$edge_unit_install_path"
 systemctl daemon-reload
 systemctl restart fishystuff-beta-edge.service
@@ -517,7 +602,10 @@ fi
 
 printf 'remote_hostname=%s\n' "$(hostname)"
 printf 'remote_edge_served_links_ok=true\n'
-printf 'remote_edge_placeholder_tls_installed=true\n'
+case "$tls_mode" in
+  placeholder) printf 'remote_edge_placeholder_tls_installed=true\n' ;;
+  existing) printf 'remote_edge_existing_tls_preserved=true\n' ;;
+esac
 printf 'remote_edge_service_install_ok=fishystuff-beta-edge.service\n'
 printf 'remote_edge_service_restart_ok=fishystuff-beta-edge.service\n'
 printf 'remote_edge_api_meta_contains_dolt_commit=true\n'

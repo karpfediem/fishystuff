@@ -392,7 +392,7 @@ gitops-beta-remote-materialize-dolt-ref target="" expected_hostname="site-nbg1-b
 gitops-beta-remote-start-services target="" expected_hostname="site-nbg1-beta" summary_file="data/gitops/beta-current.handoff-summary.json" ssh_bin="ssh":
   bash scripts/recipes/gitops-beta-remote-start-services.sh "{{target}}" "{{expected_hostname}}" "{{summary_file}}" "{{ssh_bin}}"
 
-# Copy and start the checked beta edge service on the fresh beta host with placeholder TLS for origin smoke. Remote host mutation.
+# Copy and start the checked beta edge service on the beta host with explicit placeholder or existing TLS mode. Remote host mutation.
 gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_bundle="auto" summary_file="data/gitops/beta-current.handoff-summary.json" push_bin="scripts/recipes/push-closure.sh" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-start-edge.sh "{{target}}" "{{expected_hostname}}" "{{edge_bundle}}" "{{summary_file}}" "{{push_bin}}" "{{ssh_bin}}" "{{scp_bin}}"
 

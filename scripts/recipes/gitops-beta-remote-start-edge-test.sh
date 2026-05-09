@@ -179,6 +179,7 @@ cdn_closure="${root}/cdn"
 summary="${root}/beta-current.handoff-summary.json"
 fake_push="${root}/push-closure.sh"
 fake_ssh="${root}/ssh"
+fake_ssh_existing="${root}/ssh-existing"
 fake_scp="${root}/scp"
 
 make_beta_edge_bundle "$edge_bundle"
@@ -248,6 +249,24 @@ printf 'local_host_mutation_performed=false\n'
 SSH
 chmod +x "$fake_ssh"
 
+cat >"$fake_ssh_existing" <<'SSH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FISHYSTUFF_FAKE_REMOTE_LOG:?}"
+cat >"${FISHYSTUFF_FAKE_REMOTE_STDIN:?}"
+printf 'remote_hostname=site-nbg1-beta\n'
+printf 'remote_edge_served_links_ok=true\n'
+printf 'remote_edge_existing_tls_preserved=true\n'
+printf 'remote_edge_service_install_ok=fishystuff-beta-edge.service\n'
+printf 'remote_edge_service_restart_ok=fishystuff-beta-edge.service\n'
+printf 'remote_edge_api_meta_contains_dolt_commit=true\n'
+printf 'remote_host_mutation_performed=true\n'
+printf 'remote_deploy_performed=false\n'
+printf 'infrastructure_mutation_performed=false\n'
+printf 'local_host_mutation_performed=false\n'
+SSH
+chmod +x "$fake_ssh_existing"
+
 env \
   FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
   FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 \
@@ -279,6 +298,38 @@ grep -F "systemctl restart fishystuff-beta-edge.service" "${root}/remote.sh" >/d
 grep -F -- "--resolve \"\${host}:443:127.0.0.1\"" "${root}/remote.sh" >/dev/null
 grep -F "https://api.beta.fishystuff.fish/api/v1/meta" "${root}/remote.sh" >/dev/null
 pass "remote edge start is explicit, beta-targeted, and origin-smoke only"
+
+env \
+  FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 \
+  FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE=existing \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_EXISTING_TLS=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 \
+  FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@203.0.113.20 \
+  FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256="$edge_unit_sha256" \
+  FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_ALLOW_FIXTURE_PATHS=1 \
+  HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
+  FISHYSTUFF_FAKE_PUSH_LOG="${root}/push-existing.log" \
+  FISHYSTUFF_FAKE_SCP_LOG="${root}/scp-existing.log" \
+  FISHYSTUFF_FAKE_REMOTE_LOG="${root}/remote-existing.log" \
+  FISHYSTUFF_FAKE_REMOTE_STDIN="${root}/remote-existing.sh" \
+  bash scripts/recipes/gitops-beta-remote-start-edge.sh root@203.0.113.20 site-nbg1-beta "$edge_bundle" "$summary" "$fake_push" "$fake_ssh_existing" "$fake_scp" >"${root}/edge-existing.out"
+grep -F "gitops_beta_remote_start_edge_checked=true" "${root}/edge-existing.out" >/dev/null
+grep -F "gitops_beta_remote_start_edge_ok=true" "${root}/edge-existing.out" >/dev/null
+grep -F "tls_mode=existing_remote" "${root}/edge-existing.out" >/dev/null
+grep -F "remote_edge_existing_tls_preserved=true" "${root}/edge-existing.out" >/dev/null
+grep -F "root@203.0.113.20 ${edge_bundle}" "${root}/push-existing.log" >/dev/null
+if [[ -s "${root}/scp-existing.log" ]]; then
+  printf '[gitops-beta-remote-start-edge-test] existing TLS mode must not copy placeholder TLS\n' >&2
+  cat "${root}/scp-existing.log" >&2
+  exit 1
+fi
+grep -F "validate_existing_tls \"\${edge_tls_dir}/fullchain.pem\" \"\${edge_tls_dir}/privkey.pem\"" "${root}/remote-existing.sh" >/dev/null
+grep -F "remote_edge_existing_tls_preserved=true" "${root}/remote-existing.sh" >/dev/null
+pass "remote edge start can preserve existing trusted TLS"
 
 base_env=(
   FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy
@@ -314,6 +365,40 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 \
+    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@203.0.113.20 \
+    FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256="$edge_unit_sha256" \
+    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_ALLOW_FIXTURE_PATHS=1 \
+    HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
+    bash scripts/recipes/gitops-beta-remote-start-edge.sh root@203.0.113.20 site-nbg1-beta "$edge_bundle" "$summary" "$fake_push" "$fake_ssh" "$fake_scp"
+
+expect_fail_contains \
+  "requires existing TLS opt-in" \
+  "gitops-beta-remote-start-edge requires FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_EXISTING_TLS=1" \
+  env \
+    FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 \
+    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE=existing \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 \
+    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@203.0.113.20 \
+    FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256="$edge_unit_sha256" \
+    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_ALLOW_FIXTURE_PATHS=1 \
+    HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
+    bash scripts/recipes/gitops-beta-remote-start-edge.sh root@203.0.113.20 site-nbg1-beta "$edge_bundle" "$summary" "$fake_push" "$fake_ssh" "$fake_scp"
+
+expect_fail_contains \
+  "rejects invalid TLS mode" \
+  "FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE must be placeholder or existing" \
+  env \
+    FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 \
+    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 \
+    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE=invalid \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 \
     FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 \
     FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@203.0.113.20 \
