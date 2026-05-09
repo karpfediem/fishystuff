@@ -28,6 +28,8 @@ just gitops-beta-activation-draft
 just gitops-beta-activation-draft-test
 just gitops-beta-host-handoff-plan
 just gitops-beta-host-handoff-plan-test
+just gitops-beta-verify-activation-served
+just gitops-beta-verify-activation-served-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -89,8 +91,10 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, and beta API upstream. It intentionally reports `beta_apply_gate_available=false`; consuming the draft on a host still requires the next beta operator-proof/apply gate slice.
 
+`just gitops-beta-verify-activation-served` is the read-only served-state check for the beta path. It refuses non-beta handoff summaries, then verifies that the local beta served documents under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta` still match the checked beta activation draft, admission evidence, selected host, selected release, route, admission, and roots-ready state.
+
 Next pieces to add:
 
 1. beta operator-proof and local apply gate wrappers parameterized from the production path
-2. environment-parametric served verification/proof indexing for beta
+2. beta served proof/proof-index wrappers around the served verifier
 3. only then, a separate manually confirmed host bootstrap path

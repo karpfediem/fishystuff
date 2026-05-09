@@ -81,6 +81,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
   bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
+  bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -159,6 +160,10 @@ gitops-apply-activation-draft draft_file="data/gitops/production-activation.draf
 # Verify local served GitOps state still matches the checked production activation draft.
 gitops-verify-activation-served draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops":
   bash scripts/recipes/gitops-verify-activation-served.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}"
+
+# Verify local served beta GitOps state still matches the checked beta activation draft.
+gitops-beta-verify-activation-served draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops-beta" run_dir="/run/fishystuff/gitops-beta":
+  bash scripts/recipes/gitops-beta-verify-activation-served.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{deploy_bin}}" "{{state_dir}}" "{{run_dir}}"
 
 # Write a timestamped proof that served state matches the checked activation and operator proof.
 gitops-production-served-proof output_dir="data/gitops" draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" proof_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" proof_max_age_seconds="86400":
@@ -267,6 +272,10 @@ gitops-check-production-operator-proof-test:
 # Run fast local regression checks for production GitOps served proofs.
 gitops-production-served-proof-test:
   bash scripts/recipes/gitops-production-served-proof-test.sh
+
+# Run fast local regression checks for beta GitOps served verification.
+gitops-beta-verify-activation-served-test:
+  bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
 
 # Run fast local regression checks for production GitOps proof indexing.
 gitops-production-proof-index-test:

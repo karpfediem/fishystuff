@@ -42,12 +42,12 @@ fi
 
 bash scripts/recipes/gitops-check-activation-draft.sh "$draft_file" "$summary_file" "$admission_file" "$deploy_bin"
 
-environment="production"
-release_id="$(jq -er '.environments.production.active_release | select(type == "string" and length > 0)' "$draft_file")"
-host="$(jq -er '.environments.production.host | select(type == "string" and length > 0)' "$draft_file")"
+environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
+release_id="$(jq -er --arg environment "$environment" '.environments[$environment].active_release | select(type == "string" and length > 0)' "$draft_file")"
+host="$(jq -er --arg environment "$environment" '.environments[$environment].host | select(type == "string" and length > 0)' "$draft_file")"
 generation="$(jq -er '.generation | select(type == "number")' "$draft_file")"
-api_upstream="$(jq -er '.environments.production.api_upstream | select(type == "string" and length > 0)' "$draft_file")"
-admission_url="$(jq -er '.environments.production.admission_probe.url | select(type == "string" and length > 0)' "$draft_file")"
+api_upstream="$(jq -er --arg environment "$environment" '.environments[$environment].api_upstream | select(type == "string" and length > 0)' "$draft_file")"
+admission_url="$(jq -er --arg environment "$environment" '.environments[$environment].admission_probe.url | select(type == "string" and length > 0)' "$draft_file")"
 
 bash scripts/recipes/gitops-inspect-served.sh "$deploy_bin" "$environment" "$state_dir" "$run_dir" "$host" "$release_id"
 
@@ -127,6 +127,7 @@ if ! jq -e \
 fi
 
 printf 'gitops_activation_served_ok=%s\n' "$release_id"
+printf 'gitops_activation_served_environment=%s\n' "$environment"
 printf 'gitops_activation_served_generation=%s\n' "$generation"
 printf 'gitops_activation_served_state_dir=%s\n' "$state_dir"
 printf 'gitops_activation_served_run_dir=%s\n' "$run_dir"
