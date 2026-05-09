@@ -86,6 +86,42 @@ grep -F "gitops_beta_runtime_env_database=loopback-dolt-beta" "${root}/check-api
 grep -F "gitops_beta_runtime_env_public_cdn_base_url=https://cdn.beta.fishystuff.fish" "${root}/check-api.stdout" >/dev/null
 pass "check beta API runtime env"
 
+fake_bin="${root}/fake-bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/secretspec" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$#" -lt 5 || "$1" != "run" || "$2" != "--profile" || "$3" != "beta-runtime" || "$4" != "--" ]]; then
+  echo "unexpected fake secretspec invocation: $*" >&2
+  exit 89
+fi
+
+shift 4
+export FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL="mysql://fishy:secret@127.0.0.1:3316/fishystuff"
+exec "$@"
+EOF
+chmod +x "${fake_bin}/secretspec"
+
+secret_api_env="${root}/api/runtime-from-secretspec.env"
+env \
+  PATH="${fake_bin}:$PATH" \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 \
+  bash scripts/recipes/gitops-beta-write-runtime-env-secretspec.sh api "$secret_api_env" beta-runtime >"${root}/write-api-secretspec.stdout"
+grep -F "gitops_beta_runtime_env_write_ok=${secret_api_env}" "${root}/write-api-secretspec.stdout" >/dev/null
+grep -Fx "FISHYSTUFF_DATABASE_URL='mysql://fishy:secret@127.0.0.1:3316/fishystuff'" "$secret_api_env" >/dev/null
+pass "write beta API runtime env through SecretSpec wrapper"
+
+expect_fail_contains \
+  "reject broad SecretSpec profile for beta API runtime env" \
+  "gitops-beta-write-runtime-env-secretspec requires profile=beta-runtime" \
+  bash scripts/recipes/gitops-beta-write-runtime-env-secretspec.sh api "$secret_api_env" beta-deploy
+
+expect_fail_contains \
+  "reject SecretSpec wrapper for Dolt runtime env" \
+  "gitops-beta-write-runtime-env-secretspec only supports service=api" \
+  bash scripts/recipes/gitops-beta-write-runtime-env-secretspec.sh dolt "$dolt_env" beta-runtime
+
 bad_api_env="${root}/bad-api.env"
 cat >"$bad_api_env" <<'EOF'
 FISHYSTUFF_DATABASE_URL='mysql://fishy:secret@127.0.0.1:3316/fishystuff'

@@ -301,7 +301,7 @@ gitops-beta-write-runtime-env service="api" output="":
 
 # Write the beta runtime env through a narrow SecretSpec profile after explicit opt-in.
 gitops-beta-write-runtime-env-secretspec service="api" output="" profile="beta-runtime":
-  p='{{profile}}'; p="${p#profile=}"; secretspec run --profile "$p" -- bash scripts/recipes/gitops-beta-write-runtime-env.sh "{{service}}" "{{output}}"
+  bash scripts/recipes/gitops-beta-write-runtime-env-secretspec.sh "{{service}}" "{{output}}" "{{profile}}"
 
 # Validate the beta API or Dolt runtime env file. No mutation.
 gitops-beta-check-runtime-env service="api" env_file="":
