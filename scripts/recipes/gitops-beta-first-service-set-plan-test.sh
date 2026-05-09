@@ -62,6 +62,7 @@ bash scripts/recipes/gitops-beta-first-service-set-plan.sh \
 grep -F "gitops_beta_first_service_set_plan_ok=true" "${root}/pending.stdout" >/dev/null
 grep -F "service_start_plan_status=pending_explicit_bundles" "${root}/pending.stdout" >/dev/null
 grep -F "handoff_summary_status=missing" "${root}/pending.stdout" >/dev/null
+grep -F "next_required_action=generate_current_handoff" "${root}/pending.stdout" >/dev/null
 grep -F "admission_evidence_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "activation_draft_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${root}/pending.stdout" >/dev/null
@@ -139,6 +140,7 @@ grep -F "service_start_plan_missing_api_runtime_env=${fixture_root}/api/runtime.
 grep -F "admission_evidence_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "activation_draft_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "next_required_action=write_beta_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null

@@ -140,10 +140,12 @@ run_service_start_plan_if_ready() {
   local output="$1"
 
   if [[ "$api_bundle" == "auto" || "$dolt_bundle" == "auto" ]]; then
+    service_start_plan_status="pending_explicit_bundles"
     printf 'service_start_plan_status=pending_explicit_bundles\n'
     return
   fi
   if [[ ! -f "$api_env_file" || ! -f "$dolt_env_file" ]]; then
+    service_start_plan_status="pending_runtime_env"
     printf 'service_start_plan_status=pending_runtime_env\n'
     if [[ ! -f "$dolt_env_file" ]]; then
       printf 'service_start_plan_missing_dolt_runtime_env=%s\n' "$dolt_env_file"
@@ -162,6 +164,7 @@ run_service_start_plan_if_ready() {
   require_kv_equals remote_deploy_performed "$output" false
   require_kv_equals infrastructure_mutation_performed "$output" false
   require_kv_equals local_host_mutation_performed "$output" false
+  service_start_plan_status="ready"
   printf 'service_start_plan_status=ready\n'
 }
 
@@ -200,6 +203,7 @@ current_handoff_plan="${tmp_dir}/current-handoff-plan.out"
 service_start_plan="${tmp_dir}/service-start-plan.out"
 proof_index="${tmp_dir}/proof-index.out"
 : >"$service_start_plan"
+service_start_plan_status="unknown"
 
 bash scripts/recipes/gitops-beta-host-bootstrap-plan.sh >"$bootstrap_plan"
 require_kv_equals remote_deploy_performed "$bootstrap_plan" false
@@ -257,12 +261,34 @@ fi
 printf 'activation_draft_status=%s\n' "$draft_status"
 print_file_status activation_draft "$draft_file"
 
+proof_index_complete="false"
 if bash scripts/recipes/gitops-beta-proof-index.sh "$proof_dir" 86400 false >"$proof_index"; then
   awk -F= '$1 ~ /^(gitops_proof_index_|gitops_beta_proof_index_)/ { print }' "$proof_index"
+  proof_index_complete="$(kv_value gitops_beta_proof_index_complete "$proof_index")"
 else
   echo "beta proof index read failed" >&2
   exit 2
 fi
+
+next_required_action="inspect_plan"
+if [[ "$summary_status" != "ready" ]]; then
+  next_required_action="generate_current_handoff"
+elif [[ "$service_start_plan_status" == "pending_explicit_bundles" ]]; then
+  next_required_action="provide_service_bundle_paths"
+elif [[ "$service_start_plan_status" == "pending_runtime_env" ]]; then
+  next_required_action="write_beta_runtime_env"
+elif [[ "$service_start_plan_status" != "ready" ]]; then
+  next_required_action="fix_service_start_plan"
+elif [[ "$admission_status" != "ready" ]]; then
+  next_required_action="observe_beta_admission"
+elif [[ "$draft_status" != "ready" ]]; then
+  next_required_action="write_activation_draft"
+elif [[ "$proof_index_complete" != "true" ]]; then
+  next_required_action="publish_beta_operator_and_served_proofs"
+else
+  next_required_action="review_edge_install"
+fi
+printf 'next_required_action=%s\n' "$next_required_action"
 
 api_unit_sha256="$(kv_value gitops_beta_service_start_plan_api_unit_sha256 "$service_start_plan")"
 dolt_unit_sha256="$(kv_value gitops_beta_service_start_plan_dolt_unit_sha256 "$service_start_plan")"
