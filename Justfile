@@ -396,6 +396,10 @@ gitops-beta-remote-start-services target="" expected_hostname="site-nbg1-beta" s
 gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_bundle="auto" summary_file="data/gitops/beta-current.handoff-summary.json" push_bin="scripts/recipes/push-closure.sh" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-start-edge.sh "{{target}}" "{{expected_hostname}}" "{{edge_bundle}}" "{{summary_file}}" "{{push_bin}}" "{{ssh_bin}}" "{{scp_bin}}"
 
+# Install operator-supplied beta edge TLS material on the fresh beta host. Remote host mutation.
+gitops-beta-remote-install-edge-tls target="" expected_hostname="site-nbg1-beta" fullchain="" privkey="" ssh_bin="ssh" scp_bin="scp":
+  bash scripts/recipes/gitops-beta-remote-install-edge-tls.sh "{{target}}" "{{expected_hostname}}" "{{fullchain}}" "{{privkey}}" "{{ssh_bin}}" "{{scp_bin}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
@@ -423,6 +427,10 @@ gitops-beta-remote-start-services-test:
 # Run fast local regression checks for remote beta edge starting.
 gitops-beta-remote-start-edge-test:
   bash scripts/recipes/gitops-beta-remote-start-edge-test.sh
+
+# Run fast local regression checks for remote beta edge TLS installation.
+gitops-beta-remote-install-edge-tls-test:
+  bash scripts/recipes/gitops-beta-remote-install-edge-tls-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
