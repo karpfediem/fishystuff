@@ -135,4 +135,66 @@ if grep -E '^(phase_|read_only_step_|guarded_host_action_|guarded_runtime_env_ac
 fi
 pass "runtime env preflight packet"
 
+cat >"${fake_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+printf 'site-nbg1-beta\n'
+EOF
+chmod +x "${fake_bin}/hostname"
+
+host_root="${root}/host-runtime"
+host_api_env="${host_root}/api/runtime.env"
+host_dolt_env="${host_root}/dolt/beta.env"
+
+bash scripts/recipes/gitops-beta-first-service-set-packet.sh \
+  "$summary" \
+  "$admission" \
+  "$draft" \
+  "$proofs" \
+  auto \
+  auto \
+  auto \
+  "$host_api_env" \
+  "$host_dolt_env" \
+  "http://127.0.0.1:18192" \
+  "${fixture_root}/observations" \
+  >"${fixture_root}/bootstrap-packet.stdout"
+
+grep -F "next_required_action=bootstrap_beta_host" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "operator_packet_status=bootstrap_beta_host" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_next_required_action=bootstrap_beta_host" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "operator_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "operator_packet_after_success_command=just gitops-beta-runtime-env-host-preflight api_env_file=${host_api_env} dolt_env_file=${host_dolt_env}" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "remote_deploy_performed=false" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "infrastructure_mutation_performed=false" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+grep -F "local_host_mutation_performed=false" "${fixture_root}/bootstrap-packet.stdout" >/dev/null
+pass "runtime env bootstrap packet"
+
+mkdir -p "${host_root}/api" "${host_root}/dolt"
+bash scripts/recipes/gitops-beta-first-service-set-packet.sh \
+  "$summary" \
+  "$admission" \
+  "$draft" \
+  "$proofs" \
+  auto \
+  auto \
+  auto \
+  "$host_api_env" \
+  "$host_dolt_env" \
+  "http://127.0.0.1:18192" \
+  "${fixture_root}/observations" \
+  >"${fixture_root}/write-env-packet.stdout"
+
+grep -F "next_required_action=write_beta_runtime_env" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_status=write_beta_runtime_env" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_next_required_action=write_beta_runtime_env" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_ready=true" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${host_api_env} dolt_env_file=${host_dolt_env}" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${host_dolt_env}" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${host_api_env} profile=beta-runtime" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "operator_packet_after_success_command=just gitops-beta-service-start-packet api_bundle=${fixture_root}/active-api dolt_bundle=${fixture_root}/active-dolt-service api_env_file=${host_api_env} dolt_env_file=${host_dolt_env} summary_file=${summary}" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "remote_deploy_performed=false" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "infrastructure_mutation_performed=false" "${fixture_root}/write-env-packet.stdout" >/dev/null
+grep -F "local_host_mutation_performed=false" "${fixture_root}/write-env-packet.stdout" >/dev/null
+pass "runtime env write packet"
+
 printf '[gitops-beta-first-service-set-packet-test] %s checks passed\n' "$pass_count"
