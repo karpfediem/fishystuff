@@ -8,6 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 proof_dir="$(normalize_named_arg proof_dir "${1-data/gitops}")"
 max_age_seconds="$(normalize_named_arg max_age_seconds "${2-86400}")"
 require_complete="$(normalize_named_arg require_complete "${3-false}")"
+environment="$(normalize_named_arg environment "${4-${FISHYSTUFF_GITOPS_ENVIRONMENT:-production}}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -85,12 +86,24 @@ case "$require_complete" in
     exit 2
     ;;
 esac
+case "$environment" in
+  production | beta) ;;
+  *)
+    echo "unsupported GitOps proof index environment: ${environment}" >&2
+    exit 2
+    ;;
+esac
+index_key_prefix="gitops_${environment}_proof_index"
+served_proof_schema="fishystuff.gitops.${environment}-served-proof.v1"
 
 proof_dir="$(absolute_path "$proof_dir")"
 if [[ ! -d "$proof_dir" ]]; then
-  printf 'gitops_production_proof_index_status=missing_proof_dir\n'
-  printf 'gitops_production_proof_index_dir=%s\n' "$proof_dir"
-  printf 'gitops_production_proof_index_complete=false\n'
+  printf 'gitops_proof_index_status=missing_proof_dir\n'
+  printf 'gitops_proof_index_dir=%s\n' "$proof_dir"
+  printf 'gitops_proof_index_complete=false\n'
+  printf '%s_status=missing_proof_dir\n' "$index_key_prefix"
+  printf '%s_dir=%s\n' "$index_key_prefix" "$proof_dir"
+  printf '%s_complete=false\n' "$index_key_prefix"
   printf 'remote_deploy_performed=false\n'
   printf 'infrastructure_mutation_performed=false\n'
   if [[ "$require_complete" == "true" ]]; then
@@ -99,8 +112,8 @@ if [[ ! -d "$proof_dir" ]]; then
   exit 0
 fi
 
-operator_proof="$(latest_file "$proof_dir" 'production-operator-proof.*.json')"
-served_proof="$(latest_file "$proof_dir" 'production-served-proof.*.json')"
+operator_proof="$(latest_file "$proof_dir" "${environment}-operator-proof.*.json")"
+served_proof="$(latest_file "$proof_dir" "${environment}-served-proof.*.json")"
 status="complete"
 complete="true"
 
@@ -141,7 +154,7 @@ else
   operator_summary_file="$(jq -er '.inputs.summary_file // ""' "$operator_proof" 2>/dev/null || true)"
   operator_admission_file="$(jq -er '.inputs.admission_file // ""' "$operator_proof" 2>/dev/null || true)"
   operator_release_id="$(jq -er '.commands.host_handoff_plan.kv.release_id // ""' "$operator_proof" 2>/dev/null || true)"
-  if bash scripts/recipes/gitops-check-production-operator-proof.sh "$operator_proof" "$max_age_seconds" "" >"$operator_check_output" 2>"$operator_check_stderr"; then
+  if bash scripts/recipes/gitops-check-production-operator-proof.sh "$operator_proof" "$max_age_seconds" "" "$environment" >"$operator_check_output" 2>"$operator_check_stderr"; then
     operator_check_status="passed"
   else
     operator_check_status="failed"
@@ -163,8 +176,12 @@ else
   served_operator_proof_sha256="$(jq -er '.inputs.operator_proof_sha256 // ""' "$served_proof" 2>/dev/null || true)"
   served_release_id="$(jq -er '.served.release_id // ""' "$served_proof" 2>/dev/null || true)"
   served_generation="$(jq -er '.served.generation // ""' "$served_proof" 2>/dev/null || true)"
-  if jq -e '
-    .schema == "fishystuff.gitops.production-served-proof.v1"
+  if jq -e \
+    --arg schema "$served_proof_schema" \
+    --arg environment "$environment" \
+    '
+    .schema == $schema
+    and .environment == $environment
     and .remote_deploy_performed == false
     and .infrastructure_mutation_performed == false
     and .commands.operator_proof_check.success == true
@@ -199,28 +216,36 @@ if [[ "$operator_check_status" == "passed" && "$served_schema_status" == "passed
   complete="true"
 fi
 
-printf 'gitops_production_proof_index_status=%s\n' "$status"
-printf 'gitops_production_proof_index_complete=%s\n' "$complete"
-printf 'gitops_production_proof_index_dir=%s\n' "$proof_dir"
-printf 'gitops_production_proof_index_operator_proof=%s\n' "$operator_proof"
-printf 'gitops_production_proof_index_operator_proof_sha256=%s\n' "$operator_sha256"
-printf 'gitops_production_proof_index_operator_check=%s\n' "$operator_check_status"
-printf 'gitops_production_proof_index_operator_created_at=%s\n' "$operator_created_at"
-printf 'gitops_production_proof_index_operator_age_seconds=%s\n' "$operator_age_seconds"
-printf 'gitops_production_proof_index_operator_draft_file=%s\n' "$operator_draft_file"
-printf 'gitops_production_proof_index_operator_summary_file=%s\n' "$operator_summary_file"
-printf 'gitops_production_proof_index_operator_admission_file=%s\n' "$operator_admission_file"
-printf 'gitops_production_proof_index_operator_release_id=%s\n' "$operator_release_id"
-printf 'gitops_production_proof_index_served_proof=%s\n' "$served_proof"
-printf 'gitops_production_proof_index_served_proof_sha256=%s\n' "$served_sha256"
-printf 'gitops_production_proof_index_served_schema=%s\n' "$served_schema_status"
-printf 'gitops_production_proof_index_served_link=%s\n' "$served_link_status"
-printf 'gitops_production_proof_index_served_created_at=%s\n' "$served_created_at"
-printf 'gitops_production_proof_index_served_age_seconds=%s\n' "$served_age_seconds"
-printf 'gitops_production_proof_index_served_release_id=%s\n' "$served_release_id"
-printf 'gitops_production_proof_index_served_generation=%s\n' "$served_generation"
-printf 'gitops_production_proof_index_served_operator_proof=%s\n' "$served_operator_proof_file"
-printf 'gitops_production_proof_index_served_operator_proof_sha256=%s\n' "$served_operator_proof_sha256"
+print_index_field() {
+  local key="$1"
+  local value="$2"
+  printf 'gitops_proof_index_%s=%s\n' "$key" "$value"
+  printf '%s_%s=%s\n' "$index_key_prefix" "$key" "$value"
+}
+
+print_index_field status "$status"
+print_index_field complete "$complete"
+print_index_field dir "$proof_dir"
+print_index_field environment "$environment"
+print_index_field operator_proof "$operator_proof"
+print_index_field operator_proof_sha256 "$operator_sha256"
+print_index_field operator_check "$operator_check_status"
+print_index_field operator_created_at "$operator_created_at"
+print_index_field operator_age_seconds "$operator_age_seconds"
+print_index_field operator_draft_file "$operator_draft_file"
+print_index_field operator_summary_file "$operator_summary_file"
+print_index_field operator_admission_file "$operator_admission_file"
+print_index_field operator_release_id "$operator_release_id"
+print_index_field served_proof "$served_proof"
+print_index_field served_proof_sha256 "$served_sha256"
+print_index_field served_schema "$served_schema_status"
+print_index_field served_link "$served_link_status"
+print_index_field served_created_at "$served_created_at"
+print_index_field served_age_seconds "$served_age_seconds"
+print_index_field served_release_id "$served_release_id"
+print_index_field served_generation "$served_generation"
+print_index_field served_operator_proof "$served_operator_proof_file"
+print_index_field served_operator_proof_sha256 "$served_operator_proof_sha256"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'
 

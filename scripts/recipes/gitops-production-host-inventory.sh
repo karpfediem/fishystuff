@@ -172,6 +172,18 @@ if [[ -z "$environment" ]]; then
   echo "environment must not be empty" >&2
   exit 2
 fi
+case "$environment" in
+  production)
+    edge_admin_address="127.0.0.1:2019"
+    ;;
+  beta)
+    edge_admin_address="127.0.0.1:2119"
+    ;;
+  *)
+    echo "unsupported GitOps host inventory environment: ${environment}" >&2
+    exit 2
+    ;;
+esac
 
 state_dir="$(absolute_path "$state_dir")"
 run_dir="$(absolute_path "$run_dir")"
@@ -205,7 +217,7 @@ edge_systemd_unit_store=""
 edge_systemd_unit_artifact=""
 
 if [[ -n "$edge_bundle" && "$edge_bundle" != "skip" ]]; then
-  if bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle" >"$edge_output" 2>"$edge_error"; then
+  if bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle" "$environment" >"$edge_output" 2>"$edge_error"; then
     edge_bundle_check_ok="true"
     edge_bundle_path="$(awk -F= '$1 == "gitops_edge_handoff_bundle_ok" { print $2 }' "$edge_output")"
     edge_caddy_validate="$(awk -F= '$1 == "gitops_edge_handoff_caddy_validate" { print $2 }' "$edge_output")"
@@ -220,7 +232,11 @@ if [[ -n "$edge_bundle" && "$edge_bundle" != "skip" ]]; then
   fi
 fi
 
+printf 'gitops_host_inventory_ok=%s\n' "$environment"
 printf 'gitops_production_host_inventory_ok=%s\n' "$environment"
+if [[ "$environment" == "beta" ]]; then
+  printf 'gitops_beta_host_inventory_ok=%s\n' "$environment"
+fi
 printf 'environment=%s\n' "$environment"
 printf 'state_dir=%s\n' "$state_dir"
 printf 'run_dir=%s\n' "$run_dir"
@@ -291,7 +307,7 @@ if [[ -f "$systemd_unit_path" ]]; then
   fi
   if [[ -n "$edge_executable_store" && -n "$edge_caddyfile_store" ]]; then
     expected_execstart="ExecStart=${edge_executable_store} run --config ${edge_caddyfile_store} --adapter caddyfile"
-    expected_execreload="ExecReload=${edge_executable_store} reload --config ${edge_caddyfile_store} --adapter caddyfile --address 127.0.0.1:2019 --force"
+    expected_execreload="ExecReload=${edge_executable_store} reload --config ${edge_caddyfile_store} --adapter caddyfile --address ${edge_admin_address} --force"
     if [[ "$installed_execstart" == "$expected_execstart" ]]; then
       printf 'installed_edge_unit_execstart_matches_bundle=true\n'
     else

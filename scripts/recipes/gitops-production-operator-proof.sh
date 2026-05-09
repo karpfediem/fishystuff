@@ -55,16 +55,16 @@ run_capture() {
   local stdout="${tmp_dir}/${name}.stdout"
   local stderr="${tmp_dir}/${name}.stderr"
 
-  printf 'gitops_production_operator_proof_step_start=%s\n' "$name" >&2
+  printf '%s_step_start=%s\n' "$proof_key_prefix" "$name" >&2
   if "$@" >"$stdout" 2>"$stderr"; then
     if [[ -s "$stderr" ]]; then
       sed "s/^/[${name}] /" "$stderr" >&2
     fi
-    printf 'gitops_production_operator_proof_step_pass=%s\n' "$name" >&2
+    printf '%s_step_pass=%s\n' "$proof_key_prefix" "$name" >&2
     return
   fi
 
-  printf 'gitops_production_operator_proof_step_fail=%s\n' "$name" >&2
+  printf '%s_step_fail=%s\n' "$proof_key_prefix" "$name" >&2
   if [[ -s "$stdout" ]]; then
     sed "s/^/[${name}:stdout] /" "$stdout" >&2
   fi
@@ -96,6 +96,16 @@ if [[ -z "$environment" ]]; then
   echo "environment must not be empty" >&2
   exit 2
 fi
+case "$environment" in
+  production | beta) ;;
+  *)
+    echo "unsupported GitOps operator proof environment: ${environment}" >&2
+    exit 2
+    ;;
+esac
+proof_key_prefix="gitops_${environment}_operator_proof"
+proof_schema="fishystuff.gitops.${environment}-operator-proof.v1"
+proof_file_prefix="${environment}-operator-proof"
 
 output_dir="$(absolute_path "$output_dir")"
 draft_file="$(absolute_path "$draft_file")"
@@ -140,6 +150,7 @@ preflight_cmd=(
   "$run_helper_tests"
   "$served_state_dir"
   "$rollback_set_path"
+  "$environment"
 )
 handoff_plan_cmd=(
   bash scripts/recipes/gitops-production-host-handoff-plan.sh
@@ -148,6 +159,7 @@ handoff_plan_cmd=(
   "$admission_file"
   "$edge_bundle"
   "$deploy_bin"
+  "$environment"
 )
 
 run_capture inventory "${inventory_cmd[@]}"
@@ -156,9 +168,9 @@ run_capture host_handoff_plan "${handoff_plan_cmd[@]}"
 
 created_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
-proof_file="${output_dir%/}/production-operator-proof.${timestamp}.json"
+proof_file="${output_dir%/}/${proof_file_prefix}.${timestamp}.json"
 if [[ -e "$proof_file" ]]; then
-  proof_file="${output_dir%/}/production-operator-proof.${timestamp}.$$.json"
+  proof_file="${output_dir%/}/${proof_file_prefix}.${timestamp}.$$.json"
 fi
 
 draft_sha256="$(file_sha256_or_empty "$draft_file")"
@@ -166,7 +178,7 @@ summary_sha256="$(file_sha256_or_empty "$summary_file")"
 admission_sha256="$(file_sha256_or_empty "$admission_file")"
 
 jq -n \
-  --arg schema "fishystuff.gitops.production-operator-proof.v1" \
+  --arg schema "$proof_schema" \
   --arg created_at "$created_at" \
   --arg environment "$environment" \
   --arg output_path "$proof_file" \
@@ -231,14 +243,14 @@ jq -n \
           kv: kv($inventory_stdout)
         },
         preflight: {
-          argv: $ARGS.positional[9:19],
+          argv: $ARGS.positional[9:20],
           success: true,
           stdout: $preflight_stdout,
           stderr: $preflight_stderr,
           kv: kv($preflight_stdout)
         },
         host_handoff_plan: {
-          argv: $ARGS.positional[19:26],
+          argv: $ARGS.positional[20:28],
           success: true,
           stdout: $handoff_plan_stdout,
           stderr: $handoff_plan_stderr,
@@ -254,10 +266,15 @@ jq -n \
   "${preflight_cmd[@]}" \
   "${handoff_plan_cmd[@]}" >"$proof_file"
 
-printf 'gitops_production_operator_proof_ok=%s\n' "$proof_file"
-printf 'gitops_production_operator_proof_environment=%s\n' "$environment"
-printf 'gitops_production_operator_proof_draft_sha256=%s\n' "$draft_sha256"
-printf 'gitops_production_operator_proof_summary_sha256=%s\n' "$summary_sha256"
-printf 'gitops_production_operator_proof_admission_sha256=%s\n' "$admission_sha256"
+printf 'gitops_operator_proof_ok=%s\n' "$proof_file"
+printf 'gitops_operator_proof_environment=%s\n' "$environment"
+printf 'gitops_operator_proof_draft_sha256=%s\n' "$draft_sha256"
+printf 'gitops_operator_proof_summary_sha256=%s\n' "$summary_sha256"
+printf 'gitops_operator_proof_admission_sha256=%s\n' "$admission_sha256"
+printf '%s_ok=%s\n' "$proof_key_prefix" "$proof_file"
+printf '%s_environment=%s\n' "$proof_key_prefix" "$environment"
+printf '%s_draft_sha256=%s\n' "$proof_key_prefix" "$draft_sha256"
+printf '%s_summary_sha256=%s\n' "$proof_key_prefix" "$summary_sha256"
+printf '%s_admission_sha256=%s\n' "$proof_key_prefix" "$admission_sha256"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

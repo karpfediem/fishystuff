@@ -14,6 +14,7 @@ deploy_bin="$(normalize_named_arg deploy_bin "${6-auto}")"
 state_dir="$(normalize_named_arg state_dir "${7-/var/lib/fishystuff/gitops}")"
 run_dir="$(normalize_named_arg run_dir "${8-/run/fishystuff/gitops}")"
 proof_max_age_seconds="$(normalize_named_arg proof_max_age_seconds "${9-86400}")"
+environment="$(normalize_named_arg environment "${10-${FISHYSTUFF_GITOPS_ENVIRONMENT:-production}}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -49,16 +50,16 @@ run_capture() {
   local stdout="${tmp_dir}/${name}.stdout"
   local stderr="${tmp_dir}/${name}.stderr"
 
-  printf 'gitops_production_served_proof_step_start=%s\n' "$name" >&2
+  printf '%s_step_start=%s\n' "$served_proof_key_prefix" "$name" >&2
   if "$@" >"$stdout" 2>"$stderr"; then
     if [[ -s "$stderr" ]]; then
       sed "s/^/[${name}] /" "$stderr" >&2
     fi
-    printf 'gitops_production_served_proof_step_pass=%s\n' "$name" >&2
+    printf '%s_step_pass=%s\n' "$served_proof_key_prefix" "$name" >&2
     return
   fi
 
-  printf 'gitops_production_served_proof_step_fail=%s\n' "$name" >&2
+  printf '%s_step_fail=%s\n' "$served_proof_key_prefix" "$name" >&2
   if [[ -s "$stdout" ]]; then
     sed "s/^/[${name}:stdout] /" "$stdout" >&2
   fi
@@ -81,6 +82,16 @@ case "$proof_max_age_seconds" in
     exit 2
     ;;
 esac
+case "$environment" in
+  production | beta) ;;
+  *)
+    echo "unsupported GitOps served proof environment: ${environment}" >&2
+    exit 2
+    ;;
+esac
+served_proof_key_prefix="gitops_${environment}_served_proof"
+served_proof_schema="fishystuff.gitops.${environment}-served-proof.v1"
+served_proof_file_prefix="${environment}-served-proof"
 
 if [[ "$output_dir" == "-" || -z "$output_dir" ]]; then
   echo "gitops-production-served-proof requires an output directory, not '-'" >&2
@@ -108,9 +119,23 @@ admission_file="$(absolute_path "$admission_file")"
 operator_proof_file="$(absolute_path "$operator_proof_file")"
 state_dir="$(absolute_path "$state_dir")"
 run_dir="$(absolute_path "$run_dir")"
+summary_environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
+if [[ "$summary_environment" != "$environment" ]]; then
+  echo "served proof environment does not match handoff summary" >&2
+  echo "served proof: ${environment}" >&2
+  echo "summary:      ${summary_environment}" >&2
+  exit 2
+fi
 
 if [[ ! -f "$operator_proof_file" ]]; then
-  echo "production operator proof does not exist: ${operator_proof_file}" >&2
+  echo "${environment} operator proof does not exist: ${operator_proof_file}" >&2
+  exit 2
+fi
+operator_proof_environment="$(jq -er '.environment | select(type == "string" and length > 0)' "$operator_proof_file")"
+if [[ "$operator_proof_environment" != "$environment" ]]; then
+  echo "operator proof environment does not match served proof" >&2
+  echo "served proof:   ${environment}" >&2
+  echo "operator proof: ${operator_proof_environment}" >&2
   exit 2
 fi
 
@@ -148,6 +173,7 @@ operator_proof_check_cmd=(
   "$operator_proof_file"
   "$proof_max_age_seconds"
   ""
+  "$environment"
 )
 served_verification_cmd=(
   bash scripts/recipes/gitops-verify-activation-served.sh
@@ -164,9 +190,9 @@ run_capture served_verification "${served_verification_cmd[@]}"
 
 created_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
-proof_file="${output_dir%/}/production-served-proof.${timestamp}.json"
+proof_file="${output_dir%/}/${served_proof_file_prefix}.${timestamp}.json"
 if [[ -e "$proof_file" ]]; then
-  proof_file="${output_dir%/}/production-served-proof.${timestamp}.$$.json"
+  proof_file="${output_dir%/}/${served_proof_file_prefix}.${timestamp}.$$.json"
 fi
 
 draft_sha256="$(file_sha256_or_empty "$draft_file")"
@@ -180,9 +206,9 @@ require_value "$release_id" "served verification did not report a release ID"
 require_value "$generation" "served verification did not report a generation"
 
 jq -n \
-  --arg schema "fishystuff.gitops.production-served-proof.v1" \
+  --arg schema "$served_proof_schema" \
   --arg created_at "$created_at" \
-  --arg environment "production" \
+  --arg environment "$environment" \
   --arg output_path "$proof_file" \
   --arg draft_file "$draft_file" \
   --arg draft_sha256 "$draft_sha256" \
@@ -234,14 +260,14 @@ jq -n \
       },
       commands: {
         operator_proof_check: {
-          argv: $ARGS.positional[0:5],
+          argv: $ARGS.positional[0:6],
           success: true,
           stdout: $operator_proof_check_stdout,
           stderr: $operator_proof_check_stderr,
           kv: kv($operator_proof_check_stdout)
         },
         served_verification: {
-          argv: $ARGS.positional[5:13],
+          argv: $ARGS.positional[6:14],
           success: true,
           stdout: $served_verification_stdout,
           stderr: $served_verification_stderr,
@@ -256,11 +282,17 @@ jq -n \
   "${operator_proof_check_cmd[@]}" \
   "${served_verification_cmd[@]}" >"$proof_file"
 
-printf 'gitops_production_served_proof_ok=%s\n' "$proof_file"
-printf 'gitops_production_served_proof_environment=production\n'
-printf 'gitops_production_served_proof_release_id=%s\n' "$release_id"
-printf 'gitops_production_served_proof_generation=%s\n' "$generation"
-printf 'gitops_production_served_proof_operator_proof=%s\n' "$operator_proof_file"
-printf 'gitops_production_served_proof_operator_proof_sha256=%s\n' "$operator_proof_sha256"
+printf 'gitops_served_proof_ok=%s\n' "$proof_file"
+printf 'gitops_served_proof_environment=%s\n' "$environment"
+printf 'gitops_served_proof_release_id=%s\n' "$release_id"
+printf 'gitops_served_proof_generation=%s\n' "$generation"
+printf 'gitops_served_proof_operator_proof=%s\n' "$operator_proof_file"
+printf 'gitops_served_proof_operator_proof_sha256=%s\n' "$operator_proof_sha256"
+printf '%s_ok=%s\n' "$served_proof_key_prefix" "$proof_file"
+printf '%s_environment=%s\n' "$served_proof_key_prefix" "$environment"
+printf '%s_release_id=%s\n' "$served_proof_key_prefix" "$release_id"
+printf '%s_generation=%s\n' "$served_proof_key_prefix" "$generation"
+printf '%s_operator_proof=%s\n' "$served_proof_key_prefix" "$operator_proof_file"
+printf '%s_operator_proof_sha256=%s\n' "$served_proof_key_prefix" "$operator_proof_sha256"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

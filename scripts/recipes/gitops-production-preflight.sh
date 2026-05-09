@@ -13,6 +13,7 @@ deploy_bin="$(normalize_named_arg deploy_bin "${5-auto}")"
 run_helper_tests="$(normalize_named_arg run_helper_tests "${6-true}")"
 served_state_dir="$(normalize_named_arg served_state_dir "${7-}")"
 rollback_set_path="$(normalize_named_arg rollback_set_path "${8-}")"
+environment="$(normalize_named_arg environment "${9-${FISHYSTUFF_GITOPS_ENVIRONMENT:-production}}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -124,6 +125,19 @@ require_command jq
 require_command sha256sum
 require_command sed
 
+case "$environment" in
+  production)
+    default_served_state_dir="/var/lib/fishystuff/gitops"
+    ;;
+  beta)
+    default_served_state_dir="/var/lib/fishystuff/gitops-beta"
+    ;;
+  *)
+    echo "unsupported GitOps preflight environment: ${environment}" >&2
+    exit 2
+    ;;
+esac
+
 draft_file="$(absolute_path "$draft_file")"
 summary_file="$(absolute_path "$summary_file")"
 if [[ -z "$admission_file" ]]; then
@@ -142,7 +156,14 @@ if [[ -n "$rollback_set_path" ]]; then
   rollback_set_path="$(absolute_path "$rollback_set_path")"
 fi
 if [[ -z "$served_state_dir" && -n "$rollback_set_path" ]]; then
-  served_state_dir="/var/lib/fishystuff/gitops"
+  served_state_dir="$default_served_state_dir"
+fi
+summary_environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
+if [[ "$summary_environment" != "$environment" ]]; then
+  echo "preflight environment does not match handoff summary" >&2
+  echo "preflight: ${environment}" >&2
+  echo "summary:   ${summary_environment}" >&2
+  exit 2
 fi
 
 tmp_dir="$(mktemp -d)"
@@ -158,9 +179,9 @@ run_step activation_draft \
 run_step activation_review \
   bash scripts/recipes/gitops-review-activation-draft.sh "$draft_file" "$summary_file" "$admission_file" "$deploy_bin"
 run_step edge_handoff_bundle \
-  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle"
+  bash scripts/recipes/gitops-check-edge-handoff-bundle.sh "$edge_bundle" "$environment"
 run_step host_handoff_plan \
-  bash scripts/recipes/gitops-production-host-handoff-plan.sh "$draft_file" "$summary_file" "$admission_file" "$edge_bundle" "$deploy_bin"
+  bash scripts/recipes/gitops-production-host-handoff-plan.sh "$draft_file" "$summary_file" "$admission_file" "$edge_bundle" "$deploy_bin" "$environment"
 
 served_rollback_checked="false"
 served_rollback_set_path=""
@@ -168,10 +189,10 @@ if [[ -n "$served_state_dir" ]]; then
   if [[ -n "$rollback_set_path" ]]; then
     served_rollback_set_path="$rollback_set_path"
   else
-    served_rollback_set_path="${served_state_dir%/}/rollback-set/production.json"
+    served_rollback_set_path="${served_state_dir%/}/rollback-set/${environment}.json"
   fi
   run_step served_rollback_set \
-    bash scripts/recipes/gitops-retained-releases-json.sh "$deploy_bin" production "$served_state_dir" "$served_rollback_set_path"
+    bash scripts/recipes/gitops-retained-releases-json.sh "$deploy_bin" "$environment" "$served_state_dir" "$served_rollback_set_path"
   compare_served_retained_releases "${tmp_dir}/served_rollback_set.stdout"
   served_rollback_checked="true"
 fi
@@ -179,9 +200,18 @@ fi
 if [[ "$run_helper_tests" == "true" ]]; then
   require_command cargo
   run_step helper_cargo_test cargo test -p fishystuff_deploy
-  run_step helper_current_handoff bash scripts/recipes/gitops-production-current-handoff-test.sh
-  run_step helper_edge_bundle bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
-  run_step helper_host_handoff_plan bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+  if [[ "$environment" == "production" ]]; then
+    run_step helper_current_handoff bash scripts/recipes/gitops-production-current-handoff-test.sh
+    run_step helper_edge_bundle bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
+    run_step helper_host_handoff_plan bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+  else
+    run_step helper_current_desired bash scripts/recipes/gitops-beta-current-desired-test.sh
+    run_step helper_current_handoff bash scripts/recipes/gitops-beta-current-handoff-test.sh
+    run_step helper_activation_draft bash scripts/recipes/gitops-beta-activation-draft-test.sh
+    run_step helper_edge_bundle bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
+    run_step helper_host_handoff_plan bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
+    run_step helper_served_verification bash scripts/recipes/gitops-beta-verify-activation-served-test.sh
+  fi
 fi
 
 state_file="$(jq -er '.desired_state_path | select(type == "string" and length > 0)' "$summary_file")"
@@ -190,11 +220,16 @@ read -r summary_sha256 _ < <(sha256sum "$summary_file")
 read -r admission_sha256 _ < <(sha256sum "$admission_file")
 edge_bundle_path="$(awk -F= '$1 == "gitops_edge_handoff_bundle_ok" { print $2 }' "${tmp_dir}/edge_handoff_bundle.stdout")"
 require_value "$edge_bundle_path" "edge handoff bundle check did not report a bundle path"
-release_id="$(jq -er '.environments.production.active_release | select(type == "string" and length > 0)' "$draft_file")"
+release_id="$(jq -er --arg environment "$environment" '.environments[$environment].active_release | select(type == "string" and length > 0)' "$draft_file")"
 release_identity="$(jq -er '.release_identity | select(type == "string" and length > 0)' "$admission_file")"
-api_upstream="$(jq -er '.environments.production.api_upstream | select(type == "string" and length > 0)' "$draft_file")"
+api_upstream="$(jq -er --arg environment "$environment" '.environments[$environment].api_upstream | select(type == "string" and length > 0)' "$draft_file")"
 
-printf 'gitops_production_preflight_ok=%s\n' "$draft_file"
+printf 'gitops_preflight_ok=%s\n' "$draft_file"
+if [[ "$environment" == "production" ]]; then
+  printf 'gitops_production_preflight_ok=%s\n' "$draft_file"
+elif [[ "$environment" == "beta" ]]; then
+  printf 'gitops_beta_preflight_ok=%s\n' "$draft_file"
+fi
 printf 'activation_draft_sha256=%s\n' "$draft_sha256"
 printf 'handoff_summary=%s\n' "$summary_file"
 printf 'handoff_summary_sha256=%s\n' "$summary_sha256"
@@ -202,7 +237,7 @@ printf 'handoff_desired_state=%s\n' "$state_file"
 printf 'admission_evidence=%s\n' "$admission_file"
 printf 'admission_evidence_sha256=%s\n' "$admission_sha256"
 printf 'edge_bundle=%s\n' "$edge_bundle_path"
-printf 'environment=production\n'
+printf 'environment=%s\n' "$environment"
 printf 'release_id=%s\n' "$release_id"
 printf 'release_identity=%s\n' "$release_identity"
 printf 'api_upstream=%s\n' "$api_upstream"
