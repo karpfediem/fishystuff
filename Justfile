@@ -91,6 +91,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
   bash scripts/recipes/gitops-beta-service-start-plan-test.sh
   bash scripts/recipes/gitops-beta-host-bootstrap-plan-test.sh
+  bash scripts/recipes/gitops-beta-host-bootstrap-apply-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -294,6 +295,10 @@ gitops-beta-host-bootstrap-plan api_runtime_env_path="/var/lib/fishystuff/gitops
 gitops-beta-host-bootstrap-plan-test:
   bash scripts/recipes/gitops-beta-host-bootstrap-plan-test.sh
 
+# Apply the fresh beta host bootstrap contract locally after explicit opt-ins. No remote mutation.
+gitops-beta-host-bootstrap-apply install_bin="install" groupadd_bin="groupadd" useradd_bin="useradd" getent_bin="getent":
+  bash scripts/recipes/gitops-beta-host-bootstrap-apply.sh "{{install_bin}}" "{{groupadd_bin}}" "{{useradd_bin}}" "{{getent_bin}}"
+
 # Print the dry-run host-local production GitOps handoff plan. No remote mutation.
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
@@ -369,6 +374,10 @@ gitops-beta-install-edge-test:
 # Run fast local regression checks for beta API/Dolt service install gates.
 gitops-beta-install-service-test:
   bash scripts/recipes/gitops-beta-install-service-test.sh
+
+# Run fast local regression checks for the guarded beta host bootstrap apply gate.
+gitops-beta-host-bootstrap-apply-test:
+  bash scripts/recipes/gitops-beta-host-bootstrap-apply-test.sh
 
 # Run fast local regression checks for production GitOps proof indexing.
 gitops-production-proof-index-test:
