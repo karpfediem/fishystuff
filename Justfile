@@ -80,6 +80,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-current-desired-test.sh
   bash scripts/recipes/gitops-beta-current-handoff-test.sh
   bash scripts/recipes/gitops-beta-activation-draft-test.sh
+  bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -223,6 +224,10 @@ gitops-beta-service-bundles-test system="x86_64-linux":
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
   bash scripts/recipes/gitops-production-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
 
+# Print the dry-run host-local beta GitOps handoff plan. No remote mutation.
+gitops-beta-host-handoff-plan draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
+  bash scripts/recipes/gitops-beta-host-handoff-plan.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{edge_bundle}}" "{{deploy_bin}}"
+
 # Print read-only local production GitOps host inventory. No remote mutation.
 gitops-production-host-inventory state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops" edge_bundle="auto" systemd_unit_path="/etc/systemd/system/fishystuff-edge.service" tls_fullchain_path="/run/fishystuff/edge/tls/fullchain.pem" tls_privkey_path="/run/fishystuff/edge/tls/privkey.pem" environment="production":
   bash scripts/recipes/gitops-production-host-inventory.sh "{{state_dir}}" "{{run_dir}}" "{{edge_bundle}}" "{{systemd_unit_path}}" "{{tls_fullchain_path}}" "{{tls_privkey_path}}" "{{environment}}"
@@ -242,6 +247,10 @@ gitops-check-production-operator-proof proof_file="" max_age_seconds="86400" pro
 # Run fast local regression checks for the dry-run production host handoff plan.
 gitops-production-host-handoff-plan-test:
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
+
+# Run fast local regression checks for the dry-run beta host handoff plan.
+gitops-beta-host-handoff-plan-test:
+  bash scripts/recipes/gitops-beta-host-handoff-plan-test.sh
 
 # Run fast local regression checks for production GitOps host inventory.
 gitops-production-host-inventory-test:

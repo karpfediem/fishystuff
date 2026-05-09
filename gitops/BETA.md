@@ -26,6 +26,8 @@ just gitops-beta-current-handoff-test
 just gitops-beta-write-activation-admission-evidence
 just gitops-beta-activation-draft
 just gitops-beta-activation-draft-test
+just gitops-beta-host-handoff-plan
+just gitops-beta-host-handoff-plan-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -85,8 +87,10 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are the beta-shaped admission and activation wrappers. They require a beta handoff summary and refuse production summaries. The shared activation checker now reads the environment from the handoff summary, so the same invariant applies to beta: a serving draft must include explicit admission evidence and a retained rollback release. The current `gitops-beta-current-handoff` output is therefore candidate-only until a retained beta release is added.
 
+`just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, and beta API upstream. It intentionally reports `beta_apply_gate_available=false`; consuming the draft on a host still requires the next beta operator-proof/apply gate slice.
+
 Next pieces to add:
 
-1. beta operator-proof and host handoff wrappers parameterized from the production path
-2. a local-only beta host handoff plan
+1. beta operator-proof and local apply gate wrappers parameterized from the production path
+2. environment-parametric served verification/proof indexing for beta
 3. only then, a separate manually confirmed host bootstrap path

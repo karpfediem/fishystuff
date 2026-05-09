@@ -310,6 +310,10 @@ make_fixture() {
   printf '%s\n' "$site_cdn_probe_observation" >"${root}/site-cdn-probe.path"
 }
 
+if [[ "${FISHYSTUFF_GITOPS_BETA_ACTIVATION_DRAFT_TEST_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 root="$(mktemp -d)"
 make_fixture "$root"
 make_fake_mgmt "${root}/mgmt"

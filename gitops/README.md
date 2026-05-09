@@ -72,6 +72,8 @@ just gitops-beta-current-handoff-test
 just gitops-beta-write-activation-admission-evidence
 just gitops-beta-activation-draft
 just gitops-beta-activation-draft-test
+just gitops-beta-host-handoff-plan
+just gitops-beta-host-handoff-plan-test
 just gitops-production-edge-handoff-bundle
 just gitops-production-edge-handoff-bundle-test
 just gitops-production-host-inventory
@@ -160,6 +162,8 @@ nix build .#checks.x86_64-linux.gitops-wrong-cdn-retained-root-refusal
 `just gitops-beta-current-handoff` wraps the beta current desired state in a local handoff proof. It verifies the exact closure paths, active CDN serving manifest, GitOps unify result, and handoff summary without requiring a retained rollback release for the first clean beta service-set candidate. The summary records `desired_serving_preflight_skipped: true` so it cannot be mistaken for a production-style serving-ready handoff.
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are beta defaults over the shared admission and activation-draft checks. They refuse non-beta handoff summaries. A beta activation draft still requires explicit admission evidence and a retained rollback release; the current no-retained beta handoff is intentionally candidate-only.
+
+`just gitops-beta-host-handoff-plan` is the beta dry-run host handoff review. It checks the beta activation tuple against the beta edge handoff bundle and prints beta service paths, TLS paths, API upstream, and refusal conditions. It does not apply the draft and records `beta_apply_gate_available=false` until the beta operator-proof/apply gate exists.
 
 `just gitops-production-current-handoff` is the checked version of that flow. It requires retained rollback input, generates the production-current desired file, runs `gitops-check-desired-serving`, verifies that every active and retained closure path exists locally, verifies that the active CDN serving manifest retains each rollback CDN root, runs `gitops-unify` against the same file, and verifies the written handoff summary before printing the ready marker. It is still local-only and does not serve production.
 
