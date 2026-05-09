@@ -129,6 +129,7 @@ print_cdn_runtime_status() {
     fi
     printf 'cdn_runtime_operator_root_status=present\n'
     printf 'cdn_runtime_operator_root=%s\n' "$operator_root"
+    printf 'cdn_runtime_closure_build_mode=impure_operator_root\n'
   fi
 
   closure_build_required="true"

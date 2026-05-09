@@ -207,7 +207,7 @@ printf 'api_env_file=%s\n' "$api_env_file"
 printf 'dolt_env_file=%s\n' "$dolt_env_file"
 
 printf 'host_bootstrap_plan_status=ready\n'
-awk -F= '$1 ~ /^(gitops_beta_current_handoff_plan_ok|handoff_plan_status|handoff_can_run|closure_build_required|mgmt_build_required|cdn_runtime_closure_status|cdn_runtime_operator_root_status|dolt_commit_status|dolt_remote_status)$/ { print }' "$current_handoff_plan"
+awk -F= '$1 ~ /^(gitops_beta_current_handoff_plan_ok|handoff_plan_status|handoff_can_run|closure_build_required|mgmt_build_required|cdn_runtime_closure_status|cdn_runtime_closure_build_mode|cdn_runtime_operator_root_status|dolt_commit_status|dolt_remote_status)$/ { print }' "$current_handoff_plan"
 run_service_start_plan_if_ready "$service_start_plan"
 
 summary_status="missing"

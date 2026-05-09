@@ -88,11 +88,15 @@ build_or_use_path() {
   local env_name="$1"
   local attr="$2"
   local value="${!env_name:-}"
+  local nix_args=(build --no-link --print-out-paths)
   if [[ -n "$value" ]]; then
     printf '%s\n' "$value"
     return
   fi
-  nix build --no-link --print-out-paths ".#${attr}" | tail -n 1
+  if [[ "$attr" == "cdn-serving-root" && -n "${FISHYSTUFF_OPERATOR_ROOT:-}" ]]; then
+    nix_args+=(--impure)
+  fi
+  nix "${nix_args[@]}" ".#${attr}" | tail -n 1
 }
 
 current_git_rev() {

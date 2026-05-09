@@ -53,6 +53,23 @@ EOF
   export FISHYSTUFF_FAKE_MGMT_MARKER="$marker"
 }
 
+write_fake_nix() {
+  local path="$1"
+
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >"${FISHYSTUFF_FAKE_NIX_LOG:?}"
+if [[ "$*" != "build --no-link --print-out-paths --impure .#cdn-serving-root" ]]; then
+  echo "unexpected fake nix args: $*" >&2
+  exit 2
+fi
+printf '%s\n' "/nix/store/00000000000000000000000000000000-fake-cdn-serving-root"
+EOF
+  chmod +x "$path"
+}
+
 require_command jq
 require_command nix-store
 
@@ -116,5 +133,28 @@ mgmt_marker="$root/fake-mgmt-state-file"
 write_fake_mgmt "$fake_mgmt" "$mgmt_marker"
 bash scripts/recipes/gitops-unify.sh "$fake_mgmt" "$output"
 grep -Fx "$output" "$mgmt_marker" >/dev/null
+
+fake_nix="${root}/nix"
+fake_nix_log="${root}/fake-nix.log"
+operator_root="${root}/operator-root"
+output_impure="${root}/beta-current-impure.desired.json"
+mkdir -p "$operator_root"
+write_fake_nix "$fake_nix"
+env \
+  PATH="${root}:$PATH" \
+  FISHYSTUFF_FAKE_NIX_LOG="$fake_nix_log" \
+  FISHYSTUFF_OPERATOR_ROOT="$operator_root" \
+  FISHYSTUFF_GITOPS_GIT_REV="beta-test-git" \
+  FISHYSTUFF_GITOPS_DOLT_COMMIT="beta-test-dolt" \
+  FISHYSTUFF_GITOPS_DOLT_REMOTE_URL="file://${root}/dolt-origin" \
+  FISHYSTUFF_GITOPS_API_CLOSURE="$api_closure" \
+  FISHYSTUFF_GITOPS_SITE_CLOSURE="$site_closure" \
+  FISHYSTUFF_GITOPS_DOLT_SERVICE_CLOSURE="$dolt_service_closure" \
+  bash scripts/recipes/gitops-beta-current-desired.sh "$output_impure" beta
+grep -Fx "build --no-link --print-out-paths --impure .#cdn-serving-root" "$fake_nix_log" >/dev/null
+jq -e \
+  '.releases
+  | to_entries[0].value.closures.cdn_runtime.store_path == "/nix/store/00000000000000000000000000000000-fake-cdn-serving-root"' \
+  "$output_impure" >/dev/null
 
 printf '[gitops-beta-current-desired-test] checks passed\n'
