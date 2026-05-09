@@ -11,7 +11,9 @@ just gitops-beta-edge-handoff-bundle
 just gitops-beta-edge-handoff-bundle-test
 just gitops-beta-check-service-bundle service=api
 just gitops-beta-check-service-bundle service=dolt
+just secrets-check profile=beta-runtime
 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=mysql://fishy:secret@127.0.0.1:3316/fishystuff just gitops-beta-write-runtime-env service=api output=/tmp/fishystuff-beta-api-runtime.env
+FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=/tmp/fishystuff-beta-api-runtime.env profile=beta-runtime
 just gitops-beta-check-runtime-env service=api env_file=/tmp/fishystuff-beta-api-runtime.env
 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=/tmp/fishystuff-beta-dolt.env
 just gitops-beta-check-runtime-env service=dolt env_file=/tmp/fishystuff-beta-dolt.env

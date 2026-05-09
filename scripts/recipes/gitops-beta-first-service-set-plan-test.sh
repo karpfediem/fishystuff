@@ -145,6 +145,7 @@ grep -F "read_only_runtime_env_check_01=just gitops-beta-check-runtime-env servi
 grep -F "read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_runtime_env_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "guarded_runtime_env_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${fixture_root}/api/runtime.env profile=beta-runtime" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_host_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_host_action_04=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1" "${fixture_root}/ready.stdout" >/dev/null
 pass "ready artifact first service set plan"
