@@ -77,6 +77,7 @@ gitops-unify mgmt_bin="auto" state_file="gitops/fixtures/empty.desired.json":
 gitops-helper-test:
   cargo test -p fishystuff_deploy
   bash scripts/recipes/gitops-production-current-handoff-test.sh
+  bash scripts/recipes/gitops-beta-current-desired-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -110,6 +111,15 @@ gitops-retained-releases-json deploy_bin="auto" environment="production" state_d
 # Generate a local validate-mode production desired-state snapshot from exact local outputs.
 gitops-production-current-desired output="data/gitops/production-current.desired.json" dolt_ref="main":
   bash scripts/recipes/gitops-production-current-desired.sh "{{output}}" "{{dolt_ref}}"
+
+# Generate a local validate-mode beta desired-state snapshot from exact local outputs.
+gitops-beta-current-desired output="data/gitops/beta-current.desired.json" dolt_ref="beta":
+  bash scripts/recipes/gitops-beta-current-desired.sh "{{output}}" "{{dolt_ref}}"
+
+# Generate and type-check the local validate-mode beta desired-state snapshot.
+gitops-beta-current-validate output="data/gitops/beta-current.desired.json" dolt_ref="beta" mgmt_bin="auto":
+  bash scripts/recipes/gitops-beta-current-desired.sh "{{output}}" "{{dolt_ref}}"
+  bash scripts/recipes/gitops-unify.sh "{{mgmt_bin}}" "{{output}}"
 
 # Generate and validate a production-current handoff snapshot with retained rollback input.
 gitops-production-current-handoff output="data/gitops/production-current.desired.json" dolt_ref="main" mgmt_bin="auto" deploy_bin="auto" summary_output="":
@@ -158,6 +168,10 @@ gitops-production-current-from-served output="data/gitops/production-current.des
 # Run fast local regression checks for the production-current handoff recipe.
 gitops-production-current-handoff-test:
   bash scripts/recipes/gitops-production-current-handoff-test.sh
+
+# Run fast local regression checks for beta current desired-state generation.
+gitops-beta-current-desired-test:
+  bash scripts/recipes/gitops-beta-current-desired-test.sh
 
 # Build or validate the local production GitOps edge handoff bundle. No remote mutation.
 gitops-production-edge-handoff-bundle bundle="auto":

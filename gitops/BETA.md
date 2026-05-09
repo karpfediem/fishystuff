@@ -18,6 +18,9 @@ just gitops-beta-service-bundles
 just gitops-beta-service-bundles-test
 just gitops-beta-edge-handoff-bundle
 just gitops-beta-edge-handoff-bundle-test
+just gitops-beta-current-desired
+just gitops-beta-current-validate
+just gitops-beta-current-desired-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -69,9 +72,12 @@ The edge bundle validates:
 
 The validator refuses production hostnames, production served roots, production TLS paths, and production edge dependencies in the beta edge bundle.
 
+`just gitops-beta-current-desired` writes `data/gitops/beta-current.desired.json` as a validate-mode desired-state snapshot from exact local outputs. It is parameterized from the production-current generator but pins the beta service bundle attrs, `site-content-beta`, Dolt branch context `beta`, beta gcroot/cache roots, and the beta release-ref prefix `fishystuff/gitops-beta`. The default CDN runtime attr is `cdn-serving-root`, so the recipe requires `FISHYSTUFF_OPERATOR_ROOT` for operator-local CDN data unless `FISHYSTUFF_GITOPS_CDN_RUNTIME_CLOSURE` supplies an exact existing closure. It does not apply or serve anything.
+
+`just gitops-beta-current-validate` generates that same snapshot and type-checks it through `gitops/main.mcl`. It is still local-only: no SSH, no Hetzner, no Cloudflare, no systemd changes.
+
 Next pieces to add:
 
-1. beta desired-state generation under `data/gitops/beta-*`
-2. beta activation/admission/proof wrappers parameterized from the production path
-3. a local-only beta host handoff plan
-4. only then, a separate manually confirmed host bootstrap path
+1. beta activation/admission/proof wrappers parameterized from the production path
+2. a local-only beta host handoff plan
+3. only then, a separate manually confirmed host bootstrap path
