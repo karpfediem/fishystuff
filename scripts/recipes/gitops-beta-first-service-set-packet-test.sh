@@ -64,6 +64,9 @@ grep -F "gitops_beta_first_service_set_packet_ok=true" "${root}/packet.stdout" >
 grep -F "next_required_action=generate_current_handoff" "${root}/packet.stdout" >/dev/null
 grep -F "service_start_plan_status=pending_explicit_bundles" "${root}/packet.stdout" >/dev/null
 grep -F "operator_packet_status=generate_current_handoff" "${root}/packet.stdout" >/dev/null
+grep -F "operator_packet_deploy_authority_check_status=passed" "${root}/packet.stdout" >/dev/null
+grep -F "operator_packet_deploy_authority_secretspec_profile=beta-deploy" "${root}/packet.stdout" >/dev/null
+grep -F "operator_packet_deploy_authority_remote_mutation=none" "${root}/packet.stdout" >/dev/null
 grep -F "operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=${RECIPE_REPO_ROOT} just gitops-beta-current-handoff summary_output=${pending_summary}" "${root}/packet.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/packet.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/packet.stdout" >/dev/null

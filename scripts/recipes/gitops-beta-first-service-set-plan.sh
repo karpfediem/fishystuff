@@ -42,6 +42,12 @@ kv_value() {
   awk -F= -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$file"
 }
 
+colon_value() {
+  local key="$1"
+  local file="$2"
+  awk -F': ' -v key="$key" '$1 == key { print substr($0, length(key) + 3); exit }' "$file"
+}
+
 require_kv_equals() {
   local key="$1"
   local file="$2"
@@ -49,6 +55,19 @@ require_kv_equals() {
   local value=""
 
   value="$(kv_value "$key" "$file")"
+  if [[ "$value" != "$expected" ]]; then
+    echo "${key} expected ${expected}, got: ${value}" >&2
+    exit 2
+  fi
+}
+
+require_colon_equals() {
+  local key="$1"
+  local file="$2"
+  local expected="$3"
+  local value=""
+
+  value="$(colon_value "$key" "$file")"
   if [[ "$value" != "$expected" ]]; then
     echo "${key} expected ${expected}, got: ${value}" >&2
     exit 2
@@ -210,6 +229,7 @@ cleanup() {
 trap cleanup EXIT
 
 bootstrap_plan="${tmp_dir}/bootstrap-plan.out"
+authority_plan="${tmp_dir}/deploy-authority.out"
 current_handoff_plan="${tmp_dir}/current-handoff-plan.out"
 service_start_plan="${tmp_dir}/service-start-plan.out"
 runtime_env_packet="${tmp_dir}/runtime-env-packet.out"
@@ -222,6 +242,11 @@ bash scripts/recipes/gitops-beta-host-bootstrap-plan.sh >"$bootstrap_plan"
 require_kv_equals remote_deploy_performed "$bootstrap_plan" false
 require_kv_equals infrastructure_mutation_performed "$bootstrap_plan" false
 require_kv_equals local_host_mutation_performed "$bootstrap_plan" false
+
+bash scripts/recipes/deploy-authority-check.sh beta dolt api edge site cdn >"$authority_plan"
+require_colon_equals authority_check "$authority_plan" passed
+require_colon_equals deployment "$authority_plan" beta
+require_colon_equals remote_mutation "$authority_plan" none
 
 current_desired_file="${summary_file%.handoff-summary.json}.desired.json"
 if [[ "$current_desired_file" == "$summary_file" ]]; then
@@ -246,6 +271,15 @@ printf 'api_env_file=%s\n' "$api_env_file"
 printf 'dolt_env_file=%s\n' "$dolt_env_file"
 
 printf 'host_bootstrap_plan_status=ready\n'
+printf 'deploy_authority_check_status=%s\n' "$(colon_value authority_check "$authority_plan")"
+printf 'deploy_authority_secretspec_profile=%s\n' "$(colon_value secretspec_profile "$authority_plan")"
+printf 'deploy_authority_active_secretspec_profile=%s\n' "$(colon_value active_secretspec_profile "$authority_plan")"
+printf 'deploy_authority_deploy_private_key_loaded=%s\n' "$(colon_value deploy_private_key_loaded "$authority_plan")"
+printf 'deploy_authority_cloudflare_api_token_loaded=%s\n' "$(colon_value cloudflare_api_token_loaded "$authority_plan")"
+printf 'deploy_authority_dns_mutation_authority=%s\n' "$(colon_value dns_mutation_authority "$authority_plan")"
+printf 'deploy_authority_dns_mutation_authority_risk=%s\n' "$(colon_value dns_mutation_authority_risk "$authority_plan")"
+printf 'deploy_authority_selected_mutating_services=%s\n' "$(colon_value selected_mutating_services "$authority_plan")"
+printf 'deploy_authority_remote_mutation=%s\n' "$(colon_value remote_mutation "$authority_plan")"
 awk -F= '$1 ~ /^(gitops_beta_current_handoff_plan_ok|existing_desired_state_status|existing_desired_state_active_release|existing_desired_state_closure_source|handoff_plan_status|handoff_can_run|closure_build_required|mgmt_build_required|cdn_runtime_closure_status|cdn_runtime_closure_build_mode|cdn_runtime_operator_root_status|dolt_commit_status|dolt_remote_status)$/ { print }' "$current_handoff_plan"
 run_service_start_plan_if_ready "$service_start_plan"
 
@@ -353,6 +387,14 @@ printf 'operator_packet_current_hostname=%s\n' "$operator_current_hostname"
 printf 'operator_packet_expected_hostname=%s\n' "$operator_expected_hostname"
 printf 'operator_packet_expected_hostname_match=%s\n' "$operator_expected_hostname_match"
 printf 'operator_packet_resident_target=%s\n' "$operator_resident_target"
+printf 'operator_packet_deploy_authority_check_status=%s\n' "$(colon_value authority_check "$authority_plan")"
+printf 'operator_packet_deploy_authority_secretspec_profile=%s\n' "$(colon_value secretspec_profile "$authority_plan")"
+printf 'operator_packet_deploy_authority_active_secretspec_profile=%s\n' "$(colon_value active_secretspec_profile "$authority_plan")"
+printf 'operator_packet_deploy_authority_deploy_private_key_loaded=%s\n' "$(colon_value deploy_private_key_loaded "$authority_plan")"
+printf 'operator_packet_deploy_authority_cloudflare_api_token_loaded=%s\n' "$(colon_value cloudflare_api_token_loaded "$authority_plan")"
+printf 'operator_packet_deploy_authority_dns_mutation_authority=%s\n' "$(colon_value dns_mutation_authority "$authority_plan")"
+printf 'operator_packet_deploy_authority_dns_mutation_authority_risk=%s\n' "$(colon_value dns_mutation_authority_risk "$authority_plan")"
+printf 'operator_packet_deploy_authority_remote_mutation=%s\n' "$(colon_value remote_mutation "$authority_plan")"
 printf 'operator_packet_summary_file=%s\n' "$summary_file"
 printf 'operator_packet_admission_file=%s\n' "$admission_file"
 printf 'operator_packet_draft_file=%s\n' "$draft_file"

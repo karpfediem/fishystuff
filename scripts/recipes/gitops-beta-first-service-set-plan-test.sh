@@ -85,7 +85,14 @@ grep -F "gitops_beta_first_service_set_plan_ok=true" "${root}/pending.stdout" >/
 grep -F "service_start_plan_status=pending_explicit_bundles" "${root}/pending.stdout" >/dev/null
 grep -F "handoff_summary_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "next_required_action=generate_current_handoff" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_authority_check_status=passed" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_authority_secretspec_profile=beta-deploy" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_authority_deploy_private_key_loaded=false" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_authority_remote_mutation=none" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_status=generate_current_handoff" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_deploy_authority_check_status=passed" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_deploy_authority_secretspec_profile=beta-deploy" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_deploy_authority_remote_mutation=none" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=${RECIPE_REPO_ROOT} just gitops-beta-current-handoff summary_output=${pending_summary}" "${root}/pending.stdout" >/dev/null
 grep -F "admission_evidence_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "activation_draft_status=missing" "${root}/pending.stdout" >/dev/null
