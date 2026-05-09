@@ -50,6 +50,8 @@ just gitops-beta-observe-admission
 just gitops-beta-observe-admission-test
 just gitops-beta-first-service-set-plan
 just gitops-beta-first-service-set-plan-test
+just gitops-beta-first-service-set-packet
+just gitops-beta-first-service-set-packet-test
 just gitops-beta-activation-draft
 just gitops-beta-activation-draft-test
 just gitops-beta-host-handoff-plan
@@ -144,7 +146,7 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-observe-admission` captures the practical beta admission inputs from a running host-local beta candidate. It only accepts a loopback API upstream, fetches `/api/v1/meta`, probes `/api/v1/fish?lang=en` as a DB-backed route that exercises localized Dolt data, checks the active site closure's `runtime-config.js` points at the beta CDN base, checks the active CDN runtime manifest and referenced JS/WASM files exist, then writes checked activation evidence through `just gitops-beta-write-activation-admission-evidence`. It writes local evidence files only; it does not apply, install, restart, SSH, or mutate DNS/cloud state.
 
-`just gitops-beta-first-service-set-plan` is the lightweight runbook view for the first clean beta service set. It refuses non-loopback API admission targets, checks any present beta handoff/admission/draft artifacts are beta-shaped, reports proof-index completeness if proofs exist, and prints both the full guarded sequence and a compact `operator_packet_*` section with the immediate next command. Once runtime env files are ready, the next action becomes `start_or_verify_beta_services`; admission evidence is only the follow-up after the guarded beta Dolt/API start command has run or the operator has verified those beta services are already active. The plan does not invoke mgmt, install units, restart services, SSH, mutate DNS, or provision hosts.
+`just gitops-beta-first-service-set-plan` is the lightweight runbook view for the first clean beta service set. It refuses non-loopback API admission targets, checks any present beta handoff/admission/draft artifacts are beta-shaped, reports proof-index completeness if proofs exist, and prints both the full guarded sequence and a compact `operator_packet_*` section with the immediate next command. `just gitops-beta-first-service-set-packet` is the read-only short form that prints only that packet plus safety flags. Once runtime env files are ready, the next action becomes `start_or_verify_beta_services`; admission evidence is only the follow-up after the guarded beta Dolt/API start command has run or the operator has verified those beta services are already active. Neither command invokes mgmt, installs units, restarts services, uses SSH, mutates DNS, or provisions hosts.
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are the beta-shaped admission and activation wrappers. They require a beta handoff summary and refuse production summaries. The shared activation checker now reads the environment from the handoff summary, so the same invariant applies to beta: a serving draft must include explicit admission evidence and a retained rollback release. The current `gitops-beta-current-handoff` output is therefore candidate-only until a retained beta release is added.
 
