@@ -460,6 +460,14 @@ gitops-beta-hetzner-create-host server_name="site-nbg1-beta-v2" server_type="cx3
 gitops-beta-hetzner-create-host-test:
   bash scripts/recipes/gitops-beta-hetzner-create-host-test.sh
 
+# Retire the old beta Hetzner host after explicit opt-ins. Infrastructure mutation.
+gitops-beta-hetzner-retire-host retire_server_name="site-nbg1-beta" retire_server_id="" retire_server_ipv4="" active_server_name="site-nbg1-beta-v2" active_server_ipv4="":
+  bash scripts/recipes/gitops-beta-hetzner-retire-host.sh "{{retire_server_name}}" "{{retire_server_id}}" "{{retire_server_ipv4}}" "{{active_server_name}}" "{{active_server_ipv4}}"
+
+# Run fast local regression checks for the guarded beta Hetzner retire helper.
+gitops-beta-hetzner-retire-host-test:
+  bash scripts/recipes/gitops-beta-hetzner-retire-host-test.sh
+
 # Generate and store a missing beta deploy SSH key after explicit opt-in. No upload or remote mutation.
 gitops-beta-deploy-key-ensure key_comment="fishystuff-beta-deploy" key_name="fishystuff-beta-deploy":
   bash scripts/recipes/gitops-beta-deploy-key-ensure.sh "{{key_comment}}" "{{key_name}}"
