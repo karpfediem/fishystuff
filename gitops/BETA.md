@@ -23,6 +23,8 @@ just gitops-beta-check-runtime-env service=api
 just gitops-beta-write-runtime-env service=dolt
 just gitops-beta-check-runtime-env service=dolt
 just gitops-beta-runtime-env-test
+just gitops-beta-service-start-plan
+just gitops-beta-service-start-plan-test
 just gitops-beta-install-service service=api
 just gitops-beta-install-service service=dolt
 just gitops-beta-install-service-test
@@ -112,6 +114,8 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-write-runtime-env` and `just gitops-beta-check-runtime-env` materialize and validate the host-local beta runtime env boundary. API runtime config lives in `/var/lib/fishystuff/gitops-beta/api/runtime.env`; the GitOps graph owns `/var/lib/fishystuff/gitops-beta/api/beta.env` for release identity and selected Dolt ref, so reconciliation cannot erase the operator-owned database/CORS/CDN settings. API writing requires `FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1` and `FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=mysql://...@127.0.0.1:3316/fishystuff`; public site/CDN defaults are beta-only and production hostnames are refused. Dolt writing requires `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1` and currently writes an intentionally empty beta env file, because the beta Dolt unit carries its deployment identity statically. The checker is read-only and rejects the shared `/run/fishystuff/api/env`, production GitOps state, production origins, and non-beta Dolt branch overrides.
 
+`just gitops-beta-service-start-plan` is the read-only review step before starting the distinct beta API/Dolt service set. It checks the beta API runtime env, beta Dolt env, beta API bundle, and beta Dolt bundle, then prints the reviewed unit hashes and guarded `gitops-beta-install-service` commands. It keeps Dolt before API and refuses fixture env-path mismatches outside the test-only override, so the real plan proves the env files being reviewed are the env files the generated units will read.
+
 `just gitops-beta-install-service` is the guarded local install/restart gate for the beta API and Dolt units. API requires `FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1`, and `FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked beta API unit hash>`. Dolt requires the corresponding `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1`, and `FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked beta Dolt unit hash>`. The gate re-runs the beta service-bundle check, installs only the beta unit, reloads systemd, restarts that beta unit, and verifies it is active. Its regression intercepts `install` and `systemctl` with fake commands.
 
 `just gitops-beta-current-handoff` adds the first beta handoff proof around that snapshot. It generates the beta desired-state file, verifies local closure paths, verifies the active CDN serving manifest, runs GitOps unify, writes a handoff summary, and verifies that summary. Unlike production-current handoff it does not require retained rollback releases yet, because this is the first clean beta service-set candidate rather than a live production upgrade. It records that serving readiness was intentionally skipped.
@@ -133,5 +137,5 @@ The validator refuses production hostnames, production served roots, production 
 Next pieces to add:
 
 1. beta host bootstrap/install path with separate manually confirmed infrastructure steps
-2. first real beta service start on the new service set using the checked runtime env files
+2. first real beta service start on the new service set using the service-start plan
 3. first real beta apply on the new service set, followed by served proof/index capture and edge install

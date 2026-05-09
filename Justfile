@@ -89,6 +89,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-install-edge-test.sh
   bash scripts/recipes/gitops-beta-install-service-test.sh
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
+  bash scripts/recipes/gitops-beta-service-start-plan-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -275,6 +276,14 @@ gitops-beta-check-runtime-env service="api" env_file="":
 # Run fast local regression checks for beta runtime env writers/checkers.
 gitops-beta-runtime-env-test:
   bash scripts/recipes/gitops-beta-runtime-env-test.sh
+
+# Print the beta API/Dolt service start plan from checked env files and service bundles. No mutation.
+gitops-beta-service-start-plan api_bundle="auto" dolt_bundle="auto" api_env_file="/var/lib/fishystuff/gitops-beta/api/runtime.env" dolt_env_file="/var/lib/fishystuff/gitops-beta/dolt/beta.env":
+  bash scripts/recipes/gitops-beta-service-start-plan.sh "{{api_bundle}}" "{{dolt_bundle}}" "{{api_env_file}}" "{{dolt_env_file}}"
+
+# Run fast local regression checks for the beta service start plan.
+gitops-beta-service-start-plan-test:
+  bash scripts/recipes/gitops-beta-service-start-plan-test.sh
 
 # Print the dry-run host-local production GitOps handoff plan. No remote mutation.
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
