@@ -77,6 +77,9 @@ if [[ "$runtime_packet_status" != "ready" ]]; then
     printf 'service_start_packet_host_preflight_path_ready=%s\n' "$(kv_value runtime_env_packet_host_preflight_path_ready "$runtime_packet_output")"
     printf 'service_start_packet_host_preflight_ready=%s\n' "$(kv_value runtime_env_packet_host_preflight_ready "$runtime_packet_output")"
     printf 'service_start_packet_host_preflight_next_command_01=%s\n' "$(kv_value runtime_env_packet_host_preflight_next_command_01 "$runtime_packet_output")"
+    if [[ -n "$(kv_value runtime_env_packet_host_preflight_next_note_01 "$runtime_packet_output")" ]]; then
+      printf 'service_start_packet_host_preflight_next_note_01=%s\n' "$(kv_value runtime_env_packet_host_preflight_next_note_01 "$runtime_packet_output")"
+    fi
   fi
   if [[ -n "$(kv_value runtime_env_packet_next_command_01 "$runtime_packet_output")" ]]; then
     printf 'service_start_packet_next_command_01=%s\n' "$(kv_value runtime_env_packet_next_command_01 "$runtime_packet_output")"

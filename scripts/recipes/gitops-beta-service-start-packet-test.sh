@@ -127,7 +127,8 @@ grep -F "service_start_packet_host_preflight_status=blocked" "${root}/missing-ru
 grep -F "service_start_packet_host_preflight_next_required_action=run_on_expected_beta_host" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_path_ready=true" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_host_preflight_ready=false" "${root}/missing-runtime.stdout" >/dev/null
-grep -F "service_start_packet_host_preflight_next_command_01=run this preflight on site-nbg1-beta before writing beta runtime env" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_next_command_01=just gitops-beta-runtime-env-host-preflight api_env_file=${root}/missing-api.env dolt_env_file=${dolt_env}" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_next_note_01=run this preflight on site-nbg1-beta before writing beta runtime env" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${root}/missing-api.env profile=beta-runtime" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/missing-runtime.stdout" >/dev/null

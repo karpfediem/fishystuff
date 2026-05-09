@@ -137,6 +137,7 @@ elif [[ "$path_ready" != "true" ]]; then
 fi
 
 bootstrap_command="FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply"
+host_preflight_command="just gitops-beta-runtime-env-host-preflight api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 runtime_env_packet_command="just gitops-beta-runtime-env-packet api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 
 printf 'gitops_beta_runtime_env_host_preflight_ok=true\n'
@@ -153,7 +154,8 @@ printf 'runtime_env_host_preflight_path_ready=%s\n' "$path_ready"
 printf 'runtime_env_host_preflight_ready=%s\n' "$ready"
 case "$next_required_action" in
   run_on_expected_beta_host)
-    printf 'runtime_env_host_preflight_next_command_01=run this preflight on %s before writing beta runtime env\n' "$expected_hostname"
+    printf 'runtime_env_host_preflight_next_command_01=%s\n' "$host_preflight_command"
+    printf 'runtime_env_host_preflight_next_note_01=run this preflight on %s before writing beta runtime env\n' "$expected_hostname"
     ;;
   bootstrap_beta_host)
     printf 'runtime_env_host_preflight_next_command_01=%s\n' "$bootstrap_command"

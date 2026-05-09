@@ -171,7 +171,8 @@ grep -F "operator_packet_runtime_env_host_preflight_status=blocked" "${fixture_r
 grep -F "operator_packet_runtime_env_host_preflight_next_required_action=run_on_expected_beta_host" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_path_ready=false" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_runtime_env_host_preflight_ready=false" "${fixture_root}/ready.stdout" >/dev/null
-grep -F "operator_packet_runtime_env_host_preflight_next_command_01=run this preflight on site-nbg1-beta before writing beta runtime env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_next_command_01=just gitops-beta-runtime-env-host-preflight api_env_file=${fixture_root}/api/runtime.env dolt_env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "operator_packet_runtime_env_host_preflight_next_note_01=run this preflight on site-nbg1-beta before writing beta runtime env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_next_command_01=just gitops-beta-runtime-env-host-preflight api_env_file=${fixture_root}/api/runtime.env dolt_env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "operator_packet_note_02=run the preflight command on the expected beta host before writing runtime env files" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null

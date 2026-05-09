@@ -134,6 +134,9 @@ if [[ "$packet_status" != "ready" ]]; then
   if [[ -n "$(kv_value runtime_env_host_preflight_next_command_01 "$host_preflight_output")" ]]; then
     printf 'runtime_env_packet_host_preflight_next_command_01=%s\n' "$(kv_value runtime_env_host_preflight_next_command_01 "$host_preflight_output")"
   fi
+  if [[ -n "$(kv_value runtime_env_host_preflight_next_note_01 "$host_preflight_output")" ]]; then
+    printf 'runtime_env_packet_host_preflight_next_note_01=%s\n' "$(kv_value runtime_env_host_preflight_next_note_01 "$host_preflight_output")"
+  fi
 fi
 if [[ "$api_status" == "ready" ]]; then
   printf 'runtime_env_packet_api_database=%s\n' "$(kv_value gitops_beta_runtime_env_database "$api_output")"

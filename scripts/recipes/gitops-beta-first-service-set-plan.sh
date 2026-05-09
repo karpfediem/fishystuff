@@ -365,6 +365,7 @@ if [[ "$service_start_plan_status" == "pending_runtime_env" && -s "$runtime_env_
   host_preflight_path_ready="$(kv_value runtime_env_packet_host_preflight_path_ready "$runtime_env_packet")"
   host_preflight_ready="$(kv_value runtime_env_packet_host_preflight_ready "$runtime_env_packet")"
   host_preflight_next_command="$(kv_value runtime_env_packet_host_preflight_next_command_01 "$runtime_env_packet")"
+  host_preflight_next_note="$(kv_value runtime_env_packet_host_preflight_next_note_01 "$runtime_env_packet")"
   if [[ -n "$api_secret_status" ]]; then
     printf 'operator_packet_api_secretspec_status=%s\n' "$api_secret_status"
   fi
@@ -376,6 +377,9 @@ if [[ "$service_start_plan_status" == "pending_runtime_env" && -s "$runtime_env_
   fi
   if [[ -n "$host_preflight_next_command" ]]; then
     printf 'operator_packet_runtime_env_host_preflight_next_command_01=%s\n' "$host_preflight_next_command"
+  fi
+  if [[ -n "$host_preflight_next_note" ]]; then
+    printf 'operator_packet_runtime_env_host_preflight_next_note_01=%s\n' "$host_preflight_next_note"
   fi
   if [[ -n "$missing_secret" ]]; then
     printf 'operator_packet_missing_secret_01=%s\n' "$missing_secret"
