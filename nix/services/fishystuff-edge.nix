@@ -28,6 +28,7 @@ let
     "/images/terrain_height/*"
     "/images/terrain_fullres/*"
     "/fields/*"
+    "/hotspots/*"
     "/waypoints/*"
   ];
   tlsDirective = optionalString cfg.tlsEnable ''

@@ -801,10 +801,11 @@
           cdnServingRootRetentionCheck =
             let
               currentFixture = pkgs.runCommand "cdn-serving-current-fixture" { } ''
-                mkdir -p "$out/map"
+                mkdir -p "$out/hotspots" "$out/map"
                 printf '{"module":"fishystuff_ui_bevy.new.js","wasm":"fishystuff_ui_bevy_bg.new.wasm"}\n' > "$out/map/runtime-manifest.json"
                 printf '{"module":"fishystuff_ui_bevy.stale.js","wasm":"fishystuff_ui_bevy_bg.stale.wasm"}\n' > "$out/map/runtime-manifest.stale.json"
                 printf 'current-metadata' > "$out/.cdn-metadata.json"
+                printf '{"hotspots":[]}' > "$out/hotspots/hotspots.v1.json"
                 printf 'new-runtime' > "$out/map/fishystuff_ui_bevy.new.js"
                 printf 'new-runtime-br' > "$out/map/fishystuff_ui_bevy.new.js.br"
                 printf 'new-wasm' > "$out/map/fishystuff_ui_bevy_bg.new.wasm"
@@ -835,6 +836,7 @@
               test "$(jq -r '.wasm' ${servingRoot}/map/runtime-manifest.new-cache-key.json)" = "fishystuff_ui_bevy_bg.new.wasm"
               test ! -e ${servingRoot}/map/runtime-manifest.stale.json
               test "$(cat ${servingRoot}/.cdn-metadata.json)" = "current-metadata"
+              test "$(cat ${servingRoot}/hotspots/hotspots.v1.json)" = '{"hotspots":[]}'
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js)" = "new-runtime"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy.new.js.br)" = "new-runtime-br"
               test "$(cat ${servingRoot}/map/fishystuff_ui_bevy_bg.new.wasm)" = "new-wasm"

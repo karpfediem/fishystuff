@@ -80,6 +80,7 @@ runCommand "cdn-serving-root" { nativeBuildInputs = [ jq ]; } ''
       images/terrain_height/*|\
       images/terrain_fullres/*|\
       fields/*|\
+      hotspots/*|\
       waypoints/*)
         return 0
         ;;

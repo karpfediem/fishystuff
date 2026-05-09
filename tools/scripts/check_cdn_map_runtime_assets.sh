@@ -185,6 +185,7 @@ required_urls=(
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.meta.json")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/hotspots/hotspots.v1.json?v=hotspots-v1-icons")"
   "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
 )
 
@@ -198,6 +199,7 @@ immutable_cache_urls=(
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.meta.json")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/hotspots/hotspots.v1.json?v=hotspots-v1-icons")"
   "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
 )
 
@@ -217,6 +219,7 @@ cors_required_urls=(
   "$(join_url "$CDN_BASE_URL" "/fields/region_groups.v1.meta.json")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.bin")"
   "$(join_url "$CDN_BASE_URL" "/fields/zone_mask.v1.meta.json")"
+  "$(join_url "$CDN_BASE_URL" "/hotspots/hotspots.v1.json?v=hotspots-v1-icons")"
   "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
 )
 

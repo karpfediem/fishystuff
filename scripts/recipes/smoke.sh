@@ -75,6 +75,7 @@ probe_cdn_runtime_contract() {
   local wasm_path=""
   local module_url=""
   local wasm_url=""
+  local hotspots_url=""
 
   smoke_fetch "cdn runtime manifest" "$cdn_base_url/map/runtime-manifest.json" || return 1
   manifest_body="$SMOKE_LAST_BODY"
@@ -116,6 +117,12 @@ probe_cdn_runtime_contract() {
   smoke_fetch "cdn runtime wasm" "$wasm_url" || return 1
   if [[ "$deployment" != "local" ]]; then
     smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn runtime wasm cache policy" || return 1
+  fi
+
+  hotspots_url="$(smoke_join_url "$cdn_base_url" "/hotspots/hotspots.v1.json?v=hotspots-v1-icons")"
+  smoke_fetch "cdn hotspots" "$hotspots_url" || return 1
+  if [[ "$deployment" != "local" ]]; then
+    smoke_headers_match "$SMOKE_LAST_HEADERS" '^cache-control:.*max-age=31536000.*immutable' "cdn hotspots cache policy" || return 1
   fi
 }
 

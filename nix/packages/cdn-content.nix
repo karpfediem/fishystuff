@@ -3,6 +3,7 @@ runCommand "cdn-content" { } ''
   mkdir -p "$out/images/tiles"
   ln -sfn ${cdnBaseContent}/.cdn-metadata.json "$out/.cdn-metadata.json"
   ln -sfn ${cdnBaseContent}/fields "$out/fields"
+  ln -sfn ${cdnBaseContent}/hotspots "$out/hotspots"
   ln -sfn ${cdnBaseContent}/logs "$out/logs"
   ln -sfn ${cdnBaseContent}/map "$out/map"
   ln -sfn ${cdnBaseContent}/waypoints "$out/waypoints"
