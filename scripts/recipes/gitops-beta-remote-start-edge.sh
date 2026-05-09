@@ -105,6 +105,20 @@ require_safe_target() {
   fi
 }
 
+require_expected_hostname() {
+  local value="$1"
+
+  if [[ -z "$value" ]]; then
+    fail "expected_hostname is required"
+  fi
+  if [[ "$value" == *=* ]]; then
+    fail "expected_hostname must be a hostname, got ${value}; pass arguments in order: target expected_hostname edge_bundle"
+  fi
+  if [[ ! "$value" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
+    fail "expected_hostname must be a simple hostname, got: ${value}"
+  fi
+}
+
 summary_value() {
   local query="$1"
   jq -er "$query" "$summary_file"
@@ -214,6 +228,7 @@ require_beta_deploy_profile
 assert_deployment_configuration_safe beta
 assert_beta_infra_cluster_dns_scope_safe
 require_safe_target "$target"
+require_expected_hostname "$expected_hostname"
 require_command_or_executable jq jq
 require_command_or_executable awk awk
 require_command_or_executable openssl openssl

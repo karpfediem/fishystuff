@@ -330,6 +330,13 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-remote-start-edge.sh root@203.0.113.20 site-nbg1-beta "$edge_bundle" "$summary" "$fake_push" "$fake_ssh" "$fake_scp"
 
 expect_fail_contains \
+  "rejects shifted named edge bundle argument" \
+  "expected_hostname must be a hostname, got edge_bundle=${edge_bundle}; pass arguments in order" \
+  env \
+    "${base_env[@]}" \
+    bash scripts/recipes/gitops-beta-remote-start-edge.sh root@203.0.113.20 "edge_bundle=${edge_bundle}" auto "$summary" "$fake_push" "$fake_ssh" "$fake_scp"
+
+expect_fail_contains \
   "rejects production profile" \
   "must not run with production SecretSpec profile active" \
   env \
