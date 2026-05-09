@@ -283,13 +283,28 @@ else
   exit 2
 fi
 
+runtime_env_preflight_action=""
+if [[ "$service_start_plan_status" == "pending_runtime_env" && -s "$runtime_env_packet" ]]; then
+  runtime_env_preflight_action="$(kv_value runtime_env_packet_host_preflight_next_required_action "$runtime_env_packet")"
+fi
+
 next_required_action="inspect_plan"
 if [[ "$summary_status" != "ready" ]]; then
   next_required_action="generate_current_handoff"
 elif [[ "$service_start_plan_status" == "pending_explicit_bundles" ]]; then
   next_required_action="provide_service_bundle_paths"
 elif [[ "$service_start_plan_status" == "pending_runtime_env" ]]; then
-  next_required_action="write_beta_runtime_env"
+  case "$runtime_env_preflight_action" in
+    run_on_expected_beta_host)
+      next_required_action="run_runtime_env_preflight_on_beta_host"
+      ;;
+    bootstrap_beta_host)
+      next_required_action="bootstrap_beta_host"
+      ;;
+    *)
+      next_required_action="write_beta_runtime_env"
+      ;;
+  esac
 elif [[ "$service_start_plan_status" != "ready" ]]; then
   next_required_action="fix_service_start_plan"
 elif [[ "$admission_status" != "ready" ]]; then
@@ -318,6 +333,7 @@ runtime_env_dolt_command="FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1
 runtime_env_api_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${api_env_file}"
 runtime_env_api_secretspec_command="FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env_file} profile=beta-runtime"
 runtime_env_host_preflight_command="just gitops-beta-runtime-env-host-preflight api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
+host_bootstrap_apply_command="FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply"
 start_services_command="FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=${dolt_unit_sha256} FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=${api_unit_sha256} just gitops-beta-start-services api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 admission_packet_command="just gitops-beta-admission-packet admission_file=${admission_file} summary_file=${summary_file} api_upstream=${api_upstream} observation_dir=${observation_dir} draft_file=${draft_file}"
 activation_draft_packet_command="just gitops-beta-activation-draft-packet draft_file=${draft_file} summary_file=${summary_file} admission_file=${admission_file} proof_dir=${proof_dir} edge_bundle=${edge_bundle} api_upstream=${api_upstream} observation_dir=${observation_dir}"
@@ -340,7 +356,7 @@ printf 'operator_packet_dolt_env_file=%s\n' "$dolt_env_file"
 printf 'operator_packet_api_unit_sha256=%s\n' "$api_unit_sha256"
 printf 'operator_packet_dolt_unit_sha256=%s\n' "$dolt_unit_sha256"
 printf 'operator_packet_note_01=run guarded commands only on the intended beta host\n'
-if [[ "$next_required_action" == "write_beta_runtime_env" && -s "$runtime_env_packet" ]]; then
+if [[ "$service_start_plan_status" == "pending_runtime_env" && -s "$runtime_env_packet" ]]; then
   api_secret_status="$(kv_value runtime_env_packet_api_secretspec_status "$runtime_env_packet")"
   missing_secret="$(kv_value runtime_env_packet_missing_secret_01 "$runtime_env_packet")"
   secret_check_unavailable="$(kv_value runtime_env_packet_secret_check_unavailable "$runtime_env_packet")"
@@ -374,6 +390,14 @@ case "$next_required_action" in
     ;;
   provide_service_bundle_paths | fix_service_start_plan)
     printf 'operator_packet_next_command_01=%s\n' "$service_start_review_command"
+    ;;
+  run_runtime_env_preflight_on_beta_host)
+    printf 'operator_packet_next_command_01=%s\n' "$runtime_env_host_preflight_command"
+    printf 'operator_packet_note_02=run the preflight command on the expected beta host before writing runtime env files\n'
+    ;;
+  bootstrap_beta_host)
+    printf 'operator_packet_next_command_01=%s\n' "$host_bootstrap_apply_command"
+    printf 'operator_packet_after_success_command=%s\n' "$runtime_env_host_preflight_command"
     ;;
   write_beta_runtime_env)
     printf 'operator_packet_before_write_command=%s\n' "$runtime_env_host_preflight_command"
@@ -425,7 +449,7 @@ printf 'read_only_runtime_env_check_04=%s\n' "$runtime_env_host_preflight_comman
 printf 'guarded_runtime_env_action_01=%s\n' "$runtime_env_dolt_command"
 printf 'guarded_runtime_env_action_02=%s\n' "$runtime_env_api_command"
 printf 'guarded_runtime_env_action_03=%s\n' "$runtime_env_api_secretspec_command"
-printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply\n'
+printf 'guarded_host_action_01=%s\n' "$host_bootstrap_apply_command"
 printf 'guarded_host_action_02=%s\n' "$start_services_command"
 printf 'guarded_host_action_03=%s\n' "$apply_activation_command"
 printf 'guarded_host_action_04=%s\n' "$install_edge_command"
