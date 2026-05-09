@@ -392,6 +392,10 @@ gitops-beta-remote-materialize-dolt-ref target="" expected_hostname="site-nbg1-b
 gitops-beta-remote-start-services target="" expected_hostname="site-nbg1-beta" summary_file="data/gitops/beta-current.handoff-summary.json" ssh_bin="ssh":
   bash scripts/recipes/gitops-beta-remote-start-services.sh "{{target}}" "{{expected_hostname}}" "{{summary_file}}" "{{ssh_bin}}"
 
+# Copy and start the checked beta edge service on the fresh beta host with placeholder TLS for origin smoke. Remote host mutation.
+gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_bundle="auto" summary_file="data/gitops/beta-current.handoff-summary.json" push_bin="scripts/recipes/push-closure.sh" ssh_bin="ssh" scp_bin="scp":
+  bash scripts/recipes/gitops-beta-remote-start-edge.sh "{{target}}" "{{expected_hostname}}" "{{edge_bundle}}" "{{summary_file}}" "{{push_bin}}" "{{ssh_bin}}" "{{scp_bin}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
@@ -415,6 +419,10 @@ gitops-beta-remote-materialize-dolt-ref-test:
 # Run fast local regression checks for remote beta service starting.
 gitops-beta-remote-start-services-test:
   bash scripts/recipes/gitops-beta-remote-start-services-test.sh
+
+# Run fast local regression checks for remote beta edge starting.
+gitops-beta-remote-start-edge-test:
+  bash scripts/recipes/gitops-beta-remote-start-edge-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
