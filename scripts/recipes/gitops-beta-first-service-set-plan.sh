@@ -344,8 +344,22 @@ if [[ "$next_required_action" == "write_beta_runtime_env" && -s "$runtime_env_pa
   api_secret_status="$(kv_value runtime_env_packet_api_secretspec_status "$runtime_env_packet")"
   missing_secret="$(kv_value runtime_env_packet_missing_secret_01 "$runtime_env_packet")"
   secret_check_unavailable="$(kv_value runtime_env_packet_secret_check_unavailable "$runtime_env_packet")"
+  host_preflight_status="$(kv_value runtime_env_packet_host_preflight_status "$runtime_env_packet")"
+  host_preflight_action="$(kv_value runtime_env_packet_host_preflight_next_required_action "$runtime_env_packet")"
+  host_preflight_path_ready="$(kv_value runtime_env_packet_host_preflight_path_ready "$runtime_env_packet")"
+  host_preflight_ready="$(kv_value runtime_env_packet_host_preflight_ready "$runtime_env_packet")"
+  host_preflight_next_command="$(kv_value runtime_env_packet_host_preflight_next_command_01 "$runtime_env_packet")"
   if [[ -n "$api_secret_status" ]]; then
     printf 'operator_packet_api_secretspec_status=%s\n' "$api_secret_status"
+  fi
+  if [[ -n "$host_preflight_status" ]]; then
+    printf 'operator_packet_runtime_env_host_preflight_status=%s\n' "$host_preflight_status"
+    printf 'operator_packet_runtime_env_host_preflight_next_required_action=%s\n' "$host_preflight_action"
+    printf 'operator_packet_runtime_env_host_preflight_path_ready=%s\n' "$host_preflight_path_ready"
+    printf 'operator_packet_runtime_env_host_preflight_ready=%s\n' "$host_preflight_ready"
+  fi
+  if [[ -n "$host_preflight_next_command" ]]; then
+    printf 'operator_packet_runtime_env_host_preflight_next_command_01=%s\n' "$host_preflight_next_command"
   fi
   if [[ -n "$missing_secret" ]]; then
     printf 'operator_packet_missing_secret_01=%s\n' "$missing_secret"

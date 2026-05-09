@@ -47,6 +47,11 @@ fi
 exit 2
 EOF
 chmod +x "${fake_bin}/secretspec"
+cat >"${fake_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+printf 'operator-dev\n'
+EOF
+chmod +x "${fake_bin}/hostname"
 PATH="${fake_bin}:${PATH}"
 
 api_env="${root}/api/runtime.env"
@@ -63,6 +68,11 @@ grep -F "runtime_env_packet_api_status=missing" "${root}/missing.stdout" >/dev/n
 grep -F "runtime_env_packet_dolt_status=missing" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_api_secretspec_status=ready" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${api_env} dolt_env_file=${dolt_env}" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_host_preflight_status=blocked" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_host_preflight_next_required_action=run_on_expected_beta_host" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_host_preflight_path_ready=false" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_host_preflight_ready=false" "${root}/missing.stdout" >/dev/null
+grep -F "runtime_env_packet_host_preflight_next_command_01=run this preflight on site-nbg1-beta before writing beta runtime env" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${dolt_env}" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_next_command_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${api_env} profile=beta-runtime" "${root}/missing.stdout" >/dev/null
 grep -F "runtime_env_packet_after_success_command=just gitops-beta-service-start-packet api_bundle=auto dolt_bundle=auto api_env_file=${api_env} dolt_env_file=${dolt_env} summary_file=${root}/summary.json" "${root}/missing.stdout" >/dev/null

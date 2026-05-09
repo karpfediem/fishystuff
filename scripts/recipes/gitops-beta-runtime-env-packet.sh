@@ -81,6 +81,8 @@ api_output="${tmp_dir}/api.out"
 api_stderr="${tmp_dir}/api.err"
 dolt_output="${tmp_dir}/dolt.out"
 dolt_stderr="${tmp_dir}/dolt.err"
+host_preflight_output="${tmp_dir}/host-preflight.out"
+: >"$host_preflight_output"
 
 api_status="$(run_env_check api "$api_env_file" "$api_output" "$api_stderr")"
 dolt_status="$(run_env_check dolt "$dolt_env_file" "$dolt_output" "$dolt_stderr")"
@@ -105,6 +107,15 @@ fi
 runtime_env_host_preflight_command="just gitops-beta-runtime-env-host-preflight api_env_file=${api_env_file} dolt_env_file=${dolt_env_file}"
 service_start_packet_command="just gitops-beta-service-start-packet api_bundle=${api_bundle} dolt_bundle=${dolt_bundle} api_env_file=${api_env_file} dolt_env_file=${dolt_env_file} summary_file=${summary_file}"
 
+if [[ "$packet_status" != "ready" ]]; then
+  bash scripts/recipes/gitops-beta-runtime-env-host-preflight.sh \
+    "$api_env_file" \
+    "$dolt_env_file" >"$host_preflight_output"
+  require_kv_equals remote_deploy_performed "$host_preflight_output" false
+  require_kv_equals infrastructure_mutation_performed "$host_preflight_output" false
+  require_kv_equals local_host_mutation_performed "$host_preflight_output" false
+fi
+
 printf 'gitops_beta_runtime_env_packet_ok=true\n'
 printf 'runtime_env_packet_status=%s\n' "$packet_status"
 printf 'runtime_env_packet_api_env_file=%s\n' "$api_env_file"
@@ -114,6 +125,15 @@ printf 'runtime_env_packet_dolt_status=%s\n' "$dolt_status"
 printf 'runtime_env_packet_api_secretspec_status=%s\n' "$api_secret_status"
 if [[ "$packet_status" != "ready" ]]; then
   printf 'runtime_env_packet_before_write_command=%s\n' "$runtime_env_host_preflight_command"
+  printf 'runtime_env_packet_host_preflight_status=%s\n' "$(kv_value runtime_env_host_preflight_status "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_next_required_action=%s\n' "$(kv_value runtime_env_host_preflight_next_required_action "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_current_hostname=%s\n' "$(kv_value runtime_env_host_preflight_current_hostname "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_expected_hostname=%s\n' "$(kv_value runtime_env_host_preflight_expected_hostname "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_path_ready=%s\n' "$(kv_value runtime_env_host_preflight_path_ready "$host_preflight_output")"
+  printf 'runtime_env_packet_host_preflight_ready=%s\n' "$(kv_value runtime_env_host_preflight_ready "$host_preflight_output")"
+  if [[ -n "$(kv_value runtime_env_host_preflight_next_command_01 "$host_preflight_output")" ]]; then
+    printf 'runtime_env_packet_host_preflight_next_command_01=%s\n' "$(kv_value runtime_env_host_preflight_next_command_01 "$host_preflight_output")"
+  fi
 fi
 if [[ "$api_status" == "ready" ]]; then
   printf 'runtime_env_packet_api_database=%s\n' "$(kv_value gitops_beta_runtime_env_database "$api_output")"

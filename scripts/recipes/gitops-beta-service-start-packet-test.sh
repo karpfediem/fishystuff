@@ -40,6 +40,15 @@ expect_fail_contains() {
 }
 
 root="$(mktemp -d)"
+fake_bin="${root}/bin"
+mkdir -p "$fake_bin"
+cat >"${fake_bin}/hostname" <<'EOF'
+#!/usr/bin/env bash
+printf 'operator-dev\n'
+EOF
+chmod +x "${fake_bin}/hostname"
+PATH="${fake_bin}:${PATH}"
+
 api_bundle="${root}/api-bundle"
 dolt_bundle="${root}/dolt-bundle"
 api_env="${root}/api/runtime.env"
@@ -114,6 +123,11 @@ grep -F "service_start_packet_status=pending_runtime_env" "${root}/missing-runti
 grep -F "service_start_packet_api_status=missing" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_dolt_status=ready" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_before_write_command=just gitops-beta-runtime-env-host-preflight api_env_file=${root}/missing-api.env dolt_env_file=${dolt_env}" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_status=blocked" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_next_required_action=run_on_expected_beta_host" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_path_ready=true" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_ready=false" "${root}/missing-runtime.stdout" >/dev/null
+grep -F "service_start_packet_host_preflight_next_command_01=run this preflight on site-nbg1-beta before writing beta runtime env" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "service_start_packet_next_command_01=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${root}/missing-api.env profile=beta-runtime" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/missing-runtime.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/missing-runtime.stdout" >/dev/null
