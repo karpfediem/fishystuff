@@ -20,7 +20,7 @@ class fixture($st) {
 	$retained_release_count int = $st->retained_release_count || 0
 	$state str = $st->state || "not_run"
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$status_dir = fmt.printf("%s/admission", fishy_paths.run_dir($mode))
+	$status_dir = fmt.printf("%s/admission", fishy_paths.run_dir_for($mode, $environment))
 	$status_path = fmt.printf("%s/%s.json", $status_dir, $environment)
 	$site_index_path = fmt.printf("%s/index.html", $site_content)
 	$cdn_runtime_manifest_path = fmt.printf("%s/map/runtime-manifest.json", $cdn_runtime_content)
@@ -217,8 +217,8 @@ class http_status($st) {
 	$requested_timeout_ms int = $st->timeout_ms || 0
 	$timeout_ms int = if $requested_timeout_ms == 0 { 2000 } else { $requested_timeout_ms }
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$request_dir = fmt.printf("%s/admission/requests", $state_dir)
 	$request_path = fmt.printf("%s/%s-%s-http-status.json", $request_dir, $environment, $release_id)
 	$status_dir = fmt.printf("%s/admission", $run_dir)
@@ -296,8 +296,8 @@ class http_json_scalar($st) {
 	$json_pointer str = $st->json_pointer || ""
 	$expected_scalar str = $st->expected_scalar || ""
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$request_dir = fmt.printf("%s/admission/requests", $state_dir)
 	$request_path = fmt.printf("%s/%s-%s-http-json-scalar.json", $request_dir, $environment, $release_id)
 	$status_dir = fmt.printf("%s/admission", $run_dir)
@@ -376,8 +376,8 @@ class http_api_meta($st) {
 	$requested_timeout_ms int = $st->timeout_ms || 0
 	$timeout_ms int = if $requested_timeout_ms == 0 { 2000 } else { $requested_timeout_ms }
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$request_dir = fmt.printf("%s/admission/requests", $state_dir)
 	$request_path = fmt.printf("%s/%s-%s-http-api-meta.json", $request_dir, $environment, $release_id)
 	$status_dir = fmt.printf("%s/admission", $run_dir)

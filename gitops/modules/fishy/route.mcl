@@ -12,8 +12,8 @@ class local($st) {
 	$served bool = $st->served || false
 	$api_upstream str = $st->api_upstream || ""
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$active_path = $st->active_path || fmt.printf("%s/active/%s.json", $state_dir, $environment)
 	$site_root = $st->site_root || fmt.printf("%s/served/%s/site", $state_dir, $environment)
 	$cdn_root = $st->cdn_root || fmt.printf("%s/served/%s/cdn", $state_dir, $environment)

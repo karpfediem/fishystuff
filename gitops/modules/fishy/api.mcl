@@ -17,7 +17,7 @@ class candidate_service($st) {
 	$dolt_release_ref str = $st->dolt_release_ref || ""
 	$write_local_state = fishy_paths.writes_local_state($mode)
 	$enabled = $service_name != ""
-	$state_dir = fishy_paths.state_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
 	$config_dir = fmt.printf("%s/api", $state_dir)
 	$config_path = fmt.printf("%s/%s.json", $config_dir, $environment)
 	$env_path = fmt.printf("%s/%s.env", $config_dir, $environment)

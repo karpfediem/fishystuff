@@ -32,7 +32,7 @@ case "$environment" in
     tls_privkey_path="/run/fishystuff/beta-edge/tls/privkey.pem"
     edge_check_recipe="gitops-beta-edge-handoff-bundle"
     host_label="beta"
-    apply_gate_available="false"
+    apply_gate_available="true"
     ;;
   *)
     echo "unsupported GitOps host handoff environment: ${environment}" >&2
@@ -224,8 +224,8 @@ if [[ "$environment" == "production" ]]; then
   printf 'refusal_condition_06=do not install or restart the edge service unless just gitops-production-proof-index proof_dir=data/gitops require_complete=true passes after served-proof generation\n'
   printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256=<checked operator proof sha256> just gitops-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
 else
-  printf 'refusal_condition_06=do not install or restart the edge service until a checked beta operator proof and beta apply gate exist\n'
-  printf 'guarded_host_action_01=blocked: beta activation apply gate is not implemented yet\n'
+  printf 'refusal_condition_06=do not install or restart the edge service unless just gitops-beta-proof-index proof_dir=data/gitops require_complete=true passes after served-proof generation\n'
+  printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
 fi
 printf 'guarded_host_action_02=install -D -m 0644 %s %s\n' "$systemd_unit_source" "$systemd_unit_install_path"
 printf 'guarded_host_action_03=systemctl daemon-reload\n'
@@ -239,13 +239,13 @@ if [[ "$environment" == "production" ]]; then
   printf 'planned_host_step_03=just gitops-production-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
   printf 'planned_host_step_04=just gitops-production-proof-index proof_dir=data/gitops require_complete=true\n'
 else
-  printf 'post_handoff_read_only_check_01=after beta apply support exists, verify beta served state under /var/lib/fishystuff/gitops-beta and /run/fishystuff/gitops-beta\n'
-  printf 'post_handoff_audit_step_01=after beta apply support exists, write a beta served proof linked to the checked beta operator proof\n'
-  printf 'post_handoff_read_only_check_02=after beta proof indexing exists, require a complete beta proof chain\n'
-  printf 'planned_host_step_01=implement checked beta operator proof and beta local apply gate before consuming this draft\n'
-  printf 'planned_host_step_02=after checked beta apply, verify beta served state under /var/lib/fishystuff/gitops-beta and /run/fishystuff/gitops-beta\n'
-  printf 'planned_host_step_03=after beta served proof support exists, write beta served proof and require a complete beta proof chain\n'
-  printf 'planned_host_step_04=only then install or restart the beta edge service\n'
+  printf 'post_handoff_read_only_check_01=just gitops-beta-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'post_handoff_audit_step_01=just gitops-beta-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'post_handoff_read_only_check_02=just gitops-beta-proof-index proof_dir=data/gitops require_complete=true\n'
+  printf 'planned_host_step_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'planned_host_step_02=just gitops-beta-verify-activation-served draft_file=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'planned_host_step_03=just gitops-beta-served-proof draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
+  printf 'planned_host_step_04=just gitops-beta-proof-index proof_dir=data/gitops require_complete=true\n'
 fi
 printf 'post_handoff_read_only_check_03=systemctl is-active --quiet %s\n' "$unit_name"
 printf 'post_handoff_read_only_check_04=inspect public site/API/CDN/telemetry through %s host routing before considering this handoff complete\n' "$host_label"

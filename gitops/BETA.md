@@ -37,6 +37,8 @@ just gitops-beta-served-proof
 just gitops-beta-served-proof-test
 just gitops-beta-proof-index
 just gitops-beta-proof-index-test
+just gitops-beta-apply-activation-draft
+just gitops-beta-apply-activation-draft-test
 nix build .#checks.x86_64-linux.api-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.dolt-service-bundle-beta-gitops-handoff --no-link
 nix build .#checks.x86_64-linux.edge-service-bundle-beta-gitops-handoff --no-link
@@ -96,7 +98,7 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are the beta-shaped admission and activation wrappers. They require a beta handoff summary and refuse production summaries. The shared activation checker now reads the environment from the handoff summary, so the same invariant applies to beta: a serving draft must include explicit admission evidence and a retained rollback release. The current `gitops-beta-current-handoff` output is therefore candidate-only until a retained beta release is added.
 
-`just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, and beta API upstream. It intentionally reports `beta_apply_gate_available=false`; consuming the draft on a host still requires the next beta operator-proof/apply gate slice.
+`just gitops-beta-host-handoff-plan` is a dry-run host-local handoff review for a checked beta activation draft and beta edge bundle. It validates the beta edge bundle, beta served roots, beta TLS paths, beta API upstream, and the guarded beta apply command. It reports `beta_apply_gate_available=true`, but still does not apply, install, or restart anything by itself.
 
 `just gitops-beta-verify-activation-served` is the read-only served-state check for the beta path. It refuses non-beta handoff summaries, then verifies that the local beta served documents under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta` still match the checked beta activation draft, admission evidence, selected host, selected release, route, admission, and roots-ready state.
 
@@ -104,8 +106,10 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-served-proof` and `just gitops-beta-proof-index` are the beta post-reconciliation audit wrappers. They link served-state verification back to a checked beta operator proof and require the latest beta served proof to point at the latest beta operator proof. They remain read-only and are only meaningful after a beta apply gate has reconciled local served state.
 
+`just gitops-beta-apply-activation-draft` is the guarded beta local apply gate. It refuses to run without `FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1`, `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1`, and `FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash>`. It checks a beta operator proof, refuses production summaries/proofs, and runs mgmt only against the beta activation draft. In `local-apply` mode, the clean graph publishes beta state under `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta`.
+
 Next pieces to add:
 
-1. beta local apply gate consuming a checked beta operator proof
-2. beta host bootstrap/install path with separate manually confirmed infrastructure steps
-3. beta edge install/restart only after a complete beta proof chain exists
+1. beta host bootstrap/install path with separate manually confirmed infrastructure steps
+2. beta edge install/restart only after a complete beta proof chain exists
+3. served proof/index capture after the first beta apply on the new service set

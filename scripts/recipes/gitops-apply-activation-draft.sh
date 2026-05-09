@@ -12,6 +12,7 @@ deploy_bin="$(normalize_named_arg deploy_bin "${5-auto}")"
 converged_timeout="$(normalize_named_arg converged_timeout "${6-45}")"
 operator_proof_file="$(normalize_named_arg proof_file "${7-}")"
 operator_proof_max_age_seconds="$(normalize_named_arg proof_max_age_seconds "${8-86400}")"
+environment="$(normalize_named_arg environment "${9-production}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -36,6 +37,25 @@ require_command jq
 require_command sha256sum
 require_positive_int converged_timeout "$converged_timeout"
 
+case "$environment" in
+  production)
+    environment_apply_optin="FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY"
+    operator_proof_file_env="FISHYSTUFF_GITOPS_OPERATOR_PROOF_FILE"
+    operator_proof_sha_env="FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256"
+    operator_proof_check_script="scripts/recipes/gitops-check-production-operator-proof.sh"
+    ;;
+  beta)
+    environment_apply_optin="FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY"
+    operator_proof_file_env="FISHYSTUFF_GITOPS_BETA_OPERATOR_PROOF_FILE"
+    operator_proof_sha_env="FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256"
+    operator_proof_check_script="scripts/recipes/gitops-check-beta-operator-proof.sh"
+    ;;
+  *)
+    echo "unsupported GitOps activation apply environment: ${environment}" >&2
+    exit 2
+    ;;
+esac
+
 absolute_path() {
   local path="$1"
   if [[ "$path" == /* ]]; then
@@ -55,8 +75,8 @@ if [[ -z "$admission_file" ]]; then
   admission_file="${FISHYSTUFF_GITOPS_ADMISSION_EVIDENCE_FILE:-}"
 fi
 
-if [[ "${FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY:-}" != "1" ]]; then
-  echo "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_ENABLE_PRODUCTION_APPLY=1" >&2
+if [[ "${!environment_apply_optin:-}" != "1" ]]; then
+  echo "gitops-apply-activation-draft requires ${environment_apply_optin}=1" >&2
   exit 2
 fi
 if [[ "${FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY:-}" != "1" ]]; then
@@ -64,25 +84,26 @@ if [[ "${FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY:-}" != "1" ]]; then
   exit 2
 fi
 if [[ -z "$operator_proof_file" ]]; then
-  operator_proof_file="${FISHYSTUFF_GITOPS_OPERATOR_PROOF_FILE:-}"
+  operator_proof_file="${!operator_proof_file_env:-}"
 fi
 if [[ -z "$operator_proof_file" ]]; then
-  echo "gitops-apply-activation-draft requires proof_file or FISHYSTUFF_GITOPS_OPERATOR_PROOF_FILE" >&2
+  echo "gitops-apply-activation-draft requires proof_file or ${operator_proof_file_env}" >&2
   exit 2
 fi
 operator_proof_file="$(absolute_path "$operator_proof_file")"
 if [[ ! -f "$operator_proof_file" ]]; then
-  echo "production operator proof does not exist: ${operator_proof_file}" >&2
+  echo "${environment} operator proof does not exist: ${operator_proof_file}" >&2
   exit 2
 fi
-if [[ -z "${FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256:-}" ]]; then
-  echo "gitops-apply-activation-draft requires FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256 from gitops-check-production-operator-proof" >&2
+operator_proof_sha_expected="${!operator_proof_sha_env:-}"
+if [[ -z "$operator_proof_sha_expected" ]]; then
+  echo "gitops-apply-activation-draft requires ${operator_proof_sha_env} from gitops-check-${environment}-operator-proof" >&2
   exit 2
 fi
 
 read -r operator_proof_sha256 _ < <(sha256sum "$operator_proof_file")
-if [[ "$FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256" != "$operator_proof_sha256" ]]; then
-  echo "FISHYSTUFF_GITOPS_APPLY_OPERATOR_PROOF_SHA256 does not match operator proof: expected ${operator_proof_sha256}" >&2
+if [[ "$operator_proof_sha_expected" != "$operator_proof_sha256" ]]; then
+  echo "${operator_proof_sha_env} does not match operator proof: expected ${operator_proof_sha256}" >&2
   exit 2
 fi
 
@@ -92,7 +113,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
-bash scripts/recipes/gitops-check-production-operator-proof.sh "$operator_proof_file" "$operator_proof_max_age_seconds" "" >"$proof_check_output"
+summary_environment="$(jq -er '.environment.name | select(type == "string" and length > 0)' "$summary_file")"
+if [[ "$summary_environment" != "$environment" ]]; then
+  echo "activation apply environment does not match handoff summary" >&2
+  echo "apply:   ${environment}" >&2
+  echo "summary: ${summary_environment}" >&2
+  exit 2
+fi
+
+proof_environment="$(jq -er '.environment | select(type == "string" and length > 0)' "$operator_proof_file")"
+if [[ "$proof_environment" != "$environment" ]]; then
+  echo "activation apply environment does not match operator proof" >&2
+  echo "apply: ${environment}" >&2
+  echo "proof: ${proof_environment}" >&2
+  exit 2
+fi
+
+bash "$operator_proof_check_script" "$operator_proof_file" "$operator_proof_max_age_seconds" "" >"$proof_check_output"
 
 proof_draft_file="$(absolute_path "$(jq -er '.inputs.draft_file' "$operator_proof_file")")"
 proof_summary_file="$(absolute_path "$(jq -er '.inputs.summary_file' "$operator_proof_file")")"
@@ -165,5 +202,10 @@ printf 'gitops_activation_apply_ok=%s\n' "$draft_file"
 printf 'gitops_activation_apply_operator_proof=%s\n' "$operator_proof_file"
 printf 'gitops_activation_apply_operator_proof_sha256=%s\n' "$operator_proof_sha256"
 printf 'gitops_activation_apply_draft_sha256=%s\n' "$draft_sha256"
+printf 'gitops_activation_apply_environment=%s\n' "$environment"
+printf 'gitops_%s_activation_apply_ok=%s\n' "$environment" "$draft_file"
+printf 'gitops_%s_activation_apply_operator_proof=%s\n' "$environment" "$operator_proof_file"
+printf 'gitops_%s_activation_apply_operator_proof_sha256=%s\n' "$environment" "$operator_proof_sha256"
+printf 'gitops_%s_activation_apply_draft_sha256=%s\n' "$environment" "$draft_sha256"
 printf 'remote_deploy_performed=false\n'
 printf 'infrastructure_mutation_performed=false\n'

@@ -24,8 +24,8 @@ class candidate($st) {
 	$api_upstream str = $st->api_upstream || ""
 	$serve bool = $st->serve || false
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$instance_name = fmt.printf("%s-%s", $environment, $release_id)
 	$instance_path = fmt.printf("%s/instances/%s.json", $state_dir, $instance_name)
 	$marker_path = fmt.printf("%s/candidates/%s.ready", $run_dir, $instance_name)

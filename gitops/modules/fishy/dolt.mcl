@@ -43,8 +43,8 @@ class materialization($st) {
 	$materialization str = if $raw_materialization == "" { "metadata_only" } else { $raw_materialization }
 	$remote_url str = $st->remote_url || ""
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$cache_dir str = $st->cache_dir || fmt.printf("%s/dolt-cache/%s", $state_dir, $repository)
 	$release_ref str = $st->release_ref || fmt.printf("fishystuff/gitops/%s", $release_id)
 	$request_dir = fmt.printf("%s/dolt/requests", $state_dir)

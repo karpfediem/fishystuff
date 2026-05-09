@@ -20,8 +20,8 @@ class release_ready($st) {
 	$dolt_service_store_path str = $st->dolt_service_store_path || ""
 	$dolt_service_gcroot_path str = $st->dolt_service_gcroot_path || ""
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment)
 	$request_root_dir = fmt.printf("%s/roots", $state_dir)
 	$request_dir = fmt.printf("%s/requests", $request_root_dir)
 	$status_dir = fmt.printf("%s/roots", $run_dir)

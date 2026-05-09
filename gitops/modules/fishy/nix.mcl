@@ -9,7 +9,8 @@ class artifact($st) {
 	$enabled bool = $st->enabled || false
 	$mode str = $st->mode || "validate"
 	$should_manage = $enabled and (($mode == "local-apply") or ($mode == "vm-test-closures"))
-	$gc_roots_dir = if $mode == "vm-test-closures" { "/nix/var/nix/gcroots/fishystuff/gitops-test" } else { "/nix/var/nix/gcroots/fishystuff/gitops" }
+	$local_apply_gc_roots_dir = if core_strings.has_prefix($gcroot_path, "/nix/var/nix/gcroots/fishystuff/gitops-beta/") { "/nix/var/nix/gcroots/fishystuff/gitops-beta" } else { "/nix/var/nix/gcroots/fishystuff/gitops" }
+	$gc_roots_dir = if $mode == "vm-test-closures" { "/nix/var/nix/gcroots/fishystuff/gitops-test" } else { $local_apply_gc_roots_dir }
 	$release_gcroot_dir = fmt.printf("%s/%s", $gc_roots_dir, $release_id)
 	$release_gcroot_prefix = fmt.printf("%s/", $release_gcroot_dir)
 	$phase = if not $enabled {

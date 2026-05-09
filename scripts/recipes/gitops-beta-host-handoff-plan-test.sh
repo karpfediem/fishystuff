@@ -258,10 +258,11 @@ grep -F "served_cdn_link=/var/lib/fishystuff/gitops-beta/served/beta/cdn" "${roo
 grep -F "tls_fullchain=/run/fishystuff/beta-edge/tls/fullchain.pem" "${root}/plan.stdout" >/dev/null
 grep -F "systemd_unit_install_path=/etc/systemd/system/fishystuff-beta-edge.service" "${root}/plan.stdout" >/dev/null
 grep -F "read_only_readiness_check_04=just gitops-beta-edge-handoff-bundle bundle=${root}/edge-bundle" "${root}/plan.stdout" >/dev/null
-grep -F "beta_apply_gate_available=false" "${root}/plan.stdout" >/dev/null
-grep -F "guarded_host_action_01=blocked: beta activation apply gate is not implemented yet" "${root}/plan.stdout" >/dev/null
+grep -F "beta_apply_gate_available=true" "${root}/plan.stdout" >/dev/null
+grep -F "guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked beta operator proof file>" "${root}/plan.stdout" >/dev/null
 grep -F "guarded_host_action_04=systemctl restart fishystuff-beta-edge.service" "${root}/plan.stdout" >/dev/null
-grep -F "planned_host_step_01=implement checked beta operator proof and beta local apply gate before consuming this draft" "${root}/plan.stdout" >/dev/null
+grep -F "planned_host_step_01=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta operator proof sha256> just gitops-beta-apply-activation-draft draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_file=<checked beta operator proof file>" "${root}/plan.stdout" >/dev/null
+grep -F "planned_host_step_04=just gitops-beta-proof-index proof_dir=data/gitops require_complete=true" "${root}/plan.stdout" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/plan.stdout" >/dev/null
 grep -F "infrastructure_mutation_performed=false" "${root}/plan.stdout" >/dev/null
 pass "valid beta host handoff plan"

@@ -85,6 +85,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-operator-proof-test.sh
   bash scripts/recipes/gitops-beta-served-proof-test.sh
   bash scripts/recipes/gitops-beta-proof-index-test.sh
+  bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -159,6 +160,10 @@ gitops-review-activation-draft draft_file="data/gitops/production-activation.dra
 # Apply a checked production activation draft through local mgmt only after explicit opt-ins and reviewed operator proof hash.
 gitops-apply-activation-draft draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto" converged_timeout="45" proof_file="" proof_max_age_seconds="86400":
   bash scripts/recipes/gitops-apply-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{converged_timeout}}" "{{proof_file}}" "{{proof_max_age_seconds}}"
+
+# Apply a checked beta activation draft through local mgmt only after explicit beta opt-ins and reviewed beta operator proof hash.
+gitops-beta-apply-activation-draft draft_file="data/gitops/beta-activation.draft.desired.json" summary_file="data/gitops/beta-current.handoff-summary.json" admission_file="" mgmt_bin="auto" deploy_bin="auto" converged_timeout="45" proof_file="" proof_max_age_seconds="86400":
+  bash scripts/recipes/gitops-beta-apply-activation-draft.sh "{{draft_file}}" "{{summary_file}}" "{{admission_file}}" "{{mgmt_bin}}" "{{deploy_bin}}" "{{converged_timeout}}" "{{proof_file}}" "{{proof_max_age_seconds}}"
 
 # Verify local served GitOps state still matches the checked production activation draft.
 gitops-verify-activation-served draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" deploy_bin="auto" state_dir="/var/lib/fishystuff/gitops" run_dir="/run/fishystuff/gitops":
@@ -307,6 +312,10 @@ gitops-beta-served-proof-test:
 # Run fast local regression checks for beta GitOps proof indexing.
 gitops-beta-proof-index-test:
   bash scripts/recipes/gitops-beta-proof-index-test.sh
+
+# Run fast local regression checks for the beta GitOps apply gate.
+gitops-beta-apply-activation-draft-test:
+  bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
 
 # Run fast local regression checks for production GitOps proof indexing.
 gitops-production-proof-index-test:

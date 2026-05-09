@@ -7,23 +7,47 @@ func writes_local_state($mode) {
 }
 
 func state_dir($mode) {
+	state_dir_for($mode, "")
+}
+
+func run_dir($mode) {
+	run_dir_for($mode, "")
+}
+
+func local_apply_state_dir($environment) {
+	if $environment == "beta" {
+		"/var/lib/fishystuff/gitops-beta"
+	} else {
+		"/var/lib/fishystuff/gitops"
+	}
+}
+
+func local_apply_run_dir($environment) {
+	if $environment == "beta" {
+		"/run/fishystuff/gitops-beta"
+	} else {
+		"/run/fishystuff/gitops"
+	}
+}
+
+func state_dir_for($mode, $environment) {
 	if is_vm_state($mode) {
 		"/var/lib/fishystuff/gitops-test"
 	} else {
 		if $mode == "local-apply" {
-			"/var/lib/fishystuff/gitops"
+			local_apply_state_dir($environment)
 		} else {
 			"/tmp/fishystuff-gitops-test"
 		}
 	}
 }
 
-func run_dir($mode) {
+func run_dir_for($mode, $environment) {
 	if is_vm_state($mode) {
 		"/run/fishystuff/gitops-test"
 	} else {
 		if $mode == "local-apply" {
-			"/run/fishystuff/gitops"
+			local_apply_run_dir($environment)
 		} else {
 			"/tmp/fishystuff-gitops-test/run"
 		}

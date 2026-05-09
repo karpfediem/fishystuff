@@ -86,8 +86,8 @@ class single_host($st) {
 	$active_dolt_materialization str = if $raw_active_dolt_materialization == "" { "metadata_only" } else { $raw_active_dolt_materialization }
 	$write_vm_state = fishy_paths.is_vm_state($mode)
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
-	$run_dir = fishy_paths.run_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment_name)
+	$run_dir = fishy_paths.run_dir_for($mode, $environment_name)
 	$active_api_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["api"] || $empty_artifact
 	$active_site_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["site"] || $empty_artifact
 	$active_cdn_runtime_artifact struct{enabled bool; store_path str; gcroot_path str} = $active_release->closures["cdn_runtime"] || $empty_artifact

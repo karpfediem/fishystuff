@@ -22,7 +22,7 @@ class active($st) {
 	$admission_state str = $st->admission_state || "not_run"
 	$served bool = $st->served || false
 	$write_local_state = fishy_paths.writes_local_state($mode)
-	$state_dir = fishy_paths.state_dir($mode)
+	$state_dir = fishy_paths.state_dir_for($mode, $environment)
 	$active_dir = fmt.printf("%s/active", $state_dir)
 	$active_path = fmt.printf("%s/%s.json", $active_dir, $environment)
 	$served_dir = fmt.printf("%s/served/%s", $state_dir, $environment)

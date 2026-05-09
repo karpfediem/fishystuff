@@ -107,7 +107,7 @@ jq -e \
     and .commands.inventory.kv.gitops_beta_host_inventory_ok == "beta"
     and .commands.preflight.kv.gitops_beta_preflight_ok == $draft
     and .commands.host_handoff_plan.kv.gitops_beta_host_handoff_plan_ok == $draft
-    and .commands.host_handoff_plan.kv.beta_apply_gate_available == "false"
+    and .commands.host_handoff_plan.kv.beta_apply_gate_available == "true"
     and .remote_deploy_performed == false
     and .infrastructure_mutation_performed == false
   ' "$proof_file" >/dev/null
