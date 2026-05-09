@@ -134,9 +134,15 @@ grep -F "handoff_summary_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "api_bundle=${fixture_root}/active-api" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "dolt_bundle=${fixture_root}/active-dolt-service" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "service_start_plan_status=pending_runtime_env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "service_start_plan_missing_dolt_runtime_env=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "service_start_plan_missing_api_runtime_env=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "admission_evidence_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "activation_draft_status=ready" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "gitops_beta_proof_index_status=missing_proof_dir" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "guarded_runtime_env_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_host_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_host_action_04=FISHYSTUFF_GITOPS_ENABLE_BETA_EDGE_INSTALL=1" "${fixture_root}/ready.stdout" >/dev/null
 pass "ready artifact first service set plan"

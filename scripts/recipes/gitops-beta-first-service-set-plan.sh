@@ -145,6 +145,12 @@ run_service_start_plan_if_ready() {
   fi
   if [[ ! -f "$api_env_file" || ! -f "$dolt_env_file" ]]; then
     printf 'service_start_plan_status=pending_runtime_env\n'
+    if [[ ! -f "$dolt_env_file" ]]; then
+      printf 'service_start_plan_missing_dolt_runtime_env=%s\n' "$dolt_env_file"
+    fi
+    if [[ ! -f "$api_env_file" ]]; then
+      printf 'service_start_plan_missing_api_runtime_env=%s\n' "$api_env_file"
+    fi
     return
   fi
 
@@ -281,6 +287,10 @@ printf 'read_only_step_04=just gitops-beta-observe-admission output=%s summary_f
 printf 'read_only_step_05=just gitops-beta-activation-draft output=%s summary_file=%s admission_file=%s\n' "$draft_file" "$summary_file" "$admission_file"
 printf 'read_only_step_06=just gitops-beta-operator-proof output_dir=%s draft_file=%s summary_file=%s admission_file=%s edge_bundle=%s\n' "$proof_dir" "$draft_file" "$summary_file" "$admission_file" "$edge_bundle"
 printf 'read_only_step_07=just gitops-beta-proof-index proof_dir=%s require_complete=true\n' "$proof_dir"
+printf 'read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=%s\n' "$dolt_env_file"
+printf 'read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=%s\n' "$api_env_file"
+printf 'guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=%s\n' "$dolt_env_file"
+printf 'guarded_runtime_env_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=%s\n' "$api_env_file"
 printf 'guarded_host_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_BOOTSTRAP=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_DIRECTORIES=1 FISHYSTUFF_GITOPS_ENABLE_BETA_HOST_USER_GROUPS=1 just gitops-beta-host-bootstrap-apply\n'
 printf 'guarded_host_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=%s FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=%s just gitops-beta-start-services api_bundle=%s dolt_bundle=%s api_env_file=%s dolt_env_file=%s\n' "$dolt_unit_sha256" "$api_unit_sha256" "$api_bundle" "$dolt_bundle" "$api_env_file" "$dolt_env_file"
 printf 'guarded_host_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 FISHYSTUFF_GITOPS_BETA_APPLY_OPERATOR_PROOF_SHA256=<checked beta proof hash> just gitops-beta-apply-activation-draft draft_file=%s summary_file=%s admission_file=%s proof_file=<checked beta operator proof file>\n' "$draft_file" "$summary_file" "$admission_file"
