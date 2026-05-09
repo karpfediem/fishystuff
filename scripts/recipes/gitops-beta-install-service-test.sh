@@ -98,6 +98,7 @@ make_beta_service_bundle() {
   local unit_name=""
   local config_destination=""
   local runtime_env_target=""
+  local release_env_target=""
   local exe_real=""
   local config_real=""
   local systemd_unit_real=""
@@ -107,13 +108,15 @@ make_beta_service_bundle() {
       service_id="fishystuff-beta-api"
       unit_name="fishystuff-beta-api.service"
       config_destination="config.toml"
-      runtime_env_target="/var/lib/fishystuff/gitops-beta/api/beta.env"
+      runtime_env_target="/var/lib/fishystuff/gitops-beta/api/runtime.env"
+      release_env_target="/var/lib/fishystuff/gitops-beta/api/beta.env"
       ;;
     dolt)
       service_id="fishystuff-beta-dolt"
       unit_name="fishystuff-beta-dolt.service"
       config_destination="sql-server.yaml"
       runtime_env_target="/var/lib/fishystuff/gitops-beta/dolt/beta.env"
+      release_env_target=""
       ;;
     *)
       printf '[gitops-beta-install-service-test] unsupported fixture service: %s\n' "$service" >&2
@@ -149,7 +152,8 @@ NoNewPrivileges=true
 Environment="FISHYSTUFF_DEPLOYMENT_ENVIRONMENT=beta"
 Environment="FISHYSTUFF_OTEL_DEPLOYMENT_ENVIRONMENT=beta"
 Environment="FISHYSTUFF_SECRETSPEC_PATH=/etc/fishystuff/secretspec.toml"
-EnvironmentFile=${runtime_env_target}
+EnvironmentFile=-${runtime_env_target}
+EnvironmentFile=-${release_env_target}
 ExecStart=${exe_real} --config ${config_real} --bind 127.0.0.1:18192
 Restart=on-failure
 [Install]
@@ -191,6 +195,7 @@ EOF
     --arg unit_name "$unit_name" \
     --arg config_destination "$config_destination" \
     --arg runtime_env_target "$runtime_env_target" \
+    --arg release_env_target "$release_env_target" \
     --arg exe_real "$exe_real" \
     --arg config_real "$config_real" \
     --arg systemd_unit_real "$systemd_unit_real" \
@@ -225,6 +230,13 @@ EOF
         }
       ],
       supervision: {
+        environmentFiles: (
+          if $release_env_target != "" then
+            [$runtime_env_target, ("-" + $release_env_target)]
+          else
+            [$runtime_env_target]
+          end
+        ),
         environment: (
           if $service == "api" then
             {

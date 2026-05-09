@@ -40,6 +40,7 @@ require_bundle_metadata() {
     --arg unit_name "$unit_name" \
     --arg config_destination "$config_destination" \
     --arg runtime_env_target "$runtime_env_target" \
+    --arg release_env_target "$release_env_target" \
     --arg systemd_unit_store "$systemd_unit_store" \
     "$filter" \
     "$bundle_json" >/dev/null; then
@@ -130,7 +131,8 @@ case "$service" in
     service_id="fishystuff-beta-api"
     unit_name="fishystuff-beta-api.service"
     config_destination="config.toml"
-    runtime_env_target="/var/lib/fishystuff/gitops-beta/api/beta.env"
+    runtime_env_target="/var/lib/fishystuff/gitops-beta/api/runtime.env"
+    release_env_target="/var/lib/fishystuff/gitops-beta/api/beta.env"
     ;;
   dolt)
     auto_package="dolt-service-bundle-beta-gitops-handoff"
@@ -138,6 +140,7 @@ case "$service" in
     unit_name="fishystuff-beta-dolt.service"
     config_destination="sql-server.yaml"
     runtime_env_target="/var/lib/fishystuff/gitops-beta/dolt/beta.env"
+    release_env_target=""
     ;;
   *)
     echo "unsupported beta service bundle: ${service}" >&2
@@ -200,6 +203,9 @@ require_bundle_metadata "config artifact" '.artifacts."config/base".destination 
 require_bundle_metadata "systemd unit artifact" '.artifacts."systemd/unit".destination == $unit_name and .artifacts."systemd/unit".storePath == $systemd_unit_store'
 require_bundle_metadata "runtime env overlay" '.runtimeOverlays[]? | select(.targetPath == $runtime_env_target and .secret == true and .onChange == "restart")'
 require_bundle_metadata "systemd unit install" '.backends.systemd.daemon_reload == true and (.backends.systemd.units[]? | select(.name == $unit_name and .install_path == ("/etc/systemd/system/" + $unit_name) and .state == "running" and .startup == "enabled"))'
+if [[ -n "$release_env_target" ]]; then
+  require_bundle_metadata "GitOps release environment file" '.supervision.environmentFiles[]? | select(. == $release_env_target or . == ("-" + $release_env_target))'
+fi
 
 grep -Fx "$config_store" "$store_paths" >/dev/null
 grep -Fx "$systemd_unit_store" "$store_paths" >/dev/null
@@ -208,6 +214,9 @@ require_unit_fragment "ExecStart" "ExecStart="
 require_unit_line "restart policy" "Restart=on-failure"
 require_unit_line "install target" "WantedBy=multi-user.target"
 require_unit_environment_file "$runtime_env_target"
+if [[ -n "$release_env_target" ]]; then
+  require_unit_environment_file "$release_env_target"
+fi
 require_unit_line "beta deployment environment" 'Environment="FISHYSTUFF_DEPLOYMENT_ENVIRONMENT=beta"'
 reject_unit_fragment "shared API runtime env" "/run/fishystuff/api/env"
 reject_unit_fragment "production service name" "fishystuff-api.service"
@@ -251,6 +260,9 @@ printf 'gitops_beta_service_bundle_systemd_unit_store=%s\n' "$systemd_unit_store
 printf 'gitops_beta_service_bundle_systemd_unit_sha256=%s\n' "$systemd_unit_sha256"
 printf 'gitops_beta_service_bundle_unit_install_path=/etc/systemd/system/%s\n' "$unit_name"
 printf 'gitops_beta_service_bundle_runtime_env_target=%s\n' "$runtime_env_target"
+if [[ -n "$release_env_target" ]]; then
+  printf 'gitops_beta_service_bundle_release_env_target=%s\n' "$release_env_target"
+fi
 printf 'gitops_beta_%s_service_bundle_ok=%s\n' "$service" "$bundle"
 printf 'gitops_beta_%s_service_bundle_unit_sha256=%s\n' "$service" "$systemd_unit_sha256"
 printf 'remote_deploy_performed=false\n'

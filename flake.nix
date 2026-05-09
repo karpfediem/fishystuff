@@ -233,7 +233,8 @@
             serviceId = "fishystuff-beta-api";
             unitName = "fishystuff-beta-api.service";
             port = 18192;
-            runtimeEnvFile = "/var/lib/fishystuff/gitops-beta/api/beta.env";
+            runtimeEnvFile = "/var/lib/fishystuff/gitops-beta/api/runtime.env";
+            environmentFiles = [ "-/var/lib/fishystuff/gitops-beta/api/beta.env" ];
           };
           doltServiceBundleFor =
             deploymentEnvironment:

@@ -18,6 +18,11 @@ just gitops-beta-service-bundles
 just gitops-beta-service-bundles-test
 just gitops-beta-check-service-bundle service=api
 just gitops-beta-check-service-bundle service=dolt
+just gitops-beta-write-runtime-env service=api
+just gitops-beta-check-runtime-env service=api
+just gitops-beta-write-runtime-env service=dolt
+just gitops-beta-check-runtime-env service=dolt
+just gitops-beta-runtime-env-test
 just gitops-beta-install-service service=api
 just gitops-beta-install-service service=dolt
 just gitops-beta-install-service-test
@@ -55,7 +60,9 @@ The API bundle validates:
 
 - service ID `fishystuff-beta-api`
 - systemd unit `fishystuff-beta-api.service`
-- beta runtime env file:
+- operator-owned beta runtime env file:
+  - `/var/lib/fishystuff/gitops-beta/api/runtime.env`
+- GitOps-owned release identity env file:
   - `/var/lib/fishystuff/gitops-beta/api/beta.env`
 - beta API listener:
   - `127.0.0.1:18192`
@@ -103,6 +110,8 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-check-service-bundle` validates one beta API or Dolt service bundle outside Nix test derivations. It accepts `service=api` or `service=dolt`, builds the matching beta handoff bundle by default, and checks the beta service ID, beta systemd unit name, beta runtime env path, beta loopback listener or Dolt state directory, and absence of production unit names or production state paths.
 
+`just gitops-beta-write-runtime-env` and `just gitops-beta-check-runtime-env` materialize and validate the host-local beta runtime env boundary. API runtime config lives in `/var/lib/fishystuff/gitops-beta/api/runtime.env`; the GitOps graph owns `/var/lib/fishystuff/gitops-beta/api/beta.env` for release identity and selected Dolt ref, so reconciliation cannot erase the operator-owned database/CORS/CDN settings. API writing requires `FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1` and `FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=mysql://...@127.0.0.1:3316/fishystuff`; public site/CDN defaults are beta-only and production hostnames are refused. Dolt writing requires `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1` and currently writes an intentionally empty beta env file, because the beta Dolt unit carries its deployment identity statically. The checker is read-only and rejects the shared `/run/fishystuff/api/env`, production GitOps state, production origins, and non-beta Dolt branch overrides.
+
 `just gitops-beta-install-service` is the guarded local install/restart gate for the beta API and Dolt units. API requires `FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1`, and `FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked beta API unit hash>`. Dolt requires the corresponding `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1`, and `FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked beta Dolt unit hash>`. The gate re-runs the beta service-bundle check, installs only the beta unit, reloads systemd, restarts that beta unit, and verifies it is active. Its regression intercepts `install` and `systemctl` with fake commands.
 
 `just gitops-beta-current-handoff` adds the first beta handoff proof around that snapshot. It generates the beta desired-state file, verifies local closure paths, verifies the active CDN serving manifest, runs GitOps unify, writes a handoff summary, and verifies that summary. Unlike production-current handoff it does not require retained rollback releases yet, because this is the first clean beta service-set candidate rather than a live production upgrade. It records that serving readiness was intentionally skipped.
@@ -124,5 +133,5 @@ The validator refuses production hostnames, production served roots, production 
 Next pieces to add:
 
 1. beta host bootstrap/install path with separate manually confirmed infrastructure steps
-2. first real beta API/Dolt runtime env materialization and local service start on the new service set
+2. first real beta service start on the new service set using the checked runtime env files
 3. first real beta apply on the new service set, followed by served proof/index capture and edge install

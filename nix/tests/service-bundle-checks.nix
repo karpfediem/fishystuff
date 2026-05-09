@@ -255,7 +255,7 @@ in
     bundle = apiServiceBundleBetaGitopsHandoff;
     serviceId = "fishystuff-beta-api";
     configDestination = "config.toml";
-    runtimeEnvTarget = "/var/lib/fishystuff/gitops-beta/api/beta.env";
+    runtimeEnvTarget = "/var/lib/fishystuff/gitops-beta/api/runtime.env";
     unitName = "fishystuff-beta-api.service";
     minArgvLength = 3;
     requireSecretSpecPath = true;
@@ -268,6 +268,8 @@ in
       "PrivateTmp=true"
       "ProtectSystem=strict"
       "NoNewPrivileges=true"
+      "EnvironmentFile=-/var/lib/fishystuff/gitops-beta/api/runtime.env"
+      "EnvironmentFile=-/var/lib/fishystuff/gitops-beta/api/beta.env"
     ];
     requiredUnitFragments = [
       "--bind 127.0.0.1:18192"

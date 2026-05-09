@@ -88,6 +88,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
   bash scripts/recipes/gitops-beta-install-edge-test.sh
   bash scripts/recipes/gitops-beta-install-service-test.sh
+  bash scripts/recipes/gitops-beta-runtime-env-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -262,6 +263,18 @@ gitops-beta-service-bundles-test system="x86_64-linux":
 # Install/restart a beta API or Dolt unit only after explicit opt-ins and checked unit hash.
 gitops-beta-install-service service="api" bundle="auto" install_bin="install" systemctl_bin="systemctl":
   bash scripts/recipes/gitops-beta-install-service.sh "{{service}}" "{{bundle}}" "{{install_bin}}" "{{systemctl_bin}}"
+
+# Write the beta API or Dolt runtime env file after explicit service-specific opt-in.
+gitops-beta-write-runtime-env service="api" output="":
+  bash scripts/recipes/gitops-beta-write-runtime-env.sh "{{service}}" "{{output}}"
+
+# Validate the beta API or Dolt runtime env file. No mutation.
+gitops-beta-check-runtime-env service="api" env_file="":
+  bash scripts/recipes/gitops-check-beta-runtime-env.sh "{{service}}" "{{env_file}}"
+
+# Run fast local regression checks for beta runtime env writers/checkers.
+gitops-beta-runtime-env-test:
+  bash scripts/recipes/gitops-beta-runtime-env-test.sh
 
 # Print the dry-run host-local production GitOps handoff plan. No remote mutation.
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
