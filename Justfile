@@ -364,6 +364,26 @@ gitops-beta-host-selection-packet public_ipv4="" host_name="site-nbg1-beta" ssh_
 gitops-beta-host-selection-packet-test:
   bash scripts/recipes/gitops-beta-host-selection-packet-test.sh
 
+# Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
+gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
+  @bash scripts/recipes/gitops-beta-hetzner-inventory-packet.sh "{{old_server_name}}" "{{replacement_server_name}}"
+
+# Plan the fresh beta host replacement sequence. No hcloud, SSH, or DNS mutation.
+gitops-beta-host-replacement-plan old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2" proof_dir="data/gitops":
+  @bash scripts/recipes/gitops-beta-host-replacement-plan.sh "{{old_server_name}}" "{{replacement_server_name}}" "{{proof_dir}}"
+
+# Run fast local regression checks for the beta host replacement plan.
+gitops-beta-host-replacement-plan-test:
+  bash scripts/recipes/gitops-beta-host-replacement-plan-test.sh
+
+# Create the fresh beta Hetzner resident host after explicit opt-ins. Infrastructure mutation.
+gitops-beta-hetzner-create-host server_name="site-nbg1-beta-v2" server_type="cx33" image="debian-13" datacenter="nbg1-dc3":
+  bash scripts/recipes/gitops-beta-hetzner-create-host.sh "{{server_name}}" "{{server_type}}" "{{image}}" "{{datacenter}}"
+
+# Run fast local regression checks for the guarded beta Hetzner create helper.
+gitops-beta-hetzner-create-host-test:
+  bash scripts/recipes/gitops-beta-hetzner-create-host-test.sh
+
 # Generate and store a missing beta deploy SSH key after explicit opt-in. No upload or remote mutation.
 gitops-beta-deploy-key-ensure key_comment="fishystuff-beta-deploy" key_name="fishystuff-beta-deploy":
   bash scripts/recipes/gitops-beta-deploy-key-ensure.sh "{{key_comment}}" "{{key_name}}"
