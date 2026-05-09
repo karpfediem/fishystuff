@@ -89,10 +89,15 @@ grep -F "deploy_authority_check_status=passed" "${root}/pending.stdout" >/dev/nu
 grep -F "deploy_authority_secretspec_profile=beta-deploy" "${root}/pending.stdout" >/dev/null
 grep -F "deploy_authority_deploy_private_key_loaded=false" "${root}/pending.stdout" >/dev/null
 grep -F "deploy_authority_remote_mutation=none" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_credentials_status=missing" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_credentials_ssh_key_pair_match=unknown" "${root}/pending.stdout" >/dev/null
+grep -F "deploy_credentials_next_required_action=generate_or_store_beta_deploy_key" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_status=generate_current_handoff" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_deploy_authority_check_status=passed" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_deploy_authority_secretspec_profile=beta-deploy" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_deploy_authority_remote_mutation=none" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_deploy_credentials_status=missing" "${root}/pending.stdout" >/dev/null
+grep -F "operator_packet_deploy_credentials_next_required_action=generate_or_store_beta_deploy_key" "${root}/pending.stdout" >/dev/null
 grep -F "operator_packet_next_command_01=FISHYSTUFF_OPERATOR_ROOT=${RECIPE_REPO_ROOT} just gitops-beta-current-handoff summary_output=${pending_summary}" "${root}/pending.stdout" >/dev/null
 grep -F "admission_evidence_status=missing" "${root}/pending.stdout" >/dev/null
 grep -F "activation_draft_status=missing" "${root}/pending.stdout" >/dev/null
@@ -190,10 +195,12 @@ grep -F "read_only_runtime_env_check_01=just gitops-beta-check-runtime-env servi
 grep -F "read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_03=just secrets-check profile=beta-runtime" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "read_only_runtime_env_check_04=just gitops-beta-runtime-env-host-preflight api_env_file=${fixture_root}/api/runtime.env dolt_env_file=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
-grep -F "read_only_step_05=just gitops-beta-activation-draft-packet draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_dir=${proofs} edge_bundle=auto api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
-grep -F "read_only_step_06=just gitops-beta-operator-proof-packet proof_dir=${proofs} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
-grep -F "read_only_step_07=just gitops-beta-served-proof-packet proof_dir=${proofs} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
-grep -F "read_only_step_08=just gitops-beta-edge-install-packet edge_bundle=auto proof_dir=${proofs} draft_file=${draft} summary_file=${summary} admission_file=${admission} api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_step_03=just gitops-beta-deploy-credentials-packet" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_step_04=just deploy-key-boundary-check" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_step_07=just gitops-beta-activation-draft-packet draft_file=${draft} summary_file=${summary} admission_file=${admission} proof_dir=${proofs} edge_bundle=auto api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_step_08=just gitops-beta-operator-proof-packet proof_dir=${proofs} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_step_09=just gitops-beta-served-proof-packet proof_dir=${proofs} draft_file=${draft} summary_file=${summary} admission_file=${admission} edge_bundle=auto api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
+grep -F "read_only_step_10=just gitops-beta-edge-install-packet edge_bundle=auto proof_dir=${proofs} draft_file=${draft} summary_file=${summary} admission_file=${admission} api_upstream=http://127.0.0.1:18192 observation_dir=${fixture_root}/observations" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_runtime_env_action_01=FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env service=dolt output=${fixture_root}/dolt/beta.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_runtime_env_action_02=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 FISHYSTUFF_GITOPS_BETA_API_DATABASE_URL=<beta loopback Dolt DSN from operator secret> just gitops-beta-write-runtime-env service=api output=${fixture_root}/api/runtime.env" "${fixture_root}/ready.stdout" >/dev/null
 grep -F "guarded_runtime_env_action_03=FISHYSTUFF_GITOPS_ENABLE_BETA_API_RUNTIME_ENV_WRITE=1 just gitops-beta-write-runtime-env-secretspec service=api output=${fixture_root}/api/runtime.env profile=beta-runtime" "${fixture_root}/ready.stdout" >/dev/null

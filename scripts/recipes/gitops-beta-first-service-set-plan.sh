@@ -230,6 +230,7 @@ trap cleanup EXIT
 
 bootstrap_plan="${tmp_dir}/bootstrap-plan.out"
 authority_plan="${tmp_dir}/deploy-authority.out"
+deploy_credentials_packet="${tmp_dir}/deploy-credentials.out"
 current_handoff_plan="${tmp_dir}/current-handoff-plan.out"
 service_start_plan="${tmp_dir}/service-start-plan.out"
 runtime_env_packet="${tmp_dir}/runtime-env-packet.out"
@@ -247,6 +248,11 @@ bash scripts/recipes/deploy-authority-check.sh beta dolt api edge site cdn >"$au
 require_colon_equals authority_check "$authority_plan" passed
 require_colon_equals deployment "$authority_plan" beta
 require_colon_equals remote_mutation "$authority_plan" none
+
+bash scripts/recipes/gitops-beta-deploy-credentials-packet.sh >"$deploy_credentials_packet"
+require_kv_equals remote_deploy_performed "$deploy_credentials_packet" false
+require_kv_equals infrastructure_mutation_performed "$deploy_credentials_packet" false
+require_kv_equals local_host_mutation_performed "$deploy_credentials_packet" false
 
 current_desired_file="${summary_file%.handoff-summary.json}.desired.json"
 if [[ "$current_desired_file" == "$summary_file" ]]; then
@@ -280,6 +286,10 @@ printf 'deploy_authority_dns_mutation_authority=%s\n' "$(colon_value dns_mutatio
 printf 'deploy_authority_dns_mutation_authority_risk=%s\n' "$(colon_value dns_mutation_authority_risk "$authority_plan")"
 printf 'deploy_authority_selected_mutating_services=%s\n' "$(colon_value selected_mutating_services "$authority_plan")"
 printf 'deploy_authority_remote_mutation=%s\n' "$(colon_value remote_mutation "$authority_plan")"
+printf 'deploy_credentials_status=%s\n' "$(kv_value beta_deploy_credentials_status "$deploy_credentials_packet")"
+printf 'deploy_credentials_ssh_key_name=%s\n' "$(kv_value beta_deploy_ssh_key_name "$deploy_credentials_packet")"
+printf 'deploy_credentials_ssh_key_pair_match=%s\n' "$(kv_value beta_deploy_ssh_key_pair_match "$deploy_credentials_packet")"
+printf 'deploy_credentials_next_required_action=%s\n' "$(kv_value beta_deploy_credentials_next_required_action "$deploy_credentials_packet")"
 awk -F= '$1 ~ /^(gitops_beta_current_handoff_plan_ok|existing_desired_state_status|existing_desired_state_active_release|existing_desired_state_closure_source|handoff_plan_status|handoff_can_run|closure_build_required|mgmt_build_required|cdn_runtime_closure_status|cdn_runtime_closure_build_mode|cdn_runtime_operator_root_status|dolt_commit_status|dolt_remote_status)$/ { print }' "$current_handoff_plan"
 run_service_start_plan_if_ready "$service_start_plan"
 
@@ -395,6 +405,14 @@ printf 'operator_packet_deploy_authority_cloudflare_api_token_loaded=%s\n' "$(co
 printf 'operator_packet_deploy_authority_dns_mutation_authority=%s\n' "$(colon_value dns_mutation_authority "$authority_plan")"
 printf 'operator_packet_deploy_authority_dns_mutation_authority_risk=%s\n' "$(colon_value dns_mutation_authority_risk "$authority_plan")"
 printf 'operator_packet_deploy_authority_remote_mutation=%s\n' "$(colon_value remote_mutation "$authority_plan")"
+printf 'operator_packet_deploy_credentials_status=%s\n' "$(kv_value beta_deploy_credentials_status "$deploy_credentials_packet")"
+printf 'operator_packet_deploy_credentials_hetzner_api_token_status=%s\n' "$(kv_value beta_deploy_hetzner_api_token_status "$deploy_credentials_packet")"
+printf 'operator_packet_deploy_credentials_cloudflare_api_token_status=%s\n' "$(kv_value beta_deploy_cloudflare_api_token_status "$deploy_credentials_packet")"
+printf 'operator_packet_deploy_credentials_ssh_key_pair_match=%s\n' "$(kv_value beta_deploy_ssh_key_pair_match "$deploy_credentials_packet")"
+printf 'operator_packet_deploy_credentials_next_required_action=%s\n' "$(kv_value beta_deploy_credentials_next_required_action "$deploy_credentials_packet")"
+if [[ -n "$(kv_value beta_deploy_ssh_public_key_fingerprint "$deploy_credentials_packet")" ]]; then
+  printf 'operator_packet_deploy_credentials_ssh_public_key_fingerprint=%s\n' "$(kv_value beta_deploy_ssh_public_key_fingerprint "$deploy_credentials_packet")"
+fi
 printf 'operator_packet_summary_file=%s\n' "$summary_file"
 printf 'operator_packet_admission_file=%s\n' "$admission_file"
 printf 'operator_packet_draft_file=%s\n' "$draft_file"
@@ -497,13 +515,15 @@ printf 'phase_06=apply activation draft through mgmt and publish served proof/in
 printf 'phase_07=install beta edge only after complete served proof chain\n'
 printf 'read_only_step_01=just gitops-beta-host-bootstrap-plan\n'
 printf 'read_only_step_02=%s\n' "$service_start_review_command"
-printf 'read_only_step_03=just gitops-beta-current-handoff summary_output=%s\n' "$summary_file"
-printf 'read_only_step_04=%s\n' "$admission_packet_command"
-printf 'read_only_step_05=%s\n' "$activation_draft_packet_command"
-printf 'read_only_step_06=%s\n' "$operator_proof_packet_command"
-printf 'read_only_step_07=%s\n' "$served_proof_packet_command"
-printf 'read_only_step_08=%s\n' "$edge_install_packet_command"
-printf 'read_only_step_09=%s\n' "$proof_index_command"
+printf 'read_only_step_03=just gitops-beta-deploy-credentials-packet\n'
+printf 'read_only_step_04=just deploy-key-boundary-check\n'
+printf 'read_only_step_05=just gitops-beta-current-handoff summary_output=%s\n' "$summary_file"
+printf 'read_only_step_06=%s\n' "$admission_packet_command"
+printf 'read_only_step_07=%s\n' "$activation_draft_packet_command"
+printf 'read_only_step_08=%s\n' "$operator_proof_packet_command"
+printf 'read_only_step_09=%s\n' "$served_proof_packet_command"
+printf 'read_only_step_10=%s\n' "$edge_install_packet_command"
+printf 'read_only_step_11=%s\n' "$proof_index_command"
 printf 'read_only_runtime_env_check_01=just gitops-beta-check-runtime-env service=dolt env_file=%s\n' "$dolt_env_file"
 printf 'read_only_runtime_env_check_02=just gitops-beta-check-runtime-env service=api env_file=%s\n' "$api_env_file"
 printf 'read_only_runtime_env_check_03=just secrets-check profile=beta-runtime\n'

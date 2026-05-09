@@ -344,6 +344,18 @@ gitops-beta-service-bundles:
 gitops-beta-check-service-bundle service="api" bundle="auto":
   bash scripts/recipes/gitops-check-beta-service-bundle.sh "{{service}}" "{{bundle}}"
 
+# Print the local beta deploy credential readiness packet. No remote mutation.
+gitops-beta-deploy-credentials-packet:
+  @bash scripts/recipes/gitops-beta-deploy-credentials-packet.sh
+
+# Generate and store a missing beta deploy SSH key after explicit opt-in. No upload or remote mutation.
+gitops-beta-deploy-key-ensure key_comment="fishystuff-beta-deploy" key_name="fishystuff-beta-deploy":
+  bash scripts/recipes/gitops-beta-deploy-key-ensure.sh "{{key_comment}}" "{{key_name}}"
+
+# Run fast local regression checks for beta deploy credential helpers.
+gitops-beta-deploy-credentials-test:
+  bash scripts/recipes/gitops-beta-deploy-credentials-test.sh
+
 # Run local Nix checks for the distinct beta GitOps API, Dolt, and edge service bundles.
 gitops-beta-service-bundles-test system="x86_64-linux":
   nix build --no-link ".#checks.{{system}}.api-service-bundle-beta-gitops-handoff" ".#checks.{{system}}.dolt-service-bundle-beta-gitops-handoff" ".#checks.{{system}}.edge-service-bundle-beta-gitops-handoff"
