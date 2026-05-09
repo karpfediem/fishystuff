@@ -16,6 +16,11 @@ The first concrete artifacts are the beta GitOps handoff service bundles:
 ```bash
 just gitops-beta-service-bundles
 just gitops-beta-service-bundles-test
+just gitops-beta-check-service-bundle service=api
+just gitops-beta-check-service-bundle service=dolt
+just gitops-beta-install-service service=api
+just gitops-beta-install-service service=dolt
+just gitops-beta-install-service-test
 just gitops-beta-edge-handoff-bundle
 just gitops-beta-edge-handoff-bundle-test
 just gitops-beta-current-desired
@@ -96,6 +101,10 @@ The validator refuses production hostnames, production served roots, production 
 
 `just gitops-beta-current-validate` generates that same snapshot and type-checks it through `gitops/main.mcl`. It is still local-only: no SSH, no Hetzner, no Cloudflare, no systemd changes.
 
+`just gitops-beta-check-service-bundle` validates one beta API or Dolt service bundle outside Nix test derivations. It accepts `service=api` or `service=dolt`, builds the matching beta handoff bundle by default, and checks the beta service ID, beta systemd unit name, beta runtime env path, beta loopback listener or Dolt state directory, and absence of production unit names or production state paths.
+
+`just gitops-beta-install-service` is the guarded local install/restart gate for the beta API and Dolt units. API requires `FISHYSTUFF_GITOPS_ENABLE_BETA_API_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_API_RESTART=1`, and `FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked beta API unit hash>`. Dolt requires the corresponding `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_INSTALL=1`, `FISHYSTUFF_GITOPS_ENABLE_BETA_DOLT_RESTART=1`, and `FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked beta Dolt unit hash>`. The gate re-runs the beta service-bundle check, installs only the beta unit, reloads systemd, restarts that beta unit, and verifies it is active. Its regression intercepts `install` and `systemctl` with fake commands.
+
 `just gitops-beta-current-handoff` adds the first beta handoff proof around that snapshot. It generates the beta desired-state file, verifies local closure paths, verifies the active CDN serving manifest, runs GitOps unify, writes a handoff summary, and verifies that summary. Unlike production-current handoff it does not require retained rollback releases yet, because this is the first clean beta service-set candidate rather than a live production upgrade. It records that serving readiness was intentionally skipped.
 
 `just gitops-beta-write-activation-admission-evidence` and `just gitops-beta-activation-draft` are the beta-shaped admission and activation wrappers. They require a beta handoff summary and refuse production summaries. The shared activation checker now reads the environment from the handoff summary, so the same invariant applies to beta: a serving draft must include explicit admission evidence and a retained rollback release. The current `gitops-beta-current-handoff` output is therefore candidate-only until a retained beta release is added.
@@ -115,5 +124,5 @@ The validator refuses production hostnames, production served roots, production 
 Next pieces to add:
 
 1. beta host bootstrap/install path with separate manually confirmed infrastructure steps
-2. first real beta apply on the new service set, followed by served proof/index capture
-3. beta API/Dolt service install gates with the same proof-hash and unit-hash discipline as the edge gate
+2. first real beta API/Dolt runtime env materialization and local service start on the new service set
+3. first real beta apply on the new service set, followed by served proof/index capture and edge install

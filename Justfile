@@ -87,6 +87,7 @@ gitops-helper-test:
   bash scripts/recipes/gitops-beta-proof-index-test.sh
   bash scripts/recipes/gitops-beta-apply-activation-draft-test.sh
   bash scripts/recipes/gitops-beta-install-edge-test.sh
+  bash scripts/recipes/gitops-beta-install-service-test.sh
   bash scripts/recipes/gitops-production-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-beta-edge-handoff-bundle-test.sh
   bash scripts/recipes/gitops-production-host-handoff-plan-test.sh
@@ -250,9 +251,17 @@ gitops-beta-edge-handoff-bundle-test:
 gitops-beta-service-bundles:
   nix build --no-link ".#api-service-bundle-beta-gitops-handoff" ".#dolt-service-bundle-beta-gitops-handoff"
 
+# Validate a beta GitOps API or Dolt service bundle. No remote mutation.
+gitops-beta-check-service-bundle service="api" bundle="auto":
+  bash scripts/recipes/gitops-check-beta-service-bundle.sh "{{service}}" "{{bundle}}"
+
 # Run local Nix checks for the distinct beta GitOps API, Dolt, and edge service bundles.
 gitops-beta-service-bundles-test system="x86_64-linux":
   nix build --no-link ".#checks.{{system}}.api-service-bundle-beta-gitops-handoff" ".#checks.{{system}}.dolt-service-bundle-beta-gitops-handoff" ".#checks.{{system}}.edge-service-bundle-beta-gitops-handoff"
+
+# Install/restart a beta API or Dolt unit only after explicit opt-ins and checked unit hash.
+gitops-beta-install-service service="api" bundle="auto" install_bin="install" systemctl_bin="systemctl":
+  bash scripts/recipes/gitops-beta-install-service.sh "{{service}}" "{{bundle}}" "{{install_bin}}" "{{systemctl_bin}}"
 
 # Print the dry-run host-local production GitOps handoff plan. No remote mutation.
 gitops-production-host-handoff-plan draft_file="data/gitops/production-activation.draft.desired.json" summary_file="data/gitops/production-current.handoff-summary.json" admission_file="" edge_bundle="auto" deploy_bin="auto":
@@ -325,6 +334,10 @@ gitops-beta-apply-activation-draft-test:
 # Run fast local regression checks for the beta edge install/restart gate.
 gitops-beta-install-edge-test:
   bash scripts/recipes/gitops-beta-install-edge-test.sh
+
+# Run fast local regression checks for beta API/Dolt service install gates.
+gitops-beta-install-service-test:
+  bash scripts/recipes/gitops-beta-install-service-test.sh
 
 # Run fast local regression checks for production GitOps proof indexing.
 gitops-production-proof-index-test:
