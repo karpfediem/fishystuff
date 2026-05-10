@@ -294,6 +294,10 @@ fi
 if [[ "$release_ref" != fishystuff/gitops-beta/* ]]; then
   fail "remote beta Dolt release ref must live under fishystuff/gitops-beta/, got: ${release_ref}"
 fi
+repo_parent="${repo%/*}"
+if [[ "$repo" != /var/lib/fishystuff/beta-dolt/* || "$repo_parent" != /var/lib/fishystuff/beta-dolt ]]; then
+  fail "remote beta Dolt repo must be directly under /var/lib/fishystuff/beta-dolt, got: ${repo}"
+fi
 case "$remote_url" in
   *$'\n'* | *$'\r'* | *"'"* | *'"'* | *" "*)
     fail "remote Dolt URL contains unsupported characters"
@@ -305,6 +309,12 @@ esac
 
 systemctl stop fishystuff-beta-api.service || true
 systemctl stop fishystuff-beta-dolt.service || true
+install -d -m 0750 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/beta-dolt
+install -d -m 0700 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/beta-dolt/home
+install -d -m 0750 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/beta-dolt/.doltcfg
+if [[ -e "$repo" && ! -d "$repo/.dolt" ]]; then
+  rm -rf "$repo"
+fi
 runuser -u fishystuff-beta-dolt -- env \
   HOME=/var/lib/fishystuff/beta-dolt/home \
   DOLT_BIN="$dolt_bin" \

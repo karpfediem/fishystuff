@@ -155,11 +155,13 @@ user_action="$(ensure_user fishystuff-beta-dolt fishystuff-beta-dolt /var/lib/fi
 install -d -m 0750 /var/lib/fishystuff/gitops-beta
 install -d -m 0750 /var/lib/fishystuff/gitops-beta/api
 install -d -m 0750 /var/lib/fishystuff/gitops-beta/dolt
-install -d -m 0750 /var/lib/fishystuff/gitops-beta/dolt-cache/fishystuff
+install -d -m 0750 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/gitops-beta/dolt-cache/fishystuff
 install -d -m 0755 /var/lib/fishystuff/gitops-beta/served/beta
 install -d -m 0750 /run/fishystuff/gitops-beta
 install -d -m 0700 /var/lib/fishystuff/gitops-beta/tls/live
-install -d -m 0750 /var/lib/fishystuff/beta-dolt
+install -d -m 0750 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/beta-dolt
+install -d -m 0700 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/beta-dolt/home
+install -d -m 0750 -o fishystuff-beta-dolt -g fishystuff-beta-dolt /var/lib/fishystuff/beta-dolt/.doltcfg
 
 printf 'remote_hostname=%s\n' "$remote_hostname"
 printf 'expected_hostname_match=true\n'
@@ -175,6 +177,8 @@ printf 'beta_directory_05=0755:/var/lib/fishystuff/gitops-beta/served/beta\n'
 printf 'beta_directory_06=0750:/run/fishystuff/gitops-beta\n'
 printf 'beta_directory_07=0700:/var/lib/fishystuff/gitops-beta/tls/live\n'
 printf 'beta_directory_08=0750:/var/lib/fishystuff/beta-dolt\n'
+printf 'beta_directory_09=0700:/var/lib/fishystuff/beta-dolt/home\n'
+printf 'beta_directory_10=0750:/var/lib/fishystuff/beta-dolt/.doltcfg\n'
 REMOTE
 
 printf 'remote_host_mutation_performed=true\n'
