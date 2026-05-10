@@ -60,6 +60,9 @@ case "$property" in
   SubState) printf '%s\n' "${FISHYSTUFF_FAKE_UNIT_SUB_STATE:-running}" ;;
   UnitFileState) printf '%s\n' "${FISHYSTUFF_FAKE_UNIT_FILE_STATE:-enabled}" ;;
   MainPID) printf '%s\n' "${FISHYSTUFF_FAKE_UNIT_MAIN_PID:-1234}" ;;
+  Result) printf '%s\n' "${FISHYSTUFF_FAKE_UNIT_RESULT:-success}" ;;
+  ExecMainStatus) printf '%s\n' "${FISHYSTUFF_FAKE_UNIT_EXEC_MAIN_STATUS:-0}" ;;
+  NRestarts) printf '%s\n' "${FISHYSTUFF_FAKE_UNIT_N_RESTARTS:-0}" ;;
   *) printf 'unknown\n' ;;
 esac
 EOF
@@ -102,6 +105,9 @@ grep -F "beta_tls_resident_status=active_with_tls_material" "${root}/status.stdo
 grep -F "beta_tls_resident_hostname_match=true" "${root}/status.stdout" >/dev/null
 grep -F "beta_tls_resident_unit_load_state=loaded" "${root}/status.stdout" >/dev/null
 grep -F "beta_tls_resident_unit_active_state=active" "${root}/status.stdout" >/dev/null
+grep -F "beta_tls_resident_unit_result=success" "${root}/status.stdout" >/dev/null
+grep -F "beta_tls_resident_unit_exec_main_status=0" "${root}/status.stdout" >/dev/null
+grep -F "beta_tls_resident_unit_n_restarts=0" "${root}/status.stdout" >/dev/null
 grep -F "beta_tls_resident_cloudflare_token_exists=true" "${root}/status.stdout" >/dev/null
 grep -F "beta_tls_resident_cloudflare_token_mode=600" "${root}/status.stdout" >/dev/null
 grep -F "beta_tls_resident_cloudflare_token_sha256=${token_sha256}" "${root}/status.stdout" >/dev/null
@@ -152,6 +158,9 @@ grep -F "beta_tls_resident_hostname_match=false" "${root}/wrong-host.stdout" >/d
 pass "reports wrong host context"
 
 env PATH="${fake_bin}:${PATH}" FISHYSTUFF_FAKE_UNIT_ACTIVE_STATE=failed \
+  FISHYSTUFF_FAKE_UNIT_RESULT=exit-code \
+  FISHYSTUFF_FAKE_UNIT_EXEC_MAIN_STATUS=200 \
+  FISHYSTUFF_FAKE_UNIT_N_RESTARTS=7 \
   bash scripts/recipes/gitops-beta-tls-resident-status-packet.sh \
     "$desired" \
     "$unit" \
@@ -162,6 +171,9 @@ env PATH="${fake_bin}:${PATH}" FISHYSTUFF_FAKE_UNIT_ACTIVE_STATE=failed \
     openssl >"${root}/inactive.stdout"
 grep -F "beta_tls_resident_status=unit_not_active" "${root}/inactive.stdout" >/dev/null
 grep -F "beta_tls_resident_unit_active_state=failed" "${root}/inactive.stdout" >/dev/null
+grep -F "beta_tls_resident_unit_result=exit-code" "${root}/inactive.stdout" >/dev/null
+grep -F "beta_tls_resident_unit_exec_main_status=200" "${root}/inactive.stdout" >/dev/null
+grep -F "beta_tls_resident_unit_n_restarts=7" "${root}/inactive.stdout" >/dev/null
 pass "reports inactive resident unit"
 
 printf '[gitops-beta-tls-resident-status-packet-test] %s checks passed\n' "$pass_count"

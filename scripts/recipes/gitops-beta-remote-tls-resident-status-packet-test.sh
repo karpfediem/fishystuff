@@ -49,6 +49,9 @@ printf 'remote_tls_resident_unit_load_state=loaded\n'
 printf 'remote_tls_resident_unit_active_state=active\n'
 printf 'remote_tls_resident_unit_sub_state=running\n'
 printf 'remote_tls_resident_unit_file_state=enabled\n'
+printf 'remote_tls_resident_unit_result=success\n'
+printf 'remote_tls_resident_unit_exec_main_status=0\n'
+printf 'remote_tls_resident_unit_n_restarts=0\n'
 printf 'remote_tls_resident_desired_state_exists=true\n'
 printf 'remote_tls_resident_cloudflare_token_exists=true\n'
 printf 'remote_tls_resident_cloudflare_token_mode=600\n'
@@ -77,11 +80,16 @@ env \
 grep -F "gitops_beta_remote_tls_resident_status_packet_ok=true" "${root}/status.out" >/dev/null
 grep -F "resident_target=root@203.0.113.20" "${root}/status.out" >/dev/null
 grep -F "remote_tls_resident_unit_active_state=active" "${root}/status.out" >/dev/null
+grep -F "remote_tls_resident_unit_result=success" "${root}/status.out" >/dev/null
+grep -F "remote_tls_resident_unit_exec_main_status=0" "${root}/status.out" >/dev/null
+grep -F "remote_tls_resident_unit_n_restarts=0" "${root}/status.out" >/dev/null
 grep -F "remote_tls_resident_fullchain_parse_ok=true" "${root}/status.out" >/dev/null
 grep -F "remote_tls_resident_cert_key_match=true" "${root}/status.out" >/dev/null
 grep -F "remote_host_mutation_performed=false" "${root}/status.out" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/status.out" >/dev/null
 grep -F "systemctl show \"\$unit_name\" -p ActiveState --value" "${root}/remote.sh" >/dev/null
+grep -F "systemctl show \"\$unit_name\" -p ExecMainStatus --value" "${root}/remote.sh" >/dev/null
+grep -F "systemctl show \"\$unit_name\" -p NRestarts --value" "${root}/remote.sh" >/dev/null
 grep -F "openssl x509 -checkend 604800" "${root}/remote.sh" >/dev/null
 pass "remote TLS resident status packet is read-only"
 

@@ -184,6 +184,9 @@ printf 'remote_tls_resident_unit_active_state=%s\n' "$(systemctl show "$unit_nam
 printf 'remote_tls_resident_unit_sub_state=%s\n' "$(systemctl show "$unit_name" -p SubState --value 2>/dev/null || true)"
 printf 'remote_tls_resident_unit_file_state=%s\n' "$(systemctl show "$unit_name" -p UnitFileState --value 2>/dev/null || true)"
 printf 'remote_tls_resident_unit_main_pid=%s\n' "$(systemctl show "$unit_name" -p MainPID --value 2>/dev/null || true)"
+printf 'remote_tls_resident_unit_result=%s\n' "$(systemctl show "$unit_name" -p Result --value 2>/dev/null || true)"
+printf 'remote_tls_resident_unit_exec_main_status=%s\n' "$(systemctl show "$unit_name" -p ExecMainStatus --value 2>/dev/null || true)"
+printf 'remote_tls_resident_unit_n_restarts=%s\n' "$(systemctl show "$unit_name" -p NRestarts --value 2>/dev/null || true)"
 
 file_inventory remote_tls_resident_desired_state "$desired_state"
 file_inventory remote_tls_resident_unit_file "$unit_file"
