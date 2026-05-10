@@ -77,7 +77,7 @@ grep -F "beta_remote_tls_resident_install_packet_target_status=ready" "${root}/r
 grep -F "beta_remote_tls_resident_install_packet_desired_sha256=${desired_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "beta_remote_tls_resident_install_packet_unit_sha256=${unit_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "beta_remote_tls_resident_install_packet_cloudflare_token_sha256=${token_sha256}" "${root}/ready.stdout" >/dev/null
-grep -F "FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART=1" "${root}/ready.stdout" >/dev/null
+grep -F "FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART=1" "${root}/ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=root@203.0.113.20" "${root}/ready.stdout" >/dev/null
 grep -F "secretspec run --profile beta-deploy -- just gitops-beta-remote-install-tls-resident target=root@203.0.113.20 expected_hostname=site-nbg1-beta" "${root}/ready.stdout" >/dev/null
 if grep -F "fake-cloudflare-token" "${root}/ready.stdout" >/dev/null; then

@@ -256,7 +256,7 @@ unit_arg="$(kv_command_arg unit_file "$unit_file")"
 token_arg="$(kv_command_arg cloudflare_token_source "$cloudflare_token_source")"
 printf 'beta_remote_tls_resident_install_packet_status=ready\n'
 printf 'beta_remote_tls_resident_install_packet_next_required_action=run_guarded_remote_install\n'
-printf 'beta_remote_tls_resident_install_packet_next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=%s FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256=%s FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256=%s FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256=%s secretspec run --profile beta-deploy -- just gitops-beta-remote-install-tls-resident %s %s %s %s %s\n' \
+printf 'beta_remote_tls_resident_install_packet_next_command_01=FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=%s FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256=%s FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256=%s FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256=%s secretspec run --profile beta-deploy -- just gitops-beta-remote-install-tls-resident %s %s %s %s %s\n' \
   "$target" \
   "$desired_sha256" \
   "$unit_sha256" \

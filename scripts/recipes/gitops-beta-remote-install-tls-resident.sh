@@ -12,6 +12,7 @@ unit_file="$(normalize_named_arg unit_file "${4-data/gitops/fishystuff-beta-tls-
 cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${5-${FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SOURCE:-env:CLOUDFLARE_API_TOKEN}}")"
 ssh_bin="$(normalize_named_arg ssh_bin "${6:-${FISHYSTUFF_GITOPS_SSH_BIN:-ssh}}")"
 scp_bin="$(normalize_named_arg scp_bin "${7:-${FISHYSTUFF_GITOPS_SCP_BIN:-scp}}")"
+push_bin="$(normalize_named_arg push_bin "${8:-scripts/recipes/push-closure.sh}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -60,6 +61,17 @@ require_command_or_executable() {
   fi
 }
 
+resolve_push_command() {
+  local command_name="$1"
+
+  if [[ "$command_name" == */* && "$command_name" == *.sh && -f "$command_name" ]]; then
+    printf 'bash\0%s\0' "$command_name"
+    return
+  fi
+  require_command_or_executable "$command_name" push_bin
+  printf '%s\0' "$command_name"
+}
+
 absolute_path() {
   local path="$1"
   if [[ "$path" == /* ]]; then
@@ -67,6 +79,37 @@ absolute_path() {
     return
   fi
   printf '%s/%s' "$RECIPE_REPO_ROOT" "$path"
+}
+
+store_root_for_path() {
+  local path="$1"
+
+  if [[ "$path" != /nix/store/* ]]; then
+    fail "resident unit references a non-store path: ${path}"
+  fi
+  printf '%s' "$path" | awk -F/ '{ print "/" $2 "/" $3 "/" $4 }'
+}
+
+require_store_path() {
+  local label="$1"
+  local path="$2"
+
+  if [[ "$path" != /nix/store/* ]]; then
+    fail "${label} must be a /nix/store path, got: ${path}"
+  fi
+  if [[ ! -e "$path" ]]; then
+    fail "${label} does not exist locally: ${path}"
+  fi
+}
+
+unit_working_directory() {
+  local path="$1"
+  grep -E '^WorkingDirectory=' "$path" | head -n 1 | sed 's/^WorkingDirectory=//'
+}
+
+unit_mgmt_binary() {
+  local path="$1"
+  grep -E '^ExecStart=' "$path" | sed -n 's/.*exec \([^ ]*\/bin\/mgmt\) run .*/\1/p' | head -n 1
 }
 
 sha256_file() {
@@ -191,7 +234,12 @@ require_command_or_executable sha256sum sha256sum
 require_command_or_executable mktemp mktemp
 require_command_or_executable "$ssh_bin" ssh_bin
 require_command_or_executable "$scp_bin" scp_bin
+push_command=()
+while IFS= read -r -d '' part; do
+  push_command+=("$part")
+done < <(resolve_push_command "$push_bin")
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL 1
+require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_CLOSURE_COPY 1
 require_env_value FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART 1
 require_env_value FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET "$target"
 require_env_nonempty FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256
@@ -244,6 +292,18 @@ require_beta_tls_unit_shape "$unit_file_path"
 desired_sha256="$(require_sha256_match desired_state "$desired_state_path" "$FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256")"
 unit_sha256="$(require_sha256_match unit_file "$unit_file_path" "$FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256")"
 token_sha256="$(require_sha256_match cloudflare_token_source "$cloudflare_token_source_path" "$FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256")"
+resident_gitops_dir="$(unit_working_directory "$unit_file_path")"
+resident_mgmt_bin="$(unit_mgmt_binary "$unit_file_path")"
+if [[ -z "$resident_gitops_dir" ]]; then
+  fail "beta TLS resident unit did not expose WorkingDirectory"
+fi
+if [[ -z "$resident_mgmt_bin" ]]; then
+  fail "beta TLS resident unit did not expose mgmt binary path"
+fi
+resident_gitops_store="$(store_root_for_path "$resident_gitops_dir")"
+resident_mgmt_store="$(store_root_for_path "$resident_mgmt_bin")"
+require_store_path resident_gitops_store "$resident_gitops_store"
+require_store_path resident_mgmt_store "$resident_mgmt_store"
 
 tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-beta-tls-resident-key.XXXXXX)"
 known_hosts="$(mktemp /tmp/fishystuff-beta-tls-resident-known-hosts.XXXXXX)"
@@ -259,6 +319,13 @@ printf 'resident_target=%s\n' "$target"
 printf 'desired_sha256=%s\n' "$desired_sha256"
 printf 'unit_sha256=%s\n' "$unit_sha256"
 printf 'cloudflare_token_sha256=%s\n' "$token_sha256"
+printf 'resident_gitops_store=%s\n' "$resident_gitops_store"
+printf 'resident_mgmt_store=%s\n' "$resident_mgmt_store"
+
+"${push_command[@]}" \
+  "$target" \
+  "$resident_gitops_store" \
+  "$resident_mgmt_store"
 
 ssh_common=(
   -i "$tmp_key"

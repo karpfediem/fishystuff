@@ -38,28 +38,29 @@ expect_fail_contains() {
 root="$(mktemp -d)"
 fake_ssh="${root}/ssh"
 fake_scp="${root}/scp"
-mgmt_dir="${root}/mgmt/bin"
-gitops_dir="${root}/gitops"
+fake_push="${root}/push-closure.sh"
 desired="${root}/beta-tls.desired.json"
 unit="${root}/fishystuff-beta-tls-reconciler.service"
-mkdir -p "$mgmt_dir" "$gitops_dir"
-
-cat >"${mgmt_dir}/mgmt" <<'EOF'
-#!/usr/bin/env bash
-printf 'fake mgmt\n'
-EOF
-chmod +x "${mgmt_dir}/mgmt"
-printf '# fake main\n' >"${gitops_dir}/main.mcl"
+store_root="$(readlink -f /bin/sh | awk -F/ '{ print "/" $2 "/" $3 "/" $4 }')"
 
 env FISHYSTUFF_GITOPS_BETA_ACME_CONTACT_EMAIL=ops@fishystuff.invalid \
   bash scripts/recipes/gitops-beta-tls-desired.sh "$desired" staging "" >/dev/null 2>"${root}/desired.stderr"
-bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
-  "$unit" \
-  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
-  "${mgmt_dir}/mgmt" \
-  "$gitops_dir" \
-  /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
-  -1 >/dev/null 2>"${root}/unit.stderr"
+cat >"$unit" <<EOF
+[Unit]
+Description=FishyStuff beta GitOps TLS ACME reconciler
+
+[Service]
+Type=simple
+WorkingDirectory=${store_root}
+Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
+Environment=FISHYSTUFF_GITOPS_STATE_FILE=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json
+LoadCredential=cloudflare-api-token:/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token
+ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${store_root}/bin/mgmt run --tmp-prefix --no-pgp lang --converged-timeout -1 main.mcl'
+ReadWritePaths=/var/lib/fishystuff/gitops-beta
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 read -r desired_sha256 _ < <(sha256sum "$desired")
 read -r unit_sha256 _ < <(sha256sum "$unit")
@@ -71,6 +72,13 @@ set -euo pipefail
 printf '%s\n' "$*" >>"${FISHYSTUFF_FAKE_SCP_LOG:?}"
 SCP
 chmod +x "$fake_scp"
+
+cat >"$fake_push" <<'PUSH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FISHYSTUFF_FAKE_PUSH_LOG:?}"
+PUSH
+chmod +x "$fake_push"
 
 cat >"$fake_ssh" <<'SSH'
 #!/usr/bin/env bash
@@ -92,6 +100,7 @@ chmod +x "$fake_ssh"
 env \
   FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
   FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL=1 \
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_CLOSURE_COPY=1 \
   FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART=1 \
   FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=root@203.0.113.20 \
   FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256="$desired_sha256" \
@@ -99,6 +108,7 @@ env \
   FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256="$token_sha256" \
   CLOUDFLARE_API_TOKEN=fake-cloudflare-token \
   HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
+  FISHYSTUFF_FAKE_PUSH_LOG="${root}/push.log" \
   FISHYSTUFF_FAKE_SCP_LOG="${root}/scp.log" \
   FISHYSTUFF_FAKE_REMOTE_LOG="${root}/remote.log" \
   FISHYSTUFF_FAKE_REMOTE_STDIN="${root}/remote.sh" \
@@ -109,12 +119,23 @@ env \
     "$unit" \
     env:CLOUDFLARE_API_TOKEN \
     "$fake_ssh" \
-    "$fake_scp" >"${root}/remote-install.out"
+    "$fake_scp" \
+    "$fake_push" >"${root}/remote-install.out"
 
 grep -F "gitops_beta_remote_install_tls_resident_checked=true" "${root}/remote-install.out" >/dev/null
 grep -F "gitops_beta_remote_install_tls_resident_ok=true" "${root}/remote-install.out" >/dev/null
 grep -F "remote_tls_resident_install_ok=fishystuff-beta-tls-reconciler.service" "${root}/remote-install.out" >/dev/null
 grep -F "remote_host_mutation_performed=true" "${root}/remote-install.out" >/dev/null
+grep -F "resident_gitops_store=/nix/store/" "${root}/remote-install.out" >/dev/null
+grep -F "resident_mgmt_store=/tmp/" "${root}/push.log" >/dev/null && {
+  printf '[gitops-beta-remote-install-tls-resident-test] push used non-store path\n' >&2
+  exit 1
+}
+grep -F "root@203.0.113.20 /tmp/" "${root}/push.log" >/dev/null && {
+  printf '[gitops-beta-remote-install-tls-resident-test] push used fixture tmp path\n' >&2
+  exit 1
+}
+grep -F "root@203.0.113.20 /nix/store/" "${root}/push.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-tls-resident-desired.json" "${root}/scp.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-tls-resident.service" "${root}/scp.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-tls-resident-cloudflare-api-token" "${root}/scp.log" >/dev/null
@@ -129,6 +150,7 @@ pass "remote TLS resident install validates and emits guarded remote script"
 base_env=(
   FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy
   FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_INSTALL=1
+  FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_CLOSURE_COPY=1
   FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_TLS_RESIDENT_RESTART=1
   FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=root@203.0.113.20
   FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256="$desired_sha256"
@@ -136,6 +158,7 @@ base_env=(
   FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256="$token_sha256"
   CLOUDFLARE_API_TOKEN=fake-cloudflare-token
   HETZNER_SSH_PRIVATE_KEY=fixture-private-key
+  FISHYSTUFF_FAKE_PUSH_LOG="${root}/push-fail.log"
   FISHYSTUFF_FAKE_SCP_LOG="${root}/scp-fail.log"
   FISHYSTUFF_FAKE_REMOTE_LOG="${root}/remote-fail.log"
   FISHYSTUFF_FAKE_REMOTE_STDIN="${root}/remote-fail.sh"
@@ -147,7 +170,7 @@ expect_fail_contains \
   env \
     FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
     HETZNER_SSH_PRIVATE_KEY=fixture-private-key \
-    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp" "$fake_push"
 
 expect_fail_contains \
   "refuses production profile" \
@@ -155,7 +178,7 @@ expect_fail_contains \
   env \
     "${base_env[@]}" \
     FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=production-deploy \
-    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp" "$fake_push"
 
 expect_fail_contains \
   "refuses previous beta host" \
@@ -163,7 +186,7 @@ expect_fail_contains \
   env \
     "${base_env[@]}" \
     FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@178.104.230.121 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@178.104.230.121 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp" "$fake_push"
 
 expect_fail_contains \
   "refuses stale token hash" \
@@ -171,6 +194,6 @@ expect_fail_contains \
   env \
     "${base_env[@]}" \
     FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
-    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp"
+    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp" "$fake_push"
 
 printf '[gitops-beta-remote-install-tls-resident-test] %s checks passed\n' "$pass_count"

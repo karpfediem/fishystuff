@@ -405,8 +405,8 @@ gitops-beta-remote-tls-resident-status-packet target="" expected_hostname="site-
   @bash scripts/recipes/gitops-beta-remote-tls-resident-status-packet.sh "{{target}}" "{{expected_hostname}}" "{{ssh_bin}}"
 
 # Install and start the reviewed beta TLS resident mgmt unit on the beta host. Remote host mutation.
-gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp":
-  bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{ssh_bin}}" "{{scp_bin}}"
+gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp" push_bin="scripts/recipes/push-closure.sh":
+  bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{ssh_bin}}" "{{scp_bin}}" "{{push_bin}}"
 
 # Install operator-supplied beta edge TLS material on the fresh beta host. Remote host mutation.
 gitops-beta-remote-install-edge-tls target="" expected_hostname="site-nbg1-beta" fullchain="" privkey="" ssh_bin="ssh" scp_bin="scp":
