@@ -89,9 +89,28 @@ require_safe_ref_name() {
   fi
 }
 
+require_safe_remote_url() {
+  local value="$1"
+
+  require_value "$value" "dolt remote_url must not be empty"
+  case "$value" in
+    *$'\n'* | *$'\r'* | *"'"* | *'"'* | *" "*)
+      fail "dolt remote_url contains unsupported characters"
+      ;;
+    *"://"*"@"*)
+      fail "dolt remote_url must not contain embedded credentials"
+      ;;
+  esac
+}
+
 summary_value() {
   local query="$1"
   jq -er "$query" "$summary_file"
+}
+
+summary_optional_value() {
+  local query="$1"
+  jq -er "$query" "$summary_file" 2>/dev/null || true
 }
 
 require_summary_equals() {
@@ -177,7 +196,20 @@ require_summary_equals summary_infrastructure_mutation_performed '.checks.infras
 release_id="$(summary_value '.active_release.release_id')"
 dolt_commit="$(summary_value '.active_release.dolt_commit')"
 dolt_branch_context="$(summary_value '.active_release.dolt.branch_context')"
+dolt_materialization="$(summary_optional_value '.active_release.dolt.materialization | select(type == "string" and length > 0)')"
 dolt_release_ref="$(summary_value '.active_release.dolt.release_ref')"
+dolt_remote_url="$(summary_optional_value '.active_release.dolt.remote_url | select(type == "string" and length > 0)')"
+if [[ -z "$dolt_remote_url" ]]; then
+  desired_file="$(summary_optional_value '.desired_state_path | select(type == "string" and length > 0)')"
+  if [[ -n "$desired_file" && -f "$desired_file" ]]; then
+    dolt_remote_url="$(
+      jq -er \
+        --arg release_id "$release_id" \
+        '.releases[$release_id].dolt.remote_url | select(type == "string" and length > 0)' \
+        "$desired_file" 2>/dev/null || true
+    )"
+  fi
+fi
 dolt_bundle="$(summary_value '.active_release.closures.dolt_service')"
 dolt_repo_path="${FISHYSTUFF_GITOPS_BETA_REMOTE_DOLT_REPO_PATH:-/var/lib/fishystuff/beta-dolt/fishystuff}"
 dolt_bin="$(extract_dolt_bin "$dolt_bundle")"
@@ -186,10 +218,14 @@ require_safe_ref_name release_id "$release_id"
 require_safe_ref_name dolt_commit "$dolt_commit"
 require_safe_ref_name dolt_branch_context "$dolt_branch_context"
 require_safe_ref_name dolt_release_ref "$dolt_release_ref"
+require_safe_remote_url "$dolt_remote_url"
 require_store_path dolt_bundle "$dolt_bundle"
 
 if [[ "$dolt_branch_context" != "beta" ]]; then
   fail "beta Dolt ref materialization requires branch_context=beta, got: ${dolt_branch_context}"
+fi
+if [[ "$dolt_materialization" != "fetch_pin" ]]; then
+  fail "beta Dolt ref materialization requires materialization=fetch_pin, got: ${dolt_materialization:-<empty>}"
 fi
 if [[ "$dolt_release_ref" != fishystuff/gitops-beta/* ]]; then
   fail "beta Dolt release ref must live under fishystuff/gitops-beta/, got: ${dolt_release_ref}"
@@ -208,7 +244,9 @@ printf 'resident_target=%s\n' "$target"
 printf 'release_id=%s\n' "$release_id"
 printf 'dolt_commit=%s\n' "$dolt_commit"
 printf 'dolt_branch_context=%s\n' "$dolt_branch_context"
+printf 'dolt_materialization=%s\n' "$dolt_materialization"
 printf 'dolt_release_ref=%s\n' "$dolt_release_ref"
+printf 'dolt_remote_url=%s\n' "$dolt_remote_url"
 printf 'dolt_bin=%s\n' "$dolt_bin"
 printf 'dolt_repo_path=%s\n' "$dolt_repo_path"
 
@@ -225,7 +263,8 @@ ssh_common=(
   "$dolt_repo_path" \
   "$dolt_branch_context" \
   "$dolt_release_ref" \
-  "$dolt_commit" <<'REMOTE'
+  "$dolt_commit" \
+  "$dolt_remote_url" <<'REMOTE'
 set -euo pipefail
 expected_hostname="$1"
 dolt_bin="$2"
@@ -233,6 +272,7 @@ repo="$3"
 branch_context="$4"
 release_ref="$5"
 commit="$6"
+remote_url="$7"
 
 fail() {
   echo "$1" >&2
@@ -257,6 +297,14 @@ fi
 if [[ "$release_ref" != fishystuff/gitops-beta/* ]]; then
   fail "remote beta Dolt release ref must live under fishystuff/gitops-beta/, got: ${release_ref}"
 fi
+case "$remote_url" in
+  *$'\n'* | *$'\r'* | *"'"* | *'"'* | *" "*)
+    fail "remote Dolt URL contains unsupported characters"
+    ;;
+  *"://"*"@"*)
+    fail "remote Dolt URL must not contain embedded credentials"
+    ;;
+esac
 
 systemctl stop fishystuff-beta-api.service || true
 systemctl stop fishystuff-beta-dolt.service || true
@@ -267,9 +315,31 @@ runuser -u fishystuff-beta-dolt -- env \
   BRANCH_CONTEXT="$branch_context" \
   RELEASE_REF="$release_ref" \
   COMMIT="$commit" \
+  REMOTE_URL="$remote_url" \
   bash <<'INNER'
 set -euo pipefail
+repo_name="${REPO##*/}"
+repo_parent="${REPO%/*}"
+if [ "$repo_name" = "$REPO" ] || [ -z "$repo_parent" ]; then
+  echo "invalid beta Dolt repo path: $REPO" >&2
+  exit 2
+fi
+mkdir -p "$repo_parent"
+if [ ! -d "$REPO/.dolt" ]; then
+  rm -rf "$REPO"
+  (
+    cd "$repo_parent"
+    "$DOLT_BIN" clone --branch "$BRANCH_CONTEXT" --single-branch "$REMOTE_URL" "$repo_name"
+  )
+  printf 'remote_dolt_repo_bootstrapped=true\n'
+else
+  printf 'remote_dolt_repo_bootstrapped=false\n'
+fi
 cd "$REPO"
+if "$DOLT_BIN" remote | awk '{print $1}' | grep -Fx origin >/dev/null 2>&1; then
+  "$DOLT_BIN" remote remove origin
+fi
+"$DOLT_BIN" remote add origin "$REMOTE_URL"
 "$DOLT_BIN" fetch origin "$BRANCH_CONTEXT"
 "$DOLT_BIN" checkout "$BRANCH_CONTEXT"
 "$DOLT_BIN" reset --hard "origin/$BRANCH_CONTEXT"

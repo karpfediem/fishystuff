@@ -69,6 +69,8 @@ jq -n \
       dolt_commit: "dolt-test",
       dolt: {
         branch_context: "beta",
+        materialization: "fetch_pin",
+        remote_url: "https://doltremoteapi.dolthub.com/fishystuff/fishystuff",
         release_ref: "fishystuff/gitops-beta/release-test"
       },
       closures: {
@@ -112,8 +114,11 @@ env \
 grep -F "gitops_beta_remote_materialize_dolt_ref_checked=true" "${root}/materialize.out" >/dev/null
 grep -F "gitops_beta_remote_materialize_dolt_ref_ok=true" "${root}/materialize.out" >/dev/null
 grep -F "dolt_release_ref=fishystuff/gitops-beta/release-test" "${root}/materialize.out" >/dev/null
+grep -F "dolt_materialization=fetch_pin" "${root}/materialize.out" >/dev/null
+grep -F "dolt_remote_url=https://doltremoteapi.dolthub.com/fishystuff/fishystuff" "${root}/materialize.out" >/dev/null
 grep -F "root@203.0.113.20" "${root}/remote.log" >/dev/null
 grep -F "systemctl stop fishystuff-beta-api.service" "${root}/remote.sh" >/dev/null
+grep -F '"$DOLT_BIN" clone --branch "$BRANCH_CONTEXT" --single-branch "$REMOTE_URL" "$repo_name"' "${root}/remote.sh" >/dev/null
 grep -F '"$DOLT_BIN" fetch origin "$BRANCH_CONTEXT"' "${root}/remote.sh" >/dev/null
 grep -F '"$DOLT_BIN" branch -f "$RELEASE_REF" "$COMMIT"' "${root}/remote.sh" >/dev/null
 pass "remote Dolt release ref materialization is explicit and beta-targeted"
