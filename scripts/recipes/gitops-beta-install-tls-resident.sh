@@ -5,7 +5,7 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-desired_state="$(normalize_named_arg desired_state "${1-data/gitops/beta-tls.staging.desired.json}")"
+desired_state="$(normalize_named_arg desired_state "${1-data/gitops/beta-tls.desired.json}")"
 unit_file="$(normalize_named_arg unit_file "${2-data/gitops/fishystuff-beta-tls-reconciler.service}")"
 cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${3-env:CLOUDFLARE_API_TOKEN}")"
 install_bin="$(normalize_named_arg install_bin "${4-${FISHYSTUFF_GITOPS_INSTALL_BIN:-install}}")"
@@ -14,7 +14,7 @@ systemctl_bin="$(normalize_named_arg systemctl_bin "${5-${FISHYSTUFF_GITOPS_SYST
 cd "$RECIPE_REPO_ROOT"
 
 unit_name="fishystuff-beta-tls-reconciler.service"
-desired_target="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json"
+desired_target="/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json"
 unit_target="/etc/systemd/system/${unit_name}"
 cloudflare_token_target="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token"
 

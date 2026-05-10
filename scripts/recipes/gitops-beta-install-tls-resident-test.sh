@@ -42,7 +42,7 @@ fake_install_log="${root}/install.log"
 fake_systemctl_log="${root}/systemctl.log"
 mgmt_dir="${root}/mgmt/bin"
 gitops_dir="${root}/gitops"
-desired="${root}/beta-tls.staging.desired.json"
+desired="${root}/beta-tls.desired.json"
 unit="${root}/fishystuff-beta-tls-reconciler.service"
 token="${root}/cloudflare-api-token"
 mkdir -p "$fake_bin" "$fake_install_root" "$mgmt_dir" "$gitops_dir"
@@ -117,7 +117,7 @@ env FISHYSTUFF_GITOPS_BETA_ACME_CONTACT_EMAIL=ops@fishystuff.invalid \
   bash scripts/recipes/gitops-beta-tls-desired.sh "$desired" staging "" >/dev/null 2>"${root}/desired.stderr"
 bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$unit" \
-  /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
   "${mgmt_dir}/mgmt" \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
@@ -198,7 +198,7 @@ env "${base_env[@]}" \
 
 grep -F "gitops_beta_tls_resident_install_ok=fishystuff-beta-tls-reconciler.service" "${root}/install.stdout" >/dev/null
 grep -F "local_host_mutation_performed=true" "${root}/install.stdout" >/dev/null
-grep -F "install mode=0644 src=${desired} dst=/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" "$fake_install_log" >/dev/null
+grep -F "install mode=0644 src=${desired} dst=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" "$fake_install_log" >/dev/null
 grep -F "install mode=0600" "$fake_install_log" | grep -F "dst=/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" >/dev/null
 grep -F "install mode=0644 src=${unit} dst=/etc/systemd/system/fishystuff-beta-tls-reconciler.service" "$fake_install_log" >/dev/null
 grep -F "systemctl daemon-reload" "$fake_systemctl_log" >/dev/null

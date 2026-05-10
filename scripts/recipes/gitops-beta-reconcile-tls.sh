@@ -5,7 +5,7 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-state_file_arg="$(normalize_named_arg state_file "${1-data/gitops/beta-tls.staging.desired.json}")"
+state_file_arg="$(normalize_named_arg state_file "${1-data/gitops/beta-tls.desired.json}")"
 ca="$(normalize_named_arg ca "${2-staging}")"
 mgmt_bin="$(normalize_named_arg mgmt_bin "${3-auto}")"
 converged_timeout="$(normalize_named_arg converged_timeout "${4-300}")"

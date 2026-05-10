@@ -32,7 +32,7 @@ make_beta_cert() {
 root="$(mktemp -d)"
 fake_bin="${root}/bin"
 cert_root="${root}/cert"
-desired="${root}/beta-tls.staging.desired.json"
+desired="${root}/beta-tls.desired.json"
 unit="${root}/fishystuff-beta-tls-reconciler.service"
 token="${root}/cloudflare-api-token"
 mkdir -p "$fake_bin" "$cert_root"

@@ -59,7 +59,7 @@ EOF
 chmod +x "${fake_bin}/secretspec"
 PATH="${fake_bin}:${PATH}"
 
-state="${root}/beta-tls.staging.desired.json"
+state="${root}/beta-tls.desired.json"
 missing_state="${root}/missing-beta-tls.desired.json"
 
 bash scripts/recipes/gitops-beta-tls-reconcile-packet.sh \

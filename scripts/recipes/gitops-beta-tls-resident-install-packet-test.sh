@@ -39,7 +39,7 @@ root="$(mktemp -d)"
 fake_bin="${root}/bin"
 mgmt_dir="${root}/mgmt/bin"
 gitops_dir="${root}/gitops"
-desired="${root}/beta-tls.staging.desired.json"
+desired="${root}/beta-tls.desired.json"
 unit="${root}/fishystuff-beta-tls-reconciler.service"
 token="${root}/cloudflare-api-token"
 mkdir -p "$fake_bin" "$mgmt_dir" "$gitops_dir"
@@ -66,7 +66,7 @@ env FISHYSTUFF_GITOPS_BETA_ACME_CONTACT_EMAIL=ops@fishystuff.invalid \
   bash scripts/recipes/gitops-beta-tls-desired.sh "$desired" staging "" >/dev/null 2>"${root}/desired.stderr"
 bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$unit" \
-  /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
   "${mgmt_dir}/mgmt" \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \

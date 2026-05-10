@@ -40,7 +40,7 @@ fake_ssh="${root}/ssh"
 fake_scp="${root}/scp"
 mgmt_dir="${root}/mgmt/bin"
 gitops_dir="${root}/gitops"
-desired="${root}/beta-tls.staging.desired.json"
+desired="${root}/beta-tls.desired.json"
 unit="${root}/fishystuff-beta-tls-reconciler.service"
 mkdir -p "$mgmt_dir" "$gitops_dir"
 
@@ -55,7 +55,7 @@ env FISHYSTUFF_GITOPS_BETA_ACME_CONTACT_EMAIL=ops@fishystuff.invalid \
   bash scripts/recipes/gitops-beta-tls-desired.sh "$desired" staging "" >/dev/null 2>"${root}/desired.stderr"
 bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$unit" \
-  /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
   "${mgmt_dir}/mgmt" \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
@@ -79,7 +79,7 @@ printf '%s\n' "$*" >>"${FISHYSTUFF_FAKE_REMOTE_LOG:?}"
 cat >"${FISHYSTUFF_FAKE_REMOTE_STDIN:?}"
 printf 'remote_hostname=site-nbg1-beta\n'
 printf 'remote_tls_resident_install_ok=fishystuff-beta-tls-reconciler.service\n'
-printf 'remote_tls_resident_desired_target=/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json\n'
+printf 'remote_tls_resident_desired_target=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json\n'
 printf 'remote_tls_resident_unit_target=/etc/systemd/system/fishystuff-beta-tls-reconciler.service\n'
 printf 'remote_tls_resident_cloudflare_token_target=/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token\n'
 printf 'remote_host_mutation_performed=true\n'

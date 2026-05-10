@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 target="$(normalize_named_arg target "${1:-${FISHYSTUFF_BETA_RESIDENT_TARGET:-}}")"
 expected_hostname="$(normalize_named_arg expected_hostname "${2:-site-nbg1-beta}")"
-desired_state="$(normalize_named_arg desired_state "${3-data/gitops/beta-tls.staging.desired.json}")"
+desired_state="$(normalize_named_arg desired_state "${3-data/gitops/beta-tls.desired.json}")"
 unit_file="$(normalize_named_arg unit_file "${4-data/gitops/fishystuff-beta-tls-reconciler.service}")"
 cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${5-${FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SOURCE:-env:CLOUDFLARE_API_TOKEN}}")"
 ssh_bin="$(normalize_named_arg ssh_bin "${6:-${FISHYSTUFF_GITOPS_SSH_BIN:-ssh}}")"
@@ -16,7 +16,7 @@ scp_bin="$(normalize_named_arg scp_bin "${7:-${FISHYSTUFF_GITOPS_SCP_BIN:-scp}}"
 cd "$RECIPE_REPO_ROOT"
 
 unit_name="fishystuff-beta-tls-reconciler.service"
-desired_target="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json"
+desired_target="/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json"
 unit_target="/etc/systemd/system/${unit_name}"
 cloudflare_token_target="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token"
 

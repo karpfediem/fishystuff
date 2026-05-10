@@ -5,7 +5,7 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-output="$(normalize_named_arg output "${1-data/gitops/beta-tls.staging.desired.json}")"
+output="$(normalize_named_arg output "${1-data/gitops/beta-tls.desired.json}")"
 ca="$(normalize_named_arg ca "${2-staging}")"
 contact_email="$(normalize_named_arg contact_email "${3-${FISHYSTUFF_GITOPS_BETA_ACME_CONTACT_EMAIL:-}}")"
 if [[ -z "$contact_email" ]]; then

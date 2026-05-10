@@ -397,11 +397,11 @@ gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_
   bash scripts/recipes/gitops-beta-remote-start-edge.sh "{{target}}" "{{expected_hostname}}" "{{edge_bundle}}" "{{summary_file}}" "{{push_bin}}" "{{ssh_bin}}" "{{scp_bin}}"
 
 # Print the read-only beta TLS resident remote install packet.
-gitops-beta-remote-install-tls-resident-packet target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
+gitops-beta-remote-install-tls-resident-packet target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
   @bash scripts/recipes/gitops-beta-remote-install-tls-resident-packet.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}"
 
 # Install and start the reviewed beta TLS resident mgmt unit on the beta host. Remote host mutation.
-gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp":
+gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{ssh_bin}}" "{{scp_bin}}"
 
 # Install operator-supplied beta edge TLS material on the fresh beta host. Remote host mutation.
@@ -409,31 +409,31 @@ gitops-beta-remote-install-edge-tls target="" expected_hostname="site-nbg1-beta"
   bash scripts/recipes/gitops-beta-remote-install-edge-tls.sh "{{target}}" "{{expected_hostname}}" "{{fullchain}}" "{{privkey}}" "{{ssh_bin}}" "{{scp_bin}}"
 
 # Generate beta TLS desired state for mgmt ACME reconciliation. Local file write only.
-gitops-beta-tls-desired output="data/gitops/beta-tls.staging.desired.json" ca="staging" contact_email="":
+gitops-beta-tls-desired output="data/gitops/beta-tls.desired.json" ca="staging" contact_email="":
   bash scripts/recipes/gitops-beta-tls-desired.sh "{{output}}" "{{ca}}" "{{contact_email}}"
 
 # Print the read-only beta TLS mgmt ACME reconciliation packet.
-gitops-beta-tls-reconcile-packet state_file="data/gitops/beta-tls.staging.desired.json" ca="staging" contact_email="":
+gitops-beta-tls-reconcile-packet state_file="data/gitops/beta-tls.desired.json" ca="staging" contact_email="":
   @bash scripts/recipes/gitops-beta-tls-reconcile-packet.sh "{{state_file}}" "{{ca}}" "{{contact_email}}"
 
 # Reconcile beta TLS through the clean mgmt ACME graph after explicit opt-ins. Local beta host mutation.
-gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.staging.desired.json" ca="staging" mgmt_bin="auto" converged_timeout="300":
+gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.desired.json" ca="staging" mgmt_bin="auto" converged_timeout="300":
   bash scripts/recipes/gitops-beta-reconcile-tls.sh "{{state_file}}" "{{ca}}" "{{mgmt_bin}}" "{{converged_timeout}}"
 
 # Generate the beta TLS resident mgmt systemd unit. Local file write only.
-gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" mgmt_bin="auto" gitops_dir="auto" cloudflare_token_credential="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" converged_timeout="-1":
+gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" mgmt_bin="auto" gitops_dir="auto" cloudflare_token_credential="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" converged_timeout="-1":
   bash scripts/recipes/gitops-beta-tls-resident-unit.sh "{{output}}" "{{state_file}}" "{{mgmt_bin}}" "{{gitops_dir}}" "{{cloudflare_token_credential}}" "{{converged_timeout}}"
 
 # Print the read-only beta TLS resident install packet.
-gitops-beta-tls-resident-install-packet desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
+gitops-beta-tls-resident-install-packet desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
   @bash scripts/recipes/gitops-beta-tls-resident-install-packet.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}"
 
 # Print the read-only beta TLS resident status packet. No mutation.
-gitops-beta-tls-resident-status-packet desired_state="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" unit_file="/etc/systemd/system/fishystuff-beta-tls-reconciler.service" cloudflare_token="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" tls_fullchain="/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem" tls_privkey="/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem" systemctl_bin="systemctl" openssl_bin="openssl":
+gitops-beta-tls-resident-status-packet desired_state="/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" unit_file="/etc/systemd/system/fishystuff-beta-tls-reconciler.service" cloudflare_token="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" tls_fullchain="/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem" tls_privkey="/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem" systemctl_bin="systemctl" openssl_bin="openssl":
   @bash scripts/recipes/gitops-beta-tls-resident-status-packet.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token}}" "{{tls_fullchain}}" "{{tls_privkey}}" "{{systemctl_bin}}" "{{openssl_bin}}"
 
 # Install and start the reviewed beta TLS resident mgmt unit. Local beta host mutation.
-gitops-beta-install-tls-resident desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" install_bin="install" systemctl_bin="systemctl":
+gitops-beta-install-tls-resident desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" install_bin="install" systemctl_bin="systemctl":
   bash scripts/recipes/gitops-beta-install-tls-resident.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{install_bin}}" "{{systemctl_bin}}"
 
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.

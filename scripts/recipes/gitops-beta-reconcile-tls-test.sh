@@ -66,7 +66,7 @@ EOF
 chmod +x "${fake_bin}/hostname"
 PATH="${fake_bin}:${PATH}"
 
-state="${root}/beta-tls.staging.desired.json"
+state="${root}/beta-tls.desired.json"
 bash scripts/recipes/gitops-beta-tls-desired.sh \
   "$state" \
   staging \

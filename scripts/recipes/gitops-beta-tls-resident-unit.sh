@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 output="$(normalize_named_arg output "${1--}")"
-state_file="$(normalize_named_arg state_file "${2-/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json}")"
+state_file="$(normalize_named_arg state_file "${2-/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json}")"
 mgmt_bin="$(normalize_named_arg mgmt_bin "${3-auto}")"
 gitops_dir="$(normalize_named_arg gitops_dir "${4-auto}")"
 cloudflare_token_credential="$(normalize_named_arg cloudflare_token_credential "${5-/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token}")"

@@ -50,7 +50,7 @@ printf '# fake main\n' >"${gitops_dir}/main.mcl"
 
 bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$unit" \
-  /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
   "${mgmt_dir}/mgmt" \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
@@ -59,7 +59,7 @@ bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
 grep -F "Description=FishyStuff beta GitOps TLS ACME reconciler" "$unit" >/dev/null
 grep -F "WorkingDirectory=$(readlink -f "$gitops_dir")" "$unit" >/dev/null
 grep -F "Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1" "$unit" >/dev/null
-grep -F "Environment=FISHYSTUFF_GITOPS_STATE_FILE=/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" "$unit" >/dev/null
+grep -F "Environment=FISHYSTUFF_GITOPS_STATE_FILE=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" "$unit" >/dev/null
 grep -F "LoadCredential=cloudflare-api-token:/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" "$unit" >/dev/null
 grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout -1 main.mcl'" "$unit" >/dev/null
 grep -F "ReadWritePaths=/var/lib/fishystuff/gitops-beta" "$unit" >/dev/null
@@ -78,7 +78,7 @@ pass "no production hostnames in unit"
 stdout_unit="${root}/stdout.service"
 bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   - \
-  /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
   "${mgmt_dir}/mgmt" \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
@@ -101,7 +101,7 @@ expect_fail_contains \
   "cloudflare_token_credential must stay under /var/lib/fishystuff/gitops-beta/secrets/" \
   bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
     - \
-    /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+    /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
     "${mgmt_dir}/mgmt" \
     "$gitops_dir" \
     /var/lib/fishystuff/gitops/secrets/cloudflare-api-token
@@ -111,7 +111,7 @@ expect_fail_contains \
   "gitops_dir does not contain main.mcl" \
   bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
     - \
-    /var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json \
+    /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
     "${mgmt_dir}/mgmt" \
     "$root" \
     /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token
