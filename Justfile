@@ -396,6 +396,10 @@ gitops-beta-remote-start-services target="" expected_hostname="site-nbg1-beta" s
 gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_bundle="auto" summary_file="data/gitops/beta-current.handoff-summary.json" push_bin="scripts/recipes/push-closure.sh" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-start-edge.sh "{{target}}" "{{expected_hostname}}" "{{edge_bundle}}" "{{summary_file}}" "{{push_bin}}" "{{ssh_bin}}" "{{scp_bin}}"
 
+# Install and start the reviewed beta TLS resident mgmt unit on the beta host. Remote host mutation.
+gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp":
+  bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{ssh_bin}}" "{{scp_bin}}"
+
 # Install operator-supplied beta edge TLS material on the fresh beta host. Remote host mutation.
 gitops-beta-remote-install-edge-tls target="" expected_hostname="site-nbg1-beta" fullchain="" privkey="" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-install-edge-tls.sh "{{target}}" "{{expected_hostname}}" "{{fullchain}}" "{{privkey}}" "{{ssh_bin}}" "{{scp_bin}}"
@@ -455,6 +459,10 @@ gitops-beta-remote-start-services-test:
 # Run fast local regression checks for remote beta edge starting.
 gitops-beta-remote-start-edge-test:
   bash scripts/recipes/gitops-beta-remote-start-edge-test.sh
+
+# Run fast local regression checks for remote beta TLS resident installation.
+gitops-beta-remote-install-tls-resident-test:
+  bash scripts/recipes/gitops-beta-remote-install-tls-resident-test.sh
 
 # Run fast local regression checks for remote beta edge TLS installation.
 gitops-beta-remote-install-edge-tls-test:
