@@ -396,6 +396,10 @@ gitops-beta-remote-start-services target="" expected_hostname="site-nbg1-beta" s
 gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_bundle="auto" summary_file="data/gitops/beta-current.handoff-summary.json" push_bin="scripts/recipes/push-closure.sh" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-start-edge.sh "{{target}}" "{{expected_hostname}}" "{{edge_bundle}}" "{{summary_file}}" "{{push_bin}}" "{{ssh_bin}}" "{{scp_bin}}"
 
+# Print the read-only beta TLS resident remote install packet.
+gitops-beta-remote-install-tls-resident-packet target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
+  @bash scripts/recipes/gitops-beta-remote-install-tls-resident-packet.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}"
+
 # Install and start the reviewed beta TLS resident mgmt unit on the beta host. Remote host mutation.
 gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{ssh_bin}}" "{{scp_bin}}"
@@ -459,6 +463,10 @@ gitops-beta-remote-start-services-test:
 # Run fast local regression checks for remote beta edge starting.
 gitops-beta-remote-start-edge-test:
   bash scripts/recipes/gitops-beta-remote-start-edge-test.sh
+
+# Run fast local regression checks for the remote beta TLS resident install packet.
+gitops-beta-remote-install-tls-resident-packet-test:
+  bash scripts/recipes/gitops-beta-remote-install-tls-resident-packet-test.sh
 
 # Run fast local regression checks for remote beta TLS resident installation.
 gitops-beta-remote-install-tls-resident-test:
