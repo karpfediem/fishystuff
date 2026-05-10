@@ -166,9 +166,6 @@ require_safe_target() {
   if [[ ! "$host" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     fail "target host must be an IPv4 address, got: ${host}"
   fi
-  if [[ "$host" == "178.104.230.121" ]]; then
-    fail "target points at the previous beta host; use the fresh replacement IP"
-  fi
 }
 
 require_expected_hostname() {

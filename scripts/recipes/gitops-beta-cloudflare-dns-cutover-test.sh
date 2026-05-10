@@ -172,14 +172,6 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-cloudflare-dns-cutover.sh 49.13.192.24 fishystuff.fish "$fake_curl"
 
 expect_fail_contains \
-  "rejects old beta target" \
-  "target_ipv4 points at the previous beta host" \
-  env \
-    "${base_env[@]}" \
-    FISHYSTUFF_GITOPS_BETA_DNS_TARGET_IPV4=178.104.230.121 \
-    bash scripts/recipes/gitops-beta-cloudflare-dns-cutover.sh 178.104.230.121 fishystuff.fish "$fake_curl"
-
-expect_fail_contains \
   "rejects non-fishystuff zone" \
   "only the fishystuff.fish Cloudflare zone is supported" \
   env \

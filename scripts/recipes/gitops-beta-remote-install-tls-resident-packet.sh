@@ -75,10 +75,6 @@ target_status() {
     printf 'blocked_non_ipv4_target'
     return
   fi
-  if [[ "$host" == "178.104.230.121" ]]; then
-    printf 'blocked_previous_beta_host'
-    return
-  fi
   printf 'ready'
 }
 

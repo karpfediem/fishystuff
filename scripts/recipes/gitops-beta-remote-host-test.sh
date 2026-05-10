@@ -218,15 +218,4 @@ expect_fail_contains \
   env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
     bash scripts/recipes/gitops-beta-remote-host-bootstrap.sh root@203.0.113.20
 
-expect_fail_contains \
-  "bootstrap rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
-    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_BOOTSTRAP=1 \
-    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DIRECTORIES=1 \
-    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_USER_GROUPS=1 \
-    HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
-    bash scripts/recipes/gitops-beta-remote-host-bootstrap.sh root@178.104.230.121
-
 printf '[gitops-beta-remote-host-test] %s checks passed\n' "$pass_count"

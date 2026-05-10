@@ -170,12 +170,4 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_BETA_REMOTE_DOLT_REF_TARGET=root@beta.fishystuff.fish \
     bash scripts/recipes/gitops-beta-remote-materialize-dolt-ref.sh root@beta.fishystuff.fish site-nbg1-beta "$summary" "$fake_ssh"
 
-expect_fail_contains \
-  "rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    "${base_env[@]}" \
-    FISHYSTUFF_GITOPS_BETA_REMOTE_DOLT_REF_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-remote-materialize-dolt-ref.sh root@178.104.230.121 site-nbg1-beta "$summary" "$fake_ssh"
-
 printf '[gitops-beta-remote-materialize-dolt-ref-test] %s checks passed\n' "$pass_count"

@@ -364,14 +364,6 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-remote-start-services.sh root@beta.fishystuff.fish site-nbg1-beta "$summary" "$fake_ssh"
 
 expect_fail_contains \
-  "rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    "${base_env[@]}" \
-    FISHYSTUFF_GITOPS_BETA_REMOTE_SERVICE_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-remote-start-services.sh root@178.104.230.121 site-nbg1-beta "$summary" "$fake_ssh"
-
-expect_fail_contains \
   "rejects stale reviewed API hash" \
   "FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256 does not match checked beta API unit" \
   env \

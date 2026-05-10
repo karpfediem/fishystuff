@@ -186,14 +186,6 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@203.0.113.20 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp" "$fake_push"
 
 expect_fail_contains \
-  "refuses previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    "${base_env[@]}" \
-    FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh root@178.104.230.121 site-nbg1-beta "$desired" "$unit" env:CLOUDFLARE_API_TOKEN "$fake_ssh" "$fake_scp" "$fake_push"
-
-expect_fail_contains \
   "refuses stale token hash" \
   "cloudflare_token_source sha256 mismatch" \
   env \

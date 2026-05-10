@@ -154,14 +154,6 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-remote-install-edge-tls.sh root@beta.fishystuff.fish site-nbg1-beta "$fullchain" "$privkey" "$fake_ssh" "$fake_scp"
 
 expect_fail_contains \
-  "rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    "${base_env[@]}" \
-    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-remote-install-edge-tls.sh root@178.104.230.121 site-nbg1-beta "$fullchain" "$privkey" "$fake_ssh" "$fake_scp"
-
-expect_fail_contains \
   "rejects stale fullchain hash" \
   "FISHYSTUFF_GITOPS_BETA_EDGE_TLS_FULLCHAIN_SHA256 does not match checked beta edge fullchain" \
   env \

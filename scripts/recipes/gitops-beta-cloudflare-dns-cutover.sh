@@ -78,9 +78,6 @@ require_ipv4() {
       fail "target_ipv4 must be an IPv4 address, got: ${value}"
     fi
   done
-  if [[ "$value" == "178.104.230.121" ]]; then
-    fail "target_ipv4 points at the previous beta host; use the fresh replacement IP"
-  fi
 }
 
 require_zone() {

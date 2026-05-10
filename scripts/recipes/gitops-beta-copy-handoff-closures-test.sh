@@ -132,15 +132,6 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_BETA_REMOTE_CLOSURE_TARGET=root@beta.fishystuff.fish \
     bash scripts/recipes/gitops-beta-copy-handoff-closures.sh root@beta.fishystuff.fish "$summary" "$push_bin"
 
-expect_fail_contains \
-  "rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
-    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_CLOSURE_COPY=1 \
-    FISHYSTUFF_GITOPS_BETA_REMOTE_CLOSURE_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-copy-handoff-closures.sh root@178.104.230.121 "$summary" "$push_bin"
-
 jq '.cluster = "production"' "$summary" >"${root}/prod-summary.json"
 expect_fail_contains \
   "rejects non-beta summary" \

@@ -110,10 +110,4 @@ expect_fail_contains \
   env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=production-deploy HETZNER_SSH_PRIVATE_KEY=fixture-private-key \
     bash scripts/recipes/gitops-beta-remote-tls-resident-status-packet.sh root@203.0.113.20 site-nbg1-beta "$fake_ssh"
 
-expect_fail_contains \
-  "refuses previous beta host" \
-  "target points at the previous beta host" \
-  env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy HETZNER_SSH_PRIVATE_KEY=fixture-private-key \
-    bash scripts/recipes/gitops-beta-remote-tls-resident-status-packet.sh root@178.104.230.121 site-nbg1-beta "$fake_ssh"
-
 printf '[gitops-beta-remote-tls-resident-status-packet-test] %s checks passed\n' "$pass_count"

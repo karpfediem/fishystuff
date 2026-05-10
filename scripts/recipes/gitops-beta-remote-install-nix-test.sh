@@ -110,14 +110,4 @@ expect_fail_contains \
     HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
     bash scripts/recipes/gitops-beta-remote-install-nix.sh root@beta.fishystuff.fish site-nbg1-beta "$fake_ssh"
 
-expect_fail_contains \
-  "rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy \
-    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_INSTALL=1 \
-    FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_NIX_APT_PREREQS=1 \
-    HETZNER_SSH_PRIVATE_KEY='fixture-private-key' \
-    bash scripts/recipes/gitops-beta-remote-install-nix.sh root@178.104.230.121 site-nbg1-beta "$fake_ssh"
-
 printf '[gitops-beta-remote-install-nix-test] %s checks passed\n' "$pass_count"

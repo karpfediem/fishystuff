@@ -441,14 +441,6 @@ expect_fail_contains \
     bash scripts/recipes/gitops-beta-remote-start-edge.sh root@beta.fishystuff.fish site-nbg1-beta "$edge_bundle" "$summary" "$fake_push" "$fake_ssh" "$fake_scp"
 
 expect_fail_contains \
-  "rejects previous beta host" \
-  "target points at the previous beta host" \
-  env \
-    "${base_env[@]}" \
-    FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@178.104.230.121 \
-    bash scripts/recipes/gitops-beta-remote-start-edge.sh root@178.104.230.121 site-nbg1-beta "$edge_bundle" "$summary" "$fake_push" "$fake_ssh" "$fake_scp"
-
-expect_fail_contains \
   "rejects stale reviewed edge hash" \
   "FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256 does not match checked beta edge unit" \
   env \

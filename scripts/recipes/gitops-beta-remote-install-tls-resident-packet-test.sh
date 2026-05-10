@@ -104,10 +104,11 @@ env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy CLOUDFLARE_API_TOKEN=fake
     site-nbg1-beta \
     "$desired" \
     "$unit" \
-    env:CLOUDFLARE_API_TOKEN >"${root}/previous-host.stdout"
-grep -F "beta_remote_tls_resident_install_packet_status=blocked_target" "${root}/previous-host.stdout" >/dev/null
-grep -F "beta_remote_tls_resident_install_packet_target_status=blocked_previous_beta_host" "${root}/previous-host.stdout" >/dev/null
-pass "blocked previous beta host"
+    env:CLOUDFLARE_API_TOKEN >"${root}/reused-ip.stdout"
+grep -F "beta_remote_tls_resident_install_packet_status=ready" "${root}/reused-ip.stdout" >/dev/null
+grep -F "beta_remote_tls_resident_install_packet_target_status=ready" "${root}/reused-ip.stdout" >/dev/null
+grep -F "FISHYSTUFF_GITOPS_BETA_REMOTE_TLS_RESIDENT_TARGET=root@178.104.230.121" "${root}/reused-ip.stdout" >/dev/null
+pass "accepts selected beta IPv4"
 
 env FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=production-deploy CLOUDFLARE_API_TOKEN=fake-cloudflare-token \
   bash scripts/recipes/gitops-beta-remote-install-tls-resident-packet.sh \
