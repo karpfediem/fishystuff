@@ -102,6 +102,11 @@ trap cleanup EXIT
 ssh_common=(
   -i "$tmp_key"
   -o IdentitiesOnly=yes
+  -o BatchMode=yes
+  -o ConnectTimeout=120
+  -o ConnectionAttempts=1
+  -o ServerAliveInterval=10
+  -o ServerAliveCountMax=3
   -o StrictHostKeyChecking=accept-new
   -o UserKnownHostsFile="$known_hosts"
 )

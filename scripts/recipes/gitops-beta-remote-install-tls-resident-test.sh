@@ -139,6 +139,11 @@ grep -F "root@203.0.113.20 /nix/store/" "${root}/push.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-tls-resident-desired.json" "${root}/scp.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-tls-resident.service" "${root}/scp.log" >/dev/null
 grep -F "root@203.0.113.20:/tmp/fishystuff-beta-tls-resident-cloudflare-api-token" "${root}/scp.log" >/dev/null
+grep -F "BatchMode=yes" "${root}/scp.log" >/dev/null
+grep -F "ConnectTimeout=120" "${root}/scp.log" >/dev/null
+grep -F "ConnectionAttempts=1" "${root}/scp.log" >/dev/null
+grep -F "ServerAliveInterval=10" "${root}/remote.log" >/dev/null
+grep -F "ServerAliveCountMax=3" "${root}/remote.log" >/dev/null
 grep -F "systemctl enable --now \"\$unit_name\"" "${root}/remote.sh" >/dev/null
 grep -F "LoadCredential=cloudflare-api-token:\${cloudflare_token_target}" "${root}/remote.sh" >/dev/null
 if grep -F "fake-cloudflare-token" "${root}/remote-install.out" "${root}/scp.log" "${root}/remote.log" "${root}/remote.sh" >/dev/null; then

@@ -87,6 +87,11 @@ grep -F "remote_tls_resident_fullchain_parse_ok=true" "${root}/status.out" >/dev
 grep -F "remote_tls_resident_cert_key_match=true" "${root}/status.out" >/dev/null
 grep -F "remote_host_mutation_performed=false" "${root}/status.out" >/dev/null
 grep -F "remote_deploy_performed=false" "${root}/status.out" >/dev/null
+grep -F "BatchMode=yes" "${root}/remote.log" >/dev/null
+grep -F "ConnectTimeout=120" "${root}/remote.log" >/dev/null
+grep -F "ConnectionAttempts=1" "${root}/remote.log" >/dev/null
+grep -F "ServerAliveInterval=10" "${root}/remote.log" >/dev/null
+grep -F "ServerAliveCountMax=3" "${root}/remote.log" >/dev/null
 grep -F "systemctl show \"\$unit_name\" -p ActiveState --value" "${root}/remote.sh" >/dev/null
 grep -F "systemctl show \"\$unit_name\" -p ExecMainStatus --value" "${root}/remote.sh" >/dev/null
 grep -F "systemctl show \"\$unit_name\" -p NRestarts --value" "${root}/remote.sh" >/dev/null
