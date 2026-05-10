@@ -1,0 +1,56 @@
+import "encoding"
+import "map"
+import "os"
+import "sys"
+
+import "modules/fishy/tls.mcl" as fishy_tls
+
+$state_file = sys.defaultenv("FISHYSTUFF_GITOPS_STATE_FILE", "fixtures/empty.desired.json")
+
+$raw_desired = encoding.decode_json_flexible(
+	os.readfile($state_file),
+	"struct{mode str; tls map{str: struct{enabled bool; materialize bool; solve bool; present_dns bool; certificate_name str; account_name str; directory_url str; contact_email str; challenge str; dns_provider str; dns_zone str; domains []str; request_namespace str; account_key_path str; account_cache_dir str; key_algorithm str; renew_before int; tls_dir str; key_path str; cert_path str; chain_path str; fullchain_path str; cloudflare_token_env str; reload_service str; reload_service_action str; attempt_ttl int; presentation_timeout int; poll_interval int; presentation_settle int; cooldown int}}}"
+)
+
+$empty_tls map{str: struct{enabled bool; materialize bool; solve bool; present_dns bool; certificate_name str; account_name str; directory_url str; contact_email str; challenge str; dns_provider str; dns_zone str; domains []str; request_namespace str; account_key_path str; account_cache_dir str; key_algorithm str; renew_before int; tls_dir str; key_path str; cert_path str; chain_path str; fullchain_path str; cloudflare_token_env str; reload_service str; reload_service_action str; attempt_ttl int; presentation_timeout int; poll_interval int; presentation_settle int; cooldown int}} = {}
+$mode str = $raw_desired->mode || "validate"
+$tls map{str: struct{enabled bool; materialize bool; solve bool; present_dns bool; certificate_name str; account_name str; directory_url str; contact_email str; challenge str; dns_provider str; dns_zone str; domains []str; request_namespace str; account_key_path str; account_cache_dir str; key_algorithm str; renew_before int; tls_dir str; key_path str; cert_path str; chain_path str; fullchain_path str; cloudflare_token_env str; reload_service str; reload_service_action str; attempt_ttl int; presentation_timeout int; poll_interval int; presentation_settle int; cooldown int}} = $raw_desired->tls || $empty_tls
+
+for $index, $tls_name in map.keys($tls) {
+	$tls_entry struct{enabled bool; materialize bool; solve bool; present_dns bool; certificate_name str; account_name str; directory_url str; contact_email str; challenge str; dns_provider str; dns_zone str; domains []str; request_namespace str; account_key_path str; account_cache_dir str; key_algorithm str; renew_before int; tls_dir str; key_path str; cert_path str; chain_path str; fullchain_path str; cloudflare_token_env str; reload_service str; reload_service_action str; attempt_ttl int; presentation_timeout int; poll_interval int; presentation_settle int; cooldown int} = $tls[$tls_name]
+	if $tls_entry->enabled {
+		include fishy_tls.edge_certificate(struct {
+			mode => $mode,
+			enabled => $tls_entry->enabled,
+			materialize => $tls_entry->materialize,
+			solve => $tls_entry->solve,
+			present_dns => $tls_entry->present_dns,
+			certificate_name => $tls_entry->certificate_name,
+			account_name => $tls_entry->account_name,
+			directory_url => $tls_entry->directory_url,
+			contact_email => $tls_entry->contact_email,
+			challenge => $tls_entry->challenge,
+			dns_provider => $tls_entry->dns_provider,
+			dns_zone => $tls_entry->dns_zone,
+			domains => $tls_entry->domains,
+			request_namespace => $tls_entry->request_namespace,
+			account_key_path => $tls_entry->account_key_path,
+			account_cache_dir => $tls_entry->account_cache_dir,
+			key_algorithm => $tls_entry->key_algorithm,
+			renew_before => $tls_entry->renew_before,
+			tls_dir => $tls_entry->tls_dir,
+			key_path => $tls_entry->key_path,
+			cert_path => $tls_entry->cert_path,
+			chain_path => $tls_entry->chain_path,
+			fullchain_path => $tls_entry->fullchain_path,
+			cloudflare_token_env => $tls_entry->cloudflare_token_env,
+			reload_service => $tls_entry->reload_service,
+			reload_service_action => $tls_entry->reload_service_action,
+			attempt_ttl => $tls_entry->attempt_ttl,
+			presentation_timeout => $tls_entry->presentation_timeout,
+			poll_interval => $tls_entry->poll_interval,
+			presentation_settle => $tls_entry->presentation_settle,
+			cooldown => $tls_entry->cooldown,
+		})
+	}
+}

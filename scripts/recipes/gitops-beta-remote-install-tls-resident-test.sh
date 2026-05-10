@@ -55,7 +55,7 @@ WorkingDirectory=${store_root}
 Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
 Environment=FISHYSTUFF_GITOPS_STATE_FILE=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json
 LoadCredential=cloudflare-api-token:/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token
-ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${store_root}/bin/mgmt run --tmp-prefix --no-pgp lang --converged-timeout -1 main.mcl'
+ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${store_root}/bin/mgmt run --tmp-prefix --no-pgp lang --converged-timeout -1 tls-main.mcl'
 ReadWritePaths=/var/lib/fishystuff/gitops-beta
 
 [Install]

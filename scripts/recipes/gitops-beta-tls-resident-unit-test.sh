@@ -46,7 +46,7 @@ cat >"${mgmt_dir}/mgmt" <<'EOF'
 printf 'fake mgmt\n'
 EOF
 chmod +x "${mgmt_dir}/mgmt"
-printf '# fake main\n' >"${gitops_dir}/main.mcl"
+printf '# fake tls main\n' >"${gitops_dir}/tls-main.mcl"
 
 bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$unit" \
@@ -61,11 +61,11 @@ grep -F "WorkingDirectory=$(readlink -f "$gitops_dir")" "$unit" >/dev/null
 grep -F "Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1" "$unit" >/dev/null
 grep -F "Environment=FISHYSTUFF_GITOPS_STATE_FILE=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" "$unit" >/dev/null
 grep -F "LoadCredential=cloudflare-api-token:/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" "$unit" >/dev/null
-grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout -1 main.mcl'" "$unit" >/dev/null
+grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout -1 tls-main.mcl'" "$unit" >/dev/null
 grep -F "Nice=10" "$unit" >/dev/null
 grep -F "IOSchedulingClass=idle" "$unit" >/dev/null
 grep -F "CPUQuota=50%" "$unit" >/dev/null
-grep -F "MemoryMax=1536M" "$unit" >/dev/null
+grep -F "MemoryMax=512M" "$unit" >/dev/null
 grep -F "TasksMax=256" "$unit" >/dev/null
 grep -F "ReadWritePaths=/var/lib/fishystuff/gitops-beta" "$unit" >/dev/null
 grep -F "ProtectSystem=strict" "$unit" >/dev/null
@@ -88,7 +88,7 @@ bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
   600 >"$stdout_unit" 2>"${root}/stdout.stderr"
-grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout 600 main.mcl'" "$stdout_unit" >/dev/null
+grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout 600 tls-main.mcl'" "$stdout_unit" >/dev/null
 pass "write unit to stdout"
 
 default_timeout_unit="${root}/default-timeout.service"
@@ -99,7 +99,7 @@ bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   "$gitops_dir" \
   /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
   >"${root}/default-timeout.stdout" 2>"${root}/default-timeout.stderr"
-grep -F " --converged-timeout 600 main.mcl" "$default_timeout_unit" >/dev/null
+grep -F " --converged-timeout 600 tls-main.mcl" "$default_timeout_unit" >/dev/null
 pass "default convergence timeout is finite"
 
 expect_fail_contains \
@@ -123,8 +123,8 @@ expect_fail_contains \
     /var/lib/fishystuff/gitops/secrets/cloudflare-api-token
 
 expect_fail_contains \
-  "refuse missing gitops main" \
-  "gitops_dir does not contain main.mcl" \
+  "refuse missing gitops TLS main" \
+  "gitops_dir does not contain tls-main.mcl" \
   bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
     - \
     /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \

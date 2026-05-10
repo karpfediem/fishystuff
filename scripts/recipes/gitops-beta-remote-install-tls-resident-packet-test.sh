@@ -48,7 +48,7 @@ cat >"${mgmt_dir}/mgmt" <<'EOF'
 printf 'fake mgmt\n'
 EOF
 chmod +x "${mgmt_dir}/mgmt"
-printf '# fake main\n' >"${gitops_dir}/main.mcl"
+printf '# fake tls main\n' >"${gitops_dir}/tls-main.mcl"
 printf 'fake-cloudflare-token\n' >"$token"
 
 env FISHYSTUFF_GITOPS_BETA_ACME_CONTACT_EMAIL=ops@fishystuff.invalid \

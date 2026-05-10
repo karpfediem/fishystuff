@@ -82,7 +82,7 @@ Description=FishyStuff beta GitOps TLS ACME reconciler
 Type=simple
 Environment=FISHYSTUFF_GITOPS_STATE_FILE=${desired}
 LoadCredential=cloudflare-api-token:${token}
-ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec /nix/store/example-mgmt/bin/mgmt run main.mcl'
+ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec /nix/store/example-mgmt/bin/mgmt run tls-main.mcl'
 
 [Install]
 WantedBy=multi-user.target

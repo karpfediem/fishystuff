@@ -11,6 +11,7 @@ mgmt_bin="$(normalize_named_arg mgmt_bin "${3-auto}")"
 gitops_dir="$(normalize_named_arg gitops_dir "${4-auto}")"
 cloudflare_token_credential="$(normalize_named_arg cloudflare_token_credential "${5-/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token}")"
 converged_timeout="$(normalize_named_arg converged_timeout "${6-600}")"
+entrypoint="tls-main.mcl"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -98,8 +99,8 @@ if [[ "$gitops_dir" == "auto" ]]; then
   gitops_dir="$(nix build "$gitops_flake" --no-link --print-out-paths)"
 fi
 gitops_dir="$(resolve_directory "$gitops_dir" gitops_dir)"
-if [[ ! -f "${gitops_dir}/main.mcl" ]]; then
-  echo "gitops_dir does not contain main.mcl: ${gitops_dir}" >&2
+if [[ ! -f "${gitops_dir}/${entrypoint}" ]]; then
+  echo "gitops_dir does not contain ${entrypoint}: ${gitops_dir}" >&2
   exit 2
 fi
 
@@ -119,13 +120,13 @@ Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
 Environment=FISHYSTUFF_GITOPS_STATE_FILE=${state_file}
 Environment=HOME=/var/lib/fishystuff/gitops-beta/mgmt-home
 LoadCredential=cloudflare-api-token:${cloudflare_token_credential}
-ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${mgmt_bin} run --tmp-prefix --no-pgp lang --converged-timeout ${converged_timeout} main.mcl'
+ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${mgmt_bin} run --tmp-prefix --no-pgp lang --converged-timeout ${converged_timeout} ${entrypoint}'
 Restart=on-failure
 RestartSec=10s
 Nice=10
 IOSchedulingClass=idle
 CPUQuota=50%
-MemoryMax=1536M
+MemoryMax=512M
 TasksMax=256
 NoNewPrivileges=true
 PrivateTmp=true
@@ -161,6 +162,7 @@ printf 'beta_tls_resident_unit_state_file=%s\n' "$state_file" >&2
 printf 'beta_tls_resident_unit_gitops_dir=%s\n' "$gitops_dir" >&2
 printf 'beta_tls_resident_unit_mgmt_bin=%s\n' "$mgmt_bin" >&2
 printf 'beta_tls_resident_unit_cloudflare_token_credential=%s\n' "$cloudflare_token_credential" >&2
+printf 'beta_tls_resident_unit_entrypoint=%s\n' "$entrypoint" >&2
 printf 'remote_deploy_performed=false\n' >&2
 printf 'infrastructure_mutation_performed=false\n' >&2
 printf 'local_host_mutation_performed=false\n' >&2
