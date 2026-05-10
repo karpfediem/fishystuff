@@ -288,9 +288,6 @@ fi
 if [[ ! -x "$dolt_bin" ]]; then
   fail "remote Dolt binary is not executable: ${dolt_bin}"
 fi
-if [[ ! -d "$repo/.dolt" ]]; then
-  fail "remote beta Dolt repo is missing: ${repo}"
-fi
 if [[ "$branch_context" != "beta" ]]; then
   fail "remote beta Dolt materialization requires branch_context=beta, got: ${branch_context}"
 fi
