@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 desired_state="$(normalize_named_arg desired_state "${1-data/gitops/beta-tls.staging.desired.json}")"
 unit_file="$(normalize_named_arg unit_file "${2-data/gitops/fishystuff-beta-tls-reconciler.service}")"
-cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${3-${FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SOURCE:-}}")"
+cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${3-${FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SOURCE:-env:CLOUDFLARE_API_TOKEN}}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -43,6 +43,11 @@ sha256_file() {
   local value=""
   read -r value _ < <(sha256sum "$path")
   printf '%s' "$value"
+}
+
+sha256_line() {
+  local value="$1"
+  printf '%s\n' "$value" | sha256sum | awk '{ print $1 }'
 }
 
 require_beta_tls_desired_shape() {
@@ -101,7 +106,7 @@ hostname_match="$(deployment_hostname_match_status "$current_hostname" "$expecte
 desired_state_path="$(absolute_path "$desired_state")"
 unit_file_path="$(absolute_path "$unit_file")"
 cloudflare_token_source_path=""
-if [[ -n "$cloudflare_token_source" ]]; then
+if [[ -n "$cloudflare_token_source" && "$cloudflare_token_source" != env:* ]]; then
   cloudflare_token_source_path="$(absolute_path "$cloudflare_token_source")"
 fi
 
@@ -151,19 +156,40 @@ else
   printf 'beta_tls_resident_install_packet_unit_sha256=%s\n' "$unit_sha256"
 fi
 
-if [[ -z "$cloudflare_token_source" ]]; then
-  printf 'beta_tls_resident_install_packet_cloudflare_token_status=missing_source\n'
-  printf 'beta_tls_resident_install_packet_next_required_action=choose_cloudflare_token_source_file\n'
-  missing_inputs=1
-elif [[ ! -f "$cloudflare_token_source_path" ]]; then
-  printf 'beta_tls_resident_install_packet_cloudflare_token_status=missing_file\n'
-  printf 'beta_tls_resident_install_packet_next_required_action=write_or_select_cloudflare_token_source_file\n'
-  missing_inputs=1
-else
-  token_sha256="$(sha256_file "$cloudflare_token_source_path")"
-  printf 'beta_tls_resident_install_packet_cloudflare_token_status=ready\n'
-  printf 'beta_tls_resident_install_packet_cloudflare_token_sha256=%s\n' "$token_sha256"
-fi
+case "$cloudflare_token_source" in
+  env:CLOUDFLARE_API_TOKEN)
+    if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+      printf 'beta_tls_resident_install_packet_cloudflare_token_status=missing_env\n'
+      printf 'beta_tls_resident_install_packet_next_required_action=load_beta_deploy_cloudflare_token\n'
+      printf 'beta_tls_resident_install_packet_next_command_03=secretspec run --profile beta-deploy -- just gitops-beta-tls-resident-install-packet desired_state=%s unit_file=%s cloudflare_token_source=env:CLOUDFLARE_API_TOKEN\n' "$desired_state" "$unit_file"
+      missing_inputs=1
+    else
+      token_sha256="$(sha256_line "$CLOUDFLARE_API_TOKEN")"
+      printf 'beta_tls_resident_install_packet_cloudflare_token_status=ready_env\n'
+      printf 'beta_tls_resident_install_packet_cloudflare_token_sha256=%s\n' "$token_sha256"
+    fi
+    ;;
+  env:*)
+    echo "unsupported beta TLS Cloudflare token env source: ${cloudflare_token_source}" >&2
+    exit 2
+    ;;
+  "")
+    printf 'beta_tls_resident_install_packet_cloudflare_token_status=missing_source\n'
+    printf 'beta_tls_resident_install_packet_next_required_action=choose_cloudflare_token_source\n'
+    missing_inputs=1
+    ;;
+  *)
+    if [[ ! -f "$cloudflare_token_source_path" ]]; then
+      printf 'beta_tls_resident_install_packet_cloudflare_token_status=missing_file\n'
+      printf 'beta_tls_resident_install_packet_next_required_action=write_or_select_cloudflare_token_source_file\n'
+      missing_inputs=1
+    else
+      token_sha256="$(sha256_file "$cloudflare_token_source_path")"
+      printf 'beta_tls_resident_install_packet_cloudflare_token_status=ready_file\n'
+      printf 'beta_tls_resident_install_packet_cloudflare_token_sha256=%s\n' "$token_sha256"
+    fi
+    ;;
+esac
 
 if [[ "$missing_inputs" != "0" ]]; then
   printf 'beta_tls_resident_install_packet_status=pending_inputs\n'

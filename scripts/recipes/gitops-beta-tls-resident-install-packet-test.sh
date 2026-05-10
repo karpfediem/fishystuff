@@ -88,31 +88,32 @@ grep -F "beta_tls_resident_install_packet_cloudflare_token_status=missing_source
 grep -F "local_host_mutation_performed=false" "${root}/missing.stdout" >/dev/null
 pass "pending missing inputs packet"
 
-env PATH="${fake_bin}:${PATH}" \
+env PATH="${fake_bin}:${PATH}" CLOUDFLARE_API_TOKEN=fake-cloudflare-token \
   bash scripts/recipes/gitops-beta-tls-resident-install-packet.sh \
     "$desired" \
     "$unit" \
-    "$token" >"${root}/ready.stdout"
+    env:CLOUDFLARE_API_TOKEN >"${root}/ready.stdout"
 grep -F "beta_tls_resident_install_packet_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "beta_tls_resident_install_packet_desired_sha256=${desired_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "beta_tls_resident_install_packet_unit_sha256=${unit_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "beta_tls_resident_install_packet_cloudflare_token_sha256=${token_sha256}" "${root}/ready.stdout" >/dev/null
+grep -F "beta_tls_resident_install_packet_cloudflare_token_status=ready_env" "${root}/ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_RESTART=1" "${root}/ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256=${desired_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256=${unit_sha256}" "${root}/ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256=${token_sha256}" "${root}/ready.stdout" >/dev/null
-grep -F "just gitops-beta-install-tls-resident desired_state=${desired} unit_file=${unit} cloudflare_token_source=${token}" "${root}/ready.stdout" >/dev/null
+grep -F "just gitops-beta-install-tls-resident desired_state=${desired} unit_file=${unit} cloudflare_token_source=env:CLOUDFLARE_API_TOKEN" "${root}/ready.stdout" >/dev/null
 if grep -F "fake-cloudflare-token" "${root}/ready.stdout" >/dev/null; then
   printf '[gitops-beta-tls-resident-install-packet-test] packet leaked token value\n' >&2
   exit 1
 fi
 pass "ready install packet"
 
-env PATH="${fake_bin}:${PATH}" FISHYSTUFF_FAKE_HOSTNAME=operator-dev \
+env PATH="${fake_bin}:${PATH}" FISHYSTUFF_FAKE_HOSTNAME=operator-dev CLOUDFLARE_API_TOKEN=fake-cloudflare-token \
   bash scripts/recipes/gitops-beta-tls-resident-install-packet.sh \
     "$desired" \
     "$unit" \
-    "$token" >"${root}/wrong-host.stdout"
+    env:CLOUDFLARE_API_TOKEN >"${root}/wrong-host.stdout"
 grep -F "beta_tls_resident_install_packet_status=blocked_host" "${root}/wrong-host.stdout" >/dev/null
 grep -F "beta_tls_resident_install_packet_hostname_match=false" "${root}/wrong-host.stdout" >/dev/null
 pass "blocked wrong host packet"
@@ -134,5 +135,15 @@ expect_fail_contains \
   "beta TLS resident unit must use LoadCredential, not EnvironmentFile" \
   env PATH="${fake_bin}:${PATH}" \
     bash scripts/recipes/gitops-beta-tls-resident-install-packet.sh "$desired" "$bad_unit" "$token"
+
+env PATH="${fake_bin}:${PATH}" \
+  bash scripts/recipes/gitops-beta-tls-resident-install-packet.sh \
+    "$desired" \
+    "$unit" \
+    env:CLOUDFLARE_API_TOKEN >"${root}/missing-env.stdout"
+grep -F "beta_tls_resident_install_packet_status=pending_inputs" "${root}/missing-env.stdout" >/dev/null
+grep -F "beta_tls_resident_install_packet_cloudflare_token_status=missing_env" "${root}/missing-env.stdout" >/dev/null
+grep -F "beta_tls_resident_install_packet_next_required_action=load_beta_deploy_cloudflare_token" "${root}/missing-env.stdout" >/dev/null
+pass "pending missing env token packet"
 
 printf '[gitops-beta-tls-resident-install-packet-test] %s checks passed\n' "$pass_count"

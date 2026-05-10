@@ -132,25 +132,26 @@ base_env=(
   FISHYSTUFF_FAKE_INSTALL_ROOT="$fake_install_root"
   FISHYSTUFF_FAKE_INSTALL_LOG="$fake_install_log"
   FISHYSTUFF_FAKE_SYSTEMCTL_LOG="$fake_systemctl_log"
+  CLOUDFLARE_API_TOKEN=fake-cloudflare-token
 )
 
 expect_fail_contains \
   "refuse without install opt-in" \
   "gitops-beta-install-tls-resident requires FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_INSTALL=1" \
   env "${base_env[@]}" \
-    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl
+    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl
 
 expect_fail_contains \
   "refuse without restart opt-in" \
   "gitops-beta-install-tls-resident requires FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_RESTART=1" \
   env "${base_env[@]}" FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_INSTALL=1 \
-    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl
+    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl
 
 expect_fail_contains \
   "refuse without reviewed desired hash" \
   "gitops-beta-install-tls-resident requires FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256" \
   env "${base_env[@]}" FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_RESTART=1 \
-    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl
+    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl
 
 expect_fail_contains \
   "refuse stale unit hash" \
@@ -161,7 +162,7 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256="$desired_sha256" \
     FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
     FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256="$token_sha256" \
-    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl
+    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl
 
 expect_fail_contains \
   "refuse wrong host" \
@@ -173,7 +174,7 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256="$desired_sha256" \
     FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256="$unit_sha256" \
     FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256="$token_sha256" \
-    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl
+    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl
 
 expect_fail_contains \
   "refuse production profile" \
@@ -185,7 +186,7 @@ expect_fail_contains \
     FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256="$desired_sha256" \
     FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256="$unit_sha256" \
     FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256="$token_sha256" \
-    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl
+    bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl
 
 env "${base_env[@]}" \
   FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_RESIDENT_INSTALL=1 \
@@ -193,18 +194,19 @@ env "${base_env[@]}" \
   FISHYSTUFF_GITOPS_BETA_TLS_DESIRED_SHA256="$desired_sha256" \
   FISHYSTUFF_GITOPS_BETA_TLS_RESIDENT_UNIT_SHA256="$unit_sha256" \
   FISHYSTUFF_GITOPS_BETA_TLS_CLOUDFLARE_TOKEN_SHA256="$token_sha256" \
-  bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" "$token" install systemctl >"${root}/install.stdout"
+  bash scripts/recipes/gitops-beta-install-tls-resident.sh "$desired" "$unit" env:CLOUDFLARE_API_TOKEN install systemctl >"${root}/install.stdout"
 
 grep -F "gitops_beta_tls_resident_install_ok=fishystuff-beta-tls-reconciler.service" "${root}/install.stdout" >/dev/null
 grep -F "local_host_mutation_performed=true" "${root}/install.stdout" >/dev/null
 grep -F "install mode=0644 src=${desired} dst=/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" "$fake_install_log" >/dev/null
-grep -F "install mode=0600 src=${token} dst=/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" "$fake_install_log" >/dev/null
+grep -F "install mode=0600" "$fake_install_log" | grep -F "dst=/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" >/dev/null
 grep -F "install mode=0644 src=${unit} dst=/etc/systemd/system/fishystuff-beta-tls-reconciler.service" "$fake_install_log" >/dev/null
 grep -F "systemctl daemon-reload" "$fake_systemctl_log" >/dev/null
 grep -F "systemctl enable --now fishystuff-beta-tls-reconciler.service" "$fake_systemctl_log" >/dev/null
 grep -F "systemctl restart fishystuff-beta-tls-reconciler.service" "$fake_systemctl_log" >/dev/null
 grep -F "systemctl is-active --quiet fishystuff-beta-tls-reconciler.service" "$fake_systemctl_log" >/dev/null
 test "$(stat -c '%a' "${fake_install_root}/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token")" = "600"
+grep -Fx "fake-cloudflare-token" "${fake_install_root}/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" >/dev/null
 pass "valid beta TLS resident install gate"
 
 printf '[gitops-beta-install-tls-resident-test] %s checks passed\n' "$pass_count"

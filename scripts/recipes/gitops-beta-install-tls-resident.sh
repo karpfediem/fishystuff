@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 desired_state="$(normalize_named_arg desired_state "${1-data/gitops/beta-tls.staging.desired.json}")"
 unit_file="$(normalize_named_arg unit_file "${2-data/gitops/fishystuff-beta-tls-reconciler.service}")"
-cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${3-}")"
+cloudflare_token_source="$(normalize_named_arg cloudflare_token_source "${3-env:CLOUDFLARE_API_TOKEN}")"
 install_bin="$(normalize_named_arg install_bin "${4-${FISHYSTUFF_GITOPS_INSTALL_BIN:-install}}")"
 systemctl_bin="$(normalize_named_arg systemctl_bin "${5-${FISHYSTUFF_GITOPS_SYSTEMCTL_BIN:-systemctl}}")"
 
@@ -136,6 +136,7 @@ case "${FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE:-}" in
 esac
 
 require_command jq
+require_command mktemp
 require_command sha256sum
 require_executable_or_command "$install_bin" install_bin
 require_executable_or_command "$systemctl_bin" systemctl_bin
@@ -148,7 +149,11 @@ deployment_require_current_hostname_match beta gitops-beta-install-tls-resident
 
 desired_state_path="$(absolute_path "$desired_state")"
 unit_file_path="$(absolute_path "$unit_file")"
-cloudflare_token_source_path="$(absolute_path "$cloudflare_token_source")"
+tmp_dir="$(mktemp -d)"
+cleanup() {
+  rm -rf "$tmp_dir"
+}
+trap cleanup EXIT
 
 if [[ ! -f "$desired_state_path" ]]; then
   echo "beta TLS desired state file does not exist: ${desired_state}" >&2
@@ -158,10 +163,29 @@ if [[ ! -f "$unit_file_path" ]]; then
   echo "beta TLS resident unit file does not exist: ${unit_file}" >&2
   exit 2
 fi
-if [[ ! -f "$cloudflare_token_source_path" ]]; then
-  echo "beta TLS Cloudflare token source does not exist: ${cloudflare_token_source}" >&2
-  exit 2
-fi
+case "$cloudflare_token_source" in
+  env:CLOUDFLARE_API_TOKEN)
+    if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+      echo "gitops-beta-install-tls-resident requires CLOUDFLARE_API_TOKEN when cloudflare_token_source=env:CLOUDFLARE_API_TOKEN" >&2
+      exit 2
+    fi
+    cloudflare_token_source_path="${tmp_dir}/cloudflare-api-token"
+    umask 077
+    printf '%s\n' "$CLOUDFLARE_API_TOKEN" >"$cloudflare_token_source_path"
+    chmod 600 "$cloudflare_token_source_path"
+    ;;
+  env:*)
+    echo "unsupported beta TLS Cloudflare token env source: ${cloudflare_token_source}" >&2
+    exit 2
+    ;;
+  *)
+    cloudflare_token_source_path="$(absolute_path "$cloudflare_token_source")"
+    if [[ ! -f "$cloudflare_token_source_path" ]]; then
+      echo "beta TLS Cloudflare token source does not exist: ${cloudflare_token_source}" >&2
+      exit 2
+    fi
+    ;;
+esac
 
 require_beta_tls_desired_shape "$desired_state_path"
 require_beta_tls_unit_shape "$unit_file_path"
