@@ -18,7 +18,10 @@ shift
 exec_with_secretspec_profile_if_needed "$(operator_secretspec_profile)" bash "$SCRIPT_PATH" "$ssh_target" "$@"
 
 tmp_key="$(create_temp_ssh_key_from_env /tmp/fishystuff-push-closure.XXXXXX)"
-trap 'rm -f "$tmp_key"' EXIT
+known_hosts="$(mktemp /tmp/fishystuff-push-closure-known-hosts.XXXXXX)"
+trap 'rm -f "$tmp_key" "$known_hosts"' EXIT
+export FISHYSTUFF_SSH_USER_KNOWN_HOSTS_FILE="$known_hosts"
+export NIX_SSHOPTS="${NIX_SSHOPTS:-} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$known_hosts"
 
 remote_nix_daemon_path="$(detect_remote_nix_daemon_path "$ssh_target" "$tmp_key")"
 require_value "$remote_nix_daemon_path" "could not detect remote nix-daemon path on $ssh_target"

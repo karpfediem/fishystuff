@@ -1480,11 +1480,19 @@ create_temp_ssh_key_from_env() {
 detect_remote_nix_probe() {
   local ssh_target="$1"
   local tmp_key="$2"
+  local known_hosts="${FISHYSTUFF_SSH_USER_KNOWN_HOSTS_FILE:-}"
+  local ssh_opts=(
+    -i "$tmp_key"
+    -o IdentitiesOnly=yes
+    -o StrictHostKeyChecking=accept-new
+  )
+
+  if [[ -n "$known_hosts" ]]; then
+    ssh_opts+=(-o UserKnownHostsFile="$known_hosts")
+  fi
 
   ssh \
-    -i "$tmp_key" \
-    -o IdentitiesOnly=yes \
-    -o StrictHostKeyChecking=accept-new \
+    "${ssh_opts[@]}" \
     "$ssh_target" \
     '
       nix_path=""
