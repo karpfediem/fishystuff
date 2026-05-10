@@ -400,6 +400,18 @@ gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_
 gitops-beta-remote-install-edge-tls target="" expected_hostname="site-nbg1-beta" fullchain="" privkey="" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-install-edge-tls.sh "{{target}}" "{{expected_hostname}}" "{{fullchain}}" "{{privkey}}" "{{ssh_bin}}" "{{scp_bin}}"
 
+# Generate beta TLS desired state for mgmt ACME reconciliation. Local file write only.
+gitops-beta-tls-desired output="data/gitops/beta-tls.staging.desired.json" ca="staging" contact_email="":
+  bash scripts/recipes/gitops-beta-tls-desired.sh "{{output}}" "{{ca}}" "{{contact_email}}"
+
+# Print the read-only beta TLS mgmt ACME reconciliation packet.
+gitops-beta-tls-reconcile-packet state_file="data/gitops/beta-tls.staging.desired.json" ca="staging" contact_email="":
+  @bash scripts/recipes/gitops-beta-tls-reconcile-packet.sh "{{state_file}}" "{{ca}}" "{{contact_email}}"
+
+# Reconcile beta TLS through the clean mgmt ACME graph after explicit opt-ins. Local beta host mutation.
+gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.staging.desired.json" ca="staging" mgmt_bin="auto" converged_timeout="300":
+  bash scripts/recipes/gitops-beta-reconcile-tls.sh "{{state_file}}" "{{ca}}" "{{mgmt_bin}}" "{{converged_timeout}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
@@ -431,6 +443,14 @@ gitops-beta-remote-start-edge-test:
 # Run fast local regression checks for remote beta edge TLS installation.
 gitops-beta-remote-install-edge-tls-test:
   bash scripts/recipes/gitops-beta-remote-install-edge-tls-test.sh
+
+# Run fast local regression checks for beta TLS mgmt ACME packet generation.
+gitops-beta-tls-reconcile-packet-test:
+  bash scripts/recipes/gitops-beta-tls-reconcile-packet-test.sh
+
+# Run fast local regression checks for guarded beta TLS mgmt reconciliation.
+gitops-beta-reconcile-tls-test:
+  bash scripts/recipes/gitops-beta-reconcile-tls-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":

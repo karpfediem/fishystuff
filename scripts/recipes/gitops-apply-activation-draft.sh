@@ -186,7 +186,7 @@ if [[ "$admission_sha256" != "$proof_admission_sha256" ]]; then
 fi
 
 if [[ "$mgmt_bin" == "auto" ]]; then
-  mgmt_flake="${FISHYSTUFF_GITOPS_MGMT_FLAKE:-git+file:///home/carp/code/mgmt-fishystuff-beta?rev=8ff41165c88368b84828ea2e37c24414be3f9532#minimal}"
+  mgmt_flake="${FISHYSTUFF_GITOPS_MGMT_FLAKE:-${RECIPE_REPO_ROOT}#mgmt-gitops}"
   mgmt_out="$(nix build "$mgmt_flake" --no-link --print-out-paths)"
   mgmt_bin="${mgmt_out}/bin/mgmt"
 fi

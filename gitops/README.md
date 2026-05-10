@@ -89,6 +89,11 @@ just gitops-beta-remote-start-edge
 just gitops-beta-remote-start-edge-test
 just gitops-beta-remote-install-edge-tls
 just gitops-beta-remote-install-edge-tls-test
+just gitops-beta-tls-desired
+just gitops-beta-tls-reconcile-packet
+just gitops-beta-tls-reconcile-packet-test
+just gitops-beta-reconcile-tls
+just gitops-beta-reconcile-tls-test
 just gitops-beta-cloudflare-dns-cutover
 just gitops-beta-cloudflare-dns-cutover-test
 just gitops-beta-service-start-plan
@@ -685,6 +690,8 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_PLACEHOLDER_TLS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked-beta-edge-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-edge target=root@<new-beta-public-ip>` copies only the checked beta edge closure, makes the beta GitOps root traversable for the dynamic Caddy user without making API/Dolt env directories readable, publishes the handoff site/CDN closures as the beta served symlinks, installs and restarts only `fishystuff-beta-edge.service`, and probes site/API/CDN through remote loopback `curl -k --resolve` checks. The placeholder TLS opt-in is only for origin smoke before beta DNS or mgmt-issued DNS01 certificates are pointed at the replacement host. On a host that already has trusted beta certificates, set `FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE=existing` with `FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_EXISTING_TLS=1`; this preserves and validates `/var/lib/fishystuff/gitops-beta/tls/live/{fullchain.pem,privkey.pem}` and uses trusted loopback HTTPS checks.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_TLS_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_FULLCHAIN_SHA256=<checked-fullchain-sha256> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_PRIVKEY_SHA256=<checked-privkey-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-install-edge-tls target=root@<new-beta-public-ip> fullchain=<local-fullchain.pem> privkey=<local-privkey.pem>` installs operator-supplied beta-only TLS material, validates SANs/expiry/key match/hash acknowledgements, restarts only `fishystuff-beta-edge.service`, and then performs trusted loopback HTTPS smokes without `-k`. This can consume a copied beta certificate today or the later mgmt `acme:certificate` materialization output.
+
+`just gitops-beta-tls-desired`, `just gitops-beta-tls-reconcile-packet`, and `just gitops-beta-reconcile-tls` are the first beta TLS path that goes through mgmt ACME instead of the manual certificate-copy bridge. The generator defaults to Let's Encrypt staging and writes only a local desired-state file. The packet validates beta-only domains, beta TLS paths, the beta ACME request namespace, and beta-deploy Cloudflare token readiness without applying anything. The reconcile command is host-local mutation and requires beta/local apply opt-ins, the expected beta resident hostname, `CLOUDFLARE_API_TOKEN` from `beta-deploy`, and an extra production ACME opt-in if `ca=production`.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_DNS_CUTOVER=1 FISHYSTUFF_GITOPS_BETA_DNS_TARGET_IPV4=<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-cloudflare-dns-cutover target_ipv4=<new-beta-public-ip>` updates only the existing beta Cloudflare A records for `beta`, `api.beta`, `cdn.beta`, and `telemetry.beta` to the acknowledged fresh beta IPv4. It refuses production profiles, the previous beta IP, non-beta hostnames, and root production DNS records.
 

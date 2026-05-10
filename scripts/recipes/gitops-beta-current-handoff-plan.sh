@@ -218,7 +218,7 @@ print_mgmt_status() {
   if [[ "$mgmt_bin" == "auto" ]]; then
     mgmt_build_required="true"
     printf 'mgmt_bin_status=auto_will_build\n'
-    printf 'mgmt_flake=%s\n' "${FISHYSTUFF_GITOPS_MGMT_FLAKE:-git+file:///home/carp/code/mgmt-fishystuff-beta?rev=8ff41165c88368b84828ea2e37c24414be3f9532#minimal}"
+    printf 'mgmt_flake=%s\n' "${FISHYSTUFF_GITOPS_MGMT_FLAKE:-${RECIPE_REPO_ROOT}#mgmt-gitops}"
     return
   fi
   if [[ "$mgmt_bin" == */* && -x "$mgmt_bin" ]]; then
