@@ -338,6 +338,42 @@ The minimal JSON shape is:
   "cluster": "local-test",
   "generation": 1,
   "mode": "validate",
+  "tls": {
+    "edge": {
+      "enabled": true,
+      "materialize": true,
+      "solve": true,
+      "present_dns": true,
+      "certificate_name": "fishystuff-edge",
+      "account_name": "fishystuff-edge-account",
+      "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+      "contact_email": "ops@example.invalid",
+      "challenge": "dns-01",
+      "dns_provider": "cloudflare",
+      "dns_zone": "fishystuff.fish",
+      "domains": [
+        "beta.fishystuff.fish",
+        "api.beta.fishystuff.fish",
+        "cdn.beta.fishystuff.fish"
+      ],
+      "request_namespace": "acme/cert-requests/fishystuff-gitops",
+      "account_key_path": "/var/lib/fishystuff/gitops/acme/fishystuff-edge-account/account.key",
+      "account_cache_dir": "/var/lib/fishystuff/gitops/acme/fishystuff-edge-account",
+      "key_algorithm": "ecdsa-p256",
+      "renew_before": 0,
+      "tls_dir": "/var/lib/fishystuff/gitops/tls/live",
+      "key_path": "/var/lib/fishystuff/gitops/tls/live/privkey.pem",
+      "cert_path": "/var/lib/fishystuff/gitops/tls/live/cert.pem",
+      "chain_path": "/var/lib/fishystuff/gitops/tls/live/chain.pem",
+      "fullchain_path": "/var/lib/fishystuff/gitops/tls/live/fullchain.pem",
+      "cloudflare_token_env": "CLOUDFLARE_API_TOKEN",
+      "attempt_ttl": 2400,
+      "presentation_timeout": 1800,
+      "poll_interval": 10,
+      "presentation_settle": 60,
+      "cooldown": 600
+    }
+  },
   "hosts": {
     "vm-single-host": {
       "enabled": true,
@@ -406,6 +442,8 @@ Supported modes:
 - `vm-test`: create only VM-local files under `/var/lib/fishystuff/gitops-test` and `/run/fishystuff/gitops-test`.
 - `vm-test-closures`: VM-only mode that also verifies real Nix store paths with `nix:closure` and roots them under `/nix/var/nix/gcroots/fishystuff/gitops-test`.
 - `local-apply`: opt-in host-local mode. It is refused unless `FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1` is set. Production and generic local-test environments use `/var/lib/fishystuff/gitops` and `/run/fishystuff/gitops`; beta uses `/var/lib/fishystuff/gitops-beta` and `/run/fishystuff/gitops-beta`. Candidate/status facts, served symlinks, rollback documents, and route handoff files are written under that environment-selected root. Serving with HTTP admission requires `api_upstream`, and the admission URL must target that upstream. Current probe support is loopback-only.
+
+`tls` is optional and is reconciled through the custom ACME resources in the pinned mgmt package, not through Caddy's automatic ACME, lego, certbot, or an imperative certificate command. In `validate` mode the graph only decodes and shape-checks the TLS desired state. In `local-apply`, `materialize` declares an `acme:certificate` that writes the selected key/cert/chain/fullchain paths, `solve` declares an `acme:account` plus `acme:solver:dns01`, and `present_dns` declares a `cloudflare:dnsmanager` TXT record only while the solver publishes a live dns-01 attempt in mgmt World. DNS mutation therefore still requires the explicit local-apply gate and a Cloudflare token in the configured environment variable.
 
 `admission_fixture_state` is a VM-only test hook for deterministic local admission behavior. It may be empty, `passed_fixture`, `failed_fixture`, or `not_run`; empty defaults to `passed_fixture` in VM modes and `not_run` in validate mode. It must not be used for beta/prod desired state.
 
@@ -644,9 +682,9 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_SERVICE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_DOLT_RESTART=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_API_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_API_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_SERVICE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_DOLT_UNIT_SHA256=<checked-dolt-unit-sha256> FISHYSTUFF_GITOPS_BETA_API_UNIT_SHA256=<checked-api-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-services target=root@<new-beta-public-ip>` installs and starts only the checked beta Dolt/API service units on that fresh host. It starts Dolt before API and waits for loopback Dolt SQL plus API `/api/v1/meta` to report the selected release and Dolt commit; edge routing, DNS, Hetzner, Cloudflare, production, and old-beta retirement remain separate steps.
 
-`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_PLACEHOLDER_TLS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked-beta-edge-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-edge target=root@<new-beta-public-ip>` copies only the checked beta edge closure, makes the beta GitOps root traversable for the dynamic Caddy user without making API/Dolt env directories readable, publishes the handoff site/CDN closures as the beta served symlinks, installs and restarts only `fishystuff-beta-edge.service`, and probes site/API/CDN through remote loopback `curl -k --resolve` checks. The placeholder TLS opt-in is only for origin smoke before beta DNS or DNS01-issued certificates are pointed at the replacement host. On a host that already has trusted beta certificates, set `FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE=existing` with `FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_EXISTING_TLS=1`; this preserves and validates `/var/lib/fishystuff/gitops-beta/tls/live/{fullchain.pem,privkey.pem}` and uses trusted loopback HTTPS checks.
+`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_START=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_CLOSURE_COPY=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_SERVED_LINKS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_PLACEHOLDER_TLS=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_UNIT_SHA256=<checked-beta-edge-unit-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-start-edge target=root@<new-beta-public-ip>` copies only the checked beta edge closure, makes the beta GitOps root traversable for the dynamic Caddy user without making API/Dolt env directories readable, publishes the handoff site/CDN closures as the beta served symlinks, installs and restarts only `fishystuff-beta-edge.service`, and probes site/API/CDN through remote loopback `curl -k --resolve` checks. The placeholder TLS opt-in is only for origin smoke before beta DNS or mgmt-issued DNS01 certificates are pointed at the replacement host. On a host that already has trusted beta certificates, set `FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_MODE=existing` with `FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_EXISTING_TLS=1`; this preserves and validates `/var/lib/fishystuff/gitops-beta/tls/live/{fullchain.pem,privkey.pem}` and uses trusted loopback HTTPS checks.
 
-`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_TLS_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_FULLCHAIN_SHA256=<checked-fullchain-sha256> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_PRIVKEY_SHA256=<checked-privkey-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-install-edge-tls target=root@<new-beta-public-ip> fullchain=<local-fullchain.pem> privkey=<local-privkey.pem>` installs operator-supplied beta-only TLS material, validates SANs/expiry/key match/hash acknowledgements, restarts only `fishystuff-beta-edge.service`, and then performs trusted loopback HTTPS smokes without `-k`. This can consume a copied beta certificate today or DNS01 output later.
+`FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_TLS_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_FULLCHAIN_SHA256=<checked-fullchain-sha256> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_PRIVKEY_SHA256=<checked-privkey-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-install-edge-tls target=root@<new-beta-public-ip> fullchain=<local-fullchain.pem> privkey=<local-privkey.pem>` installs operator-supplied beta-only TLS material, validates SANs/expiry/key match/hash acknowledgements, restarts only `fishystuff-beta-edge.service`, and then performs trusted loopback HTTPS smokes without `-k`. This can consume a copied beta certificate today or the later mgmt `acme:certificate` materialization output.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_DNS_CUTOVER=1 FISHYSTUFF_GITOPS_BETA_DNS_TARGET_IPV4=<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-cloudflare-dns-cutover target_ipv4=<new-beta-public-ip>` updates only the existing beta Cloudflare A records for `beta`, `api.beta`, `cdn.beta`, and `telemetry.beta` to the acknowledged fresh beta IPv4. It refuses production profiles, the previous beta IP, non-beta hostnames, and root production DNS records.
 

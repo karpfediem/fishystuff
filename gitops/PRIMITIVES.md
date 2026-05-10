@@ -73,6 +73,78 @@ Defaults: `state = "exists"`, `gc_roots_dir = "/nix/var/nix/gcroots"`, `store_di
 
 The new graph currently emits `nix:closure` in `vm-test-closures` and future `local-apply` mode, then uses ordinary `file` symlink resources under `/nix/var/nix/gcroots/fishystuff/...` for GC roots. Served publication is gated by a separate helper-backed `roots-ready` exec/status fact for each active and retained release. The helper verifies the symlink target, store path existence, and `nix-store --gc --print-roots` output before status/active/route/rollback documents can publish. `validate` and plain `vm-test` intentionally no-op closure realization.
 
+## ACME And DNS
+
+The old beta resident graph performed ACME through custom mgmt resources. The clean GitOps graph keeps that shape: certificates are desired state in mgmt, not Caddy automatic ACME, lego, certbot, or an imperative deploy step.
+
+The fishystuff flake pins `/home/carp/code/mgmt-fishystuff-beta` at `dc590ceb2060edeb9f739899f451d46de43efbb2`, which exposes these resource kinds:
+
+```text
+acme:certificate "<name>" {
+  request_namespace => str
+  namespace => str
+  domains => []str
+  key_algorithm => str
+  renew_before => uint64
+  key => str
+  cert => str
+  chain => str
+  fullchain => str
+  private_key_mode => str
+}
+```
+
+`request_namespace` groups certificate requests in mgmt World. `namespace` is a legacy exact-world override and should not be used by new MCL with `request_namespace`. If any local materialization path is set, `key`, `cert`, `chain`, and `fullchain` are all required and must be absolute.
+
+```text
+acme:account "<name>" {
+  directory => str
+  contact => []str
+  key => str
+  key_algorithm => str
+  cache_dir => str
+  terms_of_service_agreed => bool
+  eab_kid => str
+  eab_hmac_key_file => str
+}
+```
+
+```text
+acme:solver:dns01 "<name>" {
+  account => str
+  request_namespace => str
+  certificates => []str
+  zones => []str
+  resolvers => []str
+  attempt_ttl => uint64
+  presentation_timeout => uint64
+  poll_interval => uint64
+  presentation_settle => uint64
+  cooldown => uint64
+}
+```
+
+The solver publishes live dns-01 attempt data into mgmt World. The GitOps TLS module reads that attempt state and declares DNS only while the attempt is in `presenting`.
+
+```text
+cloudflare:dnsmanager "<name>" {
+  apitoken => str
+  state => "exists" | "absent"
+  zone => str
+  type => str
+  record_name => str
+  content => str
+  ttl => int64
+  proxied => bool
+  purge => bool
+  comment => str
+  cachettl => duration
+  Meta:poll => duration
+}
+```
+
+`cloudflare:dnsmanager` requires polling with `Meta:poll >= 60`. The clean GitOps TLS module currently uses it only for Cloudflare TXT presentation during dns-01, and only in `local-apply` mode. `validate` mode decodes and type-checks the resources but performs no account registration, certificate issuance, file writes, or DNS mutation.
+
 ## Local Files
 
 Signature from `/home/carp/code/mgmt/engine/resources/file.go`:

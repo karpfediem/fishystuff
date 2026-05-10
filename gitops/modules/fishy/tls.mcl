@@ -1,0 +1,156 @@
+import "encoding"
+import "datetime"
+import "fmt"
+import "strings" as core_strings
+import "sys"
+import "world"
+
+class dns01_attempt($st) {
+	$request_namespace str = $st->request_namespace
+	$certificate_name str = $st->certificate_name
+	$attempt_key str = fmt.printf("%s/%s/attempt", $request_namespace, $certificate_name)
+	$raw = world.getval($attempt_key)
+	$attempt_json str = if $raw->exists { $raw->value } else { "{}" }
+	$attempt = encoding.decode_json_flexible(
+		$attempt_json,
+		"struct{phase str; challenge_type str; dns_zone str; dns_name str; dns_value str; expires_at int}"
+	)
+	$phase str = $attempt->phase || ""
+	$challenge_type str = $attempt->challenge_type || ""
+	$dns_zone str = $attempt->dns_zone || ""
+	$dns_name str = $attempt->dns_name || ""
+	$dns_value str = $attempt->dns_value || ""
+	$expires_at int = $attempt->expires_at || 0
+	$presenting bool = $raw->exists and ($phase == "presenting") and ($challenge_type == "dns-01") and ($expires_at > datetime.now())
+}
+
+class edge_certificate($st) {
+	$mode str = $st->mode || "validate"
+	$enabled bool = $st->enabled || false
+	$materialize bool = $st->materialize || false
+	$solve bool = $st->solve || false
+	$present_dns bool = $st->present_dns || false
+	$certificate_name str = $st->certificate_name
+	$account_name str = $st->account_name || fmt.printf("%s-account", $certificate_name)
+	$directory_url str = $st->directory_url || "https://acme-v02.api.letsencrypt.org/directory"
+	$contact_email str = $st->contact_email || ""
+	$contact_uri str = if core_strings.has_prefix($contact_email, "mailto:") {
+		$contact_email
+	} else {
+		fmt.printf("mailto:%s", $contact_email)
+	}
+	$challenge str = $st->challenge || "dns-01"
+	$dns_provider str = $st->dns_provider || ""
+	$dns_provider_normalized str = core_strings.to_lower($dns_provider)
+	$dns_zone str = $st->dns_zone || ""
+	$domains []str = $st->domains || []
+	$request_namespace str = $st->request_namespace || "acme/cert-requests/fishystuff-gitops"
+	$account_key_path str = $st->account_key_path || fmt.printf("/var/lib/fishystuff/gitops/acme/%s/account.key", $account_name)
+	$account_cache_dir str = $st->account_cache_dir || fmt.printf("/var/lib/fishystuff/gitops/acme/%s", $account_name)
+	$key_algorithm str = $st->key_algorithm || "ecdsa-p256"
+	$renew_before int = $st->renew_before || 0
+	$tls_dir str = $st->tls_dir || "/var/lib/fishystuff/gitops/tls/live"
+	$tls_dir_prefix str = if core_strings.has_suffix($tls_dir, "/") { $tls_dir } else { fmt.printf("%s/", $tls_dir) }
+	$key_path str = $st->key_path || fmt.printf("%s/privkey.pem", $tls_dir)
+	$cert_path str = $st->cert_path || fmt.printf("%s/cert.pem", $tls_dir)
+	$chain_path str = $st->chain_path || fmt.printf("%s/chain.pem", $tls_dir)
+	$fullchain_path str = $st->fullchain_path || fmt.printf("%s/fullchain.pem", $tls_dir)
+	$cloudflare_token_env str = $st->cloudflare_token_env || "CLOUDFLARE_API_TOKEN"
+	$cloudflare_api_token str = if $cloudflare_token_env == "" { "" } else { sys.getenv($cloudflare_token_env) }
+	$attempt_ttl int = $st->attempt_ttl || 2400
+	$presentation_timeout int = $st->presentation_timeout || 1800
+	$poll_interval int = $st->poll_interval || 10
+	$presentation_settle int = $st->presentation_settle || 60
+	$cooldown int = $st->cooldown || 600
+	$apply = $enabled and ($mode == "local-apply")
+
+	panic($enabled and ($certificate_name == ""), "TLS certificate requires certificate_name")
+	panic($enabled and (len($domains) == 0), fmt.printf("TLS certificate %s requires at least one domain", $certificate_name))
+	panic($enabled and ($challenge != "dns-01"), fmt.printf("TLS certificate %s only supports dns-01 in the clean GitOps path", $certificate_name))
+	panic($enabled and (($dns_provider != "") and ($dns_provider_normalized != "cloudflare")), fmt.printf("TLS certificate %s unsupported DNS provider %s", $certificate_name, $dns_provider))
+	panic($enabled and $materialize and ($tls_dir == ""), fmt.printf("TLS certificate %s requires tls_dir when materializing", $certificate_name))
+	panic($enabled and $materialize and (not core_strings.has_prefix($key_path, $tls_dir_prefix)), fmt.printf("TLS certificate %s key_path must be under tls_dir", $certificate_name))
+	panic($enabled and $materialize and (not core_strings.has_prefix($cert_path, $tls_dir_prefix)), fmt.printf("TLS certificate %s cert_path must be under tls_dir", $certificate_name))
+	panic($enabled and $materialize and (not core_strings.has_prefix($chain_path, $tls_dir_prefix)), fmt.printf("TLS certificate %s chain_path must be under tls_dir", $certificate_name))
+	panic($enabled and $materialize and (not core_strings.has_prefix($fullchain_path, $tls_dir_prefix)), fmt.printf("TLS certificate %s fullchain_path must be under tls_dir", $certificate_name))
+	panic($apply and (not $materialize) and (not $solve), fmt.printf("TLS certificate %s local-apply requires materialize or solve", $certificate_name))
+	panic($apply and $solve and ($contact_email == ""), fmt.printf("TLS certificate %s solve requires contact_email", $certificate_name))
+	panic($apply and ($solve or $present_dns) and ($dns_provider_normalized != "cloudflare"), fmt.printf("TLS certificate %s dns-01 solve/presentation requires Cloudflare", $certificate_name))
+	panic($apply and ($solve or $present_dns) and ($dns_zone == ""), fmt.printf("TLS certificate %s dns-01 solve/presentation requires dns_zone", $certificate_name))
+	panic($apply and $present_dns and ($cloudflare_api_token == ""), fmt.printf("TLS certificate %s DNS presentation requires %s", $certificate_name, $cloudflare_token_env))
+
+	if $apply and $materialize {
+		file "${tls_dir}/" {
+			state => "exists",
+			mode => "0700",
+			owner => "root",
+			group => "root",
+		}
+	}
+
+	if $apply {
+		acme:certificate "${certificate_name}" {
+			request_namespace => $request_namespace,
+			domains => $domains,
+			key_algorithm => $key_algorithm,
+			renew_before => $renew_before,
+			key => if $materialize { $key_path } else { "" },
+			cert => if $materialize { $cert_path } else { "" },
+			chain => if $materialize { $chain_path } else { "" },
+			fullchain => if $materialize { $fullchain_path } else { "" },
+		}
+	}
+
+	if $apply and $materialize {
+		File["${tls_dir}/"] -> Acme:Certificate["${certificate_name}"]
+	}
+
+	if $apply and $solve {
+		acme:account "${account_name}" {
+			directory => $directory_url,
+			contact => [$contact_uri,],
+			key => $account_key_path,
+			key_algorithm => $key_algorithm,
+			cache_dir => $account_cache_dir,
+			terms_of_service_agreed => true,
+		}
+
+		acme:solver:dns01 "${certificate_name}-dns01" {
+			account => $account_name,
+			request_namespace => $request_namespace,
+			certificates => [$certificate_name,],
+			zones => [$dns_zone,],
+			resolvers => ["8.8.8.8:53", "1.1.1.1:53",],
+			attempt_ttl => $attempt_ttl,
+			presentation_timeout => $presentation_timeout,
+			poll_interval => $poll_interval,
+			presentation_settle => $presentation_settle,
+			cooldown => $cooldown,
+
+			Depend => Acme:Account["${account_name}"],
+		}
+	}
+
+	if $apply and $present_dns {
+		include dns01_attempt(struct {
+			request_namespace => $request_namespace,
+			certificate_name => $certificate_name,
+		}) as dns_attempt
+
+		if $dns_attempt.presenting {
+			cloudflare:dnsmanager "${certificate_name}-dns01" {
+				apitoken => $cloudflare_api_token,
+				state => "exists",
+				zone => $dns_attempt.dns_zone,
+				record_name => $dns_attempt.dns_name,
+				type => "TXT",
+				content => $dns_attempt.dns_value,
+				ttl => 60,
+				proxied => false,
+				purge => false,
+				comment => fmt.printf("FishyStuff GitOps ACME dns-01 for %s", $certificate_name),
+				Meta:poll => 60,
+			}
+		}
+	}
+}

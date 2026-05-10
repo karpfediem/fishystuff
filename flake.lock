@@ -43,16 +43,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1776848146,
-        "narHash": "sha256-v3YLrmNvXaL1hIt6EZaUyyctsiUBaS6epIOYsLPzRNg=",
+        "lastModified": 1778367213,
+        "narHash": "sha256-UmZuMvkkXrGvVnPhD0LkgEv2+uj0LPPDFhfngS9Mj5M=",
         "ref": "refs/heads/feature/fishystuff-beta-integration",
-        "rev": "8ff41165c88368b84828ea2e37c24414be3f9532",
-        "revCount": 2652,
+        "rev": "dc590ceb2060edeb9f739899f451d46de43efbb2",
+        "revCount": 2653,
         "type": "git",
         "url": "file:///home/carp/code/mgmt-fishystuff-beta"
       },
       "original": {
-        "rev": "8ff41165c88368b84828ea2e37c24414be3f9532",
+        "rev": "dc590ceb2060edeb9f739899f451d46de43efbb2",
         "type": "git",
         "url": "file:///home/carp/code/mgmt-fishystuff-beta"
       }

@@ -8,7 +8,7 @@
     nix2container.url = "github:nlewo/nix2container";
     nix2container.inputs.nixpkgs.follows = "nixpkgs";
     mk-shell-bin.url = "github:rrbutani/nix-mk-shell-bin";
-    mgmt-fishystuff-beta.url = "git+file:///home/carp/code/mgmt-fishystuff-beta?rev=8ff41165c88368b84828ea2e37c24414be3f9532";
+    mgmt-fishystuff-beta.url = "git+file:///home/carp/code/mgmt-fishystuff-beta?rev=dc590ceb2060edeb9f739899f451d46de43efbb2";
     mgmt-fishystuff-beta.inputs.flake-parts.follows = "flake-parts";
     mgmt-fishystuff-beta.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
@@ -1464,6 +1464,7 @@
             otel-collector-service-bundle = otelCollectorServiceBundle;
             minimap-display-tiles = minimapDisplayTiles;
             minimap-source-tiles = minimapSourceTiles;
+            mgmt-gitops = mgmtGitopsPackage;
             prometheus-service-bundle = prometheusServiceBundle;
             site-content = siteContent;
             site-content-beta = siteContentBeta;

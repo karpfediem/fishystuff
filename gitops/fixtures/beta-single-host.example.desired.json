@@ -2,6 +2,35 @@
   "cluster": "beta",
   "generation": 1,
   "mode": "validate",
+  "tls": {
+    "beta-edge": {
+      "enabled": true,
+      "materialize": true,
+      "solve": true,
+      "present_dns": true,
+      "certificate_name": "fishystuff-beta-edge",
+      "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+      "contact_email": "ops@example.invalid",
+      "challenge": "dns-01",
+      "dns_provider": "cloudflare",
+      "dns_zone": "fishystuff.fish",
+      "domains": [
+        "beta.fishystuff.fish",
+        "api.beta.fishystuff.fish",
+        "cdn.beta.fishystuff.fish",
+        "telemetry.beta.fishystuff.fish"
+      ],
+      "request_namespace": "acme/cert-requests/fishystuff-beta",
+      "account_key_path": "/var/lib/fishystuff/gitops-beta/acme/fishystuff-beta-edge-account/account.key",
+      "account_cache_dir": "/var/lib/fishystuff/gitops-beta/acme/fishystuff-beta-edge-account",
+      "tls_dir": "/var/lib/fishystuff/gitops-beta/tls/live",
+      "key_path": "/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem",
+      "cert_path": "/var/lib/fishystuff/gitops-beta/tls/live/cert.pem",
+      "chain_path": "/var/lib/fishystuff/gitops-beta/tls/live/chain.pem",
+      "fullchain_path": "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem",
+      "cloudflare_token_env": "CLOUDFLARE_API_TOKEN"
+    }
+  },
   "hosts": {
     "beta-single-host": {
       "enabled": true,

@@ -6,7 +6,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 mgmt_bin="$(normalize_named_arg mgmt_bin "${1-auto}")"
 state_file="$(normalize_named_arg state_file "${2-gitops/fixtures/empty.desired.json}")"
-mgmt_flake="${FISHYSTUFF_GITOPS_MGMT_FLAKE:-git+file:///home/carp/code/mgmt-fishystuff-beta?rev=8ff41165c88368b84828ea2e37c24414be3f9532#minimal}"
+mgmt_flake="${FISHYSTUFF_GITOPS_MGMT_FLAKE:-${RECIPE_REPO_ROOT}#mgmt-gitops}"
 
 if [[ "$state_file" != /* ]]; then
   state_file="${RECIPE_REPO_ROOT}/${state_file}"
