@@ -100,6 +100,8 @@ json="$(
           chain_path: "/var/lib/fishystuff/gitops-beta/tls/live/chain.pem",
           fullchain_path: "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem",
           cloudflare_token_env: "CLOUDFLARE_API_TOKEN",
+          reload_service: "fishystuff-beta-edge",
+          reload_service_action: "reload-or-try-restart",
           attempt_ttl: 2400,
           presentation_timeout: 1800,
           poll_interval: 10,

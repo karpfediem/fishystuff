@@ -57,6 +57,8 @@ class edge_certificate($st) {
 	$fullchain_path str = $st->fullchain_path || fmt.printf("%s/fullchain.pem", $tls_dir)
 	$cloudflare_token_env str = $st->cloudflare_token_env || "CLOUDFLARE_API_TOKEN"
 	$cloudflare_api_token str = if $cloudflare_token_env == "" { "" } else { sys.getenv($cloudflare_token_env) }
+	$reload_service str = $st->reload_service || ""
+	$reload_service_action str = $st->reload_service_action || "reload-or-try-restart"
 	$attempt_ttl int = $st->attempt_ttl || 2400
 	$presentation_timeout int = $st->presentation_timeout || 1800
 	$poll_interval int = $st->poll_interval || 10
@@ -78,6 +80,8 @@ class edge_certificate($st) {
 	panic($apply and ($solve or $present_dns) and ($dns_provider_normalized != "cloudflare"), fmt.printf("TLS certificate %s dns-01 solve/presentation requires Cloudflare", $certificate_name))
 	panic($apply and ($solve or $present_dns) and ($dns_zone == ""), fmt.printf("TLS certificate %s dns-01 solve/presentation requires dns_zone", $certificate_name))
 	panic($apply and $present_dns and ($cloudflare_api_token == ""), fmt.printf("TLS certificate %s DNS presentation requires %s", $certificate_name, $cloudflare_token_env))
+	panic($enabled and core_strings.has_suffix($reload_service, ".service"), fmt.printf("TLS certificate %s reload_service must be the bare mgmt service name, not a .service unit filename", $certificate_name))
+	panic($enabled and ($reload_service_action != "") and ($reload_service_action != "reload-or-try-restart") and ($reload_service_action != "try-restart"), fmt.printf("TLS certificate %s unsupported reload_service_action %s", $certificate_name, $reload_service_action))
 
 	if $apply and $materialize {
 		file "${tls_dir}/" {
@@ -98,11 +102,21 @@ class edge_certificate($st) {
 			cert => if $materialize { $cert_path } else { "" },
 			chain => if $materialize { $chain_path } else { "" },
 			fullchain => if $materialize { $fullchain_path } else { "" },
+			Notify => ($reload_service != "") ?: Svc["${reload_service}"],
 		}
 	}
 
 	if $apply and $materialize {
 		File["${tls_dir}/"] -> Acme:Certificate["${certificate_name}"]
+	}
+
+	if $apply and $materialize and ($reload_service != "") {
+		svc "${reload_service}" {
+			state => "running",
+			refresh_action => $reload_service_action,
+		}
+
+		Acme:Certificate["${certificate_name}"] -> Svc["${reload_service}"]
 	}
 
 	if $apply and $solve {

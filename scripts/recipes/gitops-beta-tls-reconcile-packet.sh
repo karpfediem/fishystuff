@@ -109,6 +109,8 @@ require_beta_tls_shape() {
       and (.tls["beta-edge"].chain_path == "/var/lib/fishystuff/gitops-beta/tls/live/chain.pem")
       and (.tls["beta-edge"].fullchain_path == "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem")
       and (.tls["beta-edge"].cloudflare_token_env == "CLOUDFLARE_API_TOKEN")
+      and (.tls["beta-edge"].reload_service == "fishystuff-beta-edge")
+      and (.tls["beta-edge"].reload_service_action == "reload-or-try-restart")
     ' "$state_file" >/dev/null
 }
 
@@ -141,6 +143,8 @@ printf 'beta_tls_packet_tls_dir=/var/lib/fishystuff/gitops-beta/tls/live\n'
 printf 'beta_tls_packet_fullchain_path=/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem\n'
 printf 'beta_tls_packet_privkey_path=/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem\n'
 printf 'beta_tls_packet_domains=beta.fishystuff.fish,api.beta.fishystuff.fish,cdn.beta.fishystuff.fish,telemetry.beta.fishystuff.fish\n'
+printf 'beta_tls_packet_reload_service=fishystuff-beta-edge\n'
+printf 'beta_tls_packet_reload_service_action=reload-or-try-restart\n'
 printf 'beta_tls_packet_mgmt_flake=%s\n' "${FISHYSTUFF_GITOPS_MGMT_FLAKE:-${RECIPE_REPO_ROOT}#mgmt-gitops}"
 
 if [[ ! -f "$state_file" ]]; then

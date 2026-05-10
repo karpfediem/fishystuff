@@ -83,6 +83,8 @@ jq -e '
   and .mode == "local-apply"
   and .tls["beta-edge"].directory_url == "https://acme-staging-v02.api.letsencrypt.org/directory"
   and .tls["beta-edge"].fullchain_path == "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem"
+  and .tls["beta-edge"].reload_service == "fishystuff-beta-edge"
+  and .tls["beta-edge"].reload_service_action == "reload-or-try-restart"
   and ((.tls["beta-edge"].domains | sort) == [
     "api.beta.fishystuff.fish",
     "beta.fishystuff.fish",
@@ -108,6 +110,8 @@ bash scripts/recipes/gitops-beta-tls-reconcile-packet.sh \
 grep -F "beta_tls_packet_status=ready" "${root}/ready.stdout" >/dev/null
 grep -F "beta_tls_packet_secretspec_profile=beta-deploy" "${root}/ready.stdout" >/dev/null
 grep -F "beta_tls_packet_cloudflare_api_token_status=present" "${root}/ready.stdout" >/dev/null
+grep -F "beta_tls_packet_reload_service=fishystuff-beta-edge" "${root}/ready.stdout" >/dev/null
+grep -F "beta_tls_packet_reload_service_action=reload-or-try-restart" "${root}/ready.stdout" >/dev/null
 grep -F "beta_tls_packet_next_required_action=run_staging_acme_reconcile" "${root}/ready.stdout" >/dev/null
 grep -F "FISHYSTUFF_GITOPS_ENABLE_BETA_TLS_APPLY=1 FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1 secretspec run --profile beta-deploy -- just gitops-beta-reconcile-tls state_file=${state} ca=staging" "${root}/ready.stdout" >/dev/null
 pass "ready staging packet"

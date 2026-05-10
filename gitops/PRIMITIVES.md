@@ -143,7 +143,7 @@ cloudflare:dnsmanager "<name>" {
 }
 ```
 
-`cloudflare:dnsmanager` requires polling with `Meta:poll >= 60`. The clean GitOps TLS module currently uses it only for Cloudflare TXT presentation during dns-01, and only in `local-apply` mode. `validate` mode decodes and type-checks the resources but performs no account registration, certificate issuance, file writes, or DNS mutation.
+`cloudflare:dnsmanager` requires polling with `Meta:poll >= 60`. The clean GitOps TLS module currently uses it only for Cloudflare TXT presentation during dns-01, and only in `local-apply` mode. `validate` mode decodes and type-checks the resources but performs no account registration, certificate issuance, file writes, service reloads, or DNS mutation.
 
 ## Local Files
 
@@ -217,7 +217,7 @@ svc "<unit>" {
 }
 ```
 
-The GitOps graph uses `svc` only for an optional local-writing-mode candidate API service. Desired state must provide the bare mgmt service name, not a `.service` unit filename, because mgmt appends `.service` internally. HTTP admission waits for this local candidate service when `api_service` is set. The graph writes a candidate API env file with `FISHYSTUFF_RELEASE_ID`, `FISHYSTUFF_RELEASE_IDENTITY`, `FISHYSTUFF_DOLT_COMMIT`, and `FISHYSTUFF_DEPLOYMENT_ENVIRONMENT`, sets `Notify => Svc[...]` on that env file, and sets `refresh_action => "try-restart"` so an env-file change restarts a running candidate instead of leaving admission stuck on the old release identity.
+The GitOps graph uses `svc` for optional local-writing-mode candidate API refresh and for optional TLS material reload notification. Desired state must provide the bare mgmt service name, not a `.service` unit filename, because mgmt appends `.service` internally. HTTP admission waits for this local candidate service when `api_service` is set. The graph writes a candidate API env file with `FISHYSTUFF_RELEASE_ID`, `FISHYSTUFF_RELEASE_IDENTITY`, `FISHYSTUFF_DOLT_COMMIT`, and `FISHYSTUFF_DEPLOYMENT_ENVIRONMENT`, sets `Notify => Svc[...]` on that env file, and sets `refresh_action => "try-restart"` so an env-file change restarts a running candidate instead of leaving admission stuck on the old release identity. TLS materialization may set `reload_service`, which makes `acme:certificate` notify that service with `reload-or-try-restart` by default after certificate files change.
 
 The FishyStuff flake applies `nix/patches/mgmt-recwatch-bound-watch-path-index.patch` to the pinned GitOps mgmt package. This is a local backport of the adjacent mgmt `util: Bound watch path index` change, needed because nested GitOps state directory creation can otherwise panic in `recwatch` before service/admission resources reconcile.
 
