@@ -420,6 +420,10 @@ gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler
 gitops-beta-tls-resident-install-packet desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
   @bash scripts/recipes/gitops-beta-tls-resident-install-packet.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}"
 
+# Print the read-only beta TLS resident status packet. No mutation.
+gitops-beta-tls-resident-status-packet desired_state="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" unit_file="/etc/systemd/system/fishystuff-beta-tls-reconciler.service" cloudflare_token="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" tls_fullchain="/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem" tls_privkey="/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem" systemctl_bin="systemctl" openssl_bin="openssl":
+  @bash scripts/recipes/gitops-beta-tls-resident-status-packet.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token}}" "{{tls_fullchain}}" "{{tls_privkey}}" "{{systemctl_bin}}" "{{openssl_bin}}"
+
 # Install and start the reviewed beta TLS resident mgmt unit. Local beta host mutation.
 gitops-beta-install-tls-resident desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" install_bin="install" systemctl_bin="systemctl":
   bash scripts/recipes/gitops-beta-install-tls-resident.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{install_bin}}" "{{systemctl_bin}}"
@@ -471,6 +475,10 @@ gitops-beta-tls-resident-unit-test:
 # Run fast local regression checks for the beta TLS resident install packet.
 gitops-beta-tls-resident-install-packet-test:
   bash scripts/recipes/gitops-beta-tls-resident-install-packet-test.sh
+
+# Run fast local regression checks for the beta TLS resident status packet.
+gitops-beta-tls-resident-status-packet-test:
+  bash scripts/recipes/gitops-beta-tls-resident-status-packet-test.sh
 
 # Run fast local regression checks for the beta TLS resident install gate.
 gitops-beta-install-tls-resident-test:
