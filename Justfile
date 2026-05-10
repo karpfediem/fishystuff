@@ -416,6 +416,10 @@ gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.staging.desired.json"
 gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" mgmt_bin="auto" gitops_dir="auto" cloudflare_token_credential="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" converged_timeout="-1":
   bash scripts/recipes/gitops-beta-tls-resident-unit.sh "{{output}}" "{{state_file}}" "{{mgmt_bin}}" "{{gitops_dir}}" "{{cloudflare_token_credential}}" "{{converged_timeout}}"
 
+# Install and start the reviewed beta TLS resident mgmt unit. Local beta host mutation.
+gitops-beta-install-tls-resident desired_state="data/gitops/beta-tls.staging.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="" install_bin="install" systemctl_bin="systemctl":
+  bash scripts/recipes/gitops-beta-install-tls-resident.sh "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{install_bin}}" "{{systemctl_bin}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
@@ -459,6 +463,10 @@ gitops-beta-reconcile-tls-test:
 # Run fast local regression checks for the beta TLS resident unit generator.
 gitops-beta-tls-resident-unit-test:
   bash scripts/recipes/gitops-beta-tls-resident-unit-test.sh
+
+# Run fast local regression checks for the beta TLS resident install gate.
+gitops-beta-install-tls-resident-test:
+  bash scripts/recipes/gitops-beta-install-tls-resident-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":
