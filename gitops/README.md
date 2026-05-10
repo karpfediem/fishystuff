@@ -379,7 +379,7 @@ The minimal JSON shape is:
       "account_key_path": "/var/lib/fishystuff/gitops/acme/fishystuff-edge-account/account.key",
       "account_cache_dir": "/var/lib/fishystuff/gitops/acme/fishystuff-edge-account",
       "key_algorithm": "ecdsa-p256",
-      "renew_before": 0,
+      "renew_before": 2592000,
       "tls_dir": "/var/lib/fishystuff/gitops/tls/live",
       "key_path": "/var/lib/fishystuff/gitops/tls/live/privkey.pem",
       "cert_path": "/var/lib/fishystuff/gitops/tls/live/cert.pem",

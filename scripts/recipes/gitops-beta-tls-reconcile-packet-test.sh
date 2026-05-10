@@ -83,6 +83,7 @@ jq -e '
   and .mode == "local-apply"
   and .tls["beta-edge"].directory_url == "https://acme-staging-v02.api.letsencrypt.org/directory"
   and .tls["beta-edge"].fullchain_path == "/var/lib/fishystuff/gitops-beta/tls/live/fullchain.pem"
+  and .tls["beta-edge"].renew_before == 2592000
   and .tls["beta-edge"].reload_service == "fishystuff-beta-edge"
   and .tls["beta-edge"].reload_service_action == "reload-or-try-restart"
   and ((.tls["beta-edge"].domains | sort) == [

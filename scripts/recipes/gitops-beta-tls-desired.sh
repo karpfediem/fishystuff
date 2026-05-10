@@ -93,7 +93,7 @@ json="$(
           account_key_path: "/var/lib/fishystuff/gitops-beta/acme/fishystuff-beta-edge-account/account.key",
           account_cache_dir: "/var/lib/fishystuff/gitops-beta/acme/fishystuff-beta-edge-account",
           key_algorithm: "ecdsa-p256",
-          renew_before: 0,
+          renew_before: 2592000,
           tls_dir: "/var/lib/fishystuff/gitops-beta/tls/live",
           key_path: "/var/lib/fishystuff/gitops-beta/tls/live/privkey.pem",
           cert_path: "/var/lib/fishystuff/gitops-beta/tls/live/cert.pem",
