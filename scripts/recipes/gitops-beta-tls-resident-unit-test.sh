@@ -65,7 +65,7 @@ grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDEN
 grep -F "Nice=10" "$unit" >/dev/null
 grep -F "IOSchedulingClass=idle" "$unit" >/dev/null
 grep -F "CPUQuota=50%" "$unit" >/dev/null
-grep -F "MemoryMax=512M" "$unit" >/dev/null
+grep -F "MemoryMax=1536M" "$unit" >/dev/null
 grep -F "TasksMax=256" "$unit" >/dev/null
 grep -F "ReadWritePaths=/var/lib/fishystuff/gitops-beta" "$unit" >/dev/null
 grep -F "ProtectSystem=strict" "$unit" >/dev/null
