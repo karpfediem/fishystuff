@@ -425,7 +425,7 @@ gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.desired.json" ca="sta
   bash scripts/recipes/gitops-beta-reconcile-tls.sh "{{state_file}}" "{{ca}}" "{{mgmt_bin}}" "{{converged_timeout}}"
 
 # Generate the beta TLS resident mgmt systemd unit. Local file write only.
-gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" mgmt_bin="auto" gitops_dir="auto" cloudflare_token_credential="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" converged_timeout="-1":
+gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" mgmt_bin="auto" gitops_dir="auto" cloudflare_token_credential="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" converged_timeout="600":
   bash scripts/recipes/gitops-beta-tls-resident-unit.sh "{{output}}" "{{state_file}}" "{{mgmt_bin}}" "{{gitops_dir}}" "{{cloudflare_token_credential}}" "{{converged_timeout}}"
 
 # Print the read-only beta TLS resident install packet.

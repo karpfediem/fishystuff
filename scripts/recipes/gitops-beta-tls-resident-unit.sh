@@ -10,7 +10,7 @@ state_file="$(normalize_named_arg state_file "${2-/var/lib/fishystuff/gitops-bet
 mgmt_bin="$(normalize_named_arg mgmt_bin "${3-auto}")"
 gitops_dir="$(normalize_named_arg gitops_dir "${4-auto}")"
 cloudflare_token_credential="$(normalize_named_arg cloudflare_token_credential "${5-/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token}")"
-converged_timeout="$(normalize_named_arg converged_timeout "${6--1}")"
+converged_timeout="$(normalize_named_arg converged_timeout "${6-600}")"
 
 cd "$RECIPE_REPO_ROOT"
 
@@ -122,6 +122,11 @@ LoadCredential=cloudflare-api-token:${cloudflare_token_credential}
 ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${mgmt_bin} run --tmp-prefix --no-pgp lang --converged-timeout ${converged_timeout} main.mcl'
 Restart=on-failure
 RestartSec=10s
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=512M
+TasksMax=256
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

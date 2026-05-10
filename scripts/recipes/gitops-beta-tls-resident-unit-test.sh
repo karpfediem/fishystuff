@@ -62,6 +62,11 @@ grep -F "Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1" "$unit" >/dev/null
 grep -F "Environment=FISHYSTUFF_GITOPS_STATE_FILE=/var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json" "$unit" >/dev/null
 grep -F "LoadCredential=cloudflare-api-token:/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" "$unit" >/dev/null
 grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout -1 main.mcl'" "$unit" >/dev/null
+grep -F "Nice=10" "$unit" >/dev/null
+grep -F "IOSchedulingClass=idle" "$unit" >/dev/null
+grep -F "CPUQuota=50%" "$unit" >/dev/null
+grep -F "MemoryMax=512M" "$unit" >/dev/null
+grep -F "TasksMax=256" "$unit" >/dev/null
 grep -F "ReadWritePaths=/var/lib/fishystuff/gitops-beta" "$unit" >/dev/null
 grep -F "ProtectSystem=strict" "$unit" >/dev/null
 grep -F "gitops_beta_tls_resident_unit_ok=true" "${root}/unit.stderr" >/dev/null
@@ -85,6 +90,17 @@ bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
   600 >"$stdout_unit" 2>"${root}/stdout.stderr"
 grep -F "ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN=\"\$(cat \"\$CREDENTIALS_DIRECTORY/cloudflare-api-token\")\"; exec $(readlink -f "${mgmt_dir}/mgmt") run --tmp-prefix --no-pgp lang --converged-timeout 600 main.mcl'" "$stdout_unit" >/dev/null
 pass "write unit to stdout"
+
+default_timeout_unit="${root}/default-timeout.service"
+bash scripts/recipes/gitops-beta-tls-resident-unit.sh \
+  "$default_timeout_unit" \
+  /var/lib/fishystuff/gitops-beta/desired/beta-tls.desired.json \
+  "${mgmt_dir}/mgmt" \
+  "$gitops_dir" \
+  /var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token \
+  >"${root}/default-timeout.stdout" 2>"${root}/default-timeout.stderr"
+grep -F " --converged-timeout 600 main.mcl" "$default_timeout_unit" >/dev/null
+pass "default convergence timeout is finite"
 
 expect_fail_contains \
   "refuse non-beta desired state path" \
