@@ -412,6 +412,10 @@ gitops-beta-tls-reconcile-packet state_file="data/gitops/beta-tls.staging.desire
 gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.staging.desired.json" ca="staging" mgmt_bin="auto" converged_timeout="300":
   bash scripts/recipes/gitops-beta-reconcile-tls.sh "{{state_file}}" "{{ca}}" "{{mgmt_bin}}" "{{converged_timeout}}"
 
+# Generate the beta TLS resident mgmt systemd unit. Local file write only.
+gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" mgmt_bin="auto" gitops_dir="auto" secrets_env_file="/var/lib/fishystuff/gitops-beta/secrets/acme.env" converged_timeout="-1":
+  bash scripts/recipes/gitops-beta-tls-resident-unit.sh "{{output}}" "{{state_file}}" "{{mgmt_bin}}" "{{gitops_dir}}" "{{secrets_env_file}}" "{{converged_timeout}}"
+
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:
   bash scripts/recipes/gitops-beta-remote-host-test.sh
@@ -451,6 +455,10 @@ gitops-beta-tls-reconcile-packet-test:
 # Run fast local regression checks for guarded beta TLS mgmt reconciliation.
 gitops-beta-reconcile-tls-test:
   bash scripts/recipes/gitops-beta-reconcile-tls-test.sh
+
+# Run fast local regression checks for the beta TLS resident unit generator.
+gitops-beta-tls-resident-unit-test:
+  bash scripts/recipes/gitops-beta-tls-resident-unit-test.sh
 
 # Read Hetzner beta server inventory through beta-deploy credentials. Read-only.
 gitops-beta-hetzner-inventory-packet old_server_name="site-nbg1-beta" replacement_server_name="site-nbg1-beta-v2":

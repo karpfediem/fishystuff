@@ -94,6 +94,8 @@ just gitops-beta-tls-reconcile-packet
 just gitops-beta-tls-reconcile-packet-test
 just gitops-beta-reconcile-tls
 just gitops-beta-reconcile-tls-test
+just gitops-beta-tls-resident-unit
+just gitops-beta-tls-resident-unit-test
 just gitops-beta-cloudflare-dns-cutover
 just gitops-beta-cloudflare-dns-cutover-test
 just gitops-beta-service-start-plan
@@ -693,7 +695,7 @@ The originally intended `nix:gcroot` resource is not used by the current graph. 
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_TLS_INSTALL=1 FISHYSTUFF_GITOPS_ENABLE_BETA_REMOTE_EDGE_RESTART=1 FISHYSTUFF_GITOPS_BETA_REMOTE_EDGE_TLS_TARGET=root@<new-beta-public-ip> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_FULLCHAIN_SHA256=<checked-fullchain-sha256> FISHYSTUFF_GITOPS_BETA_EDGE_TLS_PRIVKEY_SHA256=<checked-privkey-sha256> secretspec run --profile beta-deploy -- just gitops-beta-remote-install-edge-tls target=root@<new-beta-public-ip> fullchain=<local-fullchain.pem> privkey=<local-privkey.pem>` installs operator-supplied beta-only TLS material, validates SANs/expiry/key match/hash acknowledgements, restarts only `fishystuff-beta-edge.service`, and then performs trusted loopback HTTPS smokes without `-k`. This can consume a copied beta certificate today or the later mgmt `acme:certificate` materialization output.
 
-`just gitops-beta-tls-desired`, `just gitops-beta-tls-reconcile-packet`, and `just gitops-beta-reconcile-tls` are the first beta TLS path that goes through mgmt ACME instead of the manual certificate-copy bridge. The generator defaults to Let's Encrypt staging and writes only a local desired-state file. The packet validates beta-only domains, beta TLS paths, the beta ACME request namespace, beta edge reload notification, and beta-deploy Cloudflare token readiness without applying anything. The reconcile command is host-local mutation and requires beta/local apply opt-ins, the expected beta resident hostname, `CLOUDFLARE_API_TOKEN` from `beta-deploy`, and an extra production ACME opt-in if `ca=production`.
+`just gitops-beta-tls-desired`, `just gitops-beta-tls-reconcile-packet`, and `just gitops-beta-reconcile-tls` are the first beta TLS path that goes through mgmt ACME instead of the manual certificate-copy bridge. The generator defaults to Let's Encrypt staging and writes only a local desired-state file. The packet validates beta-only domains, beta TLS paths, the beta ACME request namespace, beta edge reload notification, and beta-deploy Cloudflare token readiness without applying anything. The reconcile command is host-local mutation and requires beta/local apply opt-ins, the expected beta resident hostname, `CLOUDFLARE_API_TOKEN` from `beta-deploy`, and an extra production ACME opt-in if `ca=production`. `just gitops-beta-tls-resident-unit` writes the future durable systemd unit for the same graph, using the pinned `.#mgmt-gitops` binary and packaged `.#gitops-src` graph while keeping desired state and SecretSpec-exported ACME env files under `/var/lib/fishystuff/gitops-beta`.
 
 `FISHYSTUFF_OPERATOR_SECRETSPEC_PROFILE=beta-deploy FISHYSTUFF_GITOPS_ENABLE_BETA_DNS_CUTOVER=1 FISHYSTUFF_GITOPS_BETA_DNS_TARGET_IPV4=<new-beta-public-ip> secretspec run --profile beta-deploy -- just gitops-beta-cloudflare-dns-cutover target_ipv4=<new-beta-public-ip>` updates only the existing beta Cloudflare A records for `beta`, `api.beta`, `cdn.beta`, and `telemetry.beta` to the acknowledged fresh beta IPv4. It refuses production profiles, the previous beta IP, non-beta hostnames, and root production DNS records.
 

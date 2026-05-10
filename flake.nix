@@ -759,6 +759,10 @@
               ./nix/patches/mgmt-recwatch-bound-watch-path-index.patch
             ];
           });
+          gitopsSrcPackage = pkgs.runCommand "fishystuff-gitops-src" { } ''
+            mkdir -p "$out"
+            cp -R ${./gitops}/. "$out"/
+          '';
           gitopsTests = import ./gitops/tests/nixos {
             inherit pkgs;
             gitopsSrc = ./gitops;
@@ -1458,6 +1462,7 @@
             gitops-desired-state-production-vm-serve-fixture = gitopsDesiredStateProductionVmServeFixture;
             gitops-desired-state-rollback-transition-fixture = gitopsDesiredStateRollbackTransitionFixture;
             gitops-desired-state-vm-serve-fixture = gitopsDesiredStateVmServeFixture;
+            gitops-src = gitopsSrcPackage;
             grafana-service-bundle = grafanaServiceBundle;
             jaeger-service-bundle = jaegerServiceBundle;
             loki-service-bundle = lokiServiceBundle;
