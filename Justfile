@@ -400,6 +400,10 @@ gitops-beta-remote-start-edge target="" expected_hostname="site-nbg1-beta" edge_
 gitops-beta-remote-install-tls-resident-packet target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN":
   @bash scripts/recipes/gitops-beta-remote-install-tls-resident-packet.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}"
 
+# Probe beta TLS resident state on the beta host over SSH. Read-only.
+gitops-beta-remote-tls-resident-status-packet target="" expected_hostname="site-nbg1-beta" ssh_bin="ssh":
+  @bash scripts/recipes/gitops-beta-remote-tls-resident-status-packet.sh "{{target}}" "{{expected_hostname}}" "{{ssh_bin}}"
+
 # Install and start the reviewed beta TLS resident mgmt unit on the beta host. Remote host mutation.
 gitops-beta-remote-install-tls-resident target="" expected_hostname="site-nbg1-beta" desired_state="data/gitops/beta-tls.desired.json" unit_file="data/gitops/fishystuff-beta-tls-reconciler.service" cloudflare_token_source="env:CLOUDFLARE_API_TOKEN" ssh_bin="ssh" scp_bin="scp":
   bash scripts/recipes/gitops-beta-remote-install-tls-resident.sh "{{target}}" "{{expected_hostname}}" "{{desired_state}}" "{{unit_file}}" "{{cloudflare_token_source}}" "{{ssh_bin}}" "{{scp_bin}}"
@@ -467,6 +471,10 @@ gitops-beta-remote-start-edge-test:
 # Run fast local regression checks for the remote beta TLS resident install packet.
 gitops-beta-remote-install-tls-resident-packet-test:
   bash scripts/recipes/gitops-beta-remote-install-tls-resident-packet-test.sh
+
+# Run fast local regression checks for remote beta TLS resident status.
+gitops-beta-remote-tls-resident-status-packet-test:
+  bash scripts/recipes/gitops-beta-remote-tls-resident-status-packet-test.sh
 
 # Run fast local regression checks for remote beta TLS resident installation.
 gitops-beta-remote-install-tls-resident-test:
