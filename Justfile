@@ -413,8 +413,8 @@ gitops-beta-reconcile-tls state_file="data/gitops/beta-tls.staging.desired.json"
   bash scripts/recipes/gitops-beta-reconcile-tls.sh "{{state_file}}" "{{ca}}" "{{mgmt_bin}}" "{{converged_timeout}}"
 
 # Generate the beta TLS resident mgmt systemd unit. Local file write only.
-gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" mgmt_bin="auto" gitops_dir="auto" secrets_env_file="/var/lib/fishystuff/gitops-beta/secrets/acme.env" converged_timeout="-1":
-  bash scripts/recipes/gitops-beta-tls-resident-unit.sh "{{output}}" "{{state_file}}" "{{mgmt_bin}}" "{{gitops_dir}}" "{{secrets_env_file}}" "{{converged_timeout}}"
+gitops-beta-tls-resident-unit output="data/gitops/fishystuff-beta-tls-reconciler.service" state_file="/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json" mgmt_bin="auto" gitops_dir="auto" cloudflare_token_credential="/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token" converged_timeout="-1":
+  bash scripts/recipes/gitops-beta-tls-resident-unit.sh "{{output}}" "{{state_file}}" "{{mgmt_bin}}" "{{gitops_dir}}" "{{cloudflare_token_credential}}" "{{converged_timeout}}"
 
 # Run fast local regression checks for the beta remote host preflight/bootstrap helpers.
 gitops-beta-remote-host-test:

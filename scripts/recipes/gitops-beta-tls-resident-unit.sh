@@ -9,7 +9,7 @@ output="$(normalize_named_arg output "${1--}")"
 state_file="$(normalize_named_arg state_file "${2-/var/lib/fishystuff/gitops-beta/desired/beta-tls.staging.desired.json}")"
 mgmt_bin="$(normalize_named_arg mgmt_bin "${3-auto}")"
 gitops_dir="$(normalize_named_arg gitops_dir "${4-auto}")"
-secrets_env_file="$(normalize_named_arg secrets_env_file "${5-/var/lib/fishystuff/gitops-beta/secrets/acme.env}")"
+cloudflare_token_credential="$(normalize_named_arg cloudflare_token_credential "${5-/var/lib/fishystuff/gitops-beta/secrets/cloudflare-api-token}")"
 converged_timeout="$(normalize_named_arg converged_timeout "${6--1}")"
 
 cd "$RECIPE_REPO_ROOT"
@@ -79,9 +79,9 @@ resolve_directory() {
 }
 
 require_absolute_path state_file "$state_file"
-require_absolute_path secrets_env_file "$secrets_env_file"
+require_absolute_path cloudflare_token_credential "$cloudflare_token_credential"
 require_beta_prefix state_file "$state_file" "/var/lib/fishystuff/gitops-beta/desired/"
-require_beta_prefix secrets_env_file "$secrets_env_file" "/var/lib/fishystuff/gitops-beta/secrets/"
+require_beta_prefix cloudflare_token_credential "$cloudflare_token_credential" "/var/lib/fishystuff/gitops-beta/secrets/"
 require_integer converged_timeout "$converged_timeout"
 
 if [[ "$mgmt_bin" == "auto" ]]; then
@@ -118,8 +118,8 @@ WorkingDirectory=${gitops_dir}
 Environment=FISHYSTUFF_GITOPS_ENABLE_LOCAL_APPLY=1
 Environment=FISHYSTUFF_GITOPS_STATE_FILE=${state_file}
 Environment=HOME=/var/lib/fishystuff/gitops-beta/mgmt-home
-EnvironmentFile=${secrets_env_file}
-ExecStart=${mgmt_bin} run --tmp-prefix --no-pgp lang --converged-timeout ${converged_timeout} main.mcl
+LoadCredential=cloudflare-api-token:${cloudflare_token_credential}
+ExecStart=/bin/sh -ceu 'export CLOUDFLARE_API_TOKEN="\$(cat "\$CREDENTIALS_DIRECTORY/cloudflare-api-token")"; exec ${mgmt_bin} run --tmp-prefix --no-pgp lang --converged-timeout ${converged_timeout} main.mcl'
 Restart=on-failure
 RestartSec=10s
 NoNewPrivileges=true
@@ -155,7 +155,7 @@ printf 'beta_tls_resident_unit_name=fishystuff-beta-tls-reconciler.service\n' >&
 printf 'beta_tls_resident_unit_state_file=%s\n' "$state_file" >&2
 printf 'beta_tls_resident_unit_gitops_dir=%s\n' "$gitops_dir" >&2
 printf 'beta_tls_resident_unit_mgmt_bin=%s\n' "$mgmt_bin" >&2
-printf 'beta_tls_resident_unit_secrets_env_file=%s\n' "$secrets_env_file" >&2
+printf 'beta_tls_resident_unit_cloudflare_token_credential=%s\n' "$cloudflare_token_credential" >&2
 printf 'remote_deploy_performed=false\n' >&2
 printf 'infrastructure_mutation_performed=false\n' >&2
 printf 'local_host_mutation_performed=false\n' >&2
